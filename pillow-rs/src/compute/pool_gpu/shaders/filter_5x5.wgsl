@@ -1,7 +1,8 @@
 // 5x5 convolution filter — PIL-identical row-grouped f32 accumulation.
 // Mode-aware: for L/LA (0/1) only convolves R channel (luma), preserves G/B/A.
-// Params: 25 pre-divided kernel f32 values (as u32 bits), scale (f32 as u32),
-//         offset (i32).
+// Mode 7 is I: one packed word is one signed little-endian i32 sample.
+// Params: 25 pre-divided kernel f32 values (as u32 bits), offset (i32), and an
+//         optional exact rational denominator.
 //
 // CPU reference (image.rs:2670-2710):
 //   kn[n] = kernel[n] / scale,  rounding_bias = offset + 0.5
@@ -32,6 +33,7 @@ struct Params {
     k30: u32, k31: u32, k32: u32, k33: u32, k34: u32,
     k40: u32, k41: u32, k42: u32, k43: u32, k44: u32,
     offset_val: i32,
+    rational_denominator: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -40,7 +42,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
 // PIL-identical clip8: truncating cast clamping to [0, 255]
 fn clip8_filter(ss: f32) -> u32 {
@@ -49,7 +51,136 @@ fn clip8_filter(ss: f32) -> u32 {
     return u32(ss);
 }
 
+fn i32_sample(pixel: u32) -> f32 {
+    return f32(bitcast<i32>(pixel));
+}
+
+fn i32_row_5(
+    p0: u32, p1: u32, p2: u32, p3: u32, p4: u32,
+    k0: f32, k1: f32, k2: f32, k3: f32, k4: f32,
+) -> f32 {
+    var sum = i32_sample(p1) * k1;
+    sum = fma(i32_sample(p0), k0, sum);
+    sum = fma(i32_sample(p2), k2, sum);
+    sum = fma(i32_sample(p3), k3, sum);
+    sum = fma(i32_sample(p4), k4, sum);
+    return sum;
+}
+
+fn byte_row_5(
+    p0: u32, p1: u32, p2: u32, p3: u32, p4: u32,
+    k0: f32, k1: f32, k2: f32, k3: f32, k4: f32,
+) -> f32 {
+    var sum = f32(p1) * k1;
+    sum = fma(f32(p0), k0, sum);
+    sum = fma(f32(p2), k2, sum);
+    sum = fma(f32(p3), k3, sum);
+    sum = fma(f32(p4), k4, sum);
+    return sum;
+}
+
+fn clip_i32_filter(ss: f32) -> u32 {
+    if !(ss > 0.0) { return 0u; }
+    if ss >= 2147483647.0 { return 0x7fffffffu; }
+    return bitcast<u32>(i32(ss));
+}
+
+fn rational_num(bits: u32, denominator: u32) -> i32 {
+    return i32(round(bitcast<f32>(bits) * f32(denominator)));
+}
+
+fn clip_rational_filter(sum: i32, denominator: u32) -> u32 {
+    let d = i32(denominator);
+    // The byte contract is trunc((sum / d) + offset + 0.5), with clipping
+    // before the cast. Doubling keeps the half-unit bias exact for odd d.
+    let doubled = sum * 2i + params.offset_val * d * 2i + d;
+    let doubled_denominator = d * 2i;
+    if doubled <= 0i {
+        return 0u;
+    }
+    if doubled >= 255i * doubled_denominator {
+        return 255u;
+    }
+    return u32(doubled / doubled_denominator);
+}
+
+fn rational_5x5_channel(
+    values: ptr<function, array<u32, 25>>,
+    coefficients: ptr<function, array<u32, 25>>,
+    denominator: u32,
+) -> u32 {
+    var sum: i32 = 0i;
+    for (var i = 0u; i < 25u; i++) {
+        sum = sum + i32((*values)[i]) * rational_num((*coefficients)[i], denominator);
+    }
+    return clip_rational_filter(sum, denominator);
+}
+
+fn process_i32_pixel(x: u32, y: u32) -> u32 {
+    let w = params.width;
+    let h = params.height;
+    let idx = y * w + x;
+    if w < 5u || h < 5u {
+        return input[idx];
+    }
+    if x < 2u || x >= w - 2u || y < 2u || y >= h - 2u {
+        return input[idx];
+    }
+
+    let k00 = bitcast<f32>(params.k00); let k01 = bitcast<f32>(params.k01);
+    let k02 = bitcast<f32>(params.k02); let k03 = bitcast<f32>(params.k03);
+    let k04 = bitcast<f32>(params.k04);
+    let k10 = bitcast<f32>(params.k10); let k11 = bitcast<f32>(params.k11);
+    let k12 = bitcast<f32>(params.k12); let k13 = bitcast<f32>(params.k13);
+    let k14 = bitcast<f32>(params.k14);
+    let k20 = bitcast<f32>(params.k20); let k21 = bitcast<f32>(params.k21);
+    let k22 = bitcast<f32>(params.k22); let k23 = bitcast<f32>(params.k23);
+    let k24 = bitcast<f32>(params.k24);
+    let k30 = bitcast<f32>(params.k30); let k31 = bitcast<f32>(params.k31);
+    let k32 = bitcast<f32>(params.k32); let k33 = bitcast<f32>(params.k33);
+    let k34 = bitcast<f32>(params.k34);
+    let k40 = bitcast<f32>(params.k40); let k41 = bitcast<f32>(params.k41);
+    let k42 = bitcast<f32>(params.k42); let k43 = bitcast<f32>(params.k43);
+    let k44 = bitcast<f32>(params.k44);
+
+    let row0 = i32_row_5(
+        input[(y + 2u) * w + (x - 2u)], input[(y + 2u) * w + (x - 1u)],
+        input[(y + 2u) * w + x], input[(y + 2u) * w + (x + 1u)],
+        input[(y + 2u) * w + (x + 2u)], k00, k01, k02, k03, k04,
+    );
+    let row1 = i32_row_5(
+        input[(y + 1u) * w + (x - 2u)], input[(y + 1u) * w + (x - 1u)],
+        input[(y + 1u) * w + x], input[(y + 1u) * w + (x + 1u)],
+        input[(y + 1u) * w + (x + 2u)], k10, k11, k12, k13, k14,
+    );
+    let row2 = i32_row_5(
+        input[y * w + (x - 2u)], input[y * w + (x - 1u)], input[y * w + x],
+        input[y * w + (x + 1u)], input[y * w + (x + 2u)],
+        k20, k21, k22, k23, k24,
+    );
+    let row3 = i32_row_5(
+        input[(y - 1u) * w + (x - 2u)], input[(y - 1u) * w + (x - 1u)],
+        input[(y - 1u) * w + x], input[(y - 1u) * w + (x + 1u)],
+        input[(y - 1u) * w + (x + 2u)], k30, k31, k32, k33, k34,
+    );
+    let row4 = i32_row_5(
+        input[(y - 2u) * w + (x - 2u)], input[(y - 2u) * w + (x - 1u)],
+        input[(y - 2u) * w + x], input[(y - 2u) * w + (x + 1u)],
+        input[(y - 2u) * w + (x + 2u)], k40, k41, k42, k43, k44,
+    );
+    var value = f32(params.offset_val) + 0.5;
+    value = value + row0;
+    value = value + row1;
+    value = value + row2;
+    value = value + row3;
+    value = value + row4;
+    return clip_i32_filter(value);
+}
+
 fn process_pixel(x: u32, y: u32) -> u32 {
+    if params.mode == 7u {
+        return process_i32_pixel(x, y);
+    }
     let w = params.width;
     let h = params.height;
     let idx = y * w + x;
@@ -174,36 +305,87 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     let a4_0 = (p4_0 >> 24u); let a4_1 = (p4_1 >> 24u); let a4_2 = (p4_2 >> 24u);
     let a4_3 = (p4_3 >> 24u); let a4_4 = (p4_4 >> 24u);
 
+    if params.rational_denominator > 0u {
+        var coefficients: array<u32, 25> = array<u32, 25>(
+            params.k00, params.k01, params.k02, params.k03, params.k04,
+            params.k10, params.k11, params.k12, params.k13, params.k14,
+            params.k20, params.k21, params.k22, params.k23, params.k24,
+            params.k30, params.k31, params.k32, params.k33, params.k34,
+            params.k40, params.k41, params.k42, params.k43, params.k44,
+        );
+        var values_r: array<u32, 25> = array<u32, 25>(
+            r0_0, r0_1, r0_2, r0_3, r0_4, r1_0, r1_1, r1_2, r1_3, r1_4,
+            r2_0, r2_1, r2_2, r2_3, r2_4, r3_0, r3_1, r3_2, r3_3, r3_4,
+            r4_0, r4_1, r4_2, r4_3, r4_4,
+        );
+        var values_g: array<u32, 25> = array<u32, 25>(
+            g0_0, g0_1, g0_2, g0_3, g0_4, g1_0, g1_1, g1_2, g1_3, g1_4,
+            g2_0, g2_1, g2_2, g2_3, g2_4, g3_0, g3_1, g3_2, g3_3, g3_4,
+            g4_0, g4_1, g4_2, g4_3, g4_4,
+        );
+        var values_b: array<u32, 25> = array<u32, 25>(
+            b0_0, b0_1, b0_2, b0_3, b0_4, b1_0, b1_1, b1_2, b1_3, b1_4,
+            b2_0, b2_1, b2_2, b2_3, b2_4, b3_0, b3_1, b3_2, b3_3, b3_4,
+            b4_0, b4_1, b4_2, b4_3, b4_4,
+        );
+        var values_a: array<u32, 25> = array<u32, 25>(
+            a0_0, a0_1, a0_2, a0_3, a0_4, a1_0, a1_1, a1_2, a1_3, a1_4,
+            a2_0, a2_1, a2_2, a2_3, a2_4, a3_0, a3_1, a3_2, a3_3, a3_4,
+            a4_0, a4_1, a4_2, a4_3, a4_4,
+        );
+        let denominator = params.rational_denominator;
+        let out_r = rational_5x5_channel(&values_r, &coefficients, denominator);
+        let in_pixel = input[idx];
+        let in_g = (in_pixel >> 8u) & 0xffu;
+        let in_b = (in_pixel >> 16u) & 0xffu;
+        let out_g = select(
+            in_g,
+            rational_5x5_channel(&values_g, &coefficients, denominator),
+            mode_has_g(params.mode),
+        );
+        let out_b = select(
+            in_b,
+            rational_5x5_channel(&values_b, &coefficients, denominator),
+            mode_has_b(params.mode),
+        );
+        let out_a = select(
+            255u,
+            rational_5x5_channel(&values_a, &coefficients, denominator),
+            mode_has_a(params.mode),
+        );
+        return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
+    }
+
     // ── Row accumulation in PIL order (bottom to top) ──
     // Row +2 (bottom-most): dy=+2, kernel k40..k44
-    let row0_r = f32(r4_0)*k40 + f32(r4_1)*k41 + f32(r4_2)*k42 + f32(r4_3)*k43 + f32(r4_4)*k44;
-    let row0_g = f32(g4_0)*k40 + f32(g4_1)*k41 + f32(g4_2)*k42 + f32(g4_3)*k43 + f32(g4_4)*k44;
-    let row0_b = f32(b4_0)*k40 + f32(b4_1)*k41 + f32(b4_2)*k42 + f32(b4_3)*k43 + f32(b4_4)*k44;
-    let row0_a = f32(a4_0)*k40 + f32(a4_1)*k41 + f32(a4_2)*k42 + f32(a4_3)*k43 + f32(a4_4)*k44;
+    let row0_r = byte_row_5(r4_0, r4_1, r4_2, r4_3, r4_4, k40, k41, k42, k43, k44);
+    let row0_g = byte_row_5(g4_0, g4_1, g4_2, g4_3, g4_4, k40, k41, k42, k43, k44);
+    let row0_b = byte_row_5(b4_0, b4_1, b4_2, b4_3, b4_4, k40, k41, k42, k43, k44);
+    let row0_a = byte_row_5(a4_0, a4_1, a4_2, a4_3, a4_4, k40, k41, k42, k43, k44);
 
     // Row +1: dy=+1, kernel k30..k34
-    let row1_r = f32(r3_0)*k30 + f32(r3_1)*k31 + f32(r3_2)*k32 + f32(r3_3)*k33 + f32(r3_4)*k34;
-    let row1_g = f32(g3_0)*k30 + f32(g3_1)*k31 + f32(g3_2)*k32 + f32(g3_3)*k33 + f32(g3_4)*k34;
-    let row1_b = f32(b3_0)*k30 + f32(b3_1)*k31 + f32(b3_2)*k32 + f32(b3_3)*k33 + f32(b3_4)*k34;
-    let row1_a = f32(a3_0)*k30 + f32(a3_1)*k31 + f32(a3_2)*k32 + f32(a3_3)*k33 + f32(a3_4)*k34;
+    let row1_r = byte_row_5(r3_0, r3_1, r3_2, r3_3, r3_4, k30, k31, k32, k33, k34);
+    let row1_g = byte_row_5(g3_0, g3_1, g3_2, g3_3, g3_4, k30, k31, k32, k33, k34);
+    let row1_b = byte_row_5(b3_0, b3_1, b3_2, b3_3, b3_4, k30, k31, k32, k33, k34);
+    let row1_a = byte_row_5(a3_0, a3_1, a3_2, a3_3, a3_4, k30, k31, k32, k33, k34);
 
     // Row 0 (center): dy=0, kernel k20..k24
-    let row2_r = f32(r2_0)*k20 + f32(r2_1)*k21 + f32(r2_2)*k22 + f32(r2_3)*k23 + f32(r2_4)*k24;
-    let row2_g = f32(g2_0)*k20 + f32(g2_1)*k21 + f32(g2_2)*k22 + f32(g2_3)*k23 + f32(g2_4)*k24;
-    let row2_b = f32(b2_0)*k20 + f32(b2_1)*k21 + f32(b2_2)*k22 + f32(b2_3)*k23 + f32(b2_4)*k24;
-    let row2_a = f32(a2_0)*k20 + f32(a2_1)*k21 + f32(a2_2)*k22 + f32(a2_3)*k23 + f32(a2_4)*k24;
+    let row2_r = byte_row_5(r2_0, r2_1, r2_2, r2_3, r2_4, k20, k21, k22, k23, k24);
+    let row2_g = byte_row_5(g2_0, g2_1, g2_2, g2_3, g2_4, k20, k21, k22, k23, k24);
+    let row2_b = byte_row_5(b2_0, b2_1, b2_2, b2_3, b2_4, k20, k21, k22, k23, k24);
+    let row2_a = byte_row_5(a2_0, a2_1, a2_2, a2_3, a2_4, k20, k21, k22, k23, k24);
 
     // Row -1: dy=-1, kernel k10..k14
-    let row3_r = f32(r1_0)*k10 + f32(r1_1)*k11 + f32(r1_2)*k12 + f32(r1_3)*k13 + f32(r1_4)*k14;
-    let row3_g = f32(g1_0)*k10 + f32(g1_1)*k11 + f32(g1_2)*k12 + f32(g1_3)*k13 + f32(g1_4)*k14;
-    let row3_b = f32(b1_0)*k10 + f32(b1_1)*k11 + f32(b1_2)*k12 + f32(b1_3)*k13 + f32(b1_4)*k14;
-    let row3_a = f32(a1_0)*k10 + f32(a1_1)*k11 + f32(a1_2)*k12 + f32(a1_3)*k13 + f32(a1_4)*k14;
+    let row3_r = byte_row_5(r1_0, r1_1, r1_2, r1_3, r1_4, k10, k11, k12, k13, k14);
+    let row3_g = byte_row_5(g1_0, g1_1, g1_2, g1_3, g1_4, k10, k11, k12, k13, k14);
+    let row3_b = byte_row_5(b1_0, b1_1, b1_2, b1_3, b1_4, k10, k11, k12, k13, k14);
+    let row3_a = byte_row_5(a1_0, a1_1, a1_2, a1_3, a1_4, k10, k11, k12, k13, k14);
 
     // Row -2 (top-most): dy=-2, kernel k00..k04
-    let row4_r = f32(r0_0)*k00 + f32(r0_1)*k01 + f32(r0_2)*k02 + f32(r0_3)*k03 + f32(r0_4)*k04;
-    let row4_g = f32(g0_0)*k00 + f32(g0_1)*k01 + f32(g0_2)*k02 + f32(g0_3)*k03 + f32(g0_4)*k04;
-    let row4_b = f32(b0_0)*k00 + f32(b0_1)*k01 + f32(b0_2)*k02 + f32(b0_3)*k03 + f32(b0_4)*k04;
-    let row4_a = f32(a0_0)*k00 + f32(a0_1)*k01 + f32(a0_2)*k02 + f32(a0_3)*k03 + f32(a0_4)*k04;
+    let row4_r = byte_row_5(r0_0, r0_1, r0_2, r0_3, r0_4, k00, k01, k02, k03, k04);
+    let row4_g = byte_row_5(g0_0, g0_1, g0_2, g0_3, g0_4, k00, k01, k02, k03, k04);
+    let row4_b = byte_row_5(b0_0, b0_1, b0_2, b0_3, b0_4, k00, k01, k02, k03, k04);
+    let row4_a = byte_row_5(a0_0, a0_1, a0_2, a0_3, a0_4, k00, k01, k02, k03, k04);
 
     // Accumulate in PIL order: bias, +row0, +row1, +row2, +row3, +row4
     var ss_r = bias + row0_r; ss_r = ss_r + row1_r; ss_r = ss_r + row2_r;

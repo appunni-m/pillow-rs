@@ -4,9 +4,10 @@
 // For each pixel: load size×size window, sort per-channel values,
 // output element at index size*size/2.
 //
-// Max window: 9×9 = 81 elements. Uses per-thread insertion sort.
+// Max window: 15×15 = 225 elements. Uses per-thread insertion sort.
 // Border pixels: clamp source coordinates to image bounds (matching PIL).
-// Pixel format: packed u32 RGBA.
+// Pixel format: packed u32 RGBA. Mode 8 is F: one packed word is one
+// little-endian f32 sample.
 
 struct Params {
     width: u32,
@@ -16,7 +17,7 @@ struct Params {
     size: u32,
 }
 
-const MAX_WINDOW: u32 = 81u;
+const MAX_WINDOW: u32 = 225u;
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -25,6 +26,46 @@ const MAX_WINDOW: u32 = 81u;
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+
+fn sort_arr_f32(arr: ptr<function, array<f32, MAX_WINDOW>>, len: u32) {
+    for (var i = 1u; i < len; i++) {
+        var j = i;
+        while j > 0u && (*arr)[j] < (*arr)[j - 1u] {
+            let tmp = (*arr)[j];
+            (*arr)[j] = (*arr)[j - 1u];
+            (*arr)[j - 1u] = tmp;
+            j = j - 1u;
+        }
+    }
+}
+
+fn median_float_pixel(x: u32, y: u32) -> u32 {
+    let w = params.width;
+    let h = params.height;
+    let size = min(params.size, 15u);
+    let idx = y * w + x;
+    if size == 0u || size % 2u == 0u {
+        return input[idx];
+    }
+    let half = i32(size) / 2i;
+    let area = size * size;
+    var values: array<f32, MAX_WINDOW>;
+    var n: u32 = 0u;
+    let y_i32 = i32(y);
+    let x_i32 = i32(x);
+    let w_i32 = i32(w);
+    let h_i32 = i32(h);
+    for (var dy = -half; dy <= half; dy++) {
+        let sy = clamp(y_i32 + dy, 0, h_i32 - 1);
+        for (var dx = -half; dx <= half; dx++) {
+            let sx = clamp(x_i32 + dx, 0, w_i32 - 1);
+            values[n] = bitcast<f32>(input[u32(sy) * w + u32(sx)]);
+            n++;
+        }
+    }
+    sort_arr_f32(&values, area);
+    return bitcast<u32>(values[area / 2u]);
+}
 
 // Insertion sort on a fixed-size array (only first `len` elements are meaningful)
 fn sort_arr(arr: ptr<function, array<u32, MAX_WINDOW>>, len: u32) {
@@ -43,8 +84,11 @@ fn sort_arr(arr: ptr<function, array<u32, MAX_WINDOW>>, len: u32) {
 fn median_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let h = params.height;
-    let size = min(params.size, 9u);
+    let size = min(params.size, 15u);
     let idx = y * w + x;
+    if params.mode == 8u {
+        return median_float_pixel(x, y);
+    }
     if size == 0u || size % 2u == 0u {
         return input[idx];
     }

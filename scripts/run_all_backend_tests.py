@@ -542,6 +542,15 @@ def run_parity_lane(
         command,
         env={
             "MIGRATION_TARGET_BACKEND": backend,
+            # The orchestrator bounds GPU lanes to the smoke/full deadlines
+            # below, but the parity adapter has its own shorter default.  Pass
+            # the same bounded deadline through so a valid full lane cannot
+            # self-time out at 120s before the parent reaches its 300s guard.
+            **(
+                {"MIGRATION_GPU_TIMEOUT_SECONDS": str(lane_timeout)}
+                if backend == "gpu"
+                else {}
+            ),
             **(
                 {
                     # Keep the normal GPU lane on the target's documented

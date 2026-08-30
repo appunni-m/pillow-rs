@@ -15,7 +15,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
 fn uabs_diff(a: u32, b: u32) -> u32 {
     if a > b { return a - b; } else { return b - a; }

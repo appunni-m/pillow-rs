@@ -36,6 +36,34 @@ DEFAULT_INPUT = (
 )
 DEFAULT_RESULT = ROOT / "build" / "migration-parity" / "benchmark-result-pipeline-allops-20260812.json"
 
+# Some public operations intentionally share one deferred pipeline descriptor.
+# Keep those aliases explicit so the denominator measures PipelineOp variants,
+# rather than counting two public entry points that lower to the same variant
+# (or treating the typed BoxBlurXY descriptor as an unbenchmarked operation).
+PIPELINE_VARIANT_ALIASES: dict[str, str] = {
+    "BoxBlurXY": "BoxBlur",
+    "Blend": "BlendModule",
+    "Composite": "CompositeModule",
+}
+
+
+def canonical_variant(variant: str) -> str:
+    """Return the deferred PipelineOp variant used by a public benchmark."""
+
+    return PIPELINE_VARIANT_ALIASES.get(variant, variant)
+
+
+def variant_from_workload_id(workload_id: str) -> str:
+    """Extract and canonicalize a base operation workload's variant slug."""
+
+    slug_name = workload_id.removeprefix("pipeline-op.").removesuffix(
+        ".benchmark-materialized"
+    )
+    aliases = {
+        slug(alias): canonical_variant(alias) for alias in PIPELINE_VARIANT_ALIASES
+    }
+    return aliases.get(slug_name, slug_name)
+
 
 def pipeline_op_variants() -> set[str]:
     """Read the authoritative top-level ``PipelineOp`` variant names."""
@@ -66,10 +94,14 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
     document = json.loads(path.read_text(encoding="utf-8"))
     workloads = document["workloads"]
     source_variants = pipeline_op_variants()
+    canonical_source_variants = {
+        canonical_variant(variant) for variant in source_variants
+    }
     spec_variants = set(PIPELINE_OP_BENCHMARK_SPECS)
+    canonical_spec_variants = {canonical_variant(variant) for variant in spec_variants}
     expected_ids = {
         f"pipeline-op.{slug(variant)}.benchmark-materialized"
-        for variant in spec_variants
+        for variant in canonical_spec_variants
     }
     operation_items = [
         item
@@ -97,7 +129,7 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
         if item["workload_id"].startswith("pipeline-chain.long-point.")
     ]
     actual_ids = {
-        item["workload_id"]
+        f"pipeline-op.{slug(variant_from_workload_id(item['workload_id']))}.benchmark-materialized"
         for item in base_operation_items
     }
     all_ids = [item["workload_id"] for item in workloads]
@@ -166,12 +198,22 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
         "schema": "pillow-rs/pipeline-benchmark-coverage@1",
         "input": str(path.relative_to(ROOT)),
         "source_pipeline_op_variants": len(source_variants),
-        "benchmark_spec_variants": len(spec_variants),
-        "missing_benchmark_specs": sorted(source_variants - spec_variants),
-        "unexpected_benchmark_specs": sorted(spec_variants - source_variants),
-        "operation_variants_total": len(source_variants),
+        "canonical_pipeline_op_variants": len(canonical_source_variants),
+        "benchmark_spec_variants": len(canonical_spec_variants),
+        "benchmark_spec_aliases": sorted(
+            f"{alias}->{canonical}" for alias, canonical in PIPELINE_VARIANT_ALIASES.items()
+        ),
+        "missing_benchmark_specs": sorted(
+            canonical_source_variants - canonical_spec_variants
+        ),
+        "unexpected_benchmark_specs": sorted(
+            canonical_spec_variants - canonical_source_variants
+        ),
+        "operation_variants_total": len(canonical_source_variants),
         "operation_variants_benchmarked": len(covered),
-        "operation_coverage_percent": 100.0 * len(covered) / len(source_variants),
+        "operation_coverage_percent": 100.0
+        * len(covered)
+        / len(canonical_source_variants),
         "composition_workflows": composition_count,
         "lifecycle_workflows": len(lifecycle_items),
         "quick_workflows": len(quick_items),

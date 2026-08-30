@@ -1,7 +1,9 @@
 // 3x3 convolution filter — PIL-identical row-grouped f32 accumulation.
 // Mode-aware: for L/LA (0/1) only convolves R channel (luma), preserves G/B/A.
-// Params: 9 pre-divided kernel f32 values (as u32 bits), scale (f32 as u32),
-//         offset (i32). All sent from host via extract_params.
+// Mode 7 is I: one packed word is one signed little-endian i32 sample.
+// Params: 9 pre-divided kernel f32 values (as u32 bits), offset (i32), and an
+//         optional exact rational denominator. All sent from host via
+//         extract_params.
 //
 // CPU reference (image.rs:2604-2624):
 //   k[n] = kernel[n] / scale
@@ -30,6 +32,7 @@ struct Params {
     k7: u32,
     k8: u32,
     offset_val: i32,
+    rational_denominator: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -38,7 +41,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
 // PIL-identical clip8: truncating cast clamping to [0, 255]
 fn clip8_filter(ss: f32) -> u32 {
@@ -47,7 +50,126 @@ fn clip8_filter(ss: f32) -> u32 {
     return u32(ss);
 }
 
+fn i32_sample(pixel: u32) -> f32 {
+    return f32(bitcast<i32>(pixel));
+}
+
+fn byte_row_3(p0: u32, p1: u32, p2: u32, k0: f32, k1: f32, k2: f32) -> f32 {
+    var sum = f32(p1) * k1;
+    sum = fma(f32(p0), k0, sum);
+    sum = fma(f32(p2), k2, sum);
+    return sum;
+}
+
+fn clip_i32_filter(ss: f32) -> u32 {
+    if !(ss > 0.0) { return 0u; }
+    if ss >= 2147483647.0 { return 0x7fffffffu; }
+    return bitcast<u32>(i32(ss));
+}
+
+fn rational_num(bits: u32, denominator: u32) -> i32 {
+    return i32(round(bitcast<f32>(bits) * f32(denominator)));
+}
+
+fn clip_rational_filter(sum: i32, denominator: u32) -> u32 {
+    let d = i32(denominator);
+    // The byte contract is trunc((sum / d) + offset + 0.5), with clipping
+    // before the cast. Doubling keeps the half-unit bias exact for odd d.
+    let doubled = sum * 2i + params.offset_val * d * 2i + d;
+    let doubled_denominator = d * 2i;
+    if doubled <= 0i {
+        return 0u;
+    }
+    if doubled >= 255i * doubled_denominator {
+        return 255u;
+    }
+    return u32(doubled / doubled_denominator);
+}
+
+fn rational_3x3_channel(
+    bottom_left: u32,
+    bottom_center: u32,
+    bottom_right: u32,
+    center_left: u32,
+    center: u32,
+    center_right: u32,
+    top_left: u32,
+    top_center: u32,
+    top_right: u32,
+    denominator: u32,
+) -> u32 {
+    let n0 = rational_num(params.k0, denominator);
+    let n1 = rational_num(params.k1, denominator);
+    let n2 = rational_num(params.k2, denominator);
+    let n3 = rational_num(params.k3, denominator);
+    let n4 = rational_num(params.k4, denominator);
+    let n5 = rational_num(params.k5, denominator);
+    let n6 = rational_num(params.k6, denominator);
+    let n7 = rational_num(params.k7, denominator);
+    let n8 = rational_num(params.k8, denominator);
+    var sum = i32(bottom_center) * n1;
+    sum = sum + i32(bottom_left) * n0;
+    sum = sum + i32(bottom_right) * n2;
+    sum = sum + i32(center) * n4;
+    sum = sum + i32(center_left) * n3;
+    sum = sum + i32(center_right) * n5;
+    sum = sum + i32(top_center) * n7;
+    sum = sum + i32(top_left) * n6;
+    sum = sum + i32(top_right) * n8;
+    return clip_rational_filter(sum, denominator);
+}
+
+fn process_i32_pixel(x: u32, y: u32) -> u32 {
+    let w = params.width;
+    let idx = y * w + x;
+    if w < 3u || params.height < 3u {
+        return input[idx];
+    }
+    if x == 0u || x >= w - 1u || y == 0u || y >= params.height - 1u {
+        return input[idx];
+    }
+
+    let k0 = bitcast<f32>(params.k0);
+    let k1 = bitcast<f32>(params.k1);
+    let k2 = bitcast<f32>(params.k2);
+    let k3 = bitcast<f32>(params.k3);
+    let k4 = bitcast<f32>(params.k4);
+    let k5 = bitcast<f32>(params.k5);
+    let k6 = bitcast<f32>(params.k6);
+    let k7 = bitcast<f32>(params.k7);
+    let k8 = bitcast<f32>(params.k8);
+    let p0 = input[(y - 1u) * w + (x - 1u)];
+    let p1 = input[(y - 1u) * w + x];
+    let p2 = input[(y - 1u) * w + (x + 1u)];
+    let p3 = input[y * w + (x - 1u)];
+    let p4 = input[y * w + x];
+    let p5 = input[y * w + (x + 1u)];
+    let p6 = input[(y + 1u) * w + (x - 1u)];
+    let p7 = input[(y + 1u) * w + x];
+    let p8 = input[(y + 1u) * w + (x + 1u)];
+
+    // Keep the same middle, left, right contraction order and bottom-to-top
+    // row accumulation used by Pillow's I-mode implementation.
+    var bottom = i32_sample(p7) * k1;
+    bottom = fma(i32_sample(p6), k0, bottom);
+    bottom = fma(i32_sample(p8), k2, bottom);
+    var middle = i32_sample(p4) * k4;
+    middle = fma(i32_sample(p3), k3, middle);
+    middle = fma(i32_sample(p5), k5, middle);
+    var top = i32_sample(p1) * k7;
+    top = fma(i32_sample(p0), k6, top);
+    top = fma(i32_sample(p2), k8, top);
+    var value = f32(params.offset_val) + 0.5;
+    value = value + bottom;
+    value = value + middle;
+    value = value + top;
+    return clip_i32_filter(value);
+}
+
 fn process_pixel(x: u32, y: u32) -> u32 {
+    if params.mode == 7u {
+        return process_i32_pixel(x, y);
+    }
     let w = params.width;
     let idx = y * w + x;
 
@@ -108,35 +230,65 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     let r22 = p2_2 & 0xffu;        let g22 = (p2_2 >> 8u) & 0xffu;
     let b22 = (p2_2 >> 16u) & 0xffu; let a22 = (p2_2 >> 24u) & 0xffu;
 
+    // Mode-aware output: for L/LA modes, only R is convolved; G/B/A
+    // preservation is applied identically by both byte arithmetic paths.
+    let in_pixel = input[idx];
+    let in_g = (in_pixel >> 8u) & 0xffu;
+    let in_b = (in_pixel >> 16u) & 0xffu;
+    let in_a = (in_pixel >> 24u) & 0xffu;
+
+    if params.rational_denominator > 0u {
+        let denominator = params.rational_denominator;
+        let out_r = rational_3x3_channel(
+            r20, r21, r22, r10, r11, r12, r00, r01, r02, denominator,
+        );
+        let out_g = select(
+            in_g,
+            rational_3x3_channel(
+                g20, g21, g22, g10, g11, g12, g00, g01, g02, denominator,
+            ),
+            mode_has_g(params.mode),
+        );
+        let out_b = select(
+            in_b,
+            rational_3x3_channel(
+                b20, b21, b22, b10, b11, b12, b00, b01, b02, denominator,
+            ),
+            mode_has_b(params.mode),
+        );
+        let out_a = select(
+            255u,
+            rational_3x3_channel(
+                a20, a21, a22, a10, a11, a12, a00, a01, a02, denominator,
+            ),
+            mode_has_a(params.mode),
+        );
+        return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
+    }
+
     // ── Row bottom (y+1) — pixels p2_0..p2_2, kernel k0..k2 ──
-    let row_b_r = f32(r20) * k0 + f32(r21) * k1 + f32(r22) * k2;
-    let row_b_g = f32(g20) * k0 + f32(g21) * k1 + f32(g22) * k2;
-    let row_b_b = f32(b20) * k0 + f32(b21) * k1 + f32(b22) * k2;
-    let row_b_a = f32(a20) * k0 + f32(a21) * k1 + f32(a22) * k2;
+    let row_b_r = byte_row_3(r20, r21, r22, k0, k1, k2);
+    let row_b_g = byte_row_3(g20, g21, g22, k0, k1, k2);
+    let row_b_b = byte_row_3(b20, b21, b22, k0, k1, k2);
+    let row_b_a = byte_row_3(a20, a21, a22, k0, k1, k2);
 
     // ── Row center (y) — pixels p1_0..p1_2, kernel k3..k5 ──
-    let row_c_r = f32(r10) * k3 + f32(r11) * k4 + f32(r12) * k5;
-    let row_c_g = f32(g10) * k3 + f32(g11) * k4 + f32(g12) * k5;
-    let row_c_b = f32(b10) * k3 + f32(b11) * k4 + f32(b12) * k5;
-    let row_c_a = f32(a10) * k3 + f32(a11) * k4 + f32(a12) * k5;
+    let row_c_r = byte_row_3(r10, r11, r12, k3, k4, k5);
+    let row_c_g = byte_row_3(g10, g11, g12, k3, k4, k5);
+    let row_c_b = byte_row_3(b10, b11, b12, k3, k4, k5);
+    let row_c_a = byte_row_3(a10, a11, a12, k3, k4, k5);
 
     // ── Row top (y-1) — pixels p0_0..p0_2, kernel k6..k8 ──
-    let row_t_r = f32(r00) * k6 + f32(r01) * k7 + f32(r02) * k8;
-    let row_t_g = f32(g00) * k6 + f32(g01) * k7 + f32(g02) * k8;
-    let row_t_b = f32(b00) * k6 + f32(b01) * k7 + f32(b02) * k8;
-    let row_t_a = f32(a00) * k6 + f32(a01) * k7 + f32(a02) * k8;
+    let row_t_r = byte_row_3(r00, r01, r02, k6, k7, k8);
+    let row_t_g = byte_row_3(g00, g01, g02, k6, k7, k8);
+    let row_t_b = byte_row_3(b00, b01, b02, k6, k7, k8);
+    let row_t_a = byte_row_3(a00, a01, a02, k6, k7, k8);
 
     // Accumulate in PIL order: bias -> bottom -> center -> top
     let ss_r = bias + row_b_r + row_c_r + row_t_r;
     let ss_g = bias + row_b_g + row_c_g + row_t_g;
     let ss_b = bias + row_b_b + row_c_b + row_t_b;
     let ss_a = bias + row_b_a + row_c_a + row_t_a;
-
-    // Mode-aware output: for L/LA modes, only R is convolved; G/B/A preserved from input
-    let in_pixel = input[idx];
-    let in_g = (in_pixel >> 8u) & 0xffu;
-    let in_b = (in_pixel >> 16u) & 0xffu;
-    let in_a = (in_pixel >> 24u) & 0xffu;
 
     let out_r = clip8_filter(ss_r);
     let out_g = select(in_g, clip8_filter(ss_g), mode_has_g(params.mode));

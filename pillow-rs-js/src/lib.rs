@@ -11,9 +11,9 @@
 
 //! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs.
 use pillow_rs::Image as RsImage;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsCast;
 
 fn err(e: pillow_rs::PilError) -> JsValue {
     let name = match &e {
@@ -172,25 +172,21 @@ fn image_info_value_to_js(value: pillow_rs::ImageInfoValue) -> JsValue {
             );
             object.into()
         }
-        pillow_rs::ImageInfoValue::IntegerList(values) => {
-            js_sys::Array::from_iter(
-                values
-                    .into_iter()
-                    .map(|value| JsValue::from_f64(value as f64)),
-            )
-            .into()
-        }
+        pillow_rs::ImageInfoValue::IntegerList(values) => js_sys::Array::from_iter(
+            values
+                .into_iter()
+                .map(|value| JsValue::from_f64(value as f64)),
+        )
+        .into(),
         pillow_rs::ImageInfoValue::FloatList(values) => {
             js_sys::Array::from_iter(values.into_iter().map(JsValue::from_f64)).into()
         }
-        pillow_rs::ImageInfoValue::IntegerTuple(values) => {
-            js_sys::Array::from_iter(
-                values
-                    .into_iter()
-                    .map(|value| JsValue::from_f64(value as f64)),
-            )
-            .into()
-        }
+        pillow_rs::ImageInfoValue::IntegerTuple(values) => js_sys::Array::from_iter(
+            values
+                .into_iter()
+                .map(|value| JsValue::from_f64(value as f64)),
+        )
+        .into(),
         pillow_rs::ImageInfoValue::Object(fields) => image_info_to_js(fields),
     }
 }
@@ -291,8 +287,7 @@ fn js_color3dlut_table(value: &JsValue) -> Result<pillow_rs::Color3DLutTable, Js
     } else {
         let flat = js_float_array(value).ok_or_else(|| {
             err(pillow_rs::PilError::TypeError(
-                "Table must be a sequence of floats or a sequence of tuples of floats."
-                    .to_owned(),
+                "Table must be a sequence of floats or a sequence of tuples of floats.".to_owned(),
             ))
         })?;
         Ok(pillow_rs::Color3DLutTable::Flat(flat))
@@ -373,9 +368,7 @@ fn js_python_dither(value: &JsValue) -> pillow_rs::PythonDitherInput {
     if let Some(value) = js_integer(value) {
         return u32::try_from(value)
             .map(pillow_rs::PythonDitherInput::Integer)
-            .unwrap_or_else(|_| {
-                pillow_rs::PythonDitherInput::Invalid("int".to_owned())
-            });
+            .unwrap_or_else(|_| pillow_rs::PythonDitherInput::Invalid("int".to_owned()));
     }
     if let Some(value) = value.as_string() {
         return pillow_rs::PythonDitherInput::Name(value);
@@ -390,9 +383,7 @@ fn js_convert_mode(value: &JsValue) -> pillow_rs::PythonConvertModeInput {
     value
         .as_string()
         .map(pillow_rs::PythonConvertModeInput::Name)
-        .unwrap_or_else(|| {
-            pillow_rs::PythonConvertModeInput::Invalid(js_value_type_name(value))
-        })
+        .unwrap_or_else(|| pillow_rs::PythonConvertModeInput::Invalid(js_value_type_name(value)))
 }
 
 fn js_convert_palette(value: &JsValue) -> pillow_rs::PythonConvertPaletteInput {
@@ -402,22 +393,18 @@ fn js_convert_palette(value: &JsValue) -> pillow_rs::PythonConvertPaletteInput {
     value
         .as_string()
         .map(pillow_rs::PythonConvertPaletteInput::Name)
-        .unwrap_or_else(|| {
-            pillow_rs::PythonConvertPaletteInput::Invalid(js_value_type_name(value))
-        })
+        .unwrap_or_else(|| pillow_rs::PythonConvertPaletteInput::Invalid(js_value_type_name(value)))
 }
 
 fn js_optional_matrix(value: &JsValue) -> Result<Option<Vec<f64>>, JsValue> {
     if value.is_null() || value.is_undefined() {
         return Ok(None);
     }
-    js_float_array(value)
-        .map(Some)
-        .ok_or_else(|| {
-            err(pillow_rs::PilError::TypeError(
-                "matrix must be a sequence of numbers".to_owned(),
-            ))
-        })
+    js_float_array(value).map(Some).ok_or_else(|| {
+        err(pillow_rs::PilError::TypeError(
+            "matrix must be a sequence of numbers".to_owned(),
+        ))
+    })
 }
 
 fn js_centering(value: &JsValue) -> pillow_rs::CenteringInput {
@@ -522,12 +509,9 @@ fn js_draw_box_input(value: &JsValue) -> pillow_rs::DrawBoxInput {
             pillow_rs::DrawBoxInput::Nested,
         );
     }
-    js_integer_array(value).map_or(
-        pillow_rs::DrawBoxInput::Invalid,
-        |values| pillow_rs::DrawBoxInput::Flat(
-            values.into_iter().map(|value| value as i32).collect(),
-        ),
-    )
+    js_integer_array(value).map_or(pillow_rs::DrawBoxInput::Invalid, |values| {
+        pillow_rs::DrawBoxInput::Flat(values.into_iter().map(|value| value as i32).collect())
+    })
 }
 
 fn js_draw_circle_center_input(value: &JsValue) -> pillow_rs::DrawCircleCenterInput {
@@ -775,9 +759,9 @@ fn js_transform_data(value: &JsValue) -> Result<Option<pillow_rs::TransformData>
     if value.is_object() {
         return Ok(Some(pillow_rs::TransformData::Mapping));
     }
-    Ok(Some(pillow_rs::TransformData::Invalid(
-        js_value_type_name(value),
-    )))
+    Ok(Some(pillow_rs::TransformData::Invalid(js_value_type_name(
+        value,
+    ))))
 }
 
 fn js_rotate_resample(value: &JsValue) -> pillow_rs::RotateResampleInput {
@@ -862,7 +846,10 @@ fn js_putpixel_value(value: &JsValue) -> pillow_rs::PutPixelValue {
             .map(|item| item.as_f64())
             .collect::<Option<Vec<_>>>();
         if let Some(values) = values {
-            if values.iter().all(|item| item.is_finite() && item.fract() == 0.0) {
+            if values
+                .iter()
+                .all(|item| item.is_finite() && item.fract() == 0.0)
+            {
                 return pillow_rs::PutPixelValue::Components(
                     values.into_iter().map(|item| item as i64).collect(),
                 );
@@ -924,7 +911,14 @@ fn js_new_color_input(
     };
     if let Some(text) = value.as_string() {
         return Ok(pillow_rs::PythonNewColorInput::from_parts(
-            Some(text), None, None, None, None, None, None, true,
+            Some(text),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
         ));
     }
     if let Some(number) = value.as_f64() {
@@ -1026,7 +1020,7 @@ fn js_new_color_input(
             _ => {
                 return Err(err(pillow_rs::PilError::TypeError(
                     "color must be a sequence of length 2, 3, or 4".to_owned(),
-                )))
+                )));
             }
         };
         return Ok(input);
@@ -1857,9 +1851,9 @@ impl Image {
                     Ok(result)
                 }
                 "color3dlut-short-result" => Ok(values.iter().copied().take(2).collect()),
-                _ => Err(err(pillow_rs::PilError::NotImplementedError(
-                    format!("unsupported Color3DLUT callback: {callback}"),
-                ))),
+                _ => Err(err(pillow_rs::PilError::NotImplementedError(format!(
+                    "unsupported Color3DLUT callback: {callback}"
+                )))),
             },
             err,
         )?;
@@ -1997,11 +1991,7 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "thumbnailWithInput")]
-    pub fn thumb_with_input(
-        &mut self,
-        size: JsValue,
-        resample: JsValue,
-    ) -> Result<(), JsValue> {
+    pub fn thumb_with_input(&mut self, size: JsValue, resample: JsValue) -> Result<(), JsValue> {
         let values = js_integer_array(&size).ok_or_else(|| {
             err(pillow_rs::PilError::TypeError(
                 "size must be a two-item sequence".to_owned(),
@@ -2014,10 +2004,7 @@ impl Image {
             ))));
         }
         self.inner
-            .thumbnail(
-                (values[0], values[1]),
-                js_optional_resample(&resample)?,
-            )
+            .thumbnail((values[0], values[1]), js_optional_resample(&resample)?)
             .map_err(err)
     }
 
@@ -2153,12 +2140,14 @@ impl Image {
                     ));
                 }
                 if value.is_object() && !value.is_array() {
-                    if matches!(kind, pillow_rs::PutDataValueKind::Components { channels: 2 })
-                        && js_sys::Reflect::has(
-                            &value,
-                            &JsValue::from_str("__pillow_rs_putdata_custom_index__"),
-                        )
-                        .unwrap_or(false)
+                    if matches!(
+                        kind,
+                        pillow_rs::PutDataValueKind::Components { channels: 2 }
+                    ) && js_sys::Reflect::has(
+                        &value,
+                        &JsValue::from_str("__pillow_rs_putdata_custom_index__"),
+                    )
+                    .unwrap_or(false)
                     {
                         return Err(pillow_rs::PilError::TypeError(
                             "color must be int or tuple".to_owned(),
@@ -2166,7 +2155,10 @@ impl Image {
                     }
                 }
                 if value.is_array() && js_sys::Array::from(&value).length() == 1 {
-                    if matches!(kind, pillow_rs::PutDataValueKind::Components { channels: 2 }) {
+                    if matches!(
+                        kind,
+                        pillow_rs::PutDataValueKind::Components { channels: 2 }
+                    ) {
                         return Err(pillow_rs::PilError::SystemError(
                             "new style getargs format but argument is not a tuple".to_owned(),
                         ));
@@ -2365,9 +2357,7 @@ impl ImageDraw {
     pub fn new(img: &Image, mode: Option<String>) -> Result<ImageDraw, JsValue> {
         let draw = Draw::new(img.inner.clone(), mode);
         draw.validate_mode().map_err(err)?;
-        Ok(ImageDraw {
-            draw,
-        })
+        Ok(ImageDraw { draw })
     }
 
     #[wasm_bindgen(js_name = "line")]
@@ -2430,12 +2420,7 @@ impl ImageDraw {
             }
         };
         self.draw
-            .polyline_with_input_joint(
-                input,
-                (r, g, b, a),
-                width.unwrap_or(1),
-                joint.as_deref(),
-            )
+            .polyline_with_input_joint(input, (r, g, b, a), width.unwrap_or(1), joint.as_deref())
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "lineWithColorInput")]
@@ -2521,7 +2506,17 @@ impl ImageDraw {
         let fill = js_draw_optional_color(&self.draw, &fill)?;
         let outline = js_draw_optional_color(&self.draw, &outline)?;
         self.draw
-            .chord(x0, y0, x1, y1, start, end, fill, outline, width.unwrap_or(1))
+            .chord(
+                x0,
+                y0,
+                x1,
+                y1,
+                start,
+                end,
+                fill,
+                outline,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "piesliceWithInput")]
@@ -2538,7 +2533,17 @@ impl ImageDraw {
         let fill = js_draw_optional_color(&self.draw, &fill)?;
         let outline = js_draw_optional_color(&self.draw, &outline)?;
         self.draw
-            .pieslice(x0, y0, x1, y1, start, end, fill, outline, width.unwrap_or(1))
+            .pieslice(
+                x0,
+                y0,
+                x1,
+                y1,
+                start,
+                end,
+                fill,
+                outline,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "circleWithInput")]
@@ -2593,11 +2598,7 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pointWithInput")]
-    pub fn point_with_input(
-        &mut self,
-        points: JsValue,
-        fill: JsValue,
-    ) -> Result<(), JsValue> {
+    pub fn point_with_input(&mut self, points: JsValue, fill: JsValue) -> Result<(), JsValue> {
         let fill = self
             .draw
             .color_with_input(js_draw_color_input(&fill))
@@ -3263,7 +3264,12 @@ impl ImageFont {
             &options,
         )
         .map_err(err)?;
-        Ok(vec![bbox.0 as f64, bbox.1 as f64, bbox.2 as f64, bbox.3 as f64])
+        Ok(vec![
+            bbox.0 as f64,
+            bbox.1 as f64,
+            bbox.2 as f64,
+            bbox.3 as f64,
+        ])
     }
 
     #[wasm_bindgen(js_name = "getlengthWithOptions")]
@@ -3595,7 +3601,10 @@ fn image_palette_bytes(value: &JsValue) -> Vec<u8> {
     }
     js_sys::Array::from(value)
         .iter()
-        .map(|item| item.as_f64().and_then(|value| u8::try_from(value as i64).ok()))
+        .map(|item| {
+            item.as_f64()
+                .and_then(|value| u8::try_from(value as i64).ok())
+        })
         .collect::<Option<Vec<_>>>()
         .unwrap_or_default()
 }
@@ -3810,8 +3819,8 @@ impl Image {
     ) -> Result<Vec<u8>, JsValue> {
         let format = js_optional_string(&format, "format")?;
         let extension = js_optional_string(&extension, "extension")?;
-        let resolved = RsImage::resolve_save_format(format.as_deref(), extension.as_deref())
-            .map_err(err)?;
+        let resolved =
+            RsImage::resolve_save_format(format.as_deref(), extension.as_deref()).map_err(err)?;
         self.inner.encode(&resolved).map_err(err)
     }
 
@@ -3936,12 +3945,7 @@ pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Resu
 }
 
 #[wasm_bindgen(js_name = "imageNewWithInput")]
-pub fn image_new_with_input(
-    mode: &str,
-    w: u32,
-    h: u32,
-    color: JsValue,
-) -> Result<Image, JsValue> {
+pub fn image_new_with_input(mode: &str, w: u32, h: u32, color: JsValue) -> Result<Image, JsValue> {
     let input = js_new_color_input(
         mode,
         (!color.is_null() && !color.is_undefined()).then_some(&color),
@@ -3998,11 +4002,7 @@ pub fn from_array_fn(
 }
 
 #[wasm_bindgen(js_name = "openFn")]
-pub fn open_fn(
-    data: Vec<u8>,
-    mode: JsValue,
-    formats: JsValue,
-) -> Result<Image, JsValue> {
+pub fn open_fn(data: Vec<u8>, mode: JsValue, formats: JsValue) -> Result<Image, JsValue> {
     let mode = if mode.is_null() || mode.is_undefined() {
         pillow_rs::PythonOpenModeInput::None
     } else if let Some(name) = mode.as_string() {
@@ -4093,8 +4093,8 @@ impl ImageChops {
             scale.unwrap_or(1.0),
             offset.unwrap_or(0.0),
         )
-            .map(|i| Image { inner: i })
-            .map_err(err)
+        .map(|i| Image { inner: i })
+        .map_err(err)
     }
     #[wasm_bindgen(js_name = "subtract")]
     pub fn sub(
@@ -4109,8 +4109,8 @@ impl ImageChops {
             scale.unwrap_or(1.0),
             offset.unwrap_or(0.0),
         )
-            .map(|i| Image { inner: i })
-            .map_err(err)
+        .map(|i| Image { inner: i })
+        .map_err(err)
     }
     #[wasm_bindgen(js_name = "multiply")]
     pub fn mul(a: &Image, b: &Image) -> Result<Image, JsValue> {
@@ -4301,11 +4301,7 @@ impl ImageOps {
         .map_err(err)
     }
     #[wasm_bindgen(js_name = "autocontrastInvalidMask")]
-    pub fn auto_with_invalid_mask(
-        img: &Image,
-        c: f64,
-        type_name: &str,
-    ) -> Result<Image, JsValue> {
+    pub fn auto_with_invalid_mask(img: &Image, c: f64, type_name: &str) -> Result<Image, JsValue> {
         let mask = pillow_rs::ImageOpsMask::Invalid(type_name.to_owned());
         pillow_rs::imageops_autocontrast_with_mask(&img.inner, c, mask)
             .map(|i| Image { inner: i })
@@ -4330,14 +4326,9 @@ impl ImageOps {
         h: u32,
         method: JsValue,
     ) -> Result<Image, JsValue> {
-        pillow_rs::imageops_contain_with_input(
-            &img.inner,
-            w,
-            h,
-            js_optional_resample(&method)?,
-        )
-        .map(|i| Image { inner: i })
-        .map_err(err)
+        pillow_rs::imageops_contain_with_input(&img.inner, w, h, js_optional_resample(&method)?)
+            .map(|i| Image { inner: i })
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "cover")]
     pub fn cover(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
@@ -4352,14 +4343,9 @@ impl ImageOps {
         h: u32,
         method: JsValue,
     ) -> Result<Image, JsValue> {
-        pillow_rs::imageops_cover_with_input(
-            &img.inner,
-            w,
-            h,
-            js_optional_resample(&method)?,
-        )
-        .map(|i| Image { inner: i })
-        .map_err(err)
+        pillow_rs::imageops_cover_with_input(&img.inner, w, h, js_optional_resample(&method)?)
+            .map(|i| Image { inner: i })
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "fit")]
     pub fn fit(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
@@ -4429,18 +4415,10 @@ impl ImageOps {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "scaleWithInput")]
-    pub fn scale_with_input(
-        img: &Image,
-        factor: f64,
-        method: JsValue,
-    ) -> Result<Image, JsValue> {
-        pillow_rs::imageops_scale_with_input(
-            &img.inner,
-            factor,
-            js_optional_resample(&method)?,
-        )
-        .map(|i| Image { inner: i })
-        .map_err(err)
+    pub fn scale_with_input(img: &Image, factor: f64, method: JsValue) -> Result<Image, JsValue> {
+        pillow_rs::imageops_scale_with_input(&img.inner, factor, js_optional_resample(&method)?)
+            .map(|i| Image { inner: i })
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "crop")]
     pub fn crop(img: &Image, border: u32) -> Result<Image, JsValue> {
@@ -4548,9 +4526,9 @@ pub fn color3dlut_generate(
         |values| match callback.as_str() {
             "color3dlut-generate-identity" => Ok(values.to_vec()),
             "color3dlut-short-result" => Ok(values.iter().copied().take(2).collect()),
-            _ => Err(err(pillow_rs::PilError::NotImplementedError(
-                format!("unsupported Color3DLUT callback: {callback}"),
-            ))),
+            _ => Err(err(pillow_rs::PilError::NotImplementedError(format!(
+                "unsupported Color3DLUT callback: {callback}"
+            )))),
         },
         err,
     )
@@ -4696,17 +4674,11 @@ fn backend_name(backend: pillow_rs::Backend) -> String {
     format!("{backend:?}").to_lowercase()
 }
 
-fn set_pipeline_telemetry_field(
-    object: &js_sys::Object,
-    name: &str,
-    value: &JsValue,
-) {
+fn set_pipeline_telemetry_field(object: &js_sys::Object, name: &str, value: &JsValue) {
     let _ = js_sys::Reflect::set(object, &JsValue::from_str(name), value);
 }
 
-fn pipeline_resource_telemetry_to_js(
-    resource: pillow_rs::PipelineResourceTelemetry,
-) -> JsValue {
+fn pipeline_resource_telemetry_to_js(resource: pillow_rs::PipelineResourceTelemetry) -> JsValue {
     let object = js_sys::Object::new();
     set_pipeline_telemetry_field(
         &object,
@@ -4782,11 +4754,7 @@ fn pipeline_operation_telemetry_to_js(
     let values = js_sys::Array::new();
     for sample in samples {
         let value = js_sys::Object::new();
-        set_pipeline_telemetry_field(
-            &value,
-            "operation",
-            &JsValue::from_str(sample.operation),
-        );
+        set_pipeline_telemetry_field(&value, "operation", &JsValue::from_str(sample.operation));
         set_pipeline_telemetry_field(&value, "path", &JsValue::from_str(sample.path));
         set_pipeline_telemetry_field(
             &value,
@@ -4861,25 +4829,16 @@ pub fn take_pipeline_telemetry() -> JsValue {
         "operation_count",
         &JsValue::from_f64(operation_count as f64),
     );
-    set_pipeline_telemetry_field(
-        &object,
-        "route_ns",
-        &JsValue::from_f64(route_ns as f64),
-    );
+    set_pipeline_telemetry_field(&object, "route_ns", &JsValue::from_f64(route_ns as f64));
     set_pipeline_telemetry_field(
         &object,
         "validation_ns",
         &JsValue::from_f64(validation_ns as f64),
     );
-    set_pipeline_telemetry_field(
-        &object,
-        "backend_ns",
-        &JsValue::from_f64(backend_ns as f64),
-    );
+    set_pipeline_telemetry_field(&object, "backend_ns", &JsValue::from_f64(backend_ns as f64));
     let dispatch = dispatch_count.map_or(JsValue::NULL, |value| JsValue::from_f64(value as f64));
     set_pipeline_telemetry_field(&object, "dispatch_count", &dispatch);
-    let fallback = fallback_reason
-        .map_or(JsValue::NULL, |value| JsValue::from_str(&value));
+    let fallback = fallback_reason.map_or(JsValue::NULL, |value| JsValue::from_str(&value));
     set_pipeline_telemetry_field(&object, "fallback_reason", &fallback);
     let resource = resource.map_or(JsValue::NULL, pipeline_resource_telemetry_to_js);
     set_pipeline_telemetry_field(&object, "resource", &resource);
@@ -5144,10 +5103,7 @@ pub fn alpha_composite_fn(a: &Image, b: &Image) -> Result<Image, JsValue> {
 }
 
 #[wasm_bindgen(js_name = "exifTransposeFn")]
-pub fn exif_transpose_fn(
-    img: &mut Image,
-    in_place: bool,
-) -> Result<JsValue, JsValue> {
+pub fn exif_transpose_fn(img: &mut Image, in_place: bool) -> Result<JsValue, JsValue> {
     let result = pillow_rs::imageops_exif_transpose(&img.inner, in_place).map_err(err)?;
     if in_place {
         if let Some(transposed) = result {

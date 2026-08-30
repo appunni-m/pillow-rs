@@ -116,26 +116,34 @@ def infrastructure_errors(value: list[dict[str, Any]]) -> None:
 
 
 def execution_receipt(value: dict[str, Any], label: str) -> None:
-    exact(
-        value,
-        {
-            "status",
-            "requested_backend",
-            "actual_backend",
-            "actual_backend_counts",
-            "fallback_reason_counts",
-            "operation_count",
-            "dispatch_count",
-            "resize_coeff_cache_hits",
-            "resize_coeff_cache_misses",
-            "phase_timings_ns",
-            "resource",
-            "sample_count",
-            "cached_sample_count",
-        },
-        label,
-    )
-    if value["status"] not in {"completed", "not_proven", "not_applicable"}:
+    required = {
+        "status",
+        "requested_backend",
+        "actual_backend",
+        "actual_backend_counts",
+        "fallback_reason_counts",
+        "operation_count",
+        "dispatch_count",
+        "resize_coeff_cache_hits",
+        "resize_coeff_cache_misses",
+        "phase_timings_ns",
+        "resource",
+        "sample_count",
+        "cached_sample_count",
+    }
+    allowed = required | {"errors"}
+    if not isinstance(value, dict) or set(value) not in (required, allowed):
+        raise ValueError(
+            f"{label}: expected execution receipt keys {sorted(required)}"
+            " with optional errors"
+        )
+    if value["status"] not in {
+        "completed",
+        "partial",
+        "unsupported",
+        "not_proven",
+        "not_applicable",
+    }:
         raise ValueError(f"{label}.status: invalid status")
     string(value["requested_backend"], f"{label}.requested_backend")
     string(value["actual_backend"], f"{label}.actual_backend", nullable=True)
@@ -210,6 +218,25 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
         summary(value["resource"][field], f"{label}.resource.{field}")
     non_negative_int(value["sample_count"], f"{label}.sample_count")
     non_negative_int(value["cached_sample_count"], f"{label}.cached_sample_count")
+    if "errors" in value:
+        if not isinstance(value["errors"], list):
+            raise ValueError(f"{label}.errors: expected array")
+        for index, item in enumerate(value["errors"]):
+            error_label = f"{label}.errors[{index}]"
+            exact(item, {"step_id", "error"}, error_label)
+            string(item["step_id"], f"{error_label}.step_id", nullable=True)
+            exact(
+                item["error"],
+                {"class", "kind", "message", "stage", "code"},
+                f"{error_label}.error",
+            )
+            for field in ("class", "kind", "message", "stage"):
+                string(
+                    item["error"][field],
+                    f"{error_label}.error.{field}",
+                    allow_empty=field == "message",
+                )
+            string(item["error"]["code"], f"{error_label}.error.code", nullable=True)
 
 
 def workflow(value: dict[str, Any], label: str) -> None:
@@ -793,7 +820,49 @@ def benchmark(result: dict[str, Any]) -> None:
             for measurement_index, measurement in enumerate(subject["measurements"]):
                 exact(measurement, {"metric", "unit", "weighted_mean"}, f"{sprefix}.measurements[{measurement_index}]")
         for comparison_index, comparison in enumerate(suite["comparisons"]):
-            exact(comparison, {"baseline_subject", "subject_id", "metric", "baseline_value", "subject_value", "unit", "ratio"}, f"{prefix}.comparisons[{comparison_index}]")
+            comparison_label = f"{prefix}.comparisons[{comparison_index}]"
+            legacy_keys = {
+                "baseline_subject",
+                "subject_id",
+                "metric",
+                "baseline_value",
+                "subject_value",
+                "unit",
+                "ratio",
+            }
+            evidence_keys = legacy_keys | {
+                "declared_member_count",
+                "common_member_count",
+                "common_member_ids_sha256",
+                "excluded_members",
+                "status",
+            }
+            if set(comparison) not in (legacy_keys, evidence_keys):
+                raise ValueError(f"{comparison_label}: invalid comparison fields")
+            for field in ("baseline_subject", "subject_id", "metric", "unit"):
+                string(comparison[field], f"{comparison_label}.{field}")
+            for field in ("baseline_value", "subject_value", "ratio"):
+                number = comparison[field]
+                if number is not None and (
+                    isinstance(number, bool) or not isinstance(number, (int, float))
+                ):
+                    raise ValueError(f"{comparison_label}.{field}: expected number or null")
+            if evidence_keys == set(comparison):
+                for field in ("declared_member_count", "common_member_count"):
+                    non_negative_int(comparison[field], f"{comparison_label}.{field}")
+                if comparison["common_member_count"] > comparison["declared_member_count"]:
+                    raise ValueError(f"{comparison_label}: common count exceeds declared count")
+                if not re.fullmatch(r"[0-9a-f]{64}", comparison["common_member_ids_sha256"]):
+                    raise ValueError(f"{comparison_label}.common_member_ids_sha256: expected lowercase sha256")
+                if comparison["status"] not in {"comparable", "not_comparable"}:
+                    raise ValueError(f"{comparison_label}.status: invalid status")
+                if not isinstance(comparison["excluded_members"], list):
+                    raise ValueError(f"{comparison_label}.excluded_members: expected array")
+                for excluded_index, excluded in enumerate(comparison["excluded_members"]):
+                    excluded_label = f"{comparison_label}.excluded_members[{excluded_index}]"
+                    exact(excluded, {"workload_id", "baseline_status", "subject_status"}, excluded_label)
+                    for field in ("workload_id", "baseline_status", "subject_status"):
+                        string(excluded[field], f"{excluded_label}.{field}")
 
 
 def status_report(result: dict[str, Any]) -> None:

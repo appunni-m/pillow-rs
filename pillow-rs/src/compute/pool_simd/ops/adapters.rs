@@ -15,9 +15,9 @@ use crate::draw::{for_each_bresenham_point, for_each_polygon_fill_span, wide_lin
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::ops::pil_resize::{
-    filter_from_resample, luma16_resample_big_endian, luma16_resample_read,
+    FilterCoeffs, filter_from_resample, luma16_resample_big_endian, luma16_resample_read,
     luma16_resample_write, precompute_coeffs, precompute_coeffs_boxed_for_filter,
-    precompute_coeffs_f64, precompute_coeffs_f64_boxed, round_up, FilterCoeffs,
+    precompute_coeffs_f64, precompute_coeffs_f64_boxed, round_up,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
@@ -26,17 +26,17 @@ use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma, RgbImage,
     RgbaImage,
 };
+#[cfg(feature = "parallel")]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
-use wide::{f32x8, f64x8, i16x8, i32x8, u8x16, u16x8, u16x16, u32x8};
+use wide::{f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x8};
 
 fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
         DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        DynamicImage::ImageRgba8(_)
-            if matches!(mode, None | Some("RGBA" | "RGBa" | "RGBX")) =>
-        {
+        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "RGBa" | "RGBX")) => {
             Some(4)
         }
         _ => None,
@@ -54,9 +54,7 @@ fn native_filter_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<u
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_)
@@ -72,9 +70,7 @@ fn native_extract_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_)
@@ -104,8 +100,13 @@ fn native_rotate_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize>
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, Some("1" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if mode == Some("PA") => Some(2),
+        DynamicImage::ImageLuma16(_)
+            if matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N")) =>
+        {
+            Some(2)
+        }
         DynamicImage::ImageRgba8(_)
-            if matches!(mode, Some("CMYK" | "RGBa" | "RGBX")) =>
+            if matches!(mode, Some("CMYK" | "RGBa" | "RGBX" | "I" | "F")) =>
         {
             Some(4)
         }
@@ -122,9 +123,7 @@ fn native_reduce_layout(img: &DynamicImage, mode: Option<&str>) -> Option<(usize
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some((1, false)),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some((2, true)),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some((3, false))
         }
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some((4, true)),
@@ -146,9 +145,7 @@ fn native_brightness_layout(img: &DynamicImage, mode: Option<&str>) -> Option<us
         // HSV and YCbCr are also three-byte native planes. Brightness is a
         // blend with the same-mode black image, so each stored sample follows
         // the same byte LUT without a color-space conversion.
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
@@ -278,15 +275,9 @@ fn native_merge_contract_for_shape(
 
 fn native_expand_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
-        DynamicImage::ImageLuma8(_)
-            if matches!(mode, None | Some("1" | "L" | "P")) =>
-        {
-            Some(1)
-        }
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_)
@@ -313,11 +304,7 @@ fn native_expand_contract_for_image(
     let output_len = (width as usize)
         .checked_mul(height as usize)?
         .checked_mul(channels)?;
-    if img.width() == 0
-        || img.height() == 0
-        || output_len < 16
-        || img.as_bytes().len() != source_len
-    {
+    if output_len == 0 || img.as_bytes().len() != source_len {
         return None;
     }
     Some((channels, width, height))
@@ -341,7 +328,7 @@ fn native_expand_contract_for_shape(
     let output_len = (width as usize)
         .checked_mul(height as usize)?
         .checked_mul(channels)?;
-    if shape.width == 0 || shape.height == 0 || output_len < 16 {
+    if output_len == 0 {
         return None;
     }
     Some((channels, width, height))
@@ -378,17 +365,12 @@ fn native_grayscale_supported_for_image(img: &DynamicImage, mode: Option<&str>) 
     let Some(pixels) = (img.width() as usize).checked_mul(img.height() as usize) else {
         return false;
     };
-    pixels != 0
-        && pixels
-            .checked_mul(channels)
-            .is_some_and(|bytes| img.as_bytes().len() == bytes)
+    pixels
+        .checked_mul(channels)
+        .is_some_and(|bytes| img.as_bytes().len() == bytes)
 }
 
-fn autocontrast_mask_supported(
-    width: u32,
-    height: u32,
-    mask: Option<&Arc<Image>>,
-) -> bool {
+fn autocontrast_mask_supported(width: u32, height: u32, mask: Option<&Arc<Image>>) -> bool {
     let Some(mask) = mask else {
         return true;
     };
@@ -406,9 +388,7 @@ fn native_point_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usize
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
@@ -425,11 +405,7 @@ fn native_point_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usize
 /// kernel blends the supplied alpha into the three destination samples.
 fn native_draw_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
-        DynamicImage::ImageLuma8(_)
-            if matches!(mode, None | Some("1" | "L" | "P")) =>
-        {
-            Some(1)
-        }
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
         DynamicImage::ImageRgb8(_)
             if matches!(mode, None | Some("RGB" | "RGBA" | "HSV" | "YCbCr")) =>
@@ -437,7 +413,10 @@ fn native_draw_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
             Some(3)
         }
         DynamicImage::ImageRgba8(_)
-            if matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")) =>
+            if matches!(
+                mode,
+                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+            ) =>
         {
             Some(4)
         }
@@ -454,9 +433,7 @@ fn native_copy_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_)
@@ -480,6 +457,28 @@ fn native_luma16_transpose_layout(img: &DynamicImage, mode: Option<&str>) -> boo
         && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
 }
 
+/// Return whether an `I;16*` image can use native-copy geometry operations.
+/// The two-byte samples stay opaque throughout the copy; reconstructing the
+/// `ImageLuma16` buffer at the boundary preserves the typed image contract
+/// without widening it through an RGBA representation.
+fn native_luma16_copy_layout(img: &DynamicImage, mode: Option<&str>) -> bool {
+    matches!(img, DynamicImage::ImageLuma16(_))
+        && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+}
+
+fn has_valid_luma16_copy_bytes(img: &DynamicImage, mode: Option<&str>) -> bool {
+    if !native_luma16_copy_layout(img, mode) {
+        return false;
+    }
+    let Some(expected) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(2))
+    else {
+        return false;
+    };
+    img.as_bytes().len() == expected
+}
+
 /// Return the native channel stride for ImageChops operations.
 ///
 /// Chops treats every stored byte as an active sample. In particular, the
@@ -492,9 +491,7 @@ fn native_chops_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> 
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         DynamicImage::ImageRgba8(_)
@@ -576,22 +573,6 @@ fn has_vectorized_byte_rows(img: &DynamicImage, channels: usize) -> bool {
             .is_some_and(|row_bytes| row_bytes >= 16)
 }
 
-/// Return whether an operation whose formula is independent for every stored
-/// byte has at least one complete vector in the whole image.  Row boundaries
-/// are not semantic boundaries for Chops, so narrow rows may be concatenated
-/// into one vector stream without changing the result.
-fn has_vectorized_flat_bytes(img: &DynamicImage, channels: usize) -> bool {
-    if img.width() == 0 || img.height() == 0 {
-        return false;
-    }
-    img.width()
-        .checked_mul(img.height())
-        .and_then(|pixels| pixels.checked_mul(channels as u32))
-        .is_some_and(|total_bytes| {
-            total_bytes >= 16 && img.as_bytes().len() == total_bytes as usize
-        })
-}
-
 /// A zero-pixel native image is a valid Chops data path even though it has no
 /// vector block to execute. Returning its already-typed buffer is the native
 /// no-work equivalent of Pillow's empty output; it must not be reported as a
@@ -625,15 +606,21 @@ fn has_vectorized_offset_rows(img: &DynamicImage, channels: usize, xoffset: i32)
 
 /// Pillow's `I;16*` ImageChops offset path is byte-oriented: the native
 /// implementation copies only the first `width` bytes of each `width * 2`
-/// byte row, leaving the second half zero-filled. Admit that contract only
-/// when those copied bytes contain a complete SIMD block. A 2-byte sample
-/// image that is smaller than one vector remains an explicit capability miss;
-/// padding it into a register would make the entire data path scalar.
+/// byte row, leaving the second half zero-filled. Narrow images use a masked
+/// vector block across adjacent rows, so a small frame does not need to be
+/// handed to the scalar backend merely because one row is shorter than a
+/// register.
 fn has_vectorized_luma16_offset(img: &DynamicImage, mode: Option<&str>) -> bool {
     matches!(img, DynamicImage::ImageLuma16(_))
         && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
         && (has_empty_native_bytes(img, 2)
-            || (img.width() >= 16 && img.height() != 0))
+            || (img.width() != 0
+                && img.height() != 0
+                && img
+                    .width()
+                    .checked_mul(img.height())
+                    .and_then(|pixels| pixels.checked_mul(2))
+                    .is_some_and(|bytes| img.as_bytes().len() == bytes as usize)))
 }
 
 /// Mirror uses one padded vector group for a partial final pixel group, so
@@ -658,6 +645,20 @@ fn has_nonempty_byte_data(img: &DynamicImage, channels: usize) -> bool {
             .is_some_and(|bytes| bytes != 0)
 }
 
+/// Validate the native byte buffer without imposing a minimum vector width.
+/// A partial final block is padded by the data kernel, and an empty image is
+/// handled as a valid native no-work path by operations whose Pillow contract
+/// preserves it.
+fn has_valid_byte_data(img: &DynamicImage, channels: usize) -> bool {
+    let Some(expected) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return false;
+    };
+    img.as_bytes().len() == expected
+}
+
 /// The enhancement kernels consume eight independent byte samples per
 /// `f64x8` block.  A partial final block is handled by the same padded vector
 /// kernel, but at least one complete block is required for strict SIMD.
@@ -671,10 +672,10 @@ fn has_vectorized_float_bytes(img: &DynamicImage, channels: usize) -> bool {
     expected >= 8 && img.as_bytes().len() == expected
 }
 
-/// Sharpness needs one complete eight-pixel interior block for its 3x3
-/// neighborhood pass. Border pixels are retained from the source, and a
-/// scalar tail is allowed after the vector block, but a width with no interior
-/// vector block would make the entire explicit SIMD request scalar-only.
+/// Sharpness needs a non-empty 3x3 interior for its neighborhood pass. The
+/// neighborhood kernel pads/repeats the final vector lanes, and the blend
+/// phase permits a scalar tail after its eight-wide blocks, so width alone
+/// must not reject valid 3x3-or-larger images.
 fn has_vectorized_sharpness_bytes(img: &DynamicImage, channels: usize) -> bool {
     let Some(expected) = (img.width() as usize)
         .checked_mul(img.height() as usize)
@@ -682,10 +683,7 @@ fn has_vectorized_sharpness_bytes(img: &DynamicImage, channels: usize) -> bool {
     else {
         return false;
     };
-    img.width() >= 10
-        && img.height() >= 3
-        && expected != 0
-        && img.as_bytes().len() == expected
+    img.width() >= 3 && img.height() >= 3 && expected != 0 && img.as_bytes().len() == expected
 }
 
 /// Return whether an identity operation can use at least one complete native
@@ -718,14 +716,6 @@ fn has_affine_vector_rows(img: &DynamicImage, channels: usize) -> bool {
                 .is_some_and(|row_bytes| row_bytes >= 8))
 }
 
-/// Multiply and Screen consume eight independent byte samples in an
-/// `f64x8` block. Keep their admission threshold separate from the
-/// sixteen-byte bytewise kernels so an 8-pixel `L` row or a 4-pixel `LA` row
-/// still takes a real vector data path.
-fn has_blend_vector_rows(img: &DynamicImage, channels: usize) -> bool {
-    has_affine_vector_rows(img, channels)
-}
-
 fn has_visible_draw_rectangle(
     width: u32,
     height: u32,
@@ -748,28 +738,19 @@ fn has_visible_draw_rectangle(
         && i64::from(y0) < i64::from(height)
 }
 
-fn valid_draw_rectangle(
-    width: u32,
-    height: u32,
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-) -> bool {
-    width != 0 && height != 0 && x1 >= x0 && y1 >= y0
+fn valid_draw_rectangle(width: u32, height: u32, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
+    let _ = (width, height);
+    x1 >= x0 && y1 >= y0
 }
 
 #[inline]
-fn record_native_row_work(width: usize, height: usize, channels: usize) {
+fn record_padded_native_row_work(width: usize, height: usize, channels: usize) {
     let row_bytes = width.saturating_mul(channels);
-    let vector_blocks = (row_bytes / 16).saturating_mul(height);
-    let scalar_tail = (row_bytes % 16).saturating_mul(height);
-    if vector_blocks != 0 {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
+    if row_bytes == 0 || height == 0 {
+        return;
     }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
-    }
+    let vector_blocks = row_bytes.div_ceil(16).saturating_mul(height);
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
 }
 
 fn valid_convolution_parameters(kernel: &[f32], scale: f32) -> bool {
@@ -794,11 +775,9 @@ fn put_alpha_data_shape(
         // RGBA while inserting an image-backed alpha channel. The data-plane
         // kernel handles that conversion with vector arithmetic below.
         PixelMode::CMYK => (4, 4, 4, true),
-        PixelMode::Mode1
-        | PixelMode::YCbCr
-        | PixelMode::HSV
-        | PixelMode::I
-        | PixelMode::F => return None,
+        PixelMode::Mode1 | PixelMode::YCbCr | PixelMode::HSV | PixelMode::I | PixelMode::F => {
+            return None;
+        }
     };
     let mode_matches = match alpha_mode {
         // `Image.putalpha_data` queues a P source with PixelMode::P but
@@ -845,11 +824,9 @@ fn put_alpha_shape(
         PixelMode::RGB => (3, 4, 4, false),
         PixelMode::RGBA => (4, 4, 4, false),
         PixelMode::CMYK => (4, 4, 4, true),
-        PixelMode::Mode1
-        | PixelMode::YCbCr
-        | PixelMode::HSV
-        | PixelMode::I
-        | PixelMode::F => return None,
+        PixelMode::Mode1 | PixelMode::YCbCr | PixelMode::HSV | PixelMode::I | PixelMode::F => {
+            return None;
+        }
     };
     let mode_matches = match alpha_mode {
         // A paletted source is represented by one-byte indices before the
@@ -900,11 +877,7 @@ fn logical_byte_channels(mode: &str) -> Option<usize> {
 /// execution began. `mode()` and `size()` use retained headers or pipeline
 /// metadata whenever possible; they do not force a byte-buffer materialize for
 /// a loaded secondary image.
-fn simd_chops_operands_supported(
-    img: &DynamicImage,
-    other: &Image,
-    mode: Option<&str>,
-) -> bool {
+fn simd_chops_operands_supported(img: &DynamicImage, other: &Image, mode: Option<&str>) -> bool {
     let Some(channels) = native_chops_layout(img, mode) else {
         return false;
     };
@@ -914,8 +887,7 @@ fn simd_chops_operands_supported(
     let Ok(other_size) = other.size() else {
         return false;
     };
-    logical_byte_channels(&other_mode)
-        .is_some_and(|other_channels| channels == other_channels)
+    logical_byte_channels(&other_mode).is_some_and(|other_channels| channels == other_channels)
         && img.dimensions() == other_size
 }
 
@@ -1048,6 +1020,25 @@ fn native_paste_layout(img: &DynamicImage, mode: Option<&str>) -> Option<NativeP
     }
 }
 
+/// Return the native typed-sample contract used by `I;16*` Paste.
+///
+/// `DynamicImage` stores these modes as host-endian `u16` samples.  The
+/// logical mode tag determines how the binding later serializes the samples,
+/// but it does not change the SIMD data-plane contract: one unsigned 16-bit
+/// value per pixel, with optional 8-bit mask blending.
+fn native_paste_luma16_layout(img: &DynamicImage, mode: Option<&str>) -> Option<NativePasteLayout> {
+    matches!(img, DynamicImage::ImageLuma16(_))
+        .then_some(())
+        .filter(|_| mode.is_none_or(|value| matches!(value, "I;16" | "I;16L" | "I;16B" | "I;16N")))
+        .map(|_| NativePasteLayout {
+            // This is the byte stride used by the actual-layout validator and
+            // by the generic region planner. The typed kernel interprets it as
+            // one u16 sample rather than two independent channels.
+            channels: 2,
+            mode: "I;16",
+        })
+}
+
 fn native_paste_shape_layout(
     shape: SimdImageShape,
     mode: Option<&str>,
@@ -1113,6 +1104,27 @@ fn native_paste_shape_layout(
     }
 }
 
+fn native_paste_luma16_shape_layout(
+    shape: SimdImageShape,
+    mode: Option<&str>,
+) -> Option<NativePasteLayout> {
+    (shape.layout == SimdLayout::Luma16)
+        .then_some(())
+        .filter(|_| mode.is_none_or(|value| matches!(value, "I;16" | "I;16L" | "I;16B" | "I;16N")))
+        .map(|_| NativePasteLayout {
+            channels: 2,
+            mode: "I;16",
+        })
+}
+
+fn native_paste_mode_matches(actual: &str, expected: &str) -> bool {
+    if expected == "I;16" {
+        matches!(actual, "I;16" | "I;16L" | "I;16B" | "I;16N")
+    } else {
+        actual == expected
+    }
+}
+
 fn native_paste_mask_layout(mode: &str, mask_alpha: bool) -> Option<NativePasteMaskLayout> {
     match (mode, mask_alpha) {
         ("1" | "L", false) => Some(NativePasteMaskLayout {
@@ -1170,20 +1182,6 @@ fn native_paste_region(
     })
 }
 
-/// Overlay and HardLight use eight `u32` lanes, so their minimum useful
-/// frame is one eight-byte block rather than one sixteen-byte byte-vector.
-fn has_vectorized_lut_bytes(img: &DynamicImage, channels: usize) -> bool {
-    if img.width() == 0 || img.height() == 0 {
-        return false;
-    }
-    img.width()
-        .checked_mul(img.height())
-        .and_then(|pixels| pixels.checked_mul(channels as u32))
-        .is_some_and(|total_bytes| {
-            total_bytes >= 8 && img.as_bytes().len() == total_bytes as usize
-        })
-}
-
 fn native_paste_plan_from_layout(
     destination_width: u32,
     destination_height: u32,
@@ -1198,7 +1196,7 @@ fn native_paste_plan_from_layout(
 ) -> Option<NativePastePlan> {
     let source_width = u32::try_from(width).ok()?;
     let source_height = u32::try_from(height).ok()?;
-    if source.mode().ok()?.as_str() != layout.mode
+    if !native_paste_mode_matches(&source.mode().ok()?, layout.mode)
         || source.size().ok()? != (source_width, source_height)
     {
         return None;
@@ -1209,7 +1207,7 @@ fn native_paste_plan_from_layout(
             // Pillow contracts are not the same as L/LA/RGB/RGBA blending.
             // Reject them before execution rather than silently applying an
             // RGBA-shaped alpha formula to indexed, typed, or tagged data.
-            if !matches!(layout.mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK") {
+            if !matches!(layout.mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK" | "I;16") {
                 return None;
             }
             let mask_mode = mask.mode().ok()?;
@@ -1221,6 +1219,10 @@ fn native_paste_plan_from_layout(
         }
         None => None,
     };
+    // A zero-area intersection is a valid Pillow no-op, not an unsupported
+    // layout. The apply kernels simply execute zero rows and preserve the
+    // destination. Masked rows are also allowed to be narrower than a vector;
+    // the padded tail kernel handles those bytes without scalar arithmetic.
     let region = native_paste_region(
         destination_width,
         destination_height,
@@ -1228,16 +1230,15 @@ fn native_paste_plan_from_layout(
         source_height,
         x,
         y,
-    )?;
-    let row_bytes = region.width.checked_mul(layout.channels)?;
-    // An unmasked paste is a byte copy, so even a short row can use the
-    // padded u8x16 tail path below.  Requiring a complete 16-byte row here
-    // made valid padded Image.crop pipelines report SIMD unsupported for
-    // small clipped regions.  Masked blending retains its eight-byte
-    // minimum because its narrow vector kernel has a different contract.
-    if mask.is_some() && row_bytes < 8 {
-        return None;
-    }
+    )
+    .unwrap_or(NativePasteRegion {
+        source_left: 0,
+        source_top: 0,
+        destination_left: 0,
+        destination_top: 0,
+        width: 0,
+        height: 0,
+    });
     Some(NativePastePlan {
         layout,
         mask: mask_layout,
@@ -1258,7 +1259,8 @@ fn native_paste_plan_for_image(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Option<NativePastePlan> {
-    let layout = native_paste_layout(img, mode)?;
+    let layout =
+        native_paste_luma16_layout(img, mode).or_else(|| native_paste_layout(img, mode))?;
     native_paste_plan_from_layout(
         img.width(),
         img.height(),
@@ -1284,7 +1286,8 @@ fn native_paste_plan_for_shape(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Option<NativePastePlan> {
-    let layout = native_paste_shape_layout(shape, mode)?;
+    let layout = native_paste_luma16_shape_layout(shape, mode)
+        .or_else(|| native_paste_shape_layout(shape, mode))?;
     native_paste_plan_from_layout(
         shape.width,
         shape.height,
@@ -1297,6 +1300,52 @@ fn native_paste_plan_for_shape(
         mask,
         mask_alpha,
     )
+}
+
+/// RGB destinations intentionally accept an RGBA source in Pillow's Paste.c
+/// path. The alpha byte is ignored for an unmasked paste; dropping it is a
+/// fixed byte shuffle, not a reason to widen the operation through CPU/RGBA
+/// materialization.
+fn native_paste_rgba_to_rgb_supported(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+    width: i32,
+    height: i32,
+    mask: Option<&Arc<Image>>,
+    mode: Option<&str>,
+) -> bool {
+    let Some(source_width) = u32::try_from(width).ok() else {
+        return false;
+    };
+    let Some(source_height) = u32::try_from(height).ok() else {
+        return false;
+    };
+    matches!(img, DynamicImage::ImageRgb8(_))
+        && mode.is_none_or(|value| value == "RGB")
+        && mask.is_none()
+        && source.mode().ok().as_deref() == Some("RGBA")
+        && source.size().ok() == Some((source_width, source_height))
+}
+
+fn native_paste_rgba_to_rgb_supported_for_shape(
+    shape: SimdImageShape,
+    source: &Arc<Image>,
+    width: i32,
+    height: i32,
+    mask: Option<&Arc<Image>>,
+    mode: Option<&str>,
+) -> bool {
+    let Some(source_width) = u32::try_from(width).ok() else {
+        return false;
+    };
+    let Some(source_height) = u32::try_from(height).ok() else {
+        return false;
+    };
+    shape.layout == SimdLayout::Rgb8
+        && mode.is_none_or(|value| value == "RGB")
+        && mask.is_none()
+        && source.mode().ok().as_deref() == Some("RGBA")
+        && source.size().ok() == Some((source_width, source_height))
 }
 
 /// Build the native byte contract for `Image.composite` and
@@ -1382,8 +1431,8 @@ fn native_put_data_layout(
     mode: Option<&str>,
 ) -> Option<NativePasteLayout> {
     let logical_mode = pixel_mode_name(data_mode);
-    let layout = native_paste_layout(img, mode)
-        .or_else(|| native_paste_layout(img, Some(logical_mode)))?;
+    let layout =
+        native_paste_layout(img, mode).or_else(|| native_paste_layout(img, Some(logical_mode)))?;
     (layout.channels == data_mode.channels()).then_some(layout)
 }
 
@@ -1399,20 +1448,23 @@ fn native_put_data_shape_layout(
 }
 
 fn native_paste_actual_layout(image: &DynamicImage, layout: NativePasteLayout) -> bool {
-    native_paste_layout(image, Some(layout.mode)).is_some_and(|actual| {
+    let layout_matches = if layout.mode == "I;16" {
+        native_paste_luma16_layout(image, Some("I;16")).is_some()
+    } else {
+        native_paste_layout(image, Some(layout.mode)).is_some()
+    };
+    layout_matches && {
+        let actual = layout;
         actual.channels == layout.channels
             && image
                 .width()
                 .checked_mul(image.height())
                 .and_then(|pixels| pixels.checked_mul(layout.channels as u32))
                 .is_some_and(|bytes| image.as_bytes().len() == bytes as usize)
-    })
+    }
 }
 
-fn native_paste_actual_mask_layout(
-    image: &DynamicImage,
-    layout: NativePasteMaskLayout,
-) -> bool {
+fn native_paste_actual_mask_layout(image: &DynamicImage, layout: NativePasteMaskLayout) -> bool {
     let channels = match image {
         DynamicImage::ImageLuma8(_) => 1,
         DynamicImage::ImageLumaA8(_) => 2,
@@ -1482,25 +1534,19 @@ fn native_paste_blend_vector16(
     let source = u16x16::from(u8x16::new(source));
     let destination = u16x16::from(u8x16::new(destination));
     let mask = u16x16::from(u8x16::new(mask));
-    let weighted = source * mask
-        + destination * (u16x16::splat(255) - mask)
-        + u16x16::splat(127);
+    let weighted = source * mask + destination * (u16x16::splat(255) - mask) + u16x16::splat(127);
     simd_pack_u16x16(simd_div255(weighted)).to_array()
 }
 
 #[inline]
-fn native_paste_blend_vector8(
-    source: [u8; 8],
-    destination: [u8; 8],
-    mask: [u8; 8],
-) -> [u8; 8] {
+fn native_paste_blend_vector8(source: [u8; 8], destination: [u8; 8], mask: [u8; 8]) -> [u8; 8] {
     let source = u16x8::new(source.map(u16::from));
     let destination = u16x8::new(destination.map(u16::from));
     let mask = u16x8::new(mask.map(u16::from));
-    let weighted = source * mask
-        + destination * (u16x8::splat(255) - mask)
-        + u16x8::splat(127);
-    simd_div255_u16x8(weighted).to_array().map(|value| value as u8)
+    let weighted = source * mask + destination * (u16x8::splat(255) - mask) + u16x8::splat(127);
+    simd_div255_u16x8(weighted)
+        .to_array()
+        .map(|value| value as u8)
 }
 
 fn native_paste_apply(
@@ -1594,11 +1640,7 @@ fn native_paste_apply(
                         mask_layout,
                     );
                     destination_row[start..start + 16].copy_from_slice(
-                        &native_paste_blend_vector16(
-                            source_block,
-                            destination_block,
-                            mask_block,
-                        ),
+                        &native_paste_blend_vector16(source_block, destination_block, mask_block),
                     );
                     vector_blocks = vector_blocks.saturating_add(1);
                 }
@@ -1606,9 +1648,8 @@ fn native_paste_apply(
                 for start in (vector_len..vector_len8).step_by(8) {
                     let source_block = <[u8; 8]>::try_from(&source_row[start..start + 8])
                         .expect("native Paste blend block has 8 bytes");
-                    let destination_block =
-                        <[u8; 8]>::try_from(&destination_row[start..start + 8])
-                            .expect("native Paste destination block has 8 bytes");
+                    let destination_block = <[u8; 8]>::try_from(&destination_row[start..start + 8])
+                        .expect("native Paste destination block has 8 bytes");
                     let mask_block = native_paste_mask_block::<8>(
                         mask,
                         mask_row_stride,
@@ -1618,12 +1659,11 @@ fn native_paste_apply(
                         plan.layout.channels,
                         mask_layout,
                     );
-                    destination_row[start..start + 8]
-                        .copy_from_slice(&native_paste_blend_vector8(
-                            source_block,
-                            destination_block,
-                            mask_block,
-                        ));
+                    destination_row[start..start + 8].copy_from_slice(&native_paste_blend_vector8(
+                        source_block,
+                        destination_block,
+                        mask_block,
+                    ));
                     vector_blocks = vector_blocks.saturating_add(1);
                 }
                 let tail = region_row_bytes - vector_len8;
@@ -1635,8 +1675,7 @@ fn native_paste_apply(
                     let mut source_block = [0u8; 8];
                     let mut destination_block = [0u8; 8];
                     source_block[..tail].copy_from_slice(&source_row[vector_len8..]);
-                    destination_block[..tail]
-                        .copy_from_slice(&destination_row[vector_len8..]);
+                    destination_block[..tail].copy_from_slice(&destination_row[vector_len8..]);
                     let mask_block = native_paste_mask_block_active::<8>(
                         mask,
                         mask_row_stride,
@@ -1647,11 +1686,8 @@ fn native_paste_apply(
                         plan.layout.channels,
                         mask_layout,
                     );
-                    let blended = native_paste_blend_vector8(
-                        source_block,
-                        destination_block,
-                        mask_block,
-                    );
+                    let blended =
+                        native_paste_blend_vector8(source_block, destination_block, mask_block);
                     destination_row[vector_len8..].copy_from_slice(&blended[..tail]);
                     vector_blocks = vector_blocks.saturating_add(1);
                     scalar_tail = scalar_tail.saturating_add(tail as u64);
@@ -1689,6 +1725,232 @@ fn native_paste_apply(
     true
 }
 
+/// Blend eight unsigned 16-bit luma samples with an 8-bit mask. The gathers
+/// and stores are scalar indexing around the image layout; the arithmetic is
+/// performed entirely in wide floating-point lanes so the 16-bit products do
+/// not overflow a u16 vector.
+#[inline]
+fn native_paste_luma16_blend_vector8(
+    source: [u16; 8],
+    destination: [u16; 8],
+    mask: [u8; 8],
+) -> [u16; 8] {
+    let source = f64x8::new(source.map(f64::from));
+    let destination = f64x8::new(destination.map(f64::from));
+    let mask = f64x8::new(mask.map(f64::from));
+    ((source * mask + destination * (f64x8::splat(255.0) - mask) + f64x8::splat(127.0))
+        / f64x8::splat(255.0))
+    .to_array()
+    .map(|value| value as u16)
+}
+
+#[inline]
+fn native_paste_luma16_mask_block(
+    mask: &[u8],
+    mask_row_stride: usize,
+    source_y: usize,
+    source_left: usize,
+    start: usize,
+    active: usize,
+    mask_layout: NativePasteMaskLayout,
+) -> [u8; 8] {
+    std::array::from_fn(|lane| {
+        if lane >= active {
+            return 0;
+        }
+        mask[source_y * mask_row_stride
+            + (source_left + start + lane) * mask_layout.channels
+            + mask_layout.value_index]
+    })
+}
+
+/// Apply Paste to a native `ImageLuma16` plane. Pillow's I;16 Paste.c keeps
+/// unsigned 16-bit samples, so treating `as_bytes()` as eight-bit channels
+/// would blend the two halves independently and corrupt every high byte.
+/// Each group of up to eight samples uses the same vector blend, including a
+/// padded final group; no scalar pixel arithmetic is used for tails.
+fn native_paste_luma16_apply(
+    destination: &mut [u16],
+    source: &[u16],
+    mask: Option<&[u8]>,
+    destination_width: usize,
+    destination_height: usize,
+    plan: NativePastePlan,
+) -> bool {
+    if plan.layout.mode != "I;16" {
+        return false;
+    }
+    let Some(destination_len) = destination_width.checked_mul(destination_height) else {
+        return false;
+    };
+    let Some(source_len) = plan.source_width.checked_mul(plan.source_height) else {
+        return false;
+    };
+    if destination.len() != destination_len || source.len() != source_len {
+        return false;
+    }
+
+    let mask_layout = match (plan.mask, mask) {
+        (Some(layout), Some(mask)) => {
+            let Some(mask_row_stride) = plan.source_width.checked_mul(layout.channels) else {
+                return false;
+            };
+            let Some(mask_len) = mask_row_stride.checked_mul(plan.source_height) else {
+                return false;
+            };
+            if mask.len() != mask_len {
+                return false;
+            }
+            Some((layout, mask_row_stride))
+        }
+        (None, None) => None,
+        _ => return false,
+    };
+
+    let region = plan.region;
+    if region.source_left.saturating_add(region.width) > plan.source_width
+        || region.source_top.saturating_add(region.height) > plan.source_height
+        || region.destination_left.saturating_add(region.width) > destination_width
+        || region.destination_top.saturating_add(region.height) > destination_height
+    {
+        return false;
+    }
+
+    let mut vector_blocks = 0u64;
+    for row in 0..region.height {
+        let source_row_start = (region.source_top + row) * plan.source_width + region.source_left;
+        let destination_row_start =
+            (region.destination_top + row) * destination_width + region.destination_left;
+        let source_row = &source[source_row_start..source_row_start + region.width];
+        let destination_row =
+            &mut destination[destination_row_start..destination_row_start + region.width];
+        for start in (0..region.width).step_by(8) {
+            let active = (region.width - start).min(8);
+            let mut source_block = [0u16; 8];
+            let mut destination_block = [0u16; 8];
+            source_block[..active].copy_from_slice(&source_row[start..start + active]);
+            destination_block[..active].copy_from_slice(&destination_row[start..start + active]);
+            let output = match mask_layout {
+                None => u16x8::new(source_block).to_array(),
+                Some((mask_layout, mask_row_stride)) => {
+                    let mask = mask.expect("a mask layout always has mask bytes");
+                    let mask_block = native_paste_luma16_mask_block(
+                        mask,
+                        mask_row_stride,
+                        region.source_top + row,
+                        region.source_left,
+                        start,
+                        active,
+                        mask_layout,
+                    );
+                    native_paste_luma16_blend_vector8(source_block, destination_block, mask_block)
+                }
+            };
+            destination_row[start..start + active].copy_from_slice(&output[..active]);
+            vector_blocks = vector_blocks.saturating_add(1);
+        }
+    }
+
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    crate::compute::record_pipeline_operation_path(if plan.mask.is_some() {
+        "vector"
+    } else {
+        "native-copy"
+    });
+    true
+}
+
+/// Copy an RGBA source into an RGB destination using fixed SIMD shuffles to
+/// drop alpha. This is the unmasked Pillow contract; a mask would require a
+/// separate blend contract and is deliberately not admitted here.
+fn simd_paste_rgba_to_rgb(
+    img: &DynamicImage,
+    source: &DynamicImage,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<DynamicImage, PilError> {
+    let (destination, source) = match (img, source) {
+        (DynamicImage::ImageRgb8(destination), DynamicImage::ImageRgba8(source)) => {
+            (destination, source)
+        }
+        _ => return Err(simd_unsupported("Paste")),
+    };
+    let source_width = u32::try_from(width).map_err(|_| simd_unsupported("Paste"))?;
+    let source_height = u32::try_from(height).map_err(|_| simd_unsupported("Paste"))?;
+    if source.dimensions() != (source_width, source_height) {
+        return Err(simd_unsupported("Paste"));
+    }
+    let expected_destination = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(3))
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let expected_source = (source_width as usize)
+        .checked_mul(source_height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    if destination.as_raw().len() != expected_destination
+        || source.as_raw().len() != expected_source
+    {
+        return Err(simd_unsupported("Paste"));
+    }
+
+    let region = native_paste_region(img.width(), img.height(), source_width, source_height, x, y)
+        .unwrap_or(NativePasteRegion {
+            source_left: 0,
+            source_top: 0,
+            destination_left: 0,
+            destination_top: 0,
+            width: 0,
+            height: 0,
+        });
+    let source_row_stride = source_width as usize * 4;
+    let destination_row_stride = img.width() as usize * 3;
+    let layout = NativeConvertLayout {
+        source_channels: 4,
+        target_channels: 3,
+        source_is_luma: false,
+        source_is_rgbx: false,
+        target_is_luma: false,
+        target_is_cmyk: false,
+        target_is_hsv: false,
+        target_is_ycbcr: false,
+        target_is_integer: false,
+        target_is_float: false,
+    };
+    let mut output = destination.as_raw().clone();
+    let mut vector_blocks = 0u64;
+    for row in 0..region.height {
+        let source_row_start =
+            (region.source_top + row) * source_row_stride + region.source_left * 4;
+        let destination_row_start =
+            (region.destination_top + row) * destination_row_stride + region.destination_left * 3;
+        for start in (0..region.width).step_by(4) {
+            let active = (region.width - start).min(4);
+            let source_start = source_row_start + start * 4;
+            let mut input = [0u8; 16];
+            input[..active * 4]
+                .copy_from_slice(&source.as_raw()[source_start..source_start + active * 4]);
+            let converted = native_convert_layout_block(&input, layout, 4)
+                .ok_or_else(|| simd_unsupported("Paste"))?;
+            let destination_start = destination_row_start + start * 3;
+            output[destination_start..destination_start + active * 3]
+                .copy_from_slice(&converted[..active * 3]);
+            vector_blocks = vector_blocks.saturating_add(1);
+        }
+    }
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    crate::compute::record_pipeline_operation_path("vector");
+    let result = RgbImage::from_raw(img.width(), img.height(), output)
+        .ok_or_else(|| PilError::InternalError("SIMD Paste RGB buffer shape mismatch".into()))?;
+    Ok(preserve_mode(img, DynamicImage::ImageRgb8(result)))
+}
+
 pub fn simd_paste(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -1706,6 +1968,10 @@ pub fn simd_paste(
     else {
         return Err(PilError::ValueError("expected Paste op".into()));
     };
+    if native_paste_rgba_to_rgb_supported(img, source, *w, *h, mask.as_ref(), mode) {
+        let source_image = source.materialized_shared()?;
+        return simd_paste_rgba_to_rgb(img, source_image.as_ref(), *x, *y, *w, *h);
+    }
     let plan = native_paste_plan_for_image(
         img,
         source,
@@ -1735,6 +2001,29 @@ pub fn simd_paste(
         }
         None => None,
     };
+    if plan.layout.mode == "I;16" {
+        let DynamicImage::ImageLuma16(source_image) = source_image.as_ref() else {
+            return Err(simd_unsupported("Paste"));
+        };
+        let DynamicImage::ImageLuma16(destination_image) = img else {
+            return Err(simd_unsupported("Paste"));
+        };
+        let mut output = destination_image.as_raw().clone();
+        if !native_paste_luma16_apply(
+            &mut output,
+            source_image.as_raw(),
+            mask_image.as_ref().map(|image| image.as_bytes()),
+            img.width() as usize,
+            img.height() as usize,
+            plan,
+        ) {
+            return Err(simd_unsupported("Paste"));
+        }
+        let result = ImageBuffer::from_raw(img.width(), img.height(), output).ok_or_else(|| {
+            PilError::InternalError("SIMD Paste I;16 buffer shape mismatch".into())
+        })?;
+        return Ok(preserve_mode(img, DynamicImage::ImageLuma16(result)));
+    }
     let mut output = img.as_bytes().to_vec();
     if !native_paste_apply(
         &mut output,
@@ -1743,7 +2032,7 @@ pub fn simd_paste(
         img.width() as usize,
         img.height() as usize,
         plan,
-        false,
+        true,
     ) {
         return Err(simd_unsupported("Paste"));
     }
@@ -1774,9 +2063,7 @@ pub fn simd_composite_module(
         mask_alpha,
     } = op
     else {
-        return Err(PilError::ValueError(
-            "expected CompositeModule op".into(),
-        ));
+        return Err(PilError::ValueError("expected CompositeModule op".into()));
     };
     let plan = native_composite_plan_for_image(img, other, mask, *mask_alpha, mode)
         .ok_or_else(|| simd_unsupported("CompositeModule"))?;
@@ -1841,8 +2128,8 @@ pub fn simd_put_data(
     else {
         return Err(PilError::ValueError("expected PutData op".into()));
     };
-    let layout = native_put_data_layout(img, *data_mode, mode)
-        .ok_or_else(|| simd_unsupported("PutData"))?;
+    let layout =
+        native_put_data_layout(img, *data_mode, mode).ok_or_else(|| simd_unsupported("PutData"))?;
     if !native_paste_actual_layout(img, layout) {
         return Err(simd_unsupported("PutData"));
     }
@@ -1889,17 +2176,8 @@ fn native_paste_in_place(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Result<bool, PilError> {
-    let plan = native_paste_plan_for_image(
-        img,
-        source,
-        x,
-        y,
-        width,
-        height,
-        mask,
-        mask_alpha,
-        mode,
-    );
+    let plan =
+        native_paste_plan_for_image(img, source, x, y, width, height, mask, mask_alpha, mode);
     let Some(plan) = plan else {
         return Ok(false);
     };
@@ -1920,6 +2198,24 @@ fn native_paste_in_place(
         }
         None => None,
     };
+    if plan.layout.mode == "I;16" {
+        let DynamicImage::ImageLuma16(source_image) = source_image.as_ref() else {
+            return Ok(false);
+        };
+        let destination_width = img.width() as usize;
+        let destination_height = img.height() as usize;
+        let Some(destination_image) = img.as_mut_luma16() else {
+            return Ok(false);
+        };
+        return Ok(native_paste_luma16_apply(
+            destination_image.as_mut(),
+            source_image.as_raw(),
+            mask_image.as_ref().map(|image| image.as_bytes()),
+            destination_width,
+            destination_height,
+            plan,
+        ));
+    }
     let destination_width = img.width() as usize;
     let destination_height = img.height() as usize;
     let Some(output) = img.as_bytes_mut() else {
@@ -1932,7 +2228,7 @@ fn native_paste_in_place(
         destination_width,
         destination_height,
         plan,
-        false,
+        true,
     ))
 }
 
@@ -1960,11 +2256,7 @@ fn native_invert_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize>
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
         DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        DynamicImage::ImageRgba8(_)
-            if matches!(mode, None | Some("RGBA" | "CMYK")) =>
-        {
-            Some(4)
-        }
+        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
         _ => None,
     }
 }
@@ -1990,14 +2282,7 @@ fn clipped_horizontal_span(
     (start <= end).then_some((start as usize, end as usize, y0 as usize))
 }
 
-fn line_bounds_intersect(
-    width: u32,
-    height: u32,
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-) -> bool {
+fn line_bounds_intersect(width: u32, height: u32, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
     let min_x = i64::from(x0.min(x1));
     let max_x = i64::from(x0.max(x1));
     let min_y = i64::from(y0.min(y1));
@@ -2012,10 +2297,7 @@ fn line_bounds_intersect(
 
 fn has_visible_draw_point(width: u32, height: u32, points: &[(i32, i32)]) -> bool {
     points.iter().any(|&(x, y)| {
-        x >= 0
-            && y >= 0
-            && i64::from(x) < i64::from(width)
-            && i64::from(y) < i64::from(height)
+        x >= 0 && y >= 0 && i64::from(x) < i64::from(width) && i64::from(y) < i64::from(height)
     })
 }
 
@@ -2043,8 +2325,8 @@ fn draw_line_source_byte(fill: (u8, u8, u8, u8), channels: usize, byte: usize) -
 
 #[inline]
 fn draw_line_blend_byte(source: u8, destination: u8, alpha: u8) -> u8 {
-    let weighted = u16::from(source) * u16::from(alpha)
-        + u16::from(destination) * u16::from(u8::MAX - alpha);
+    let weighted =
+        u16::from(source) * u16::from(alpha) + u16::from(destination) * u16::from(u8::MAX - alpha);
     ((u32::from(weighted) + 127) / 255) as u8
 }
 
@@ -2130,13 +2412,18 @@ fn simd_draw_line_native(
         };
         if let Some(points) = wide_line_polygon_points(x0, y0, x1, y1, width) {
             let mut first_error = None;
-            for_each_polygon_fill_span(&points, image_width, image_height, |span_x0, span_x1, y| {
-                if first_error.is_none()
-                    && let Err(error) = writer.write(span_x0, y, span_x1, fill)
-                {
-                    first_error = Some(error);
-                }
-            });
+            for_each_polygon_fill_span(
+                &points,
+                image_width,
+                image_height,
+                |span_x0, span_x1, y| {
+                    if first_error.is_none()
+                        && let Err(error) = writer.write(span_x0, y, span_x1, fill)
+                    {
+                        first_error = Some(error);
+                    }
+                },
+            );
             if let Some(error) = first_error {
                 return Err(error);
             }
@@ -2157,16 +2444,7 @@ fn simd_draw_line_native(
             .map(Some);
     }
     if y0 != y1 {
-        return simd_draw_bresenham_native(
-            img,
-            x0,
-            y0,
-            x1,
-            y1,
-            channels,
-            fill,
-            alpha_blend_rgb,
-        );
+        return simd_draw_bresenham_native(img, x0, y0, x1, y1, channels, fill, alpha_blend_rgb);
     }
     let Some((start_pixel, end_pixel, row_index)) =
         clipped_horizontal_span(img.width(), img.height(), x0, y0, x1, y1)
@@ -2247,8 +2525,7 @@ fn simd_draw_line_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
-        .map(Some)
+    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels).map(Some)
 }
 
 /// Fill one clipped horizontal span in a native drawing buffer.
@@ -2401,9 +2678,9 @@ fn push_simd_draw_point(
     vector_blocks: &mut u64,
     scalar_tail: &mut u64,
 ) -> Result<(), PilError> {
-    let extends_run = span.as_ref().is_some_and(|(_x0, _x1, last_x, run_y)| {
-        *run_y == y && (x - *last_x).abs() == 1
-    });
+    let extends_run = span
+        .as_ref()
+        .is_some_and(|(_x0, _x1, last_x, run_y)| *run_y == y && (x - *last_x).abs() == 1);
     if extends_run {
         if let Some((run_x0, run_x1, last_x, _run_y)) = span.as_mut() {
             *run_x0 = (*run_x0).min(x);
@@ -2691,7 +2968,15 @@ fn simd_put_pixel_native(
     if output.len() < 16 {
         let mut block = [0u8; 16];
         block[..output.len()].copy_from_slice(&output);
-        draw_line_vector_block(&mut block, 0, target_start, target_end, channels, color, false);
+        draw_line_vector_block(
+            &mut block,
+            0,
+            target_start,
+            target_end,
+            channels,
+            color,
+            false,
+        );
         let output_len = output.len();
         output.copy_from_slice(&block[..output_len]);
     } else {
@@ -2835,7 +3120,10 @@ fn simd_draw_rectangle_native(
     if let Some(outline) = outline.filter(|_| width != 0) {
         let width = i64::from(width);
         for i in 0..width {
-            for y in [i64::from(y0).saturating_add(i), i64::from(y1).saturating_sub(i)] {
+            for y in [
+                i64::from(y0).saturating_add(i),
+                i64::from(y1).saturating_sub(i),
+            ] {
                 let (vectors, tail) = simd_draw_span(
                     &mut output,
                     image_width,
@@ -2890,13 +3178,7 @@ struct SimdDrawSpanWriter<'a> {
 }
 
 impl SimdDrawSpanWriter<'_> {
-    fn write(
-        &mut self,
-        x0: i32,
-        y: i32,
-        x1: i32,
-        color: (u8, u8, u8, u8),
-    ) -> Result<(), PilError> {
+    fn write(&mut self, x0: i32, y: i32, x1: i32, color: (u8, u8, u8, u8)) -> Result<(), PilError> {
         let (vectors, tail) = simd_draw_span(
             self.output,
             self.image_width,
@@ -2924,13 +3206,20 @@ fn simd_write_ellipse_spans(
     color: (u8, u8, u8, u8),
 ) -> Result<(), PilError> {
     let mut first_error = None;
-    for_each_ellipse_span(x0, y0, x1, y1, geometry_width, |span_x0, span_y, span_x1| {
-        if first_error.is_none()
-            && let Err(error) = writer.write(span_x0, span_y, span_x1, color)
-        {
-            first_error = Some(error);
-        }
-    });
+    for_each_ellipse_span(
+        x0,
+        y0,
+        x1,
+        y1,
+        geometry_width,
+        |span_x0, span_y, span_x1| {
+            if first_error.is_none()
+                && let Err(error) = writer.write(span_x0, span_y, span_x1, color)
+            {
+                first_error = Some(error);
+            }
+        },
+    );
     first_error.map_or(Ok(()), Err)
 }
 
@@ -3254,10 +3543,10 @@ fn simd_draw_pieslice_native(
                 let state = pie_side_clip_state(a, b, width, angle);
                 simd_write_clipped_ellipse_spans(&mut writer, x0, y0, a, b, state, outline)?;
             }
-            let center_x = ((f64::from(x0) + f64::from(x1) - f64::from(width)) / 2.0).round()
-                as i32;
-            let center_y = ((f64::from(y0) + f64::from(y1) - f64::from(width)) / 2.0).round()
-                as i32;
+            let center_x =
+                ((f64::from(x0) + f64::from(x1) - f64::from(width)) / 2.0).round() as i32;
+            let center_y =
+                ((f64::from(y0) + f64::from(y1) - f64::from(width)) / 2.0).round() as i32;
             simd_write_ellipse_spans(
                 &mut writer,
                 center_x,
@@ -3461,7 +3750,9 @@ fn simd_draw_rounded_rect_native(
     let (image_width, image_height) = img.dimensions();
     let row_bytes = (image_width as usize)
         .checked_mul(channels)
-        .ok_or_else(|| PilError::InternalError("SIMD rounded rectangle row stride overflow".into()))?;
+        .ok_or_else(|| {
+            PilError::InternalError("SIMD rounded rectangle row stride overflow".into())
+        })?;
     if row_bytes < 16 || x1 < x0 || y1 < y0 || !radius.is_finite() || radius < 0.0 {
         return Ok(None);
     }
@@ -3477,12 +3768,30 @@ fn simd_draw_rounded_rect_native(
     }
     if full_x && full_y {
         return simd_draw_ellipse_native(
-            img, x0, y0, x1, y1, fill, outline, width, alpha_blend_rgb, mode,
+            img,
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            alpha_blend_rgb,
+            mode,
         );
     }
     if diameter == 0.0 {
         return simd_draw_rectangle_native(
-            img, x0, y0, x1, y1, fill, outline, width, alpha_blend_rgb, mode,
+            img,
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            alpha_blend_rgb,
+            mode,
         );
     }
 
@@ -3637,11 +3946,7 @@ fn color3dlut_target_channels(mode: PixelMode) -> Option<usize> {
     }
 }
 
-fn color3dlut_table_len(
-    size: (u32, u32, u32),
-    channels: u32,
-    table_len: usize,
-) -> Option<usize> {
+fn color3dlut_table_len(size: (u32, u32, u32), channels: u32, table_len: usize) -> Option<usize> {
     if !matches!(size.0, 2..=65)
         || !matches!(size.1, 2..=65)
         || !matches!(size.2, 2..=65)
@@ -3774,21 +4079,17 @@ fn simd_rotate_geometry(
     let sw = f64::from(width);
     let sh = f64::from(height);
     let radians = -angle.to_radians();
-    let round_15 = |value: f64| {
-        (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0
-    };
+    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
     let affine_a = round_15(radians.cos());
     let affine_b = round_15(radians.sin());
     let affine_d = round_15(-radians.sin());
     let affine_e = affine_a;
     let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
     let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
-    let mut affine_c = affine_a * (-center_x - translate_x)
-        + affine_b * (-center_y - translate_y)
-        + center_x;
-    let mut affine_f = affine_d * (-center_x - translate_x)
-        + affine_e * (-center_y - translate_y)
-        + center_y;
+    let mut affine_c =
+        affine_a * (-center_x - translate_x) + affine_b * (-center_y - translate_y) + center_x;
+    let mut affine_f =
+        affine_d * (-center_x - translate_x) + affine_e * (-center_y - translate_y) + center_y;
     let transform = |x: f64, y: f64| {
         (
             affine_a * x + affine_b * y + affine_c,
@@ -3796,8 +4097,7 @@ fn simd_rotate_geometry(
         )
     };
     let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-    let (mut min_x, mut min_y, mut max_x, mut max_y) =
-        (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for &(corner_x, corner_y) in &corners {
         let (rotated_x, rotated_y) = transform(corner_x, corner_y);
         min_x = min_x.min(rotated_x);
@@ -3806,10 +4106,7 @@ fn simd_rotate_geometry(
         max_y = max_y.max(rotated_y);
     }
     let (destination_width, destination_height) = if expand {
-        (
-            max_x.ceil() - min_x.floor(),
-            max_y.ceil() - min_y.floor(),
-        )
+        (max_x.ceil() - min_x.floor(), max_y.ceil() - min_y.floor())
     } else {
         (sw, sh)
     };
@@ -3897,16 +4194,18 @@ fn rotate_nearest_supported_for_shape(
     {
         return false;
     }
-    let Some(geometry) =
-        simd_rotate_geometry(width, height, angle, expand, center, translate)
+    let Some(geometry) = simd_rotate_geometry(width, height, angle, expand, center, translate)
     else {
         return false;
     };
+    // The gather kernel pads a partial final block and writes only active
+    // lanes, so even a single output byte follows the same native SIMD path.
+    // Keep zero-sized geometry out of the admission contract above.
     geometry
         .width
         .checked_mul(geometry.height)
         .and_then(|pixels| pixels.checked_mul(channels as u32))
-        .is_some_and(|bytes| bytes >= SIMD_RANK_FILTER_LANES as u32)
+        .is_some_and(|bytes| bytes != 0)
 }
 
 fn rotate_bilinear_supported_for_shape(
@@ -3927,12 +4226,11 @@ fn rotate_bilinear_supported_for_shape(
     {
         return false;
     }
-    let Some(geometry) =
-        simd_rotate_geometry(width, height, angle, expand, center, translate)
+    let Some(geometry) = simd_rotate_geometry(width, height, angle, expand, center, translate)
     else {
         return false;
     };
-    geometry.width as usize >= SIMD_F64_LANES && geometry.height != 0
+    geometry.width != 0 && geometry.height != 0
 }
 
 /// Check the contextual conditions for a real SIMD/native-copy operation.
@@ -3961,14 +4259,14 @@ pub(crate) fn simd_supports_for_image(
     let native_rotate_channels = native_rotate_layout(img, mode);
     let native_copy = native_copy_layout(img, mode).is_some();
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
-    let native_chops = native_chops_layout(img, mode)
-        .is_some_and(|channels| has_empty_native_bytes(img, channels)
-            || has_vectorized_flat_bytes(img, channels));
-    let lut_chops = native_chops_layout(img, mode)
-        .is_some_and(|channels| has_empty_native_bytes(img, channels)
-            || has_vectorized_lut_bytes(img, channels));
-    let blend_chops = native_chops_layout(img, mode)
-        .is_some_and(|channels| has_blend_vector_rows(img, channels));
+    let native_luma16_copy =
+        has_valid_luma16_copy_bytes(img, mode) && img.width() != 0 && img.height() != 0;
+    let native_chops =
+        native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels));
+    let lut_chops =
+        native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels));
+    let blend_chops =
+        native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels));
     let affine_chops = native_chops_layout(img, mode)
         .is_some_and(|channels| has_affine_vector_rows(img, channels));
     match op {
@@ -3976,13 +4274,16 @@ pub(crate) fn simd_supports_for_image(
         // and explicitly mode-converted images are deliberately rejected
         // until their sample-domain kernels exist.
         PipelineOp::Invert | PipelineOp::InvertChops => native_invert_layout(img, mode)
-            .is_some_and(|channels| has_empty_native_bytes(img, channels)
-                || has_vectorized_byte_rows(img, channels)),
+            .is_some_and(|channels| {
+                has_empty_native_bytes(img, channels) || has_nonempty_byte_data(img, channels)
+            }),
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_image(img, *w, *h, *filter, mode)
         }
-        PipelineOp::Scale { factor, filter } => native_scale_dimensions(img.width(), img.height(), *factor)
-            .is_some_and(|(w, h)| native_resize_supported_for_image(img, w, h, *filter, mode)),
+        PipelineOp::Scale { factor, filter } => {
+            native_scale_dimensions(img.width(), img.height(), *factor)
+                .is_some_and(|(w, h)| native_resize_supported_for_image(img, w, h, *filter, mode))
+        }
         PipelineOp::Thumbnail { w, h, filter } => {
             native_thumbnail_supported_for_image(img, *w, *h, *filter, mode)
         }
@@ -3998,15 +4299,7 @@ pub(crate) fn simd_supports_for_image(
             filter,
             bleed,
             centering,
-        } => native_fit_supported_for_image(
-            img,
-            *w,
-            *h,
-            *filter,
-            *bleed,
-            *centering,
-            mode,
-        ),
+        } => native_fit_supported_for_image(img, *w, *h, *filter, *bleed, *centering, mode),
         PipelineOp::Transform {
             w,
             h,
@@ -4016,26 +4309,19 @@ pub(crate) fn simd_supports_for_image(
             ..
         } => match method {
             TransformMethod::Affine => {
-                native_affine_luma16_transform_supported_for_image(
-                    img, *w, *h, method, data, mode,
-                ) || native_affine_nearest_transform_supported_for_image(
-                    img, *w, *h, method, data, *filter, mode,
-                )
+                native_affine_luma16_transform_supported_for_image(img, *w, *h, method, data, mode)
+                    || native_affine_nearest_transform_supported_for_image(
+                        img, *w, *h, method, data, *filter, mode,
+                    )
             }
             TransformMethod::Perspective | TransformMethod::Quad => {
                 native_projective_nearest_transform_supported_for_image(
-                    img,
-                    *w,
-                    *h,
-                    method,
-                    data,
-                    *filter,
-                    mode,
+                    img, *w, *h, method, data, *filter, mode,
                 )
             }
-            TransformMethod::Mesh => native_mesh_transform_supported_for_image(
-                img, *w, *h, data, *filter, mode,
-            ),
+            TransformMethod::Mesh => {
+                native_mesh_transform_supported_for_image(img, *w, *h, data, *filter, mode)
+            }
         },
         PipelineOp::Pad { w, h, filter, .. } => {
             native_pad_supported_for_image(img, *w, *h, *filter, mode)
@@ -4044,16 +4330,10 @@ pub(crate) fn simd_supports_for_image(
             mode: target,
             matrix,
             dither: _,
-        } => native_convert_supported_for_image(
-            img,
-            target,
-            matrix.as_deref(),
-            mode,
-        ),
-        PipelineOp::Reduce {
-            x_factor,
-            y_factor,
-        } => native_reduce_supported_for_image(img, *x_factor, *y_factor, mode),
+        } => native_convert_supported_for_image(img, target, matrix.as_deref(), mode),
+        PipelineOp::Reduce { x_factor, y_factor } => {
+            native_reduce_supported_for_image(img, *x_factor, *y_factor, mode)
+        }
         PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
             native_byte_channels.is_some_and(|channels| has_nonempty_byte_data(img, channels))
         }
@@ -4067,9 +4347,11 @@ pub(crate) fn simd_supports_for_image(
                     .checked_mul(img.height() as usize)
                     .is_some_and(|pixels| img.as_bytes().len() == pixels)
         }
-        PipelineOp::Brightness { factor } => native_brightness_layout(img, mode)
-            .is_some_and(|channels| has_nonempty_byte_data(img, channels))
-            && factor.is_finite(),
+        PipelineOp::Brightness { factor } => {
+            native_brightness_layout(img, mode)
+                .is_some_and(|channels| has_nonempty_byte_data(img, channels))
+                && factor.is_finite()
+        }
         PipelineOp::Contrast { factor } | PipelineOp::ColorSaturation { factor } => {
             factor.is_finite()
                 && native_enhance_layout(img, mode)
@@ -4083,24 +4365,23 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Autocontrast { cutoff, mask } => {
             cutoff.is_finite()
                 && native_autocontrast_layout(img, mode)
-                    .is_some_and(|channels| has_vectorized_flat_bytes(img, channels))
-                && autocontrast_mask_supported(
-                    img.width(),
-                    img.height(),
-                    mask.as_ref(),
-                )
+                    .is_some_and(|channels| has_valid_byte_data(img, channels))
+                && autocontrast_mask_supported(img.width(), img.height(), mask.as_ref())
         }
         PipelineOp::Equalize => native_autocontrast_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_flat_bytes(img, channels)),
+            .is_some_and(|channels| has_valid_byte_data(img, channels)),
+        PipelineOp::RemapPalette { dest_map } => native_remap_palette_layout(img, mode)
+            .is_some_and(|_| dest_map.len() <= 256 && has_valid_remap_bytes(img)),
         // Eval/PointOp keeps its interleaved native layout. The LUT lookup
         // itself is vectorized per band; scalar work only deinterleaves the
         // byte lanes because `wide` has no portable byte-gather primitive.
-        PipelineOp::Eval { lut } => native_point_channels(img, mode)
-            .is_some_and(|channels| lut.len() == 256 * channels && img.as_bytes().len() >= 16),
-        PipelineOp::PutData { mode: data_mode, .. } => {
-            native_put_data_layout(img, *data_mode, mode)
-                .is_some_and(|layout| native_paste_actual_layout(img, layout))
-        }
+        PipelineOp::Eval { lut } => native_point_channels(img, mode).is_some_and(|channels| {
+            lut.len() == 256 * channels && has_valid_byte_data(img, channels)
+        }),
+        PipelineOp::PutData {
+            mode: data_mode, ..
+        } => native_put_data_layout(img, *data_mode, mode)
+            .is_some_and(|layout| native_paste_actual_layout(img, layout)),
         PipelineOp::ExtractBand { index } => {
             native_extract_layout(img, mode).is_some_and(|channels| {
                 usize::from(*index) < channels
@@ -4116,16 +4397,26 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Offset { x, .. } => {
             has_vectorized_luma16_offset(img, mode)
                 || (native_copy
-                    && native_copy_layout(img, mode)
-                        .is_some_and(|channels| has_empty_native_bytes(img, channels)
-                            || has_vectorized_offset_rows(img, channels, *x)))
+                    && native_copy_layout(img, mode).is_some_and(|channels| {
+                        has_empty_native_bytes(img, channels)
+                            || has_vectorized_offset_rows(img, channels, *x)
+                    }))
         }
-        PipelineOp::Flip => native_copy_layout(img, mode)
-            .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
-        PipelineOp::Mirror => native_copy_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_mirror_rows(img, channels)),
+        PipelineOp::Flip => {
+            native_copy_layout(img, mode)
+                .is_some_and(|channels| has_nonempty_byte_data(img, channels))
+                || native_luma16_copy
+        }
+        PipelineOp::Mirror => {
+            native_copy_layout(img, mode)
+                .is_some_and(|channels| has_vectorized_mirror_rows(img, channels))
+                || native_luma16_copy
+        }
         PipelineOp::Transpose { .. } => {
-            (native_copy || native_luma16_transpose) && pixel_count != 0
+            (native_copy || native_luma16_transpose)
+                && (pixel_count != 0
+                    || native_copy_layout(img, mode)
+                        .is_some_and(|channels| has_empty_native_bytes(img, channels)))
         }
         PipelineOp::Crop {
             left,
@@ -4133,7 +4424,7 @@ pub(crate) fn simd_supports_for_image(
             right,
             bottom,
         } => {
-            native_copy
+            (native_copy || native_luma16_copy)
                 && pixel_count != 0
                 && *left < *right
                 && *top < *bottom
@@ -4157,9 +4448,7 @@ pub(crate) fn simd_supports_for_image(
         // vector remain automatic CPU work; image *area* is not a capability
         // condition because a small image can still contain a real vector
         // block.
-        PipelineOp::Filter3x3 {
-            kernel, scale, ..
-        } => {
+        PipelineOp::Filter3x3 { kernel, scale, .. } => {
             valid_convolution_parameters(kernel, *scale)
                 && (use_native_byte_convolution_path(img, mode, 1)
                     || (mode == Some("I")
@@ -4167,9 +4456,7 @@ pub(crate) fn simd_supports_for_image(
                         && use_native_i32_convolution_path(img, mode, 1))
                     || native_filter_identity_supported_for_image(img, mode, 1))
         }
-        PipelineOp::Filter5x5 {
-            kernel, scale, ..
-        } => {
+        PipelineOp::Filter5x5 { kernel, scale, .. } => {
             valid_convolution_parameters(kernel, *scale)
                 && (use_native_byte_convolution_path(img, mode, 2)
                     || (mode == Some("I")
@@ -4195,9 +4482,7 @@ pub(crate) fn simd_supports_for_image(
                 && radius_y.is_finite()
                 && *radius_x >= 0.0
                 && *radius_y >= 0.0
-                && ((*radius_x != 0.0 || *radius_y != 0.0)
-                    && img.width() != 0
-                    && img.height() != 0
+                && ((*radius_x != 0.0 || *radius_y != 0.0) && img.width() != 0 && img.height() != 0
                     || (*radius_x == 0.0
                         && *radius_y == 0.0
                         && has_vectorized_native_identity_copy(img, mode)))
@@ -4256,12 +4541,17 @@ pub(crate) fn simd_supports_for_image(
                 && img.height() != 0)
                 || native_float_rank_supported_for_image(img, mode, *size, *rank)
         }
-        PipelineOp::PutAlpha { mode: alpha_mode, .. } => {
+        PipelineOp::PutAlpha {
+            mode: alpha_mode, ..
+        } => {
             let pixels = (img.width() as usize).saturating_mul(img.height() as usize);
             put_alpha_shape(img, *alpha_mode, mode)
                 .is_some_and(|(_, _, pixels_per_vector, _)| pixels >= pixels_per_vector)
         }
-        PipelineOp::PutAlphaData { mask, mode: alpha_mode } => {
+        PipelineOp::PutAlphaData {
+            mask,
+            mode: alpha_mode,
+        } => {
             let mask = mask.as_ref();
             let pixels = (img.width() as usize).saturating_mul(img.height() as usize);
             put_alpha_data_shape(img, mask, *alpha_mode, mode)
@@ -4277,13 +4567,10 @@ pub(crate) fn simd_supports_for_image(
             ColorMode::Mode1 | ColorMode::L | ColorMode::P | ColorMode::I | ColorMode::F
         ),
         PipelineOp::EffectSpread { distance } => {
-            (*distance <= 1 || (img.width() == 1 && img.height() == 1))
-                && native_copy_layout(img, mode).is_some_and(|channels| {
-                    img.width()
-                        .checked_mul(img.height())
-                        .and_then(|pixels| pixels.checked_mul(channels as u32))
-                        .is_some_and(|expected| expected != 0 && img.as_bytes().len() == expected as usize)
-                })
+            let _ = distance;
+            native_copy_layout(img, mode).is_some_and(|channels| {
+                has_empty_native_bytes(img, channels) || has_valid_byte_data(img, channels)
+            })
         }
         PipelineOp::Color3DLut {
             size,
@@ -4313,13 +4600,28 @@ pub(crate) fn simd_supports_for_image(
             // different filter. Keep that mode rule in the scalar
             // capability check so a P image reaches the native byte sampler.
             let nearest = *nearest || matches!(mode, Some("1" | "P"));
-            if rotate_identity_contract(*angle, *center, *translate) {
+            if (img.width() == 0 || img.height() == 0)
+                && !matches!(img, DynamicImage::ImageLuma16(_))
+            {
+                native_rotate_channels.is_some_and(|channels| {
+                    has_empty_native_bytes(img, channels)
+                        && simd_rotate_geometry(
+                            img.width(),
+                            img.height(),
+                            *angle,
+                            *expand,
+                            *center,
+                            *translate,
+                        )
+                        .is_some()
+                })
+            } else if rotate_identity_contract(*angle, *center, *translate) {
                 native_copy_layout(img, mode).is_some_and(|channels| {
                     img.width()
                         .checked_mul(img.height())
                         .and_then(|pixels| pixels.checked_mul(channels as u32))
                         .is_some_and(|expected| {
-                            expected as usize >= 16 && img.as_bytes().len() == expected as usize
+                            expected != 0 && img.as_bytes().len() == expected as usize
                         })
                 })
             } else if rotate_uses_discrete_fast_path(*angle, *center, *translate) {
@@ -4336,6 +4638,8 @@ pub(crate) fn simd_supports_for_image(
                         *translate,
                         nearest,
                     )
+                } else if matches!(img, DynamicImage::ImageLuma16(_)) {
+                    false
                 } else {
                     rotate_bilinear_supported_for_shape(
                         img.width(),
@@ -4350,25 +4654,26 @@ pub(crate) fn simd_supports_for_image(
                 }
             }
         }
-        PipelineOp::DrawLine { x0, y0, x1, y1, .. } =>
+        PipelineOp::DrawLine { x0, y0, x1, y1, .. } => {
             native_draw_layout(img, mode).is_some_and(|channels| {
-            has_vectorized_byte_rows(img, channels)
-                && line_bounds_intersect(img.width(), img.height(), *x0, *y0, *x1, *y1)
-                && channels != 0
-        }),
-        PipelineOp::DrawPoint { points, .. } => native_draw_layout(img, mode).is_some_and(|channels| {
-            (points.is_empty() || has_vectorized_byte_rows(img, channels))
-                && (!has_visible_draw_point(img.width(), img.height(), points)
-                    || has_vectorized_byte_rows(img, channels))
-        }),
+                has_vectorized_byte_rows(img, channels)
+                    && line_bounds_intersect(img.width(), img.height(), *x0, *y0, *x1, *y1)
+                    && channels != 0
+            })
+        }
+        PipelineOp::DrawPoint { points, .. } => {
+            native_draw_layout(img, mode).is_some_and(|channels| {
+                (points.is_empty() || has_vectorized_byte_rows(img, channels))
+                    && (!has_visible_draw_point(img.width(), img.height(), points)
+                        || has_vectorized_byte_rows(img, channels))
+            })
+        }
         PipelineOp::DrawEllipse { .. }
         | PipelineOp::DrawCircle { .. }
         | PipelineOp::DrawArc { .. }
         | PipelineOp::DrawChord { .. }
-        | PipelineOp::DrawPieslice { .. } => {
-            native_draw_layout(img, mode)
-                .is_some_and(|channels| has_vectorized_byte_rows(img, channels))
-        }
+        | PipelineOp::DrawPieslice { .. } => native_draw_layout(img, mode)
+            .is_some_and(|channels| has_vectorized_byte_rows(img, channels)),
         PipelineOp::DrawRoundedRect {
             x0,
             y0,
@@ -4376,30 +4681,22 @@ pub(crate) fn simd_supports_for_image(
             y1,
             radius,
             ..
-        } => {
-            native_draw_layout(img, mode).is_some_and(|channels| {
-                has_vectorized_byte_rows(img, channels)
-                    && *x1 >= *x0
-                    && *y1 >= *y0
-                    && radius.is_finite()
+        } => native_draw_layout(img, mode).is_some_and(|channels| {
+            has_vectorized_byte_rows(img, channels)
+                && *x1 >= *x0
+                && *y1 >= *y0
+                && radius.is_finite()
                 && *radius >= 0.0
-            })
-        }
-        PipelineOp::DrawPolygon { .. } => {
-            native_draw_layout(img, mode).is_some_and(|channels| {
-                has_vectorized_byte_rows(img, channels)
-            })
-        }
+        }),
+        PipelineOp::DrawPolygon { .. } => native_draw_layout(img, mode)
+            .is_some_and(|channels| has_vectorized_byte_rows(img, channels)),
         PipelineOp::PutPixel {
             x,
             y,
             palette_index: _,
             ..
-        } => native_draw_layout(img, mode).is_some_and(|channels| {
-            *x < img.width()
-                && *y < img.height()
-                && channels != 0
-        }),
+        } => native_draw_layout(img, mode)
+            .is_some_and(|channels| *x < img.width() && *y < img.height() && channels != 0),
         PipelineOp::DrawRectangle {
             x0,
             y0,
@@ -4410,7 +4707,7 @@ pub(crate) fn simd_supports_for_image(
             width,
             ..
         } => native_draw_layout(img, mode).is_some_and(|channels| {
-            has_vectorized_byte_rows(img, channels)
+            (img.width() == 0 || img.height() == 0 || has_vectorized_byte_rows(img, channels))
                 && valid_draw_rectangle(img.width(), img.height(), *x0, *y0, *x1, *y1)
                 && (has_visible_draw_rectangle(
                     img.width(),
@@ -4446,21 +4743,25 @@ pub(crate) fn simd_supports_for_image(
             h,
             mask,
             mask_alpha,
-        } => native_paste_plan_for_image(
-            img,
-            source,
-            *x,
-            *y,
-            *w,
-            *h,
-            mask.as_ref(),
-            *mask_alpha,
-            mode,
-        )
-        .is_some(),
-        PipelineOp::Merge { mode: target_mode, bands } => {
-            native_merge_contract_for_image(img, target_mode, bands, mode).is_some()
+        } => {
+            native_paste_plan_for_image(
+                img,
+                source,
+                *x,
+                *y,
+                *w,
+                *h,
+                mask.as_ref(),
+                *mask_alpha,
+                mode,
+            )
+            .is_some()
+                || native_paste_rgba_to_rgb_supported(img, source, *w, *h, mask.as_ref(), mode)
         }
+        PipelineOp::Merge {
+            mode: target_mode,
+            bands,
+        } => native_merge_contract_for_image(img, target_mode, bands, mode).is_some(),
         PipelineOp::BlendModule { other, alpha } => {
             simd_module_blend_supported(img, other, mode, *alpha)
         }
@@ -4496,11 +4797,15 @@ pub(crate) fn simd_supports_for_image(
             scale,
             offset,
         } => {
-            affine_chops
-                && scale.is_finite()
+            scale.is_finite()
                 && *scale != 0.0
                 && offset.is_finite()
                 && simd_chops_operands_supported(img, other, mode)
+                && if *scale == 1.0 && *offset == 0.0 {
+                    native_chops
+                } else {
+                    affine_chops
+                }
         }
         // Operations not listed above remain explicitly unsupported until their
         // data plane is vectorized or classified as native-copy.
@@ -4579,6 +4884,7 @@ pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
             | PipelineOp::RankFilter { .. }
             | PipelineOp::Autocontrast { .. }
             | PipelineOp::Equalize
+            | PipelineOp::RemapPalette { .. }
             | PipelineOp::Invert
             | PipelineOp::Flip
             | PipelineOp::Mirror
@@ -4627,7 +4933,7 @@ pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
     )
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SimdLayout {
     Luma8,
     LumaA8,
@@ -4674,13 +4980,14 @@ fn shape_draw_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usiz
     match shape.layout {
         SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        SimdLayout::Rgb8
-            if matches!(mode, None | Some("RGB" | "RGBA" | "HSV" | "YCbCr")) =>
-        {
+        SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "RGBA" | "HSV" | "YCbCr")) => {
             Some(3)
         }
         SimdLayout::Rgba8
-            if matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")) =>
+            if matches!(
+                mode,
+                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+            ) =>
         {
             Some(4)
         }
@@ -4695,7 +5002,10 @@ fn shape_mode_matches(shape: SimdImageShape, mode: Option<&str>) -> bool {
         SimdLayout::LumaA8 => matches!(mode, None | Some("LA" | "PA")),
         SimdLayout::Rgb8 => matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")),
         SimdLayout::Rgba8 => {
-            matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F"))
+            matches!(
+                mode,
+                None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX" | "I" | "F")
+            )
         }
         SimdLayout::Luma16 => false,
         SimdLayout::Unsupported => false,
@@ -4715,10 +5025,7 @@ fn shape_native_byte_channels(shape: SimdImageShape, mode: Option<&str>) -> Opti
     valid.then_some(channels)
 }
 
-fn shape_native_filter_byte_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_filter_byte_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     let channels = shape_channels(shape)?;
     let valid = match shape.layout {
         SimdLayout::Luma8 => matches!(mode, None | Some("1" | "L")),
@@ -4732,10 +5039,7 @@ fn shape_native_filter_byte_channels(
     valid.then_some(channels)
 }
 
-fn shape_native_extract_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_extract_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     let channels = shape_channels(shape)?;
     let valid = match shape.layout {
         SimdLayout::Luma8 => matches!(mode, None | Some("1" | "L" | "P")),
@@ -4749,10 +5053,7 @@ fn shape_native_extract_channels(
     valid.then_some(channels)
 }
 
-fn shape_native_typed_filter_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_typed_filter_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     (shape.layout == SimdLayout::Rgba8 && matches!(mode, Some("I" | "F"))).then_some(4)
 }
 
@@ -4800,7 +5101,8 @@ fn shape_native_rotate_channels(shape: SimdImageShape, mode: Option<&str>) -> Op
     match (shape.layout, mode) {
         (SimdLayout::Luma8, Some("1" | "P")) => Some(1),
         (SimdLayout::LumaA8, Some("PA")) => Some(2),
-        (SimdLayout::Rgba8, Some("CMYK" | "RGBa" | "RGBX")) => Some(4),
+        (SimdLayout::Luma16, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N")) => Some(2),
+        (SimdLayout::Rgba8, Some("CMYK" | "RGBa" | "RGBX" | "I" | "F")) => Some(4),
         _ => shape_native_byte_channels(shape, mode),
     }
 }
@@ -4818,10 +5120,7 @@ fn shape_native_reduce_layout(shape: SimdImageShape, mode: Option<&str>) -> Opti
     }
 }
 
-fn shape_native_brightness_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_brightness_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     let channels = shape_channels(shape)?;
     let valid = match shape.layout {
         SimdLayout::Luma8 => matches!(mode, None | Some("L")),
@@ -4862,26 +5161,19 @@ fn shape_native_sharpness_channels(
     }
 }
 
-fn shape_native_autocontrast_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_autocontrast_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     let channels = shape_channels(shape)?;
     let valid = match shape.layout {
         SimdLayout::Luma8 => matches!(mode, None | Some("L")),
         SimdLayout::Rgb8 => matches!(mode, None | Some("RGB")),
-        SimdLayout::LumaA8
-        | SimdLayout::Rgba8
-        | SimdLayout::Luma16
-        | SimdLayout::Unsupported => false,
+        SimdLayout::LumaA8 | SimdLayout::Rgba8 | SimdLayout::Luma16 | SimdLayout::Unsupported => {
+            false
+        }
     };
     valid.then_some(channels)
 }
 
-fn shape_native_grayscale_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_grayscale_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     match shape.layout {
         SimdLayout::Luma8 if matches!(mode, None | Some("L")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some(2),
@@ -4895,13 +5187,11 @@ fn shape_native_grayscale_supported(shape: SimdImageShape, mode: Option<&str>) -
     let Some(channels) = shape_native_grayscale_channels(shape, mode) else {
         return false;
     };
-    shape.width != 0
-        && shape.height != 0
-        && shape
-            .width
-            .checked_mul(shape.height)
-            .and_then(|pixels| pixels.checked_mul(channels as u32))
-            .is_some_and(|bytes| bytes != 0)
+    shape
+        .width
+        .checked_mul(shape.height)
+        .and_then(|pixels| pixels.checked_mul(channels as u32))
+        .is_some()
 }
 
 fn shape_native_colorize_supported(shape: SimdImageShape, mode: Option<&str>) -> bool {
@@ -4930,7 +5220,7 @@ fn shape_has_vectorized_float_bytes(shape: SimdImageShape, channels: usize) -> b
 }
 
 fn shape_has_vectorized_sharpness_bytes(shape: SimdImageShape, channels: usize) -> bool {
-    shape.width >= 10
+    shape.width >= 3
         && shape.height >= 3
         && shape
             .width
@@ -4939,11 +5229,9 @@ fn shape_has_vectorized_sharpness_bytes(shape: SimdImageShape, channels: usize) 
             .is_some_and(|bytes| bytes != 0)
 }
 
-fn shape_has_vectorized_native_identity_copy(
-    shape: SimdImageShape,
-    channels: usize,
-) -> bool {
-    shape.width
+fn shape_has_vectorized_native_identity_copy(shape: SimdImageShape, channels: usize) -> bool {
+    shape
+        .width
         .checked_mul(shape.height)
         .and_then(|pixels| pixels.checked_mul(channels as u32))
         .is_some_and(|bytes| bytes >= 16)
@@ -4982,17 +5270,16 @@ fn shape_luma16_transpose_layout(shape: SimdImageShape, mode: Option<&str>) -> b
         && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
 }
 
-fn shape_native_identity_copy_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_luma16_copy_layout(shape: SimdImageShape, mode: Option<&str>) -> bool {
+    shape_luma16_transpose_layout(shape, mode)
+}
+
+fn shape_native_identity_copy_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     match shape.layout {
         SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA" | "PA")) => Some(2),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => Some(3),
-        SimdLayout::Rgba8
-            if matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "I" | "F")) =>
-        {
+        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "I" | "F")) => {
             Some(4)
         }
         _ => None,
@@ -5031,31 +5318,7 @@ fn shape_has_vector_rows(shape: SimdImageShape, channels: usize) -> bool {
             .is_some_and(|row_bytes| row_bytes >= 16)
 }
 
-fn shape_has_vectorized_flat_bytes(shape: SimdImageShape, channels: usize) -> bool {
-    shape.width != 0
-        && shape.height != 0
-        && shape
-            .width
-            .checked_mul(shape.height)
-            .and_then(|pixels| pixels.checked_mul(channels as u32))
-            .is_some_and(|total_bytes| total_bytes >= 16)
-}
-
-fn shape_has_vectorized_lut_bytes(shape: SimdImageShape, channels: usize) -> bool {
-    shape.width != 0
-        && shape.height != 0
-        && shape
-            .width
-            .checked_mul(shape.height)
-            .and_then(|pixels| pixels.checked_mul(channels as u32))
-            .is_some_and(|total_bytes| total_bytes >= 8)
-}
-
-fn shape_has_vectorized_offset_rows(
-    shape: SimdImageShape,
-    channels: usize,
-    xoffset: i32,
-) -> bool {
+fn shape_has_vectorized_offset_rows(shape: SimdImageShape, channels: usize, xoffset: i32) -> bool {
     if shape.width == 0 || shape.height == 0 {
         return false;
     }
@@ -5068,14 +5331,10 @@ fn shape_has_vectorized_offset_rows(
         .is_some_and(|total_bytes| total_bytes >= 16)
 }
 
-fn shape_has_vectorized_luma16_offset(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> bool {
+fn shape_has_vectorized_luma16_offset(shape: SimdImageShape, mode: Option<&str>) -> bool {
     shape.layout == SimdLayout::Luma16
         && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
-        && (shape_has_empty_native_bytes(shape, 2)
-            || (shape.width >= 16 && shape.height != 0))
+        && (shape_has_empty_native_bytes(shape, 2) || (shape.width != 0 && shape.height != 0))
 }
 
 fn shape_has_vectorized_mirror_rows(shape: SimdImageShape, channels: usize) -> bool {
@@ -5089,10 +5348,6 @@ fn shape_has_affine_vector_rows(shape: SimdImageShape, channels: usize) -> bool 
                 .width
                 .checked_mul(channels as u32)
                 .is_some_and(|row_bytes| row_bytes >= 8))
-}
-
-fn shape_has_blend_vector_rows(shape: SimdImageShape, channels: usize) -> bool {
-    shape_has_affine_vector_rows(shape, channels)
 }
 
 fn shape_preserves_chops_operands(
@@ -5110,15 +5365,11 @@ fn shape_preserves_chops_operands(
         return false;
     };
     logical_byte_channels(&other_mode).is_some_and(|other_channels| {
-        channels == other_channels
-            && (shape.width, shape.height) == other_size
+        channels == other_channels && (shape.width, shape.height) == other_size
     })
 }
 
-fn shape_native_module_blend_channels(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn shape_native_module_blend_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     match (shape.layout, mode) {
         (SimdLayout::Luma8, None | Some("L")) => Some(1),
         (SimdLayout::LumaA8, None | Some("LA")) => Some(2),
@@ -5167,10 +5418,9 @@ fn shape_put_alpha_supported(
             SimdLayout::Luma8,
             matches!(mode, None | Some("L" | "P" | "PA")),
         ),
-        PixelMode::LA | PixelMode::PA => (
-            SimdLayout::LumaA8,
-            matches!(mode, None | Some("LA" | "PA")),
-        ),
+        PixelMode::LA | PixelMode::PA => {
+            (SimdLayout::LumaA8, matches!(mode, None | Some("LA" | "PA")))
+        }
         PixelMode::RGB => (SimdLayout::Rgb8, matches!(mode, None | Some("RGB"))),
         PixelMode::RGBA => (
             SimdLayout::Rgba8,
@@ -5198,10 +5448,9 @@ fn shape_put_alpha_data_supported(
             SimdLayout::Luma8,
             matches!(mode, None | Some("L" | "P" | "PA")),
         ),
-        PixelMode::LA | PixelMode::PA => (
-            SimdLayout::LumaA8,
-            matches!(mode, None | Some("LA" | "PA")),
-        ),
+        PixelMode::LA | PixelMode::PA => {
+            (SimdLayout::LumaA8, matches!(mode, None | Some("LA" | "PA")))
+        }
         PixelMode::RGB => (SimdLayout::Rgb8, matches!(mode, None | Some("RGB"))),
         PixelMode::RGBA => (
             SimdLayout::Rgba8,
@@ -5222,10 +5471,7 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
             right,
             bottom,
         } => {
-            if *left >= *right
-                || *top >= *bottom
-                || *right > shape.width
-                || *bottom > shape.height
+            if *left >= *right || *top >= *bottom || *right > shape.width || *bottom > shape.height
             {
                 return None;
             }
@@ -5279,10 +5525,7 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
                 _ => SimdLayout::Unsupported,
             };
         }
-        PipelineOp::Reduce {
-            x_factor,
-            y_factor,
-        } => {
+        PipelineOp::Reduce { x_factor, y_factor } => {
             next.width = shape.width.div_ceil((*x_factor).max(1));
             next.height = shape.height.div_ceil((*y_factor).max(1));
         }
@@ -5301,10 +5544,12 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
             next.height = output_height;
         }
         PipelineOp::Contain { w, h, .. } => {
-            let (output_width, output_height) =
-                native_pad_contained_dimensions(shape.width, shape.height, *w, *h)?;
-            next.width = output_width;
-            next.height = output_height;
+            if shape.width != 0 && shape.height != 0 {
+                let (output_width, output_height) =
+                    native_pad_contained_dimensions(shape.width, shape.height, *w, *h)?;
+                next.width = output_width;
+                next.height = output_height;
+            }
         }
         PipelineOp::Cover { w, h, .. } => {
             let (output_width, output_height) =
@@ -5353,9 +5598,7 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
         }
         PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
             next.layout = match mode {
-                PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => {
-                    SimdLayout::LumaA8
-                }
+                PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => SimdLayout::LumaA8,
                 PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK => SimdLayout::Rgba8,
                 _ => SimdLayout::Unsupported,
             };
@@ -5413,15 +5656,20 @@ fn operation_target_mode(op: &PipelineOp) -> Option<&'static str> {
         PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => {
             Some(color_mode_name(mode))
         }
-        PipelineOp::Color3DLut { target_mode, .. }
-        | PipelineOp::PutAlpha {
-            mode: target_mode,
-            ..
-        }
-        | PipelineOp::PutAlphaData {
-            mode: target_mode,
-            ..
-        } => Some(pixel_mode_name(*target_mode)),
+        PipelineOp::Color3DLut { target_mode, .. } => Some(pixel_mode_name(*target_mode)),
+        // PutAlpha's `mode` field identifies the source image, not the
+        // resulting logical mode.  In particular a CMYK image is stored as
+        // RGBA at this boundary and Pillow promotes it to RGBA when alpha is
+        // inserted; treating the source tag as the output tag makes the next
+        // SIMD/CPU capability check observe stale CMYK metadata.
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => match mode {
+            PixelMode::L | PixelMode::LA => Some("LA"),
+            PixelMode::P | PixelMode::PA => Some("PA"),
+            PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK => Some("RGBA"),
+            PixelMode::Mode1 | PixelMode::YCbCr | PixelMode::HSV | PixelMode::I | PixelMode::F => {
+                None
+            }
+        },
         PipelineOp::LinearGradient { mode } => Some(color_mode_name(mode)),
         PipelineOp::Grayscale | PipelineOp::EffectNoise { .. } => Some("L"),
         PipelineOp::Colorize { .. } => Some("RGB"),
@@ -5514,39 +5762,41 @@ pub(crate) fn first_unsupported_simd_op<'a>(
     None
 }
 
-fn simd_supports_for_shape(
-    shape: SimdImageShape,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> bool {
+fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<&str>) -> bool {
     let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
     let native_byte_channels = shape_native_byte_channels(shape, mode);
     let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
     let native_copy = shape_native_copy_channels(shape, mode).is_some();
     let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
+    let native_luma16_copy =
+        shape_luma16_copy_layout(shape, mode) && shape.width != 0 && shape.height != 0;
     let native_chops = shape_native_chops_channels(shape, mode).is_some_and(|channels| {
         shape_has_empty_native_bytes(shape, channels)
-            || shape_has_vectorized_flat_bytes(shape, channels)
+            || shape_has_nonempty_byte_data(shape, channels)
     });
     let lut_chops = shape_native_chops_channels(shape, mode).is_some_and(|channels| {
         shape_has_empty_native_bytes(shape, channels)
-            || shape_has_vectorized_lut_bytes(shape, channels)
+            || shape_has_nonempty_byte_data(shape, channels)
     });
-    let blend_chops = shape_native_chops_channels(shape, mode)
-        .is_some_and(|channels| shape_has_blend_vector_rows(shape, channels));
+    let blend_chops = shape_native_chops_channels(shape, mode).is_some_and(|channels| {
+        shape_has_empty_native_bytes(shape, channels)
+            || shape_has_nonempty_byte_data(shape, channels)
+    });
     let affine_chops = shape_native_chops_channels(shape, mode)
         .is_some_and(|channels| shape_has_affine_vector_rows(shape, channels));
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => shape_native_invert_channels(shape, mode)
             .is_some_and(|channels| {
                 shape_has_empty_native_bytes(shape, channels)
-                    || shape_has_vector_rows(shape, channels)
+                    || shape_has_nonempty_byte_data(shape, channels)
             }),
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_shape(shape, *w, *h, *filter, mode)
         }
-        PipelineOp::Scale { factor, filter } => native_scale_dimensions(shape.width, shape.height, *factor)
-            .is_some_and(|(w, h)| native_resize_supported_for_shape(shape, w, h, *filter, mode)),
+        PipelineOp::Scale { factor, filter } => {
+            native_scale_dimensions(shape.width, shape.height, *factor)
+                .is_some_and(|(w, h)| native_resize_supported_for_shape(shape, w, h, *filter, mode))
+        }
         PipelineOp::Thumbnail { w, h, filter } => {
             native_thumbnail_supported_for_shape(shape, *w, *h, *filter, mode)
         }
@@ -5562,15 +5812,7 @@ fn simd_supports_for_shape(
             filter,
             bleed,
             centering,
-        } => native_fit_supported_for_shape(
-            shape,
-            *w,
-            *h,
-            *filter,
-            *bleed,
-            *centering,
-            mode,
-        ),
+        } => native_fit_supported_for_shape(shape, *w, *h, *filter, *bleed, *centering, mode),
         PipelineOp::Transform {
             w,
             h,
@@ -5588,42 +5830,32 @@ fn simd_supports_for_shape(
             }
             TransformMethod::Perspective | TransformMethod::Quad => {
                 native_projective_nearest_transform_supported_for_shape(
-                    shape,
-                    *w,
-                    *h,
-                    method,
-                    data,
-                    *filter,
-                    mode,
+                    shape, *w, *h, method, data, *filter, mode,
                 )
             }
-            TransformMethod::Mesh => native_mesh_transform_supported_for_shape(
-                shape, *w, *h, data, *filter, mode,
-            ),
+            TransformMethod::Mesh => {
+                native_mesh_transform_supported_for_shape(shape, *w, *h, data, *filter, mode)
+            }
         },
-        PipelineOp::Reduce {
-            x_factor,
-            y_factor,
-        } => native_reduce_supported_for_shape(shape, *x_factor, *y_factor, mode),
+        PipelineOp::Reduce { x_factor, y_factor } => {
+            native_reduce_supported_for_shape(shape, *x_factor, *y_factor, mode)
+        }
         PipelineOp::Convert {
             mode: target,
             matrix,
             dither: _,
-        } => native_convert_supported_for_shape(
-            shape,
-            target,
-            matrix.as_deref(),
-            mode,
-        ),
+        } => native_convert_supported_for_shape(shape, target, matrix.as_deref(), mode),
         PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
             shape_native_byte_channels(shape, mode)
                 .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
         }
         PipelineOp::Grayscale => shape_native_grayscale_supported(shape, mode),
         PipelineOp::Colorize { .. } => shape_native_colorize_supported(shape, mode),
-        PipelineOp::Brightness { factor } => shape_native_brightness_channels(shape, mode)
-            .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
-            && factor.is_finite(),
+        PipelineOp::Brightness { factor } => {
+            shape_native_brightness_channels(shape, mode)
+                .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
+                && factor.is_finite()
+        }
         PipelineOp::Contrast { factor } | PipelineOp::ColorSaturation { factor } => {
             factor.is_finite()
                 && shape_native_enhance_channels(shape, mode)
@@ -5631,36 +5863,46 @@ fn simd_supports_for_shape(
         }
         PipelineOp::Sharpness { factor } => {
             factor.is_finite()
-                && shape_native_sharpness_channels(shape, mode).is_some_and(
-                    |(channels, _)| shape_has_vectorized_sharpness_bytes(shape, channels),
-                )
+                && shape_native_sharpness_channels(shape, mode).is_some_and(|(channels, _)| {
+                    shape_has_vectorized_sharpness_bytes(shape, channels)
+                })
         }
         PipelineOp::Autocontrast { cutoff, mask } => {
             cutoff.is_finite()
-                && shape_native_autocontrast_channels(shape, mode)
-                    .is_some_and(|channels| shape_has_vectorized_flat_bytes(shape, channels))
+                && shape_native_autocontrast_channels(shape, mode).is_some_and(|channels| {
+                    shape_has_empty_native_bytes(shape, channels)
+                        || shape_has_nonempty_byte_data(shape, channels)
+                })
                 && autocontrast_mask_supported(shape.width, shape.height, mask.as_ref())
         }
-        PipelineOp::Equalize => shape_native_autocontrast_channels(shape, mode)
-            .is_some_and(|channels| shape_has_vectorized_flat_bytes(shape, channels)),
+        PipelineOp::Equalize => {
+            shape_native_autocontrast_channels(shape, mode).is_some_and(|channels| {
+                shape_has_empty_native_bytes(shape, channels)
+                    || shape_has_nonempty_byte_data(shape, channels)
+            })
+        }
+        PipelineOp::RemapPalette { dest_map } => {
+            dest_map.len() <= 256
+                && shape.layout == SimdLayout::Luma8
+                && matches!(mode, None | Some("L" | "P"))
+        }
         PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => {
             shape_native_point_channels(shape, mode).is_some_and(|channels| {
                 lut.len() == 256 * channels
-                    && (shape.width as usize)
-                        .saturating_mul(shape.height as usize)
-                        .saturating_mul(channels)
-                        >= 16
+                    && shape
+                        .width
+                        .checked_mul(shape.height)
+                        .and_then(|pixels| pixels.checked_mul(channels as u32))
+                        .is_some()
             })
         }
-        PipelineOp::PutData { mode: data_mode, .. } => {
-            native_put_data_shape_layout(shape, *data_mode, mode).is_some()
-        }
-        PipelineOp::ExtractBand { index } => {
-            shape_native_extract_channels(shape, mode).is_some_and(|channels| {
-                usize::from(*index) < channels
-                    && pixel_count.saturating_mul(channels) != 0
-            })
-        }
+        PipelineOp::PutData {
+            mode: data_mode, ..
+        } => native_put_data_shape_layout(shape, *data_mode, mode).is_some(),
+        PipelineOp::ExtractBand { index } => shape_native_extract_channels(shape, mode)
+            .is_some_and(|channels| {
+                usize::from(*index) < channels && pixel_count.saturating_mul(channels) != 0
+            }),
         PipelineOp::Offset { x, .. } => {
             shape_has_vectorized_luma16_offset(shape, mode)
                 || shape_native_copy_channels(shape, mode).is_some_and(|channels| {
@@ -5668,12 +5910,21 @@ fn simd_supports_for_shape(
                         || shape_has_vectorized_offset_rows(shape, channels, *x)
                 })
         }
-        PipelineOp::Flip => shape_native_copy_channels(shape, mode)
-            .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels)),
-        PipelineOp::Mirror => shape_native_copy_channels(shape, mode)
-            .is_some_and(|channels| shape_has_vectorized_mirror_rows(shape, channels)),
+        PipelineOp::Flip => {
+            shape_native_copy_channels(shape, mode)
+                .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
+                || native_luma16_copy
+        }
+        PipelineOp::Mirror => {
+            shape_native_copy_channels(shape, mode)
+                .is_some_and(|channels| shape_has_vectorized_mirror_rows(shape, channels))
+                || native_luma16_copy
+        }
         PipelineOp::Transpose { .. } => {
-            (native_copy || native_luma16_transpose) && pixel_count != 0
+            (native_copy || native_luma16_transpose)
+                && (pixel_count != 0
+                    || native_copy
+                        && shape_has_empty_native_bytes(shape, shape_channels(shape).unwrap_or(0)))
         }
         PipelineOp::Crop {
             left,
@@ -5681,7 +5932,7 @@ fn simd_supports_for_shape(
             right,
             bottom,
         } => {
-            native_copy
+            (native_copy || native_luma16_copy)
                 && pixel_count != 0
                 && *left < *right
                 && *top < *bottom
@@ -5710,9 +5961,7 @@ fn simd_supports_for_shape(
                     .and_then(|pixels| pixels.checked_mul(channels as u32))
                     .is_some_and(|bytes| bytes != 0)
         }),
-        PipelineOp::Filter3x3 {
-            kernel, scale, ..
-        } => {
+        PipelineOp::Filter3x3 { kernel, scale, .. } => {
             valid_convolution_parameters(kernel, *scale)
                 && (native_filter_byte_channels.is_some()
                     && shape.width as usize >= 3
@@ -5720,9 +5969,7 @@ fn simd_supports_for_shape(
                     || shape_native_i32_convolution_path(shape, mode, 1)
                     || shape_native_filter_identity_supported(shape, mode, 1))
         }
-        PipelineOp::Filter5x5 {
-            kernel, scale, ..
-        } => {
+        PipelineOp::Filter5x5 { kernel, scale, .. } => {
             valid_convolution_parameters(kernel, *scale)
                 && (native_filter_byte_channels.is_some()
                     && shape.width as usize >= 5
@@ -5732,10 +5979,9 @@ fn simd_supports_for_shape(
         }
         PipelineOp::BoxBlur { radius } => {
             if *radius == 0 {
-                shape_native_byte_channels(shape, mode)
-                    .is_some_and(|channels| {
-                        shape_has_vectorized_native_identity_copy(shape, channels)
-                    })
+                shape_native_byte_channels(shape, mode).is_some_and(|channels| {
+                    shape_has_vectorized_native_identity_copy(shape, channels)
+                })
             } else {
                 native_byte_channels.is_some() && shape.width != 0 && shape.height != 0
             }
@@ -5751,9 +5997,7 @@ fn simd_supports_for_shape(
                 && radius_y.is_finite()
                 && *radius_x >= 0.0
                 && *radius_y >= 0.0
-                && ((*radius_x != 0.0 || *radius_y != 0.0)
-                    && shape.width != 0
-                    && shape.height != 0
+                && ((*radius_x != 0.0 || *radius_y != 0.0) && shape.width != 0 && shape.height != 0
                     || (*radius_x == 0.0
                         && *radius_y == 0.0
                         && shape_native_byte_channels(shape, mode).is_some_and(|channels| {
@@ -5816,22 +6060,27 @@ fn simd_supports_for_shape(
                 && shape.height != 0)
                 || shape_native_float_rank_supported(shape, mode, *size, *rank)
         }
-        PipelineOp::PutAlpha { mode: alpha_mode, .. } => {
+        PipelineOp::PutAlpha {
+            mode: alpha_mode, ..
+        } => {
             let pixels_per_vector = match alpha_mode {
                 PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => 8,
                 PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK => 4,
                 _ => usize::MAX,
             };
-            shape_put_alpha_supported(shape, *alpha_mode, mode)
-                && pixel_count >= pixels_per_vector
+            shape_put_alpha_supported(shape, *alpha_mode, mode) && pixel_count >= pixels_per_vector
         }
-        PipelineOp::PutAlphaData { mask, mode: alpha_mode } => {
+        PipelineOp::PutAlphaData {
+            mask,
+            mode: alpha_mode,
+        } => {
             shape_put_alpha_data_supported(shape, mask, *alpha_mode, mode)
-                && pixel_count >= match alpha_mode {
-                    PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => 8,
-                    PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK => 4,
-                    _ => usize::MAX,
-                }
+                && pixel_count
+                    >= match alpha_mode {
+                        PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA => 8,
+                        PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK => 4,
+                        _ => usize::MAX,
+                    }
         }
         PipelineOp::EffectNoise { sigma } => {
             sigma.is_finite()
@@ -5843,13 +6092,11 @@ fn simd_supports_for_shape(
             ColorMode::Mode1 | ColorMode::L | ColorMode::P | ColorMode::I | ColorMode::F
         ),
         PipelineOp::EffectSpread { distance } => {
-            (*distance <= 1 || (shape.width == 1 && shape.height == 1))
-                && shape_native_identity_copy_channels(shape, mode).is_some_and(|channels| {
-                    (shape.width as usize)
-                        .checked_mul(shape.height as usize)
-                        .and_then(|pixels| pixels.checked_mul(channels))
-                        .is_some_and(|bytes| bytes != 0)
-                })
+            let _ = distance;
+            shape_native_identity_copy_channels(shape, mode).is_some_and(|channels| {
+                shape_has_empty_native_bytes(shape, channels)
+                    || shape_has_nonempty_byte_data(shape, channels)
+            })
         }
         PipelineOp::Color3DLut {
             size,
@@ -5875,12 +6122,23 @@ fn simd_supports_for_shape(
             ..
         } => {
             let nearest = *nearest || matches!(mode, Some("1" | "P"));
-            if rotate_identity_contract(*angle, *center, *translate) {
+            if (shape.width == 0 || shape.height == 0) && shape.layout != SimdLayout::Luma16 {
+                shape_native_rotate_channels(shape, mode).is_some()
+                    && simd_rotate_geometry(
+                        shape.width,
+                        shape.height,
+                        *angle,
+                        *expand,
+                        *center,
+                        *translate,
+                    )
+                    .is_some()
+            } else if rotate_identity_contract(*angle, *center, *translate) {
                 shape_native_identity_copy_channels(shape, mode).is_some_and(|channels| {
                     (shape.width as usize)
                         .checked_mul(shape.height as usize)
                         .and_then(|pixels| pixels.checked_mul(channels))
-                        .is_some_and(|bytes| bytes >= 16)
+                        .is_some_and(|bytes| bytes != 0)
                 })
             } else if rotate_uses_discrete_fast_path(*angle, *center, *translate) {
                 shape_native_rotate_channels(shape, mode).is_some() && pixel_count != 0
@@ -5896,6 +6154,8 @@ fn simd_supports_for_shape(
                         *translate,
                         nearest,
                     )
+                } else if shape.layout == SimdLayout::Luma16 {
+                    false
                 } else {
                     rotate_bilinear_supported_for_shape(
                         shape.width,
@@ -5910,25 +6170,25 @@ fn simd_supports_for_shape(
                 }
             }
         }
-        PipelineOp::DrawLine { x0, y0, x1, y1, .. } =>
+        PipelineOp::DrawLine { x0, y0, x1, y1, .. } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| {
+                shape_has_vector_rows(shape, channels)
+                    && line_bounds_intersect(shape.width, shape.height, *x0, *y0, *x1, *y1)
+                    && channels != 0
+            }),
+        PipelineOp::DrawPoint { points, .. } => {
             shape_draw_channels(shape, mode).is_some_and(|channels| {
-            shape_has_vector_rows(shape, channels)
-                && line_bounds_intersect(shape.width, shape.height, *x0, *y0, *x1, *y1)
-                && channels != 0
-        }),
-        PipelineOp::DrawPoint { points, .. } => shape_draw_channels(shape, mode).is_some_and(|channels| {
-            (points.is_empty() || shape_has_vector_rows(shape, channels))
-                && (!has_visible_draw_point(shape.width, shape.height, points)
-                    || shape_has_vector_rows(shape, channels))
-        }),
+                (points.is_empty() || shape_has_vector_rows(shape, channels))
+                    && (!has_visible_draw_point(shape.width, shape.height, points)
+                        || shape_has_vector_rows(shape, channels))
+            })
+        }
         PipelineOp::DrawEllipse { .. }
         | PipelineOp::DrawCircle { .. }
         | PipelineOp::DrawArc { .. }
         | PipelineOp::DrawChord { .. }
-        | PipelineOp::DrawPieslice { .. } => {
-            shape_draw_channels(shape, mode)
-                .is_some_and(|channels| shape_has_vector_rows(shape, channels))
-        }
+        | PipelineOp::DrawPieslice { .. } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| shape_has_vector_rows(shape, channels)),
         PipelineOp::DrawRoundedRect {
             x0,
             y0,
@@ -5936,30 +6196,22 @@ fn simd_supports_for_shape(
             y1,
             radius,
             ..
-        } => {
-            shape_draw_channels(shape, mode).is_some_and(|channels| {
-                shape_has_vector_rows(shape, channels)
-                    && *x1 >= *x0
-                    && *y1 >= *y0
-                    && radius.is_finite()
-                    && *radius >= 0.0
-            })
-        }
-        PipelineOp::DrawPolygon { .. } => {
-            shape_draw_channels(shape, mode).is_some_and(|channels| {
-                shape_has_vector_rows(shape, channels)
-            })
-        }
+        } => shape_draw_channels(shape, mode).is_some_and(|channels| {
+            shape_has_vector_rows(shape, channels)
+                && *x1 >= *x0
+                && *y1 >= *y0
+                && radius.is_finite()
+                && *radius >= 0.0
+        }),
+        PipelineOp::DrawPolygon { .. } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| shape_has_vector_rows(shape, channels)),
         PipelineOp::PutPixel {
             x,
             y,
             palette_index: _,
             ..
-        } => shape_draw_channels(shape, mode).is_some_and(|channels| {
-            *x < shape.width
-                && *y < shape.height
-                && channels != 0
-        }),
+        } => shape_draw_channels(shape, mode)
+            .is_some_and(|channels| *x < shape.width && *y < shape.height && channels != 0),
         PipelineOp::DrawRectangle {
             x0,
             y0,
@@ -5970,7 +6222,7 @@ fn simd_supports_for_shape(
             width,
             ..
         } => shape_draw_channels(shape, mode).is_some_and(|channels| {
-            shape_has_vector_rows(shape, channels)
+            (shape.width == 0 || shape.height == 0 || shape_has_vector_rows(shape, channels))
                 && valid_draw_rectangle(shape.width, shape.height, *x0, *y0, *x1, *y1)
                 && (has_visible_draw_rectangle(
                     shape.width,
@@ -6006,21 +6258,32 @@ fn simd_supports_for_shape(
             h,
             mask,
             mask_alpha,
-        } => native_paste_plan_for_shape(
-            shape,
-            source,
-            *x,
-            *y,
-            *w,
-            *h,
-            mask.as_ref(),
-            *mask_alpha,
-            mode,
-        )
-        .is_some(),
-        PipelineOp::Merge { mode: target_mode, bands } => {
-            native_merge_contract_for_shape(shape, target_mode, bands, mode).is_some()
+        } => {
+            native_paste_plan_for_shape(
+                shape,
+                source,
+                *x,
+                *y,
+                *w,
+                *h,
+                mask.as_ref(),
+                *mask_alpha,
+                mode,
+            )
+            .is_some()
+                || native_paste_rgba_to_rgb_supported_for_shape(
+                    shape,
+                    source,
+                    *w,
+                    *h,
+                    mask.as_ref(),
+                    mode,
+                )
         }
+        PipelineOp::Merge {
+            mode: target_mode,
+            bands,
+        } => native_merge_contract_for_shape(shape, target_mode, bands, mode).is_some(),
         PipelineOp::BlendModule { other, alpha } => {
             shape_module_blend_supported(shape, other, mode, *alpha)
         }
@@ -6053,11 +6316,15 @@ fn simd_supports_for_shape(
             scale,
             offset,
         } => {
-            affine_chops
-                && scale.is_finite()
+            scale.is_finite()
                 && *scale != 0.0
                 && offset.is_finite()
                 && shape_preserves_chops_operands(shape, other, mode)
+                && if *scale == 1.0 && *offset == 0.0 {
+                    native_chops
+                } else {
+                    affine_chops
+                }
         }
         _ => false,
     }
@@ -6203,9 +6470,7 @@ where
             native_byte_transform_bytes(&mut result, 2, &transform);
             Some(DynamicImage::ImageLumaA8(result))
         }
-        DynamicImage::ImageRgb8(image)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             let mut result = image.clone();
             native_byte_transform_bytes(&mut result, 3, &transform);
             Some(DynamicImage::ImageRgb8(result))
@@ -6249,9 +6514,7 @@ where
             native_byte_transform_bytes(&mut result, 2, &transform);
             DynamicImage::ImageLumaA8(result)
         }
-        DynamicImage::ImageRgb8(image)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             let mut result = image.clone();
             native_byte_transform_bytes(&mut result, 3, &transform);
             DynamicImage::ImageRgb8(result)
@@ -6269,7 +6532,9 @@ where
         }
         _ => return None,
     };
-    crate::compute::record_pipeline_operation_vector_blocks(img.as_bytes().len().div_ceil(16) as u64);
+    crate::compute::record_pipeline_operation_vector_blocks(
+        img.as_bytes().len().div_ceil(16) as u64
+    );
     crate::compute::record_pipeline_operation_path("vector");
     Some(result)
 }
@@ -6509,14 +6774,7 @@ fn native_enhance_output(
             factor,
         )
     } else {
-        vectorize_color_bytes(
-            source,
-            output,
-            channels,
-            active_channels,
-            mode,
-            factor,
-        )
+        vectorize_color_bytes(source, output, channels, active_channels, mode, factor)
     };
     Some((result, vector_blocks, scalar_tail))
 }
@@ -6531,19 +6789,15 @@ fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
     let active = NATIVE_BYTE_INVERT_MASKS[channels][invert_alpha as usize];
     let active_vector = u8x16::new(*active);
     let inactive = u8x16::splat(u8::MAX) - active_vector;
-    let mut chunks = bytes.chunks_exact_mut(16);
+    let mut chunks = bytes.chunks_mut(16);
     for chunk in &mut chunks {
-        let input = <[u8; 16]>::try_from(&*chunk).expect("chunks_exact_mut yields 16-byte chunks");
-        let input = u8x16::new(input);
+        let active_lanes = chunk.len();
+        let mut padded = [0u8; 16];
+        padded[..active_lanes].copy_from_slice(chunk);
+        let input = u8x16::new(padded);
         let inverted = u8x16::splat(u8::MAX) - input;
         let output = (inverted & active_vector) | (input & inactive);
-        chunk.copy_from_slice(&output.to_array());
-    }
-    let remainder = chunks.into_remainder();
-    for (index, value) in remainder.iter_mut().enumerate() {
-        let mask = active[index % 16];
-        let inverted = u8::MAX - *value;
-        *value = (inverted & mask) | (*value & !mask);
+        chunk.copy_from_slice(&output.to_array()[..active_lanes]);
     }
 }
 
@@ -6559,7 +6813,7 @@ fn apply_native_rows<F>(
     #[cfg(feature = "parallel")]
     let row_stride = width.saturating_mul(channels);
     #[cfg(feature = "parallel")]
-    if bytes.len() >= 256 * 1024 {
+    if bytes.len() >= 256 * 1024 && row_stride != 0 {
         crate::par_rows_mut!(
             bytes,
             row_stride,
@@ -6569,12 +6823,21 @@ fn apply_native_rows<F>(
             }
         );
     } else {
-        transform(bytes);
+        if row_stride != 0 {
+            for row in bytes.chunks_mut(row_stride).take(height) {
+                transform(row);
+            }
+        }
     }
     #[cfg(not(feature = "parallel"))]
-    let _ = (width, height, channels);
-    #[cfg(not(feature = "parallel"))]
-    transform(bytes);
+    {
+        let row_stride = width.saturating_mul(channels);
+        if row_stride != 0 {
+            for row in bytes.chunks_mut(row_stride).take(height) {
+                transform(row);
+            }
+        }
+    }
 }
 
 /// Apply an 8-bit point operation directly to the image's native byte
@@ -6591,7 +6854,7 @@ fn native_invert(
             crate::compute::record_pipeline_operation_path("native-copy");
             return Some(img.clone());
         }
-        record_native_row_work(img.width() as usize, img.height() as usize, channels);
+        record_padded_native_row_work(img.width() as usize, img.height() as usize, channels);
     }
     let mut result = img.clone();
     let (width, height) = result.dimensions();
@@ -6696,11 +6959,7 @@ where
 }
 
 /// In-place counterpart of [`native_invert`].
-fn native_invert_in_place(
-    img: &mut DynamicImage,
-    mode: Option<&str>,
-    invert_alpha: bool,
-) -> bool {
+fn native_invert_in_place(img: &mut DynamicImage, mode: Option<&str>, invert_alpha: bool) -> bool {
     let Some(channels) = native_invert_layout(img, mode) else {
         return false;
     };
@@ -6713,7 +6972,7 @@ fn native_invert_in_place(
     let Some(bytes) = img.as_bytes_mut() else {
         return false;
     };
-    record_native_row_work(width, height, channels);
+    record_padded_native_row_work(width, height, channels);
     apply_native_rows(bytes, width, height, channels, |row| {
         invert_native_bytes(row, channels, invert_alpha || mode == Some("CMYK"));
     });
@@ -6751,10 +7010,76 @@ fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     output
 }
 
-fn native_lut_tables_for_channels(
-    lut: &[u8],
-    channels: usize,
-) -> Option<[[u8x16; 16]; 4]> {
+fn native_remap_palette_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    matches!(img, DynamicImage::ImageLuma8(_))
+        .then_some(1)
+        .filter(|_| matches!(mode, None | Some("L" | "P")))
+}
+
+fn has_valid_remap_bytes(img: &DynamicImage) -> bool {
+    let Some(expected) = (img.width() as usize).checked_mul(img.height() as usize) else {
+        return false;
+    };
+    img.as_bytes().len() == expected
+}
+
+fn native_remap_palette_tables(dest_map: &[u8]) -> Option<[u8x16; 16]> {
+    if dest_map.len() > 256 {
+        return None;
+    }
+    let mut inverse = [0u8; 256];
+    for (new_index, &old_index) in dest_map.iter().enumerate() {
+        inverse[usize::from(old_index)] = u8::try_from(new_index).ok()?;
+    }
+    native_lut_tables(&inverse)
+}
+
+/// Apply Pillow's inverse palette map to a one-byte `L`/`P` index plane.
+///
+/// Every non-empty chunk, including a final partial chunk, is padded into a
+/// `u8x16` lookup. This keeps short public images on a real SIMD data path;
+/// the zero padding never reaches the output buffer. Palette colors and
+/// alpha metadata remain owned by the `Image` facade, as they are for the
+/// CPU implementation.
+fn native_remap_palette_bytes(bytes: &mut [u8], tables: &[u8x16; 16]) -> (u64, u64) {
+    let mut vector_blocks = 0u64;
+    for chunk in bytes.chunks_mut(16) {
+        let active = chunk.len();
+        let mut padded = [0u8; 16];
+        padded[..active].copy_from_slice(chunk);
+        let output = native_lut_chunk(u8x16::new(padded), tables).to_array();
+        chunk.copy_from_slice(&output[..active]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    (vector_blocks, 0)
+}
+
+fn native_remap_palette_in_place(
+    img: &mut DynamicImage,
+    mode: Option<&str>,
+    dest_map: &[u8],
+) -> bool {
+    if native_remap_palette_layout(img, mode).is_none() || !has_valid_remap_bytes(img) {
+        return false;
+    }
+    let Some(tables) = native_remap_palette_tables(dest_map) else {
+        return false;
+    };
+    let Some(bytes) = img.as_bytes_mut() else {
+        return false;
+    };
+    let (vector_blocks, scalar_tail) = native_remap_palette_bytes(bytes, &tables);
+    if vector_blocks == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("vector");
+    }
+    true
+}
+
+fn native_lut_tables_for_channels(lut: &[u8], channels: usize) -> Option<[[u8x16; 16]; 4]> {
     if !(1..=4).contains(&channels) || lut.len() != 256 * channels {
         return None;
     }
@@ -6768,65 +7093,80 @@ fn native_lut_tables_for_channels(
 
 /// Apply one LUT per native byte band. The table lookup is vectorized with
 /// `u8x16`; only the interleaved-band gather/scatter is scalar because the
-/// portable `wide` API has no byte-gather instruction.
+/// portable `wide` API has no byte-gather instruction. Independent scanlines
+/// are split through `apply_native_rows` so large LUT passes use the same
+/// row-parallel execution policy as the other point kernels.
 fn native_lut_apply(
     bytes: &mut [u8],
+    width: usize,
+    height: usize,
     channels: usize,
     lut: &[u8],
 ) -> Option<(u64, u64)> {
     let tables = native_lut_tables_for_channels(lut, channels)?;
-    let vector_len = bytes.len() / 16 * 16;
-    let mut vector_blocks = 0u64;
-    for start in (0..vector_len).step_by(16) {
-        let mut input = [[0u8; 16]; 4];
-        let mut lanes = [0usize; 4];
-        let mut locations = [(0usize, 0usize); 16];
-        for lane in 0..16 {
-            let channel = (start + lane) % channels;
-            let slot = lanes[channel];
-            input[channel][slot] = bytes[start + lane];
-            locations[lane] = (channel, slot);
-            lanes[channel] += 1;
-        }
-        let output: [[u8; 16]; 4] = std::array::from_fn(|channel| {
-            native_lut_chunk(u8x16::new(input[channel]), &tables[channel]).to_array()
-        });
-        for lane in 0..16 {
-            let (channel, slot) = locations[lane];
-            bytes[start + lane] = output[channel][slot];
-        }
-        vector_blocks = vector_blocks.saturating_add(1);
+    let row_stride = width.checked_mul(channels)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if row_stride == 0 || bytes.len() != expected_len {
+        return None;
     }
-
-    let mut scalar_tail = 0u64;
-    for (index, value) in bytes[vector_len..].iter_mut().enumerate() {
-        let channel = (vector_len + index) % channels;
-        *value = lut[channel * 256 + usize::from(*value)];
-        scalar_tail = scalar_tail.saturating_add(1);
-    }
-    Some((vector_blocks, scalar_tail))
+    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height) as u64;
+    apply_native_rows(bytes, width, height, channels, |row| {
+        for (block, chunk) in row.chunks_mut(16).enumerate() {
+            let start = block * 16;
+            let active = chunk.len();
+            let mut input = [[0u8; 16]; 4];
+            let mut lanes = [0usize; 4];
+            let mut locations = [(0usize, 0usize); 16];
+            for lane in 0..active {
+                let channel = (start + lane) % channels;
+                let slot = lanes[channel];
+                input[channel][slot] = chunk[lane];
+                locations[lane] = (channel, slot);
+                lanes[channel] += 1;
+            }
+            let output: [[u8; 16]; 4] = std::array::from_fn(|channel| {
+                native_lut_chunk(u8x16::new(input[channel]), &tables[channel]).to_array()
+            });
+            for lane in 0..active {
+                let (channel, slot) = locations[lane];
+                chunk[lane] = output[channel][slot];
+            }
+        }
+    });
+    Some((vector_blocks, 0))
 }
 
-fn native_point_lut_in_place(
-    img: &mut DynamicImage,
-    mode: Option<&str>,
-    lut: &[u8],
-) -> bool {
+#[inline]
+fn native_lut_is_identity(lut: &[u8], channels: usize) -> bool {
+    lut.len() == channels.saturating_mul(256)
+        && lut.chunks_exact(256).all(|table| {
+            table
+                .iter()
+                .enumerate()
+                .all(|(index, &value)| value == index as u8)
+        })
+}
+
+fn native_point_lut_in_place(img: &mut DynamicImage, mode: Option<&str>, lut: &[u8]) -> bool {
     let Some(channels) = native_point_channels(img, mode) else {
         return false;
     };
-    if lut.len() != 256 * channels || img.as_bytes().len() < 16 {
+    if lut.len() != 256 * channels || !has_valid_byte_data(img, channels) {
         return false;
+    }
+    if native_lut_is_identity(lut, channels) {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return true;
     }
     let width = img.width() as usize;
     let height = img.height() as usize;
     let Some(bytes) = img.as_bytes_mut() else {
         return false;
     };
-    let Some((vector_blocks, scalar_tail)) = native_lut_apply(bytes, channels, lut) else {
+    let Some((vector_blocks, scalar_tail)) = native_lut_apply(bytes, width, height, channels, lut)
+    else {
         return false;
     };
-    record_native_row_work(width, height, channels);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
@@ -6844,11 +7184,12 @@ pub(crate) fn simd_in_place_supported(
 ) -> bool {
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => native_invert_layout(img, mode).is_some(),
-        PipelineOp::Solarize { .. }
-        | PipelineOp::Posterize { .. } => native_byte_layout(img, mode)
+        PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => native_byte_layout(img, mode)
             .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
         PipelineOp::Brightness { .. } => native_brightness_layout(img, mode)
             .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
+        PipelineOp::RemapPalette { dest_map } => native_remap_palette_layout(img, mode)
+            .is_some_and(|_| dest_map.len() <= 256 && has_valid_remap_bytes(img)),
         PipelineOp::Eval { lut } => native_point_channels(img, mode)
             .is_some_and(|channels| lut.len() == 256 * channels && img.as_bytes().len() >= 16),
         PipelineOp::Paste {
@@ -6893,24 +7234,20 @@ pub(crate) fn simd_execute_in_place(
     match op {
         PipelineOp::Invert => Ok(native_invert_in_place(img, mode, false)),
         PipelineOp::InvertChops => Ok(native_invert_in_place(img, mode, true)),
-        PipelineOp::Solarize { threshold } => Ok(native_byte_transform_in_place(
-            img,
-            mode,
-            |input| {
+        PipelineOp::Solarize { threshold } => {
+            Ok(native_byte_transform_in_place(img, mode, |input| {
                 input
                     .simd_ge(u8x16::splat(*threshold))
                     .select(u8x16::splat(u8::MAX) - input, input)
-            },
-        )),
+            }))
+        }
         PipelineOp::Posterize { bits } => {
             let shift = 8u32
                 .checked_sub(*bits as u32)
                 .ok_or_else(|| PilError::ValueError("posterize bits must be at most 8".into()))?;
-            Ok(native_byte_transform_in_place(
-                img,
-                mode,
-                |input| (input >> shift) << shift,
-            ))
+            Ok(native_byte_transform_in_place(img, mode, |input| {
+                (input >> shift) << shift
+            }))
         }
         PipelineOp::Brightness { factor } => {
             let factor_fp = (*factor * 1000.0) as u32;
@@ -6920,11 +7257,12 @@ pub(crate) fn simd_execute_in_place(
             let Some(tables) = native_lut_tables(&lut) else {
                 return Ok(false);
             };
-            Ok(native_brightness_transform_in_place(
-                img,
-                mode,
-                |input| native_lut_chunk(input, &tables),
-            ))
+            Ok(native_brightness_transform_in_place(img, mode, |input| {
+                native_lut_chunk(input, &tables)
+            }))
+        }
+        PipelineOp::RemapPalette { dest_map } => {
+            Ok(native_remap_palette_in_place(img, mode, dest_map))
         }
         PipelineOp::Paste {
             source,
@@ -7124,15 +7462,18 @@ pub(crate) fn native_point_lut(
     lut: &[u8],
 ) -> Option<DynamicImage> {
     let channels = native_point_channels(img, mode)?;
-    if lut.len() != 256 * channels || img.as_bytes().len() < 16 {
+    if lut.len() != 256 * channels || !has_valid_byte_data(img, channels) {
         return None;
     }
     let mut result = img.clone();
-    let width = result.width() as usize;
-    let height = result.height() as usize;
     let bytes = result.as_bytes_mut()?;
-    let (vector_blocks, scalar_tail) = native_lut_apply(bytes, channels, lut)?;
-    record_native_row_work(width, height, channels);
+    let (vector_blocks, scalar_tail) = native_lut_apply(
+        bytes,
+        img.width() as usize,
+        img.height() as usize,
+        channels,
+        lut,
+    )?;
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
@@ -7185,11 +7526,7 @@ fn native_convert_luma16_supported(
     matches!(
         target,
         ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
-    )
-        && matches!(
-            mode,
-            Some("I;16" | "I;16L" | "I;16B" | "I;16N")
-        )
+    ) && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
         && matches!(img, DynamicImage::ImageLuma16(_))
         && (img.width() as usize)
             .checked_mul(img.height() as usize)
@@ -7264,13 +7601,8 @@ fn native_convert_layout(
     target: &ColorMode,
     mode: Option<&str>,
 ) -> Option<NativeConvertLayout> {
-    let (
-        target_channels,
-        target_is_luma,
-        target_is_cmyk,
-        target_is_hsv,
-        target_is_ycbcr,
-    ) = native_convert_target(target)?;
+    let (target_channels, target_is_luma, target_is_cmyk, target_is_hsv, target_is_ycbcr) =
+        native_convert_target(target)?;
     let source_channels = if target_is_hsv || target_is_ycbcr {
         match img {
             DynamicImage::ImageRgba8(_) if mode == Some("RGBX") => 4,
@@ -7356,13 +7688,8 @@ fn native_convert_shape_layout(
     target: &ColorMode,
     mode: Option<&str>,
 ) -> Option<NativeConvertLayout> {
-    let (
-        target_channels,
-        target_is_luma,
-        target_is_cmyk,
-        target_is_hsv,
-        target_is_ycbcr,
-    ) = native_convert_target(target)?;
+    let (target_channels, target_is_luma, target_is_cmyk, target_is_hsv, target_is_ycbcr) =
+        native_convert_target(target)?;
     let source_channels = if target_is_hsv || target_is_ycbcr {
         match (shape.layout, mode) {
             (SimdLayout::Rgba8, Some("RGBX")) => 4,
@@ -7397,11 +7724,7 @@ fn native_convert_supported_for_shape(
     if matches!(
         target,
         ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
-    )
-        && matches!(
-            mode,
-            Some("I;16" | "I;16L" | "I;16B" | "I;16N")
-        )
+    ) && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
         && matches!(shape.layout, SimdLayout::Luma16)
     {
         return (shape.width as usize)
@@ -7658,13 +7981,11 @@ fn native_convert_hsv_bytes(
             // PIL applies the sector constants in double precision after the
             // f32 ratios have been computed. Build all three candidates in
             // f64 lanes, then select the candidate per lane below.
-            let red_h = f64x8::new(bc.to_array().map(f64::from))
-                - f64x8::new(gc.to_array().map(f64::from));
-            let green_h = f64x8::splat(2.0)
-                + f64x8::new(rc.to_array().map(f64::from))
+            let red_h =
+                f64x8::new(bc.to_array().map(f64::from)) - f64x8::new(gc.to_array().map(f64::from));
+            let green_h = f64x8::splat(2.0) + f64x8::new(rc.to_array().map(f64::from))
                 - f64x8::new(bc.to_array().map(f64::from));
-            let blue_h = f64x8::splat(4.0)
-                + f64x8::new(gc.to_array().map(f64::from))
+            let blue_h = f64x8::splat(4.0) + f64x8::new(gc.to_array().map(f64::from))
                 - f64x8::new(rc.to_array().map(f64::from));
             let red_h = red_h.to_array();
             let green_h = green_h.to_array();
@@ -7769,8 +8090,7 @@ fn native_convert_layout_block(
             } else {
                 opaque_index
             };
-            indices[pixel * layout.target_channels + channel] =
-                u8::try_from(source_index).ok()?;
+            indices[pixel * layout.target_channels + channel] = u8::try_from(source_index).ok()?;
         }
     }
     Some(
@@ -7837,8 +8157,8 @@ fn native_convert_bytes(
                     + u32x8::new(green.map(u32::from)) * u32x8::splat(38470)
                     + u32x8::new(blue.map(u32::from)) * u32x8::splat(7471)
                     + u32x8::splat(32768))
-                    .to_array()
-                    .map(|value| (value >> 16) as i32)
+                .to_array()
+                .map(|value| (value >> 16) as i32)
             };
             for value in values.into_iter().take(active_pixels) {
                 output.extend_from_slice(&value.to_le_bytes());
@@ -7875,9 +8195,8 @@ fn native_convert_bytes(
                 let sum = u32x8::new(red.map(u32::from)) * u32x8::splat(299)
                     + u32x8::new(green.map(u32::from)) * u32x8::splat(587)
                     + u32x8::new(blue.map(u32::from)) * u32x8::splat(114);
-                (f32x8::new(sum.to_array().map(|value| value as f32))
-                    / f32x8::splat(1000.0))
-                .to_array()
+                (f32x8::new(sum.to_array().map(|value| value as f32)) / f32x8::splat(1000.0))
+                    .to_array()
             };
             for value in values.into_iter().take(active_pixels) {
                 output.extend_from_slice(&value.to_le_bytes());
@@ -7929,9 +8248,7 @@ fn native_convert_bytes(
                 output.extend_from_slice(&u8x16::new(packed).to_array()[..active_pixels]);
             } else {
                 let alpha: [u8; 8] = std::array::from_fn(|lane| {
-                    if lane < active_pixels
-                        && layout.source_channels == 4
-                        && !layout.source_is_rgbx
+                    if lane < active_pixels && layout.source_channels == 4 && !layout.source_is_rgbx
                     {
                         source[(start_pixel + lane) * layout.source_channels + 3]
                     } else {
@@ -7942,9 +8259,7 @@ fn native_convert_bytes(
                 gray_lanes[..8].copy_from_slice(&gray);
                 let mut alpha_lanes = [0u8; 16];
                 alpha_lanes[..8].copy_from_slice(&alpha);
-                let duplicate = u8x16::new([
-                    0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
-                ]);
+                let duplicate = u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
                 let even = u8x16::new([
                     u8::MAX,
                     0,
@@ -7964,9 +8279,8 @@ fn native_convert_bytes(
                     0,
                 ]);
                 let odd = u8x16::splat(u8::MAX) ^ even;
-                let interleaved =
-                    (u8x16::new(gray_lanes).swizzle_relaxed(duplicate) & even)
-                        | (u8x16::new(alpha_lanes).swizzle_relaxed(duplicate) & odd);
+                let interleaved = (u8x16::new(gray_lanes).swizzle_relaxed(duplicate) & even)
+                    | (u8x16::new(alpha_lanes).swizzle_relaxed(duplicate) & odd);
                 output.extend_from_slice(&interleaved.to_array()[..active_pixels * 2]);
             }
             vector_blocks = vector_blocks.saturating_add(1);
@@ -7990,34 +8304,12 @@ fn native_convert_bytes(
 /// Apply one of the exact byte-domain ImageChops blend formulas without
 /// widening ordinary images to packed RGBA pixels.
 ///
-/// Indexed, typed, and mode-converted images are rejected during SIMD
-/// preflight; this helper never widens them into a packed scalar fallback.
-/// These four native variants are the common public byte layouts, and
-/// preserving them avoids two full-frame conversions for every dual-image
+/// Every non-empty row is processed by padded `u8x16`/`u16x16` blocks. The
+/// padding lanes are never written back, so a four-byte indexed row still
+/// executes the same vector data path as a wider row. Keeping rows separate
+/// here preserves the layout contract for interleaved LA/PA and CMYK bytes.
+/// These native variants avoid two full-frame conversions for every dual-image
 /// operation in a pipeline.
-#[inline]
-fn native_blend_byte(left: u8, right: u8, screen: bool) -> u8 {
-    if screen {
-        255 - ((255 - left) as u16 * (255 - right) as u16 / 255) as u8
-    } else {
-        (left as u16 * right as u16 / 255) as u8
-    }
-}
-
-#[inline]
-fn native_blend_vector8(left: [u8; 8], right: [u8; 8], screen: bool) -> [u8; 8] {
-    let left = u16x8::new(left.map(u16::from));
-    let right = u16x8::new(right.map(u16::from));
-    let values = if screen {
-        u16x8::splat(255) - simd_div255_u16x8(
-            (u16x8::splat(255) - left) * (u16x8::splat(255) - right),
-        )
-    } else {
-        simd_div255_u16x8(left * right)
-    };
-    values.to_array().map(|value| value as u8)
-}
-
 fn apply_native_blend_rows(
     left: &[u8],
     right: &[u8],
@@ -8036,25 +8328,20 @@ fn apply_native_blend_rows(
     {
         return false;
     }
-    let vector_blocks = (row_stride / 8).saturating_mul(height);
-    let scalar_tail = (row_stride % 8).saturating_mul(height);
+    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height);
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
     }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
-    }
     let apply_row = |left_row: &[u8], right_row: &[u8], output_row: &mut [u8]| {
-        let vector_len = output_row.len() / 16 * 16;
-        for start in (0..vector_len).step_by(16) {
-            let Ok(left_chunk) = <[u8; 16]>::try_from(&left_row[start..start + 16]) else {
-                return;
-            };
-            let Ok(right_chunk) = <[u8; 16]>::try_from(&right_row[start..start + 16]) else {
-                return;
-            };
-            let left = u16x16::from(u8x16::new(left_chunk));
-            let right = u16x16::from(u8x16::new(right_chunk));
+        for (block_index, output_chunk) in output_row.chunks_mut(16).enumerate() {
+            let start = block_index * 16;
+            let active = output_chunk.len();
+            let mut left_padded = [0u8; 16];
+            let mut right_padded = [0u8; 16];
+            left_padded[..active].copy_from_slice(&left_row[start..start + active]);
+            right_padded[..active].copy_from_slice(&right_row[start..start + active]);
+            let left = u16x16::from(u8x16::new(left_padded));
+            let right = u16x16::from(u8x16::new(right_padded));
             let values = if screen {
                 let inverse_left = u16x16::splat(255) - left;
                 let inverse_right = u16x16::splat(255) - right;
@@ -8062,25 +8349,8 @@ fn apply_native_blend_rows(
             } else {
                 simd_div255(left * right)
             };
-            output_row[start..start + 16].copy_from_slice(&simd_pack_u16x16(values).to_array());
-        }
-        let vector_len8 = output_row.len() / 8 * 8;
-        for start in (vector_len..vector_len8).step_by(8) {
-            let Ok(left_chunk) = <[u8; 8]>::try_from(&left_row[start..start + 8]) else {
-                return;
-            };
-            let Ok(right_chunk) = <[u8; 8]>::try_from(&right_row[start..start + 8]) else {
-                return;
-            };
-            output_row[start..start + 8]
-                .copy_from_slice(&native_blend_vector8(left_chunk, right_chunk, screen));
-        }
-        for ((output, &left), &right) in output_row[vector_len8..]
-            .iter_mut()
-            .zip(&left_row[vector_len8..])
-            .zip(&right_row[vector_len8..])
-        {
-            *output = native_blend_byte(left, right, screen);
+            let packed = simd_pack_u16x16(values).to_array();
+            output_chunk.copy_from_slice(&packed[..active]);
         }
     };
 
@@ -8129,29 +8399,21 @@ fn apply_native_blend_rows_in_place(
     if row_stride.checked_mul(height) != Some(left.len()) || right.len() != left.len() {
         return false;
     }
-    let vector_blocks = (row_stride / 8).saturating_mul(height);
-    let scalar_tail = (row_stride % 8).saturating_mul(height);
+    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height);
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
     }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
-    }
 
-    for row_index in 0..height {
-        let row_start = row_index * row_stride;
-        let left_row = &mut left[row_start..row_start + row_stride];
-        let right_row = &right[row_start..row_start + row_stride];
-        let vector_len = left_row.len() / 16 * 16;
-        for start in (0..vector_len).step_by(16) {
-            let left = u16x16::from(u8x16::new(
-                <[u8; 16]>::try_from(&left_row[start..start + 16])
-                    .expect("native blend block has 16 bytes"),
-            ));
-            let right = u16x16::from(u8x16::new(
-                <[u8; 16]>::try_from(&right_row[start..start + 16])
-                    .expect("native blend block has 16 bytes"),
-            ));
+    let apply_row = |left_row: &mut [u8], right_row: &[u8]| {
+        for (block_index, left_chunk) in left_row.chunks_mut(16).enumerate() {
+            let start = block_index * 16;
+            let active = left_chunk.len();
+            let mut left_padded = [0u8; 16];
+            let mut right_padded = [0u8; 16];
+            left_padded[..active].copy_from_slice(left_chunk);
+            right_padded[..active].copy_from_slice(&right_row[start..start + active]);
+            let left = u16x16::from(u8x16::new(left_padded));
+            let right = u16x16::from(u8x16::new(right_padded));
             let values = if screen {
                 let inverse_left = u16x16::splat(255) - left;
                 let inverse_right = u16x16::splat(255) - right;
@@ -8159,21 +8421,36 @@ fn apply_native_blend_rows_in_place(
             } else {
                 simd_div255(left * right)
             };
-            left_row[start..start + 16]
-                .copy_from_slice(&simd_pack_u16x16(values).to_array());
+            let packed = simd_pack_u16x16(values).to_array();
+            left_chunk.copy_from_slice(&packed[..active]);
         }
-        let vector_len8 = left_row.len() / 8 * 8;
-        for start in (vector_len..vector_len8).step_by(8) {
-            let left_chunk = <[u8; 8]>::try_from(&left_row[start..start + 8])
-                .expect("native blend block has 8 bytes");
-            let right_chunk = <[u8; 8]>::try_from(&right_row[start..start + 8])
-                .expect("native blend block has 8 bytes");
-            left_row[start..start + 8]
-                .copy_from_slice(&native_blend_vector8(left_chunk, right_chunk, screen));
+    };
+    #[cfg(feature = "parallel")]
+    if left.len() >= 256 * 1024 {
+        crate::par_rows_mut!(
+            left,
+            row_stride,
+            height,
+            |row_start, row_end, _y, left_row| {
+                apply_row(left_row, &right[row_start..row_end]);
+            }
+        );
+    } else {
+        for row_index in 0..height {
+            let row_start = row_index * row_stride;
+            apply_row(
+                &mut left[row_start..row_start + row_stride],
+                &right[row_start..row_start + row_stride],
+            );
         }
-        for index in vector_len8..left_row.len() {
-            left_row[index] = native_blend_byte(left_row[index], right_row[index], screen);
-        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for row_index in 0..height {
+        let row_start = row_index * row_stride;
+        apply_row(
+            &mut left[row_start..row_start + row_stride],
+            &right[row_start..row_start + row_stride],
+        );
     }
     crate::compute::record_pipeline_operation_path("vector");
     true
@@ -8214,9 +8491,10 @@ fn native_chops_blend(
     ) {
         return None;
     }
-    let result = crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
-        .ok()
-        .map(|result| preserve_mode(img, result));
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
+            .ok()
+            .map(|result| preserve_mode(img, result));
     if result.is_some() {
         crate::compute::record_pipeline_operation_path("vector");
     }
@@ -8228,14 +8506,15 @@ fn native_chops_blend(
 /// These formulas are lane-local and preserve Pillow's byte semantics exactly:
 /// min/max, absolute difference, modulo add/subtract, and logical operations
 /// do not need the widening and rounding used by multiply/screen. The helper
-/// keeps the scalar tail outside the vector loop and returns `None` when the
-/// logical mode does not match a supported native byte layout.
+/// pads the final vector block and returns `None` when the logical mode does
+/// not match a supported native byte layout. Padding is never written back,
+/// so short indexed rows do not need a scalar-only escape hatch.
 fn native_chops_bytewise<F, G>(
     img: &DynamicImage,
     other: &DynamicImage,
     mode: Option<&str>,
     vector_op: F,
-    scalar_op: G,
+    _scalar_op: G,
 ) -> Option<DynamicImage>
 where
     F: Fn(u8x16, u8x16) -> u8x16 + Send + Sync,
@@ -8264,22 +8543,20 @@ where
         crate::compute::record_pipeline_operation_path("native-copy");
         return Some(img.clone());
     }
-    if left.len() < 16 {
-        return None;
-    }
-
     let mut output = vec![0u8; left.len()];
-    let vector_len = output.len() / 16 * 16;
-    for start in (0..vector_len).step_by(16) {
-        let left_chunk = u8x16::new(<[u8; 16]>::try_from(&left[start..start + 16]).ok()?);
-        let right_chunk = u8x16::new(<[u8; 16]>::try_from(&right[start..start + 16]).ok()?);
-        output[start..start + 16].copy_from_slice(&vector_op(left_chunk, right_chunk).to_array());
+    for (block_index, output_chunk) in output.chunks_mut(16).enumerate() {
+        let start = block_index * 16;
+        let active = output_chunk.len();
+        let mut left_padded = [0u8; 16];
+        let mut right_padded = [0u8; 16];
+        left_padded[..active].copy_from_slice(&left[start..start + active]);
+        right_padded[..active].copy_from_slice(&right[start..start + active]);
+        let values = vector_op(u8x16::new(left_padded), u8x16::new(right_padded));
+        output_chunk.copy_from_slice(&values.to_array()[..active]);
     }
-    for index in vector_len..output.len() {
-        output[index] = scalar_op(left[index], right[index]);
-    }
-    crate::compute::record_pipeline_operation_vector_blocks((vector_len / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((output.len() - vector_len) as u64);
+    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(16) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
         .ok()
         .map(|result| preserve_mode(img, result))
@@ -8293,7 +8570,7 @@ fn native_chops_bytewise_in_place<F, G>(
     other: &DynamicImage,
     mode: Option<&str>,
     vector_op: F,
-    scalar_op: G,
+    _scalar_op: G,
 ) -> bool
 where
     F: Fn(u8x16, u8x16) -> u8x16,
@@ -8319,26 +8596,18 @@ where
         crate::compute::record_pipeline_operation_path("native-copy");
         return true;
     }
-    if left.len() < 16 {
-        return false;
+    for (block_index, left_chunk) in left.chunks_mut(16).enumerate() {
+        let start = block_index * 16;
+        let active = left_chunk.len();
+        let mut left_padded = [0u8; 16];
+        let mut right_padded = [0u8; 16];
+        left_padded[..active].copy_from_slice(left_chunk);
+        right_padded[..active].copy_from_slice(&right[start..start + active]);
+        let values = vector_op(u8x16::new(left_padded), u8x16::new(right_padded));
+        left_chunk.copy_from_slice(&values.to_array()[..active]);
     }
-    let vector_len = left.len() / 16 * 16;
-    for start in (0..vector_len).step_by(16) {
-        let left_chunk = u8x16::new(
-            <[u8; 16]>::try_from(&left[start..start + 16])
-                .expect("native Chops block has 16 bytes"),
-        );
-        let right_chunk = u8x16::new(
-            <[u8; 16]>::try_from(&right[start..start + 16])
-                .expect("native Chops block has 16 bytes"),
-        );
-        left[start..start + 16].copy_from_slice(&vector_op(left_chunk, right_chunk).to_array());
-    }
-    for index in vector_len..left.len() {
-        left[index] = scalar_op(left[index], right[index]);
-    }
-    crate::compute::record_pipeline_operation_vector_blocks((vector_len / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((left.len() - vector_len) as u64);
+    crate::compute::record_pipeline_operation_vector_blocks(left.len().div_ceil(16) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
     true
 }
@@ -8371,21 +8640,11 @@ fn native_chops_lut_vector(left: [u8; 8], right: [u8; 8], hard_light: bool) -> [
         .map(|value| value as u8)
 }
 
-#[inline]
-fn native_chops_lut_byte(left: u8, right: u8, hard_light: bool) -> u8 {
-    if if hard_light { right } else { left } < 128 {
-        (u32::from(left) * u32::from(right) / 127) as u8
-    } else {
-        (255
-            - (u32::from(255 - left) * u32::from(255 - right) / 127)) as u8
-    }
-}
-
 /// Apply Pillow's exact 256×256 Overlay/HardLight LUT formula to native
 /// bytes.  The operation is independent for each stored sample, so the
-/// vector stream may cross image-row boundaries.  This is important for
-/// small-width images: they still receive a real SIMD data path when the
-/// frame contains at least one complete eight-byte vector.
+/// vector stream may cross image-row boundaries. A padded final block keeps
+/// short indexed images on the real SIMD data path without writing padding
+/// lanes into the result.
 fn native_chops_lut_formula(
     img: &DynamicImage,
     other: &DynamicImage,
@@ -8402,22 +8661,20 @@ fn native_chops_lut_formula(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Some(img.clone());
     }
-    if left.len() < 8 {
-        return None;
-    }
     let mut output = vec![0u8; left.len()];
-    let vector_len = output.len() / 8 * 8;
-    for start in (0..vector_len).step_by(8) {
-        let left_block = <[u8; 8]>::try_from(&left[start..start + 8]).ok()?;
-        let right_block = <[u8; 8]>::try_from(&right[start..start + 8]).ok()?;
-        output[start..start + 8]
-            .copy_from_slice(&native_chops_lut_vector(left_block, right_block, hard_light));
+    for (block_index, output_chunk) in output.chunks_mut(8).enumerate() {
+        let start = block_index * 8;
+        let active = output_chunk.len();
+        let mut left_padded = [0u8; 8];
+        let mut right_padded = [0u8; 8];
+        left_padded[..active].copy_from_slice(&left[start..start + active]);
+        right_padded[..active].copy_from_slice(&right[start..start + active]);
+        let values = native_chops_lut_vector(left_padded, right_padded, hard_light);
+        output_chunk.copy_from_slice(&values[..active]);
     }
-    for index in vector_len..output.len() {
-        output[index] = native_chops_lut_byte(left[index], right[index], hard_light);
-    }
-    crate::compute::record_pipeline_operation_vector_blocks((vector_len / 8) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((output.len() - vector_len) as u64);
+    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(8) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
         .ok()
         .map(|result| preserve_mode(img, result))
@@ -8454,32 +8711,28 @@ fn native_chops_soft_light_vector(left: [u8; 8], right: [u8; 8]) -> [u8; 8] {
 
     let inverse_product = inverse_a * (u32x8::splat(255) - b);
     let divided_inverse = u32x8::new(
-        simd_div255_u16x8(u16x8::new(inverse_product.to_array().map(|value| value as u16)))
-            .to_array()
-            .map(u32::from),
+        simd_div255_u16x8(u16x8::new(
+            inverse_product.to_array().map(|value| value as u16),
+        ))
+        .to_array()
+        .map(u32::from),
     );
     let term2_product = a * (u32x8::splat(255) - divided_inverse);
     let term2 = u32x8::new(
-        simd_div255_u16x8(u16x8::new(term2_product.to_array().map(|value| value as u16)))
-            .to_array()
-            .map(u32::from),
+        simd_div255_u16x8(u16x8::new(
+            term2_product.to_array().map(|value| value as u16),
+        ))
+        .to_array()
+        .map(u32::from),
     );
     (term1 + term2).to_array().map(|value| value.min(255) as u8)
-}
-
-#[inline]
-fn native_chops_soft_light_byte(left: u8, right: u8) -> u8 {
-    let a = u32::from(left);
-    let b = u32::from(right);
-    let term1 = ((255 - a) * a * b) / 65_536;
-    let term2 = (a * (255 - ((255 - a) * (255 - b) / 255))) / 255;
-    (term1 + term2).min(255) as u8
 }
 
 /// Apply SoftLight directly to native interleaved bytes. Chops treats alpha
 /// as an ordinary stored sample, so LA/RGBA and CMYK all use the same active
 /// channel stream. Row boundaries are not semantic boundaries for this
-/// independent per-byte formula and may be crossed by vector blocks.
+/// independent per-byte formula and may be crossed by vector blocks. The
+/// final block is padded and only its active lanes are retained.
 fn native_chops_soft_light(
     img: &DynamicImage,
     other: &DynamicImage,
@@ -8495,22 +8748,19 @@ fn native_chops_soft_light(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Some(img.clone());
     }
-    if left.len() < 8 {
-        return None;
-    }
     let mut output = vec![0u8; left.len()];
-    let vector_len = output.len() / 8 * 8;
-    for start in (0..vector_len).step_by(8) {
-        let left_block = <[u8; 8]>::try_from(&left[start..start + 8]).ok()?;
-        let right_block = <[u8; 8]>::try_from(&right[start..start + 8]).ok()?;
-        output[start..start + 8]
-            .copy_from_slice(&native_chops_soft_light_vector(left_block, right_block));
+    for (block_index, output_chunk) in output.chunks_mut(8).enumerate() {
+        let start = block_index * 8;
+        let active = output_chunk.len();
+        let mut left_padded = [0u8; 8];
+        let mut right_padded = [0u8; 8];
+        left_padded[..active].copy_from_slice(&left[start..start + active]);
+        right_padded[..active].copy_from_slice(&right[start..start + active]);
+        let values = native_chops_soft_light_vector(left_padded, right_padded);
+        output_chunk.copy_from_slice(&values[..active]);
     }
-    for index in vector_len..output.len() {
-        output[index] = native_chops_soft_light_byte(left[index], right[index]);
-    }
-    crate::compute::record_pipeline_operation_vector_blocks((vector_len / 8) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((output.len() - vector_len) as u64);
+    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(8) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
         .ok()
@@ -8550,10 +8800,7 @@ fn native_module_blend(
     else {
         return None;
     };
-    if left.len() != right.len()
-        || left.len() != expected_len
-        || left.len() % channels != 0
-    {
+    if left.len() != right.len() || left.len() != expected_len || left.len() % channels != 0 {
         return None;
     }
     if left.is_empty() {
@@ -8633,9 +8880,8 @@ fn native_chops_pair_channels(
     mode: Option<&str>,
 ) -> Option<usize> {
     let channels = native_chops_layout(img, mode)?;
-    (native_chops_layout(other, mode) == Some(channels)
-        && img.dimensions() == other.dimensions())
-    .then_some(channels)
+    (native_chops_layout(other, mode) == Some(channels) && img.dimensions() == other.dimensions())
+        .then_some(channels)
 }
 
 /// Apply Pillow's scaled/offset Chops formula to native byte samples.
@@ -8705,9 +8951,10 @@ fn native_chops_affine(
             output_row[index] = native_chops_affine_byte(value);
         }
     }
-    let result = crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
-        .ok()
-        .map(|result| preserve_mode(img, result));
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
+            .ok()
+            .map(|result| preserve_mode(img, result));
     if result.is_some() {
         crate::compute::record_pipeline_operation_path("vector");
     }
@@ -9027,35 +9274,26 @@ fn reverse_rgb_block(input: &[u8]) -> Option<[u8; 48]> {
         13, 14, 15, 10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3, 0,
     ]));
     let block0_from_second = second.swizzle_relaxed(u8x16::splat(14));
-    let block0 = u8x16::new([
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX,
-    ])
-    .select(block0_from_second, block0_from_third);
+    let block0 = u8x16::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX])
+        .select(block0_from_second, block0_from_third);
 
     let block1_from_second = second.swizzle_relaxed(u8x16::new([
         15, 0, 11, 12, 13, 8, 9, 10, 5, 6, 7, 2, 3, 4, 0, 0,
     ]));
     let block1_from_third = third.swizzle_relaxed(u8x16::splat(0));
     let block1_from_first = first.swizzle_relaxed(u8x16::splat(15));
-    let block1 = u8x16::new([
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX, 0,
-    ])
-    .select(
+    let block1 = u8x16::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX, 0]).select(
         block1_from_first,
-        u8x16::new([
-            0, u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ])
-        .select(block1_from_third, block1_from_second),
+        u8x16::new([0, u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+            .select(block1_from_third, block1_from_second),
     );
 
     let block2_from_first = first.swizzle_relaxed(u8x16::new([
         0, 12, 13, 14, 9, 10, 11, 6, 7, 8, 3, 4, 5, 0, 1, 2,
     ]));
     let block2_from_second = second.swizzle_relaxed(u8x16::splat(1));
-    let block2 = u8x16::new([
-        u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ])
-    .select(block2_from_second, block2_from_first);
+    let block2 = u8x16::new([u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        .select(block2_from_second, block2_from_first);
 
     let mut output = [0u8; 48];
     output[..16].copy_from_slice(&block0.to_array());
@@ -9131,11 +9369,7 @@ fn circular_byte_block(source: &[u8], start: usize) -> Option<u8x16> {
 /// remains vectorized even when the shift divides the row into two short
 /// spans.
 #[inline]
-fn offset_native_row(
-    source: &[u8],
-    output: &mut [u8],
-    shift_bytes: usize,
-) -> Option<(u64, u64)> {
+fn offset_native_row(source: &[u8], output: &mut [u8], shift_bytes: usize) -> Option<(u64, u64)> {
     if source.len() != output.len() || source.len() < 16 || shift_bytes >= source.len() {
         return None;
     }
@@ -9230,10 +9464,8 @@ fn offset_narrow_bytes(
             let mut indices = [0u8; 16];
             let mut mask = [0u8; 16];
             for destination_lane in lane..lane + row_end_lane {
-                indices[destination_lane] = u8::try_from(
-                    row_offset + destination_lane - lane,
-                )
-                .ok()?;
+                indices[destination_lane] =
+                    u8::try_from(row_offset + destination_lane - lane).ok()?;
                 mask[destination_lane] = u8::MAX;
             }
             let selected = rotated.swizzle_relaxed(u8x16::new(indices));
@@ -9259,10 +9491,8 @@ fn offset_narrow_bytes(
             let mut indices = [0u8; 16];
             let mut mask = [0u8; 16];
             for destination_lane in lane..lane + row_end_lane {
-                indices[destination_lane] = u8::try_from(
-                    row_offset + destination_lane - lane,
-                )
-                .ok()?;
+                indices[destination_lane] =
+                    u8::try_from(row_offset + destination_lane - lane).ok()?;
                 mask[destination_lane] = u8::MAX;
             }
             let selected = rotated.swizzle_relaxed(u8x16::new(indices));
@@ -9291,10 +9521,7 @@ fn offset_luma16_native_row(
     shift_bytes: usize,
 ) -> Option<(u64, u64)> {
     let row_bytes = width.checked_mul(2)?;
-    if width < 16
-        || source.len() != row_bytes
-        || output.len() != row_bytes
-        || shift_bytes >= width
+    if width < 16 || source.len() != row_bytes || output.len() != row_bytes || shift_bytes >= width
     {
         return None;
     }
@@ -9316,6 +9543,126 @@ fn offset_luma16_native_row(
     Some((vector_blocks, scalar_tail as u64))
 }
 
+/// Build one masked vector for a narrow `I;16*` offset frame.
+///
+/// The public `ImageChops.offset` contract only copies the first `width`
+/// bytes of each `width * 2` storage row. A vector block may therefore cross
+/// both a row's copied/zero boundary and the next row's boundary. Scalar
+/// arithmetic computes those boundaries; the selected source bytes and the
+/// final masked store remain in `u8x16`.
+#[inline]
+fn offset_luma16_narrow_block(
+    source: &[u8],
+    output_offset: usize,
+    active_len: usize,
+    width: usize,
+    height: usize,
+    shift_bytes: usize,
+    yshift: usize,
+) -> Option<u8x16> {
+    let storage_row_len = width.checked_mul(2)?;
+    if active_len == 0
+        || active_len > 16
+        || output_offset.checked_add(active_len)? > source.len()
+        || width == 0
+        || width >= 16
+        || height == 0
+        || yshift >= height
+        || shift_bytes >= width
+    {
+        return None;
+    }
+
+    let mut block = u8x16::splat(0);
+    let mut lane = 0usize;
+    while lane < active_len {
+        let absolute = output_offset.checked_add(lane)?;
+        let output_row = absolute / storage_row_len;
+        let row_start = output_row.checked_mul(storage_row_len)?;
+        let row_offset = absolute.checked_sub(row_start)?;
+        let row_remaining = storage_row_len.checked_sub(row_offset)?;
+        let segment_len = row_remaining.min(active_len - lane);
+
+        if row_offset < width {
+            let copied_len = (width - row_offset).min(segment_len);
+            let source_row = (output_row + yshift) % height;
+            let source_start = source_row.checked_mul(storage_row_len)?;
+            let rotated = narrow_rotated_row(source, source_start, width, shift_bytes)?;
+            let mut indices = [0u8; 16];
+            let mut mask = [0u8; 16];
+            for destination_lane in lane..lane + copied_len {
+                indices[destination_lane] =
+                    u8::try_from(row_offset + destination_lane - lane).ok()?;
+                mask[destination_lane] = u8::MAX;
+            }
+            let selected = rotated.swizzle_relaxed(u8x16::new(indices));
+            block = u8x16::new(mask).select(selected, block);
+        }
+        lane += segment_len;
+    }
+    Some(block)
+}
+
+/// Offset a narrow `I;16*` frame with masked vector blocks across rows.
+///
+/// Unlike ordinary byte images, the second half of every storage row is
+/// intentionally zero in Pillow's historical `image8` path. Keeping that
+/// zero fill inside the vector block lets 2×2 and other small typed images
+/// take a real native SIMD path without inventing a scalar-only capability.
+#[inline]
+fn offset_luma16_narrow(
+    source: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    shift_bytes: usize,
+    yshift: usize,
+) -> Option<(u64, u64)> {
+    let expected_len = width.checked_mul(2)?.checked_mul(height)?;
+    if source.len() != expected_len
+        || output.len() != expected_len
+        || width == 0
+        || width >= 16
+        || height == 0
+        || yshift >= height
+        || shift_bytes >= width
+    {
+        return None;
+    }
+
+    let vector_len = output.len() / 16 * 16;
+    let mut vector_blocks = 0u64;
+    for output_offset in (0..vector_len).step_by(16) {
+        let block = offset_luma16_narrow_block(
+            source,
+            output_offset,
+            16,
+            width,
+            height,
+            shift_bytes,
+            yshift,
+        )?;
+        output[output_offset..output_offset + 16].copy_from_slice(&block.to_array());
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let scalar_tail = output.len() - vector_len;
+    if scalar_tail != 0 {
+        let block = offset_luma16_narrow_block(
+            source,
+            vector_len,
+            scalar_tail,
+            width,
+            height,
+            shift_bytes,
+            yshift,
+        )?;
+        output[vector_len..].copy_from_slice(&block.to_array()[..scalar_tail]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail as u64))
+}
+
 fn native_offset_luma16(
     img: &DynamicImage,
     xoffset: i32,
@@ -9330,13 +9677,7 @@ fn native_offset_luma16(
     }
     let (width, height) = image.dimensions();
     if width == 0 || height == 0 {
-        return image
-            .as_raw()
-            .is_empty()
-            .then_some((img.clone(), 0, 0));
-    }
-    if width < 16 || height == 0 {
-        return None;
+        return image.as_raw().is_empty().then_some((img.clone(), 0, 0));
     }
     let width_usize = usize::try_from(width).ok()?;
     let height_usize = usize::try_from(height).ok()?;
@@ -9364,18 +9705,29 @@ fn native_offset_luma16(
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
 
-    for output_y in 0..height_usize {
-        let source_y = (output_y + yshift) % height_usize;
-        let source_start = source_y.checked_mul(row_bytes)?;
-        let output_start = output_y.checked_mul(row_bytes)?;
-        let (blocks, tail) = offset_luma16_native_row(
-            source.get(source_start..source_start + row_bytes)?,
-            output.get_mut(output_start..output_start + row_bytes)?,
+    if width_usize < 16 {
+        (vector_blocks, scalar_tail) = offset_luma16_narrow(
+            &source,
+            &mut output,
             width_usize,
+            height_usize,
             xshift,
+            yshift,
         )?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
+    } else {
+        for output_y in 0..height_usize {
+            let source_y = (output_y + yshift) % height_usize;
+            let source_start = source_y.checked_mul(row_bytes)?;
+            let output_start = output_y.checked_mul(row_bytes)?;
+            let (blocks, tail) = offset_luma16_native_row(
+                source.get(source_start..source_start + row_bytes)?,
+                output.get_mut(output_start..output_start + row_bytes)?,
+                width_usize,
+                xshift,
+            )?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        }
     }
 
     let samples = output
@@ -9456,8 +9808,7 @@ fn mirror_native_row(
         padded[pad..].copy_from_slice(source.get(..remainder_len)?);
         let block = reverse_pixel_block(&padded, channels)?;
         let output_start = vector_pixels.checked_mul(channels)?;
-        output[output_start..output_start + remainder_len]
-            .copy_from_slice(&block[..remainder_len]);
+        output[output_start..output_start + remainder_len].copy_from_slice(&block[..remainder_len]);
         vector_blocks = vector_blocks.saturating_add(1);
         scalar_tail = scalar_tail.saturating_add(remainder_pixels as u64);
     }
@@ -9490,6 +9841,82 @@ fn native_flip_vertical(
     }
     let result = crate::image_utils::raw_bytes_to_image(width, height, output, channels).ok()?;
     Some((preserve_mode(img, result), vector_blocks, scalar_tail))
+}
+
+fn native_luma16_image_from_bytes(width: u32, height: u32, bytes: Vec<u8>) -> Option<DynamicImage> {
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(2))?;
+    if bytes.len() != expected {
+        return None;
+    }
+    let samples = bytes
+        .chunks_exact(2)
+        .map(|sample| u16::from_ne_bytes([sample[0], sample[1]]))
+        .collect::<Vec<_>>();
+    let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)?;
+    Some(DynamicImage::ImageLuma16(image))
+}
+
+/// Flip a typed `I;16*` image vertically without converting samples to a
+/// color representation. The row order is scalar control; each opaque
+/// two-byte sample span is transferred through the native vector copy.
+fn native_flip_luma16(img: &DynamicImage, mode: Option<&str>) -> Option<(DynamicImage, u64, u64)> {
+    if !has_valid_luma16_copy_bytes(img, mode) || img.width() == 0 || img.height() == 0 {
+        return None;
+    }
+    let (width, height) = img.dimensions();
+    let row_len = (width as usize).checked_mul(2)?;
+    let total_len = row_len.checked_mul(height as usize)?;
+    let source = img.as_bytes().get(..total_len)?;
+    let mut output = vec![0u8; total_len];
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for output_row in 0..height as usize {
+        let source_row = height as usize - 1 - output_row;
+        let source_start = source_row.checked_mul(row_len)?;
+        let output_start = output_row.checked_mul(row_len)?;
+        let (blocks, tail) = copy_native_bytes(
+            source.get(source_start..source_start + row_len)?,
+            output.get_mut(output_start..output_start + row_len)?,
+        )?;
+        vector_blocks = vector_blocks.saturating_add(blocks);
+        scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    let result = native_luma16_image_from_bytes(width, height, output)?;
+    Some((result, vector_blocks, scalar_tail))
+}
+
+/// Mirror a typed `I;16*` image horizontally with the same native opaque
+/// sample kernel used by the byte layouts. Keeping the two-byte group intact
+/// prevents a byte-wise reversal from swapping each sample's endianness.
+fn native_mirror_luma16(
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<(DynamicImage, u64, u64)> {
+    if !has_valid_luma16_copy_bytes(img, mode) || img.width() == 0 || img.height() == 0 {
+        return None;
+    }
+    let (width, height) = img.dimensions();
+    let row_len = (width as usize).checked_mul(2)?;
+    let total_len = row_len.checked_mul(height as usize)?;
+    let source = img.as_bytes().get(..total_len)?;
+    let mut output = vec![0u8; total_len];
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for row in 0..height as usize {
+        let start = row.checked_mul(row_len)?;
+        let (blocks, tail) = mirror_native_row(
+            source.get(start..start + row_len)?,
+            output.get_mut(start..start + row_len)?,
+            width as usize,
+            2,
+        )?;
+        vector_blocks = vector_blocks.saturating_add(blocks);
+        scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    let result = native_luma16_image_from_bytes(width, height, output)?;
+    Some((result, vector_blocks, scalar_tail))
 }
 
 /// Offset a native byte image by copying at most two contiguous source spans
@@ -9551,10 +9978,7 @@ fn native_offset(
 }
 
 /// Fast native-layout mirror for ordinary 8-bit byte images.
-fn native_mirror(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<(DynamicImage, u64, u64)> {
+fn native_mirror(img: &DynamicImage, mode: Option<&str>) -> Option<(DynamicImage, u64, u64)> {
     let (width, height, channels) = match img {
         DynamicImage::ImageLuma8(image) if matches!(mode, None | Some("1" | "L" | "P")) => {
             (image.width(), image.height(), 1)
@@ -9562,9 +9986,7 @@ fn native_mirror(
         DynamicImage::ImageLumaA8(image) if matches!(mode, None | Some("LA" | "PA")) => {
             (image.width(), image.height(), 2)
         }
-        DynamicImage::ImageRgb8(image)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             (image.width(), image.height(), 3)
         }
         DynamicImage::ImageRgba8(image)
@@ -9639,8 +10061,7 @@ fn transpose_gathered_row(
                 .checked_add(channel)?;
             *value = *source.get(source_offset)?;
         }
-        output[output_offset..output_offset + 16]
-            .copy_from_slice(&u8x16::new(block).to_array());
+        output[output_offset..output_offset + 16].copy_from_slice(&u8x16::new(block).to_array());
         vector_blocks = vector_blocks.saturating_add(1);
     }
     let scalar_tail = output_row_bytes - vector_len;
@@ -9793,10 +10214,10 @@ fn native_transpose_bytes(
                             );
                         }
                     );
-                    vector_blocks = (out_height as u64)
-                        .saturating_mul((output_row_bytes / 16) as u64);
-                    scalar_tail = (out_height as u64)
-                        .saturating_mul((output_row_bytes % 16) as u64);
+                    vector_blocks =
+                        (out_height as u64).saturating_mul((output_row_bytes / 16) as u64);
+                    scalar_tail =
+                        (out_height as u64).saturating_mul((output_row_bytes % 16) as u64);
                 } else {
                     (vector_blocks, scalar_tail) = write_output_rows_serial(&mut output)?;
                 }
@@ -9843,7 +10264,11 @@ fn native_transpose_luma16(
         return None;
     }
     let result = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)?;
-    Some((DynamicImage::ImageLuma16(result), vector_blocks, scalar_tail))
+    Some((
+        DynamicImage::ImageLuma16(result),
+        vector_blocks,
+        scalar_tail,
+    ))
 }
 
 /// Apply transpose while retaining the native 8-bit DynamicImage variant.
@@ -9871,7 +10296,11 @@ fn native_transpose(
     };
     let (bytes, width, height, vector_blocks, scalar_tail) =
         native_transpose_bytes(img.as_bytes(), img.width(), img.height(), channels, method)?;
-    let result = crate::image_utils::raw_bytes_to_image(width, height, bytes, channels).ok()?;
+    let result = if img.width() == 0 || img.height() == 0 {
+        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, bytes, channels).ok()?
+    } else {
+        crate::image_utils::raw_bytes_to_image(width, height, bytes, channels).ok()?
+    };
     Some((preserve_mode(img, result), vector_blocks, scalar_tail))
 }
 
@@ -9934,16 +10363,13 @@ pub fn simd_invert_chops(
 /// shuffle to drop alpha; L uses a native vector copy.  The final partial
 /// group is zero-padded and processed by the same vector kernel, so strict
 /// SIMD never becomes a scalar-only implementation for a short valid image.
-fn native_grayscale_bytes(
-    img: &DynamicImage,
-    channels: usize,
-) -> Option<(Vec<u8>, u64, u64)> {
+fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8>, u64, u64)> {
     if !(1..=4).contains(&channels) {
         return None;
     }
     let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
     let source = img.as_bytes();
-    if pixels == 0 || source.len() != pixels.checked_mul(channels)? {
+    if source.len() != pixels.checked_mul(channels)? {
         return None;
     }
 
@@ -9957,15 +10383,12 @@ fn native_grayscale_bytes(
                 let mut padded = [0u8; 16];
                 padded[..active].copy_from_slice(&source[start..start + active]);
                 let block = u8x16::new(padded);
-                output[start..start + active]
-                    .copy_from_slice(&block.to_array()[..active]);
+                output[start..start + active].copy_from_slice(&block.to_array()[..active]);
                 vector_blocks = vector_blocks.saturating_add(1);
             }
         }
         2 => {
-            let select_luma = u8x16::new([
-                0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0,
-            ]);
+            let select_luma = u8x16::new([0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0]);
             for start in (0..pixels).step_by(8) {
                 let active = (pixels - start).min(8);
                 let source_start = start * 2;
@@ -9973,9 +10396,7 @@ fn native_grayscale_bytes(
                 let mut padded = [0u8; 16];
                 padded[..source_len]
                     .copy_from_slice(&source[source_start..source_start + source_len]);
-                let luma = u8x16::new(padded)
-                    .swizzle_relaxed(select_luma)
-                    .to_array();
+                let luma = u8x16::new(padded).swizzle_relaxed(select_luma).to_array();
                 output[start..start + active].copy_from_slice(&luma[..active]);
                 vector_blocks = vector_blocks.saturating_add(1);
             }
@@ -10015,10 +10436,7 @@ fn native_grayscale_bytes(
 /// control only; no pixel arithmetic or per-sample LUT evaluation falls back
 /// to the packed CPU adapter.  A partial group is padded and stores only its
 /// valid output bytes.
-fn native_colorize_bytes(
-    img: &DynamicImage,
-    lut: &[[u8; 256]; 3],
-) -> Option<(Vec<u8>, u64, u64)> {
+fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Vec<u8>, u64, u64)> {
     if !matches!(img, DynamicImage::ImageLuma8(_)) {
         return None;
     }
@@ -10033,9 +10451,7 @@ fn native_colorize_bytes(
         native_lut_tables(&lut[1])?,
         native_lut_tables(&lut[2])?,
     ];
-    let interleave = u8x16::new([
-        0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15,
-    ]);
+    let interleave = u8x16::new([0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15]);
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
     for start in (0..pixels).step_by(16) {
@@ -10093,16 +10509,23 @@ pub fn simd_grayscale(
     let Some((output, vector_blocks, scalar_tail)) = native_grayscale_bytes(img, channels) else {
         return Err(simd_unsupported("Grayscale"));
     };
-    crate::compute::record_pipeline_operation_path(if channels == 1 {
+    crate::compute::record_pipeline_operation_path(if vector_blocks == 0 {
+        "scalar-control"
+    } else if channels == 1 {
         "native-copy"
     } else {
         "vector"
     });
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    GrayImage::from_raw(img.width(), img.height(), output)
-        .map(DynamicImage::ImageLuma8)
-        .ok_or_else(|| PilError::InternalError("SIMD grayscale buffer mismatch".into()))
+    crate::image_utils::raw_bytes_to_image_allow_empty(img.width(), img.height(), output, 1).map(
+        |result| {
+            // Grayscale intentionally changes the public mode to L; preserving
+            // the source RGB variant here would make the next native operation
+            // see the wrong layout, especially for empty RGB images.
+            result
+        },
+    )
 }
 
 pub fn simd_colorize(
@@ -10264,15 +10687,9 @@ pub fn simd_color_saturation(
     if !factor.is_finite() || !has_vectorized_float_bytes(img, channels) {
         return Err(simd_unsupported("ColorSaturation"));
     }
-    let Some((result, vector_blocks, scalar_tail)) = native_enhance_output(
-        img,
-        mode,
-        channels,
-        active_channels,
-        *factor,
-        false,
-        None,
-    ) else {
+    let Some((result, vector_blocks, scalar_tail)) =
+        native_enhance_output(img, mode, channels, active_channels, *factor, false, None)
+    else {
         return Err(simd_unsupported("ColorSaturation"));
     };
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -10313,12 +10730,10 @@ fn native_sharpness_blend(
     for channel in 0..active_channels {
         let mut pixel = 0usize;
         while pixel + 8 <= pixels {
-            let original = std::array::from_fn(|lane| {
-                source[(pixel + lane) * channels + channel] as f64
-            });
-            let smooth = std::array::from_fn(|lane| {
-                blurred[(pixel + lane) * channels + channel] as f64
-            });
+            let original =
+                std::array::from_fn(|lane| source[(pixel + lane) * channels + channel] as f64);
+            let smooth =
+                std::array::from_fn(|lane| blurred[(pixel + lane) * channels + channel] as f64);
             let values = f64x8::from(smooth) * inverse + f64x8::from(original) * factor;
             for (lane, value) in values.to_array().into_iter().enumerate() {
                 output[(pixel + lane) * channels + channel] = if value <= 0.0 {
@@ -10405,12 +10820,8 @@ pub fn simd_sharpness(
     crate::compute::record_pipeline_operation_vector_blocks(blend_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(blend_tail);
     crate::compute::record_pipeline_operation_path("vector");
-    let result = crate::image_utils::raw_bytes_to_image(
-        img.width(),
-        img.height(),
-        output,
-        channels,
-    )?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -10429,34 +10840,33 @@ pub fn simd_autocontrast(
     let Some(channels) = native_autocontrast_layout(img, mode) else {
         return Err(simd_unsupported("Autocontrast"));
     };
-    if !cutoff.is_finite()
-        || !autocontrast_mask_supported(img.width(), img.height(), mask.as_ref())
+    if !cutoff.is_finite() || !autocontrast_mask_supported(img.width(), img.height(), mask.as_ref())
     {
         return Err(simd_unsupported("Autocontrast"));
     }
-    let Some(expected_len) = (img.width() as usize)
-        .checked_mul(img.height() as usize)
-        .and_then(|pixels| pixels.checked_mul(channels))
-    else {
-        return Err(simd_unsupported("Autocontrast"));
-    };
-    if expected_len < 16 || img.as_bytes().len() != expected_len {
+    if !has_valid_byte_data(img, channels) {
         return Err(simd_unsupported("Autocontrast"));
     }
+    if img.width() == 0 || img.height() == 0 {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(img.clone());
+    }
 
-    let lut = crate::compute::pool_cpu::ops::imageops::autocontrast_lut(
-        img,
-        *cutoff,
-        mask.as_ref(),
-    )?;
+    let lut =
+        crate::compute::pool_cpu::ops::imageops::autocontrast_lut(img, *cutoff, mask.as_ref())?;
     let mut result = img.clone();
     let Some(bytes) = result.as_bytes_mut() else {
         return Err(simd_unsupported("Autocontrast"));
     };
-    let Some((vector_blocks, scalar_tail)) = native_lut_apply(bytes, channels, &lut) else {
+    let Some((vector_blocks, scalar_tail)) = native_lut_apply(
+        bytes,
+        img.width() as usize,
+        img.height() as usize,
+        channels,
+        &lut,
+    ) else {
         return Err(simd_unsupported("Autocontrast"));
     };
-    record_native_row_work(img.width() as usize, img.height() as usize, channels);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
@@ -10477,8 +10887,12 @@ pub fn simd_equalize(
     let Some(channels) = native_autocontrast_layout(img, mode) else {
         return Err(simd_unsupported("Equalize"));
     };
-    if !has_vectorized_flat_bytes(img, channels) {
+    if !has_valid_byte_data(img, channels) {
         return Err(simd_unsupported("Equalize"));
+    }
+    if img.width() == 0 || img.height() == 0 {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(img.clone());
     }
     let Some(lut) = crate::compute::pool_cpu::ops::imageops::equalize_lut(img, channels) else {
         return Err(simd_unsupported("Equalize"));
@@ -10487,14 +10901,51 @@ pub fn simd_equalize(
     let Some(bytes) = result.as_bytes_mut() else {
         return Err(simd_unsupported("Equalize"));
     };
-    let Some((vector_blocks, scalar_tail)) = native_lut_apply(bytes, channels, &lut) else {
+    let Some((vector_blocks, scalar_tail)) = native_lut_apply(
+        bytes,
+        img.width() as usize,
+        img.height() as usize,
+        channels,
+        &lut,
+    ) else {
         return Err(simd_unsupported("Equalize"));
     };
-    record_native_row_work(img.width() as usize, img.height() as usize, channels);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
     Ok(result)
+}
+
+/// Remap native `L`/`P` samples with Pillow's inverse destination map.
+///
+/// `dest_map[new_index]` names the old index, so the vector LUT stores
+/// `inverse[old_index] = new_index`. The output remains a one-byte index/luma
+/// plane; palette colors and alpha metadata are carried by the lazy `Image`
+/// wrapper rather than being widened into RGB here.
+pub fn simd_remap_palette(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::RemapPalette { dest_map } = op else {
+        return Err(PilError::ValueError("expected RemapPalette op".into()));
+    };
+    if native_remap_palette_layout(img, mode).is_none() || !has_valid_remap_bytes(img) {
+        return Err(simd_unsupported("RemapPalette"));
+    }
+    let Some(tables) = native_remap_palette_tables(dest_map) else {
+        return Err(simd_unsupported("RemapPalette"));
+    };
+    let mut output = img.as_bytes().to_vec();
+    let (vector_blocks, scalar_tail) = native_remap_palette_bytes(&mut output, &tables);
+    if vector_blocks == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("vector");
+    }
+    crate::image_utils::raw_bytes_to_image_allow_empty(img.width(), img.height(), output, 1)
 }
 
 /// Extract one channel from a native 8-bit image without expanding it to
@@ -10512,7 +10963,8 @@ pub fn simd_extract_band(
         return Err(PilError::ValueError("expected ExtractBand op".into()));
     };
 
-    let channels = native_extract_layout(img, mode).ok_or_else(|| simd_unsupported("ExtractBand"))?;
+    let channels =
+        native_extract_layout(img, mode).ok_or_else(|| simd_unsupported("ExtractBand"))?;
     let source = img.as_bytes();
 
     let (width, height) = img.dimensions();
@@ -10544,14 +10996,12 @@ pub fn simd_extract_band(
         let mut source_block = [0u8; 16];
         source_block[..source_bytes]
             .copy_from_slice(&source[source_start..source_start + source_bytes]);
-        let indices = std::array::from_fn(|lane| {
-            ((lane % pixels_per_vector) * channels + channel) as u8
-        });
+        let indices =
+            std::array::from_fn(|lane| ((lane % pixels_per_vector) * channels + channel) as u8);
         let extracted = u8x16::new(source_block)
             .swizzle_relaxed(u8x16::new(indices))
             .to_array();
-        output[pixel..pixel + pixels_per_vector]
-            .copy_from_slice(&extracted[..pixels_per_vector]);
+        output[pixel..pixel + pixels_per_vector].copy_from_slice(&extracted[..pixels_per_vector]);
         pixel += pixels_per_vector;
     }
     for pixel in pixel..pixel_count {
@@ -10711,16 +11161,13 @@ pub fn simd_draw_polygon(
     else {
         return Err(PilError::ValueError("expected DrawPolygon op".into()));
     };
-    simd_draw_polygon_native(
-        img,
-        points,
-        *fill,
-        *outline,
-        *width,
-        *alpha_blend_rgb,
-        mode,
-    )?
-    .ok_or_else(|| simd_unsupported("DrawPolygon"))
+    // Pillow's floating-point ImagingDraw polygon path stores the fill sample
+    // but ignores the outline. Keep the SIMD adapter aligned with
+    // pool_cpu::ops::draw::op_draw_polygon instead of painting an extra stroke
+    // that is observable only after materialization.
+    let outline = if mode == Some("F") { None } else { *outline };
+    simd_draw_polygon_native(img, points, *fill, outline, *width, *alpha_blend_rgb, mode)?
+        .ok_or_else(|| simd_unsupported("DrawPolygon"))
 }
 
 /// Draw a rounded rectangle using scalar corner geometry and native SIMD
@@ -10742,9 +11189,7 @@ pub fn simd_draw_rounded_rect(
         alpha_blend_rgb,
     } = op
     else {
-        return Err(PilError::ValueError(
-            "expected DrawRoundedRect op".into(),
-        ));
+        return Err(PilError::ValueError("expected DrawRoundedRect op".into()));
     };
     simd_draw_rounded_rect_native(
         img,
@@ -10982,6 +11427,12 @@ pub fn simd_flip(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Ok(result);
     }
+    if let Some((result, vector_blocks, scalar_tail)) = native_flip_luma16(img, mode) {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(result);
+    }
     Err(simd_unsupported("Flip"))
 }
 
@@ -10991,6 +11442,12 @@ pub fn simd_mirror(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if let Some((result, vector_blocks, scalar_tail)) = native_mirror(img, mode) {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(result);
+    }
+    if let Some((result, vector_blocks, scalar_tail)) = native_mirror_luma16(img, mode) {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         crate::compute::record_pipeline_operation_path("native-copy");
@@ -11340,9 +11797,8 @@ fn color3dlut_write_vector_batch(
         let result = color3dlut_interpolate_vector(left, right, shift_z).to_array();
         for (lane, value) in result.into_iter().enumerate() {
             let output_offset = (first_pixel + lane) * target_channels;
-            output[output_offset + c] = ((value + (1 << (PRECISION_BITS - 1)))
-                >> PRECISION_BITS)
-                .clamp(0, 255) as u8;
+            output[output_offset + c] =
+                ((value + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS).clamp(0, 255) as u8;
         }
     }
     if channels == 3 && target_channels == 4 {
@@ -11391,8 +11847,8 @@ pub fn simd_color3dlut(
     }
     let source_channels = color3dlut_source_channels_for_image(img, *source_mode)
         .ok_or_else(|| simd_unsupported("Color3DLut"))?;
-    let target_channels = color3dlut_target_channels(*target_mode)
-        .ok_or_else(|| simd_unsupported("Color3DLut"))?;
+    let target_channels =
+        color3dlut_target_channels(*target_mode).ok_or_else(|| simd_unsupported("Color3DLut"))?;
     let (width, height) = img.dimensions();
     let pixels = (width as usize)
         .checked_mul(height as usize)
@@ -11465,21 +11921,13 @@ pub fn simd_color3dlut(
 /// boundary or hide a CPU fallback behind an area threshold. The width and
 /// height checks ensure that the adapter has at least one complete vector block
 /// in the interior; the remaining pixels are handled as scalar tails.
-fn use_native_byte_convolution_path(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    border: usize,
-) -> bool {
+fn use_native_byte_convolution_path(img: &DynamicImage, mode: Option<&str>, border: usize) -> bool {
     native_filter_byte_layout(img, mode).is_some()
         && img.width() as usize >= border.saturating_mul(2).saturating_add(1)
         && img.height() as usize > border.saturating_mul(2)
 }
 
-fn use_native_i32_convolution_path(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    border: usize,
-) -> bool {
+fn use_native_i32_convolution_path(img: &DynamicImage, mode: Option<&str>, border: usize) -> bool {
     if mode != Some("I") || !matches!(img, DynamicImage::ImageRgba8(_)) {
         return false;
     }
@@ -11505,18 +11953,17 @@ fn native_filter_identity_supported_for_image(
         || img.height() as usize <= border.saturating_mul(2);
     let Some(expected_len) = (img.width() as usize)
         .checked_mul(img.height() as usize)
-        .and_then(|pixels| pixels.checked_mul(if mode == Some("I") {
-            4
-        } else {
-            native_filter_byte_layout(img, mode).unwrap_or(0)
-        }))
+        .and_then(|pixels| {
+            pixels.checked_mul(if mode == Some("I") {
+                4
+            } else {
+                native_filter_byte_layout(img, mode).unwrap_or(0)
+            })
+        })
     else {
         return false;
     };
-    valid_layout
-        && no_interior
-        && expected_len != 0
-        && img.as_bytes().len() == expected_len
+    valid_layout && no_interior && expected_len != 0 && img.as_bytes().len() == expected_len
 }
 
 /// Evaluate eight output samples of Pillow's 3x3 byte convolution in parallel.
@@ -11622,7 +12069,8 @@ fn native_filter_3x3_rows_active(
     }
     let interior_width = width - 2;
     let interior_height = height - 2;
-    let vector_blocks = interior_width.div_ceil(8)
+    let vector_blocks = interior_width
+        .div_ceil(8)
         .saturating_mul(active_channels)
         .saturating_mul(interior_height);
     let scalar_tail = 0;
@@ -11735,7 +12183,8 @@ fn native_filter_5x5_rows(
     }
     let interior_width = width - 4;
     let interior_height = height - 4;
-    let vector_blocks = interior_width.div_ceil(8)
+    let vector_blocks = interior_width
+        .div_ceil(8)
         .saturating_mul(channels)
         .saturating_mul(interior_height);
     let scalar_tail = 0;
@@ -11807,8 +12256,7 @@ fn native_filter_3x3_i32_vector(
             let x = (x_start + lane).min(width - 2);
             let read = |source_x: usize| -> f32 {
                 let base = (source_y * width + source_x) * 4;
-                i32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]])
-                    as f32
+                i32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]]) as f32
             };
             left[lane] = read(x - 1);
             middle[lane] = read(x);
@@ -11852,14 +12300,7 @@ fn native_filter_3x3_i32_rows(
         let mut x = 1usize;
         while x < width - 1 {
             let active = (width - 1 - x).min(8);
-            let values = native_filter_3x3_i32_vector(
-                raw,
-                width,
-                y,
-                x,
-                kernel,
-                rounding_bias,
-            );
+            let values = native_filter_3x3_i32_vector(raw, width, y, x, kernel, rounding_bias);
             for (lane, value) in values.into_iter().enumerate().take(active) {
                 let base = (x + lane) * 4;
                 destination[base..base + 4].copy_from_slice(&value.to_le_bytes());
@@ -11949,14 +12390,7 @@ fn native_filter_5x5_i32_rows(
         let mut x = 2usize;
         while x < width - 2 {
             let active = (width - 2 - x).min(8);
-            let values = native_filter_5x5_i32_vector(
-                raw,
-                width,
-                y,
-                x,
-                kernel,
-                rounding_bias,
-            );
+            let values = native_filter_5x5_i32_vector(raw, width, y, x, kernel, rounding_bias);
             for (lane, value) in values.into_iter().enumerate().take(active) {
                 let base = (x + lane) * 4;
                 destination[base..base + 4].copy_from_slice(&value.to_le_bytes());
@@ -12050,7 +12484,8 @@ fn simd_filter_identity(
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    let result = crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -12076,8 +12511,8 @@ pub fn simd_filter_3x3(
     if !use_native_byte_convolution_path(img, mode, 1) {
         return Err(simd_unsupported("Filter3x3"));
     }
-    let channels = native_filter_byte_layout(img, mode)
-        .ok_or_else(|| simd_unsupported("Filter3x3"))?;
+    let channels =
+        native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter3x3"))?;
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
     let mut output = img.as_bytes().to_vec();
     crate::compute::record_pipeline_operation_path("vector");
@@ -12090,7 +12525,8 @@ pub fn simd_filter_3x3(
         &normalized_kernel,
         *offset as f32 + 0.5,
     );
-    let result = crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -12116,8 +12552,8 @@ pub fn simd_filter_5x5(
     if !use_native_byte_convolution_path(img, mode, 2) {
         return Err(simd_unsupported("Filter5x5"));
     }
-    let channels = native_filter_byte_layout(img, mode)
-        .ok_or_else(|| simd_unsupported("Filter5x5"))?;
+    let channels =
+        native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter5x5"))?;
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
     let mut output = img.as_bytes().to_vec();
     crate::compute::record_pipeline_operation_path("vector");
@@ -12130,7 +12566,8 @@ pub fn simd_filter_5x5(
         &normalized_kernel,
         *offset as f32 + 0.5,
     );
-    let result = crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -12317,9 +12754,79 @@ fn rank_filter_vertical_scalar(
     selected
 }
 
+/// Process one row of the horizontal native-byte extrema pass.  The source
+/// row is immutable while the destination row is exclusively owned by the
+/// caller, which lets the outer pass use `par_rows_mut!` without changing the
+/// per-pixel clamp or vector reduction order.
+fn rank_filter_horizontal_vectorized_row(
+    raw: &[u8],
+    horizontal_row: &mut [u8],
+    row_start: usize,
+    width: usize,
+    channels: usize,
+    half: usize,
+    select_max: bool,
+) {
+    let effective_half = half.min(width - 1);
+    let window_len = effective_half.saturating_mul(2).saturating_add(1);
+    for channel in 0..channels {
+        let mut x = 0usize;
+        while x < width {
+            let active = rank_filter_vector_pixels(width - x);
+            if active == 0 {
+                for tail_x in x..width {
+                    horizontal_row[tail_x * channels + channel] = rank_filter_horizontal_scalar(
+                        raw,
+                        row_start,
+                        width,
+                        channels,
+                        channel,
+                        tail_x,
+                        effective_half,
+                        select_max,
+                    );
+                }
+                break;
+            }
+            let mut selected = u8x16::splat(rank_filter_identity(select_max));
+            for window_offset in 0..window_len {
+                let values = rank_filter_horizontal_window_vector(
+                    raw,
+                    row_start,
+                    width,
+                    channels,
+                    channel,
+                    x,
+                    active,
+                    effective_half,
+                    window_offset,
+                    select_max,
+                );
+                selected = if select_max {
+                    selected.max(values)
+                } else {
+                    selected.min(values)
+                };
+            }
+            store_rank_filter_channel_vector(
+                horizontal_row,
+                0,
+                channels,
+                channel,
+                x,
+                active,
+                selected,
+            );
+            x += active;
+        }
+    }
+}
+
 /// Horizontal native-byte extrema pass. It intentionally keeps all source
 /// samples in their Pillow layout and vectorizes comparisons across output
-/// pixels, while clamped edge coordinates remain scalar control.
+/// pixels, while clamped edge coordinates remain scalar control. Rows are
+/// independent and therefore run through the repository's audited row
+/// parallelism macro when the crate's parallel feature is enabled.
 fn rank_filter_horizontal_vectorized(
     raw: &[u8],
     horizontal: &mut [u8],
@@ -12330,71 +12837,103 @@ fn rank_filter_horizontal_vectorized(
     select_max: bool,
 ) -> (u64, u64) {
     let row_stride = width * channels;
-    let effective_half = half.min(width - 1);
-    let window_len = effective_half
-        .saturating_mul(2)
-        .saturating_add(1);
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        horizontal,
+        row_stride,
+        height,
+        |_row_start, _row_end, y, row| {
+            rank_filter_horizontal_vectorized_row(
+                raw,
+                row,
+                (y as usize) * row_stride,
+                width,
+                channels,
+                half,
+                select_max,
+            );
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
     for y in 0..height {
         let row_start = y * row_stride;
-        for channel in 0..channels {
-            let mut x = 0usize;
-            while x < width {
-                let active = rank_filter_vector_pixels(width - x);
-                if active == 0 {
-                    let tail = width - x;
-                    for tail_x in x..width {
-                        horizontal[row_start + tail_x * channels + channel] =
-                            rank_filter_horizontal_scalar(
-                                raw,
-                                row_start,
-                                width,
-                                channels,
-                                channel,
-                                tail_x,
-                                effective_half,
-                                select_max,
-                            );
-                    }
-                    scalar_tail = scalar_tail.saturating_add(tail as u64);
-                    break;
-                }
-                let mut selected = u8x16::splat(rank_filter_identity(select_max));
-                for window_offset in 0..window_len {
-                    let values = rank_filter_horizontal_window_vector(
-                        raw,
-                        row_start,
-                        width,
+        let row_end = row_start + row_stride;
+        rank_filter_horizontal_vectorized_row(
+            raw,
+            &mut horizontal[row_start..row_end],
+            row_start,
+            width,
+            channels,
+            half,
+            select_max,
+        );
+    }
+    let vector_blocks =
+        width.div_ceil(SIMD_RANK_FILTER_LANES) as u64 * channels as u64 * height as u64;
+    (vector_blocks, 0)
+}
+
+/// Process one row of the vertical native-byte extrema pass over the
+/// horizontal intermediate.
+fn rank_filter_vertical_vectorized_row(
+    horizontal: &[u8],
+    output_row: &mut [u8],
+    row_stride: usize,
+    width: usize,
+    height: usize,
+    channels: usize,
+    half: usize,
+    select_max: bool,
+    y: usize,
+) {
+    let effective_half = half.min(height - 1);
+    let window_len = effective_half.saturating_mul(2).saturating_add(1);
+    for channel in 0..channels {
+        let mut x = 0usize;
+        while x < width {
+            let active = rank_filter_vector_pixels(width - x);
+            if active == 0 {
+                for tail_x in x..width {
+                    output_row[tail_x * channels + channel] = rank_filter_vertical_scalar(
+                        horizontal,
+                        row_stride,
+                        height,
                         channels,
                         channel,
-                        x,
-                        active,
+                        tail_x,
+                        y,
                         effective_half,
-                        window_offset,
                         select_max,
                     );
-                    selected = if select_max {
-                        selected.max(values)
-                    } else {
-                        selected.min(values)
-                    };
                 }
-                store_rank_filter_channel_vector(
+                break;
+            }
+            let mut selected = u8x16::splat(rank_filter_identity(select_max));
+            for window_offset in 0..window_len {
+                let values = rank_filter_vertical_window_vector(
                     horizontal,
-                    row_start,
+                    row_stride,
+                    width,
+                    height,
                     channels,
                     channel,
                     x,
                     active,
-                    selected,
+                    y,
+                    effective_half,
+                    window_offset,
+                    select_max,
                 );
-                vector_blocks = vector_blocks.saturating_add(1);
-                x += active;
+                selected = if select_max {
+                    selected.max(values)
+                } else {
+                    selected.min(values)
+                };
             }
+            store_rank_filter_channel_vector(output_row, 0, channels, channel, x, active, selected);
+            x += active;
         }
     }
-    (vector_blocks, scalar_tail)
 }
 
 /// Vertical native-byte extrema pass over the horizontal intermediate.
@@ -12408,74 +12947,36 @@ fn rank_filter_vertical_vectorized(
     select_max: bool,
 ) -> (u64, u64) {
     let row_stride = width * channels;
-    let effective_half = half.min(height - 1);
-    let window_len = effective_half
-        .saturating_mul(2)
-        .saturating_add(1);
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        output,
+        row_stride,
+        height,
+        |_row_start, _row_end, y, row| {
+            rank_filter_vertical_vectorized_row(
+                horizontal, row, row_stride, width, height, channels, half, select_max, y as usize,
+            );
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
     for y in 0..height {
         let row_start = y * row_stride;
-        for channel in 0..channels {
-            let mut x = 0usize;
-            while x < width {
-                let active = rank_filter_vector_pixels(width - x);
-                if active == 0 {
-                    let tail = width - x;
-                    for tail_x in x..width {
-                        output[row_start + tail_x * channels + channel] =
-                            rank_filter_vertical_scalar(
-                                horizontal,
-                                row_stride,
-                                height,
-                                channels,
-                                channel,
-                                tail_x,
-                                y,
-                                effective_half,
-                                select_max,
-                            );
-                    }
-                    scalar_tail = scalar_tail.saturating_add(tail as u64);
-                    break;
-                }
-                let mut selected = u8x16::splat(rank_filter_identity(select_max));
-                for window_offset in 0..window_len {
-                    let values = rank_filter_vertical_window_vector(
-                        horizontal,
-                        row_stride,
-                        width,
-                        height,
-                        channels,
-                        channel,
-                        x,
-                        active,
-                        y,
-                        effective_half,
-                        window_offset,
-                        select_max,
-                    );
-                    selected = if select_max {
-                        selected.max(values)
-                    } else {
-                        selected.min(values)
-                    };
-                }
-                store_rank_filter_channel_vector(
-                    output,
-                    row_start,
-                    channels,
-                    channel,
-                    x,
-                    active,
-                    selected,
-                );
-                vector_blocks = vector_blocks.saturating_add(1);
-                x += active;
-            }
-        }
+        let row_end = row_start + row_stride;
+        rank_filter_vertical_vectorized_row(
+            horizontal,
+            &mut output[row_start..row_end],
+            row_stride,
+            width,
+            height,
+            channels,
+            half,
+            select_max,
+            y,
+        );
     }
-    (vector_blocks, scalar_tail)
+    let vector_blocks =
+        width.div_ceil(SIMD_RANK_FILTER_LANES) as u64 * channels as u64 * height as u64;
+    (vector_blocks, 0)
 }
 
 /// Execute a native-byte MaxFilter or MinFilter.
@@ -12493,7 +12994,11 @@ fn simd_extreme_filter(
     let channels = native_filter_byte_layout(img, mode)
         .ok_or_else(|| simd_unsupported(if select_max { "MaxFilter" } else { "MinFilter" }))?;
     if size == 0 || size % 2 == 0 || img.width() == 0 || img.height() == 0 {
-        return Err(simd_unsupported(if select_max { "MaxFilter" } else { "MinFilter" }));
+        return Err(simd_unsupported(if select_max {
+            "MaxFilter"
+        } else {
+            "MinFilter"
+        }));
     }
     let width = img.width() as usize;
     let height = img.height() as usize;
@@ -12535,12 +13040,8 @@ fn simd_extreme_filter(
     crate::compute::record_pipeline_operation_scalar_tail(
         horizontal_tail.saturating_add(vertical_tail),
     );
-    let result = crate::image_utils::raw_bytes_to_image(
-        img.width(),
-        img.height(),
-        output,
-        channels,
-    )?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -12705,15 +13206,75 @@ fn select_order_statistic_vectors(values: &[u8x16], rank: u8) -> u8x16 {
 /// order-statistic work is lane-wise vector compare/exchange or vector binary
 /// selection, and the output remains in the source's native L/LA/RGB/RGBA
 /// byte layout.
+fn rank_filter_order_statistic_row(
+    raw: &[u8],
+    output_row: &mut [u8],
+    row_stride: usize,
+    width: usize,
+    height: usize,
+    channels: usize,
+    size: usize,
+    half: usize,
+    area: usize,
+    rank: usize,
+    y: usize,
+) {
+    for channel in 0..channels {
+        let mut x = 0usize;
+        while x < width {
+            let active = rank_filter_vector_pixels(width - x);
+            if active == 0 {
+                for tail_x in x..width {
+                    output_row[tail_x * channels + channel] = rank_filter_order_statistic_scalar(
+                        raw, row_stride, width, height, channels, channel, tail_x, y, half, rank,
+                    );
+                }
+                break;
+            }
+
+            let mut values = [u8x16::splat(0); SIMD_ORDER_STATISTIC_MAX_AREA];
+            let mut value_index = 0usize;
+            for row_offset in 0..size {
+                let source_y = y
+                    .saturating_add(row_offset)
+                    .saturating_sub(half)
+                    .min(height - 1);
+                let source_row = source_y * row_stride;
+                for column_offset in 0..size {
+                    values[value_index] = rank_filter_order_statistic_window_vector(
+                        raw,
+                        source_row,
+                        width,
+                        channels,
+                        channel,
+                        x,
+                        active,
+                        half,
+                        column_offset,
+                    );
+                    value_index += 1;
+                }
+            }
+            let selected = if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE as usize {
+                sort_order_statistic_vectors(&mut values[..area]);
+                values[rank]
+            } else {
+                select_order_statistic_vectors(&values[..area], rank as u8)
+            };
+            store_rank_filter_channel_vector(output_row, 0, channels, channel, x, active, selected);
+            x += active;
+        }
+    }
+}
+
 fn simd_order_statistic_filter(
     img: &DynamicImage,
     size: u32,
     rank: u32,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let channels = native_filter_byte_layout(img, mode).ok_or_else(|| {
-        simd_unsupported("MedianFilter/RankFilter")
-    })?;
+    let channels = native_filter_byte_layout(img, mode)
+        .ok_or_else(|| simd_unsupported("MedianFilter/RankFilter"))?;
     let area = u64::from(size).saturating_mul(u64::from(size));
     if size == 0
         || size % 2 == 0
@@ -12743,89 +13304,54 @@ fn simd_order_statistic_filter(
     let area = area as usize;
     let rank = rank as usize;
     let mut output = vec![0u8; expected_len];
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
-
-    for y in 0..height {
-        let output_row = y * row_stride;
-        for channel in 0..channels {
-            let mut x = 0usize;
-            while x < width {
-                let active = rank_filter_vector_pixels(width - x);
-                if active == 0 {
-                    let tail = width - x;
-                    for tail_x in x..width {
-                        output[output_row + tail_x * channels + channel] =
-                            rank_filter_order_statistic_scalar(
-                                raw,
-                                row_stride,
-                                width,
-                                height,
-                                channels,
-                                channel,
-                                tail_x,
-                                y,
-                                half,
-                                rank,
-                            );
-                    }
-                    scalar_tail = scalar_tail.saturating_add(tail as u64);
-                    break;
-                }
-
-                let mut values = [u8x16::splat(0); SIMD_ORDER_STATISTIC_MAX_AREA];
-                let mut value_index = 0usize;
-                for row_offset in 0..size as usize {
-                    let source_y = y
-                        .saturating_add(row_offset)
-                        .saturating_sub(half)
-                        .min(height - 1);
-                    let source_row = source_y * row_stride;
-                    for column_offset in 0..size as usize {
-                        values[value_index] = rank_filter_order_statistic_window_vector(
-                            raw,
-                            source_row,
-                            width,
-                            channels,
-                            channel,
-                            x,
-                            active,
-                            half,
-                            column_offset,
-                        );
-                        value_index += 1;
-                    }
-                }
-                let selected = if size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE {
-                    sort_order_statistic_vectors(&mut values[..area]);
-                    values[rank]
-                } else {
-                    select_order_statistic_vectors(&values[..area], rank as u8)
-                };
-                store_rank_filter_channel_vector(
-                    &mut output,
-                    output_row,
-                    channels,
-                    channel,
-                    x,
-                    active,
-                    selected,
-                );
-                vector_blocks = vector_blocks.saturating_add(1);
-                x += active;
-            }
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        &mut output,
+        row_stride,
+        height,
+        |_row_start, _row_end, y, row| {
+            rank_filter_order_statistic_row(
+                raw,
+                row,
+                row_stride,
+                width,
+                height,
+                channels,
+                size as usize,
+                half,
+                area,
+                rank,
+                y as usize,
+            );
         }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y * row_stride;
+        let row_end = row_start + row_stride;
+        rank_filter_order_statistic_row(
+            raw,
+            &mut output[row_start..row_end],
+            row_stride,
+            width,
+            height,
+            channels,
+            size as usize,
+            half,
+            area,
+            rank,
+            y,
+        );
     }
+    let vector_blocks =
+        width.div_ceil(SIMD_RANK_FILTER_LANES) as u64 * channels as u64 * height as u64;
+    let scalar_tail = 0u64;
 
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    let result = crate::image_utils::raw_bytes_to_image(
-        img.width(),
-        img.height(),
-        output,
-        channels,
-    )?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -12907,8 +13433,7 @@ fn rank_filter_float_window_vector(
             .saturating_sub(half)
             .min(width - 1);
         let base = (source_y * width + source_x) * 4;
-        *value =
-            f32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]]);
+        *value = f32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]]);
     }
     f32x8::from(values)
 }
@@ -12936,6 +13461,67 @@ fn store_rank_filter_float_vector(
 /// compare/exchange sorting network operate independently in eight lanes.
 /// The bounded size keeps the fixed network deterministic and matches the
 /// exact scalar ordering used by Pillow for the supported public contract.
+fn rank_filter_float_order_statistic_row(
+    raw: &[u8],
+    output_row: &mut [u8],
+    width: usize,
+    height: usize,
+    size: usize,
+    half: usize,
+    area: usize,
+    rank: usize,
+    y: usize,
+) {
+    let mut x = 0usize;
+    while x < width {
+        let active = (width - x).min(SIMD_FLOAT_ORDER_STATISTIC_LANES);
+        if active == 0 {
+            let value = rank_filter_float_scalar(raw, width, height, x, y, half, rank);
+            output_row[x * 4..(x + 1) * 4].copy_from_slice(&value.to_le_bytes());
+            x += 1;
+            continue;
+        }
+        let mut values = [f32x8::splat(0.0); SIMD_FLOAT_ORDER_STATISTIC_MAX_AREA];
+        let mut value_index = 0usize;
+        for row_offset in 0..size {
+            for column_offset in 0..size {
+                values[value_index] = rank_filter_float_window_vector(
+                    raw,
+                    width,
+                    height,
+                    x,
+                    active,
+                    y,
+                    half,
+                    row_offset,
+                    column_offset,
+                );
+                value_index += 1;
+            }
+        }
+        let selected = if rank == 0 {
+            values[..area]
+                .iter()
+                .copied()
+                .fold(f32x8::splat(f32::INFINITY), |current, value| {
+                    current.min(value)
+                })
+        } else if rank + 1 == area {
+            values[..area]
+                .iter()
+                .copied()
+                .fold(f32x8::splat(f32::NEG_INFINITY), |current, value| {
+                    current.max(value)
+                })
+        } else {
+            sort_float_order_statistic_vectors(&mut values[..area]);
+            values[rank]
+        };
+        store_rank_filter_float_vector(output_row, 0, 0, x, active, selected);
+        x += active;
+    }
+}
+
 fn simd_float_order_statistic_filter(
     img: &DynamicImage,
     size: u32,
@@ -12953,64 +13539,35 @@ fn simd_float_order_statistic_filter(
     let rank = rank as usize;
     let raw = img.as_bytes();
     let mut output = raw.to_vec();
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
-
-    for y in 0..height {
-        let mut x = 0usize;
-        while x < width {
-            let active = (width - x).min(SIMD_FLOAT_ORDER_STATISTIC_LANES);
-            if active == 0 {
-                output[(y * width + x) * 4..(y * width + x + 1) * 4]
-                    .copy_from_slice(
-                        &rank_filter_float_scalar(raw, width, height, x, y, half, rank)
-                            .to_le_bytes(),
-                    );
-                scalar_tail = scalar_tail.saturating_add(1);
-                x += 1;
-                continue;
-            }
-            let mut values = [f32x8::splat(0.0); SIMD_FLOAT_ORDER_STATISTIC_MAX_AREA];
-            let mut value_index = 0usize;
-            for row_offset in 0..size {
-                for column_offset in 0..size {
-                    values[value_index] = rank_filter_float_window_vector(
-                        raw,
-                        width,
-                        height,
-                        x,
-                        active,
-                        y,
-                        half,
-                        row_offset,
-                        column_offset,
-                    );
-                    value_index += 1;
-                }
-            }
-            let selected = if rank == 0 {
-                values[..area]
-                    .iter()
-                    .copied()
-                    .fold(f32x8::splat(f32::INFINITY), |current, value| {
-                        current.min(value)
-                    })
-            } else if rank + 1 == area {
-                values[..area]
-                    .iter()
-                    .copied()
-                    .fold(f32x8::splat(f32::NEG_INFINITY), |current, value| {
-                        current.max(value)
-                    })
-            } else {
-                sort_float_order_statistic_vectors(&mut values[..area]);
-                values[rank]
-            };
-            store_rank_filter_float_vector(&mut output, width, y, x, active, selected);
-            vector_blocks = vector_blocks.saturating_add(1);
-            x += active;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        &mut output,
+        width * 4,
+        height,
+        |_row_start, _row_end, y, row| {
+            rank_filter_float_order_statistic_row(
+                raw, row, width, height, size, half, area, rank, y as usize,
+            );
         }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y * width * 4;
+        let row_end = row_start + width * 4;
+        rank_filter_float_order_statistic_row(
+            raw,
+            &mut output[row_start..row_end],
+            width,
+            height,
+            size,
+            half,
+            area,
+            rank,
+            y,
+        );
     }
+    let vector_blocks = width.div_ceil(SIMD_FLOAT_ORDER_STATISTIC_LANES) as u64 * height as u64;
+    let scalar_tail = 0u64;
 
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -13388,8 +13945,7 @@ fn simd_pil_box_blur_xy(
     };
     let (horizontal_radius, horizontal_weight, horizontal_fractional_weight) =
         blur_parameters(radius_x);
-    let (vertical_radius, vertical_weight, vertical_fractional_weight) =
-        blur_parameters(radius_y);
+    let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
 
     let mut work = img.as_bytes().to_vec();
     let mut scratch = dimensions.alloc_buffer();
@@ -13495,11 +14051,7 @@ fn native_reduce_block_parameters(
 }
 
 #[inline]
-fn native_reduce_supported_buffer(
-    img: &DynamicImage,
-    channels: usize,
-    mode: Option<&str>,
-) -> bool {
+fn native_reduce_supported_buffer(img: &DynamicImage, channels: usize, mode: Option<&str>) -> bool {
     let Some(expected_bytes) = (img.width() as usize)
         .checked_mul(img.height() as usize)
         .and_then(|pixels| pixels.checked_mul(channels))
@@ -13508,7 +14060,7 @@ fn native_reduce_supported_buffer(
     };
     native_reduce_layout(img, mode).is_some_and(|(layout, _)| layout == channels)
         && img.as_bytes().len() == expected_bytes
-        && expected_bytes >= 16
+        && expected_bytes != 0
 }
 
 fn native_reduce_supported_for_image(
@@ -13526,8 +14078,12 @@ fn native_reduce_supported_for_image(
         // alpha and channel semantics remain explicit.
         return x_factor == 1
             && y_factor == 1
-            && native_copy_layout(img, mode)
-                .is_some_and(|channels| native_reduce_supported_buffer(img, channels, mode));
+            && native_copy_layout(img, mode).is_some_and(|channels| {
+                let expected = (img.width() as usize)
+                    .checked_mul(img.height() as usize)
+                    .and_then(|pixels| pixels.checked_mul(channels));
+                expected == Some(img.as_bytes().len()) && expected != Some(0)
+            });
     };
     if !native_reduce_supported_buffer(img, channels, mode) {
         return false;
@@ -13543,15 +14099,8 @@ fn native_reduce_supported_for_image(
         .checked_mul(output_height)
         .is_some_and(|pixels| pixels != 0)
         && output_height != 0
-        && native_reduce_block_parameters(
-            width,
-            height,
-            x_factor as usize,
-            y_factor as usize,
-            0,
-            0,
-        )
-        .is_some()
+        && native_reduce_block_parameters(width, height, x_factor as usize, y_factor as usize, 0, 0)
+            .is_some()
 }
 
 fn native_reduce_supported_for_shape(
@@ -13566,14 +14115,13 @@ fn native_reduce_supported_for_shape(
     let Some((channels, _premultiplied_alpha)) = shape_native_reduce_layout(shape, mode) else {
         return x_factor == 1
             && y_factor == 1
-            && shape_native_copy_channels(shape, mode)
-                .is_some_and(|channels| {
-                    shape
-                        .width
-                        .checked_mul(shape.height)
-                        .and_then(|pixels| pixels.checked_mul(channels as u32))
-                        .is_some_and(|bytes| bytes >= 16)
-                });
+            && shape_native_copy_channels(shape, mode).is_some_and(|channels| {
+                shape
+                    .width
+                    .checked_mul(shape.height)
+                    .and_then(|pixels| pixels.checked_mul(channels as u32))
+                    .is_some_and(|bytes| bytes != 0)
+            });
     };
     let Some(expected_bytes) = shape
         .width
@@ -13582,7 +14130,7 @@ fn native_reduce_supported_for_shape(
     else {
         return false;
     };
-    if expected_bytes < 16 {
+    if expected_bytes == 0 {
         return false;
     }
     if x_factor == 1 && y_factor == 1 {
@@ -13618,14 +14166,7 @@ fn native_reduce_pixel_sums(
     y: usize,
 ) -> Option<([u32; 4], u32, u32, u32)> {
     let (source_x, source_y, block_width, block_height, multiplier, amend) =
-        native_reduce_block_parameters(
-            width,
-            height,
-            x_factor,
-            y_factor,
-            x,
-            y,
-        )?;
+        native_reduce_block_parameters(width, height, x_factor, y_factor, x, y)?;
     let mut sums = [0u64; 4];
     for dy in 0..block_height {
         for dx in 0..block_width {
@@ -13655,8 +14196,8 @@ fn native_reduce_pixel_sums(
 
 #[inline]
 fn native_reduce_average(sum: u32, multiplier: u32, amend: u32) -> u8 {
-    (((u64::from(sum) + u64::from(amend)) * u64::from(multiplier)) >> 24)
-        .min(u64::from(u8::MAX)) as u8
+    (((u64::from(sum) + u64::from(amend)) * u64::from(multiplier)) >> 24).min(u64::from(u8::MAX))
+        as u8
 }
 
 #[inline]
@@ -13671,18 +14212,17 @@ fn native_reduce_scalar_pixel(
     x: usize,
     y: usize,
 ) -> Option<[u8; 4]> {
-    let (sums, _count, multiplier, amend) =
-        native_reduce_pixel_sums(
-            source,
-            width,
-            height,
-            channels,
-            premultiplied_alpha,
-            x_factor,
-            y_factor,
-            x,
-            y,
-        )?;
+    let (sums, _count, multiplier, amend) = native_reduce_pixel_sums(
+        source,
+        width,
+        height,
+        channels,
+        premultiplied_alpha,
+        x_factor,
+        y_factor,
+        x,
+        y,
+    )?;
     let mut output = [0u8; 4];
     let alpha = if premultiplied_alpha {
         native_reduce_average(sums[channels - 1], multiplier, amend)
@@ -13758,12 +14298,12 @@ fn native_reduce_vector_block(
         };
         for channel in 0..channels {
             let value = averaged[channel][lane];
-            output[lane * channels + channel] =
-                if has_alpha && channel + 1 < channels && alpha != 0 {
-                    (u16::from(value) * 255 / u16::from(alpha)) as u8
-                } else {
-                    value
-                };
+            output[lane * channels + channel] = if has_alpha && channel + 1 < channels && alpha != 0
+            {
+                (u16::from(value) * 255 / u16::from(alpha)) as u8
+            } else {
+                value
+            };
         }
     }
     Some(output)
@@ -13782,54 +14322,150 @@ fn native_reduce_bytes(
     let y_factor = usize::try_from(y_factor).ok()?;
     let output_width = width.div_ceil(x_factor);
     let output_height = height.div_ceil(y_factor);
-    let output_len = output_width.checked_mul(output_height)?.checked_mul(channels)?;
+    let output_len = output_width
+        .checked_mul(output_height)?
+        .checked_mul(channels)?;
     let source_len = width.checked_mul(height)?.checked_mul(channels)?;
     let source = img.as_bytes();
     if source.len() != source_len || output_height == 0 {
         return None;
     }
-    let mut output = Vec::with_capacity(output_len);
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
+    let mut output = vec![0u8; output_len];
     let output_pixels = output_width.checked_mul(output_height)?;
-    let vector_pixels = output_pixels / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES;
-    let vector_limit = if vector_pixels == 0 {
-        output_pixels
+    let vector_blocks_per_row = if output_width < SIMD_REDUCE_LANES {
+        1
     } else {
-        vector_pixels
+        output_width / SIMD_REDUCE_LANES
     };
-    for start_index in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
-        let block = native_reduce_vector_block(
-            source,
-            width,
-            height,
-            output_width,
-            output_pixels,
-            channels,
-            premultiplied_alpha,
-            x_factor,
-            y_factor,
-            start_index,
-        )?;
-        let valid_pixels = (output_pixels - start_index).min(SIMD_REDUCE_LANES);
-        output.extend_from_slice(&block[..valid_pixels * channels]);
-        vector_blocks = vector_blocks.saturating_add(1);
+    let scalar_tail_per_row = if output_width < SIMD_REDUCE_LANES {
+        0
+    } else {
+        output_width % SIMD_REDUCE_LANES
+    };
+
+    // Reduction output rows are independent. Keep all source gathers and
+    // block geometry exact, but let the approved row splitter distribute the
+    // work across the same Rayon pool used by the CPU implementation. The
+    // previous SIMD loop processed the entire reduced image on one thread,
+    // making a native vector average slower than the CPU row-parallel path.
+    #[cfg(feature = "parallel")]
+    {
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut output,
+            output_width * channels,
+            output_height,
+            |row_start, _row_end, y, row| {
+                let row_start_pixel = (y as usize).saturating_mul(output_width);
+                let vector_limit = if output_width < SIMD_REDUCE_LANES {
+                    output_width
+                } else {
+                    output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
+                };
+                for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
+                    let start_index = row_start_pixel.saturating_add(local);
+                    let Some(block) = native_reduce_vector_block(
+                        source,
+                        width,
+                        height,
+                        output_width,
+                        output_pixels,
+                        channels,
+                        premultiplied_alpha,
+                        x_factor,
+                        y_factor,
+                        start_index,
+                    ) else {
+                        failed.store(true, Ordering::Relaxed);
+                        return;
+                    };
+                    let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
+                    let dst_start = local * channels;
+                    let dst_end = dst_start + valid_pixels * channels;
+                    let Some(dst) = row.get_mut(dst_start..dst_end) else {
+                        failed.store(true, Ordering::Relaxed);
+                        return;
+                    };
+                    dst.copy_from_slice(&block[..valid_pixels * channels]);
+                }
+                for local in vector_limit..output_width {
+                    let index = row_start_pixel.saturating_add(local);
+                    let Some(pixel) = native_reduce_scalar_pixel(
+                        source,
+                        width,
+                        height,
+                        channels,
+                        premultiplied_alpha,
+                        x_factor,
+                        y_factor,
+                        local,
+                        y as usize,
+                    ) else {
+                        failed.store(true, Ordering::Relaxed);
+                        return;
+                    };
+                    let dst_start = (index - row_start_pixel) * channels;
+                    let dst_end = dst_start + channels;
+                    let Some(dst) = row.get_mut(dst_start..dst_end) else {
+                        failed.store(true, Ordering::Relaxed);
+                        return;
+                    };
+                    dst.copy_from_slice(&pixel[..channels]);
+                }
+                let _ = row_start;
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return None;
+        }
     }
-    for index in vector_limit..output_pixels {
-        let pixel = native_reduce_scalar_pixel(
-            source,
-            width,
-            height,
-            channels,
-            premultiplied_alpha,
-            x_factor,
-            y_factor,
-            index % output_width,
-            index / output_width,
-        )?;
-        output.extend_from_slice(&pixel[..channels]);
-        scalar_tail = scalar_tail.saturating_add(1);
+
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..output_height {
+        let row_start_pixel = y * output_width;
+        let row_start = row_start_pixel * channels;
+        let row = &mut output[row_start..row_start + output_width * channels];
+        let vector_limit = if output_width < SIMD_REDUCE_LANES {
+            output_width
+        } else {
+            output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
+        };
+        for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
+            let block = native_reduce_vector_block(
+                source,
+                width,
+                height,
+                output_width,
+                output_pixels,
+                channels,
+                premultiplied_alpha,
+                x_factor,
+                y_factor,
+                row_start_pixel + local,
+            )?;
+            let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
+            let dst_start = local * channels;
+            row[dst_start..dst_start + valid_pixels * channels]
+                .copy_from_slice(&block[..valid_pixels * channels]);
+        }
+        for local in vector_limit..output_width {
+            let pixel = native_reduce_scalar_pixel(
+                source,
+                width,
+                height,
+                channels,
+                premultiplied_alpha,
+                x_factor,
+                y_factor,
+                local,
+                y,
+            )?;
+            let dst_start = local * channels;
+            row[dst_start..dst_start + channels].copy_from_slice(&pixel[..channels]);
+        }
     }
+    let vector_blocks = (vector_blocks_per_row * output_height) as u64;
+    let scalar_tail = (scalar_tail_per_row * output_height) as u64;
     Some((
         output,
         output_width as u32,
@@ -13869,9 +14505,11 @@ fn simd_thumbnail_reduce_f(
         .chunks_exact(4)
         .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
         .collect();
-    let mut output = Vec::with_capacity(output_pixels.checked_mul(4).ok_or_else(|| {
-        simd_unsupported("Thumbnail")
-    })?);
+    let mut output = Vec::with_capacity(
+        output_pixels
+            .checked_mul(4)
+            .ok_or_else(|| simd_unsupported("Thumbnail"))?,
+    );
     let mut vector_blocks = 0u64;
     for start in (0..output_pixels).step_by(SIMD_RESIZE_LANES) {
         let count = (output_pixels - start).min(SIMD_RESIZE_LANES);
@@ -13933,9 +14571,11 @@ fn simd_thumbnail_reduce_i(
         .chunks_exact(4)
         .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
         .collect();
-    let mut output = Vec::with_capacity(output_pixels.checked_mul(4).ok_or_else(|| {
-        simd_unsupported("Thumbnail")
-    })?);
+    let mut output = Vec::with_capacity(
+        output_pixels
+            .checked_mul(4)
+            .ok_or_else(|| simd_unsupported("Thumbnail"))?,
+    );
     let mut vector_blocks = 0u64;
     for start in (0..output_pixels).step_by(SIMD_RESIZE_LANES) {
         let count = (output_pixels - start).min(SIMD_RESIZE_LANES);
@@ -13952,9 +14592,7 @@ fn simd_thumbnail_reduce_i(
             counts[lane] = (block_width * block_height) as f64;
             for dy in 0..block_height {
                 for dx in 0..block_width {
-                    sums[lane] += i64::from(
-                        source[(source_y + dy) * source_width + source_x + dx],
-                    );
+                    sums[lane] += i64::from(source[(source_y + dy) * source_width + source_x + dx]);
                 }
             }
         }
@@ -13978,12 +14616,8 @@ fn simd_thumbnail_reduce_i(
 const SIMD_RESIZE_LANES: usize = 8;
 const SIMD_RESIZE_NEAREST_BYTES: usize = 16;
 
-fn resize_native_channels_for_image(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<usize> {
-    native_resize_byte_layout_for_image(img, mode)
-        .map(|(channels, _)| channels)
+fn resize_native_channels_for_image(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    native_resize_byte_layout_for_image(img, mode).map(|(channels, _)| channels)
 }
 
 /// Return the byte-domain resize layout and alpha contract.
@@ -14112,15 +14746,13 @@ fn native_pad_contained_dimensions(
         Some((
             target_width,
             native_pad_round_dimension(
-                f64::from(source_height) / f64::from(source_width)
-                    * f64::from(target_width),
+                f64::from(source_height) / f64::from(source_width) * f64::from(target_width),
             )?,
         ))
     } else {
         Some((
             native_pad_round_dimension(
-                f64::from(source_width) / f64::from(source_height)
-                    * f64::from(target_height),
+                f64::from(source_width) / f64::from(source_height) * f64::from(target_height),
             )?,
             target_height,
         ))
@@ -14149,15 +14781,13 @@ fn native_cover_dimensions(
         Some((
             target_width,
             native_pad_round_dimension(
-                f64::from(source_height) / f64::from(source_width)
-                    * f64::from(target_width),
+                f64::from(source_height) / f64::from(source_width) * f64::from(target_width),
             )?,
         ))
     } else {
         Some((
             native_pad_round_dimension(
-                f64::from(source_width) / f64::from(source_height)
-                    * f64::from(target_height),
+                f64::from(source_width) / f64::from(source_height) * f64::from(target_height),
             )?,
             target_height,
         ))
@@ -14216,10 +14846,7 @@ fn native_fit_box(
 /// resampler. P/PA are included as raw indexed samples: P forces nearest
 /// sampling in Pillow, while PA filters its index and alpha bytes without RGBA
 /// premultiplication.
-fn native_fit_layout_for_image(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<(usize, bool)> {
+fn native_fit_layout_for_image(img: &DynamicImage, mode: Option<&str>) -> Option<(usize, bool)> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => {
             Some((1, false))
@@ -14230,29 +14857,18 @@ fn native_fit_layout_for_image(
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "RGBX")) => {
             Some((4, true))
         }
-        DynamicImage::ImageRgba8(_)
-            if matches!(mode, Some("RGBa" | "CMYK")) =>
-        {
-            Some((4, false))
-        }
+        DynamicImage::ImageRgba8(_) if matches!(mode, Some("RGBa" | "CMYK")) => Some((4, false)),
         _ => None,
     }
 }
 
-fn native_fit_layout_for_shape(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<(usize, bool)> {
+fn native_fit_layout_for_shape(shape: SimdImageShape, mode: Option<&str>) -> Option<(usize, bool)> {
     match shape.layout {
-        SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => {
-            Some((1, false))
-        }
+        SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some((1, false)),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some((2, true)),
         SimdLayout::LumaA8 if mode == Some("PA") => Some((2, false)),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB")) => Some((3, false)),
-        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX")) => {
-            Some((4, true))
-        }
+        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX")) => Some((4, true)),
         SimdLayout::Rgba8 if matches!(mode, Some("RGBa" | "CMYK")) => Some((4, false)),
         _ => None,
     }
@@ -14448,31 +15064,29 @@ fn native_thumbnail_dimensions(
     }
     let aspect = f64::from(source_width) / f64::from(source_height);
     let (width, height) = if f64::from(bound_width) / f64::from(bound_height) >= aspect {
-        let adjusted = native_thumbnail_round_aspect(
-            f64::from(bound_height) * aspect,
-            |candidate| (aspect - candidate / f64::from(bound_height)).abs(),
-        )?;
+        let adjusted =
+            native_thumbnail_round_aspect(f64::from(bound_height) * aspect, |candidate| {
+                (aspect - candidate / f64::from(bound_height)).abs()
+            })?;
         (adjusted, bound_height)
     } else {
-        let adjusted = native_thumbnail_round_aspect(
-            f64::from(bound_width) / aspect,
-            |candidate| {
+        let adjusted =
+            native_thumbnail_round_aspect(f64::from(bound_width) / aspect, |candidate| {
                 if candidate == 0.0 {
                     0.0
                 } else {
                     (aspect - f64::from(bound_width) / candidate).abs()
                 }
-            },
-        )?;
+            })?;
         (bound_width, adjusted)
     };
-    Some((width.min(source_width).max(1), height.min(source_height).max(1)))
+    Some((
+        width.min(source_width).max(1),
+        height.min(source_height).max(1),
+    ))
 }
 
-fn native_thumbnail_round_aspect(
-    number: f64,
-    key: impl Fn(f64) -> f64,
-) -> Option<u32> {
+fn native_thumbnail_round_aspect(number: f64, key: impl Fn(f64) -> f64) -> Option<u32> {
     if !number.is_finite() || number < 0.0 {
         return None;
     }
@@ -14556,11 +15170,10 @@ fn native_thumbnail_typed_reduce_supported_for_image(
     else {
         return false;
     };
-    let output_pixels = (img.width() / factor_x.max(1)).saturating_add(u32::from(
-        img.width() % factor_x.max(1) != 0,
-    )) * (img.height() / factor_y.max(1)).saturating_add(u32::from(
-        img.height() % factor_y.max(1) != 0,
-    ));
+    let output_pixels = (img.width() / factor_x.max(1))
+        .saturating_add(u32::from(img.width() % factor_x.max(1) != 0))
+        * (img.height() / factor_y.max(1))
+            .saturating_add(u32::from(img.height() % factor_y.max(1) != 0));
     img.as_bytes().len() == expected_bytes && output_pixels != 0
 }
 
@@ -14613,7 +15226,8 @@ fn native_thumbnail_supported_for_image(
             return false;
         }
     }
-    channels != 0 && native_resize_supported_for_image(img, output_width, output_height, filter, mode)
+    channels != 0
+        && native_resize_supported_for_image(img, output_width, output_height, filter, mode)
 }
 
 fn native_thumbnail_supported_for_shape(
@@ -14653,7 +15267,8 @@ fn native_thumbnail_supported_for_shape(
             return false;
         }
     }
-    channels != 0 && native_resize_supported_for_shape(shape, output_width, output_height, filter, mode)
+    channels != 0
+        && native_resize_supported_for_shape(shape, output_width, output_height, filter, mode)
 }
 
 fn native_pad_offsets(
@@ -14691,48 +15306,26 @@ fn native_pad_offsets(
 /// `ImageOps.pad`; `F` and `I` keep one scalar sample in four raw bytes, and
 /// HSV/CMYK use their ordinary packed byte layouts.  The adapter must admit
 /// those logical modes without pretending that the stored bytes are RGBA.
-fn native_pad_channels_for_image(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn native_pad_channels_for_image(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
-        DynamicImage::ImageLuma8(_)
-            if matches!(mode, None | Some("1" | "L" | "P")) =>
-        {
-            Some(1)
-        }
-        DynamicImage::ImageLumaA8(_)
-            if matches!(mode, None | Some("LA" | "PA")) =>
-        {
-            Some(2)
-        }
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
-        DynamicImage::ImageRgba8(_)
-            if matches!(mode, None | Some("RGBA" | "CMYK" | "I" | "F")) =>
-        {
+        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK" | "I" | "F")) => {
             Some(4)
         }
         _ => None,
     }
 }
 
-fn native_pad_channels_for_shape(
-    shape: SimdImageShape,
-    mode: Option<&str>,
-) -> Option<usize> {
+fn native_pad_channels_for_shape(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     match shape.layout {
         SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA" | "PA")) => Some(2),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => Some(3),
-        SimdLayout::Rgba8
-            if matches!(mode, None | Some("RGBA" | "CMYK" | "I" | "F")) =>
-        {
-            Some(4)
-        }
+        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "CMYK" | "I" | "F")) => Some(4),
         _ => None,
     }
 }
@@ -14783,12 +15376,9 @@ fn native_pad_supported_for_image(
                 channels,
             );
     }
-    let Some((contained_width, contained_height)) = native_pad_contained_dimensions(
-        img.width(),
-        img.height(),
-        target_width,
-        target_height,
-    ) else {
+    let Some((contained_width, contained_height)) =
+        native_pad_contained_dimensions(img.width(), img.height(), target_width, target_height)
+    else {
         return false;
     };
     if native_pad_offsets(
@@ -14836,12 +15426,9 @@ fn native_pad_supported_for_shape(
                 channels,
             );
     }
-    let Some((contained_width, contained_height)) = native_pad_contained_dimensions(
-        shape.width,
-        shape.height,
-        target_width,
-        target_height,
-    ) else {
+    let Some((contained_width, contained_height)) =
+        native_pad_contained_dimensions(shape.width, shape.height, target_width, target_height)
+    else {
         return false;
     };
     native_pad_offsets(
@@ -14873,12 +15460,17 @@ fn native_contain_supported_for_image(
     let Some(channels) = native_pad_channels_for_image(img, mode) else {
         return false;
     };
-    let Some((output_width, output_height)) = native_pad_contained_dimensions(
-        img.width(),
-        img.height(),
-        target_width,
-        target_height,
-    ) else {
+    if img.width() == 0 || img.height() == 0 {
+        let expected_bytes = (img.width() as usize)
+            .checked_mul(img.height() as usize)
+            .and_then(|pixels| pixels.checked_mul(channels));
+        return target_width != 0
+            && target_height != 0
+            && expected_bytes == Some(img.as_bytes().len());
+    }
+    let Some((output_width, output_height)) =
+        native_pad_contained_dimensions(img.width(), img.height(), target_width, target_height)
+    else {
         return false;
     };
     let Some(expected_bytes) = (img.width() as usize)
@@ -14908,12 +15500,12 @@ fn native_contain_supported_for_shape(
     let Some(channels) = native_pad_channels_for_shape(shape, mode) else {
         return false;
     };
-    let Some((output_width, output_height)) = native_pad_contained_dimensions(
-        shape.width,
-        shape.height,
-        target_width,
-        target_height,
-    ) else {
+    if shape.width == 0 || shape.height == 0 {
+        return target_width != 0 && target_height != 0;
+    }
+    let Some((output_width, output_height)) =
+        native_pad_contained_dimensions(shape.width, shape.height, target_width, target_height)
+    else {
         return false;
     };
     native_resize_supported_for_dimensions(
@@ -14936,12 +15528,9 @@ fn native_cover_supported_for_image(
     let Some(channels) = native_pad_channels_for_image(img, mode) else {
         return false;
     };
-    let Some((output_width, output_height)) = native_cover_dimensions(
-        img.width(),
-        img.height(),
-        target_width,
-        target_height,
-    ) else {
+    let Some((output_width, output_height)) =
+        native_cover_dimensions(img.width(), img.height(), target_width, target_height)
+    else {
         return false;
     };
     let Some(expected_bytes) = (img.width() as usize)
@@ -14971,12 +15560,9 @@ fn native_cover_supported_for_shape(
     let Some(channels) = native_pad_channels_for_shape(shape, mode) else {
         return false;
     };
-    let Some((output_width, output_height)) = native_cover_dimensions(
-        shape.width,
-        shape.height,
-        target_width,
-        target_height,
-    ) else {
+    let Some((output_width, output_height)) =
+        native_cover_dimensions(shape.width, shape.height, target_width, target_height)
+    else {
         return false;
     };
     native_resize_supported_for_dimensions(
@@ -15014,9 +15600,7 @@ fn native_affine_bilinear_layout(
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some((1, None)),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some((2, Some(1))),
-        DynamicImage::ImageRgb8(_)
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some((3, None))
         }
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some((4, Some(3))),
@@ -15032,11 +15616,7 @@ fn shape_native_affine_bilinear_layout(
     match shape.layout {
         SimdLayout::Luma8 if matches!(mode, None | Some("L")) => Some((1, None)),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some((2, Some(1))),
-        SimdLayout::Rgb8
-            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
-        {
-            Some((3, None))
-        }
+        SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => Some((3, None)),
         SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA")) => Some((4, Some(3))),
         SimdLayout::Rgba8 if mode == Some("CMYK") => Some((4, None)),
         _ => None,
@@ -15245,10 +15825,10 @@ fn native_pad_bytes(
     // plane so this remains a real SIMD data path for P/PA/F/I and color-space
     // modes as well as ordinary byte images.
     if img.width() == 0 || img.height() == 0 {
-        let target_width_usize = usize::try_from(target_width)
-            .map_err(|_| simd_unsupported("Pad"))?;
-        let target_height_usize = usize::try_from(target_height)
-            .map_err(|_| simd_unsupported("Pad"))?;
+        let target_width_usize =
+            usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
+        let target_height_usize =
+            usize::try_from(target_height).map_err(|_| simd_unsupported("Pad"))?;
         let target_stride = target_width_usize
             .checked_mul(channels)
             .ok_or_else(|| simd_unsupported("Pad"))?;
@@ -15270,24 +15850,17 @@ fn native_pad_bytes(
             vector_blocks = vector_blocks.saturating_add(blocks);
             scalar_tail = scalar_tail.saturating_add(tail);
         }
-        let result = crate::image_utils::raw_bytes_to_image(
-            target_width,
-            target_height,
-            output,
-            channels,
-        )?;
+        let result =
+            crate::image_utils::raw_bytes_to_image(target_width, target_height, output, channels)?;
         return Ok(Some((
             preserve_mode(img, result),
             vector_blocks,
             scalar_tail,
         )));
     }
-    let Some((contained_width, contained_height)) = native_pad_contained_dimensions(
-        img.width(),
-        img.height(),
-        target_width,
-        target_height,
-    ) else {
+    let Some((contained_width, contained_height)) =
+        native_pad_contained_dimensions(img.width(), img.height(), target_width, target_height)
+    else {
         return Ok(None);
     };
     let Some((offset_x, offset_y)) = native_pad_offsets(
@@ -15311,12 +15884,8 @@ fn native_pad_bytes(
             .ok_or_else(|| PilError::InternalError("SIMD pad source copy shape mismatch".into()))?;
         resize_vector_blocks = resize_vector_blocks.saturating_add(blocks);
         resize_scalar_tail = resize_scalar_tail.saturating_add(tail);
-        let result = crate::image_utils::raw_bytes_to_image(
-            img.width(),
-            img.height(),
-            copied,
-            channels,
-        )?;
+        let result =
+            crate::image_utils::raw_bytes_to_image(img.width(), img.height(), copied, channels)?;
         preserve_mode(img, result)
     } else if mode == Some("F") {
         simd_resize_f(img, contained_width, contained_height, &filter)?
@@ -15341,14 +15910,10 @@ fn native_pad_bytes(
             )?,
         }
     };
-    let source_width = usize::try_from(contained_width)
-        .map_err(|_| simd_unsupported("Pad"))?;
-    let source_height = usize::try_from(contained_height)
-        .map_err(|_| simd_unsupported("Pad"))?;
-    let target_width = usize::try_from(target_width)
-        .map_err(|_| simd_unsupported("Pad"))?;
-    let target_height = usize::try_from(target_height)
-        .map_err(|_| simd_unsupported("Pad"))?;
+    let source_width = usize::try_from(contained_width).map_err(|_| simd_unsupported("Pad"))?;
+    let source_height = usize::try_from(contained_height).map_err(|_| simd_unsupported("Pad"))?;
+    let target_width = usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
+    let target_height = usize::try_from(target_height).map_err(|_| simd_unsupported("Pad"))?;
     let source_stride = source_width
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Pad"))?;
@@ -15403,7 +15968,11 @@ fn native_pad_bytes(
         output,
         channels,
     )?;
-    Ok(Some((preserve_mode(img, result), vector_blocks, scalar_tail)))
+    Ok(Some((
+        preserve_mode(img, result),
+        vector_blocks,
+        scalar_tail,
+    )))
 }
 
 /// Return the dimensions Pillow's scalar `ImageOps.scale` validation computes.
@@ -15412,13 +15981,16 @@ fn native_pad_bytes(
 /// as `Image.resize`.  Keeping the ties-to-even rounding here makes SIMD
 /// preflight agree with the public operation without moving validation into a
 /// CPU adapter.
-fn native_scale_dimensions(source_width: u32, source_height: u32, factor: f64) -> Option<(u32, u32)> {
+fn native_scale_dimensions(
+    source_width: u32,
+    source_height: u32,
+    factor: f64,
+) -> Option<(u32, u32)> {
     if !factor.is_finite() || factor <= 0.0 {
         return None;
     }
     let round = |dimension: u32| {
-        native_pad_round_dimension(f64::from(dimension) * factor)
-            .filter(|rounded| *rounded > 0)
+        native_pad_round_dimension(f64::from(dimension) * factor).filter(|rounded| *rounded > 0)
     };
     Some((round(source_width)?, round(source_height)?))
 }
@@ -15563,11 +16135,94 @@ fn resize_fixed_point_to_u8(sum: f64) -> u8 {
     value.clamp(0, 255) as u8
 }
 
+/// Convert one exact Pillow fixed-point accumulator to a byte.
+///
+/// `FilterCoeffs` stores weights at `2^22` precision. Samples and weights are
+/// therefore accumulated as integers in the native SIMD path; this helper
+/// preserves the scalar rounding without a floating-point conversion.
+#[inline(always)]
+fn resize_fixed_point_i64_to_u8(sum: i64) -> u8 {
+    let value = (sum + (1_i64 << 21)) >> 22;
+    value.clamp(0, 255) as u8
+}
+
 #[inline]
 fn resize_coeff_slice(coeffs: &FilterCoeffs, index: usize) -> Option<&[i64]> {
     let start = *coeffs.offsets.get(index)?;
     let count = *coeffs.count.get(index)?;
     coeffs.weights.get(start..start.checked_add(count)?)
+}
+
+#[derive(Clone)]
+struct ResizeHorizontalTapPlan {
+    source_bases: [usize; SIMD_RESIZE_LANES],
+    weights: [i32; SIMD_RESIZE_LANES],
+    active: [bool; SIMD_RESIZE_LANES],
+}
+
+struct ResizeHorizontalBlockPlan {
+    taps: Vec<ResizeHorizontalTapPlan>,
+}
+
+struct ResizeHorizontalPlan {
+    vector_width: usize,
+    blocks: Vec<ResizeHorizontalBlockPlan>,
+}
+
+/// Precompute lane-specific source offsets and fixed-point weights once per
+/// resize call.  They are independent of the source row, so rebuilding them
+/// inside every row (the old hot path) needlessly repeated checked arithmetic,
+/// slice lookups, and coefficient conversion hundreds of times.
+fn build_resize_horizontal_plan(
+    coeffs: &FilterCoeffs,
+    output_width: usize,
+    channels: usize,
+) -> Option<ResizeHorizontalPlan> {
+    let vector_width = if output_width < SIMD_RESIZE_LANES {
+        SIMD_RESIZE_LANES
+    } else {
+        output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
+    };
+    let mut blocks = Vec::with_capacity(vector_width.div_ceil(SIMD_RESIZE_LANES));
+    for output_x in (0..vector_width).step_by(SIMD_RESIZE_LANES) {
+        let max_count = (0..SIMD_RESIZE_LANES)
+            .filter_map(|lane| coeffs.count.get(output_x + lane))
+            .copied()
+            .max()
+            .unwrap_or(0);
+        let mut taps = Vec::with_capacity(max_count);
+        for tap in 0..max_count {
+            let mut source_bases = [0usize; SIMD_RESIZE_LANES];
+            let mut weights = [0i32; SIMD_RESIZE_LANES];
+            let mut active = [false; SIMD_RESIZE_LANES];
+            for lane in 0..SIMD_RESIZE_LANES {
+                let index = output_x + lane;
+                if let (Some(&count), Some(&xmin), Some(&offset)) = (
+                    coeffs.count.get(index),
+                    coeffs.xmin.get(index),
+                    coeffs.offsets.get(index),
+                ) && tap < count
+                {
+                    let source_x = usize::try_from(xmin).ok()?.checked_add(tap)?;
+                    let source_base = source_x.checked_mul(channels)?;
+                    let weight_index = offset.checked_add(tap)?;
+                    source_bases[lane] = source_base;
+                    weights[lane] = *coeffs.weights.get(weight_index)? as i32;
+                    active[lane] = true;
+                }
+            }
+            taps.push(ResizeHorizontalTapPlan {
+                source_bases,
+                weights,
+                active,
+            });
+        }
+        blocks.push(ResizeHorizontalBlockPlan { taps });
+    }
+    Some(ResizeHorizontalPlan {
+        vector_width,
+        blocks,
+    })
 }
 
 #[inline]
@@ -15590,9 +16245,7 @@ fn resize_horizontal_scalar(
     let mut sum = 0.0;
     for (tap, &weight) in weights.iter().enumerate() {
         let source_x = x0.checked_add(tap)?;
-        let source_index = source_x
-            .checked_mul(channels)?
-            .checked_add(channel)?;
+        let source_index = source_x.checked_mul(channels)?.checked_add(channel)?;
         let value = *source_row.get(source_index)?;
         let value = if premultiplied_alpha && channel != alpha_channel {
             resize_premultiply_u8(value, *source_row.get(source_x * channels + alpha_channel)?)
@@ -15608,62 +16261,50 @@ fn resize_horizontal_vector_row(
     source_row: &[u8],
     channels: usize,
     coeffs: &FilterCoeffs,
+    plan: &ResizeHorizontalPlan,
     output_width: usize,
     output_row: &mut [u8],
     premultiplied_alpha: bool,
 ) -> Option<(u64, u64)> {
-    // A short row is still one padded vector block. The inactive lanes are
-    // left at zero and are never written to the output row.
-    let vector_width = if output_width < SIMD_RESIZE_LANES {
-        SIMD_RESIZE_LANES
-    } else {
-        output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
-    };
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
     let alpha_channel = channels - 1;
-    for output_x in (0..vector_width).step_by(SIMD_RESIZE_LANES) {
+    for (block_index, output_x) in (0..plan.vector_width)
+        .step_by(SIMD_RESIZE_LANES)
+        .enumerate()
+    {
         let mut result = [[0u8; SIMD_RESIZE_LANES]; 4];
-        for channel in 0..channels {
-            let mut sums = f64x8::splat(0.0);
-            let max_count = (0..SIMD_RESIZE_LANES)
-                .filter_map(|lane| coeffs.count.get(output_x + lane))
-                .copied()
-                .max()
-                .unwrap_or(0);
-            for tap in 0..max_count {
+        let mut sums = [i64x8::splat(0); 4];
+        let block = plan.blocks.get(block_index)?;
+        for tap in &block.taps {
+            let weight_vector = i32x8::new(tap.weights);
+            for channel in 0..channels {
                 let mut samples = [0u8; SIMD_RESIZE_LANES];
-                let mut alphas = [0u8; SIMD_RESIZE_LANES];
-                let mut weights = [0.0; SIMD_RESIZE_LANES];
                 for lane in 0..SIMD_RESIZE_LANES {
-                    let index = output_x + lane;
-                    if let (Some(&count), Some(&xmin), Some(&offset)) = (
-                        coeffs.count.get(index),
-                        coeffs.xmin.get(index),
-                        coeffs.offsets.get(index),
-                    ) && tap < count
-                    {
-                        let source_x = usize::try_from(xmin).ok()?.checked_add(tap)?;
-                        let source_index = source_x.checked_mul(channels)?.checked_add(channel)?;
-                        samples[lane] = *source_row.get(source_index)?;
-                        if premultiplied_alpha && channel != alpha_channel {
-                            alphas[lane] = *source_row.get(source_x * channels + alpha_channel)?;
-                        }
-                        let weight_index = offset.checked_add(tap)?;
-                        weights[lane] = *coeffs.weights.get(weight_index)? as f64;
+                    if tap.active[lane] {
+                        samples[lane] = *source_row.get(tap.source_bases[lane] + channel)?;
                     }
                 }
                 let samples = if premultiplied_alpha && channel != alpha_channel {
+                    let mut alphas = [0u8; SIMD_RESIZE_LANES];
+                    for lane in 0..SIMD_RESIZE_LANES {
+                        if tap.active[lane] {
+                            alphas[lane] =
+                                *source_row.get(tap.source_bases[lane] + alpha_channel)?;
+                        }
+                    }
                     let values = u16x8::new(samples.map(u16::from))
                         * u16x8::new(alphas.map(u16::from))
                         + u16x8::splat(127);
-                    simd_div255_u16x8(values).to_array().map(f64::from)
+                    simd_div255_u16x8(values).to_array().map(i32::from)
                 } else {
-                    samples.map(f64::from)
+                    samples.map(i32::from)
                 };
-                sums += f64x8::new(samples) * f64x8::new(weights);
+                sums[channel] += i32x8::new(samples).widening_mul(weight_vector);
             }
-            result[channel] = sums.to_array().map(resize_fixed_point_to_u8);
+        }
+        for channel in 0..channels {
+            result[channel] = sums[channel].to_array().map(resize_fixed_point_i64_to_u8);
         }
         for lane in 0..SIMD_RESIZE_LANES {
             if output_x + lane >= output_width {
@@ -15679,7 +16320,7 @@ fn resize_horizontal_vector_row(
     let scalar_start = if output_width < SIMD_RESIZE_LANES {
         output_width
     } else {
-        vector_width
+        plan.vector_width
     };
     for output_x in scalar_start..output_width {
         let output_start = output_x.checked_mul(channels)?;
@@ -15722,36 +16363,44 @@ fn resize_vertical_vector_row(
     let alpha_channel = channels - 1;
     for output_x in (0..vector_width).step_by(SIMD_RESIZE_LANES) {
         let mut result = [[0u8; SIMD_RESIZE_LANES]; 4];
-        for channel in 0..channels {
-            let mut sums = f64x8::splat(0.0);
-            for (tap, &weight) in weights.iter().enumerate() {
-                let source_y = y0.checked_add(tap)?;
-                if source_y >= source_height {
-                    return None;
-                }
-                let mut samples = [0.0; SIMD_RESIZE_LANES];
-                for lane in 0..SIMD_RESIZE_LANES {
-                    if output_x + lane >= output_width {
-                        continue;
-                    }
-                    let source_index = source_y
-                        .checked_mul(output_width)?
-                        .checked_add(output_x + lane)?
-                        .checked_mul(channels)?
-                        .checked_add(channel)?;
-                    samples[lane] = f64::from(*intermediate.get(source_index)?);
-                }
-                sums += f64x8::new(samples) * f64x8::splat(weight as f64);
+        let mut sums = [i64x8::splat(0); 4];
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_y = y0.checked_add(tap)?;
+            if source_y >= source_height {
+                return None;
             }
-            result[channel] = sums.to_array().map(resize_fixed_point_to_u8);
+            let mut source_bases = [0usize; SIMD_RESIZE_LANES];
+            let mut active = [false; SIMD_RESIZE_LANES];
+            for lane in 0..SIMD_RESIZE_LANES {
+                if output_x + lane >= output_width {
+                    continue;
+                }
+                source_bases[lane] = source_y
+                    .checked_mul(output_width)?
+                    .checked_add(output_x + lane)?
+                    .checked_mul(channels)?;
+                active[lane] = true;
+            }
+            let weight_vector = i32x8::splat(weight as i32);
+            for channel in 0..channels {
+                let mut samples = [0i32; SIMD_RESIZE_LANES];
+                for lane in 0..SIMD_RESIZE_LANES {
+                    if active[lane] {
+                        samples[lane] = i32::from(*intermediate.get(source_bases[lane] + channel)?);
+                    }
+                }
+                sums[channel] += i32x8::new(samples).widening_mul(weight_vector);
+            }
+        }
+        for channel in 0..channels {
+            result[channel] = sums[channel].to_array().map(resize_fixed_point_i64_to_u8);
         }
         if premultiplied_alpha {
             let alpha = result[alpha_channel];
             for channel in 0..alpha_channel {
-                let restored = (f64x8::new(result[channel].map(f64::from))
-                    * f64x8::splat(255.0)
+                let restored = (f64x8::new(result[channel].map(f64::from)) * f64x8::splat(255.0)
                     / f64x8::new(alpha.map(f64::from)).max(f64x8::splat(1.0)))
-                    .to_array();
+                .to_array();
                 for lane in 0..SIMD_RESIZE_LANES {
                     if alpha[lane] != 0 {
                         result[channel][lane] = restored[lane] as u8;
@@ -15795,8 +16444,7 @@ fn resize_vertical_vector_row(
             let alpha = result[alpha_channel];
             for channel in 0..alpha_channel {
                 if alpha != 0 {
-                    result[channel] =
-                        (f64::from(result[channel]) * 255.0 / f64::from(alpha)) as u8;
+                    result[channel] = (f64::from(result[channel]) * 255.0 / f64::from(alpha)) as u8;
                 }
             }
         }
@@ -15842,14 +16490,12 @@ fn simd_resize_nearest(
     output_height: u32,
     channels: usize,
 ) -> Result<DynamicImage, PilError> {
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Resize"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Resize"))?;
-    let output_width_usize = usize::try_from(output_width)
-        .map_err(|_| simd_unsupported("Resize"))?;
-    let output_height_usize = usize::try_from(output_height)
-        .map_err(|_| simd_unsupported("Resize"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
+    let output_width_usize =
+        usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
+    let output_height_usize =
+        usize::try_from(output_height).map_err(|_| simd_unsupported("Resize"))?;
     let x_indices = resize_nearest_indices(img.width(), output_width)
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let y_indices = resize_nearest_indices(img.height(), output_height)
@@ -15918,9 +16564,8 @@ fn simd_resize_nearest(
                         .and_then(|offset| offset.checked_sub(source_start))
                         .ok_or_else(|| simd_unsupported("Resize"))?;
                     for channel in 0..channels {
-                        indices[pixel * channels + channel] =
-                            u8::try_from(source_pixel + channel)
-                                .map_err(|_| simd_unsupported("Resize"))?;
+                        indices[pixel * channels + channel] = u8::try_from(source_pixel + channel)
+                            .map_err(|_| simd_unsupported("Resize"))?;
                     }
                 }
                 u8x16::new(source_block)
@@ -15981,9 +16626,8 @@ fn simd_resize_nearest(
                         .and_then(|offset| offset.checked_sub(source_start))
                         .ok_or_else(|| simd_unsupported("Resize"))?;
                     for channel in 0..channels {
-                        indices[pixel * channels + channel] =
-                            u8::try_from(source_pixel + channel)
-                                .map_err(|_| simd_unsupported("Resize"))?;
+                        indices[pixel * channels + channel] = u8::try_from(source_pixel + channel)
+                            .map_err(|_| simd_unsupported("Resize"))?;
                     }
                 }
                 u8x16::new(source_block)
@@ -16004,9 +16648,11 @@ fn simd_resize_nearest(
                 .to_array()
             };
             let output_start = output_row
-                .checked_add(output_x.checked_mul(channels).ok_or_else(|| {
-                    simd_unsupported("Resize")
-                })?)
+                .checked_add(
+                    output_x
+                        .checked_mul(channels)
+                        .ok_or_else(|| simd_unsupported("Resize"))?,
+                )
                 .ok_or_else(|| simd_unsupported("Resize"))?;
             output
                 .get_mut(output_start..output_start + block_bytes)
@@ -16023,9 +16669,11 @@ fn simd_resize_nearest(
                 )
                 .ok_or_else(|| simd_unsupported("Resize"))?;
             let output_start = output_row
-                .checked_add(output_x.checked_mul(channels).ok_or_else(|| {
-                    simd_unsupported("Resize")
-                })?)
+                .checked_add(
+                    output_x
+                        .checked_mul(channels)
+                        .ok_or_else(|| simd_unsupported("Resize"))?,
+                )
                 .ok_or_else(|| simd_unsupported("Resize"))?;
             output
                 .get_mut(output_start..output_start + channels)
@@ -16041,7 +16689,8 @@ fn simd_resize_nearest(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    let result = crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -16055,11 +16704,7 @@ fn boxed_nearest_indices(
     box_start: f64,
     box_end: f64,
 ) -> Option<Vec<usize>> {
-    if source_size == 0
-        || output_size == 0
-        || !box_start.is_finite()
-        || !box_end.is_finite()
-    {
+    if source_size == 0 || output_size == 0 || !box_start.is_finite() || !box_end.is_finite() {
         return None;
     }
     let box_start = box_start as f32 as f64;
@@ -16100,14 +16745,10 @@ fn simd_resize_f_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let output_width = usize::try_from(output_width)
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let output_height = usize::try_from(output_height)
-        .map_err(|_| simd_unsupported("Fit"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Fit"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Fit"))?;
+    let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Fit"))?;
+    let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Fit"))?;
     let pixel_count = source_width
         .checked_mul(source_height)
         .ok_or_else(|| simd_unsupported("Fit"))?;
@@ -16277,14 +16918,10 @@ fn simd_resize_nearest_boxed(
     box_bottom: f64,
     channels: usize,
 ) -> Result<DynamicImage, PilError> {
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let output_width = usize::try_from(output_width)
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let output_height = usize::try_from(output_height)
-        .map_err(|_| simd_unsupported("Fit"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Fit"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Fit"))?;
+    let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Fit"))?;
+    let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Fit"))?;
     let x_indices = boxed_nearest_indices(
         source_width as u32,
         output_width as u32,
@@ -16416,14 +17053,10 @@ fn simd_resize_convolution(
     channels: usize,
     premultiplied_alpha: bool,
 ) -> Result<DynamicImage, PilError> {
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Resize"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Resize"))?;
-    let output_width = usize::try_from(output_width)
-        .map_err(|_| simd_unsupported("Resize"))?;
-    let output_height = usize::try_from(output_height)
-        .map_err(|_| simd_unsupported("Resize"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
+    let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
+    let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Resize"))?;
     let intermediate_len = source_height
         .checked_mul(output_width)
         .and_then(|pixels| pixels.checked_mul(channels))
@@ -16443,8 +17076,16 @@ fn simd_resize_convolution(
     }
     let horizontal = precompute_coeffs(output_width as u32, source_width as u32, filter);
     let vertical = precompute_coeffs(output_height as u32, source_height as u32, filter);
+    let horizontal_plan = build_resize_horizontal_plan(&horizontal, output_width, channels)
+        .ok_or_else(|| simd_unsupported("Resize"))?;
     let mut intermediate = vec![0u8; intermediate_len];
+    #[cfg(feature = "parallel")]
+    let vector_blocks;
+    #[cfg(feature = "parallel")]
+    let scalar_tail;
+    #[cfg(not(feature = "parallel"))]
     let mut vector_blocks = 0u64;
+    #[cfg(not(feature = "parallel"))]
     let mut scalar_tail = 0u64;
     let source_stride = source_width
         .checked_mul(channels)
@@ -16452,6 +17093,47 @@ fn simd_resize_convolution(
     let intermediate_stride = output_width
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Resize"))?;
+    let source = img.as_bytes();
+    #[cfg(feature = "parallel")]
+    {
+        // Horizontal rows are independent once the coefficient table is
+        // built.  Keep the same per-row tap order, but let Rayon schedule
+        // rows across cores; this is the same ownership proof used by the
+        // CPU resampler and avoids the former single-thread SIMD bottleneck
+        // on large downscales.
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut intermediate,
+            intermediate_stride,
+            source_height,
+            |row_start, row_end, y, intermediate_row| {
+                let _ = (row_start, row_end);
+                let source_start = (y as usize).saturating_mul(source_stride);
+                let source_end = source_start.saturating_add(source_stride);
+                let Some(source_row) = source.get(source_start..source_end) else {
+                    failed.store(true, Ordering::Relaxed);
+                    return;
+                };
+                if resize_horizontal_vector_row(
+                    source_row,
+                    channels,
+                    &horizontal,
+                    &horizontal_plan,
+                    output_width,
+                    intermediate_row,
+                    premultiplied_alpha,
+                )
+                .is_none()
+                {
+                    failed.store(true, Ordering::Relaxed);
+                }
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return Err(simd_unsupported("Resize"));
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
     for source_y in 0..source_height {
         let source_start = source_y
             .checked_mul(source_stride)
@@ -16459,27 +17141,59 @@ fn simd_resize_convolution(
         let intermediate_start = source_y
             .checked_mul(intermediate_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        let source_row = img
-            .as_bytes()
+        let source_row = source
             .get(source_start..source_start + source_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
         let intermediate_row = intermediate
             .get_mut(intermediate_start..intermediate_start + intermediate_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        let (blocks, tail) = resize_horizontal_vector_row(
+        resize_horizontal_vector_row(
             source_row,
             channels,
             &horizontal,
+            &horizontal_plan,
             output_width,
             intermediate_row,
             premultiplied_alpha,
         )
+        .map(|(blocks, tail)| {
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        })
         .ok_or_else(|| simd_unsupported("Resize"))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
     }
     let mut output = vec![0u8; output_len];
     let output_stride = intermediate_stride;
+    #[cfg(feature = "parallel")]
+    {
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            output_height,
+            |row_start, row_end, output_y, output_row| {
+                let _ = (row_start, row_end);
+                if resize_vertical_vector_row(
+                    &intermediate,
+                    output_width,
+                    source_height,
+                    channels,
+                    &vertical,
+                    output_y as usize,
+                    output_row,
+                    premultiplied_alpha,
+                )
+                .is_none()
+                {
+                    failed.store(true, Ordering::Relaxed);
+                }
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return Err(simd_unsupported("Resize"));
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
     for output_y in 0..output_height {
         let output_start = output_y
             .checked_mul(output_stride)
@@ -16487,7 +17201,7 @@ fn simd_resize_convolution(
         let output_row = output
             .get_mut(output_start..output_start + output_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        let (blocks, tail) = resize_vertical_vector_row(
+        resize_vertical_vector_row(
             &intermediate,
             output_width,
             source_height,
@@ -16497,9 +17211,37 @@ fn simd_resize_convolution(
             output_row,
             premultiplied_alpha,
         )
+        .map(|(blocks, tail)| {
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        })
         .ok_or_else(|| simd_unsupported("Resize"))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    #[cfg(feature = "parallel")]
+    {
+        // The vector/tail counters are deterministic functions of the output
+        // width and row count.  Compute them after parallel writes rather
+        // than contending on shared counters inside the hot loops.
+        let horizontal_blocks = if output_width < SIMD_RESIZE_LANES {
+            1
+        } else {
+            output_width / SIMD_RESIZE_LANES
+        } as u64;
+        let horizontal_tail = if output_width < SIMD_RESIZE_LANES {
+            0
+        } else {
+            output_width % SIMD_RESIZE_LANES
+        } as u64;
+        let vertical_blocks = horizontal_blocks;
+        let vertical_tail = horizontal_tail;
+        let computed_vector_blocks = horizontal_blocks
+            .saturating_mul(source_height as u64)
+            .saturating_add(vertical_blocks.saturating_mul(output_height as u64));
+        let computed_scalar_tail = horizontal_tail
+            .saturating_mul(source_height as u64)
+            .saturating_add(vertical_tail.saturating_mul(output_height as u64));
+        vector_blocks = computed_vector_blocks;
+        scalar_tail = computed_scalar_tail;
     }
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -16531,14 +17273,10 @@ fn simd_resize_convolution_boxed(
     channels: usize,
     premultiplied_alpha: bool,
 ) -> Result<DynamicImage, PilError> {
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let output_width = usize::try_from(output_width)
-        .map_err(|_| simd_unsupported("Fit"))?;
-    let output_height = usize::try_from(output_height)
-        .map_err(|_| simd_unsupported("Fit"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Fit"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Fit"))?;
+    let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Fit"))?;
+    let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Fit"))?;
     let intermediate_len = source_height
         .checked_mul(output_width)
         .and_then(|pixels| pixels.checked_mul(channels))
@@ -16571,8 +17309,16 @@ fn simd_resize_convolution_boxed(
         box_bottom,
         filter,
     );
+    let horizontal_plan = build_resize_horizontal_plan(&horizontal, output_width, channels)
+        .ok_or_else(|| simd_unsupported("Fit"))?;
     let mut intermediate = vec![0u8; intermediate_len];
+    #[cfg(feature = "parallel")]
+    let vector_blocks;
+    #[cfg(feature = "parallel")]
+    let scalar_tail;
+    #[cfg(not(feature = "parallel"))]
     let mut vector_blocks = 0u64;
+    #[cfg(not(feature = "parallel"))]
     let mut scalar_tail = 0u64;
     let source_stride = source_width
         .checked_mul(channels)
@@ -16580,6 +17326,42 @@ fn simd_resize_convolution_boxed(
     let intermediate_stride = output_width
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Fit"))?;
+    let source = img.as_bytes();
+    #[cfg(feature = "parallel")]
+    {
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut intermediate,
+            intermediate_stride,
+            source_height,
+            |row_start, row_end, source_y, intermediate_row| {
+                let _ = (row_start, row_end);
+                let source_start = (source_y as usize).saturating_mul(source_stride);
+                let source_end = source_start.saturating_add(source_stride);
+                let Some(source_row) = source.get(source_start..source_end) else {
+                    failed.store(true, Ordering::Relaxed);
+                    return;
+                };
+                if resize_horizontal_vector_row(
+                    source_row,
+                    channels,
+                    &horizontal,
+                    &horizontal_plan,
+                    output_width,
+                    intermediate_row,
+                    premultiplied_alpha,
+                )
+                .is_none()
+                {
+                    failed.store(true, Ordering::Relaxed);
+                }
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return Err(simd_unsupported("Fit"));
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
     for source_y in 0..source_height {
         let source_start = source_y
             .checked_mul(source_stride)
@@ -16587,8 +17369,7 @@ fn simd_resize_convolution_boxed(
         let intermediate_start = source_y
             .checked_mul(intermediate_stride)
             .ok_or_else(|| simd_unsupported("Fit"))?;
-        let source_row = img
-            .as_bytes()
+        let source_row = source
             .get(source_start..source_start + source_stride)
             .ok_or_else(|| simd_unsupported("Fit"))?;
         let intermediate_row = intermediate
@@ -16598,6 +17379,7 @@ fn simd_resize_convolution_boxed(
             source_row,
             channels,
             &horizontal,
+            &horizontal_plan,
             output_width,
             intermediate_row,
             premultiplied_alpha,
@@ -16609,6 +17391,36 @@ fn simd_resize_convolution_boxed(
 
     let mut output = vec![0u8; output_len];
     let output_stride = intermediate_stride;
+    #[cfg(feature = "parallel")]
+    {
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            output_height,
+            |row_start, row_end, output_y, output_row| {
+                let _ = (row_start, row_end);
+                if resize_vertical_vector_row(
+                    &intermediate,
+                    output_width,
+                    source_height,
+                    channels,
+                    &vertical,
+                    output_y as usize,
+                    output_row,
+                    premultiplied_alpha,
+                )
+                .is_none()
+                {
+                    failed.store(true, Ordering::Relaxed);
+                }
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return Err(simd_unsupported("Fit"));
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
     for output_y in 0..output_height {
         let output_start = output_y
             .checked_mul(output_stride)
@@ -16629,6 +17441,22 @@ fn simd_resize_convolution_boxed(
         .ok_or_else(|| simd_unsupported("Fit"))?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    #[cfg(feature = "parallel")]
+    {
+        let vector_width = if output_width < SIMD_RESIZE_LANES {
+            SIMD_RESIZE_LANES
+        } else {
+            output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
+        };
+        let horizontal_blocks = vector_width.div_ceil(SIMD_RESIZE_LANES) as u64;
+        let horizontal_tail = output_width.saturating_sub(vector_width) as u64;
+        vector_blocks = horizontal_blocks
+            .saturating_mul(source_height as u64)
+            .saturating_add(horizontal_blocks.saturating_mul(output_height as u64));
+        scalar_tail = horizontal_tail
+            .saturating_mul(source_height as u64)
+            .saturating_add(horizontal_tail.saturating_mul(output_height as u64));
     }
 
     crate::compute::record_pipeline_operation_path("vector");
@@ -16734,14 +17562,10 @@ fn simd_affine_luma16_transform_bytes(
                 }
             }));
             let y = f64x8::splat(destination_y as f64);
-            let source_x = (f64x8::splat(*a) * x
-                + f64x8::splat(*b) * y
-                + f64x8::splat(*c))
-                .to_array();
-            let source_y = (f64x8::splat(*d) * x
-                + f64x8::splat(*e) * y
-                + f64x8::splat(*f))
-                .to_array();
+            let source_x =
+                (f64x8::splat(*a) * x + f64x8::splat(*b) * y + f64x8::splat(*c)).to_array();
+            let source_y =
+                (f64x8::splat(*d) * x + f64x8::splat(*e) * y + f64x8::splat(*f)).to_array();
             let mut values = [fill; SIMD_F64_LANES];
             for lane in 0..count {
                 let input_x = if source_x[lane].is_finite() {
@@ -16787,14 +17611,10 @@ fn simd_mesh_transform_bytes(
     let Some(channels) = native_affine_nearest_transform_channels(img, mode) else {
         return Ok(None);
     };
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_width = usize::try_from(width)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_height = usize::try_from(height)
-        .map_err(|_| simd_unsupported("Transform"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Transform"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_width = usize::try_from(width).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_height = usize::try_from(height).map_err(|_| simd_unsupported("Transform"))?;
     if source_width == 0
         || source_height == 0
         || destination_width == 0
@@ -16919,14 +17739,10 @@ fn simd_affine_nearest_transform_bytes(
     let Some(channels) = native_affine_nearest_transform_channels(img, mode) else {
         return Ok(None);
     };
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_width = usize::try_from(width)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_height = usize::try_from(height)
-        .map_err(|_| simd_unsupported("Transform"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Transform"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_width = usize::try_from(width).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_height = usize::try_from(height).map_err(|_| simd_unsupported("Transform"))?;
     let source_len = source_width
         .checked_mul(source_height)
         .and_then(|pixels| pixels.checked_mul(channels))
@@ -16965,25 +17781,13 @@ fn simd_affine_nearest_transform_bytes(
             for pixel in 0..count {
                 let x = destination_x + pixel;
                 let y = destination_y;
-                let source_x = *a * (x as f64 + 0.5)
-                    + *b * (y as f64 + 0.5)
-                    + *c;
-                let source_y = *d * (x as f64 + 0.5)
-                    + *e * (y as f64 + 0.5)
-                    + *f;
+                let source_x = *a * (x as f64 + 0.5) + *b * (y as f64 + 0.5) + *c;
+                let source_y = *d * (x as f64 + 0.5) + *e * (y as f64 + 0.5) + *f;
                 // Match Geometry.c's nearest affine contract: negative
                 // coordinates are outside, while non-negative coordinates
                 // truncate toward zero before the bounds check.
-                let input_x = if source_x < 0.0 {
-                    -1
-                } else {
-                    source_x as i64
-                };
-                let input_y = if source_y < 0.0 {
-                    -1
-                } else {
-                    source_y as i64
-                };
+                let input_x = if source_x < 0.0 { -1 } else { source_x as i64 };
+                let input_y = if source_y < 0.0 { -1 } else { source_y as i64 };
                 let block_start = pixel
                     .checked_mul(channels)
                     .ok_or_else(|| simd_unsupported("Transform"))?;
@@ -17015,9 +17819,11 @@ fn simd_affine_nearest_transform_bytes(
                 }
             }
             let output_start = row_start
-                .checked_add(destination_x.checked_mul(channels).ok_or_else(|| {
-                    simd_unsupported("Transform")
-                })?)
+                .checked_add(
+                    destination_x
+                        .checked_mul(channels)
+                        .ok_or_else(|| simd_unsupported("Transform"))?,
+                )
                 .ok_or_else(|| simd_unsupported("Transform"))?;
             let output_bytes = count
                 .checked_mul(channels)
@@ -17053,14 +17859,10 @@ fn simd_projective_nearest_transform_bytes(
     let Some(channels) = native_affine_nearest_transform_channels(img, mode) else {
         return Ok(None);
     };
-    let destination_width = usize::try_from(width)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_height = usize::try_from(height)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Transform"))?;
+    let destination_width = usize::try_from(width).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_height = usize::try_from(height).map_err(|_| simd_unsupported("Transform"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Transform"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Transform"))?;
     if destination_width == 0
         || destination_height == 0
         || source_width == 0
@@ -17128,17 +17930,11 @@ fn simd_projective_nearest_transform_bytes(
                         * f64x8::splat(inv_width * inv_height);
                 (sx.to_array(), sy.to_array())
             } else {
-                let denominator = f64x8::splat(*g) * x
-                    + f64x8::splat(*h) * y
-                    + f64x8::splat(1.0);
-                let sx = (f64x8::splat(*a) * x
-                    + f64x8::splat(*b) * y
-                    + f64x8::splat(*c))
-                    / denominator;
-                let sy = (f64x8::splat(*d) * x
-                    + f64x8::splat(*e) * y
-                    + f64x8::splat(*f))
-                    / denominator;
+                let denominator = f64x8::splat(*g) * x + f64x8::splat(*h) * y + f64x8::splat(1.0);
+                let sx =
+                    (f64x8::splat(*a) * x + f64x8::splat(*b) * y + f64x8::splat(*c)) / denominator;
+                let sy =
+                    (f64x8::splat(*d) * x + f64x8::splat(*e) * y + f64x8::splat(*f)) / denominator;
                 (sx.to_array(), sy.to_array())
             };
 
@@ -17203,14 +17999,10 @@ fn simd_projective_bilinear_transform_bytes(
     let Some(channels) = native_affine_nearest_transform_channels(img, mode) else {
         return Ok(None);
     };
-    let destination_width = usize::try_from(width)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_height = usize::try_from(height)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Transform"))?;
+    let destination_width = usize::try_from(width).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_height = usize::try_from(height).map_err(|_| simd_unsupported("Transform"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Transform"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Transform"))?;
     if destination_width == 0
         || destination_height == 0
         || source_width == 0
@@ -17273,17 +18065,11 @@ fn simd_projective_bilinear_transform_bytes(
                         * f64x8::splat(inverse_width * inverse_height);
                 (source_x.to_array(), source_y.to_array())
             } else {
-                let denominator = f64x8::splat(*g) * x
-                    + f64x8::splat(*h) * y
-                    + f64x8::splat(1.0);
-                let source_x = (f64x8::splat(*a) * x
-                    + f64x8::splat(*b) * y
-                    + f64x8::splat(*c))
-                    / denominator;
-                let source_y = (f64x8::splat(*d) * x
-                    + f64x8::splat(*e) * y
-                    + f64x8::splat(*f))
-                    / denominator;
+                let denominator = f64x8::splat(*g) * x + f64x8::splat(*h) * y + f64x8::splat(1.0);
+                let source_x =
+                    (f64x8::splat(*a) * x + f64x8::splat(*b) * y + f64x8::splat(*c)) / denominator;
+                let source_y =
+                    (f64x8::splat(*d) * x + f64x8::splat(*e) * y + f64x8::splat(*f)) / denominator;
                 (source_x.to_array(), source_y.to_array())
             };
 
@@ -17319,8 +18105,7 @@ fn simd_projective_bilinear_transform_bytes(
                 for (neighbor, &(source_x, source_y)) in coordinates.iter().enumerate() {
                     let source_start = (source_y * source_width + source_x) * channels;
                     for channel in 0..channels {
-                        neighbors[channel][neighbor][lane] =
-                            source[source_start + channel] as f64;
+                        neighbors[channel][neighbor][lane] = source[source_start + channel] as f64;
                     }
                 }
             }
@@ -17333,8 +18118,8 @@ fn simd_projective_bilinear_transform_bytes(
                 let p10 = f64x8::new(neighbors[channel][1]);
                 let p01 = f64x8::new(neighbors[channel][2]);
                 let p11 = f64x8::new(neighbors[channel][3]);
-                let interpolated = (one - fx) * ((one - fy) * p00 + fy * p01)
-                    + fx * ((one - fy) * p10 + fy * p11);
+                let interpolated =
+                    (one - fx) * ((one - fy) * p00 + fy * p01) + fx * ((one - fy) * p10 + fy * p11);
                 let values = interpolated
                     .to_array()
                     .map(|value| value.clamp(0.0, 255.0).round() as u8);
@@ -17375,14 +18160,10 @@ fn simd_affine_bilinear_transform_bytes(
     let Some((channels, alpha_channel)) = native_affine_bilinear_layout(img, mode) else {
         return Ok(None);
     };
-    let destination_width = usize::try_from(width)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let destination_height = usize::try_from(height)
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_width = usize::try_from(img.width())
-        .map_err(|_| simd_unsupported("Transform"))?;
-    let source_height = usize::try_from(img.height())
-        .map_err(|_| simd_unsupported("Transform"))?;
+    let destination_width = usize::try_from(width).map_err(|_| simd_unsupported("Transform"))?;
+    let destination_height = usize::try_from(height).map_err(|_| simd_unsupported("Transform"))?;
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Transform"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Transform"))?;
     if destination_height == 0 || source_width == 0 || source_height == 0 {
         return Ok(None);
     }
@@ -17432,13 +18213,7 @@ fn simd_affine_bilinear_transform_bytes(
             let count = (destination_width - x).min(SIMD_F64_LANES);
             let samples = std::array::from_fn(|lane| {
                 if lane < count {
-                    simd_rotate_sample_coordinates(
-                        affine,
-                        source_width,
-                        source_height,
-                        x + lane,
-                        y,
-                    )
+                    simd_rotate_sample_coordinates(affine, source_width, source_height, x + lane, y)
                 } else {
                     SimdRotateSample::default()
                 }
@@ -17506,8 +18281,7 @@ fn simd_affine_bilinear_transform_bytes(
 
             let output_start = output_row + x * channels;
             let block_bytes = count * channels;
-            output[output_start..output_start + block_bytes]
-                .copy_from_slice(&block[..block_bytes]);
+            output[output_start..output_start + block_bytes].copy_from_slice(&block[..block_bytes]);
             vector_blocks = vector_blocks.saturating_add(1);
             x += count;
         }
@@ -17554,9 +18328,8 @@ fn simd_affine_bilinear_transform_bytes(
                             source[(source_y * source_width + source_x) * channels + alpha_channel]
                                 as f64
                         };
-                        let premultiply = |value: f64, alpha: f64| {
-                            (value * alpha / 255.0 + 0.5) as u8 as f64
-                        };
+                        let premultiply =
+                            |value: f64, alpha: f64| (value * alpha / 255.0 + 0.5) as u8 as f64;
                         p00 = premultiply(p00, read_alpha(sample.x0, sample.y0));
                         p10 = premultiply(p10, read_alpha(sample.x1, sample.y0));
                         p01 = premultiply(p01, read_alpha(sample.x0, sample.y1));
@@ -17639,10 +18412,10 @@ fn simd_resize_luma16(
             .chunks_exact_mut(SIMD_RESIZE_LANES)
             .zip(source_values.chunks_exact(SIMD_RESIZE_LANES))
         {
-            chunk.copy_from_slice(&u16x8::new(<[u16; 8]>::try_from(values).map_err(|_| {
-                simd_unsupported("Resize")
-            })?)
-            .to_array());
+            chunk.copy_from_slice(
+                &u16x8::new(<[u16; 8]>::try_from(values).map_err(|_| simd_unsupported("Resize"))?)
+                    .to_array(),
+            );
             vector_blocks = vector_blocks.saturating_add(1);
         }
         let remainder = output.len() % SIMD_RESIZE_LANES;
@@ -17682,18 +18455,10 @@ fn simd_resize_luma16(
         }
     } else {
         let (kernel, support) = filter_from_resample(*filter);
-        let horizontal = precompute_coeffs_f64(
-            output_width as u32,
-            source_width as u32,
-            kernel,
-            support,
-        );
-        let vertical = precompute_coeffs_f64(
-            output_height as u32,
-            source_height as u32,
-            kernel,
-            support,
-        );
+        let horizontal =
+            precompute_coeffs_f64(output_width as u32, source_width as u32, kernel, support);
+        let vertical =
+            precompute_coeffs_f64(output_height as u32, source_height as u32, kernel, support);
         let intermediate_len = source_height
             .checked_mul(output_width)
             .ok_or_else(|| simd_unsupported("Resize"))?;
@@ -17775,7 +18540,7 @@ fn simd_resize_luma16(
                 .get(output_y)
                 .ok_or_else(|| simd_unsupported("Resize"))?;
             let output_row = output_y
-            .checked_mul(output_width)
+                .checked_mul(output_width)
                 .ok_or_else(|| simd_unsupported("Resize"))?;
             for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
                 let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
@@ -17901,75 +18666,71 @@ fn simd_resize_f(
         let mut intermediate = vec![0.0f32; intermediate_len];
 
         if needs_horizontal {
-            let horizontal = precompute_coeffs_f64(
-                output_width as u32,
-                source_width as u32,
-                kernel,
-                support,
-            );
+            let horizontal =
+                precompute_coeffs_f64(output_width as u32, source_width as u32, kernel, support);
             for source_y in 0..source_height {
-            let source_row = source_y
-                .checked_mul(source_width)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let intermediate_row = source_y
-                .checked_mul(output_width)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
-                let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
-                let max_count = (0..count)
-                    .map(|lane| horizontal.weights[output_x + lane].len())
-                    .max()
-                    .unwrap_or(0);
-                // Keep Pillow's left-to-right f64 reduction order for each
-                // lane. The eight products are still calculated together;
-                // reducing the vector with reassociated adds would create
-                // tiny side lobes in cancellation-heavy Lanczos samples.
-                let mut sums = [0.0; SIMD_RESIZE_LANES];
-                for tap in 0..max_count {
-                    let mut values = [0.0; SIMD_RESIZE_LANES];
-                    let mut weights = [0.0; SIMD_RESIZE_LANES];
-                    for lane in 0..count {
-                        let output_index = output_x + lane;
-                        let lane_weights = horizontal
-                            .weights
-                            .get(output_index)
-                            .ok_or_else(|| simd_unsupported("Resize"))?;
-                        let Some(&weight) = lane_weights.get(tap) else {
-                            continue;
-                        };
-                        let source_x = usize::try_from(
-                            *horizontal
-                                .xmin
+                let source_row = source_y
+                    .checked_mul(source_width)
+                    .ok_or_else(|| simd_unsupported("Resize"))?;
+                let intermediate_row = source_y
+                    .checked_mul(output_width)
+                    .ok_or_else(|| simd_unsupported("Resize"))?;
+                for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
+                    let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+                    let max_count = (0..count)
+                        .map(|lane| horizontal.weights[output_x + lane].len())
+                        .max()
+                        .unwrap_or(0);
+                    // Keep Pillow's left-to-right f64 reduction order for each
+                    // lane. The eight products are still calculated together;
+                    // reducing the vector with reassociated adds would create
+                    // tiny side lobes in cancellation-heavy Lanczos samples.
+                    let mut sums = [0.0; SIMD_RESIZE_LANES];
+                    for tap in 0..max_count {
+                        let mut values = [0.0; SIMD_RESIZE_LANES];
+                        let mut weights = [0.0; SIMD_RESIZE_LANES];
+                        for lane in 0..count {
+                            let output_index = output_x + lane;
+                            let lane_weights = horizontal
+                                .weights
                                 .get(output_index)
-                                .ok_or_else(|| simd_unsupported("Resize"))?,
-                        )
-                        .map_err(|_| simd_unsupported("Resize"))?
-                        .checked_add(tap)
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                        let source_index = source_row
-                            .checked_add(source_x)
+                                .ok_or_else(|| simd_unsupported("Resize"))?;
+                            let Some(&weight) = lane_weights.get(tap) else {
+                                continue;
+                            };
+                            let source_x = usize::try_from(
+                                *horizontal
+                                    .xmin
+                                    .get(output_index)
+                                    .ok_or_else(|| simd_unsupported("Resize"))?,
+                            )
+                            .map_err(|_| simd_unsupported("Resize"))?
+                            .checked_add(tap)
                             .ok_or_else(|| simd_unsupported("Resize"))?;
-                        values[lane] = f64::from(
-                            *source
-                                .get(source_index)
-                                .ok_or_else(|| simd_unsupported("Resize"))?,
-                        );
-                        weights[lane] = weight;
+                            let source_index = source_row
+                                .checked_add(source_x)
+                                .ok_or_else(|| simd_unsupported("Resize"))?;
+                            values[lane] = f64::from(
+                                *source
+                                    .get(source_index)
+                                    .ok_or_else(|| simd_unsupported("Resize"))?,
+                            );
+                            weights[lane] = weight;
+                        }
+                        let products = (f64x8::new(values) * f64x8::new(weights)).to_array();
+                        for lane in 0..count {
+                            sums[lane] += products[lane];
+                        }
                     }
-                    let products = (f64x8::new(values) * f64x8::new(weights)).to_array();
-                    for lane in 0..count {
-                        sums[lane] += products[lane];
-                    }
+                    let values = sums.map(|value| {
+                        let value = value as f32;
+                        if value == 0.0 { 0.0 } else { value }
+                    });
+                    intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
+                        .copy_from_slice(&values[..count]);
+                    vector_blocks = vector_blocks.saturating_add(1);
                 }
-                let values = sums.map(|value| {
-                    let value = value as f32;
-                    if value == 0.0 { 0.0 } else { value }
-                });
-                intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
-                    .copy_from_slice(&values[..count]);
-                vector_blocks = vector_blocks.saturating_add(1);
             }
-        }
         } else {
             // Resample.c skips an axis whose destination size already equals
             // the source size. Copy that axis in vector-sized blocks instead
@@ -17990,8 +18751,7 @@ fn simd_resize_f(
                             0.0
                         }
                     });
-                    intermediate[intermediate_row + output_x
-                        ..intermediate_row + output_x + count]
+                    intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
                         .copy_from_slice(&f32x8::new(values).to_array()[..count]);
                     vector_blocks = vector_blocks.saturating_add(1);
                 }
@@ -17999,61 +18759,57 @@ fn simd_resize_f(
         }
 
         if needs_vertical {
-            let vertical = precompute_coeffs_f64(
-                output_height as u32,
-                source_height as u32,
-                kernel,
-                support,
-            );
+            let vertical =
+                precompute_coeffs_f64(output_height as u32, source_height as u32, kernel, support);
             for output_y in 0..output_height {
-            let y0 = usize::try_from(
-                *vertical
-                    .xmin
+                let y0 = usize::try_from(
+                    *vertical
+                        .xmin
+                        .get(output_y)
+                        .ok_or_else(|| simd_unsupported("Resize"))?,
+                )
+                .map_err(|_| simd_unsupported("Resize"))?;
+                let weights = vertical
+                    .weights
                     .get(output_y)
-                    .ok_or_else(|| simd_unsupported("Resize"))?,
-            )
-            .map_err(|_| simd_unsupported("Resize"))?;
-            let weights = vertical
-                .weights
-                .get(output_y)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            let output_row = output_y
-                .checked_mul(output_width)
-                .ok_or_else(|| simd_unsupported("Resize"))?;
-            for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
-                let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
-                // As in the horizontal pass, preserve the scalar tap order
-                // after vector multiplication so exact Pillow bytes remain
-                // stable for symmetric kernels.
-                let mut sums = [0.0; SIMD_RESIZE_LANES];
-                for (tap, &weight) in weights.iter().enumerate() {
-                    let source_y = y0
-                        .checked_add(tap)
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                    let source_row = source_y
-                        .checked_mul(output_width)
-                        .ok_or_else(|| simd_unsupported("Resize"))?;
-                    let values = std::array::from_fn(|lane| {
-                        if lane < count {
-                            f64::from(intermediate[source_row + output_x + lane])
-                        } else {
-                            0.0
+                    .ok_or_else(|| simd_unsupported("Resize"))?;
+                let output_row = output_y
+                    .checked_mul(output_width)
+                    .ok_or_else(|| simd_unsupported("Resize"))?;
+                for output_x in (0..output_width).step_by(SIMD_RESIZE_LANES) {
+                    let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+                    // As in the horizontal pass, preserve the scalar tap order
+                    // after vector multiplication so exact Pillow bytes remain
+                    // stable for symmetric kernels.
+                    let mut sums = [0.0; SIMD_RESIZE_LANES];
+                    for (tap, &weight) in weights.iter().enumerate() {
+                        let source_y = y0
+                            .checked_add(tap)
+                            .ok_or_else(|| simd_unsupported("Resize"))?;
+                        let source_row = source_y
+                            .checked_mul(output_width)
+                            .ok_or_else(|| simd_unsupported("Resize"))?;
+                        let values = std::array::from_fn(|lane| {
+                            if lane < count {
+                                f64::from(intermediate[source_row + output_x + lane])
+                            } else {
+                                0.0
+                            }
+                        });
+                        let products = (f64x8::new(values) * f64x8::splat(weight)).to_array();
+                        for lane in 0..count {
+                            sums[lane] += products[lane];
                         }
-                    });
-                    let products = (f64x8::new(values) * f64x8::splat(weight)).to_array();
-                    for lane in 0..count {
-                        sums[lane] += products[lane];
                     }
+                    let values = sums.map(|value| {
+                        let value = value as f32;
+                        if value == 0.0 { 0.0 } else { value }
+                    });
+                    output_floats[output_row + output_x..output_row + output_x + count]
+                        .copy_from_slice(&values[..count]);
+                    vector_blocks = vector_blocks.saturating_add(1);
                 }
-                let values = sums.map(|value| {
-                    let value = value as f32;
-                    if value == 0.0 { 0.0 } else { value }
-                });
-                output_floats[output_row + output_x..output_row + output_x + count]
-                    .copy_from_slice(&values[..count]);
-                vector_blocks = vector_blocks.saturating_add(1);
             }
-        }
         } else {
             output_floats.copy_from_slice(&intermediate);
         }
@@ -18113,7 +18869,8 @@ fn simd_resize_zero_source(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
-    let result = crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -18199,18 +18956,10 @@ fn simd_resize_i32(
         // coefficients is control-plane work; the sample accumulation below
         // remains entirely in the SIMD adapter.
         let (kernel, support) = resample_kernel(filter);
-        let horizontal = precompute_coeffs_f64(
-            output_width as u32,
-            source_width as u32,
-            kernel,
-            support,
-        );
-        let vertical = precompute_coeffs_f64(
-            output_height as u32,
-            source_height as u32,
-            kernel,
-            support,
-        );
+        let horizontal =
+            precompute_coeffs_f64(output_width as u32, source_width as u32, kernel, support);
+        let vertical =
+            precompute_coeffs_f64(output_height as u32, source_height as u32, kernel, support);
         let intermediate_len = source_height
             .checked_mul(output_width)
             .ok_or_else(|| simd_unsupported("Resize"))?;
@@ -18359,8 +19108,8 @@ pub fn simd_resize(
         return simd_resize_luma16(img, *w, *h, filter, mode);
     }
     if (img.width(), img.height()) == (*w, *h) {
-        let result = native_copy_image_bytes(img, mode)?
-            .ok_or_else(|| simd_unsupported("Resize"))?;
+        let result =
+            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("Resize"))?;
         return Ok(preserve_mode(img, result));
     }
     if !native_resize_supported_for_image(img, *w, *h, *filter, mode) {
@@ -18378,21 +19127,14 @@ pub fn simd_resize(
         return simd_resize_i32(img, *w, *h, filter);
     }
 
-    let (channels, premultiplied_alpha) = native_resize_byte_layout_for_image(img, mode)
-        .ok_or_else(|| simd_unsupported("Resize"))?;
+    let (channels, premultiplied_alpha) =
+        native_resize_byte_layout_for_image(img, mode).ok_or_else(|| simd_unsupported("Resize"))?;
     if img.width() == 0 || img.height() == 0 {
         return simd_resize_zero_source(img, *w, *h, channels);
     }
     match filter {
         ResampleFilter::Nearest => simd_resize_nearest(img, *w, *h, channels),
-        _ => simd_resize_convolution(
-            img,
-            *w,
-            *h,
-            *filter,
-            channels,
-            premultiplied_alpha,
-        ),
+        _ => simd_resize_convolution(img, *w, *h, *filter, channels, premultiplied_alpha),
     }
 }
 
@@ -18538,6 +19280,12 @@ pub fn simd_contain(
     let PipelineOp::Contain { w, h, filter } = op else {
         return Err(PilError::ValueError("expected Contain op".into()));
     };
+    if (img.width() == 0 || img.height() == 0)
+        && native_contain_supported_for_image(img, *w, *h, *filter, mode)
+    {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        return Ok(img.clone());
+    }
     native_aspect_resize_bytes(
         img,
         *w,
@@ -18561,16 +19309,8 @@ pub fn simd_cover(
     let PipelineOp::Cover { w, h, filter } = op else {
         return Err(PilError::ValueError("expected Cover op".into()));
     };
-    native_aspect_resize_bytes(
-        img,
-        *w,
-        *h,
-        *filter,
-        mode,
-        native_cover_dimensions,
-        "Cover",
-    )?
-    .ok_or_else(|| simd_unsupported("Cover"))
+    native_aspect_resize_bytes(img, *w, *h, *filter, mode, native_cover_dimensions, "Cover")?
+        .ok_or_else(|| simd_unsupported("Cover"))
 }
 
 /// Execute `ImageOps.fit` with scalar crop-box construction and a native
@@ -18618,8 +19358,8 @@ pub fn simd_fit(
             *filter,
         );
     }
-    let (channels, premultiplied_alpha) = native_fit_layout_for_image(img, mode)
-        .ok_or_else(|| simd_unsupported("Fit"))?;
+    let (channels, premultiplied_alpha) =
+        native_fit_layout_for_image(img, mode).ok_or_else(|| simd_unsupported("Fit"))?;
     if img.width() == 0 {
         let output_len = usize::try_from(output_width)
             .ok()
@@ -18641,18 +19381,12 @@ pub fn simd_fit(
         crate::compute::record_pipeline_operation_path("vector");
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(u64::from(remainder != 0));
-        let result = crate::image_utils::raw_bytes_to_image(
-            output_width,
-            output_height,
-            output,
-            channels,
-        )?;
+        let result =
+            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
         return Ok(preserve_mode(img, result));
     }
     let resize_filter = native_fit_filter(mode, *filter);
-    if matches!(resize_filter, ResampleFilter::Nearest)
-        && matches!(mode, Some("P") | Some("PA"))
-    {
+    if matches!(resize_filter, ResampleFilter::Nearest) && matches!(mode, Some("P") | Some("PA")) {
         return simd_resize_nearest_boxed(
             img,
             output_width,
@@ -18698,9 +19432,8 @@ pub fn simd_transform(
     else {
         return Err(PilError::ValueError("expected Transform op".into()));
     };
-    let luma16_supported = native_affine_luma16_transform_supported_for_image(
-        img, *w, *h, method, data, mode,
-    );
+    let luma16_supported =
+        native_affine_luma16_transform_supported_for_image(img, *w, *h, method, data, mode);
     let supported = match method {
         TransformMethod::Affine => {
             luma16_supported
@@ -18713,9 +19446,9 @@ pub fn simd_transform(
                 img, *w, *h, method, data, *filter, mode,
             )
         }
-        TransformMethod::Mesh => native_mesh_transform_supported_for_image(
-            img, *w, *h, data, *filter, mode,
-        ),
+        TransformMethod::Mesh => {
+            native_mesh_transform_supported_for_image(img, *w, *h, data, *filter, mode)
+        }
     };
     if !supported {
         return Err(simd_unsupported("Transform"));
@@ -18726,42 +19459,40 @@ pub fn simd_transform(
     }
     match method {
         TransformMethod::Affine => match filter {
-            ResampleFilter::Nearest => simd_affine_nearest_transform_bytes(
-                img, *w, *h, data, *fill, mode,
-            )?
-            .ok_or_else(|| simd_unsupported("Transform")),
-            ResampleFilter::Bilinear => simd_affine_bilinear_transform_bytes(
-                img, *w, *h, data, *fill, mode,
-            )?
-            .ok_or_else(|| simd_unsupported("Transform")),
+            ResampleFilter::Nearest => {
+                simd_affine_nearest_transform_bytes(img, *w, *h, data, *fill, mode)?
+                    .ok_or_else(|| simd_unsupported("Transform"))
+            }
+            ResampleFilter::Bilinear => {
+                simd_affine_bilinear_transform_bytes(img, *w, *h, data, *fill, mode)?
+                    .ok_or_else(|| simd_unsupported("Transform"))
+            }
             _ => Err(simd_unsupported("Transform")),
         },
         TransformMethod::Perspective => match filter {
-            ResampleFilter::Nearest => simd_projective_nearest_transform_bytes(
-                img, *w, *h, data, *fill, mode, false,
-            )?
-            .ok_or_else(|| simd_unsupported("Transform")),
-            ResampleFilter::Bilinear => simd_projective_bilinear_transform_bytes(
-                img, *w, *h, data, *fill, mode, false,
-            )?
-            .ok_or_else(|| simd_unsupported("Transform")),
+            ResampleFilter::Nearest => {
+                simd_projective_nearest_transform_bytes(img, *w, *h, data, *fill, mode, false)?
+                    .ok_or_else(|| simd_unsupported("Transform"))
+            }
+            ResampleFilter::Bilinear => {
+                simd_projective_bilinear_transform_bytes(img, *w, *h, data, *fill, mode, false)?
+                    .ok_or_else(|| simd_unsupported("Transform"))
+            }
             _ => Err(simd_unsupported("Transform")),
         },
         TransformMethod::Quad => match filter {
-            ResampleFilter::Nearest => simd_projective_nearest_transform_bytes(
-                img, *w, *h, data, *fill, mode, true,
-            )?
-            .ok_or_else(|| simd_unsupported("Transform")),
-            ResampleFilter::Bilinear => simd_projective_bilinear_transform_bytes(
-                img, *w, *h, data, *fill, mode, true,
-            )?
-            .ok_or_else(|| simd_unsupported("Transform")),
+            ResampleFilter::Nearest => {
+                simd_projective_nearest_transform_bytes(img, *w, *h, data, *fill, mode, true)?
+                    .ok_or_else(|| simd_unsupported("Transform"))
+            }
+            ResampleFilter::Bilinear => {
+                simd_projective_bilinear_transform_bytes(img, *w, *h, data, *fill, mode, true)?
+                    .ok_or_else(|| simd_unsupported("Transform"))
+            }
             _ => Err(simd_unsupported("Transform")),
         },
-        TransformMethod::Mesh => simd_mesh_transform_bytes(
-            img, *w, *h, data, *fill, mode,
-        )?
-        .ok_or_else(|| simd_unsupported("Transform")),
+        TransformMethod::Mesh => simd_mesh_transform_bytes(img, *w, *h, data, *fill, mode)?
+            .ok_or_else(|| simd_unsupported("Transform")),
     }
 }
 
@@ -18801,11 +19532,7 @@ pub fn simd_reduce(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Reduce {
-        x_factor,
-        y_factor,
-    } = op
-    else {
+    let PipelineOp::Reduce { x_factor, y_factor } = op else {
         return Err(PilError::ValueError("expected Reduce op".into()));
     };
     if *x_factor == 0 || *y_factor == 0 {
@@ -18835,22 +19562,24 @@ pub fn simd_box_blur(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let channels = simd_native_blur_channels(img, mode)
-        .ok_or_else(|| simd_unsupported("BoxBlur"))?;
+    let channels =
+        simd_native_blur_channels(img, mode).ok_or_else(|| simd_unsupported("BoxBlur"))?;
     let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
     if pixel_count == 0 {
         return Err(simd_unsupported("BoxBlur"));
     }
     match op {
-        PipelineOp::BoxBlur { radius } if *radius == 0 => native_copy_image_bytes(img, mode)?
-            .ok_or_else(|| simd_unsupported("BoxBlur")),
+        PipelineOp::BoxBlur { radius } if *radius == 0 => {
+            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
+        }
         PipelineOp::BoxBlur { radius } => simd_pil_box_blur(img, *radius as f32, 1, channels),
         PipelineOp::BoxBlurXY {
             radius_x,
             radius_y,
             passes,
-        } if *radius_x == 0.0 && *radius_y == 0.0 => native_copy_image_bytes(img, mode)?
-            .ok_or_else(|| simd_unsupported("BoxBlur")),
+        } if *radius_x == 0.0 && *radius_y == 0.0 => {
+            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
+        }
         PipelineOp::BoxBlurXY {
             radius_x,
             radius_y,
@@ -18866,8 +19595,8 @@ pub fn simd_gaussian_blur(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if let PipelineOp::GaussianBlur { sigma } = op {
-        let channels = simd_native_blur_channels(img, mode)
-            .ok_or_else(|| simd_unsupported("GaussianBlur"))?;
+        let channels =
+            simd_native_blur_channels(img, mode).ok_or_else(|| simd_unsupported("GaussianBlur"))?;
         let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
         if !sigma.is_finite() || pixel_count == 0 {
             return Err(simd_unsupported("GaussianBlur"));
@@ -18877,8 +19606,8 @@ pub fn simd_gaussian_blur(
             return native_copy_image_bytes(img, mode)?
                 .ok_or_else(|| simd_unsupported("GaussianBlur"));
         }
-        let blur_radius = gaussian_blur_radius(sigma)
-            .ok_or_else(|| simd_unsupported("GaussianBlur"))?;
+        let blur_radius =
+            gaussian_blur_radius(sigma).ok_or_else(|| simd_unsupported("GaussianBlur"))?;
         if blur_radius <= 0.0 {
             return Err(simd_unsupported("GaussianBlur"));
         }
@@ -18916,12 +19645,9 @@ pub fn simd_multiply(
     let PipelineOp::Multiply { other } = op else {
         return Err(PilError::ValueError("expected Multiply op".into()));
     };
-        simd_native_chops(
-        img,
-        other,
-        mode,
-        |image, operand, current_mode| native_chops_blend(image, operand, current_mode, false),
-    )
+    simd_native_chops(img, other, mode, |image, operand, current_mode| {
+        native_chops_blend(image, operand, current_mode, false)
+    })
 }
 
 pub fn simd_screen(
@@ -18932,12 +19658,9 @@ pub fn simd_screen(
     let PipelineOp::Screen { other } = op else {
         return Err(PilError::ValueError("expected Screen op".into()));
     };
-        simd_native_chops(
-        img,
-        other,
-        mode,
-        |image, operand, current_mode| native_chops_blend(image, operand, current_mode, true),
-    )
+    simd_native_chops(img, other, mode, |image, operand, current_mode| {
+        native_chops_blend(image, operand, current_mode, true)
+    })
 }
 
 pub fn simd_overlay(
@@ -18990,46 +19713,18 @@ pub fn simd_blend_module(
         .ok_or_else(|| simd_unsupported("BlendModule"))
 }
 
-native_dual_op_adapter!(
-    simd_darker,
-    Darker,
-    native_chops_darker
-);
-native_dual_op_adapter!(
-    simd_lighter,
-    Lighter,
-    native_chops_lighter
-);
-native_dual_op_adapter!(
-    simd_difference,
-    Difference,
-    native_chops_difference
-);
-native_dual_op_adapter!(
-    simd_add_modulo,
-    AddModulo,
-    native_chops_add_modulo
-);
+native_dual_op_adapter!(simd_darker, Darker, native_chops_darker);
+native_dual_op_adapter!(simd_lighter, Lighter, native_chops_lighter);
+native_dual_op_adapter!(simd_difference, Difference, native_chops_difference);
+native_dual_op_adapter!(simd_add_modulo, AddModulo, native_chops_add_modulo);
 native_dual_op_adapter!(
     simd_subtract_modulo,
     SubtractModulo,
     native_chops_subtract_modulo
 );
-native_dual_op_adapter!(
-    simd_logical_and,
-    LogicalAnd,
-    native_chops_logical_and
-);
-native_dual_op_adapter!(
-    simd_logical_or,
-    LogicalOr,
-    native_chops_logical_or
-);
-native_dual_op_adapter!(
-    simd_logical_xor,
-    LogicalXor,
-    native_chops_logical_xor
-);
+native_dual_op_adapter!(simd_logical_and, LogicalAnd, native_chops_logical_and);
+native_dual_op_adapter!(simd_logical_or, LogicalOr, native_chops_logical_or);
+native_dual_op_adapter!(simd_logical_xor, LogicalXor, native_chops_logical_xor);
 
 pub fn simd_add(
     img: &DynamicImage,
@@ -19050,8 +19745,7 @@ pub fn simd_add(
     // Pillow's `(left + right) / scale + offset` order before clamping.
     if *scale == 1.0
         && *offset == 0.0
-        && native_chops_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_byte_rows(img, channels))
+        && native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels))
     {
         if let Some(result) = native_chops_add_clamped(img, &other_img, mode) {
             return Ok(result);
@@ -19061,7 +19755,8 @@ pub fn simd_add(
         if let Some(result) = native_chops_affine(img, &other_img, mode, 1.0, 0.0, false) {
             return Ok(result);
         }
-    } else if let Some(result) = native_chops_affine(img, &other_img, mode, *scale, *offset, false) {
+    } else if let Some(result) = native_chops_affine(img, &other_img, mode, *scale, *offset, false)
+    {
         return Ok(result);
     }
     Err(simd_unsupported("Add"))
@@ -19086,8 +19781,7 @@ pub fn simd_subtract(
     // helper retains Pillow's subtraction/division/addition ordering.
     if *scale == 1.0
         && *offset == 0.0
-        && native_chops_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_byte_rows(img, channels))
+        && native_chops_layout(img, mode).is_some_and(|channels| has_valid_byte_data(img, channels))
     {
         if let Some(result) = native_chops_subtract_clamped(img, &other_img, mode) {
             return Ok(result);
@@ -19115,7 +19809,8 @@ pub fn simd_transpose(
     let PipelineOp::Transpose { method } = op else {
         return Err(PilError::ValueError("expected Transpose op".into()));
     };
-    if let Some((result, vector_blocks, scalar_tail)) = native_transpose(img, mode, method.clone()) {
+    if let Some((result, vector_blocks, scalar_tail)) = native_transpose(img, mode, method.clone())
+    {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         crate::compute::record_pipeline_operation_path("native-copy");
@@ -19197,6 +19892,63 @@ fn native_crop_bytes(
     crate::image_utils::raw_bytes_to_image(width, height, output, channels).map(Some)
 }
 
+/// Crop a typed `I;16*` image by copying complete two-byte sample groups.
+/// This is a native-copy path: the vector kernel moves opaque samples and the
+/// final reconstruction restores the typed `ImageLuma16` representation.
+fn native_crop_luma16(
+    img: &DynamicImage,
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if !has_valid_luma16_copy_bytes(img, mode) {
+        return Ok(None);
+    }
+    let (image_width, image_height) = img.dimensions();
+    if left >= right || top >= bottom || right > image_width || bottom > image_height {
+        return Ok(None);
+    }
+    let width = right - left;
+    let height = bottom - top;
+    let source_stride = (image_width as usize)
+        .checked_mul(2)
+        .ok_or_else(|| PilError::ValueError("SIMD crop source stride overflow".into()))?;
+    let output_stride = (width as usize)
+        .checked_mul(2)
+        .ok_or_else(|| PilError::ValueError("SIMD crop output stride overflow".into()))?;
+    let output_len = output_stride
+        .checked_mul(height as usize)
+        .ok_or_else(|| PilError::ValueError("SIMD crop output length overflow".into()))?;
+    let source = img.as_bytes();
+    let mut output = vec![0u8; output_len];
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for y in 0..height as usize {
+        let source_start = (top as usize + y)
+            .checked_mul(source_stride)
+            .and_then(|offset| offset.checked_add(left as usize * 2))
+            .ok_or_else(|| PilError::ValueError("SIMD crop source offset overflow".into()))?;
+        let output_start = y * output_stride;
+        let (blocks, tail) = copy_native_bytes(
+            source
+                .get(source_start..source_start + output_stride)
+                .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?,
+            output
+                .get_mut(output_start..output_start + output_stride)
+                .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?,
+        )
+        .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
+        vector_blocks = vector_blocks.saturating_add(blocks);
+        scalar_tail = scalar_tail.saturating_add(tail);
+    }
+    crate::compute::record_pipeline_operation_path("native-copy");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    Ok(native_luma16_image_from_bytes(width, height, output))
+}
+
 pub fn simd_crop_border(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -19224,15 +19976,9 @@ pub fn simd_crop_border(
                 "Coordinate 'lower' is less than 'upper'".into(),
             ));
         }
-        if let Some(result) = native_crop_bytes(
-            img,
-            *border,
-            *border,
-            w - *border,
-            h - *border,
-            mode,
-            true,
-        )? {
+        if let Some(result) =
+            native_crop_bytes(img, *border, *border, w - *border, h - *border, mode, true)?
+        {
             return Ok(result);
         }
     }
@@ -19258,6 +20004,9 @@ pub fn simd_crop(
     // and empty-output layouts are rejected by contextual preflight instead
     // of entering a packed scalar implementation.
     if let Some(result) = native_crop_bytes(img, *left, *top, *right, *bottom, mode, false)? {
+        return Ok(result);
+    }
+    if let Some(result) = native_crop_luma16(img, *left, *top, *right, *bottom, mode)? {
         return Ok(result);
     }
     Err(simd_unsupported("Crop"))
@@ -19289,23 +20038,18 @@ fn native_merge_vector_block(
         packed[start..start + pixels_per_vector].copy_from_slice(source);
     }
     let indices = match channels {
-        1 => [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-        ],
-        2 => [
-            0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15,
-        ],
-        3 => [
-            0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15,
-        ],
-        4 => [
-            0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15,
-        ],
+        1 => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        2 => [0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15],
+        3 => [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15],
+        4 => [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15],
         _ => return None,
     };
-    Some((pixels_per_vector * channels, u8x16::new(packed)
-        .swizzle_relaxed(u8x16::new(indices))
-        .to_array()))
+    Some((
+        pixels_per_vector * channels,
+        u8x16::new(packed)
+            .swizzle_relaxed(u8x16::new(indices))
+            .to_array(),
+    ))
 }
 
 fn native_merge_luma_band(band: &Image) -> Result<Option<Vec<u8>>, PilError> {
@@ -19363,8 +20107,7 @@ fn native_merge_bytes(
         let (block_bytes, block) = native_merge_vector_block(&band_bytes, pixel, channels)
             .ok_or_else(|| PilError::InternalError("SIMD merge vector shape mismatch".into()))?;
         let output_start = pixel * channels;
-        output[output_start..output_start + block_bytes]
-            .copy_from_slice(&block[..block_bytes]);
+        output[output_start..output_start + block_bytes].copy_from_slice(&block[..block_bytes]);
         vector_blocks = vector_blocks.saturating_add(1);
         pixel += pixels_per_vector;
     }
@@ -19429,11 +20172,7 @@ fn native_expand_fill_sample(fill: (u8, u8, u8, u8), channels: usize, index: usi
     }
 }
 
-fn native_fill_row(
-    row: &mut [u8],
-    fill: (u8, u8, u8, u8),
-    channels: usize,
-) -> Option<(u64, u64)> {
+fn native_fill_row(row: &mut [u8], fill: (u8, u8, u8, u8), channels: usize) -> Option<(u64, u64)> {
     if !(1..=4).contains(&channels) {
         return None;
     }
@@ -19516,12 +20255,8 @@ fn native_expand_bytes(
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }
-    let result = crate::image_utils::raw_bytes_to_image(
-        output_width,
-        output_height,
-        output,
-        channels,
-    )?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
     Ok(Some((result, vector_blocks, scalar_tail)))
 }
 
@@ -19647,7 +20382,7 @@ fn native_copy_image_bytes(
         return Ok(None);
     };
     let source = img.as_bytes();
-    if expected_len < 16 || source.len() != expected_len {
+    if source.len() != expected_len {
         return Ok(None);
     }
 
@@ -19655,40 +20390,6 @@ fn native_copy_image_bytes(
     let (vector_blocks, scalar_tail) = copy_native_bytes(source, &mut output)
         .ok_or_else(|| PilError::InternalError("SIMD identity copy shape mismatch".into()))?;
 
-    crate::compute::record_pipeline_operation_path("native-copy");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::image_utils::raw_bytes_to_image(width, height, output, channels).map(Some)
-}
-
-/// Copy an identity-like operation through the native vector type when the
-/// payload is shorter than one full vector. The regular identity helper keeps
-/// its sixteen-byte admission threshold for operations whose capability
-/// contract requires a complete block; EffectSpread distance 0/1 is a
-/// different contract and must remain SIMD-capable for tiny images so its
-/// process-global RNG consumption stays aligned with Pillow.
-fn native_copy_image_bytes_allow_short(
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Result<Option<DynamicImage>, PilError> {
-    let Some(channels) = native_copy_layout(img, mode) else {
-        return Ok(None);
-    };
-    let (width, height) = img.dimensions();
-    let Some(expected_len) = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(channels))
-    else {
-        return Ok(None);
-    };
-    let source = img.as_bytes();
-    if expected_len == 0 || source.len() != expected_len {
-        return Ok(None);
-    }
-
-    let mut output = vec![0u8; source.len()];
-    let (vector_blocks, scalar_tail) = copy_native_bytes(source, &mut output)
-        .ok_or_else(|| PilError::InternalError("SIMD short identity copy shape mismatch".into()))?;
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
@@ -19767,20 +20468,14 @@ fn simd_nearest_rotate_native(
             let index = destination_index + pixel;
             let destination_y = index / destination_width;
             let destination_x = index % destination_width;
-            let source_x = origin_x
-                + destination_x as i64 * step_x_x
-                + destination_y as i64 * step_y_x;
-            let source_y = origin_y
-                + destination_x as i64 * step_x_y
-                + destination_y as i64 * step_y_y;
+            let source_x =
+                origin_x + destination_x as i64 * step_x_x + destination_y as i64 * step_y_x;
+            let source_y =
+                origin_y + destination_x as i64 * step_x_y + destination_y as i64 * step_y_y;
             let input_x = source_x >> 16;
             let input_y = source_y >> 16;
             let block_start = pixel * channels;
-            if input_x >= 0
-                && input_x < width as i64
-                && input_y >= 0
-                && input_y < height as i64
-            {
+            if input_x >= 0 && input_x < width as i64 && input_y >= 0 && input_y < height as i64 {
                 let source_start = (input_y as usize * width + input_x as usize) * channels;
                 block[block_start..block_start + channels]
                     .copy_from_slice(&source[source_start..source_start + channels]);
@@ -19799,20 +20494,12 @@ fn simd_nearest_rotate_native(
     while destination_index < destination_pixels {
         let destination_y = destination_index / destination_width;
         let destination_x = destination_index % destination_width;
-        let source_x = origin_x
-            + destination_x as i64 * step_x_x
-            + destination_y as i64 * step_y_x;
-        let source_y = origin_y
-            + destination_x as i64 * step_x_y
-            + destination_y as i64 * step_y_y;
+        let source_x = origin_x + destination_x as i64 * step_x_x + destination_y as i64 * step_y_x;
+        let source_y = origin_y + destination_x as i64 * step_x_y + destination_y as i64 * step_y_y;
         let input_x = source_x >> 16;
         let input_y = source_y >> 16;
         let output_start = destination_index * channels;
-        if input_x >= 0
-            && input_x < width as i64
-            && input_y >= 0
-            && input_y < height as i64
-        {
+        if input_x >= 0 && input_x < width as i64 && input_y >= 0 && input_y < height as i64 {
             let source_start = (input_y as usize * width + input_x as usize) * channels;
             output[output_start..output_start + channels]
                 .copy_from_slice(&source[source_start..source_start + channels]);
@@ -19828,13 +20515,8 @@ fn simd_nearest_rotate_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::image_utils::raw_bytes_to_image(
-        geometry.width,
-        geometry.height,
-        output,
-        channels,
-    )
-    .map(|result| Some(preserve_mode(img, result)))
+    crate::image_utils::raw_bytes_to_image(geometry.width, geometry.height, output, channels)
+        .map(|result| Some(preserve_mode(img, result)))
 }
 
 #[derive(Clone, Copy, Default)]
@@ -19877,10 +20559,7 @@ fn simd_rotate_sample_coordinates_with_mode(
         (source_x - 0.5, source_y - 0.5)
     };
     let outside = if pa_mode {
-        source_x < 0.0
-            || source_x >= width as f64
-            || source_y < 0.0
-            || source_y >= height as f64
+        source_x < 0.0 || source_x >= width as f64 || source_y < 0.0 || source_y >= height as f64
     } else {
         source_x < -0.5
             || source_x >= width as f64 - 0.5
@@ -19915,8 +20594,7 @@ fn simd_rotate_sample_coordinates_with_mode(
 
 #[inline]
 fn bilinear_rotate_scalar(p00: f64, p10: f64, p01: f64, p11: f64, fx: f64, fy: f64) -> f64 {
-    (1.0 - fy) * ((1.0 - fx) * p00 + fx * p10)
-        + fy * ((1.0 - fx) * p01 + fx * p11)
+    (1.0 - fy) * ((1.0 - fx) * p00 + fx * p10) + fy * ((1.0 - fx) * p01 + fx * p11)
 }
 
 #[inline]
@@ -19929,8 +20607,7 @@ fn bilinear_rotate_vector(
     fy: f64x8,
 ) -> f64x8 {
     let one = f64x8::splat(1.0);
-    (one - fy) * ((one - fx) * p00 + fx * p10)
-        + fy * ((one - fx) * p01 + fx * p11)
+    (one - fy) * ((one - fx) * p00 + fx * p10) + fy * ((one - fx) * p01 + fx * p11)
 }
 
 /// Gather a channel's four bilinear neighbors in native byte storage.
@@ -20008,8 +20685,7 @@ fn rotate_unpremultiply_vector(
     let premultiplied_bytes = premultiplied.to_array().map(|value| value as u8);
     let alpha_vector = f64x8::new(alpha.map(f64::from));
     let safe_alpha = alpha_vector.max(f64x8::splat(1.0));
-    let restored = (f64x8::new(premultiplied_bytes.map(f64::from))
-        * f64x8::splat(255.0)
+    let restored = (f64x8::new(premultiplied_bytes.map(f64::from)) * f64x8::splat(255.0)
         / safe_alpha)
         .to_array();
     std::array::from_fn(|lane| {
@@ -20022,6 +20698,162 @@ fn rotate_unpremultiply_vector(
 }
 
 const SIMD_F64_LANES: usize = 8;
+
+#[inline]
+fn typed_bilinear_rotate_vector(
+    p00: f64x8,
+    p10: f64x8,
+    p01: f64x8,
+    p11: f64x8,
+    fx: f64x8,
+    fy: f64x8,
+) -> f64x8 {
+    let one = f64x8::splat(1.0);
+    (one - fx) * (one - fy) * p00 + fx * (one - fy) * p10 + (one - fx) * fy * p01 + fx * fy * p11
+}
+
+/// Rotate native four-byte `I`/`F` samples without treating their scalar
+/// bytes as independent color channels.
+///
+/// Affine coordinate construction and gathers stay scalar control because a
+/// portable gather is not exposed by `wide`; the bilinear sample arithmetic
+/// is evaluated in eight `f64` lanes. Partial output blocks are padded and
+/// only their active lanes are stored, so small public images still execute
+/// the same vector data path rather than being rejected or sent to CPU.
+fn simd_typed_bilinear_rotate_native(
+    img: &DynamicImage,
+    angle: f64,
+    expand: bool,
+    fill: Option<(u8, u8, u8, u8)>,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    let is_float = match mode {
+        Some("F") => true,
+        Some("I") => false,
+        _ => return Ok(None),
+    };
+    if !matches!(img, DynamicImage::ImageRgba8(_)) {
+        return Ok(None);
+    }
+    let Some(geometry) =
+        simd_rotate_geometry(img.width(), img.height(), angle, expand, center, translate)
+    else {
+        return Ok(None);
+    };
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+    let destination_width = geometry.width as usize;
+    let destination_height = geometry.height as usize;
+    if width == 0 || height == 0 || destination_width == 0 || destination_height == 0 {
+        return Ok(None);
+    }
+    let source_len = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| PilError::ValueError("SIMD rotate source dimensions overflow".into()))?;
+    let destination_len = destination_width
+        .checked_mul(destination_height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| PilError::ValueError("SIMD rotate output dimensions overflow".into()))?;
+    let source = img.as_bytes();
+    if source.len() != source_len {
+        return Err(PilError::InternalError(
+            "SIMD rotate source buffer shape mismatch".into(),
+        ));
+    }
+    let fill = fill.unwrap_or((0, 0, 0, 0));
+    let scalar_fill = if is_float {
+        f32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]) as f64
+    } else {
+        i32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]) as f64
+    };
+    let mut output = vec![0u8; destination_len];
+    let mut vector_blocks = 0u64;
+
+    for destination_y in 0..destination_height {
+        let mut destination_x = 0usize;
+        while destination_x < destination_width {
+            let active = (destination_width - destination_x).min(SIMD_F64_LANES);
+            let mut p00 = [scalar_fill; SIMD_F64_LANES];
+            let mut p10 = [scalar_fill; SIMD_F64_LANES];
+            let mut p01 = [scalar_fill; SIMD_F64_LANES];
+            let mut p11 = [scalar_fill; SIMD_F64_LANES];
+            let mut fx = [0.0; SIMD_F64_LANES];
+            let mut fy = [0.0; SIMD_F64_LANES];
+
+            for lane in 0..active {
+                let x = destination_x + lane;
+                let sx = geometry.affine[0] * (x as f64 + 0.5)
+                    + geometry.affine[1] * (destination_y as f64 + 0.5)
+                    + geometry.affine[2]
+                    - 0.5;
+                let sy = geometry.affine[3] * (x as f64 + 0.5)
+                    + geometry.affine[4] * (destination_y as f64 + 0.5)
+                    + geometry.affine[5]
+                    - 0.5;
+                if sx >= 0.0 && sx < width as f64 && sy >= 0.0 && sy < height as f64 {
+                    let x0 = sx.floor() as usize;
+                    let y0 = sy.floor() as usize;
+                    let x1 = (x0 + 1).min(width - 1);
+                    let y1 = (y0 + 1).min(height - 1);
+                    fx[lane] = sx - x0 as f64;
+                    fy[lane] = sy - y0 as f64;
+                    let read = |source_x: usize, source_y: usize| {
+                        let index = (source_y * width + source_x) * 4;
+                        if is_float {
+                            f32::from_le_bytes([
+                                source[index],
+                                source[index + 1],
+                                source[index + 2],
+                                source[index + 3],
+                            ]) as f64
+                        } else {
+                            i32::from_le_bytes([
+                                source[index],
+                                source[index + 1],
+                                source[index + 2],
+                                source[index + 3],
+                            ]) as f64
+                        }
+                    };
+                    p00[lane] = read(x0, y0);
+                    p10[lane] = read(x1, y0);
+                    p01[lane] = read(x0, y1);
+                    p11[lane] = read(x1, y1);
+                }
+            }
+
+            let values = typed_bilinear_rotate_vector(
+                f64x8::new(p00),
+                f64x8::new(p10),
+                f64x8::new(p01),
+                f64x8::new(p11),
+                f64x8::new(fx),
+                f64x8::new(fy),
+            )
+            .to_array();
+            for lane in 0..active {
+                let bytes = if is_float {
+                    (values[lane] as f32).to_le_bytes()
+                } else {
+                    (values[lane] as i32).to_le_bytes()
+                };
+                let output_index = (destination_y * destination_width + destination_x + lane) * 4;
+                output[output_index..output_index + 4].copy_from_slice(&bytes);
+            }
+            vector_blocks = vector_blocks.saturating_add(1);
+            destination_x += active;
+        }
+    }
+
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    crate::image_utils::raw_bytes_to_image(geometry.width, geometry.height, output, 4)
+        .map(|result| Some(preserve_mode(img, result)))
+}
 
 /// Vectorized ordinary-byte bilinear rotation.
 ///
@@ -20041,6 +20873,9 @@ fn simd_bilinear_rotate_native(
     let Some(channels) = native_rotate_layout(img, mode) else {
         return Ok(None);
     };
+    if matches!(mode, Some("I" | "F")) {
+        return Ok(None);
+    }
     let Some(geometry) =
         simd_rotate_geometry(img.width(), img.height(), angle, expand, center, translate)
     else {
@@ -20050,7 +20885,7 @@ fn simd_bilinear_rotate_native(
     let height = img.height() as usize;
     let destination_width = geometry.width as usize;
     let destination_height = geometry.height as usize;
-    if width == 0 || height == 0 || destination_width < SIMD_F64_LANES {
+    if width == 0 || height == 0 || destination_width == 0 || destination_height == 0 {
         return Ok(None);
     }
     let source_len = width
@@ -20082,18 +20917,23 @@ fn simd_bilinear_rotate_native(
     let mut scalar_tail = 0u64;
     for y in 0..destination_height {
         let output_row = y * destination_width * channels;
-        let vector_width = destination_width / SIMD_F64_LANES * SIMD_F64_LANES;
+        let vector_width = destination_width;
         let mut x = 0usize;
         while x < vector_width {
+            let active = (destination_width - x).min(SIMD_F64_LANES);
             let samples = std::array::from_fn(|lane| {
-                simd_rotate_sample_coordinates_with_mode(
-                    geometry.affine,
-                    width,
-                    height,
-                    x + lane,
-                    y,
-                    pa_mode,
-                )
+                if lane < active {
+                    simd_rotate_sample_coordinates_with_mode(
+                        geometry.affine,
+                        width,
+                        height,
+                        x + lane,
+                        y,
+                        pa_mode,
+                    )
+                } else {
+                    SimdRotateSample::default()
+                }
             });
             let fx = f64x8::new(samples.map(|sample| sample.fx));
             let fy = f64x8::new(samples.map(|sample| sample.fy));
@@ -20154,11 +20994,10 @@ fn simd_bilinear_rotate_native(
                 }
             }
             let output_start = output_row + x * channels;
-            let block_bytes = SIMD_F64_LANES * channels;
-            output[output_start..output_start + block_bytes]
-                .copy_from_slice(&block[..block_bytes]);
+            let block_bytes = active * channels;
+            output[output_start..output_start + block_bytes].copy_from_slice(&block[..block_bytes]);
             vector_blocks = vector_blocks.saturating_add(1);
-            x += SIMD_F64_LANES;
+            x += active;
         }
         while x < destination_width {
             let sample = simd_rotate_sample_coordinates_with_mode(
@@ -20207,9 +21046,8 @@ fn simd_bilinear_rotate_native(
                         let read_alpha = |source_x: usize, source_y: usize| {
                             source[(source_y * width + source_x) * channels + alpha_channel] as f64
                         };
-                        let premultiply = |value: f64, alpha: f64| {
-                            (value * alpha / 255.0 + 0.5) as u8 as f64
-                        };
+                        let premultiply =
+                            |value: f64, alpha: f64| (value * alpha / 255.0 + 0.5) as u8 as f64;
                         p00 = premultiply(p00, read_alpha(sample.x0, sample.y0));
                         p10 = premultiply(p10, read_alpha(sample.x1, sample.y0));
                         p01 = premultiply(p01, read_alpha(sample.x0, sample.y1));
@@ -20233,13 +21071,8 @@ fn simd_bilinear_rotate_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::image_utils::raw_bytes_to_image(
-        geometry.width,
-        geometry.height,
-        output,
-        channels,
-    )
-    .map(|result| Some(preserve_mode(img, result)))
+    crate::image_utils::raw_bytes_to_image(geometry.width, geometry.height, output, channels)
+        .map(|result| Some(preserve_mode(img, result)))
 }
 
 /// Execute Pillow's right-angle fast paths in the source's native layout.
@@ -20341,19 +21174,13 @@ fn simd_right_angle_rotate_native(
                     )
                 };
                 let block_start = pixel * channels;
-                if source_x >= 0
-                    && source_x < width_i32
-                    && source_y >= 0
-                    && source_y < height_i32
-                {
-                    let source_start =
-                        (source_y as usize * width + source_x as usize) * channels;
+                if source_x >= 0 && source_x < width_i32 && source_y >= 0 && source_y < height_i32 {
+                    let source_start = (source_y as usize * width + source_x as usize) * channels;
                     block[block_start..block_start + channels]
                         .copy_from_slice(&source[source_start..source_start + channels]);
                 } else {
                     for channel in 0..channels {
-                        block[block_start + channel] =
-                            rotate_fill_sample(fill, channels, channel);
+                        block[block_start + channel] = rotate_fill_sample(fill, channels, channel);
                     }
                 }
             }
@@ -20377,11 +21204,7 @@ fn simd_right_angle_rotate_native(
                 )
             };
             let output_start = output_row + x * channels;
-            if source_x >= 0
-                && source_x < width_i32
-                && source_y >= 0
-                && source_y < height_i32
-            {
+            if source_x >= 0 && source_x < width_i32 && source_y >= 0 && source_y < height_i32 {
                 let source_start = (source_y as usize * width + source_x as usize) * channels;
                 output[output_start..output_start + channels]
                     .copy_from_slice(&source[source_start..source_start + channels]);
@@ -20401,16 +21224,180 @@ fn simd_right_angle_rotate_native(
         .map(|result| Some(preserve_mode(img, result)))
 }
 
-/// Execute the identity contracts for `distance <= 1` and one-pixel images.
+/// Rotate an empty native byte image through the scalar geometry control
+/// plane. Pillow still computes an expanded destination for a zero-width or
+/// zero-height source; every destination sample is the fill value because no
+/// source coordinate can be valid. Fill construction and storage use a
+/// padded `u8x16` block, so this is a native SIMD no-data path rather than a
+/// CPU fallback or an early capability refusal.
+fn simd_empty_rotate_native(
+    img: &DynamicImage,
+    angle: f64,
+    expand: bool,
+    fill: Option<(u8, u8, u8, u8)>,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if img.width() != 0 && img.height() != 0 {
+        return Ok(None);
+    }
+    if matches!(img, DynamicImage::ImageLuma16(_)) {
+        return Ok(None);
+    }
+    let Some(channels) = native_rotate_layout(img, mode) else {
+        return Ok(None);
+    };
+    let Some(geometry) =
+        simd_rotate_geometry(img.width(), img.height(), angle, expand, center, translate)
+    else {
+        return Ok(None);
+    };
+    let source_len = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| PilError::ValueError("SIMD rotate source dimensions overflow".into()))?;
+    if source_len != img.as_bytes().len() {
+        return Err(PilError::InternalError(
+            "SIMD rotate source buffer shape mismatch".into(),
+        ));
+    }
+    let output_len = (geometry.width as usize)
+        .checked_mul(geometry.height as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| PilError::ValueError("SIMD rotate output dimensions overflow".into()))?;
+    let fill = fill.unwrap_or((0, 0, 0, 0));
+    let fill_block =
+        std::array::from_fn(|index| rotate_fill_sample(fill, channels, index % channels));
+    let fill_vector = u8x16::new(fill_block);
+    let fill_bytes = fill_vector.to_array();
+    let mut output = vec![0u8; output_len];
+    let mut vector_blocks = 0u64;
+    for chunk in output.chunks_mut(16) {
+        let active = chunk.len();
+        chunk.copy_from_slice(&fill_bytes[..active]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    if vector_blocks == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_path("vector");
+    }
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    crate::image_utils::raw_bytes_to_image_allow_empty(
+        geometry.width,
+        geometry.height,
+        output,
+        channels,
+    )
+    .map(|result| Some(preserve_mode(img, result)))
+}
+
+/// Execute Pillow's EffectSpread with scalar RNG/coordinate control and a
+/// native vector load/store data plane.
 ///
-/// The C implementation consumes two process-global random values per pixel
-/// for every positive distance. For a one-pixel image the sampled destination
-/// is either the same pixel or out of bounds, so the result is still an
-/// identity copy; preserve that scalar control sequence before the native
-/// vector copy. For larger images and distances above one, two pixels can
-/// target the same destination; preserving last-writer ordering would require
-/// a scatter/gather kernel, so contextual preflight leaves those inputs on the
-/// explicit CPU fallback.
+/// The destination mapping is intentionally processed in source order: the
+/// C implementation reads both pixels from the immutable input and performs
+/// ordered writes, so a parallel scatter would change collision semantics.
+/// Each native pixel group is loaded/stored through `u8x16`; the scalar part
+/// is limited to RNG and bounds calculation, never a CPU adapter delegation.
+fn simd_effect_spread_native(
+    img: &DynamicImage,
+    distance: u32,
+    mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    let Some(channels) = native_copy_layout(img, mode) else {
+        return Ok(None);
+    };
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+    let expected_len = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| PilError::ValueError("SIMD EffectSpread image length overflow".into()))?;
+    let source = img.as_bytes();
+    if source.len() != expected_len {
+        return Ok(None);
+    }
+    if expected_len == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        return crate::image_utils::raw_bytes_to_image_allow_empty(
+            img.width(),
+            img.height(),
+            Vec::new(),
+            channels,
+        )
+        .map(|result| Some(preserve_mode(img, result)));
+    }
+    if distance == 0 {
+        let mut output = vec![0u8; expected_len];
+        let (vector_blocks, scalar_tail) =
+            copy_native_bytes(source, &mut output).ok_or_else(|| {
+                PilError::InternalError("SIMD EffectSpread copy shape mismatch".into())
+            })?;
+        crate::compute::record_pipeline_operation_path("native-copy");
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
+            .map(|result| Some(preserve_mode(img, result)));
+    }
+
+    let width_i64 = i64::try_from(width)
+        .map_err(|_| PilError::ValueError("SIMD EffectSpread width overflow".into()))?;
+    let height_i64 = i64::try_from(height)
+        .map_err(|_| PilError::ValueError("SIMD EffectSpread height overflow".into()))?;
+    let d = i64::from(distance);
+    let half_d = d / 2;
+    let mut output = source.to_vec();
+    let (vector_blocks, scalar_tail) =
+        crate::compute::pool_cpu::ops::effects::with_process_rng(|rng| {
+            let mut vector_blocks = 0u64;
+            for y in 0..height_i64 {
+                for x in 0..width_i64 {
+                    let source_pixel = (y * width_i64 + x) as usize;
+                    let source_start = source_pixel * channels;
+                    let xx = x + i64::from(rng.next() % distance) - half_d;
+                    let yy = y + i64::from(rng.next() % distance) - half_d;
+                    let source_block = {
+                        let mut block = [0u8; 16];
+                        block[..channels]
+                            .copy_from_slice(&source[source_start..source_start + channels]);
+                        block
+                    };
+                    if xx >= 0 && xx < width_i64 && yy >= 0 && yy < height_i64 {
+                        let destination_pixel = (yy * width_i64 + xx) as usize;
+                        let destination_start = destination_pixel * channels;
+                        let destination_block = {
+                            let mut block = [0u8; 16];
+                            block[..channels].copy_from_slice(
+                                &source[destination_start..destination_start + channels],
+                            );
+                            block
+                        };
+                        let source_vector = u8x16::new(source_block).to_array();
+                        let destination_vector = u8x16::new(destination_block).to_array();
+                        output[destination_start..destination_start + channels]
+                            .copy_from_slice(&source_vector[..channels]);
+                        output[source_start..source_start + channels]
+                            .copy_from_slice(&destination_vector[..channels]);
+                    } else {
+                        let source_vector = u8x16::new(source_block).to_array();
+                        output[source_start..source_start + channels]
+                            .copy_from_slice(&source_vector[..channels]);
+                    }
+                    vector_blocks = vector_blocks.saturating_add(1);
+                }
+            }
+            (vector_blocks, 0u64)
+        })?;
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
+        .map(|result| Some(preserve_mode(img, result)))
+}
+
 pub fn simd_effect_spread(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -20419,21 +21406,7 @@ pub fn simd_effect_spread(
     let PipelineOp::EffectSpread { distance } = op else {
         return Err(PilError::ValueError("expected EffectSpread op".into()));
     };
-    if *distance > 1 && (img.width() != 1 || img.height() != 1) {
-        return Err(simd_unsupported("EffectSpread"));
-    }
-    if *distance != 0 {
-        let pixel_count = (img.width() as usize)
-            .checked_mul(img.height() as usize)
-            .ok_or_else(|| PilError::ValueError("SIMD EffectSpread pixel count overflow".into()))?;
-        crate::compute::pool_cpu::ops::effects::with_process_rng(|rng| {
-            for _ in 0..pixel_count {
-                let _ = rng.next();
-                let _ = rng.next();
-            }
-        })?;
-    }
-    native_copy_image_bytes_allow_short(img, mode)?.ok_or_else(|| simd_unsupported("EffectSpread"))
+    simd_effect_spread_native(img, *distance, mode)?.ok_or_else(|| simd_unsupported("EffectSpread"))
 }
 
 pub fn simd_rotate(
@@ -20456,49 +21429,41 @@ pub fn simd_rotate(
     // sampling. The operation flag records only the explicit resample
     // request, so include the logical mode before choosing the data kernel.
     let nearest = *nearest || matches!(mode, Some("1" | "P"));
+    if let Some(result) =
+        simd_empty_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    {
+        return Ok(result);
+    }
     if rotate_identity_contract(*angle, *center, *translate) {
         if let Some(result) = native_identity_rotate(img, mode)? {
             return Ok(preserve_mode(img, result));
         }
     }
     if rotate_uses_discrete_fast_path(*angle, *center, *translate)
-        && let Some(result) = simd_right_angle_rotate_native(
-            img,
-            *angle,
-            *expand,
-            *fill,
-            *center,
-            *translate,
-            mode,
-        )?
+        && let Some(result) =
+            simd_right_angle_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
     {
         return Ok(result);
     }
     if nearest
         && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
-        && let Some(result) = simd_nearest_rotate_native(
-            img,
-            *angle,
-            *expand,
-            *fill,
-            *center,
-            *translate,
-            mode,
+        && let Some(result) =
+            simd_nearest_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    {
+        return Ok(result);
+    }
+    if !nearest
+        && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
+        && let Some(result) = simd_typed_bilinear_rotate_native(
+            img, *angle, *expand, *fill, *center, *translate, mode,
         )?
     {
         return Ok(result);
     }
     if !nearest
         && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
-        && let Some(result) = simd_bilinear_rotate_native(
-            img,
-            *angle,
-            *expand,
-            *fill,
-            *center,
-            *translate,
-            mode,
-        )?
+        && let Some(result) =
+            simd_bilinear_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
     {
         return Ok(result);
     }
@@ -20547,9 +21512,8 @@ fn simd_put_alpha_block(
         }
         (2, 2) => {
             let values = u8x16::new(source_block);
-            let alpha = u8x16::new(mask_block).swizzle_relaxed(u8x16::new([
-                0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
-            ]));
+            let alpha = u8x16::new(mask_block)
+                .swizzle_relaxed(u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]));
             let alpha_mask = u8x16::new([
                 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255,
             ]);
@@ -20591,9 +21555,22 @@ fn simd_put_alpha_block(
             let blue = simd_pack_u16x16(nk - muldiv255(y * nk)).to_array();
             Some(
                 u8x16::new([
-                    red[0], red[1], red[2], red[3], green[0], green[1], green[2], green[3],
-                    blue[0], blue[1], blue[2], blue[3], mask_block[0], mask_block[1],
-                    mask_block[2], mask_block[3],
+                    red[0],
+                    red[1],
+                    red[2],
+                    red[3],
+                    green[0],
+                    green[1],
+                    green[2],
+                    green[3],
+                    blue[0],
+                    blue[1],
+                    blue[2],
+                    blue[3],
+                    mask_block[0],
+                    mask_block[1],
+                    mask_block[2],
+                    mask_block[3],
                 ])
                 .swizzle_relaxed(u8x16::new([
                     0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15,
@@ -20603,12 +21580,9 @@ fn simd_put_alpha_block(
         }
         (4, 4) => {
             let values = u8x16::new(source_block);
-            let alpha = u8x16::new(mask_block).swizzle_relaxed(u8x16::new([
-                0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
-            ]));
-            let alpha_mask = u8x16::new([
-                0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-            ]);
+            let alpha = u8x16::new(mask_block)
+                .swizzle_relaxed(u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]));
+            let alpha_mask = u8x16::new([0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]);
             let preserved = values & (u8x16::splat(255) ^ alpha_mask);
             Some((preserved | (alpha & alpha_mask)).to_array())
         }
@@ -20686,8 +21660,7 @@ fn simd_put_alpha_data_bytes(
         source_block[..source_bytes]
             .copy_from_slice(&source[source_start..source_start + source_bytes]);
         let mut mask_block = [0u8; 16];
-        mask_block[..pixels_per_vector]
-            .copy_from_slice(&mask[pixel..pixel + pixels_per_vector]);
+        mask_block[..pixels_per_vector].copy_from_slice(&mask[pixel..pixel + pixels_per_vector]);
 
         let result = match (source_channels, output_channels) {
             (1, 2) => {
@@ -20695,18 +21668,15 @@ fn simd_put_alpha_data_bytes(
                 inputs[..pixels_per_vector].copy_from_slice(&source_block[..pixels_per_vector]);
                 inputs[pixels_per_vector..2 * pixels_per_vector]
                     .copy_from_slice(&mask_block[..pixels_per_vector]);
-                let indices = [
-                    0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15,
-                ];
+                let indices = [0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
                 u8x16::new(inputs)
                     .swizzle_relaxed(u8x16::new(indices))
                     .to_array()
             }
             (2, 2) => {
                 let values = u8x16::new(source_block);
-                let alpha = u8x16::new(mask_block).swizzle_relaxed(u8x16::new([
-                    0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
-                ]));
+                let alpha = u8x16::new(mask_block)
+                    .swizzle_relaxed(u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]));
                 let alpha_mask = u8x16::new([
                     0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255,
                 ]);
@@ -20716,9 +21686,7 @@ fn simd_put_alpha_data_bytes(
             (3, 4) => {
                 let mut inputs = source_block;
                 inputs[12..16].copy_from_slice(&mask_block[..4]);
-                let indices = [
-                    0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15,
-                ];
+                let indices = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15];
                 u8x16::new(inputs)
                     .swizzle_relaxed(u8x16::new(indices))
                     .to_array()
@@ -20752,10 +21720,22 @@ fn simd_put_alpha_data_bytes(
                 let green = simd_pack_u16x16(nk - muldiv255(m * nk)).to_array();
                 let blue = simd_pack_u16x16(nk - muldiv255(y * nk)).to_array();
                 u8x16::new([
-                    red[0], red[1], red[2], red[3],
-                    green[0], green[1], green[2], green[3],
-                    blue[0], blue[1], blue[2], blue[3],
-                    mask_block[0], mask_block[1], mask_block[2], mask_block[3],
+                    red[0],
+                    red[1],
+                    red[2],
+                    red[3],
+                    green[0],
+                    green[1],
+                    green[2],
+                    green[3],
+                    blue[0],
+                    blue[1],
+                    blue[2],
+                    blue[3],
+                    mask_block[0],
+                    mask_block[1],
+                    mask_block[2],
+                    mask_block[3],
                 ])
                 .swizzle_relaxed(u8x16::new([
                     0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15,
@@ -20764,12 +21744,10 @@ fn simd_put_alpha_data_bytes(
             }
             (4, 4) => {
                 let values = u8x16::new(source_block);
-                let alpha = u8x16::new(mask_block).swizzle_relaxed(u8x16::new([
-                    0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
-                ]));
-                let alpha_mask = u8x16::new([
-                    0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-                ]);
+                let alpha = u8x16::new(mask_block)
+                    .swizzle_relaxed(u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]));
+                let alpha_mask =
+                    u8x16::new([0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]);
                 let preserved = values & (u8x16::splat(255) ^ alpha_mask);
                 (preserved | (alpha & alpha_mask)).to_array()
             }
@@ -20869,7 +21847,11 @@ pub fn simd_put_alpha(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let PipelineOp::PutAlpha { alpha, mode: alpha_mode } = op else {
+    let PipelineOp::PutAlpha {
+        alpha,
+        mode: alpha_mode,
+    } = op
+    else {
         return Err(PilError::ValueError("expected PutAlpha op".into()));
     };
     let Some((source_channels, output_channels, _pixels_per_vector, cmyk_source)) =
@@ -20899,7 +21881,11 @@ pub fn simd_put_alpha_data(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let PipelineOp::PutAlphaData { mask, mode: alpha_mode } = op else {
+    let PipelineOp::PutAlphaData {
+        mask,
+        mode: alpha_mode,
+    } = op
+    else {
         return Err(PilError::ValueError("expected PutAlphaData op".into()));
     };
     let mask = mask.as_ref();
@@ -20974,12 +21960,7 @@ pub fn simd_convert(
             ColorMode::RGBA | ColorMode::CMYK => 4,
             _ => return Err(simd_unsupported("Convert")),
         };
-        return crate::image_utils::raw_bytes_to_image(
-            img.width(),
-            img.height(),
-            output,
-            channels,
-        );
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels);
     }
     let Some(layout) = native_convert_layout(img, target, mode) else {
         return Err(simd_unsupported("Convert"));
@@ -21022,8 +22003,8 @@ fn alpha_composite_channel_vector(
     // AlphaComposite.c uses PRECISION_BITS=7. All intermediates fit in u32:
     // the coefficient product is below 2^31 and the channel accumulator is
     // below 2^24, so widening is lossless before the vectorized SHIFTFORDIV255.
-    let blended = u32x8::new(source) * coefficient_source
-        + u32x8::new(destination) * coefficient_destination;
+    let blended =
+        u32x8::new(source) * coefficient_source + u32x8::new(destination) * coefficient_destination;
     let rounded = alpha_composite_div255(blended + u32x8::splat(0x80 << 7)) >> 7u32;
     let rounded = rounded.to_array();
     std::array::from_fn(|lane| rounded[lane].min(255) as u8)
@@ -21034,36 +22015,31 @@ fn alpha_composite_vector_block(source: &[u8], output: &mut [u8], channels: usiz
     let Some(block_bytes) = channels.checked_mul(8) else {
         return false;
     };
-    if !matches!(channels, 2 | 4)
-        || source.len() < block_bytes
-        || output.len() < block_bytes
-    {
+    if !matches!(channels, 2 | 4) || source.len() < block_bytes || output.len() < block_bytes {
         return false;
     }
 
-    let source_alpha = std::array::from_fn(|lane| {
-        u32::from(source[lane * channels + channels - 1])
-    });
-    let destination_alpha = std::array::from_fn(|lane| {
-        u32::from(output[lane * channels + channels - 1])
-    });
+    let source_alpha =
+        std::array::from_fn(|lane| u32::from(source[lane * channels + channels - 1]));
+    let destination_alpha =
+        std::array::from_fn(|lane| u32::from(output[lane * channels + channels - 1]));
     let source_alpha_vector = u32x8::new(source_alpha);
     let destination_alpha_vector = u32x8::new(destination_alpha);
     let blend = destination_alpha_vector * (u32x8::splat(255) - source_alpha_vector);
     let out_alpha_255 = source_alpha_vector * u32x8::splat(255) + blend;
-    let coefficient_numerator = source_alpha_vector
-        * u32x8::splat(255)
-        * u32x8::splat(255)
-        * u32x8::splat(1 << 7);
+    let coefficient_numerator =
+        source_alpha_vector * u32x8::splat(255) * u32x8::splat(255) * u32x8::splat(1 << 7);
     // There is no portable integer divide instruction in `wide`. Convert
     // only this coefficient-control calculation to f64 lanes, take the exact
     // floor required by C, then return the hot per-channel path to u32 lanes.
     // Every operand is an exactly representable integer below 2^32.
-    let coefficient_source = f64x8::new(
-        coefficient_numerator
-            .to_array()
-            .map(f64::from),
-    ) / f64x8::new(out_alpha_255.to_array().map(f64::from).map(|value| value.max(1.0)));
+    let coefficient_source = f64x8::new(coefficient_numerator.to_array().map(f64::from))
+        / f64x8::new(
+            out_alpha_255
+                .to_array()
+                .map(f64::from)
+                .map(|value| value.max(1.0)),
+        );
     let coefficient_source = u32x8::new(
         coefficient_source
             .floor()
@@ -21073,12 +22049,8 @@ fn alpha_composite_vector_block(source: &[u8], output: &mut [u8], channels: usiz
     let coefficient_destination = u32x8::splat(255 << 7) - coefficient_source;
     let output_alpha = alpha_composite_div255(out_alpha_255 + u32x8::splat(0x80)).to_array();
     let out_alpha_255_values = out_alpha_255.to_array();
-    let source_luma = std::array::from_fn(|lane| {
-        u32::from(source[lane * channels])
-    });
-    let destination_luma = std::array::from_fn(|lane| {
-        u32::from(output[lane * channels])
-    });
+    let source_luma = std::array::from_fn(|lane| u32::from(source[lane * channels]));
+    let destination_luma = std::array::from_fn(|lane| u32::from(output[lane * channels]));
     let luma = alpha_composite_channel_vector(
         source_luma,
         destination_luma,
@@ -21087,13 +22059,10 @@ fn alpha_composite_vector_block(source: &[u8], output: &mut [u8], channels: usiz
     );
 
     let rgb = if channels == 4 {
-        let source_green =
-            std::array::from_fn(|lane| u32::from(source[lane * channels + 1]));
-        let destination_green =
-            std::array::from_fn(|lane| u32::from(output[lane * channels + 1]));
+        let source_green = std::array::from_fn(|lane| u32::from(source[lane * channels + 1]));
+        let destination_green = std::array::from_fn(|lane| u32::from(output[lane * channels + 1]));
         let source_blue = std::array::from_fn(|lane| u32::from(source[lane * channels + 2]));
-        let destination_blue =
-            std::array::from_fn(|lane| u32::from(output[lane * channels + 2]));
+        let destination_blue = std::array::from_fn(|lane| u32::from(output[lane * channels + 2]));
         Some((
             alpha_composite_channel_vector(
                 source_green,
@@ -21186,35 +22155,72 @@ fn simd_alpha_composite_native(
     }
 
     let mut output = destination_bytes.to_vec();
-    let total_pixels = (img.width() as usize)
-        .checked_mul(img.height() as usize)
-        .ok_or_else(|| PilError::ValueError("SIMD AlphaComposite pixel count overflow".into()))?;
-    let vector_pixels = total_pixels / 8 * 8;
-    let vector_blocks = vector_pixels / 8;
-    let scalar_tail = total_pixels - vector_pixels;
-    // The image crate stores each image row contiguously, so a vector block is
-    // allowed to cross a row boundary. This matters for small but non-empty
-    // Pillow images: a 3×3 image has one complete eight-pixel block even
-    // though no individual row is wide enough to hold one.
-    for pixel in (0..vector_pixels).step_by(8) {
-        let byte_start = pixel * channels;
-        let byte_end = byte_start + channels * 8;
-        if !alpha_composite_vector_block(
-            &source_bytes[byte_start..byte_end],
-            &mut output[byte_start..byte_end],
-            channels,
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+    let vector_blocks_per_row = width / 8;
+    let scalar_tail_per_row = width % 8;
+    let vector_blocks = vector_blocks_per_row.saturating_mul(height);
+    let scalar_tail = scalar_tail_per_row.saturating_mul(height);
+    let process_row = |source_row: &[u8], output_row: &mut [u8]| -> bool {
+        let vector_pixels = vector_blocks_per_row * 8;
+        for pixel in (0..vector_pixels).step_by(8) {
+            let byte_start = pixel * channels;
+            let byte_end = byte_start + channels * 8;
+            if !alpha_composite_vector_block(
+                &source_row[byte_start..byte_end],
+                &mut output_row[byte_start..byte_end],
+                channels,
+            ) {
+                return false;
+            }
+        }
+        for pixel in vector_pixels..width {
+            let byte_start = pixel * channels;
+            let byte_end = byte_start + channels;
+            alpha_composite_scalar_pixel(
+                &source_row[byte_start..byte_end],
+                &mut output_row[byte_start..byte_end],
+                channels,
+            );
+        }
+        true
+    };
+    #[cfg(feature = "parallel")]
+    if output.len() >= 256 * 1024 {
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut output,
+            row_stride,
+            height,
+            |row_start, row_end, _y, output_row| {
+                if !process_row(&source_bytes[row_start..row_end], output_row) {
+                    failed.store(true, Ordering::Relaxed);
+                }
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
+    } else {
+        for row in 0..height {
+            let row_start = row * row_stride;
+            if !process_row(
+                &source_bytes[row_start..row_start + row_stride],
+                &mut output[row_start..row_start + row_stride],
+            ) {
+                return Ok(None);
+            }
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for row in 0..height {
+        let row_start = row * row_stride;
+        if !process_row(
+            &source_bytes[row_start..row_start + row_stride],
+            &mut output[row_start..row_start + row_stride],
         ) {
             return Ok(None);
         }
-    }
-    for pixel in vector_pixels..total_pixels {
-        let byte_start = pixel * channels;
-        let byte_end = byte_start + channels;
-        alpha_composite_scalar_pixel(
-            &source_bytes[byte_start..byte_end],
-            &mut output[byte_start..byte_end],
-            channels,
-        );
     }
     if vector_blocks == 0 {
         // Empty images have no pixel data to vectorize. They are still a
@@ -21244,5 +22250,6 @@ pub fn simd_alpha_composite(
     if *dest != (0, 0) || *src != (0, 0) {
         return Err(simd_unsupported("AlphaComposite"));
     }
-    simd_alpha_composite_native(img, source, mode)?.ok_or_else(|| simd_unsupported("AlphaComposite"))
+    simd_alpha_composite_native(img, source, mode)?
+        .ok_or_else(|| simd_unsupported("AlphaComposite"))
 }

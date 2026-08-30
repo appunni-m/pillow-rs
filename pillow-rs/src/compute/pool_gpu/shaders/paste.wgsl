@@ -12,7 +12,7 @@
 //   output is storage read_write.
 //
 // Mode-aware: only paste active channels.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=I;16*, 6=RGBX.
 
 struct Params {
     width: u32,
@@ -29,7 +29,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 6u || m == 7u || m == 8u; }
 
 @group(0) @binding(0) var<storage, read> input_dst: array<u32>;
 @group(0) @binding(1) var<storage, read> input_src: array<u32>;
@@ -38,6 +38,15 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 @group(0) @binding(4) var<uniform> params: Params;
 
 fn blend_pixel(src: u32, dst: u32, mask: u32, mode: u32) -> u32 {
+    // Pillow's I;16 Paste.c blends decoded unsigned samples, not the two
+    // storage bytes independently. The typed GPU transport keeps each u16 in
+    // the low half of a word, so this branch must run before the byte-channel
+    // unpacking below. The product remains well within u32 (65535 * 255).
+    if mode == 5u {
+        let source = src & 0xffffu;
+        let destination = dst & 0xffffu;
+        return (source * mask + destination * (255u - mask) + 127u) / 255u;
+    }
     let sr = src & 0xffu;
     let sg = (src >> 8u) & 0xffu;
     let sb = (src >> 16u) & 0xffu;

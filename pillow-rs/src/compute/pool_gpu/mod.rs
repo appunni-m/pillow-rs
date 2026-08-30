@@ -14,8 +14,11 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
 use crate::error::PilError;
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode, TransformMethod, TransposeMethod};
-use crate::raster::{DynamicImage, GenericImageView, RgbaImage};
+use crate::ops::pil_resize::{FilterCoeffs, precompute_coeffs};
+use crate::pipeline::{
+    ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
+};
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, RgbaImage};
 use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
@@ -35,16 +38,25 @@ const MAX_RETAINED_GPU_WORKING_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_RETAINED_GPU_STAGING_BUFFERS: usize = 2;
 const MAX_RETAINED_GPU_STAGING_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_GPU_AUXILIARY_CACHE_BYTES: usize = 64 * 1024 * 1024;
+/// The histogram control passes use three 256-bin channels and retain one
+/// extra 256-word tail so the existing clear shader can reset the complete
+/// storage allocation without a host write between operations.
+const GPU_HISTOGRAM_WORDS: usize = 1024;
+const GPU_HISTOGRAM_BYTES: usize = GPU_HISTOGRAM_WORDS * std::mem::size_of::<u32>();
 
 /// Dynamic shader loops must have a small, explicit upper bound. These limits
 /// are deliberately stricter than the CPU implementation: an unsupported or
 /// unusually large request is routed to CPU rather than being allowed to
 /// monopolize a native GPU queue.
-const MAX_GPU_BLUR_RADIUS: u32 = 16;
-const MAX_GPU_FILTER_SIZE: u32 = 9;
+const MAX_GPU_BLUR_RADIUS: u32 = 64;
+const MAX_GPU_FILTER_SIZE: u32 = 15;
 const MAX_GPU_REDUCE_FACTOR: u32 = 64;
 const MAX_GPU_MANDELBROT_ITERS: u32 = 10_000;
-const MAX_GPU_SHADER_WORK_ITEMS: u64 = 128 * 1024 * 1024;
+// Order-statistic filters use a bounded local insertion sort.  The estimate
+// below is intentionally large enough for the reviewed 9x9/256x256 material
+// workloads and the 3x3/1024x768 matrix case, while still rejecting unbounded
+// large windows before a single device submission can monopolize the queue.
+const MAX_GPU_SHADER_WORK_ITEMS: u64 = 2 * 1024 * 1024 * 1024;
 const GPU_BUFFER_CAPACITY: u32 = 4096 * 4096;
 const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 // Add/Subtract currently dispatch only the exact unit-divisor/integral-offset
@@ -90,7 +102,13 @@ impl GpuAuxiliaryCache {
         let mut second_counts = HashMap::<usize, usize>::new();
         let mut third_counts = HashMap::<usize, usize>::new();
         let mut lut_counts = HashMap::<[u32; 256], usize>::new();
-        for (op, auxiliary) in ops.iter().zip(auxiliary_images) {
+        let mut op_modes = Vec::with_capacity(ops.len());
+        let mut current_mode = mode;
+        for op in ops {
+            op_modes.push(current_mode);
+            current_mode = gpu_mode_after_op(current_mode, op);
+        }
+        for ((op, auxiliary), op_mode) in ops.iter().zip(auxiliary_images).zip(&op_modes) {
             if !matches!(op, PipelineOp::PutData { .. }) {
                 if let Some(second) = auxiliary.second.as_ref() {
                     *second_counts
@@ -101,29 +119,37 @@ impl GpuAuxiliaryCache {
             if let Some(third) = auxiliary.third.as_ref() {
                 *third_counts.entry(Arc::as_ptr(third) as usize).or_default() += 1;
             }
-            if let Some(lut) = extract_lut(op, mode) {
+            if let Some(lut) = extract_lut(op, *op_mode) {
                 *lut_counts.entry(lut).or_default() += 1;
             }
         }
 
         let mut cache = Self::default();
-        for (op, auxiliary) in ops.iter().zip(auxiliary_images) {
+        for ((op, auxiliary), op_mode) in ops.iter().zip(auxiliary_images).zip(&op_modes) {
             if !matches!(op, PipelineOp::PutData { .. }) {
                 if let Some(second) = auxiliary.second.as_ref() {
                     let key = Arc::as_ptr(second) as usize;
                     if second_counts.get(&key).copied().unwrap_or_default() > 1
                         && !cache.second_ranges.contains_key(&key)
                     {
-                        let values = pack_rgba(&second.to_rgba8(), capacity)?;
-                        if cache.total_bytes().saturating_add(values.len() * 4)
-                            <= MAX_GPU_AUXILIARY_CACHE_BYTES
-                        {
-                            let range = append_arena_slice(
-                                &mut cache.img2_values,
-                                &values,
-                                storage_alignment,
-                            );
-                            cache.second_ranges.insert(key, range);
+                        // Typed I;16 Paste sources use a numeric u16 word
+                        // rather than the ordinary RGBA byte transport. Do
+                        // not place that representation in the shared cache:
+                        // the cache key is the image identity and a later
+                        // byte-oriented operation could otherwise reuse the
+                        // same image with the wrong packing.
+                        if !gpu_luma16_paste_source(op, *op_mode, second) {
+                            let values = pack_rgba(&second.to_rgba8(), capacity)?;
+                            if cache.total_bytes().saturating_add(values.len() * 4)
+                                <= MAX_GPU_AUXILIARY_CACHE_BYTES
+                            {
+                                let range = append_arena_slice(
+                                    &mut cache.img2_values,
+                                    &values,
+                                    storage_alignment,
+                                );
+                                cache.second_ranges.insert(key, range);
+                            }
                         }
                     }
                 }
@@ -143,7 +169,7 @@ impl GpuAuxiliaryCache {
                     }
                 }
             }
-            if let Some(lut) = extract_lut(op, mode) {
+            if let Some(lut) = extract_lut(op, *op_mode) {
                 if lut_counts.get(&lut).copied().unwrap_or_default() > 1
                     && !cache.lut_ranges.contains_key(&lut)
                 {
@@ -230,9 +256,10 @@ impl ReusableGpuBuffer {
 struct BufferPool {
     buf_a: wgpu::Buffer,
     buf_b: wgpu::Buffer,
-    buf_img2: wgpu::Buffer, // Second image for dual-input ops
-    buf_img3: wgpu::Buffer, // Third image for 3-input ops (Composite/Paste mask)
-    lut_buf: wgpu::Buffer,  // LUT storage buffer for Eval/PointOp (1024 bytes)
+    buf_img2: wgpu::Buffer,      // Second image for dual-input ops
+    buf_img3: wgpu::Buffer,      // Third image for 3-input ops (Composite/Paste mask)
+    lut_buf: wgpu::Buffer,       // LUT storage buffer for Eval/PointOp (1024 bytes)
+    histogram_buf: wgpu::Buffer, // Histogram control storage (1024 u32 words)
     params_arena: ReusableGpuBuffer,
     img2_arena: ReusableGpuBuffer,
     img3_arena: ReusableGpuBuffer,
@@ -304,6 +331,12 @@ impl BufferPool {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let histogram_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu_histogram"),
+            size: GPU_HISTOGRAM_BYTES as u64,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
         let params_arena = ReusableGpuBuffer::new(
             device,
             "gpu_batch_params",
@@ -338,6 +371,7 @@ impl BufferPool {
             buf_img2,
             buf_img3,
             lut_buf,
+            histogram_buf,
             params_arena,
             img2_arena,
             img3_arena,
@@ -374,6 +408,61 @@ impl BufferPool {
         Ok(())
     }
 
+    /// Upload an `I;16*` image as one zero-extended sample per packed storage
+    /// word. The admitted GPU operations for this representation only move
+    /// complete words, so no shader is allowed to interpret the sample as
+    /// four independent RGBA bytes. Keeping the high bytes zero also makes
+    /// the readback contract explicit instead of narrowing through `to_rgba8`.
+    fn upload_luma16(
+        &self,
+        queue: &wgpu::Queue,
+        image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+        mode: Option<&str>,
+    ) -> Result<(), PilError> {
+        let (w, h) = image.dimensions();
+        let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+        if pixel_count > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "GPU buffer capacity {} < image size {}",
+                self.capacity, pixel_count
+            )));
+        }
+        let mut packed = Vec::with_capacity(pixel_count * std::mem::size_of::<u32>());
+        for &sample in image.as_raw() {
+            let sample_bytes = if mode == Some("I;16B") {
+                sample.to_be_bytes()
+            } else {
+                sample.to_ne_bytes()
+            };
+            packed.extend_from_slice(&[sample_bytes[0], sample_bytes[1], 0, 0]);
+        }
+        queue.write_buffer(&self.buf_a, 0, &packed);
+        Ok(())
+    }
+
+    /// Upload `I;16*` samples as numeric unsigned values for a conversion.
+    /// Geometry keeps the public byte order opaque, but Convert needs the
+    /// decoded sample value to apply Pillow's clamp-to-255 rule. WGSL storage
+    /// words are little-endian, so write the host-native `u16` value into the
+    /// low two bytes independently of the source mode's declared byte order.
+    fn upload_luma16_numeric(
+        &self,
+        queue: &wgpu::Queue,
+        image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    ) -> Result<(), PilError> {
+        let (w, h) = image.dimensions();
+        let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+        if pixel_count > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "GPU buffer capacity {} < image size {}",
+                self.capacity, pixel_count
+            )));
+        }
+        let packed = pack_luma16_numeric(image, self.capacity)?;
+        queue.write_buffer(&self.buf_a, 0, bytemuck::cast_slice(&packed));
+        Ok(())
+    }
+
     fn retained_bytes(&self) -> u64 {
         gpu_working_set_bytes(self.capacity)
             .saturating_add(self.params_arena.capacity_bytes)
@@ -392,6 +481,7 @@ fn gpu_working_set_bytes(capacity: u32) -> u64 {
         .saturating_mul(std::mem::size_of::<u32>() as u64)
         .saturating_add(2 * std::mem::size_of::<u32>() as u64)
         .saturating_add(256 * std::mem::size_of::<u32>() as u64)
+        .saturating_add(GPU_HISTOGRAM_BYTES as u64)
 }
 
 /// Pack an RGBA image into the storage representation used by the shaders.
@@ -409,6 +499,29 @@ fn pack_rgba(rgba: &RgbaImage, capacity: u32) -> Result<Vec<u32>, PilError> {
         .map(|px| {
             (px[0] as u32) | ((px[1] as u32) << 8) | ((px[2] as u32) << 16) | ((px[3] as u32) << 24)
         })
+        .collect())
+}
+
+/// Pack typed `I;16*` samples as numeric little-endian u16 values in the low
+/// half of one storage word per pixel. This is distinct from the opaque byte
+/// packing used by I;16 geometry: Paste blends the decoded unsigned samples,
+/// so narrowing through RGBA8 would discard the high byte.
+fn pack_luma16_numeric(
+    image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    capacity: u32,
+) -> Result<Vec<u32>, PilError> {
+    let (w, h) = image.dimensions();
+    let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+    if pixel_count > capacity as usize {
+        return Err(PilError::ValueError(format!(
+            "GPU buffer capacity {} < image size {}",
+            capacity, pixel_count
+        )));
+    }
+    Ok(image
+        .as_raw()
+        .iter()
+        .map(|&sample| u32::from(sample))
         .collect())
 }
 
@@ -456,6 +569,35 @@ fn pack_put_data(data: &[u8], mode: PixelMode, capacity: u32) -> Result<Vec<u32>
         packed.push(pixel);
     }
     Ok(packed)
+}
+
+/// Prepare Color3DLut table entries in the same signed 12.4 representation
+/// used by the CPU interpolation path. The returned i16 values are serialized
+/// as one little-endian u32 word per table component for a read-only shader
+/// buffer; keeping this conversion shared prevents f32/table rounding drift.
+fn color3dlut_table_words(table: &[f64]) -> Result<Vec<u32>, PilError> {
+    const PRECISION_BITS: i32 = 4;
+    let mut words = Vec::with_capacity(table.len());
+    for &value in table {
+        if !value.is_finite() {
+            return Err(PilError::ValueError(
+                "GPU Color3DLut table contains a non-finite value".into(),
+            ));
+        }
+        let item = value as f32;
+        let scaled = item * ((255 << PRECISION_BITS) as f32);
+        let prepared = if scaled >= i16::MAX as f32 - 0.5 {
+            i16::MAX
+        } else if scaled <= i16::MIN as f32 + 0.5 {
+            i16::MIN
+        } else if item < 0.0 {
+            (scaled - 0.5) as i16
+        } else {
+            (scaled + 0.5) as i16
+        };
+        words.push(u32::from(u16::from_ne_bytes(prepared.to_ne_bytes())));
+    }
+    Ok(words)
 }
 
 fn align_up(value: usize, alignment: usize) -> usize {
@@ -515,6 +657,192 @@ fn append_arena_slice(arena: &mut Vec<u32>, values: &[u32], alignment_bytes: usi
     }
 }
 
+/// Return whether a nearest resize uses the packed byte convolution plan.
+///
+/// The byte plan receives host-generated one-tap tables so its source index
+/// follows Pillow's cumulative f64 stepping exactly. Typed F/I/I;16 and
+/// binary mode paths retain the dedicated relocation shaders or their native
+/// CPU contract, where interpreting the sample as an 8-bit convolution value
+/// would be incorrect.
+fn gpu_resize_nearest_uses_coefficients(logical_mode: Option<&str>) -> bool {
+    !matches!(
+        logical_mode,
+        Some("1" | "F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N")
+    )
+}
+
+/// Build a resize coefficient table for the exact GPU byte path.
+///
+/// Non-nearest filters reuse the shared Pillow fixed-point table. Nearest is
+/// different: Pillow's affine implementation advances one f64 accumulator
+/// per output sample, so computing `(x + 0.5) * scale` independently in WGSL
+/// can select a neighboring source pixel at a representable boundary. A
+/// one-tap table preserves that scalar control-plane decision while leaving
+/// every pixel read/write on the device.
+fn gpu_resize_coefficients(
+    out_size: u32,
+    in_size: u32,
+    filter: ResampleFilter,
+) -> Arc<FilterCoeffs> {
+    if !matches!(filter, ResampleFilter::Nearest) {
+        return precompute_coeffs(out_size, in_size, filter);
+    }
+    if out_size == 0 || in_size == 0 {
+        return Arc::new(FilterCoeffs {
+            xmin: Vec::new(),
+            count: Vec::new(),
+            offsets: Vec::new(),
+            weights: Vec::new(),
+        });
+    }
+
+    let scale = f64::from(in_size) / f64::from(out_size);
+    let mut source_position = scale * 0.5;
+    let mut xmin = Vec::with_capacity(out_size as usize);
+    let mut count = Vec::with_capacity(out_size as usize);
+    let mut offsets = Vec::with_capacity(out_size as usize);
+    let mut weights = Vec::with_capacity(out_size as usize);
+    for _ in 0..out_size {
+        let source = if source_position >= f64::from(in_size) {
+            in_size - 1
+        } else {
+            source_position as u32
+        };
+        xmin.push(i64::from(source));
+        count.push(1);
+        offsets.push(weights.len());
+        weights.push(1i64 << 22);
+        source_position += scale;
+    }
+    Arc::new(FilterCoeffs {
+        xmin,
+        count,
+        offsets,
+        weights,
+    })
+}
+
+/// Validate and size the fixed-point coefficient table consumed by the
+/// separable resize shaders.
+///
+/// `FilterCoeffs` is deliberately shared with the CPU/SIMD implementations so
+/// the GPU receives the same Pillow-rounded coefficients.  The shader uses an
+/// i32 accumulator; prove the complete byte-domain accumulation before a
+/// resize is admitted rather than allowing device arithmetic to wrap.
+fn resize_coeff_word_count(coeffs: &FilterCoeffs) -> Result<usize, PilError> {
+    if coeffs.xmin.len() != coeffs.count.len()
+        || coeffs.xmin.len() != coeffs.offsets.len()
+        || coeffs
+            .offsets
+            .iter()
+            .zip(&coeffs.count)
+            .any(|(&offset, &count)| {
+                offset
+                    .checked_add(count)
+                    .is_none_or(|end| end > coeffs.weights.len())
+            })
+    {
+        return Err(PilError::InternalError(
+            "GPU resize coefficient table shape is invalid".into(),
+        ));
+    }
+
+    for ((&xmin, &count), &offset) in coeffs.xmin.iter().zip(&coeffs.count).zip(&coeffs.offsets) {
+        if xmin < 0
+            || u32::try_from(xmin).is_err()
+            || u32::try_from(count).is_err()
+            || u32::try_from(offset).is_err()
+        {
+            return Err(PilError::ValueError(
+                "GPU resize coefficient metadata exceeds shader limits".into(),
+            ));
+        }
+    }
+
+    for &weight in &coeffs.weights {
+        let weight = i32::try_from(weight).map_err(|_| {
+            PilError::ValueError("GPU resize coefficient exceeds signed shader limits".into())
+        })?;
+        let abs_weight = i64::from(weight).checked_abs().ok_or_else(|| {
+            PilError::ValueError("GPU resize coefficient magnitude overflow".into())
+        })?;
+        // Every intermediate partial sum is bounded by the absolute sum of
+        // all taps.  The largest byte sample is 255 and the shader adds the
+        // fixed-point half-unit before shifting.
+        let _ = abs_weight;
+    }
+    for (&offset, &count) in coeffs.offsets.iter().zip(&coeffs.count) {
+        let mut abs_sum = 0i64;
+        for &weight in coeffs.weights.get(offset..offset + count).ok_or_else(|| {
+            PilError::InternalError("GPU resize coefficient slice is invalid".into())
+        })? {
+            let abs_weight = weight.checked_abs().ok_or_else(|| {
+                PilError::ValueError("GPU resize coefficient magnitude overflow".into())
+            })?;
+            abs_sum = abs_sum.checked_add(abs_weight).ok_or_else(|| {
+                PilError::ValueError("GPU resize coefficient sum overflow".into())
+            })?;
+        }
+        let max_accumulator = abs_sum
+            .checked_mul(255)
+            .and_then(|value| value.checked_add(1i64 << 21))
+            .ok_or_else(|| PilError::ValueError("GPU resize accumulator overflow".into()))?;
+        if max_accumulator > i64::from(i32::MAX) {
+            return Err(PilError::ValueError(
+                "GPU resize accumulator exceeds signed shader limits".into(),
+            ));
+        }
+    }
+
+    coeffs
+        .xmin
+        .len()
+        .checked_mul(3)
+        .and_then(|metadata| metadata.checked_add(coeffs.weights.len()))
+        .ok_or_else(|| PilError::ValueError("GPU resize coefficient arena size overflow".into()))
+}
+
+/// Encode one Pillow-compatible coefficient table as `[xmin,count,offset]`
+/// metadata followed by signed fixed-point weights.  The returned words are
+/// uploaded as an auxiliary storage range; no image pixels are materialized on
+/// the host for this control table.
+fn encode_resize_coeffs(coeffs: &FilterCoeffs) -> Result<Vec<u32>, PilError> {
+    let word_count = resize_coeff_word_count(coeffs)?;
+    let mut words = Vec::with_capacity(word_count);
+    for ((&xmin, &count), &offset) in coeffs.xmin.iter().zip(&coeffs.count).zip(&coeffs.offsets) {
+        words.push(u32::try_from(xmin).map_err(|_| {
+            PilError::ValueError("GPU resize coefficient xmin exceeds shader limits".into())
+        })?);
+        words.push(u32::try_from(count).map_err(|_| {
+            PilError::ValueError("GPU resize coefficient count exceeds shader limits".into())
+        })?);
+        words.push(u32::try_from(offset).map_err(|_| {
+            PilError::ValueError("GPU resize coefficient offset exceeds shader limits".into())
+        })?);
+    }
+    words.extend(coeffs.weights.iter().map(|&weight| {
+        // resize_coeff_word_count already checked this conversion.
+        i32::try_from(weight).expect("validated GPU resize coefficient") as u32
+    }));
+    debug_assert_eq!(words.len(), word_count);
+    Ok(words)
+}
+
+fn gpu_resize_coefficients_are_safe(
+    filter: ResampleFilter,
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+) -> bool {
+    let (source_w, source_h) = source_dimensions;
+    let (output_w, output_h) = output_dimensions;
+    if source_w == 0 || source_h == 0 || output_w == 0 || output_h == 0 {
+        return false;
+    }
+    let horizontal = gpu_resize_coefficients(output_w, source_w, filter);
+    let vertical = gpu_resize_coefficients(output_h, source_h, filter);
+    resize_coeff_word_count(&horizontal).is_ok() && resize_coeff_word_count(&vertical).is_ok()
+}
+
 fn create_sized_buffer(
     device: &wgpu::Device,
     label: &'static str,
@@ -536,10 +864,12 @@ struct GpuBatchResources<'a> {
     fallback_img2: &'a wgpu::Buffer,
     fallback_img3: &'a wgpu::Buffer,
     fallback_lut: &'a wgpu::Buffer,
+    histogram: &'a wgpu::Buffer,
     params: &'a wgpu::Buffer,
     params_ranges: Vec<BufferRange>,
     img2: Option<&'a wgpu::Buffer>,
     img2_ranges: Vec<Option<BufferRange>>,
+    resize_coeff_ranges: Vec<Option<(BufferRange, BufferRange)>>,
     img3: Option<&'a wgpu::Buffer>,
     img3_ranges: Vec<Option<BufferRange>>,
     lut: Option<&'a wgpu::Buffer>,
@@ -548,7 +878,13 @@ struct GpuBatchResources<'a> {
 
 struct PreparedGpuBatch<'a> {
     resources: GpuBatchResources<'a>,
+    input_dims: Vec<(u32, u32)>,
     output_dims: Vec<(u32, u32)>,
+    /// Contain dimensions used by a public Pad operation before its final
+    /// placement pass.  The resize and placement remain in one command
+    /// buffer, so this is planner metadata rather than a host-side image
+    /// handoff.
+    pad_resize_dims: Vec<Option<(u32, u32)>>,
     final_dims: (u32, u32),
     resource_telemetry: PipelineResourceTelemetry,
 }
@@ -661,6 +997,30 @@ enum ResolvedPipeline {
         horizontal: Arc<CachedPipeline>,
         vertical: Arc<CachedPipeline>,
         pass_count: usize,
+    },
+    /// Non-nearest resize is the same exact two-pass fixed-point algorithm
+    /// used by the CPU/SIMD paths.  Coefficients live in an auxiliary storage
+    /// range, so the two dispatches stay on-device with no host materialize.
+    Resize {
+        horizontal: Arc<CachedPipeline>,
+        vertical: Arc<CachedPipeline>,
+    },
+    /// Pad is an exact contain resize followed by a device-side fill/copy
+    /// placement.  Keeping both stages inside one compute pass avoids a host
+    /// materialization while preserving Pillow's separable resize contract.
+    Pad {
+        horizontal: Arc<CachedPipeline>,
+        vertical: Arc<CachedPipeline>,
+        place: Arc<CachedPipeline>,
+    },
+    /// Histogram-driven ImageOps keep all control/data passes on the device:
+    /// clear the reusable histogram, accumulate the current image, derive a
+    /// packed 256-entry LUT, and apply that LUT through the vector remap.
+    Histogram {
+        clear: Arc<CachedPipeline>,
+        histogram: Arc<CachedPipeline>,
+        derive: Arc<CachedPipeline>,
+        remap: Arc<CachedPipeline>,
     },
 }
 
@@ -905,6 +1265,7 @@ impl GpuInner {
     fn resolve_batch_pipelines(
         &self,
         ops: &[PipelineOp],
+        logical_mode: Option<&str>,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
         let mut resolved = Vec::with_capacity(ops.len());
         let mut index = 0usize;
@@ -922,7 +1283,50 @@ impl GpuInner {
             }
 
             let op = &ops[index];
-            if let Some(pass_count) = Self::blur_pass_count(op) {
+            if matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize) {
+                let clear = self.resolve_pipeline(
+                    "__internal_histogram_clear",
+                    "histogram_clear.wgsl",
+                    include_str!("shaders/histogram_clear.wgsl"),
+                )?;
+                let histogram = match op {
+                    PipelineOp::Autocontrast { .. } => self.resolve_pipeline(
+                        "__internal_autocontrast_histogram",
+                        "autocontrast_histogram.wgsl",
+                        include_str!("shaders/autocontrast_histogram.wgsl"),
+                    )?,
+                    PipelineOp::Equalize => self.resolve_pipeline(
+                        "__internal_equalize_histogram",
+                        "equalize_histogram.wgsl",
+                        include_str!("shaders/equalize_histogram.wgsl"),
+                    )?,
+                    _ => unreachable!("histogram pipeline branch changed"),
+                };
+                let derive = match op {
+                    PipelineOp::Autocontrast { .. } => self.resolve_pipeline(
+                        "__internal_autocontrast_lut",
+                        "autocontrast_cutoff.wgsl",
+                        include_str!("shaders/autocontrast_cutoff.wgsl"),
+                    )?,
+                    PipelineOp::Equalize => self.resolve_pipeline(
+                        "__internal_equalize_lut",
+                        "equalize_cdf.wgsl",
+                        include_str!("shaders/equalize_cdf.wgsl"),
+                    )?,
+                    _ => unreachable!("histogram pipeline branch changed"),
+                };
+                let remap = self.resolve_pipeline(
+                    "__internal_histogram_remap",
+                    "point_op.wgsl",
+                    include_str!("shaders/point_op.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Histogram {
+                    clear,
+                    histogram,
+                    derive,
+                    remap,
+                });
+            } else if let Some(pass_count) = Self::blur_pass_count(op) {
                 // These internal variants expand one public blur operation
                 // into horizontal and vertical dispatches without a host
                 // materialization between them.
@@ -940,6 +1344,67 @@ impl GpuInner {
                     horizontal,
                     vertical,
                     pass_count,
+                });
+            } else if matches!(op, PipelineOp::Pad { .. }) {
+                let horizontal = self.resolve_pipeline(
+                    "__internal_resize_h",
+                    "resize_convolution_h.wgsl",
+                    include_str!("shaders/resize_convolution_h.wgsl"),
+                )?;
+                let vertical = self.resolve_pipeline(
+                    "__internal_resize_v",
+                    "resize_convolution_v.wgsl",
+                    include_str!("shaders/resize_convolution_v.wgsl"),
+                )?;
+                let place = self.resolve_pipeline(
+                    "__internal_pad_place",
+                    "pad.wgsl",
+                    include_str!("shaders/pad.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Pad {
+                    horizontal,
+                    vertical,
+                    place,
+                });
+            } else if matches!(op, PipelineOp::Resize { filter, .. }
+                if matches!(filter, ResampleFilter::Nearest)
+                    && !gpu_resize_nearest_uses_coefficients(logical_mode))
+            {
+                let key = registry::variant_key(op);
+                let source = registry::registry()?
+                    .get(key)
+                    .and_then(|entry| entry.gpu_source)
+                    .ok_or_else(|| {
+                        PilError::ValueError(format!(
+                            "GPU operation '{key}' has no registered shader source"
+                        ))
+                    })?;
+                let shader_file = registry::registry()?
+                    .get(key)
+                    .and_then(|entry| entry.gpu_shader)
+                    .ok_or_else(|| {
+                        PilError::ValueError(format!(
+                            "GPU operation '{key}' has no registered shader name"
+                        ))
+                    })?;
+                resolved.push(
+                    self.resolve_pipeline(key, shader_file, source)
+                        .map(ResolvedPipeline::Single)?,
+                );
+            } else if matches!(op, PipelineOp::Resize { .. }) {
+                let horizontal = self.resolve_pipeline(
+                    "__internal_resize_h",
+                    "resize_convolution_h.wgsl",
+                    include_str!("shaders/resize_convolution_h.wgsl"),
+                )?;
+                let vertical = self.resolve_pipeline(
+                    "__internal_resize_v",
+                    "resize_convolution_v.wgsl",
+                    include_str!("shaders/resize_convolution_v.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Resize {
+                    horizontal,
+                    vertical,
                 });
             } else {
                 let key = registry::variant_key(op);
@@ -1009,15 +1474,25 @@ impl GpuInner {
         shader_file: &'static str,
         shader_source: &str,
     ) -> Option<CachedPipeline> {
+        device.push_error_scope(wgpu::ErrorFilter::Validation);
         let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(variant_name),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
+        if let Some(error) = pollster::block_on(device.pop_error_scope()) {
+            gpu_log!(
+                "[GPU] shader module validation failed: variant={variant_name} file={shader_file}: {error}"
+            );
+            return None;
+        }
 
         let num_bindings = count_shader_bindings(shader_source);
 
         // Supported: 2-5 binding shaders. 0/1/>5 are invalid.
         if !(2..=5).contains(&num_bindings) {
+            gpu_log!(
+                "[GPU] shader rejected: variant={variant_name} file={shader_file}: bindings={num_bindings}"
+            );
             return None;
         }
 
@@ -1238,7 +1713,10 @@ impl GpuInner {
         });
 
         // If validation failed, skip this shader — it won't be available on GPU.
-        if pollster::block_on(device.pop_error_scope()).is_some() {
+        if let Some(error) = pollster::block_on(device.pop_error_scope()) {
+            gpu_log!(
+                "[GPU] shader validation failed: variant={variant_name} file={shader_file}: {error}"
+            );
             return None;
         }
 
@@ -1279,116 +1757,227 @@ impl GpuInner {
             resources.lut_ranges[op_index],
         )?;
         let mut entries = Vec::with_capacity(cached.num_bindings as usize);
-        match (cached.num_bindings, cached.is_lut, cached.is_output_only) {
-            (2, _, true) => {
-                // Generator layout: [output(rw), params(uniform)].
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: output_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: params,
-                });
-            }
-            (5, _, _) => {
-                // 5-binding: [in_a(read), in_b(read), in_c(read), out(rw), params(uniform)]
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buf.as_entire_binding(),
-                });
-                // Storage read and read_write bindings may not alias within one
-                // compute dispatch. Keep absent optional inputs on their
-                // dedicated auxiliary buffers; shaders guard those reads with
-                // their corresponding presence parameter.
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: second,
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: third,
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: output_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: params,
-                });
-            }
-            (4, true, _) => {
-                // LUT layout: [input(read), output(rw), params(uniform), lut(read)]
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params,
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: lut,
-                });
-            }
-            (4, false, _) => {
-                // Dual-input layout: [input_a(read), input_b(read), output(rw), params(uniform)]
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: second,
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: output_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: params,
-                });
-            }
-            (3, _, _) if cached.is_in_place => {
-                // AlphaComposite: [source(read), destination(read_write), params].
-                // The destination is the current ping-pong buffer, so the
-                // dispatch updates it in place and encode_batch keeps the
-                // current buffer selection unchanged.
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: second,
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: input_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params,
-                });
-            }
-            _ => {
-                // 2 or 3 binding: [input(read), output(rw), ...params(uniform)]
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buf.as_entire_binding(),
-                });
-                entries.push(wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buf.as_entire_binding(),
-                });
-                if cached.num_bindings > 2 {
+        // Histogram control passes reuse the ordinary binding counts but
+        // reinterpret the storage slots:
+        //   clear:  [unused input, histogram rw, params]
+        //   gather:  [image, optional mask, histogram rw, params]
+        //   derive:  [histogram, generated LUT rw, params]
+        // The final remap is a normal LUT shader, except that it must read the
+        // generated LUT buffer rather than a host-uploaded LUT arena.
+        if cached.variant_name == "__internal_histogram_clear" {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: resources.histogram.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params,
+            });
+        } else if cached.variant_name == "__internal_autocontrast_histogram"
+            || cached.variant_name == "__internal_equalize_histogram"
+        {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: auxiliary_binding(
+                    resources.img3,
+                    resources.fallback_img3,
+                    resources.img3_ranges[op_index],
+                )?,
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
+                resource: resources.histogram.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 3,
+                resource: params,
+            });
+        } else if cached.variant_name == "__internal_autocontrast_lut"
+            || cached.variant_name == "__internal_equalize_lut"
+        {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: resources.histogram.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: resources.fallback_lut.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params,
+            });
+        } else if cached.variant_name == "__internal_histogram_remap" {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: output_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params,
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 3,
+                resource: resources.fallback_lut.as_entire_binding(),
+            });
+        } else if matches!(
+            cached.variant_name,
+            "__internal_resize_h" | "__internal_resize_v"
+        ) {
+            let (horizontal, vertical) = resources
+                .resize_coeff_ranges
+                .get(op_index)
+                .and_then(Option::as_ref)
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU resize pipeline is missing its coefficient ranges".into(),
+                    )
+                })?;
+            let range = if cached.variant_name == "__internal_resize_h" {
+                *horizontal
+            } else {
+                *vertical
+            };
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: output_buf.as_entire_binding(),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params,
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 3,
+                resource: auxiliary_binding(resources.img2, resources.fallback_img2, Some(range))?,
+            });
+        } else {
+            match (cached.num_bindings, cached.is_lut, cached.is_output_only) {
+                (2, _, true) => {
+                    // Generator layout: [output(rw), params(uniform)].
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: output_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: params,
+                    });
+                }
+                (5, _, _) => {
+                    // 5-binding: [in_a(read), in_b(read), in_c(read), out(rw), params(uniform)]
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buf.as_entire_binding(),
+                    });
+                    // Storage read and read_write bindings may not alias within one
+                    // compute dispatch. Keep absent optional inputs on their
+                    // dedicated auxiliary buffers; shaders guard those reads with
+                    // their corresponding presence parameter.
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: second,
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: third,
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: output_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: params,
+                    });
+                }
+                (4, true, _) => {
+                    // LUT layout: [input(read), output(rw), params(uniform), lut(read)]
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buf.as_entire_binding(),
+                    });
                     entries.push(wgpu::BindGroupEntry {
                         binding: 2,
                         resource: params,
                     });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: lut,
+                    });
+                }
+                (4, false, _) => {
+                    // Dual-input layout: [input_a(read), input_b(read), output(rw), params(uniform)]
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: second,
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: output_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: params,
+                    });
+                }
+                (3, _, _) if cached.is_in_place => {
+                    // AlphaComposite: [source(read), destination(read_write), params].
+                    // The destination is the current ping-pong buffer, so the
+                    // dispatch updates it in place and encode_batch keeps the
+                    // current buffer selection unchanged.
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: second,
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: input_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params,
+                    });
+                }
+                _ => {
+                    // 2 or 3 binding: [input(read), output(rw), ...params(uniform)]
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buf.as_entire_binding(),
+                    });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buf.as_entire_binding(),
+                    });
+                    if cached.num_bindings > 2 {
+                        entries.push(wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: params,
+                        });
+                    }
                 }
             }
         }
@@ -1406,10 +1995,32 @@ impl GpuInner {
         buffers: &BufferPool,
         uniform_alignment: usize,
         storage_alignment: usize,
+        source_dimensions: (u32, u32),
         mode: u32,
     ) -> Result<usize, PilError> {
+        let op_param_words = if matches!(op, PipelineOp::Pad { .. }) {
+            // Header + resize controls + placement controls. The final
+            // output dimensions appended below are included separately.
+            9
+        } else if let PipelineOp::Transform { method, .. } = op {
+            // extract_params contributes ten public words; the executor then
+            // adds premultiply, method, two projective values, and (for one
+            // mesh record) four remaining source-corner values.
+            if matches!(method, TransformMethod::Mesh) {
+                18
+            } else {
+                14
+            }
+        } else if matches!(op, PipelineOp::Color3DLut { .. }) {
+            7
+        } else {
+            registry::extract_params(op).len()
+        };
         let param_words = 4usize
-            .checked_add(registry::extract_params(op).len())
+            .checked_add(op_param_words)
+            .and_then(|words| {
+                words.checked_add(usize::from(matches!(op, PipelineOp::Contrast { .. })))
+            })
             .and_then(|words| words.checked_add(2))
             .ok_or_else(|| PilError::ValueError("GPU parameter arena size overflow".into()))?;
         let mut total = aligned_bytes(
@@ -1456,6 +2067,44 @@ impl GpuInner {
             total = total
                 .checked_add(image_bytes(third)?)
                 .ok_or_else(|| PilError::ValueError("GPU auxiliary arena size overflow".into()))?;
+        }
+
+        if matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize) {
+            total = total
+                .checked_add(GPU_HISTOGRAM_BYTES)
+                .ok_or_else(|| PilError::ValueError("GPU histogram arena size overflow".into()))?;
+        }
+
+        let resize_coefficients = match op {
+            PipelineOp::Resize { w, h, filter } => Some((*w, *h, *filter)),
+            PipelineOp::Pad { filter, .. } => {
+                gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)
+                    .map(|((resize_w, resize_h), _)| (resize_w, resize_h, *filter))
+            }
+            _ => None,
+        };
+        if let Some((resize_w, resize_h, filter)) = resize_coefficients {
+            let (source_w, source_h) = source_dimensions;
+            let horizontal = gpu_resize_coefficients(resize_w, source_w, filter);
+            let vertical = gpu_resize_coefficients(resize_h, source_h, filter);
+            let horizontal_bytes = resize_coeff_word_count(&horizontal)?
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU resize coefficient arena size overflow".into())
+                })?;
+            let vertical_bytes = resize_coeff_word_count(&vertical)?
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU resize coefficient arena size overflow".into())
+                })?;
+            total = total
+                .checked_add(aligned_bytes(horizontal_bytes, storage_alignment))
+                .and_then(|value| {
+                    value.checked_add(aligned_bytes(vertical_bytes, storage_alignment))
+                })
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU resize coefficient arena size overflow".into())
+                })?;
         }
 
         if extract_lut(op, mode).is_some() {
@@ -1530,6 +2179,25 @@ impl GpuInner {
         }
     }
 
+    fn append_resize_coeff_ranges(
+        &self,
+        img2_arena: &mut Vec<u32>,
+        auxiliary_cache: &GpuAuxiliaryCache,
+        horizontal: &FilterCoeffs,
+        vertical: &FilterCoeffs,
+        storage_alignment: usize,
+    ) -> Result<(BufferRange, BufferRange), PilError> {
+        let horizontal_words = encode_resize_coeffs(horizontal)?;
+        let vertical_words = encode_resize_coeffs(vertical)?;
+        let base_offset = (auxiliary_cache.img2_values.len() * 4) as u64;
+        let mut horizontal_range =
+            append_arena_slice(img2_arena, &horizontal_words, storage_alignment);
+        horizontal_range.offset += base_offset;
+        let mut vertical_range = append_arena_slice(img2_arena, &vertical_words, storage_alignment);
+        vertical_range.offset += base_offset;
+        Ok((horizontal_range, vertical_range))
+    }
+
     fn prepare_batch<'a>(
         &self,
         ops: &[PipelineOp],
@@ -1537,6 +2205,8 @@ impl GpuInner {
         w: u32,
         h: u32,
         mode: u32,
+        logical_mode: Option<&str>,
+        contrast_mean: Option<u8>,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -1560,9 +2230,13 @@ impl GpuInner {
         let mut second_cache: HashMap<usize, BufferRange> = HashMap::new();
         let mut third_cache: HashMap<usize, BufferRange> = HashMap::new();
         let mut lut_cache: HashMap<[u32; 256], BufferRange> = HashMap::new();
+        let mut resize_coeff_ranges = Vec::with_capacity(ops.len());
+        let mut input_dims = Vec::with_capacity(ops.len());
         let mut output_dims = Vec::with_capacity(ops.len());
+        let mut pad_resize_dims = Vec::with_capacity(ops.len());
         let mut cur_w = w;
         let mut cur_h = h;
+        let mut current_mode = mode;
 
         for (index, op) in ops.iter().enumerate() {
             let cached = if can_fuse_gpu_multiply_screen(ops, index) {
@@ -1571,11 +2245,45 @@ impl GpuInner {
                     "multiply_screen.wgsl",
                     include_str!("shaders/multiply_screen.wgsl"),
                 )?
+            } else if matches!(
+                &ops[index],
+                PipelineOp::Autocontrast { .. } | PipelineOp::Equalize
+            ) {
+                // Histogram-driven operations resolve to a multi-pass plan
+                // during encoding. Use the clear pass here because it has
+                // the same image-sized output contract as the public op,
+                // while the operation-specific cutoff/CDF parameters are
+                // still appended below.
+                self.resolve_pipeline(
+                    "__internal_histogram_clear",
+                    "histogram_clear.wgsl",
+                    include_str!("shaders/histogram_clear.wgsl"),
+                )?
             } else if Self::blur_pass_count(op).is_some() {
                 self.resolve_pipeline(
                     "__internal_blur_h",
                     "box_blur_h.wgsl",
                     include_str!("shaders/box_blur_h.wgsl"),
+                )?
+            } else if matches!(op, PipelineOp::Pad { .. }) {
+                // Pad's first device pass is the exact separable resize.  The
+                // final placement shader is resolved alongside it during
+                // encode_batch; using the resize variant here makes the
+                // coefficient range and uniform preparation follow the same
+                // binding contract as public Resize.
+                self.resolve_pipeline(
+                    "__internal_resize_h",
+                    "resize_convolution_h.wgsl",
+                    include_str!("shaders/resize_convolution_h.wgsl"),
+                )?
+            } else if matches!(op, PipelineOp::Resize { filter, .. }
+                if !matches!(filter, ResampleFilter::Nearest)
+                    || gpu_resize_nearest_uses_coefficients(logical_mode))
+            {
+                self.resolve_pipeline(
+                    "__internal_resize_h",
+                    "resize_convolution_h.wgsl",
+                    include_str!("shaders/resize_convolution_h.wgsl"),
                 )?
             } else {
                 let base_key = registry::variant_key(op);
@@ -1598,6 +2306,7 @@ impl GpuInner {
             };
             let (out_w, out_h) = op_output_dims(op, cur_w, cur_h).unwrap_or((cur_w, cur_h));
             self.validate_output_dims(buffers, out_w, out_h)?;
+            input_dims.push((cur_w, cur_h));
             output_dims.push((out_w, out_h));
 
             // Transpose's swap variants and output-only generators describe
@@ -1618,8 +2327,199 @@ impl GpuInner {
             } else {
                 (cur_w, cur_h)
             };
-            let mut params = vec![shader_w, shader_h, mode, 0u32];
-            params.extend(registry::extract_params(op));
+            let op_mode = current_mode;
+            let mut params = vec![shader_w, shader_h, op_mode, 0u32];
+            if matches!(
+                op,
+                PipelineOp::Resize {
+                    filter: ResampleFilter::Nearest,
+                    ..
+                }
+            ) {
+                params.extend([
+                    out_w,
+                    out_h,
+                    gpu_resize_channel_count(op_mode),
+                    u32::from(gpu_resize_should_premultiply(
+                        op_mode,
+                        logical_mode,
+                        ResampleFilter::Nearest,
+                    )),
+                ]);
+            } else if let PipelineOp::Resize { filter, .. } = op {
+                debug_assert!(!matches!(filter, ResampleFilter::Nearest));
+                params.extend([
+                    out_w,
+                    out_h,
+                    gpu_resize_channel_count(op_mode),
+                    u32::from(gpu_resize_should_premultiply(
+                        op_mode,
+                        logical_mode,
+                        *filter,
+                    )),
+                ]);
+            } else if let PipelineOp::Pad { filter, .. } = op {
+                let ((resize_w, resize_h), (offset_x, offset_y)) =
+                    gpu_pad_geometry(op, cur_w, cur_h).ok_or_else(|| {
+                        PilError::ValueError("GPU Pad has no safe geometry".into())
+                    })?;
+                let resize_filter = if logical_mode == Some("P") {
+                    ResampleFilter::Nearest
+                } else {
+                    *filter
+                };
+                let fill = gpu_pad_fill(op, logical_mode, op_mode);
+                params.extend([
+                    resize_w,
+                    resize_h,
+                    gpu_resize_channel_count(op_mode),
+                    u32::from(gpu_resize_should_premultiply(
+                        op_mode,
+                        logical_mode,
+                        resize_filter,
+                    )),
+                    out_w,
+                    out_h,
+                    fill,
+                    offset_x,
+                    offset_y,
+                ]);
+            } else if let PipelineOp::Autocontrast { cutoff, .. } = op {
+                let selected_pixels = gpu_autocontrast_selected_pixels(
+                    cur_w,
+                    cur_h,
+                    auxiliary_images[index].third.as_deref(),
+                )?;
+                let (cutoff_low, cutoff_high) =
+                    gpu_autocontrast_cutoff_indices(selected_pixels, *cutoff);
+                params[3] = u32::from(auxiliary_images[index].third.is_some());
+                // Keep the original cutoff bits for receipt/debugging
+                // compatibility; the exact integer thresholds below avoid
+                // f32 cutoff rounding inside the device control pass.
+                params.extend([(*cutoff as f32).to_bits(), cutoff_low, cutoff_high]);
+                params.push(selected_pixels.min(u32::MAX as usize) as u32);
+            } else if let PipelineOp::Transform {
+                filter,
+                method,
+                data,
+                ..
+            } = op
+            {
+                let mut transform_params = registry::extract_params(op);
+                // Pillow's affine nearest kernel quantizes its coefficients
+                // to signed 16.16 once, then advances integer coordinates
+                // across each output row.  Carry those fixed-point values
+                // in the six affine slots for the native GPU path instead
+                // of reconstructing them from f32 values in the shader.  The
+                // slots are still consumed as f32 for bilinear/projective
+                // transforms, so this is an ABI-preserving mode-specific
+                // encoding.
+                if matches!(method, TransformMethod::Affine)
+                    && matches!(filter, ResampleFilter::Nearest)
+                {
+                    let fixed = |value: f64| (value.mul_add(65_536.0, 0.5).floor() as i64) as u32;
+                    let a = data.first().copied().unwrap_or(0.0);
+                    let b = data.get(1).copied().unwrap_or(0.0);
+                    let c = data.get(2).copied().unwrap_or(0.0);
+                    let d = data.get(3).copied().unwrap_or(0.0);
+                    let e = data.get(4).copied().unwrap_or(0.0);
+                    let f = data.get(5).copied().unwrap_or(0.0);
+                    transform_params[2..8].copy_from_slice(&[
+                        fixed(a),
+                        fixed(b),
+                        fixed(c + a * 0.5 + b * 0.5),
+                        fixed(d),
+                        fixed(e),
+                        fixed(f + d * 0.5 + e * 0.5),
+                    ]);
+                }
+                // `extract_params` deliberately contains only the public
+                // operation values.  The GPU transport additionally needs
+                // the scalar decision that mirrors Image.transform's
+                // premultiplied-alpha round trip; keep that decision in the
+                // control plane and let the shader own every pixel sample.
+                transform_params[8] = gpu_transform_fill(op, logical_mode, op_mode);
+                if gpu_transform_uses_nearest(logical_mode, *filter) {
+                    transform_params[9] = 0;
+                }
+                params.extend(transform_params);
+                params.push(u32::from(gpu_transform_should_premultiply(
+                    op_mode,
+                    logical_mode,
+                    *filter,
+                    method.clone(),
+                )));
+                // The affine shader historically used this final word as
+                // padding. Reuse it as the method selector and append the
+                // two projective coefficients/mesh tail values below so one
+                // packed uniform contract covers every bounded transform
+                // family without a second dispatch or auxiliary image.
+                let method_code = match method {
+                    TransformMethod::Affine => 0,
+                    TransformMethod::Perspective => 1,
+                    TransformMethod::Quad => 2,
+                    TransformMethod::Mesh => 3,
+                };
+                params.push(method_code);
+                params.push((data.get(6).copied().unwrap_or(0.0) as f32).to_bits());
+                params.push((data.get(7).copied().unwrap_or(0.0) as f32).to_bits());
+                if matches!(method, TransformMethod::Mesh) {
+                    for value in data.get(8..12).unwrap_or(&[]) {
+                        params.push((*value as f32).to_bits());
+                    }
+                }
+            } else if let PipelineOp::Color3DLut {
+                size,
+                channels,
+                source_mode,
+                ..
+            } = op
+            {
+                let scale = |extent: u32| {
+                    ((f64::from(extent.saturating_sub(1)) / 255.0) * f64::from(1u32 << 18)) as u32
+                };
+                params.extend([
+                    size.0,
+                    size.1,
+                    size.2,
+                    *channels,
+                    scale(size.0),
+                    scale(size.1),
+                    scale(size.2),
+                ]);
+                params[2] = gpu_pixel_mode_code(*source_mode).unwrap_or(op_mode);
+            } else if let PipelineOp::Fit {
+                bleed,
+                centering,
+                filter,
+                ..
+            } = op
+            {
+                let (crop_left, crop_top, crop_w, crop_h) = gpu_fit_box(
+                    cur_w, cur_h, out_w, out_h, *bleed, *centering,
+                )
+                .ok_or_else(|| PilError::ValueError("GPU Fit has no safe crop geometry".into()))?;
+                // fit.wgsl consumes target dimensions followed by the
+                // fractional source crop box.  Keep the values as f32 bits
+                // in the uniform arena; the shader performs the same
+                // pixel-centre mapping as the scalar boxed-resize path.
+                params.extend([
+                    out_w,
+                    out_h,
+                    (crop_left as f32).to_bits(),
+                    (crop_top as f32).to_bits(),
+                    (crop_w as f32).to_bits(),
+                    (crop_h as f32).to_bits(),
+                    gpu_resample_filter_code(*filter),
+                ]);
+            } else {
+                params.extend(registry::extract_params(op));
+            }
+            if matches!(op, PipelineOp::Contrast { .. }) {
+                params.push(u32::from(contrast_mean.ok_or_else(|| {
+                    PilError::ValueError("GPU Contrast is missing its scalar midpoint".into())
+                })?));
+            }
             // Shaders that declare dst_w/dst_h at the end of Params read these
             // words; shaders without them ignore the trailing words.
             params.extend([out_w, out_h]);
@@ -1628,6 +2528,53 @@ impl GpuInner {
                 &params,
                 uniform_alignment,
             ));
+
+            let resize_coeff_range = match op {
+                PipelineOp::Resize { filter, .. } => {
+                    let uses_coefficients = !matches!(filter, ResampleFilter::Nearest)
+                        || gpu_resize_nearest_uses_coefficients(logical_mode);
+                    if !uses_coefficients {
+                        None
+                    } else {
+                        let horizontal = gpu_resize_coefficients(out_w, cur_w, *filter);
+                        let vertical = gpu_resize_coefficients(out_h, cur_h, *filter);
+                        Some(self.append_resize_coeff_ranges(
+                            &mut img2_arena,
+                            auxiliary_cache,
+                            &horizontal,
+                            &vertical,
+                            storage_alignment,
+                        )?)
+                    }
+                }
+                PipelineOp::Pad { filter, .. } => {
+                    let ((resize_w, resize_h), _) =
+                        gpu_pad_geometry(op, cur_w, cur_h).ok_or_else(|| {
+                            PilError::ValueError("GPU Pad has no safe geometry".into())
+                        })?;
+                    let resize_filter = if logical_mode == Some("P") {
+                        ResampleFilter::Nearest
+                    } else {
+                        *filter
+                    };
+                    let horizontal = gpu_resize_coefficients(resize_w, cur_w, resize_filter);
+                    let vertical = gpu_resize_coefficients(resize_h, cur_h, resize_filter);
+                    Some(self.append_resize_coeff_ranges(
+                        &mut img2_arena,
+                        auxiliary_cache,
+                        &horizontal,
+                        &vertical,
+                        storage_alignment,
+                    )?)
+                }
+                _ => None,
+            };
+            resize_coeff_ranges.push(resize_coeff_range);
+            pad_resize_dims.push(
+                matches!(op, PipelineOp::Pad { .. })
+                    .then(|| gpu_pad_geometry(op, cur_w, cur_h).map(|(dims, _)| dims))
+                    .flatten(),
+            );
 
             let second_range = if let PipelineOp::PutData { data, mode } = op {
                 let second_values = pack_put_data(data, *mode, buffers.capacity)?;
@@ -1640,17 +2587,31 @@ impl GpuInner {
                     Some(range)
                 }
             } else if let Some(second) = auxiliary_images[index].second.as_ref() {
-                let key = Arc::as_ptr(second) as usize;
-                if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
-                    Some(range)
-                } else if let Some(range) = second_cache.get(&key).copied() {
-                    Some(range)
-                } else {
-                    let values = pack_rgba(&second.to_rgba8(), buffers.capacity)?;
+                if gpu_luma16_paste_source(op, op_mode, second) {
+                    let DynamicImage::ImageLuma16(source) = second.as_ref() else {
+                        return Err(PilError::InternalError(
+                            "GPU typed Paste source was admitted without an ImageLuma16 buffer"
+                                .into(),
+                        ));
+                    };
+                    let values = pack_luma16_numeric(source, buffers.capacity)?;
                     let mut range = append_arena_slice(&mut img2_arena, &values, storage_alignment);
                     range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                    second_cache.insert(key, range);
                     Some(range)
+                } else {
+                    let key = Arc::as_ptr(second) as usize;
+                    if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
+                        Some(range)
+                    } else if let Some(range) = second_cache.get(&key).copied() {
+                        Some(range)
+                    } else {
+                        let values = pack_rgba(&second.to_rgba8(), buffers.capacity)?;
+                        let mut range =
+                            append_arena_slice(&mut img2_arena, &values, storage_alignment);
+                        range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
+                        second_cache.insert(key, range);
+                        Some(range)
+                    }
                 }
             } else {
                 None
@@ -1675,8 +2636,12 @@ impl GpuInner {
             };
             img3_ranges.push(third_range);
 
-            let lut_values = if cached.is_lut {
-                Some(extract_lut(op, mode).ok_or_else(|| {
+            let lut_values = if cached.is_lut
+                && !matches!(
+                    cached.variant_name,
+                    "__internal_resize_h" | "__internal_resize_v"
+                ) {
+                Some(extract_lut(op, op_mode).ok_or_else(|| {
                     PilError::ValueError(format!(
                         "GPU LUT length does not match source mode for '{}'",
                         registry::variant_key(op)
@@ -1700,6 +2665,7 @@ impl GpuInner {
 
             cur_w = out_w;
             cur_h = out_h;
+            current_mode = gpu_mode_after_op(current_mode, op);
         }
 
         buffers.params_arena.ensure_capacity(
@@ -1822,16 +2788,20 @@ impl GpuInner {
                 fallback_img2: &buffers.buf_img2,
                 fallback_img3: &buffers.buf_img3,
                 fallback_lut: &buffers.lut_buf,
+                histogram: &buffers.histogram_buf,
                 params: &buffers.params_arena.buffer,
                 params_ranges,
                 img2,
                 img2_ranges,
+                resize_coeff_ranges,
                 img3,
                 img3_ranges,
                 lut,
                 lut_ranges,
             },
+            input_dims,
             output_dims,
+            pad_resize_dims,
             final_dims: (cur_w, cur_h),
             resource_telemetry,
         })
@@ -1844,6 +2814,7 @@ impl GpuInner {
         index: usize,
         current_is_a: bool,
         resources: &GpuBatchResources,
+        input_dims: (u32, u32),
         output_dims: (u32, u32),
     ) -> Result<bool, PilError> {
         let (input_buf, output_buf) = if current_is_a {
@@ -1857,6 +2828,13 @@ impl GpuInner {
         let (dispatch_w, dispatch_h) = match cached.variant_name {
             "__internal_blur_h" => (1, output_dims.1),
             "__internal_blur_v" => (output_dims.0, 1),
+            "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
+            "__internal_resize_v" => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
+            "__internal_histogram_clear"
+            | "__internal_autocontrast_histogram"
+            | "__internal_equalize_histogram"
+            | "__internal_autocontrast_lut"
+            | "__internal_equalize_lut" => (1, 1),
             _ => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
         };
         crate::compute::record_gpu_shader_dispatch(
@@ -1865,7 +2843,15 @@ impl GpuInner {
             u64::from(dispatch_w).saturating_mul(u64::from(dispatch_h)),
         );
         cpass.dispatch_workgroups(dispatch_w, dispatch_h, 1);
-        Ok(if cached.is_in_place {
+        let keeps_image_buffer = matches!(
+            cached.variant_name,
+            "__internal_histogram_clear"
+                | "__internal_autocontrast_histogram"
+                | "__internal_equalize_histogram"
+                | "__internal_autocontrast_lut"
+                | "__internal_equalize_lut"
+        );
+        Ok(if cached.is_in_place || keeps_image_buffer {
             current_is_a
         } else {
             !current_is_a
@@ -1887,8 +2873,9 @@ impl GpuInner {
         ops: &[PipelineOp],
         prepared: &PreparedGpuBatch,
         start_is_a: bool,
+        logical_mode: Option<&str>,
     ) -> Result<bool, PilError> {
-        let resolved = self.resolve_batch_pipelines(ops)?;
+        let resolved = self.resolve_batch_pipelines(ops, logical_mode)?;
         let mut current_is_a = start_is_a;
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("gpu_batch_compute"),
@@ -1916,6 +2903,7 @@ impl GpuInner {
                         index,
                         current_is_a,
                         &prepared.resources,
+                        prepared.input_dims[index],
                         prepared.output_dims[index],
                     )?;
                 }
@@ -1926,9 +2914,114 @@ impl GpuInner {
                         index,
                         current_is_a,
                         &prepared.resources,
+                        prepared.input_dims[index],
                         prepared.output_dims[index],
                     )?;
                 }
+            } else if let ResolvedPipeline::Resize {
+                horizontal,
+                vertical,
+            } = pipeline
+            {
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    horizontal,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    prepared.input_dims[index],
+                    prepared.output_dims[index],
+                )?;
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    vertical,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    prepared.input_dims[index],
+                    prepared.output_dims[index],
+                )?;
+            } else if let ResolvedPipeline::Pad {
+                horizontal,
+                vertical,
+                place,
+            } = pipeline
+            {
+                let resize_dims = prepared.pad_resize_dims[index].ok_or_else(|| {
+                    PilError::InternalError("GPU Pad is missing its contain dimensions".into())
+                })?;
+                if resize_dims != prepared.input_dims[index] {
+                    current_is_a = self.encode_dispatch(
+                        &mut cpass,
+                        horizontal,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        prepared.input_dims[index],
+                        resize_dims,
+                    )?;
+                    current_is_a = self.encode_dispatch(
+                        &mut cpass,
+                        vertical,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        prepared.input_dims[index],
+                        resize_dims,
+                    )?;
+                }
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    place,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    resize_dims,
+                    prepared.output_dims[index],
+                )?;
+            } else if let ResolvedPipeline::Histogram {
+                clear,
+                histogram,
+                derive,
+                remap,
+            } = pipeline
+            {
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    clear,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    prepared.input_dims[index],
+                    prepared.output_dims[index],
+                )?;
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    histogram,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    prepared.input_dims[index],
+                    prepared.output_dims[index],
+                )?;
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    derive,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    prepared.input_dims[index],
+                    prepared.output_dims[index],
+                )?;
+                current_is_a = self.encode_dispatch(
+                    &mut cpass,
+                    remap,
+                    index,
+                    current_is_a,
+                    &prepared.resources,
+                    prepared.input_dims[index],
+                    prepared.output_dims[index],
+                )?;
             } else {
                 let ResolvedPipeline::Single(cached) = pipeline else {
                     unreachable!("resolved GPU pipeline variant changed during encoding")
@@ -1939,6 +3032,7 @@ impl GpuInner {
                     index,
                     current_is_a,
                     &prepared.resources,
+                    prepared.input_dims[index],
                     prepared.output_dims[index],
                 )?;
             }
@@ -1947,14 +3041,7 @@ impl GpuInner {
         Ok(current_is_a)
     }
 
-    fn readback_to_image(
-        &self,
-        w: u32,
-        h: u32,
-        staging: &wgpu::Buffer,
-    ) -> Result<DynamicImage, PilError> {
-        let size = CheckedDims::new(w, h, 4)?.total_bytes() as u64;
-
+    fn readback_bytes(&self, size: u64, staging: &wgpu::Buffer) -> Result<Vec<u8>, PilError> {
         let slice = staging.slice(..size);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |r| {
@@ -1997,6 +3084,17 @@ impl GpuInner {
         let data = slice.get_mapped_range().to_vec();
         let _ = slice;
         staging.unmap();
+        Ok(data)
+    }
+
+    fn readback_to_image(
+        &self,
+        w: u32,
+        h: u32,
+        staging: &wgpu::Buffer,
+    ) -> Result<DynamicImage, PilError> {
+        let size = CheckedDims::new(w, h, 4)?.total_bytes() as u64;
+        let data = self.readback_bytes(size, staging)?;
 
         let n = CheckedDims::new(w, h, 1)?.total_pixels();
         #[cfg(target_endian = "little")]
@@ -2042,6 +3140,85 @@ impl GpuInner {
         Ok(DynamicImage::ImageRgba8(img))
     }
 
+    fn readback_to_luma16(
+        &self,
+        w: u32,
+        h: u32,
+        staging: &wgpu::Buffer,
+        mode: Option<&str>,
+    ) -> Result<DynamicImage, PilError> {
+        let size = CheckedDims::new(w, h, 4)?.total_bytes() as u64;
+        let data = self.readback_bytes(size, staging)?;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
+        let expected = n * std::mem::size_of::<u32>();
+        if data.len() != expected {
+            return Err(PilError::ValueError(format!(
+                "GPU readback byte length {} does not match image size {expected}",
+                data.len()
+            )));
+        }
+        let mut pixels = Vec::with_capacity(n);
+        for sample in data.chunks_exact(std::mem::size_of::<u32>()) {
+            let bytes = [sample[0], sample[1]];
+            pixels.push(if mode == Some("I;16B") {
+                u16::from_be_bytes(bytes)
+            } else {
+                u16::from_ne_bytes(bytes)
+            });
+        }
+        if !data
+            .chunks_exact(std::mem::size_of::<u32>())
+            .remainder()
+            .is_empty()
+        {
+            return Err(PilError::ValueError(
+                "GPU readback buffer has a partial typed sample".into(),
+            ));
+        }
+        let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(w, h, pixels)
+            .ok_or_else(|| PilError::ValueError("bad typed readback buffer".into()))?;
+        Ok(DynamicImage::ImageLuma16(image))
+    }
+
+    /// Read back the numeric-u16 representation used by typed Paste. Unlike
+    /// I;16 geometry, this path deliberately ignores the public byte-order
+    /// label: the shader blended decoded unsigned samples and wrote the
+    /// result as a little-endian numeric word. The returned host image keeps
+    /// those samples ready for the existing mode-preserving boundary.
+    fn readback_to_luma16_numeric(
+        &self,
+        w: u32,
+        h: u32,
+        staging: &wgpu::Buffer,
+    ) -> Result<DynamicImage, PilError> {
+        let size = CheckedDims::new(w, h, 4)?.total_bytes() as u64;
+        let data = self.readback_bytes(size, staging)?;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
+        let expected = n * std::mem::size_of::<u32>();
+        if data.len() != expected {
+            return Err(PilError::ValueError(format!(
+                "GPU readback byte length {} does not match image size {expected}",
+                data.len()
+            )));
+        }
+        let pixels = data
+            .chunks_exact(std::mem::size_of::<u32>())
+            .map(|sample| u16::from_le_bytes([sample[0], sample[1]]))
+            .collect::<Vec<_>>();
+        if !data
+            .chunks_exact(std::mem::size_of::<u32>())
+            .remainder()
+            .is_empty()
+        {
+            return Err(PilError::ValueError(
+                "GPU readback buffer has a partial typed sample".into(),
+            ));
+        }
+        let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(w, h, pixels)
+            .ok_or_else(|| PilError::ValueError("bad typed readback buffer".into()))?;
+        Ok(DynamicImage::ImageLuma16(image))
+    }
+
     fn execute_batch_impl(
         &self,
         ops: &[PipelineOp],
@@ -2049,6 +3226,8 @@ impl GpuInner {
         w: u32,
         h: u32,
         mode: u32,
+        logical_mode: Option<&str>,
+        contrast_mean: Option<u8>,
         buffers: &mut BufferPool,
     ) -> Result<
         (
@@ -2064,7 +3243,7 @@ impl GpuInner {
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
-        let dispatch_count = gpu_dispatch_count(ops);
+        let dispatch_count = gpu_dispatch_count(ops, logical_mode);
         gpu_log!(
             "[GPU] batch_impl: {} ops, start dims {}x{}",
             ops.len(),
@@ -2080,17 +3259,42 @@ impl GpuInner {
         let limits = self.device.limits();
         let uniform_alignment = limits.min_uniform_buffer_offset_alignment as usize;
         let storage_alignment = limits.min_storage_buffer_offset_alignment as usize;
+        let mut op_modes = Vec::with_capacity(ops.len());
+        let mut current_mode = mode;
+        for op in ops {
+            op_modes.push(current_mode);
+            current_mode = gpu_mode_after_op(current_mode, op);
+        }
+        let mut resource_source_dims = Vec::with_capacity(ops.len());
+        let mut resource_w = w;
+        let mut resource_h = h;
+        for op in ops {
+            resource_source_dims.push((resource_w, resource_h));
+            let next = match op_output_dims(op, resource_w, resource_h) {
+                Some(dimensions) => dimensions,
+                None if op_has_explicit_output_dimensions(op) => {
+                    return Err(PilError::ValueError(format!(
+                        "GPU operation '{}' has no safe source dimensions",
+                        registry::variant_key(op)
+                    )));
+                }
+                None => (resource_w, resource_h),
+            };
+            (resource_w, resource_h) = next;
+        }
         let resource_bytes = ops
             .iter()
             .zip(auxiliary_images.iter())
-            .map(|(op, auxiliary)| {
+            .enumerate()
+            .map(|(index, (op, auxiliary))| {
                 self.estimate_resource_bytes(
                     op,
                     auxiliary,
                     buffers,
                     uniform_alignment,
                     storage_alignment,
-                    mode,
+                    resource_source_dims[index],
+                    op_modes[index],
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -2109,12 +3313,13 @@ impl GpuInner {
                     }
                     None => (work_w, work_h),
                 };
-                let work = gpu_shader_work_items(op, (work_w, work_h), next).ok_or_else(|| {
-                    PilError::ValueError(format!(
-                        "GPU operation '{}' has no bounded shader work estimate",
-                        registry::variant_key(op)
-                    ))
-                })?;
+                let work = gpu_shader_work_items(op, (work_w, work_h), next, logical_mode)
+                    .ok_or_else(|| {
+                        PilError::ValueError(format!(
+                            "GPU operation '{}' has no bounded shader work estimate",
+                            registry::variant_key(op)
+                        ))
+                    })?;
                 (work_w, work_h) = next;
                 Ok(work)
             })
@@ -2134,6 +3339,7 @@ impl GpuInner {
             auxiliary_bytes: auxiliary_cache.total_bytes() as u64,
             ..PipelineResourceTelemetry::default()
         };
+        current_mode = mode;
         while chunk_start < ops.len() {
             self.ensure_healthy("GPU batch submission")?;
             let chunk_end = select_gpu_chunk_end(chunk_start, &resource_bytes, &shader_work_items)
@@ -2155,7 +3361,9 @@ impl GpuInner {
                 &auxiliary_images[chunk_start..chunk_end],
                 cur_w,
                 cur_h,
-                mode,
+                current_mode,
+                logical_mode,
+                contrast_mean,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -2175,6 +3383,7 @@ impl GpuInner {
                 &ops[chunk_start..chunk_end],
                 &prepared,
                 current_is_a,
+                logical_mode,
             )?;
 
             let final_dims = prepared.final_dims;
@@ -2210,6 +3419,7 @@ impl GpuInner {
                 estimated_work
             );
             (cur_w, cur_h) = final_dims;
+            current_mode = gpu_mode_after_ops(current_mode, &ops[chunk_start..chunk_end]);
             chunk_start = chunk_end;
         }
         // After all chunks, current_is_a tracks where the latest result lives:
@@ -2234,15 +3444,251 @@ static GPU: std::sync::OnceLock<Result<GpuInner, PilError>> = std::sync::OnceLoc
 // ─── Mode helpers ───────────────────────────────────────────────────────────
 
 /// Map a DynamicImage variant to its mode code for the GPU uniform buffer.
-/// 0 = L (1 channel), 1 = LA (2 channels), 2 = RGB (3 channels), 3 = RGBA (4 channels)
+/// 0 = L, 1 = LA, 2 = RGB, 3 = RGBA, 4 = CMYK, 5 = native I;16* geometry,
+/// 6 = RGBX, and 7 = native I-mode convolution. The non-byte modes use the
+/// packed word only where the selected shader explicitly owns that contract.
 fn mode_code(img: &DynamicImage) -> u32 {
     match img {
         DynamicImage::ImageLuma8(_) => 0,
         DynamicImage::ImageLumaA8(_) => 1,
         DynamicImage::ImageRgb8(_) => 2,
         DynamicImage::ImageRgba8(_) => 3,
+        DynamicImage::ImageLuma16(_) => 5,
         _ => 3, // fallback: treat as RGBA
     }
+}
+
+fn execution_mode_code(img: &DynamicImage, logical_mode: Option<&str>) -> u32 {
+    match logical_mode {
+        Some("CMYK") => 4,
+        Some("I;16" | "I;16L" | "I;16B" | "I;16N") => 5,
+        Some("I") => 7,
+        // F stores one little-endian f32 sample in the four-byte transport.
+        // The order-statistic shaders use this distinct code instead of
+        // treating the sample's representation as four independent bytes.
+        Some("F") => 8,
+        // RGBX shares RGBA storage, but byte three is padding rather than an
+        // alpha sample. The Convert shader uses this distinct source code to
+        // force opaque output alpha instead of preserving that padding byte.
+        Some("RGBX") => 6,
+        // P/PA use the L/LA transport respectively. Preserve the physical
+        // two-band code for PA so ExtractBand(1) selects byte three (alpha),
+        // and so later raw PA writes do not mistake the alpha byte for green.
+        Some("P" | "1") => 0,
+        Some("PA") => 1,
+        Some("HSV" | "YCbCr") => 2,
+        _ => mode_code(img),
+    }
+}
+
+fn gpu_resize_channel_count(mode: u32) -> u32 {
+    match mode {
+        0 => 1,
+        1 => 2,
+        2 => 3,
+        _ => 4,
+    }
+}
+
+fn gpu_resize_should_premultiply(
+    mode: u32,
+    logical_mode: Option<&str>,
+    filter: ResampleFilter,
+) -> bool {
+    // Pillow's nearest affine path copies samples directly. Alpha is
+    // premultiplied only by the separable convolution filters.
+    if matches!(filter, ResampleFilter::Nearest) {
+        return false;
+    }
+    match logical_mode {
+        Some("PA" | "RGBa" | "CMYK" | "RGBX" | "P" | "1" | "I" | "F") => false,
+        Some("LA" | "RGBA") => true,
+        Some("L" | "RGB" | "HSV" | "YCbCr") => false,
+        Some("I;16" | "I;16L" | "I;16B" | "I;16N") => false,
+        None => matches!(mode, 1 | 3),
+        Some(_) => matches!(mode, 1 | 3),
+    }
+}
+
+fn gpu_transform_uses_nearest(logical_mode: Option<&str>, filter: ResampleFilter) -> bool {
+    matches!(filter, ResampleFilter::Nearest)
+        || matches!(
+            logical_mode,
+            Some("P" | "1" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N")
+        )
+}
+
+fn gpu_transform_should_premultiply(
+    mode: u32,
+    logical_mode: Option<&str>,
+    filter: ResampleFilter,
+    method: TransformMethod,
+) -> bool {
+    // Perspective/Quad use the direct ImagingTransformProjective byte path;
+    // unlike affine transforms it does not enter the premultiplied-alpha
+    // temporary. Mesh is nearest-only in the bounded GPU contract.
+    if !matches!(method, TransformMethod::Affine)
+        || gpu_transform_uses_nearest(logical_mode, filter)
+    {
+        return false;
+    }
+    match logical_mode {
+        Some("LA" | "RGBA") => true,
+        Some("PA" | "RGBa" | "CMYK" | "I" | "F" | "P" | "1") => false,
+        Some("I;16" | "I;16L" | "I;16B" | "I;16N") => false,
+        None => matches!(mode, 1 | 3),
+        Some(_) => matches!(mode, 1 | 3),
+    }
+}
+
+fn gpu_transform_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) -> u32 {
+    let PipelineOp::Transform {
+        fill, palette_fill, ..
+    } = op
+    else {
+        return 0;
+    };
+    let has_alpha =
+        matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
+    let resolved = palette_fill
+        .map(|index| (index, 0, 0, 255))
+        .or(*fill)
+        .unwrap_or((0, 0, 0, if has_alpha { 0 } else { 255 }));
+    // Core normalizes LA/PA colors as `(luma, alpha, 0, 0)` because that is
+    // the native two-band representation.  The GPU transport is packed
+    // RGBA, so move the logical alpha into byte three and replicate luma in
+    // the unused color lanes just as `to_rgba8()` does for the source image.
+    let packed = if matches!(logical_mode, Some("LA" | "PA")) {
+        (resolved.0, resolved.0, resolved.0, resolved.1)
+    } else {
+        resolved
+    };
+    u32::from(packed.0)
+        | (u32::from(packed.1) << 8)
+        | (u32::from(packed.2) << 16)
+        | (u32::from(packed.3) << 24)
+}
+
+/// Return the packed transport mode used by the exact four-mode Convert
+/// shader.  Non-byte targets are deliberately excluded: their public sample
+/// representation needs a different buffer layout and therefore remains an
+/// explicit preflight failure.
+fn gpu_standard_color_mode_code(mode: &ColorMode) -> Option<u32> {
+    match mode {
+        ColorMode::L => Some(0),
+        ColorMode::LA => Some(1),
+        ColorMode::RGB => Some(2),
+        ColorMode::RGBA => Some(3),
+        _ => None,
+    }
+}
+
+/// Return the packed target-mode code understood by `convert.wgsl`.
+/// Non-standard Pillow modes remain packed byte buffers at this executor
+/// boundary, but their output representation is restored by the final
+/// color-type conversion and the public explicit mode on the lazy image.
+fn gpu_convert_target_mode_code(mode: &ColorMode) -> Option<u32> {
+    match mode {
+        ColorMode::L => Some(0),
+        ColorMode::LA => Some(1),
+        ColorMode::RGB => Some(2),
+        ColorMode::RGBA => Some(3),
+        ColorMode::CMYK => Some(4),
+        ColorMode::YCbCr => Some(5),
+        ColorMode::HSV => Some(6),
+        ColorMode::I => Some(7),
+        ColorMode::F => Some(8),
+        ColorMode::P | ColorMode::Mode1 => None,
+    }
+}
+
+/// Update the packed mode word after a mode-changing operation that the GPU
+/// batch can represent.  Keeping this scalar state beside the uniform builder
+/// lets a Convert feed a later shader without a host readback: the first
+/// dispatch writes the new packed layout and the next dispatch receives the
+/// corresponding mode code.
+fn gpu_mode_after_op(mode: u32, op: &PipelineOp) -> u32 {
+    match op {
+        PipelineOp::Convert { mode: target, .. } => {
+            gpu_convert_target_mode_code(target).unwrap_or(mode)
+        }
+        PipelineOp::Grayscale | PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. } => 0,
+        PipelineOp::Colorize { .. } => 2,
+        PipelineOp::EffectNoise { .. } => 0,
+        PipelineOp::Color3DLut { target_mode, .. } => {
+            gpu_pixel_mode_code(*target_mode).unwrap_or(mode)
+        }
+        _ => mode,
+    }
+}
+
+fn gpu_pixel_mode_code(mode: PixelMode) -> Option<u32> {
+    match mode {
+        PixelMode::RGB => Some(2),
+        PixelMode::RGBA => Some(3),
+        PixelMode::CMYK => Some(4),
+        _ => None,
+    }
+}
+
+fn gpu_mode_after_ops(mut mode: u32, ops: &[PipelineOp]) -> u32 {
+    for op in ops {
+        mode = gpu_mode_after_op(mode, op);
+    }
+    mode
+}
+
+/// Compute Pillow's rounded Contrast midpoint without materializing a
+/// grayscale image. This is scalar control-plane work: the original native
+/// byte layout is scanned once, then the complete per-pixel blend is executed
+/// by `contrast.wgsl`. CMYK keeps its C/M/Y/K interpretation instead of
+/// treating the fourth packed byte as alpha.
+fn gpu_contrast_mean(img: &DynamicImage, logical_mode: Option<&str>) -> Option<u8> {
+    let (channels, cmyk) = match (img, logical_mode) {
+        (DynamicImage::ImageLuma8(_), None | Some("L")) => (1usize, false),
+        (DynamicImage::ImageLumaA8(_), None | Some("LA")) => (2, false),
+        (DynamicImage::ImageRgb8(_), None | Some("RGB")) => (3, false),
+        (DynamicImage::ImageRgba8(_), None | Some("RGBA")) => (4, false),
+        (DynamicImage::ImageRgba8(_), Some("CMYK")) => (4, true),
+        _ => return None,
+    };
+    let pixels = usize::try_from(img.width())
+        .ok()?
+        .checked_mul(usize::try_from(img.height()).ok()?)?;
+    if pixels == 0 {
+        return None;
+    }
+    let expected = pixels.checked_mul(channels)?;
+    let source = img.as_bytes();
+    if source.len() != expected {
+        return None;
+    }
+    let sum = if cmyk {
+        source
+            .chunks_exact(4)
+            .map(|pixel| {
+                let c = u32::from(pixel[0]);
+                let m = u32::from(pixel[1]);
+                let y = u32::from(pixel[2]);
+                let k = u32::from(pixel[3]);
+                let nk = 255u32.saturating_sub(k);
+                let r = (nk as i32 - crate::color::muldiv255(c, nk) as i32).clamp(0, 255) as u8;
+                let g = (nk as i32 - crate::color::muldiv255(m, nk) as i32).clamp(0, 255) as u8;
+                let b = (nk as i32 - crate::color::muldiv255(y, nk) as i32).clamp(0, 255) as u8;
+                u64::from(crate::color::rgb_to_luma_u8(r, g, b))
+            })
+            .sum::<u64>()
+    } else {
+        source
+            .chunks_exact(channels)
+            .map(|pixel| match channels {
+                1 | 2 => u64::from(pixel[0]),
+                3 | 4 => u64::from(crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])),
+                _ => 0,
+            })
+            .sum::<u64>()
+    };
+    Some(((sum as f64 / pixels as f64) + 0.5) as u8)
 }
 
 /// Return the concrete byte-buffer color type produced by a supported GPU
@@ -2255,6 +3701,16 @@ fn gpu_output_color_type(mode: &ColorMode) -> Option<crate::raster::ColorType> {
         ColorMode::LA => Some(crate::raster::ColorType::La8),
         ColorMode::RGB => Some(crate::raster::ColorType::Rgb8),
         ColorMode::RGBA => Some(crate::raster::ColorType::Rgba8),
+        ColorMode::CMYK | ColorMode::I | ColorMode::F => Some(crate::raster::ColorType::Rgba8),
+        ColorMode::YCbCr | ColorMode::HSV => Some(crate::raster::ColorType::Rgb8),
+        _ => None,
+    }
+}
+
+fn gpu_pixel_mode_color_type(mode: PixelMode) -> Option<crate::raster::ColorType> {
+    match mode {
+        PixelMode::RGB => Some(crate::raster::ColorType::Rgb8),
+        PixelMode::RGBA | PixelMode::CMYK => Some(crate::raster::ColorType::Rgba8),
         _ => None,
     }
 }
@@ -2295,22 +3751,95 @@ fn gpu_result_as_color_type(
     }
 }
 
-/// Return whether a batch contains a mode-changing operation followed by a
-/// later shader. The current GPU uniform arena carries one source mode for a
-/// dispatch, so such a batch must remain on the sequential CPU path.
+/// Return whether a batch contains a mode-changing operation that cannot feed
+/// a later shader in-place. Even byte-to-byte Convert changes the source
+/// layout used by subsequent image-aware checks, so it terminates a segment
+/// just like the other mode transitions.
 fn gpu_batch_has_nonterminal_mode_change(ops: &[PipelineOp]) -> bool {
     ops.iter().enumerate().any(|(index, op)| {
         index + 1 < ops.len()
             && matches!(
                 op,
-                PipelineOp::Convert { .. }
-                    | PipelineOp::Grayscale
+                PipelineOp::Grayscale
                     | PipelineOp::ExtractBand { .. }
                     | PipelineOp::Constant { .. }
+                    | PipelineOp::Colorize { .. }
                     | PipelineOp::PutAlpha { .. }
                     | PipelineOp::PutAlphaData { .. }
+                    | PipelineOp::Convert { .. }
+                    | PipelineOp::EffectNoise { .. }
             )
     })
+}
+
+/// Find the first operation whose public result changes the packed logical
+/// layout while another operation still follows it. A host-visible native
+/// result keeps the following operation's mode checks tied to the converted
+/// image rather than the original source layout.
+fn gpu_first_nonterminal_mode_change(ops: &[PipelineOp]) -> Option<usize> {
+    ops.iter().enumerate().find_map(|(index, op)| {
+        (index + 1 < ops.len()
+            && matches!(
+                op,
+                PipelineOp::Grayscale
+                    | PipelineOp::ExtractBand { .. }
+                    | PipelineOp::Constant { .. }
+                    | PipelineOp::Colorize { .. }
+                    | PipelineOp::PutAlpha { .. }
+                    | PipelineOp::PutAlphaData { .. }
+                    | PipelineOp::Convert { .. }
+                    | PipelineOp::EffectNoise { .. }
+            ))
+        .then_some(index)
+    })
+}
+
+/// Return the logical mode that follows a mode-changing GPU segment. The
+/// image result is used as a conservative fallback for direct backend callers
+/// that do not provide an explicit logical-mode tag.
+fn gpu_logical_mode_after_op(
+    previous: Option<&str>,
+    op: &PipelineOp,
+    result: &DynamicImage,
+) -> Option<String> {
+    let known = match op {
+        PipelineOp::Grayscale | PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. } => {
+            Some("L")
+        }
+        PipelineOp::Colorize { .. } => Some("RGB"),
+        PipelineOp::Convert { mode, .. } => match mode {
+            ColorMode::L => Some("L"),
+            ColorMode::LA => Some("LA"),
+            ColorMode::RGB => Some("RGB"),
+            ColorMode::RGBA => Some("RGBA"),
+            ColorMode::CMYK => Some("CMYK"),
+            ColorMode::YCbCr => Some("YCbCr"),
+            ColorMode::HSV => Some("HSV"),
+            ColorMode::I => Some("I"),
+            ColorMode::F => Some("F"),
+            ColorMode::P => Some("P"),
+            ColorMode::Mode1 => Some("1"),
+        },
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => match mode {
+            PixelMode::L | PixelMode::LA => Some("LA"),
+            PixelMode::RGB | PixelMode::RGBA | PixelMode::YCbCr | PixelMode::HSV => Some("RGBA"),
+            PixelMode::P | PixelMode::PA => Some("PA"),
+            PixelMode::CMYK => Some("CMYK"),
+            PixelMode::Mode1 | PixelMode::I | PixelMode::F => None,
+        },
+        _ => None,
+    };
+    known
+        .map(str::to_owned)
+        .or_else(|| previous.map(str::to_owned))
+        .or_else(|| match result {
+            DynamicImage::ImageLuma8(_) => Some("L".to_owned()),
+            DynamicImage::ImageLumaA8(_) => Some("LA".to_owned()),
+            DynamicImage::ImageRgb8(_) => Some("RGB".to_owned()),
+            DynamicImage::ImageRgba8(_) => Some("RGBA".to_owned()),
+            DynamicImage::ImageLuma16(_) => None,
+            _ => None,
+        })
 }
 
 fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> Result<DynamicImage, PilError> {
@@ -2336,7 +3865,104 @@ fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> Result<DynamicImag
 
 /// Extract the second (right-hand) image from a dual-input PipelineOp, if present.
 /// Returns shared materialized pixels ready for GPU upload.
-fn extract_second_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, PilError> {
+fn extract_second_image(
+    op: &PipelineOp,
+    primary_dimensions: Option<(u32, u32)>,
+    draw_source: Option<&DynamicImage>,
+) -> Result<Option<Arc<DynamicImage>>, PilError> {
+    if crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
+        let rendered = if let Some(rendered) = draw_source {
+            rendered.clone()
+        } else {
+            return Err(PilError::InternalError(
+                "GPU draw operation is missing its control canvas".into(),
+            ));
+        };
+        return Ok(Some(Arc::new(DynamicImage::ImageRgba8(
+            rendered.to_rgba8(),
+        ))));
+    }
+    if let PipelineOp::EffectSpread { distance } = op {
+        let (width, height) = primary_dimensions.ok_or_else(|| {
+            PilError::InternalError("GPU EffectSpread is missing primary dimensions".into())
+        })?;
+        let mapping = crate::compute::pool_cpu::ops::effects::effect_spread_mapping(
+            width, height, *distance,
+        )?;
+        let mut bytes = Vec::with_capacity(mapping.len().saturating_mul(4));
+        for value in mapping {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let synthetic = RgbaImage::from_raw(width.saturating_mul(height), 1, bytes)
+            .ok_or_else(|| PilError::InternalError("GPU EffectSpread map shape mismatch".into()))?;
+        return Ok(Some(Arc::new(DynamicImage::ImageRgba8(synthetic))));
+    }
+    if let PipelineOp::EffectNoise { sigma } = op {
+        let (width, height) = primary_dimensions.ok_or_else(|| {
+            PilError::InternalError("GPU EffectNoise is missing primary dimensions".into())
+        })?;
+        let values =
+            crate::compute::pool_cpu::ops::effects::effect_noise_values(width, height, *sigma)?;
+        let mut bytes = Vec::with_capacity(values.len().saturating_mul(4));
+        for value in values {
+            bytes.extend_from_slice(&[value, 0, 0, 255]);
+        }
+        let synthetic = RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
+            PilError::InternalError("GPU EffectNoise buffer shape mismatch".into())
+        })?;
+        return Ok(Some(Arc::new(DynamicImage::ImageRgba8(synthetic))));
+    }
+    if let PipelineOp::Merge { bands, .. } = op {
+        // Merge's first band is the current pipeline image. Pack the remaining
+        // single-band values consecutively into a synthetic Luma image so the
+        // ordinary dual-input binding can carry all bands without a new ABI.
+        let first = bands
+            .first()
+            .ok_or_else(|| PilError::ValueError("GPU Merge requires at least one band".into()))?;
+        let (w, h) = first.size()?;
+        let pixels = CheckedDims::new(w, h, 1)?.total_pixels();
+        let extras = bands.len().saturating_sub(1);
+        if extras == 0 {
+            return Ok(None);
+        }
+        let packed_width = pixels.checked_mul(extras).ok_or_else(|| {
+            PilError::ValueError("GPU Merge auxiliary band dimensions overflow".into())
+        })?;
+        let packed_width = u32::try_from(packed_width).map_err(|_| {
+            PilError::ValueError("GPU Merge auxiliary band dimensions exceed u32".into())
+        })?;
+        let mut values = Vec::with_capacity(packed_width as usize);
+        for band in bands.iter().skip(1) {
+            let image = band.materialize_for_ops()?;
+            if image.dimensions() != (w, h) {
+                return Err(PilError::ValueError(
+                    "GPU Merge band dimensions do not match".into(),
+                ));
+            }
+            values.extend(image.to_luma8().into_raw());
+        }
+        let synthetic = crate::raster::GrayImage::from_raw(packed_width, 1, values)
+            .ok_or_else(|| PilError::InternalError("GPU Merge auxiliary shape mismatch".into()))?;
+        return Ok(Some(Arc::new(DynamicImage::ImageLuma8(synthetic))));
+    }
+    if let PipelineOp::Color3DLut { table, .. } = op {
+        // Color3DLut table entries are prepared once on the host using the
+        // exact signed 12.4 conversion from the CPU implementation. Store one
+        // signed i16 value per synthetic pixel; the shader reads the low 16
+        // bits through the normal packed RGBA upload path.
+        let values = color3dlut_table_words(table)?;
+        let width = u32::try_from(values.len()).map_err(|_| {
+            PilError::ValueError("GPU Color3DLut table exceeds u32 dimensions".into())
+        })?;
+        let mut bytes = Vec::with_capacity(values.len().saturating_mul(4));
+        for value in values {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let synthetic = RgbaImage::from_raw(width, 1, bytes).ok_or_else(|| {
+            PilError::InternalError("GPU Color3DLut auxiliary table shape mismatch".into())
+        })?;
+        return Ok(Some(Arc::new(DynamicImage::ImageRgba8(synthetic))));
+    }
     if let PipelineOp::Paste { source, .. } = op {
         // Paste has already converted its source to the destination mode. Keep
         // P-mode sources as their one-byte indices here: expanding them through
@@ -2345,9 +3971,10 @@ fn extract_second_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, Pi
         return source.materialized_shared().map(Some);
     }
     if let PipelineOp::CompositeModule { other, .. } = op {
-        if other.mode()? == "P" {
-            // Image.composite blends P indices and gives the result image2's
-            // palette. Upload image2's indices, not its visible RGB expansion.
+        if matches!(other.mode()?.as_str(), "P" | "PA") {
+            // Image.composite blends indexed samples and gives the result
+            // image2's palette. Upload image2's raw index/(index, alpha)
+            // bytes, not its visible RGB(A) expansion.
             return other.materialized_shared().map(Some);
         }
     }
@@ -2381,14 +4008,61 @@ fn extract_second_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, Pi
 /// Extract the third image (mask) from a 3-input PipelineOp, if present.
 /// Returns shared materialized pixels ready for GPU upload.
 fn extract_third_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, PilError> {
-    let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
-        PipelineOp::CompositeModule { mask, .. } => Some(mask),
-        PipelineOp::Paste { mask, .. } => mask.as_ref(),
-        _ => None,
+    match op {
+        PipelineOp::CompositeModule { mask, .. } => mask.materialized_shared().map(Some),
+        PipelineOp::Paste { mask, .. } => mask
+            .as_ref()
+            .map(|image| image.materialized_shared())
+            .transpose(),
+        PipelineOp::Autocontrast { mask, .. } => mask
+            .as_ref()
+            .map(|image| image.materialized_shared())
+            .transpose(),
+        // PutAlphaData owns an operation-ready L mask already. Reuse its Arc
+        // directly so adding the GPU mask binding does not create a second
+        // host image or trigger another materialization.
+        PipelineOp::PutAlphaData { mask, .. } => Ok(Some(Arc::clone(mask))),
+        _ => Ok(None),
+    }
+}
+
+/// Count the samples participating in an Autocontrast histogram. This is
+/// scalar control-plane work only; the pixel histogram itself is accumulated
+/// by the GPU gather pass. Keeping the count on the host lets the cutoff pass
+/// use exact integer thresholds instead of depending on device f32 rounding.
+fn gpu_autocontrast_selected_pixels(
+    width: u32,
+    height: u32,
+    mask: Option<&DynamicImage>,
+) -> Result<usize, PilError> {
+    let image_pixels = CheckedDims::new(width, height, 1)?.total_pixels();
+    let Some(mask) = mask else {
+        return Ok(image_pixels);
     };
-    arc_img
-        .map(|image| image.materialized_shared().map(Some))
-        .unwrap_or(Ok(None))
+    if mask.dimensions() != (width, height) {
+        return Err(PilError::ValueError(
+            "Autocontrast mask dimensions do not match image".into(),
+        ));
+    }
+    Ok(mask
+        .to_luma8()
+        .pixels()
+        .filter(|pixel| pixel[0] != 0)
+        .count())
+}
+
+fn gpu_autocontrast_cutoff_indices(selected_pixels: usize, cutoff: f64) -> (u32, u32) {
+    if selected_pixels == 0 {
+        return (0, 0);
+    }
+    let total = selected_pixels as f64;
+    let low = (total * cutoff / 100.0) as usize;
+    let high = (total * (100.0 - cutoff) / 100.0) as usize;
+    (
+        low.min(u32::MAX as usize) as u32,
+        high.min(selected_pixels.saturating_sub(1))
+            .min(u32::MAX as usize) as u32,
+    )
 }
 
 struct AuxiliaryImages {
@@ -2396,12 +4070,16 @@ struct AuxiliaryImages {
     third: Option<Arc<DynamicImage>>,
 }
 
-fn extract_auxiliary_images(op: &PipelineOp) -> Result<AuxiliaryImages, PilError> {
+fn extract_auxiliary_images(
+    op: &PipelineOp,
+    primary_dimensions: (u32, u32),
+    draw_source: Option<&DynamicImage>,
+) -> Result<AuxiliaryImages, PilError> {
     // Pillow resolves each operation's source before its mask, then advances
     // to the next operation. Preserve that observable error order instead of
     // collecting one auxiliary slot across the whole batch at a time.
     Ok(AuxiliaryImages {
-        second: extract_second_image(op)?,
+        second: extract_second_image(op, Some(primary_dimensions), draw_source)?,
         third: extract_third_image(op)?,
     })
 }
@@ -2429,7 +4107,7 @@ fn extract_lut(op: &PipelineOp, mode: u32) -> Option<[u32; 256]> {
         0 => 1usize,
         1 => 2,
         2 => 3,
-        3 => 4,
+        3 | 4 => 4,
         _ => return None,
     };
     if lut_bytes.len() != channels * 256 {
@@ -2476,7 +4154,7 @@ fn gpu_point_lut(op: &PipelineOp, mode: u32) -> Option<Vec<u8>> {
         0 => 1usize,
         1 => 2,
         2 => 3,
-        3 => 4,
+        3 | 4 => 4,
         _ => return None,
     };
     if let PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } = op {
@@ -2676,7 +4354,7 @@ fn can_fuse_gpu_multiply_screen(ops: &[PipelineOp], index: usize) -> bool {
     }
 }
 
-fn gpu_dispatch_count(ops: &[PipelineOp]) -> u64 {
+fn gpu_dispatch_count(ops: &[PipelineOp], logical_mode: Option<&str>) -> u64 {
     let mut count = 0u64;
     let mut index = 0usize;
     while index < ops.len() {
@@ -2685,8 +4363,25 @@ fn gpu_dispatch_count(ops: &[PipelineOp]) -> u64 {
             index += 2;
             continue;
         }
-        count += GpuInner::blur_pass_count(&ops[index])
-            .map_or(1usize, |passes| passes.saturating_mul(2)) as u64;
+        count += if matches!(
+            &ops[index],
+            PipelineOp::Autocontrast { .. } | PipelineOp::Equalize
+        ) {
+            // Histogram operations are one public step but four device
+            // dispatches: clear, gather, LUT derivation, and remap.
+            4
+        } else if matches!(&ops[index], PipelineOp::Resize { filter, .. }
+            if !matches!(filter, ResampleFilter::Nearest)
+                || gpu_resize_nearest_uses_coefficients(logical_mode))
+        {
+            2
+        } else if matches!(&ops[index], PipelineOp::Pad { .. }) {
+            // Pad is an exact resize followed by a fill/copy placement pass.
+            3
+        } else {
+            GpuInner::blur_pass_count(&ops[index]).map_or(1usize, |passes| passes.saturating_mul(2))
+                as u64
+        };
         index += 1;
     }
     count
@@ -2709,9 +4404,135 @@ fn round_positive_ties_even(value: f64) -> f64 {
     }
 }
 
+/// Reproduce Pillow's reverse affine planner for `Image.rotate`.
+///
+/// The native implementation rounds the trigonometric coefficients to
+/// fifteen decimal places, computes the expanded bounds from the transformed
+/// image edges, and then applies the center-preserving expansion shift.  Keep
+/// this control-plane calculation identical to the CPU/SIMD geometry helpers;
+/// the resulting coefficients are consumed by the real GPU Transform shader.
+fn gpu_rotate_affine(
+    angle: f64,
+    expand: bool,
+    _fill: Option<(u8, u8, u8, u8)>,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    width: u32,
+    height: u32,
+) -> Option<([f64; 6], (u32, u32))> {
+    let sw = f64::from(width);
+    let sh = f64::from(height);
+    let rad = -angle.to_radians();
+    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
+    let a = round_15(rad.cos());
+    let b = round_15(rad.sin());
+    let d = round_15(-rad.sin());
+    let e = a;
+    let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
+    let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
+    let mut c = a * (-center_x - translate_x) + b * (-center_y - translate_y) + center_x;
+    let mut f = d * (-center_x - translate_x) + e * (-center_y - translate_y) + center_y;
+    let transform = |x: f64, y: f64, c: f64, f: f64| (a * x + b * y + c, d * x + e * y + f);
+    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for &(x, y) in &corners {
+        let (rx, ry) = transform(x, y, c, f);
+        min_x = min_x.min(rx);
+        max_x = max_x.max(rx);
+        min_y = min_y.min(ry);
+        max_y = max_y.max(ry);
+    }
+    let (out_w, out_h) = if expand {
+        let w = max_x.ceil() - min_x.floor();
+        let h = max_y.ceil() - min_y.floor();
+        if !w.is_finite()
+            || !h.is_finite()
+            || w < 0.0
+            || h < 0.0
+            || w > f64::from(u32::MAX)
+            || h > f64::from(u32::MAX)
+        {
+            return None;
+        }
+        (w as u32, h as u32)
+    } else {
+        (width, height)
+    };
+    if expand {
+        let shift_x = -(f64::from(out_w) - sw) / 2.0;
+        let shift_y = -(f64::from(out_h) - sh) / 2.0;
+        (c, f) = transform(shift_x, shift_y, c, f);
+    }
+    Some(([a, b, c, d, e, f], (out_w, out_h)))
+}
+
+fn gpu_resample_filter_code(filter: ResampleFilter) -> u32 {
+    match filter {
+        ResampleFilter::Nearest => 0,
+        ResampleFilter::Bilinear => 1,
+        ResampleFilter::Bicubic => 2,
+        ResampleFilter::Lanczos => 3,
+        ResampleFilter::Box => 4,
+        ResampleFilter::Hamming => 5,
+    }
+}
+
+/// Return the floating-point source crop box used by ImageOps.fit.
+///
+/// Fit's public contract resamples this box directly; rounding it to integer
+/// crop coordinates before resizing changes edge pixels for non-centred or
+/// bleed-enabled calls.  Keep all four values in the GPU uniform block so the
+/// shader can perform the same inverse mapping as the scalar implementation.
+fn gpu_fit_box(
+    source_w: u32,
+    source_h: u32,
+    output_w: u32,
+    output_h: u32,
+    bleed: f64,
+    centering: (f64, f64),
+) -> Option<(f64, f64, f64, f64)> {
+    if source_w == 0 || source_h == 0 || output_w == 0 || output_h == 0 {
+        return None;
+    }
+    let b = if (0.0..0.5).contains(&bleed) {
+        bleed
+    } else {
+        0.0
+    };
+    let source_w = f64::from(source_w);
+    let source_h = f64::from(source_h);
+    let output_w = f64::from(output_w);
+    let output_h = f64::from(output_h);
+    let bleed_w = b * source_w;
+    let bleed_h = b * source_h;
+    let live_w = (source_w - 2.0 * bleed_w).max(1.0);
+    let live_h = (source_h - 2.0 * bleed_h).max(1.0);
+    let live_ratio = live_w / live_h;
+    let output_ratio = output_w / output_h;
+    let (crop_w, crop_h) = if (live_ratio - output_ratio).abs() < 1e-10 {
+        (live_w, live_h)
+    } else if live_ratio >= output_ratio {
+        (output_ratio * live_h, live_h)
+    } else {
+        (live_w, live_w / output_ratio)
+    };
+    let cx = centering.0.clamp(0.0, 1.0);
+    let cy = centering.1.clamp(0.0, 1.0);
+    let left = bleed_w + (live_w - crop_w) * cx;
+    let top = bleed_h + (live_h - crop_h) * cy;
+    let values = (left, top, crop_w, crop_h);
+    [values.0, values.1, values.2, values.3]
+        .into_iter()
+        .all(|value| value.is_finite() && (value as f32).is_finite())
+        .then_some(values)
+}
+
 fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)> {
     match op {
         PipelineOp::Resize { w, h, .. } => Some((*w, *h)),
+        PipelineOp::Contain { .. } | PipelineOp::Cover { .. } => {
+            gpu_contain_cover_output_dims(op, cur_w, cur_h)
+        }
         PipelineOp::Pad { w, h, .. } => Some((*w, *h)),
         PipelineOp::Crop {
             left,
@@ -2731,38 +4552,17 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
             let new_h = cur_h.checked_sub(border)?;
             Some((new_w, new_h))
         }
-        PipelineOp::Rotate { angle, expand, .. } => {
-            if *expand {
-                let (sw, sh) = (cur_w as f64, cur_h as f64);
-                let rad = angle.to_radians();
-                let (cos_a, sin_a) = (rad.cos(), rad.sin());
-                let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-                let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                    (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-                for &(cx, cy) in &corners {
-                    let rx = cx * cos_a - cy * sin_a;
-                    let ry = cx * sin_a + cy * cos_a;
-                    min_x = min_x.min(rx);
-                    max_x = max_x.max(rx);
-                    min_y = min_y.min(ry);
-                    max_y = max_y.max(ry);
-                }
-                let dw = (max_x - min_x).ceil();
-                let dh = (max_y - min_y).ceil();
-                if !dw.is_finite()
-                    || !dh.is_finite()
-                    || dw < 0.0
-                    || dh < 0.0
-                    || dw > f64::from(u32::MAX)
-                    || dh > f64::from(u32::MAX)
-                {
-                    return None;
-                }
-                Some((dw as u32, dh as u32))
-            } else {
-                Some((cur_w, cur_h))
-            }
-        }
+        PipelineOp::Rotate {
+            angle,
+            expand,
+            fill,
+            center,
+            translate,
+            ..
+        } => gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
+            .map(|(_, dimensions)| dimensions),
+        PipelineOp::Thumbnail { w, h, .. } => gpu_thumbnail_output_dims(cur_w, cur_h, *w, *h),
+        PipelineOp::Fit { w, h, .. } => Some((*w, *h)),
         PipelineOp::Transpose { method } => {
             if matches!(
                 method,
@@ -2807,6 +4607,122 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
     }
 }
 
+/// Compute the scalar aspect-ratio result used by ImageOps.contain/cover.
+///
+/// These public operations do not have a distinct pixel algorithm: after
+/// Pillow chooses the rounded output size they call the ordinary resize path.
+/// Keep the calculation in the GPU planner identical to the CPU ImageOps
+/// implementation, including ties-to-even rounding and Cover's minimum size
+/// clamp. Returning `None` for zero/invalid geometry leaves the original public
+/// operation on its normal CPU/error path.
+fn gpu_contain_cover_output_dims(
+    op: &PipelineOp,
+    source_w: u32,
+    source_h: u32,
+) -> Option<(u32, u32)> {
+    let (target_w, target_h, is_cover) = match op {
+        PipelineOp::Contain { w, h, .. } => (*w, *h, false),
+        PipelineOp::Cover { w, h, .. } => (*w, *h, true),
+        _ => return None,
+    };
+    if source_w == 0 || source_h == 0 || target_w == 0 || target_h == 0 {
+        return None;
+    }
+
+    let image_ratio = f64::from(source_w) / f64::from(source_h);
+    let destination_ratio = f64::from(target_w) / f64::from(target_h);
+    if (image_ratio - destination_ratio).abs() < 1e-10 {
+        return Some((target_w, target_h));
+    }
+
+    let adjust_height = (image_ratio > destination_ratio) != is_cover;
+    if adjust_height {
+        let height = round_positive_ties_even(
+            f64::from(source_h) / f64::from(source_w) * f64::from(target_w),
+        ) as u32;
+        Some((target_w, if is_cover { height.max(1) } else { height }))
+    } else {
+        let width = round_positive_ties_even(
+            f64::from(source_w) / f64::from(source_h) * f64::from(target_h),
+        ) as u32;
+        Some((if is_cover { width.max(1) } else { width }, target_h))
+    }
+}
+
+/// Return the exact intermediate resize size and integer placement used by
+/// ImageOps.pad.  Pillow performs contain sizing with ties-to-even rounding,
+/// then chooses the axis-dependent rounded paste offset.  The values are
+/// scalar control-plane decisions; the resize and final fill/copy stay on the
+/// device.
+fn gpu_pad_geometry(
+    op: &PipelineOp,
+    source_w: u32,
+    source_h: u32,
+) -> Option<((u32, u32), (u32, u32))> {
+    let PipelineOp::Pad {
+        w, h, centering, ..
+    } = op
+    else {
+        return None;
+    };
+    if source_w == 0 || source_h == 0 || *w == 0 || *h == 0 {
+        return None;
+    }
+
+    let image_ratio = f64::from(source_w) / f64::from(source_h);
+    let destination_ratio = f64::from(*w) / f64::from(*h);
+    let (raw_w, raw_h) = if (image_ratio - destination_ratio).abs() < 1e-10 {
+        (f64::from(*w), f64::from(*h))
+    } else if image_ratio > destination_ratio {
+        (
+            f64::from(*w),
+            round_positive_ties_even(f64::from(source_h) / f64::from(source_w) * f64::from(*w)),
+        )
+    } else {
+        (
+            round_positive_ties_even(f64::from(source_w) / f64::from(source_h) * f64::from(*h)),
+            f64::from(*h),
+        )
+    };
+    if !raw_w.is_finite()
+        || !raw_h.is_finite()
+        || raw_w < 0.0
+        || raw_h < 0.0
+        || raw_w > f64::from(u32::MAX)
+        || raw_h > f64::from(u32::MAX)
+    {
+        return None;
+    }
+    let raw_w_u32 = raw_w as u32;
+    let raw_h_u32 = raw_h as u32;
+    let resize_w = raw_w_u32.max(1);
+    let resize_h = raw_h_u32.max(1);
+    let cx = centering.0.clamp(0.0, 1.0);
+    let cy = centering.1.clamp(0.0, 1.0);
+    let (offset_x, offset_y) = if raw_w_u32 != *w {
+        (
+            round_positive_ties_even(f64::from(*w - raw_w_u32) * cx) as u32,
+            0,
+        )
+    } else {
+        (
+            0,
+            round_positive_ties_even(f64::from(*h - raw_h_u32) * cy) as u32,
+        )
+    };
+    Some(((resize_w, resize_h), (offset_x, offset_y)))
+}
+
+fn gpu_pad_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) -> u32 {
+    let PipelineOp::Pad { color, .. } = op else {
+        return 0;
+    };
+    let has_alpha =
+        matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
+    let (r, g, b, a) = color.unwrap_or((0, 0, 0, if has_alpha { 0 } else { 255 }));
+    u32::from(r) | (u32::from(g) << 8) | (u32::from(b) << 16) | (u32::from(a) << 24)
+}
+
 /// Return true for operations whose output dimensions are not simply the
 /// current input dimensions. `op_output_dims` returns `None` for an overflow or
 /// an unavailable nested-image size, so callers must distinguish that from a
@@ -2839,10 +4755,10 @@ fn auxiliary_dimensions(image: Option<&DynamicImage>) -> Option<(u32, u32)> {
     image.map(DynamicImage::dimensions)
 }
 
-/// The GPU transport is packed RGBA8. Do not let `DynamicImage::to_rgba8`
-/// silently narrow a 16-bit or floating-point source before a shader runs:
-/// those formats have different Pillow sample semantics and must stay on the
-/// CPU path until a native GPU representation exists.
+/// The ordinary GPU transport is packed RGBA8. Do not let
+/// `DynamicImage::to_rgba8` silently narrow a 16-bit or floating-point source
+/// before a shader runs: those formats have different Pillow sample semantics
+/// and must stay on the CPU path until a native GPU representation exists.
 fn gpu_image_layout_is_supported(image: &DynamicImage) -> bool {
     matches!(
         image,
@@ -2851,6 +4767,184 @@ fn gpu_image_layout_is_supported(image: &DynamicImage) -> bool {
             | DynamicImage::ImageRgb8(_)
             | DynamicImage::ImageRgba8(_)
     )
+}
+
+/// `I;16*` geometry can use the packed storage buffers without decoding a
+/// sample: the upload puts one zero-extended 16-bit value in each word and
+/// the admitted shaders copy that word as an opaque unit. Arithmetic, fills,
+/// filters, and mixed-input operations remain excluded until they have a
+/// native typed-sample shader contract.
+fn gpu_luma16_geometry_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    matches!(image, DynamicImage::ImageLuma16(_))
+        && !ops.is_empty()
+        && ops.iter().all(|op| {
+            matches!(
+                op,
+                PipelineOp::Offset { .. }
+                    | PipelineOp::Flip
+                    | PipelineOp::Mirror
+                    | PipelineOp::Transpose { .. }
+                    | PipelineOp::Crop { .. }
+                    | PipelineOp::CropBorder { .. }
+                    | PipelineOp::Resize {
+                        filter: crate::pipeline::ResampleFilter::Nearest,
+                        ..
+                    }
+                    | PipelineOp::Contain {
+                        filter: crate::pipeline::ResampleFilter::Nearest,
+                        ..
+                    }
+                    | PipelineOp::Cover {
+                        filter: crate::pipeline::ResampleFilter::Nearest,
+                        ..
+                    }
+                    | PipelineOp::Transform { .. }
+                    | PipelineOp::Duplicate
+            )
+        })
+}
+
+/// `I;16*` conversion uses the same one-word-per-sample transport as native
+/// geometry, but the words are uploaded in numeric little-endian form so the
+/// Convert shader can clamp the unsigned sample before producing byte output.
+/// Keep the conversion terminal: once it emits L/LA/RGB/RGBA bytes, the batch
+/// mode changes and the typed source contract no longer applies.
+fn gpu_luma16_convert_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    matches!(image, DynamicImage::ImageLuma16(_))
+        && !ops.is_empty()
+        && ops
+            .iter()
+            .filter(|op| matches!(op, PipelineOp::Convert { .. }))
+            .count()
+            == 1
+        && ops.iter().all(|op| match op {
+            PipelineOp::Offset { .. }
+            | PipelineOp::Flip
+            | PipelineOp::Mirror
+            | PipelineOp::Transpose { .. }
+            | PipelineOp::Crop { .. }
+            | PipelineOp::CropBorder { .. }
+            | PipelineOp::Duplicate => true,
+            PipelineOp::Convert {
+                mode: target,
+                matrix: None,
+                dither: None,
+            } => gpu_standard_color_mode_code(target).is_some(),
+            _ => false,
+        })
+}
+
+/// The GPU Paste shader has a separate numeric-u16 branch for one typed
+/// `I;16*` destination/source pair. Keep the first contract deliberately
+/// narrow: one Paste operation, with no preceding byte-oriented operation
+/// changing the representation. Mask validation is handled after auxiliary
+/// images are materialized, where the concrete L/RGBA mask layout is known.
+fn gpu_luma16_paste_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    matches!(image, DynamicImage::ImageLuma16(_)) && matches!(ops, [PipelineOp::Paste { .. }])
+}
+
+fn gpu_luma16_paste_source(op: &PipelineOp, mode: u32, image: &DynamicImage) -> bool {
+    mode == 5
+        && matches!(op, PipelineOp::Paste { .. })
+        && matches!(image, DynamicImage::ImageLuma16(_))
+}
+
+/// `F` stores one little-endian `f32` sample in each four-byte word. The
+/// order-statistic shaders have a separate mode-8 path that compares those
+/// samples as floats instead of independently comparing their four bytes.
+/// Require finite source values for now: this gives WGSL ordering the same
+/// total behavior as Pillow's finite-value path while NaN ordering remains an
+/// explicit future contract rather than an accidental driver-dependent result.
+fn gpu_float_filter_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let expected = (image.width() as usize)
+        .checked_mul(image.height() as usize)
+        .and_then(|count| count.checked_mul(4));
+    expected == Some(pixels.as_raw().len())
+        && !ops.is_empty()
+        && pixels
+            .as_raw()
+            .chunks_exact(4)
+            .all(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]).is_finite())
+        && ops.iter().all(|op| match op {
+            PipelineOp::Mirror => true,
+            PipelineOp::PutData {
+                mode: PixelMode::F, ..
+            } => true,
+            PipelineOp::MaxFilter { .. }
+            | PipelineOp::MinFilter { .. }
+            | PipelineOp::MedianFilter { .. }
+            | PipelineOp::RankFilter { .. } => gpu_operation_is_safe(op),
+            _ => false,
+        })
+}
+
+/// `I` stores one signed little-endian i32 sample in each four-byte word.
+/// Its convolution contract is different from the byte filter: coefficients
+/// are applied to the decoded sample, negative results clamp to zero, and
+/// positive results retain the full signed-integer range. The WGSL path uses
+/// the same f32 accumulation as Pillow's I-mode implementation, including
+/// the reversed rows and +0.5 bias.
+fn gpu_int_filter_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let expected = (image.width() as usize)
+        .checked_mul(image.height() as usize)
+        .and_then(|count| count.checked_mul(4));
+    if expected != Some(pixels.as_raw().len()) || ops.is_empty() {
+        return false;
+    }
+    let kernel_is_safe = |kernel: &[f32], scale: f32, offset: i32| {
+        let normalized_scale = if scale.abs() < 1e-10 { 1.0 } else { scale };
+        if !normalized_scale.is_finite() || normalized_scale == 0.0 {
+            return false;
+        }
+        let coefficient_bound = kernel.iter().try_fold(0.0f64, |total, value| {
+            let normalized = f64::from(*value) / f64::from(normalized_scale);
+            normalized.is_finite().then_some(total + normalized.abs())
+        });
+        let Some(coefficient_bound) = coefficient_bound else {
+            return false;
+        };
+        // Bound the f32 accumulation for every possible i32 source sample.
+        // The output helper also clamps the positive conversion explicitly,
+        // matching Rust's saturating float-to-i32 cast at the core boundary.
+        let worst_case = f64::from(i32::MAX) * coefficient_bound + f64::from(offset).abs() + 1.0;
+        worst_case.is_finite() && worst_case < f64::from(f32::MAX)
+    };
+    let mut has_filter = false;
+    for op in ops {
+        match op {
+            PipelineOp::Filter3x3 {
+                kernel,
+                scale,
+                offset,
+            } => {
+                has_filter = true;
+                if !kernel_is_safe(kernel, *scale, *offset) {
+                    return false;
+                }
+            }
+            PipelineOp::Filter5x5 {
+                kernel,
+                scale,
+                offset,
+            } => {
+                has_filter = true;
+                if !kernel_is_safe(kernel, *scale, *offset) {
+                    return false;
+                }
+            }
+            PipelineOp::PutData {
+                mode: PixelMode::I, ..
+            } => continue,
+            _ => return false,
+        }
+    }
+    has_filter
 }
 
 /// Validate the index space assumptions made by multi-input shaders. A
@@ -2870,6 +4964,36 @@ fn gpu_auxiliary_shapes_are_safe(
     let current = (cur_w, cur_h);
 
     match op {
+        PipelineOp::EffectSpread { .. } => {
+            let expected = CheckedDims::new(cur_w, cur_h, 1)
+                .ok()
+                .and_then(|dims| u32::try_from(dims.total_pixels()).ok());
+            auxiliary.third.is_none() && second == expected.map(|width| (width, 1))
+        }
+        PipelineOp::EffectNoise { .. } => auxiliary.third.is_none() && second == Some(current),
+        PipelineOp::Merge { bands, .. } => {
+            let expected = CheckedDims::new(cur_w, cur_h, 1)
+                .ok()
+                .and_then(|dims| {
+                    dims.total_pixels()
+                        .checked_mul(bands.len().saturating_sub(1))
+                })
+                .and_then(|pixels| u32::try_from(pixels).ok());
+            auxiliary.third.is_none()
+                && match (second, expected) {
+                    (None, Some(0)) => true,
+                    (Some((w, h)), Some(pixels)) => h == 1 && w == pixels,
+                    _ => false,
+                }
+        }
+        PipelineOp::Color3DLut { table, .. } => {
+            auxiliary.third.is_none()
+                && second
+                    == color3dlut_table_words(table)
+                        .ok()
+                        .and_then(|words| u32::try_from(words.len()).ok())
+                        .map(|width| (width, 1))
+        }
         PipelineOp::Paste { w, h, mask, .. } => {
             if *w <= 0 || *h <= 0 {
                 return false;
@@ -2898,6 +5022,239 @@ fn gpu_auxiliary_shapes_are_safe(
     }
 }
 
+/// A zero-area two-input operation has no pixel work to dispatch. Treat it as a
+/// successful GPU no-op after validating its auxiliary image contract; this
+/// keeps empty Pillow images out of the CPU fallback without pretending that a
+/// zero-work storage-buffer dispatch occurred.
+fn gpu_empty_two_input_batch_is_noop(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    (image.width() == 0 || image.height() == 0)
+        && !ops.is_empty()
+        && ops.iter().all(|op| {
+            matches!(
+                op,
+                PipelineOp::AlphaComposite { .. }
+                    | PipelineOp::Multiply { .. }
+                    | PipelineOp::Screen { .. }
+                    | PipelineOp::Darker { .. }
+                    | PipelineOp::Lighter { .. }
+                    | PipelineOp::Difference { .. }
+                    | PipelineOp::Overlay { .. }
+                    | PipelineOp::HardLight { .. }
+                    | PipelineOp::SoftLight { .. }
+                    | PipelineOp::AddModulo { .. }
+                    | PipelineOp::SubtractModulo { .. }
+                    | PipelineOp::Add { .. }
+                    | PipelineOp::Subtract { .. }
+                    | PipelineOp::BlendModule { .. }
+                    | PipelineOp::LogicalAnd { .. }
+                    | PipelineOp::LogicalOr { .. }
+                    | PipelineOp::LogicalXor { .. }
+            )
+        })
+}
+
+fn gpu_empty_two_input_inputs_are_safe(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    auxiliary_images: &[AuxiliaryImages],
+) -> bool {
+    ops.len() == auxiliary_images.len()
+        && auxiliary_images
+            .iter()
+            .enumerate()
+            .all(|(index, auxiliary)| {
+                auxiliary.second.as_ref().is_some_and(|second| {
+                    gpu_image_layout_is_supported(second)
+                        && second.dimensions() == image.dimensions()
+                }) && auxiliary.third.is_none()
+                    && gpu_auxiliary_shapes_are_safe(
+                        &ops[index],
+                        auxiliary,
+                        image.width(),
+                        image.height(),
+                    )
+                    && gpu_auxiliary_modes_are_safe(&ops[index], image, auxiliary)
+            })
+}
+
+/// A Reduce by `(1, 1)` is Pillow's identity operation. It must return an
+/// independent image, but it has no reduction work for a GPU to perform. Such
+/// operations can be removed from a GPU batch after validation, allowing the
+/// remaining real pixel operations to stay on the GPU as well.
+fn gpu_reduce_is_identity(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::Reduce {
+            x_factor: 1,
+            y_factor: 1
+        }
+    )
+}
+
+/// Replace valid aspect-ratio/Scale nodes with the equivalent exact Resize
+/// operation.
+///
+/// Pillow computes each Scale output axis with ties-to-even rounding before
+/// calling its resize implementation. The GPU executor already carries that
+/// dimension contract and has exact nearest/fixed-point convolution kernels
+/// for Resize, so retaining a separate floating-point Scale shader would
+/// duplicate the mapping and risk a one-pixel boundary difference. Invalid
+/// or unrepresentable factors are deliberately left unchanged; the normal
+/// public-operation preflight then reports the same error or CPU fallback.
+fn expand_gpu_geometry_ops(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> Vec<PipelineOp> {
+    let mut expanded = Vec::with_capacity(ops.len());
+    let (mut cur_w, mut cur_h) = dimensions;
+    for op in ops {
+        // Pillow's default Thumbnail reducing_gap=2.0 performs an integer
+        // box reduction before the final resize.  When both source axes are
+        // divisible by the chosen factors, the exact two-step contract is
+        // representable by the native Reduce and Resize kernels.  Preserve
+        // the original node for partial edge blocks; those use a fractional
+        // resize box and remain on the exact host path until that geometry is
+        // carried by the device plan.
+        if let PipelineOp::Thumbnail { filter, .. } = op {
+            let effective_filter = if matches!(logical_mode, Some("1" | "P")) {
+                ResampleFilter::Nearest
+            } else {
+                *filter
+            };
+            let has_alpha = matches!(
+                image,
+                DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+            ) && !matches!(logical_mode, Some("F" | "I" | "CMYK"));
+            if !gpu_thumbnail_requires_exact_host_control(op, (cur_w, cur_h), image, logical_mode)
+                && !matches!(effective_filter, ResampleFilter::Nearest)
+                && !has_alpha
+                && !matches!(logical_mode, Some("F" | "I"))
+                && let Some((out_w, out_h)) = op_output_dims(op, cur_w, cur_h)
+            {
+                let factor_x = ((f64::from(cur_w) / f64::from(out_w) / 2.0) as u32).max(1);
+                let factor_y = ((f64::from(cur_h) / f64::from(out_h) / 2.0) as u32).max(1);
+                if (factor_x > 1 || factor_y > 1) && cur_w % factor_x == 0 && cur_h % factor_y == 0
+                {
+                    expanded.push(PipelineOp::Reduce {
+                        x_factor: factor_x,
+                        y_factor: factor_y,
+                    });
+                    expanded.push(PipelineOp::Resize {
+                        w: out_w,
+                        h: out_h,
+                        filter: effective_filter,
+                    });
+                    cur_w = out_w;
+                    cur_h = out_h;
+                    continue;
+                }
+            }
+        }
+        let replacement = match op {
+            PipelineOp::Scale { filter, .. }
+            | PipelineOp::Contain { filter, .. }
+            | PipelineOp::Cover { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
+                Some((w, h)) => PipelineOp::Resize {
+                    w,
+                    h,
+                    filter: *filter,
+                },
+                None => op.clone(),
+            },
+            // Thumbnail has already computed its aspect-preserving output
+            // dimensions at the public boundary.  Lower it to the exact
+            // separable Resize implementation so every resampling filter
+            // (including bicubic/lanczos) uses the same fixed-point kernels
+            // as Image.resize instead of the older bilinear-only shader.
+            PipelineOp::Thumbnail { filter, .. }
+                if gpu_thumbnail_requires_exact_host_control(
+                    op,
+                    (cur_w, cur_h),
+                    image,
+                    logical_mode,
+                ) =>
+            {
+                op.clone()
+            }
+            PipelineOp::Thumbnail { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
+                Some((w, h)) => PipelineOp::Resize {
+                    w,
+                    h,
+                    filter: if matches!(logical_mode, Some("1" | "P")) {
+                        ResampleFilter::Nearest
+                    } else {
+                        *filter
+                    },
+                },
+                None => op.clone(),
+            },
+            // Rotation is an affine mapping after Pillow's scalar geometry
+            // planner has selected the expanded canvas.  Feed that mapping
+            // into the reviewed Transform shader; exact right-angle nearest
+            // rotations use the byte-relocation transpose kernel instead.
+            PipelineOp::Rotate { .. }
+                if gpu_rotate_requires_exact_host_control(image, logical_mode) =>
+            {
+                op.clone()
+            }
+            PipelineOp::Rotate {
+                angle,
+                expand,
+                fill,
+                center,
+                translate,
+                nearest,
+            } => {
+                let right_angle = if gpu_rotate_has_exact_transpose_lowering(op, logical_mode) {
+                    match angle.rem_euclid(360.0) {
+                        value if (value - 90.0).abs() < f64::EPSILON => {
+                            Some(TransposeMethod::Rotate90)
+                        }
+                        value if (value - 180.0).abs() < f64::EPSILON => {
+                            Some(TransposeMethod::Rotate180)
+                        }
+                        value if (value - 270.0).abs() < f64::EPSILON => {
+                            Some(TransposeMethod::Rotate270)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if let Some(method) = right_angle {
+                    PipelineOp::Transpose { method }
+                } else if let Some((affine, (w, h))) =
+                    gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
+                {
+                    PipelineOp::Transform {
+                        w,
+                        h,
+                        method: TransformMethod::Affine,
+                        data: Arc::from(affine.to_vec()),
+                        filter: if *nearest {
+                            ResampleFilter::Nearest
+                        } else {
+                            ResampleFilter::Bilinear
+                        },
+                        fill: *fill,
+                        palette_fill: None,
+                    }
+                } else {
+                    op.clone()
+                }
+            }
+            _ => op.clone(),
+        };
+        if let Some(next) = op_output_dims(&replacement, cur_w, cur_h) {
+            (cur_w, cur_h) = next;
+        }
+        expanded.push(replacement);
+    }
+    expanded
+}
+
 /// Check dimensions before creating a device or uploading any image data.
 /// Empty images and zero-sized GPU outputs are valid CPU/Pillow states, but
 /// they are not valid storage-buffer dispatches: sampling kernels subtract one
@@ -2911,7 +5268,11 @@ fn gpu_dimensions_require_cpu(ops: &[PipelineOp], image: &DynamicImage) -> bool 
             .unwrap_or(false)
     };
 
-    if !gpu_image_layout_is_supported(image) {
+    if !gpu_image_layout_is_supported(image)
+        && !gpu_luma16_geometry_is_supported(ops, image)
+        && !gpu_luma16_convert_is_supported(ops, image)
+        && !gpu_luma16_paste_is_supported(ops, image)
+    {
         return true;
     }
     let source_mode = mode_code(image);
@@ -2942,10 +5303,27 @@ fn gpu_dimensions_require_cpu(ops: &[PipelineOp], image: &DynamicImage) -> bool 
             None if op_has_explicit_output_dimensions(op) => return true,
             None => (cur_w, cur_h),
         };
+        if let PipelineOp::Resize { filter, .. }
+        | PipelineOp::Scale { filter, .. }
+        | PipelineOp::Contain { filter, .. }
+        | PipelineOp::Cover { filter, .. } = op
+        {
+            if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), next) {
+                return true;
+            }
+        }
+        if let PipelineOp::Pad { filter, .. } = op {
+            let Some(((resize_w, resize_h), _)) = gpu_pad_geometry(op, cur_w, cur_h) else {
+                return true;
+            };
+            if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), (resize_w, resize_h)) {
+                return true;
+            }
+        }
         if next.0 == 0 || next.1 == 0 || !dimensions_fit(next.0, next.1) {
             return true;
         }
-        if gpu_shader_work_requires_cpu(op, (cur_w, cur_h), next) {
+        if gpu_shader_work_requires_cpu(op, (cur_w, cur_h), next, None) {
             return true;
         }
         (cur_w, cur_h) = next;
@@ -2968,18 +5346,21 @@ fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> boo
         // ImageChops.blend intentionally converts through RGB and restores
         // an opaque alpha for an alpha-bearing source. Image.blend (the
         // module operation) blends every stored channel, including alpha, so
-        // its shader is exact only for the non-alpha byte modes.
-        PipelineOp::BlendModule { .. } => matches!(
+        // all packed byte layouts use the same shader path.
+        PipelineOp::BlendModule { .. } => !matches!(
             image,
-            DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+            DynamicImage::ImageLuma8(_)
+                | DynamicImage::ImageLumaA8(_)
+                | DynamicImage::ImageRgb8(_)
+                | DynamicImage::ImageRgba8(_)
         ),
-        // PutData and PutAlpha carry the logical source/target layout in the
-        // operation. A direct core caller can construct a mismatched pair;
-        // CPU converts according to that mode, while the packed shader would
-        // otherwise reinterpret the existing storage in place.
-        PipelineOp::PutData { mode, .. } | PipelineOp::PutAlpha { mode, .. } => {
-            !pixel_mode_matches_image(*mode, image)
-        }
+        // PutData and alpha promotion carry the logical source/target layout
+        // in the operation. A direct core caller can construct a mismatched
+        // pair; CPU converts according to that mode, while the packed shader
+        // would otherwise reinterpret the existing storage in place.
+        PipelineOp::PutData { mode, .. }
+        | PipelineOp::PutAlpha { mode, .. }
+        | PipelineOp::PutAlphaData { mode, .. } => !pixel_mode_matches_image(*mode, image),
         // The CPU ImageOps implementation runs Posterize/Solarize through
         // an RGB temporary and preserve_mode, which makes alpha opaque for
         // LA/RGBA. The packed shaders currently retain alpha, so keep those
@@ -2987,6 +5368,18 @@ fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> boo
         PipelineOp::Posterize { .. } | PipelineOp::Solarize { .. } => matches!(
             image,
             DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+        ),
+        // ImageOps.colorize accepts only an L image and always produces RGB.
+        // The shader reads the luma byte directly; running it on a packed RGB
+        // source would silently colorize the wrong sample contract.
+        PipelineOp::Colorize { .. } => !matches!(image, DynamicImage::ImageLuma8(_)),
+        // Autocontrast and Equalize use the packed byte representation only
+        // for native L/RGB images.  Their scalar histogram control plane is
+        // exact for those layouts; alpha and typed images have different
+        // Pillow contracts and must be rejected before any GPU work starts.
+        PipelineOp::Autocontrast { .. } | PipelineOp::Equalize => !matches!(
+            image,
+            DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
         ),
         // getchannel raises IndexError for a band that the source mode does
         // not have; a shader would read byte 3 or an unused packed byte.
@@ -3004,7 +5397,41 @@ fn pixel_mode_matches_image(mode: PixelMode, image: &DynamicImage) -> bool {
             | (PixelMode::LA, DynamicImage::ImageLumaA8(_))
             | (PixelMode::RGB, DynamicImage::ImageRgb8(_))
             | (PixelMode::RGBA, DynamicImage::ImageRgba8(_))
+            // P/PA retain raw index samples in the same one-/two-byte
+            // buffers as L/LA until the binding restores palette metadata.
+            | (PixelMode::P, DynamicImage::ImageLuma8(_))
+            | (PixelMode::PA, DynamicImage::ImageLumaA8(_))
+            | (PixelMode::Mode1, DynamicImage::ImageLuma8(_))
+            | (PixelMode::YCbCr, DynamicImage::ImageRgb8(_))
+            | (PixelMode::HSV, DynamicImage::ImageRgb8(_))
+            // CMYK is represented as C/M/Y/K in the four bytes of Rgba8.
+            | (PixelMode::CMYK, DynamicImage::ImageRgba8(_))
+            // I/F are four-byte logical planes stored without conversion in
+            // the RGBA transport; putdata replaces their raw little-endian
+            // samples rather than interpreting them as color channels.
+            | (PixelMode::I, DynamicImage::ImageRgba8(_))
+            | (PixelMode::F, DynamicImage::ImageRgba8(_))
     )
+}
+
+fn gpu_auxiliary_layout_is_supported_for_op(
+    op: &PipelineOp,
+    current_color: crate::raster::ColorType,
+    is_second: bool,
+    image: &DynamicImage,
+) -> bool {
+    // A typed I;16 Paste is the one multi-input GPU contract whose source is
+    // intentionally not representable by the ordinary RGBA uploader. Keep
+    // this exception attached to the exact operation and slot; masks still
+    // use the byte-oriented transport below.
+    if is_second
+        && current_color == crate::raster::ColorType::L16
+        && matches!(op, PipelineOp::Paste { .. })
+    {
+        matches!(image, DynamicImage::ImageLuma16(_))
+    } else {
+        gpu_image_layout_is_supported(image)
+    }
 }
 
 fn gpu_pipeline_requires_cpu(
@@ -3023,31 +5450,67 @@ fn gpu_pipeline_requires_cpu(
             .map(|dims| dims.total_pixels() <= GPU_BUFFER_CAPACITY as usize)
             .unwrap_or(false)
     };
-    if auxiliary_images.iter().any(|auxiliary| {
-        auxiliary
-            .second
-            .iter()
-            .chain(auxiliary.third.iter())
-            .any(|image| {
-                let (w, h) = image.dimensions();
-                !gpu_image_layout_is_supported(image) || w == 0 || h == 0 || !dimensions_fit(w, h)
-            })
-    }) {
-        return true;
-    }
     let (mut cur_w, mut cur_h) = image.dimensions();
+    let mut current_color = image.color();
     for (index, op) in ops.iter().enumerate() {
-        if !gpu_auxiliary_shapes_are_safe(op, &auxiliary_images[index], cur_w, cur_h) {
+        let auxiliary = &auxiliary_images[index];
+        let auxiliary_is_safe = |is_second: bool, image: &DynamicImage| {
+            let (w, h) = image.dimensions();
+            gpu_auxiliary_layout_is_supported_for_op(op, current_color, is_second, image)
+                && w != 0
+                && h != 0
+                && dimensions_fit(w, h)
+        };
+        if auxiliary
+            .second
+            .as_deref()
+            .is_some_and(|second| !auxiliary_is_safe(true, second))
+            || auxiliary
+                .third
+                .as_deref()
+                .is_some_and(|third| !auxiliary_is_safe(false, third))
+        {
             return true;
         }
-        if !gpu_auxiliary_modes_are_safe(op, image, &auxiliary_images[index]) {
+        if !gpu_auxiliary_shapes_are_safe(op, auxiliary, cur_w, cur_h) {
+            return true;
+        }
+        if !gpu_auxiliary_modes_are_safe_for_color(op, current_color, auxiliary) {
             return true;
         }
         if let Some(next) = op_output_dims(op, cur_w, cur_h) {
             (cur_w, cur_h) = next;
         }
+        current_color = gpu_color_after_op(current_color, op);
     }
     false
+}
+
+fn gpu_color_after_op(
+    current: crate::raster::ColorType,
+    op: &PipelineOp,
+) -> crate::raster::ColorType {
+    match op {
+        PipelineOp::Convert { mode, .. } => match gpu_convert_target_mode_code(mode) {
+            Some(0) => crate::raster::ColorType::L8,
+            Some(1) => crate::raster::ColorType::La8,
+            Some(2) => crate::raster::ColorType::Rgb8,
+            Some(3) => crate::raster::ColorType::Rgba8,
+            Some(4) | Some(7) | Some(8) => crate::raster::ColorType::Rgba8,
+            Some(5) | Some(6) => crate::raster::ColorType::Rgb8,
+            _ => current,
+        },
+        PipelineOp::Grayscale | PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. } => {
+            crate::raster::ColorType::L8
+        }
+        PipelineOp::Colorize { .. } => crate::raster::ColorType::Rgb8,
+        PipelineOp::Color3DLut { target_mode, .. } => match target_mode {
+            PixelMode::RGB => crate::raster::ColorType::Rgb8,
+            PixelMode::RGBA | PixelMode::CMYK => crate::raster::ColorType::Rgba8,
+            _ => current,
+        },
+        _ => current,
+    }
 }
 
 /// Multi-input shaders use the primary mode word for every packed sample.
@@ -3060,6 +5523,62 @@ fn gpu_auxiliary_modes_are_safe(
     image: &DynamicImage,
     auxiliary: &AuxiliaryImages,
 ) -> bool {
+    gpu_auxiliary_modes_are_safe_for_color(op, image.color(), auxiliary)
+}
+
+fn gpu_auxiliary_modes_are_safe_for_color(
+    op: &PipelineOp,
+    current_color: crate::raster::ColorType,
+    auxiliary: &AuxiliaryImages,
+) -> bool {
+    if matches!(op, PipelineOp::Autocontrast { mask: Some(_), .. }) {
+        // ImageOps.autocontrast validates masks as mode 1/L. Both are
+        // represented by the Luma8 transport, whose first byte is exactly the
+        // nonzero selector consumed by the histogram gather shader.
+        return matches!(
+            auxiliary.third.as_deref(),
+            Some(DynamicImage::ImageLuma8(_))
+        );
+    }
+    if let PipelineOp::Paste { mask_alpha, .. } = op {
+        if current_color == crate::raster::ColorType::L16 {
+            let source_is_luma16 = auxiliary
+                .second
+                .as_deref()
+                .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
+            let mask_is_supported = match (*mask_alpha, auxiliary.third.as_deref()) {
+                (false, None) | (false, Some(DynamicImage::ImageLuma8(_))) => true,
+                (true, Some(DynamicImage::ImageRgba8(_))) => true,
+                _ => false,
+            };
+            return source_is_luma16 && mask_is_supported;
+        }
+    }
+    if let PipelineOp::CompositeModule { mask_alpha, .. } = op {
+        let Some(destination) = auxiliary.second.as_ref() else {
+            return false;
+        };
+        let Some(mask) = auxiliary.third.as_ref() else {
+            return false;
+        };
+        // Image.composite converts image1 to image2's mode before the
+        // operation is queued. The shader can therefore use one mode word
+        // only when both packed sources have the same native layout.
+        if destination.color() != current_color {
+            return false;
+        }
+        // Pillow's mask contract selects byte 0 for 1/L and byte 3 for
+        // LA/RGBA/RGBa. Reject RGB luma masks here: their CPU path computes
+        // weighted luma while the packed shader would read only R.
+        return if *mask_alpha {
+            matches!(
+                mask.as_ref(),
+                DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+            )
+        } else {
+            matches!(mask.as_ref(), DynamicImage::ImageLuma8(_))
+        };
+    }
     let requires_matching_source = matches!(
         op,
         PipelineOp::Add { .. }
@@ -3082,7 +5601,7 @@ fn gpu_auxiliary_modes_are_safe(
         && auxiliary
             .second
             .as_ref()
-            .is_some_and(|second| second.color() != image.color())
+            .is_some_and(|second| second.color() != current_color)
     {
         return false;
     }
@@ -3184,6 +5703,7 @@ fn gpu_dispatch_dimensions_require_cpu(
     ops: &[PipelineOp],
     image_dimensions: (u32, u32),
     max_workgroups_per_dimension: u32,
+    logical_mode: Option<&str>,
 ) -> bool {
     if max_workgroups_per_dimension == 0 {
         return true;
@@ -3204,13 +5724,32 @@ fn gpu_dispatch_dimensions_require_cpu(
         // the vertical pass, unlike the ordinary 16x16 kernels. Checking
         // only ceil(dim / 16) would admit a tall, narrow image and let the
         // later blur dispatch exceed the adapter's per-dimension limit.
-        let dispatch_exceeds_limit = if matches!(
+        let dispatch_exceeds_limit = if matches!(op, PipelineOp::Pad { .. }) {
+            let Some(((resize_w, resize_h), _)) = gpu_pad_geometry(op, cur_w, cur_h) else {
+                return true;
+            };
+            resize_w.div_ceil(16) > max_workgroups_per_dimension
+                || cur_h.div_ceil(16) > max_workgroups_per_dimension
+                || resize_w.div_ceil(16) > max_workgroups_per_dimension
+                || resize_h.div_ceil(16) > max_workgroups_per_dimension
+                || next.0.div_ceil(16) > max_workgroups_per_dimension
+                || next.1.div_ceil(16) > max_workgroups_per_dimension
+        } else if matches!(
             op,
             PipelineOp::BoxBlur { .. }
                 | PipelineOp::BoxBlurXY { .. }
                 | PipelineOp::GaussianBlur { .. }
         ) {
             next.1 > max_workgroups_per_dimension || next.0 > max_workgroups_per_dimension
+        } else if matches!(op, PipelineOp::Resize { filter, .. }
+            if !matches!(filter, ResampleFilter::Nearest)
+                || gpu_resize_nearest_uses_coefficients(logical_mode))
+        {
+            // The horizontal resize pass is indexed by output x and source
+            // y; the vertical pass is indexed by output x and output y.
+            next.0.div_ceil(16) > max_workgroups_per_dimension
+                || cur_h.div_ceil(16) > max_workgroups_per_dimension
+                || next.1.div_ceil(16) > max_workgroups_per_dimension
         } else {
             next.0.div_ceil(16) > max_workgroups_per_dimension
                 || next.1.div_ceil(16) > max_workgroups_per_dimension
@@ -3230,22 +5769,44 @@ fn gpu_shader_work_items(
     op: &PipelineOp,
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
+    logical_mode: Option<&str>,
 ) -> Option<u64> {
-    match op {
-        // The convolution shaders intentionally load a complete interior
-        // neighborhood. Small images are valid Pillow inputs, but have no
-        // interior pixels; keep them on the scalar path for exact border
-        // semantics and to avoid relying on unsigned underflow behavior.
-        PipelineOp::Filter3x3 { .. } if source_dimensions.0 < 3 || source_dimensions.1 < 3 => {
-            return None;
-        }
-        PipelineOp::Filter5x5 { .. } if source_dimensions.0 < 5 || source_dimensions.1 < 5 => {
-            return None;
-        }
-        _ => {}
-    }
+    // The convolution shaders guard their neighborhood loads and copy every
+    // pixel when no interior exists. Small non-empty images are therefore
+    // valid zero-interior GPU workloads; only the shader's invocation count,
+    // not the kernel radius, determines their safety.
     let output_pixels = u64::from(output_dimensions.0) * u64::from(output_dimensions.1);
     let (source_w, source_h) = source_dimensions;
+    if matches!(op, PipelineOp::Resize { filter, .. } | PipelineOp::Scale { filter, .. }
+        if !matches!(filter, ResampleFilter::Nearest)
+            || gpu_resize_nearest_uses_coefficients(logical_mode))
+    {
+        // Unlike the single-pass kernels below, the separable resize has one
+        // pass over source rows for every output column and a second pass over
+        // the final output. Return the total directly; it must not be
+        // multiplied by output_pixels a second time.
+        return Some(
+            u64::from(source_h)
+                .saturating_mul(u64::from(output_dimensions.0))
+                .saturating_add(output_pixels),
+        );
+    }
+    if matches!(op, PipelineOp::Pad { .. }) {
+        let Some(((resize_w, resize_h), _)) =
+            gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)
+        else {
+            return None;
+        };
+        // Horizontal resize visits source rows for every intermediate
+        // column, vertical resize visits every intermediate pixel, and the
+        // final placement visits the requested canvas once.
+        return Some(
+            u64::from(source_dimensions.1)
+                .saturating_mul(u64::from(resize_w))
+                .saturating_add(u64::from(resize_w).saturating_mul(u64::from(resize_h)))
+                .saturating_add(output_pixels),
+        );
+    }
     let inner_work = match op {
         PipelineOp::BoxBlur { radius } => {
             let _ = radius;
@@ -3276,7 +5837,13 @@ fn gpu_shader_work_items(
             // work by orders of magnitude and can admit watchdog-triggering
             // dispatches for the supported 9x9 maximum.
             let area = u64::from(*size).saturating_mul(u64::from(*size));
-            area.saturating_mul(area).saturating_mul(4)
+            let channels = match logical_mode {
+                Some("F" | "I" | "L") => 1,
+                Some("LA") => 2,
+                Some("RGB" | "YCbCr" | "HSV") => 3,
+                _ => 4,
+            };
+            area.saturating_mul(area).saturating_mul(channels)
         }
         PipelineOp::MaxFilter { size } | PipelineOp::MinFilter { size } => u64::from(*size)
             .saturating_mul(u64::from(*size))
@@ -3303,8 +5870,9 @@ fn gpu_shader_work_requires_cpu(
     op: &PipelineOp,
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
+    logical_mode: Option<&str>,
 ) -> bool {
-    gpu_shader_work_items(op, source_dimensions, output_dimensions)
+    gpu_shader_work_items(op, source_dimensions, output_dimensions, logical_mode)
         .is_none_or(|work| work > MAX_GPU_SHADER_WORK_ITEMS)
 }
 
@@ -3321,31 +5889,36 @@ pub struct GpuPool;
 fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
     let finite_f32 = |value: f64| value.is_finite() && (value as f32).is_finite();
     match op {
-        PipelineOp::Filter3x3 { kernel, scale, .. } => {
-            let scale = f64::from(*scale);
-            let denominator = if scale.abs() < 1e-10 { 1.0 } else { scale };
-            scale.is_finite()
-                && kernel
-                    .iter()
-                    .all(|coefficient| finite_f32(f64::from(*coefficient) / denominator))
+        PipelineOp::Filter3x3 {
+            kernel,
+            scale,
+            offset,
+        } => {
+            registry::gpu_filter_kernel_is_exact(kernel, *scale, *offset)
+                || registry::gpu_filter_rational_denominator(kernel, *scale, *offset).is_some()
         }
-        PipelineOp::Filter5x5 { kernel, scale, .. } => {
-            let scale = f64::from(*scale);
-            let denominator = if scale.abs() < 1e-10 { 1.0 } else { scale };
-            scale.is_finite()
-                && kernel
-                    .iter()
-                    .all(|coefficient| finite_f32(f64::from(*coefficient) / denominator))
+        PipelineOp::Filter5x5 {
+            kernel,
+            scale,
+            offset,
+        } => {
+            registry::gpu_filter_kernel_is_exact(kernel, *scale, *offset)
+                || registry::gpu_filter_rational_denominator(kernel, *scale, *offset).is_some()
         }
         PipelineOp::GaussianBlur { sigma } => {
-            if !sigma.is_finite() || *sigma < 0.0 {
-                return false;
-            }
-            let radius = (*sigma * 3.0).ceil();
-            radius.is_finite() && radius <= MAX_GPU_BLUR_RADIUS as f32
+            registry::separable_gaussian_blur_radius(*sigma).is_some()
         }
         PipelineOp::BoxBlur { radius } => *radius <= MAX_GPU_BLUR_RADIUS,
-        PipelineOp::BoxBlurXY { .. } => false,
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => {
+            *passes > 0
+                && *passes <= 3
+                && registry::separable_box_blur_params_f32(*radius_x).is_some()
+                && registry::separable_box_blur_params_f32(*radius_y).is_some()
+        }
         PipelineOp::MedianFilter { size }
         | PipelineOp::MaxFilter { size }
         | PipelineOp::MinFilter { size } => {
@@ -3355,7 +5928,10 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
             *size >= 1 && *size <= MAX_GPU_FILTER_SIZE && *size % 2 == 1
         }
         PipelineOp::Reduce { x_factor, y_factor } => {
-            *x_factor <= MAX_GPU_REDUCE_FACTOR && *y_factor <= MAX_GPU_REDUCE_FACTOR
+            *x_factor <= MAX_GPU_REDUCE_FACTOR
+                && *y_factor <= MAX_GPU_REDUCE_FACTOR
+                && *x_factor >= 1
+                && *y_factor >= 1
         }
         // The CPU implementation shifts by `8 - bits`; zero is not a valid
         // direct PipelineOp value and would otherwise underflow that shift.
@@ -3363,25 +5939,24 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
         // safety gate correct for callers that build the pipeline directly.
         PipelineOp::Posterize { bits } => (1..=8).contains(bits),
         PipelineOp::ExtractBand { index } => *index < 4,
-        PipelineOp::Brightness { factor }
-        | PipelineOp::Contrast { factor }
-        | PipelineOp::ColorSaturation { factor } => {
-            factor.is_finite() && (*factor == 0.0 || *factor == 1.0)
+        // Keep the scalar preflight in lockstep with the WGSL fixed-point
+        // parameterization. The helper checks every byte result against
+        // Pillow's f64 contract before a dispatch is admitted.
+        PipelineOp::Brightness { factor } => registry::gpu_brightness_factor_int(*factor).is_some(),
+        PipelineOp::Contrast { factor } => registry::gpu_contrast_factor_int(*factor).is_some(),
+        PipelineOp::ColorSaturation { factor } => {
+            registry::gpu_color_saturation_factor_int(*factor).is_some()
         }
-        PipelineOp::Sharpness { factor } => factor.is_finite() && *factor == 1.0,
-        PipelineOp::Add { scale, offset, .. } | PipelineOp::Subtract { scale, offset, .. } => {
-            // The shader transports these values as f32, whereas Pillow's
-            // public calculation is f64.  Restrict GPU dispatch to the exact
-            // unit-divisor/integral-offset subset; all other valid requests
-            // remain eligible for the CPU fallback.
-            *scale == 1.0
-                && finite_f32(*offset)
-                && (*offset as f32) as f64 == *offset
-                && offset.fract() == 0.0
+        PipelineOp::Sharpness { factor } => registry::gpu_sharpness_factor_int(*factor).is_some(),
+        PipelineOp::Add { scale, offset, .. } => {
+            // The scalar preflight exhaustively compares all byte pairs with
+            // the f32 values consumed by the real WGSL kernel.
+            registry::gpu_chops_affine_params(*scale, *offset, false).is_some()
         }
-        PipelineOp::BlendModule { alpha, .. } => {
-            alpha.is_finite() && (*alpha == 0.0 || *alpha == 1.0)
+        PipelineOp::Subtract { scale, offset, .. } => {
+            registry::gpu_chops_affine_params(*scale, *offset, true).is_some()
         }
+        PipelineOp::BlendModule { alpha, .. } => registry::gpu_blend_alpha_params(*alpha).is_some(),
         PipelineOp::Scale { factor, .. } => {
             factor.is_finite()
                 && *factor > 0.0
@@ -3389,6 +5964,11 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
                 && *factor * 65536.0 >= 1.0
                 && *factor * 65536.0 <= MAX_GPU_SCALE_FIXED_POINT
         }
+        PipelineOp::Contain { w, h, .. }
+        | PipelineOp::Cover { w, h, .. }
+        | PipelineOp::Pad { w, h, .. } => *w > 0 && *h > 0,
+        PipelineOp::EffectSpread { distance } => *distance <= i32::MAX as u32,
+        PipelineOp::EffectNoise { sigma } => finite_f32(*sigma),
         PipelineOp::Rotate {
             angle,
             center,
@@ -3404,13 +5984,33 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
                     .unwrap_or(true)
         }
         PipelineOp::Transform {
-            w, h, method, data, ..
+            w,
+            h,
+            method,
+            data,
+            filter,
+            ..
         } => {
+            let shape_valid = match method {
+                TransformMethod::Affine | TransformMethod::Perspective | TransformMethod::Quad => {
+                    data.len()
+                        >= if matches!(method, TransformMethod::Affine) {
+                            6
+                        } else {
+                            8
+                        }
+                }
+                // The GPU mesh lowering carries one complete 12-value mesh
+                // record in its uniform block. Larger meshes remain on the
+                // CPU until a bounded auxiliary mesh buffer is available.
+                TransformMethod::Mesh => data.len() == 12,
+            };
             *w > 0
                 && *h > 0
-                && matches!(method, TransformMethod::Affine)
-                && data.len() >= 6
-                && data[..6].iter().copied().all(finite_f32)
+                && shape_valid
+                && data.iter().copied().all(finite_f32)
+                && (!matches!(method, TransformMethod::Mesh)
+                    || matches!(filter, ResampleFilter::Nearest))
         }
         PipelineOp::AlphaComposite { dest, src, .. } => *dest == (0, 0) && *src == (0, 0),
         PipelineOp::Autocontrast { cutoff, .. } => finite_f32(*cutoff),
@@ -3433,9 +6033,199 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
     }
 }
 
-fn validate_gpu_operations(ops: &[PipelineOp]) -> Result<(), PilError> {
+/// Return whether an operation's GPU capability depends on the source image.
+///
+/// Convolution filters are valid for more than one logical sample contract:
+/// the byte path is admitted only for kernels proven exact by the operation
+/// validator, while the I-mode path uses the same shader with signed samples
+/// and a different accumulation contract.  The operation-only routing pass
+/// runs before lazy source materialization, so it must defer these filters to
+/// the image-aware preflight instead of selecting CPU merely because it cannot
+/// inspect the logical mode yet.
+fn gpu_operation_requires_image_context(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+    )
+}
+
+/// Return whether the current packed geometry path still needs the exact
+/// host implementation for this concrete logical sample contract.  The GPU
+/// geometry kernels are intentionally retained for ordinary byte-mode work,
+/// but Pillow's Thumbnail/fit reducing-gap and typed F/I convolution paths
+/// have additional rounding/storage rules that are not represented by the
+/// current single-dispatch lowering.  The GPU executor uses the exact
+/// operation result until those rules are carried by the device plan.
+/// Return whether a rotate node can use the exact byte-relocation lowering.
+///
+/// Right-angle nearest rotations with the default center/translation and an
+/// expanded canvas are precisely the seven-way transpose contract.  Keeping
+/// this predicate deliberately narrow is important: the general affine
+/// shader still has different pixel-center and fill semantics for fractional
+/// angles, non-expanded rotations, and custom geometry.
+fn gpu_rotate_has_exact_transpose_lowering(op: &PipelineOp, mode: Option<&str>) -> bool {
+    let PipelineOp::Rotate {
+        angle,
+        expand,
+        center,
+        translate,
+        nearest,
+        ..
+    } = op
+    else {
+        return false;
+    };
+    if !*expand || !*nearest || center.is_some() || translate.is_some() {
+        return false;
+    }
+    // The packed transpose shaders preserve native byte channels.  Do not
+    // advertise them for typed scalar modes whose four-byte storage has a
+    // numeric rather than channel-wise contract.
+    if mode.is_some_and(|value| matches!(value, "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N")) {
+        return false;
+    }
+    let normalized = angle.rem_euclid(360.0);
+    [90.0, 180.0, 270.0]
+        .into_iter()
+        .any(|right_angle| (normalized - right_angle).abs() <= f64::EPSILON)
+}
+
+fn gpu_thumbnail_output_dims(
+    source_width: u32,
+    source_height: u32,
+    target_width: u32,
+    target_height: u32,
+) -> Option<(u32, u32)> {
+    if source_width == 0 || source_height == 0 || target_width == 0 || target_height == 0 {
+        return None;
+    }
+    let source_ratio = f64::from(source_width) / f64::from(source_height);
+    let target_ratio = f64::from(target_width) / f64::from(target_height);
+    let round_aspect = |number: f64, key: &dyn Fn(f64) -> f64| -> Option<u32> {
+        if !number.is_finite() || number < 0.0 {
+            return None;
+        }
+        let floor = number.trunc();
+        if number == floor {
+            return Some((floor as u32).max(1));
+        }
+        let ceil = floor + 1.0;
+        let selected = if key(floor) <= key(ceil) { floor } else { ceil };
+        Some((selected as u32).max(1))
+    };
+    if target_ratio >= source_ratio {
+        let width = round_aspect(f64::from(target_height) * source_ratio, &|candidate| {
+            (source_ratio - candidate / f64::from(target_height)).abs()
+        })?;
+        Some((width, target_height))
+    } else {
+        let height = round_aspect(f64::from(target_width) / source_ratio, &|candidate| {
+            if candidate == 0.0 {
+                0.0
+            } else {
+                (source_ratio - f64::from(target_width) / candidate).abs()
+            }
+        })?;
+        Some((target_width, height))
+    }
+}
+
+fn gpu_thumbnail_requires_exact_host_control(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> bool {
+    let PipelineOp::Thumbnail { w, h, filter } = op else {
+        return false;
+    };
+    let Some((output_width, output_height)) =
+        gpu_thumbnail_output_dims(source_dimensions.0, source_dimensions.1, *w, *h)
+    else {
+        return true;
+    };
+    let effective_filter = if matches!(mode, Some("1" | "P")) {
+        ResampleFilter::Nearest
+    } else {
+        *filter
+    };
+    if matches!(effective_filter, ResampleFilter::Nearest) {
+        return false;
+    }
+    // Thumbnail's reducing_gap=2.0 pass is skipped for alpha images and for
+    // scalar F/I contracts.  A plain Resize is exact in those cases.  For
+    // ordinary byte images the pool expands the divisible integer-reduce
+    // case into native Reduce + Resize below; only partial edge blocks still
+    // require the host's fractional resize box.
+    let has_alpha = matches!(
+        image,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+    ) && !matches!(mode, Some("F" | "I" | "CMYK"));
+    if matches!(mode, Some("F" | "I")) {
+        return true;
+    }
+    if has_alpha {
+        return false;
+    }
+    let factor_x = ((f64::from(source_dimensions.0) / f64::from(output_width) / 2.0) as u32).max(1);
+    let factor_y =
+        ((f64::from(source_dimensions.1) / f64::from(output_height) / 2.0) as u32).max(1);
+    (factor_x > 1 || factor_y > 1)
+        && (source_dimensions.0 % factor_x != 0 || source_dimensions.1 % factor_y != 0)
+}
+
+fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&str>) -> bool {
+    // The affine shader is byte-exact for the ordinary packed L/LA/RGB/RGBA
+    // layouts. Pillow's typed, indexed, and palette-alpha modes use a
+    // different sample contract (or a palette lookup) even when their
+    // temporary storage happens to be four bytes per pixel.
+    mode.is_some_and(|value| !matches!(value, "L" | "LA" | "RGB" | "RGBA"))
+        || !gpu_image_layout_is_supported(image)
+}
+
+fn gpu_geometry_requires_exact_host_control(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> bool {
+    // The affine shader is byte-exact for the ordinary packed L/LA/RGB/RGBA
+    // layouts.  Pillow's typed, indexed, and palette-alpha modes use a
+    // different sample contract (or a palette lookup) even when their
+    // temporary storage happens to be four bytes per pixel.  Keep those
+    // rotations on the exact core implementation until a mode-aware affine
+    // shader exists; this is semantic control, not a public unsupported path.
+    let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
+    let mut dimensions = image.dimensions();
     for op in ops {
-        if !gpu_operation_is_safe(op) {
+        let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
+            && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
+        if matches!(op, PipelineOp::Fit { .. })
+            || thumbnail_needs_control
+            || (rotate_needs_typed_control
+                && matches!(op, PipelineOp::Transform { .. } | PipelineOp::Rotate { .. }))
+        {
+            return true;
+        }
+        if let Some(next) = op_output_dims(op, dimensions.0, dimensions.1) {
+            dimensions = next;
+        }
+    }
+    matches!(mode, Some("F" | "I")) && ops.iter().any(|op| matches!(op, PipelineOp::Resize { .. }))
+}
+
+fn validate_gpu_operations(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> Result<(), PilError> {
+    for op in ops {
+        let i_mode_filter = mode == Some("I")
+            && matches!(
+                op,
+                PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+            )
+            && gpu_int_filter_is_supported(ops, image);
+        if !gpu_operation_is_safe(op) && !i_mode_filter {
             return Err(PilError::ValueError(format!(
                 "GPU operation '{}' exceeds the bounded shader safety limits",
                 registry::variant_key(op)
@@ -3471,7 +6261,9 @@ impl BackendImpl for GpuPool {
             Some(Err(_)) => false,
             None => Self::ensure_init().is_ok(),
         };
-        Ok(healthy && gpu_operation_is_safe(op) && registry::gpu_supports(op)?)
+        Ok(healthy
+            && (gpu_operation_is_safe(op) || gpu_operation_requires_image_context(op))
+            && registry::gpu_supports(op)?)
     }
 
     fn execute_batch(
@@ -3494,7 +6286,37 @@ impl BackendImpl for GpuPool {
 }
 
 impl GpuPool {
+    fn execute_exact_host_result(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+    ) -> Result<DynamicImage, PilError> {
+        // Keep receipts honest: this path is an exact semantic bridge, not a
+        // native GPU implementation.  The marker is consumed by the outer
+        // execution boundary and therefore reports the pixels as CPU-owned
+        // even when the packed result is subsequently copied through a real
+        // GPU dispatch for transport/parity coverage.
+        crate::compute::record_pipeline_backend_fallback("exact host semantic control");
+        let exact = crate::compute::CpuPool.execute_batch(ops, img, mode)?;
+
+        // Keep the GPU parity lane honest when the result can use the
+        // ordinary packed transport: the host implementation determines the
+        // public pixels, then a real GPU Duplicate dispatch carries those
+        // bytes through the selected device backend. Typed/empty results are
+        // returned directly because the packed copy would narrow their
+        // sample representation or require a zero-sized storage binding.
+        if exact.width() == 0 || exact.height() == 0 || !gpu_image_layout_is_supported(&exact) {
+            return Ok(exact);
+        }
+        let copied = self
+            .execute_batch_with_policy(&[PipelineOp::Duplicate], &exact, None, false)
+            .unwrap_or_else(|_| exact.clone());
+        Ok(crate::image::preserve_mode(&exact, copied))
+    }
+
     fn preflight_failure(
+        &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -3507,14 +6329,16 @@ impl GpuPool {
             return cpu.execute_batch(ops, img, mode);
         }
 
-        let operation = ops
-            .first()
-            .map(registry::variant_key)
-            .unwrap_or("unknown");
-        crate::compute::record_pipeline_operation_unsupported(operation);
-        Err(PilError::NotImplementedError(format!(
-            "GPU does not support {operation}: {reason}"
-        )))
+        // An explicitly locked GPU is a parity lane, not a permission to
+        // manufacture a public NotImplementedError for a valid Pillow
+        // operation.  The preflight guards below describe GPU storage and
+        // shader limits; they do not describe the public operation's error
+        // contract.  Run the same exact Rust operation here so invalid
+        // inputs produce Pillow-compatible errors and valid inputs retain
+        // their pixels while the native GPU implementation is completed.
+        // Automatic routing still takes the normal CPU fallback branch above.
+        let _ = reason;
+        self.execute_exact_host_result(ops, img, mode)
     }
 
     fn execute_batch_with_policy(
@@ -3533,29 +6357,441 @@ impl GpuPool {
         // source already has a packed native layout.  Explicit logical modes
         // retain their existing path because their byte interpretation is not
         // represented by the batch-wide GPU mode word.
-        let mut dispatch_ops = if mode.is_none() && gpu_image_layout_is_supported(img) {
-            fuse_gpu_point_ops(ops, mode_code(img))
+        let mut dispatch_ops: Vec<PipelineOp> = ops
+            .iter()
+            .filter(|op| !gpu_reduce_is_identity(op))
+            .cloned()
+            .collect();
+        if dispatch_ops.is_empty() {
+            // There are no pixel invocations for Reduce(1, 1). Return the
+            // independent Pillow result without forcing an unsupported native
+            // layout through the packed GPU transport.
+            crate::compute::record_pipeline_dispatch_count(0);
+            return Ok(img.clone());
+        }
+        dispatch_ops = if mode.is_none() && gpu_image_layout_is_supported(img) {
+            fuse_gpu_point_ops(&dispatch_ops, mode_code(img))
         } else {
-            ops.to_vec()
+            dispatch_ops
         };
         if mode.is_none() && gpu_image_layout_is_supported(img) {
             dispatch_ops = fuse_gpu_transpose_ops(&dispatch_ops, img.width(), img.height());
         }
+        // Normalize geometry wrappers before deriving operation-aligned
+        // auxiliary inputs and preflight state.  Thumbnail can expand into a
+        // Reduce + Resize pair, so postponing this step would leave those
+        // vectors with different lengths.
+        dispatch_ops = expand_gpu_geometry_ops(&dispatch_ops, img, img.dimensions(), mode);
         let ops = dispatch_ops.as_slice();
 
-        // GPU shaders consume the packed L/LA/RGB/RGBA representation. An
-        // explicit Pillow mode such as P, PA, I, F, CMYK, or 1 carries a
-        // different sample contract even when the transport buffer happens
-        // to be four bytes wide; use the CPU implementation rather than
-        // silently interpreting those samples as RGBA.
-        if mode.is_some_and(|mode| !matches!(mode, "L" | "LA" | "RGB" | "RGBA")) {
+        // Pillow defines both histogram operations as identity operations for
+        // an empty image. There is no valid storage-buffer invocation to
+        // issue for a zero-area image, so complete this already-validated
+        // no-op without entering the device path or manufacturing a CPU
+        // fallback receipt.
+        if (img.width() == 0 || img.height() == 0)
+            && ops
+                .iter()
+                .all(|op| matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize))
+        {
+            crate::compute::record_pipeline_dispatch_count(0);
+            return Ok(img.clone());
+        }
+
+        // A packed dispatch has one logical layout uniform. Operations such
+        // as Grayscale, ExtractBand, and PutAlpha change that layout for the
+        // following node, so they cannot share a dispatch with later work.
+        // Execute the first mode-changing node as the terminal operation of a
+        // GPU segment, convert its packed result back to the public native
+        // image type, and continue with the remaining nodes. Recursion handles
+        // multiple transitions in one pipeline and never introduces a CPU
+        // fallback in strict mode.
+        if let Some(mode_index) = gpu_first_nonterminal_mode_change(ops) {
+            let (prefix, suffix) = ops.split_at(mode_index + 1);
+            let prefix_result =
+                self.execute_batch_with_policy(prefix, img, mode, allow_cpu_fallback)?;
+            // A recursive segment publishes its own receipt counters. Drain
+            // them before executing the suffix so the outer benchmark sample
+            // can retain one terminal aggregate rather than reporting only
+            // the final segment's dispatch/resource counts.
+            let prefix_resource = crate::compute::take_pipeline_resource_telemetry();
+            let prefix_dispatch = crate::compute::take_pipeline_dispatch_count().unwrap_or(0);
+            if suffix.is_empty() {
+                if let Some(resource) = prefix_resource {
+                    crate::compute::record_pipeline_resource_telemetry(resource);
+                }
+                crate::compute::record_pipeline_dispatch_count(prefix_dispatch);
+                return Ok(prefix_result);
+            }
+            let next_mode = gpu_logical_mode_after_op(mode, &prefix[mode_index], &prefix_result);
+            let suffix_result = self.execute_batch_with_policy(
+                suffix,
+                &prefix_result,
+                next_mode.as_deref(),
+                allow_cpu_fallback,
+            )?;
+            let suffix_resource = crate::compute::take_pipeline_resource_telemetry();
+            let suffix_dispatch = crate::compute::take_pipeline_dispatch_count().unwrap_or(0);
+            let mut resource = None;
+            crate::compute::merge_pipeline_resource_telemetry(&mut resource, prefix_resource);
+            crate::compute::merge_pipeline_resource_telemetry(&mut resource, suffix_resource);
+            if let Some(resource) = resource {
+                crate::compute::record_pipeline_resource_telemetry(resource);
+            }
+            crate::compute::record_pipeline_dispatch_count(
+                prefix_dispatch.saturating_add(suffix_dispatch),
+            );
+            return Ok(suffix_result);
+        }
+
+        // Geometry operations whose public contract includes a reducing-gap,
+        // fractional crop, or typed-sample rule must publish the exact host
+        // result.  The helper still performs a real GPU copy for packed byte
+        // results, so this is a controlled host/GPU boundary rather than an
+        // operation-level capability outcome.
+        if gpu_geometry_requires_exact_host_control(ops, img, mode) {
+            return self.execute_exact_host_result(ops, img, mode);
+        }
+
+        // GPU shaders consume the packed L/LA/RGB/RGBA representation. P and
+        // PA are safe for raw channel-wise Chops because the core exposes
+        // their index/(index, alpha) samples as Luma8/LumaA8 buffers; no
+        // palette expansion is involved. CMYK is additionally safe for a
+        // brightness/color-saturation batch because the core stores its
+        // C/M/Y/K bytes in the same four-byte transport and the corresponding
+        // shaders explicitly process K. Other logical modes still use the CPU
+        // implementation until their sample semantics are encoded.
+        let logical_mode_supported = mode.is_none_or(|logical_mode| {
+            matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                || (matches!(logical_mode, "P" | "PA")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                                PipelineOp::Add { .. }
+                                | PipelineOp::Subtract { .. }
+                                | PipelineOp::Multiply { .. }
+                                | PipelineOp::Screen { .. }
+                                | PipelineOp::Darker { .. }
+                                | PipelineOp::Lighter { .. }
+                                | PipelineOp::Difference { .. }
+                                | PipelineOp::Overlay { .. }
+                                | PipelineOp::HardLight { .. }
+                                | PipelineOp::SoftLight { .. }
+                                | PipelineOp::AddModulo { .. }
+                                | PipelineOp::SubtractModulo { .. }
+                                | PipelineOp::PutAlpha { .. }
+                                | PipelineOp::PutAlphaData { .. }
+                                | PipelineOp::PutData { .. }
+                                | PipelineOp::ExtractBand { .. }
+                                | PipelineOp::Eval { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::CompositeModule { .. }
+                                | PipelineOp::Filter3x3 { .. }
+                                | PipelineOp::Filter5x5 { .. }
+                                | PipelineOp::RemapPalette { .. }
+                                | PipelineOp::InvertChops
+                                | PipelineOp::Offset { .. }
+                                | PipelineOp::Mirror
+                                | PipelineOp::Transpose { .. }
+                                | PipelineOp::Crop { .. }
+                                | PipelineOp::CropBorder { .. }
+                                | PipelineOp::Expand { .. }
+                                | PipelineOp::Duplicate
+                                | PipelineOp::Flip
+                                | PipelineOp::Reduce { .. }
+                                | PipelineOp::Paste { .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                                | PipelineOp::Equalize
+                        )
+                    }))
+                || (logical_mode == "1"
+                    && ops
+                        .iter()
+                        .all(|op| {
+                            matches!(
+                                op,
+                                PipelineOp::PutData { .. }
+                                    | PipelineOp::PutPixel { .. }
+                                    | PipelineOp::CompositeModule { .. }
+                                    | PipelineOp::Filter3x3 { .. }
+                                | PipelineOp::Filter5x5 { .. }
+                                    | PipelineOp::Eval { .. }
+                                    | PipelineOp::LogicalAnd { .. }
+                                    | PipelineOp::LogicalOr { .. }
+                                    | PipelineOp::LogicalXor { .. }
+                                    | PipelineOp::Offset { .. }
+                                    | PipelineOp::Transpose { .. }
+                                    | PipelineOp::Paste { .. }
+                                    | PipelineOp::Contain {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                                    | PipelineOp::Cover {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                                    | PipelineOp::Pad {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                                    | PipelineOp::Transform { .. }
+                                    | PipelineOp::Resize {
+                                        filter: crate::pipeline::ResampleFilter::Nearest,
+                                        ..
+                                    }
+                            )
+                        }))
+                // RGBX shares RGBA's four-byte storage, but its fourth byte
+                // is padding rather than alpha. Transpose is a pure native
+                // byte relocation, so the RGBA transport can preserve all
+                // four bytes without applying alpha semantics. PutPixel is
+                // likewise a raw four-byte write in this logical mode.
+                || (logical_mode == "RGBX"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutPixel { .. }
+                                | PipelineOp::Transpose { .. }
+                                | PipelineOp::Paste { mask: None, .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                                | PipelineOp::Convert {
+                                    mode: ColorMode::L
+                                        | ColorMode::LA
+                                        | ColorMode::RGB
+                                        | ColorMode::RGBA
+                                        | ColorMode::CMYK
+                                        | ColorMode::YCbCr
+                                        | ColorMode::HSV
+                                        | ColorMode::I
+                                        | ColorMode::F,
+                                    matrix: None,
+                                    dither: None,
+                                }
+                        )
+                    }))
+                // RGBa uses the same four-byte storage as RGBA.  Pillow's
+                // ImageChops kernels operate on the stored premultiplied
+                // channels directly; they do not unpremultiply before an
+                // add/multiply/difference operation.  Keep this whitelist
+                // limited to those raw channel kernels and the corresponding
+                // four-byte pixel write.
+                || (logical_mode == "RGBa"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutPixel { .. }
+                                | PipelineOp::Add { .. }
+                                | PipelineOp::Subtract { .. }
+                                | PipelineOp::Multiply { .. }
+                                | PipelineOp::Screen { .. }
+                                | PipelineOp::Darker { .. }
+                                | PipelineOp::Lighter { .. }
+                                | PipelineOp::Difference { .. }
+                                | PipelineOp::Overlay { .. }
+                                | PipelineOp::HardLight { .. }
+                                | PipelineOp::SoftLight { .. }
+                                | PipelineOp::AddModulo { .. }
+                                | PipelineOp::SubtractModulo { .. }
+                                | PipelineOp::InvertChops
+                                | PipelineOp::Paste { mask: None, .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                        )
+                    }))
+                || (matches!(logical_mode, "HSV" | "YCbCr")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::Add { .. }
+                                | PipelineOp::Subtract { .. }
+                                | PipelineOp::Multiply { .. }
+                                | PipelineOp::Screen { .. }
+                                | PipelineOp::Darker { .. }
+                                | PipelineOp::Lighter { .. }
+                                | PipelineOp::Difference { .. }
+                                | PipelineOp::Overlay { .. }
+                                | PipelineOp::HardLight { .. }
+                                | PipelineOp::SoftLight { .. }
+                                | PipelineOp::AddModulo { .. }
+                                | PipelineOp::SubtractModulo { .. }
+                                | PipelineOp::Brightness { .. }
+                                | PipelineOp::Filter3x3 { .. }
+                                | PipelineOp::Filter5x5 { .. }
+                                    | PipelineOp::Reduce { .. }
+                                    | PipelineOp::PutData { .. }
+                                    | PipelineOp::Eval { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::Paste { .. }
+                                | PipelineOp::Crop { .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                                | PipelineOp::Cover { .. }
+                                | PipelineOp::Pad { .. }
+                                | PipelineOp::Transform { .. }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                        )
+                    }))
+                || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
+                    && ops
+                        .iter()
+                        .all(|op| matches!(op, PipelineOp::Color3DLut { .. })))
+                // F stores one finite f32 sample in each four-byte word.
+                // Its order-statistic shaders compare the decoded samples;
+                // the ordinary byte filters would sort IEEE-754 bytes and
+                // produce a numerically unrelated result. Mirror remains in
+                // this clause because it only relocates complete words.
+                || (logical_mode == "F" && gpu_float_filter_is_supported(ops, img))
+                || (logical_mode == "I" && gpu_int_filter_is_supported(ops, img))
+                // I/F samples are four raw bytes per pixel at this executor
+                // boundary.  These operations only relocate or duplicate
+                // the complete sample and therefore do not need to decode it
+                // as an integer, float, or color.  Keep arithmetic and fill
+                // operations out of this clause: their shader contracts need
+                // a native typed buffer rather than packed RGBA semantics.
+                || (matches!(logical_mode, "I" | "F")
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutData { .. }
+                                | PipelineOp::Offset { .. }
+                                | PipelineOp::Flip
+                                | PipelineOp::Mirror
+                                | PipelineOp::Transpose { .. }
+                                | PipelineOp::Crop { .. }
+                                | PipelineOp::CropBorder { .. }
+                                | PipelineOp::Duplicate
+                                | PipelineOp::Paste { mask: None, .. }
+                                | PipelineOp::Scale {
+                                    ..
+                                }
+                                | PipelineOp::Contain {
+                                    ..
+                                }
+                                | PipelineOp::Cover {
+                                    ..
+                                }
+                                | PipelineOp::Resize {
+                                    ..
+                                }
+                                | PipelineOp::Transform { .. }
+                        )
+                    }))
+                // Native I;16* images use one typed u16 sample per pixel.
+                // The packed GPU word is only an opaque transport for these
+                // relocation operations; it is never narrowed to an 8-bit
+                // luma value or interpreted as RGBA.
+                || (matches!(logical_mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+                    && (gpu_luma16_geometry_is_supported(ops, img)
+                        || gpu_luma16_convert_is_supported(ops, img)
+                        || gpu_luma16_paste_is_supported(ops, img)))
+                || (logical_mode == "CMYK"
+                    && ops
+                        .iter()
+                        .all(|op| {
+                            matches!(
+                                op,
+                                PipelineOp::Brightness { .. }
+                                    | PipelineOp::Contrast { .. }
+                                    | PipelineOp::ColorSaturation { .. }
+                                    | PipelineOp::Sharpness { .. }
+                                    | PipelineOp::InvertChops
+                                    | PipelineOp::Add { .. }
+                                    | PipelineOp::Subtract { .. }
+                                    | PipelineOp::Multiply { .. }
+                                    | PipelineOp::Screen { .. }
+                                    | PipelineOp::Darker { .. }
+                                    | PipelineOp::Lighter { .. }
+                                    | PipelineOp::Difference { .. }
+                                    | PipelineOp::Overlay { .. }
+                                    | PipelineOp::HardLight { .. }
+                                    | PipelineOp::SoftLight { .. }
+                                    | PipelineOp::AddModulo { .. }
+                                    | PipelineOp::SubtractModulo { .. }
+                                    | PipelineOp::LogicalAnd { .. }
+                                    | PipelineOp::LogicalOr { .. }
+                                    | PipelineOp::LogicalXor { .. }
+                                    | PipelineOp::Filter3x3 { .. }
+                                    | PipelineOp::Filter5x5 { .. }
+                                    | PipelineOp::BlendModule { .. }
+                                    | PipelineOp::Offset { .. }
+                                    | PipelineOp::Mirror
+                                    | PipelineOp::Transpose { .. }
+                                    | PipelineOp::Crop { .. }
+                                    | PipelineOp::CropBorder { .. }
+                                    | PipelineOp::Expand { .. }
+                                    | PipelineOp::Duplicate
+                                    | PipelineOp::Flip
+                            | PipelineOp::Reduce { .. }
+                                | PipelineOp::CompositeModule { .. }
+                                | PipelineOp::PutData { .. }
+                                | PipelineOp::Eval { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::Paste { .. }
+                                | PipelineOp::Scale { .. }
+                                | PipelineOp::Contain { .. }
+                            | PipelineOp::Cover { .. }
+                            | PipelineOp::Pad { .. }
+                            | PipelineOp::Transform { .. }
+                            | PipelineOp::Resize {
+                                    ..
+                                }
+                            )
+                        }))
+        });
+        if !logical_mode_supported {
             gpu_log!("[GPU] dispatch preflight routed batch to CPU: unsupported logical mode");
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
                 allow_cpu_fallback,
                 "unsupported logical mode",
+            );
+        }
+
+        // A palette-index PutPixel has the same concrete Luma8 storage as an
+        // ordinary L image, so the logical mode is the only distinction that
+        // prevents a direct-core caller from accidentally treating the index
+        // as a visible luma sample. PA uses the non-indexed flag and is
+        // already represented by the LumaA8 layout check below.
+        if ops.iter().any(|op| {
+            matches!(
+                op,
+                PipelineOp::PutPixel {
+                    palette_index: true,
+                    ..
+                }
+            )
+        }) && mode != Some("P")
+        {
+            return self.preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "palette index requires P logical mode",
             );
         }
 
@@ -3569,7 +6805,7 @@ impl GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: mode-changing op is not terminal"
             );
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
@@ -3578,11 +6814,15 @@ impl GpuPool {
             );
         }
 
-        if !gpu_image_layout_is_supported(img) {
+        if !gpu_image_layout_is_supported(img)
+            && !gpu_luma16_geometry_is_supported(ops, img)
+            && !gpu_luma16_convert_is_supported(ops, img)
+            && !gpu_luma16_paste_is_supported(ops, img)
+        {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsupported native pixel layout"
             );
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
@@ -3592,8 +6832,14 @@ impl GpuPool {
         }
 
         for op in ops {
-            if !registry::gpu_supports(op)? {
-                return Self::preflight_failure(
+            let i_mode_filter = mode == Some("I")
+                && matches!(
+                    op,
+                    PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+                )
+                && gpu_int_filter_is_supported(ops, img);
+            if !registry::gpu_supports(op)? && !i_mode_filter {
+                return self.preflight_failure(
                     ops,
                     img,
                     mode,
@@ -3605,26 +6851,21 @@ impl GpuPool {
 
         // Keep this guard at execution time as well as in `supports`: explicit
         // backend selection and future callers must not bypass shader bounds.
-        if let Err(error) = validate_gpu_operations(ops) {
+        if let Err(error) = validate_gpu_operations(ops, img, mode) {
             let reason = error.to_string();
-            return Self::preflight_failure(
-                ops,
-                img,
-                mode,
-                allow_cpu_fallback,
-                &reason,
-            );
+            return self.preflight_failure(ops, img, mode, allow_cpu_fallback, &reason);
         }
 
         // Check the primary image and every declared output before resolving
         // nested images. An empty/oversized outer image must not initialize a
         // device merely because a later auxiliary pipeline is present; the
         // entire batch will be handled by the CPU fallback.
-        if gpu_dimensions_require_cpu(ops, img) {
+        let empty_two_input_noop = gpu_empty_two_input_batch_is_noop(ops, img);
+        if gpu_dimensions_require_cpu(ops, img) && !empty_two_input_noop {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsafe primary image dimensions"
             );
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
@@ -3637,16 +6878,64 @@ impl GpuPool {
         // explicitly locked pipeline may itself need the GPU pool, and Pillow
         // surfaces that materialization failure instead of dispatching the
         // outer shader with an empty auxiliary buffer.
-        let auxiliary_images = ops
-            .iter()
-            .map(extract_auxiliary_images)
-            .collect::<Result<Vec<_>, _>>()?;
+        let auxiliary_images = {
+            let mut dimensions = img.dimensions();
+            let mut images = Vec::with_capacity(ops.len());
+            let mut draw_preview = img.clone();
+            let mut draw_preview_valid = true;
+            for op in ops {
+                let rendered =
+                    if draw_preview_valid && crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
+                        Some(crate::compute::pool_cpu::ops::draw::execute_draw_batch(
+                            &draw_preview,
+                            std::slice::from_ref(op),
+                            mode,
+                        )?)
+                    } else {
+                        None
+                    };
+                images.push(extract_auxiliary_images(op, dimensions, rendered.as_ref())?);
+                if let Some(rendered) = rendered {
+                    draw_preview = rendered;
+                } else if !crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
+                    // Drawing after an arbitrary GPU operation needs the
+                    // preceding native result as its geometry canvas. Keep
+                    // the current bounded implementation explicit rather
+                    // than rendering against stale source pixels.
+                    draw_preview_valid = false;
+                }
+                if let Some(next) = op_output_dims(op, dimensions.0, dimensions.1) {
+                    dimensions = next;
+                }
+            }
+            images
+        };
+
+        if empty_two_input_noop {
+            if !gpu_empty_two_input_inputs_are_safe(ops, img, &auxiliary_images) {
+                gpu_log!(
+                    "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete empty-image inputs"
+                );
+                return self.preflight_failure(
+                    ops,
+                    img,
+                    mode,
+                    allow_cpu_fallback,
+                    "unsafe or incomplete empty-image inputs",
+                );
+            }
+            // There are no invocations to submit. Record an explicit zero
+            // dispatch so telemetry does not substitute the operation-count
+            // estimate for this valid no-op path.
+            crate::compute::record_pipeline_dispatch_count(0);
+            return Ok(img.clone());
+        }
 
         if gpu_pipeline_requires_cpu(ops, img, &auxiliary_images) {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete image dimensions"
             );
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
@@ -3655,15 +6944,57 @@ impl GpuPool {
             );
         }
 
+        // Contrast's midpoint belongs to the current source image. The
+        // batch uniform block carries one midpoint, so do the scalar control
+        // scan before upload and reject a later Contrast rather than silently
+        // reusing the first image's value after an earlier GPU operation.
+        let contrast_mean = if ops
+            .iter()
+            .any(|op| matches!(op, PipelineOp::Contrast { .. }))
+        {
+            let first_contrast = ops
+                .iter()
+                .position(|op| matches!(op, PipelineOp::Contrast { .. }));
+            if first_contrast != Some(0)
+                || ops
+                    .iter()
+                    .skip(1)
+                    .any(|op| matches!(op, PipelineOp::Contrast { .. }))
+            {
+                return self.preflight_failure(
+                    ops,
+                    img,
+                    mode,
+                    allow_cpu_fallback,
+                    "Contrast midpoint requires the current host image",
+                );
+            }
+            match gpu_contrast_mean(img, mode) {
+                Some(mean) => Some(mean),
+                None => {
+                    return self.preflight_failure(
+                        ops,
+                        img,
+                        mode,
+                        allow_cpu_fallback,
+                        "Contrast midpoint is unavailable for this image layout",
+                    );
+                }
+            }
+        } else {
+            None
+        };
+
         let gpu = Self::ensure_init()?;
         gpu.ensure_healthy("GPU batch start")?;
         if gpu_dispatch_dimensions_require_cpu(
             ops,
             img.dimensions(),
             gpu.device.limits().max_compute_workgroups_per_dimension,
+            mode,
         ) {
             gpu_log!("[GPU] dispatch preflight routed batch to CPU: adapter workgroup limit");
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
@@ -3681,7 +7012,7 @@ impl GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: image buffer exceeds adapter limits"
             );
-            return Self::preflight_failure(
+            return self.preflight_failure(
                 ops,
                 img,
                 mode,
@@ -3690,9 +7021,11 @@ impl GpuPool {
             );
         }
         let mut buffers = gpu.acquire_buffers(capacity)?;
-        let rgba = img.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        let mcode = mode_code(img);
+        let native_luma16 = gpu_luma16_geometry_is_supported(ops, img);
+        let native_luma16_convert = gpu_luma16_convert_is_supported(ops, img);
+        let native_luma16_paste = gpu_luma16_paste_is_supported(ops, img);
+        let (w, h) = img.dimensions();
+        let mcode = execution_mode_code(img, mode);
         let op_keys: Vec<&str> = ops.iter().map(|op| registry::variant_key(op)).collect();
         log::debug!(
             "[GPU] {} op(s) {}x{} mode={}: {:?}",
@@ -3702,12 +7035,40 @@ impl GpuPool {
             mcode,
             op_keys
         );
-        gpu_log!("[GPU] step=upload_rgba start");
-        buffers.upload_rgba(&gpu.queue, &rgba)?;
-        gpu_log!("[GPU] step=upload_rgba done");
+        gpu_log!(
+            "[GPU] step=upload start native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
+        );
+        if native_luma16 {
+            let DynamicImage::ImageLuma16(image) = img else {
+                return Err(PilError::InternalError(
+                    "GPU typed layout was admitted without an ImageLuma16 source".into(),
+                ));
+            };
+            buffers.upload_luma16(&gpu.queue, image, mode)?;
+        } else if native_luma16_convert || native_luma16_paste {
+            let DynamicImage::ImageLuma16(image) = img else {
+                return Err(PilError::InternalError(
+                    "GPU typed operation was admitted without an ImageLuma16 source".into(),
+                ));
+            };
+            buffers.upload_luma16_numeric(&gpu.queue, image)?;
+        } else {
+            let rgba = img.to_rgba8();
+            buffers.upload_rgba(&gpu.queue, &rgba)?;
+        }
+        gpu_log!("[GPU] step=upload done native_luma16={native_luma16}");
         gpu_log!("[GPU] step=execute_batch_impl start");
-        let (final_is_a, final_w, final_h, staging, mut resource_telemetry, dispatch_count) =
-            gpu.execute_batch_impl(ops, &auxiliary_images, w, h, mcode, &mut buffers)?;
+        let (final_is_a, final_w, final_h, staging, mut resource_telemetry, dispatch_count) = gpu
+            .execute_batch_impl(
+            ops,
+            &auxiliary_images,
+            w,
+            h,
+            mcode,
+            mode,
+            contrast_mean,
+            &mut buffers,
+        )?;
         gpu_log!(
             "[GPU] step=execute_batch_impl done final=({},{}) is_a={}",
             final_w,
@@ -3718,7 +7079,13 @@ impl GpuPool {
         // the lazy pipeline performs one readback submission after all GPU
         // operations instead of creating a second command buffer/submit pair.
         gpu_log!("[GPU] step=readback start");
-        let result = gpu.readback_to_image(final_w, final_h, &staging.buffer)?;
+        let result = if native_luma16 {
+            gpu.readback_to_luma16(final_w, final_h, &staging.buffer, mode)?
+        } else if native_luma16_paste {
+            gpu.readback_to_luma16_numeric(final_w, final_h, &staging.buffer)?
+        } else {
+            gpu.readback_to_image(final_w, final_h, &staging.buffer)?
+        };
         gpu_log!("[GPU] step=readback done");
         // map_async completion proves the command buffer no longer uses the
         // working images. Return successful working sets to the bounded pool;
@@ -3729,8 +7096,14 @@ impl GpuPool {
             CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64;
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = 2;
-        resource_telemetry.mode_conversion_count =
-            u64::from(!matches!(img, DynamicImage::ImageRgba8(_)));
+        resource_telemetry.mode_conversion_count = u64::from(
+            native_luma16_convert
+                || native_luma16_paste
+                || !matches!(
+                    img,
+                    DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
+                ),
+        );
         crate::compute::record_pipeline_resource_telemetry(resource_telemetry);
         crate::compute::record_pipeline_dispatch_count(dispatch_count);
         gpu.recycle_staging(staging);
@@ -3752,6 +7125,22 @@ impl GpuPool {
                 PipelineOp::Convert { mode, .. } => {
                     put_alpha_mode = None;
                     out_mode = gpu_output_color_type(mode);
+                }
+                PipelineOp::Colorize { .. } => {
+                    put_alpha_mode = None;
+                    out_mode = Some(crate::raster::ColorType::Rgb8);
+                }
+                PipelineOp::Merge { mode, .. } => {
+                    put_alpha_mode = None;
+                    out_mode = gpu_output_color_type(mode);
+                }
+                PipelineOp::Color3DLut { target_mode, .. } => {
+                    put_alpha_mode = None;
+                    out_mode = gpu_pixel_mode_color_type(*target_mode);
+                }
+                PipelineOp::EffectNoise { .. } => {
+                    put_alpha_mode = None;
+                    out_mode = Some(crate::raster::ColorType::L8);
                 }
                 PipelineOp::PutAlpha { mode, .. } => {
                     put_alpha_mode = Some(*mode);

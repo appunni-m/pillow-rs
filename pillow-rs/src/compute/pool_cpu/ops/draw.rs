@@ -475,14 +475,7 @@ fn draw_hline<C: DrawCanvas>(canvas: &mut C, x0: i32, y: i32, x1: i32, color: (u
 /// consume the inclusive native-coordinate spans with their own data-plane
 /// kernel; in particular, the SIMD adapter uses this helper only to produce
 /// spans and performs every destination write itself.
-pub(crate) fn for_each_ellipse_span<F>(
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-    width: i32,
-    mut visit: F,
-)
+pub(crate) fn for_each_ellipse_span<F>(x0: i32, y0: i32, x1: i32, y1: i32, width: i32, mut visit: F)
 where
     F: FnMut(i32, i32, i32),
 {
@@ -874,7 +867,13 @@ pub(crate) fn arc_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -
     ClipEllipseState::new(EllipseState::new(a, b, width), root)
 }
 
-pub(crate) fn chord_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+pub(crate) fn chord_clip_state(
+    a: i32,
+    b: i32,
+    width: i32,
+    start: f32,
+    end: f32,
+) -> ClipEllipseState {
     let start = f64::from(start).to_radians();
     let end = f64::from(end).to_radians();
     let start_x = f64::from(a) * start.cos();
@@ -962,8 +961,7 @@ pub(crate) fn for_each_clipped_ellipse_span<F>(
     b: i32,
     mut state: ClipEllipseState,
     mut visit: F,
-)
-where
+) where
     F: FnMut(i32, i32, i32),
 {
     while let Some((segment_x0, segment_y, segment_x1)) = state.next() {

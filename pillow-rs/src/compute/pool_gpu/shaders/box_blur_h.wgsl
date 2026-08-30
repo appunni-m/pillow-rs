@@ -1,9 +1,9 @@
 // Exact horizontal pass for BoxBlur and GaussianBlur.
 //
 // The CPU implementation uses Pillow's 24-bit fixed-point box accumulator.
-// `radius`, `weight`, and `edge_weight` are supplied after the common header:
-//   weight = floor(2^24 / (2*radius + 1))
-//   edge_weight = fractional edge contribution for GaussianBlur
+// The X and Y radius/weight triplets are supplied after the common header.
+// The horizontal pass consumes the X triplet; the vertical pass consumes the
+// Y triplet.  For a uniform radius both triplets are identical.
 //
 // Each invocation owns one complete row.  It initializes one radius-sized
 // window and then advances that window with one remove/add pair per output
@@ -16,12 +16,15 @@ struct Params {
     height: u32,
     mode: u32,
     _pad: u32,
-    radius: u32,
-    weight: u32,
-    edge_weight: u32,
+    radius_x: u32,
+    weight_x: u32,
+    edge_weight_x: u32,
+    radius_y: u32,
+    weight_y: u32,
+    edge_weight_y: u32,
 }
 
-const MAX_RADIUS: u32 = 16u;
+const MAX_RADIUS: u32 = 64u;
 const FIXED_BIAS: u32 = 8388608u;
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
@@ -40,8 +43,8 @@ fn clamp_index(value: i32, limit: u32) -> u32 {
 // Both products are split into 12-bit pieces; every intermediate remains
 // below the signed/unsigned 32-bit WGSL range for the bounded byte window.
 fn fixed_weighted_average(sum: u32, edge: u32) -> u32 {
-    let high = sum * (params.weight >> 12u) + edge * (params.edge_weight >> 12u);
-    let low = sum * (params.weight & 4095u) + edge * (params.edge_weight & 4095u) + FIXED_BIAS;
+    let high = sum * (params.weight_x >> 12u) + edge * (params.edge_weight_x >> 12u);
+    let low = sum * (params.weight_x & 4095u) + edge * (params.edge_weight_x & 4095u) + FIXED_BIAS;
     return min((high >> 12u) + ((((high & 4095u) << 12u) + low) >> 24u), 255u);
 }
 
@@ -56,7 +59,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     let width = params.width;
-    let radius = min(params.radius, MAX_RADIUS);
+    let radius = min(params.radius_x, MAX_RADIUS);
     let r = i32(radius);
     let base = gid.y * width;
 
@@ -74,7 +77,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     for (var x = 0u; x < width; x++) {
         let original = input[base + x];
-        if radius == 0u && params.edge_weight == 0u {
+        if radius == 0u && params.edge_weight_x == 0u {
             output[base + x] = original;
         } else {
             let left = clamp_index(i32(x) - r - 1, width);

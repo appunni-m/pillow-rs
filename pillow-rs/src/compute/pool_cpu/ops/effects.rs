@@ -115,8 +115,7 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     if distance == 0 {
         return Ok(img.clone());
     }
-    let d = distance as i32;
-    let half_d = d / 2;
+    let mapping = effect_spread_mapping(img.width(), img.height(), distance)?;
     // Determine pixel stride based on color type (PIL uses image8 for L/LA/P with pixelsize,
     // image32 for RGB/RGBA/CMYK with 4-byte stride)
     let (pixels, w, h, stride) = match img.color() {
@@ -143,32 +142,13 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
         }
     };
     let input_pixels = pixels;
-    let mut out_pixels = input_pixels.clone();
-
-    // Consume the same process-global stream as Pillow's libc rand().
-    let mut rng = process_rng()
-        .lock()
-        .map_err(|_| PilError::InternalError("effect_spread RNG lock poisoned".into()))?;
-    for y in 0..h {
-        for x in 0..w {
-            let src_idx = (y * w + x) as usize;
-            let src_base = src_idx * stride;
-            let xx = x + (rng.next() as i32 % d) - half_d;
-            let yy = y + (rng.next() as i32 % d) - half_d;
-            if xx >= 0 && xx < w && yy >= 0 && yy < h {
-                let dst_idx = (yy * w + xx) as usize;
-                let dst_base = dst_idx * stride;
-                // Read from INPUT (never modified), write to OUTPUT
-                out_pixels[dst_base..dst_base + stride]
-                    .copy_from_slice(&input_pixels[src_base..src_base + stride]);
-                out_pixels[src_base..src_base + stride]
-                    .copy_from_slice(&input_pixels[dst_base..dst_base + stride]);
-            } else {
-                // Copy pixel as-is
-                out_pixels[src_base..src_base + stride]
-                    .copy_from_slice(&input_pixels[src_base..src_base + stride]);
-            }
-        }
+    let mut out_pixels = vec![0u8; input_pixels.len()];
+    for (destination, &source) in mapping.iter().enumerate() {
+        let source = source as usize;
+        let destination_base = destination * stride;
+        let source_base = source * stride;
+        out_pixels[destination_base..destination_base + stride]
+            .copy_from_slice(&input_pixels[source_base..source_base + stride]);
     }
     // Reconstruct DynamicImage from the output pixel data
     let result = match stride {
@@ -190,6 +170,51 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
         ),
     };
     Ok(result)
+}
+
+/// Build the exact per-pixel relocation map used by Pillow's spread effect.
+/// The map is a control-plane representation of the C scatter loop: every
+/// source pixel consumes two values from the process-global Park–Miller stream,
+/// and each in-bounds pair updates both affected output locations from the
+/// immutable input.  A GPU/other backend can then gather through this map
+/// without reproducing the inherently order-dependent scatter writes.
+pub(crate) fn effect_spread_mapping(
+    width: u32,
+    height: u32,
+    distance: u32,
+) -> Result<Vec<u32>, PilError> {
+    let pixels = usize::try_from(width)
+        .ok()
+        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)))
+        .ok_or_else(|| PilError::ValueError("effect_spread image dimensions overflow".into()))?;
+    let mut mapping = (0..pixels)
+        .map(|index| u32::try_from(index).unwrap_or(u32::MAX))
+        .collect::<Vec<_>>();
+    if distance == 0 || pixels == 0 {
+        return Ok(mapping);
+    }
+    let d = i32::try_from(distance)
+        .map_err(|_| PilError::ValueError("effect_spread distance is too large".into()))?;
+    let half_d = d / 2;
+    let width_i32 = i32::try_from(width)
+        .map_err(|_| PilError::ValueError("effect_spread width is too large".into()))?;
+    let height_i32 = i32::try_from(height)
+        .map_err(|_| PilError::ValueError("effect_spread height is too large".into()))?;
+    with_process_rng(|rng| {
+        for y in 0..height_i32 {
+            for x in 0..width_i32 {
+                let source = (y * width_i32 + x) as usize;
+                let xx = x + (rng.next() as i32 % d) - half_d;
+                let yy = y + (rng.next() as i32 % d) - half_d;
+                if xx >= 0 && xx < width_i32 && yy >= 0 && yy < height_i32 {
+                    let destination = (yy * width_i32 + xx) as usize;
+                    mapping[destination] = u32::try_from(source).unwrap_or(u32::MAX);
+                    mapping[source] = u32::try_from(destination).unwrap_or(u32::MAX);
+                }
+            }
+        }
+    })?;
+    Ok(mapping)
 }
 
 // ── Paste ──
@@ -850,42 +875,60 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
     // never set, so every accepted pixel consumes one pair and discards the
     // second deviate.
     let (w, h) = (img.width(), img.height());
-    let mut out = GrayImage::new(w, h);
-    let mut rng = process_rng()
-        .lock()
-        .map_err(|_| PilError::InternalError("effect_noise RNG lock poisoned".into()))?;
-    // `_effect_noise` parses sigma with PyArg's `f` conversion before passing
-    // it to ImagingEffectNoise, so round it to FLOAT32 once at the boundary.
-    let sigma = f64::from(sigma as f32);
-    const RAND_MAX_F64: f64 = 2147483647.0;
-    for pixel in out.pixels_mut() {
-        let (v1, radius) = loop {
-            // Exact match to PIL:
-            //   v1 = rand() * (2.0 / RAND_MAX) - 1.0;
-            //   v2 = rand() * (2.0 / RAND_MAX) - 1.0;
-            let v1 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
-            let v2 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
-            let radius = v1 * v1 + v2 * v2;
-            if radius < 1.0 {
-                break (v1, radius);
-            }
-        };
-        // factor = sqrt(-2.0 * log(radius) / radius)
-        let factor = (-2.0 * radius.ln() / radius).sqrt();
-        let this = factor * v1;
-        // PIL: CLIP8(128 + sigma * this)
-        // CLIP8: (v) <= 0 ? 0 : (v) >= 255.0 ? 255 : (UINT8)(v)
-        // Cast truncates toward zero (no rounding).
-        let v = 128.0 + sigma * this;
-        pixel[0] = if v <= 0.0 {
-            0
-        } else if v >= 255.0 {
-            255
-        } else {
-            v as u8
-        };
-    }
+    let values = effect_noise_values(w, h, sigma)?;
+    let out = GrayImage::from_raw(w, h, values)
+        .ok_or_else(|| PilError::ValueError("effect_noise buffer error".into()))?;
     Ok(DynamicImage::ImageLuma8(out))
+}
+
+/// Generate the exact L-mode bytes for EffectNoise while consuming the shared
+/// Pillow-compatible process RNG in source order.  Keeping this scalar control
+/// section separate lets GPU encode the generated bytes as an auxiliary gather
+/// buffer without inventing a second random stream.
+pub(crate) fn effect_noise_values(
+    width: u32,
+    height: u32,
+    sigma: f64,
+) -> Result<Vec<u8>, PilError> {
+    let pixels = usize::try_from(width)
+        .ok()
+        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)))
+        .ok_or_else(|| PilError::ValueError("effect_noise image dimensions overflow".into()))?;
+    let mut values = vec![0u8; pixels];
+    let sigma = f64::from(sigma as f32);
+    with_process_rng(|rng| {
+        // `_effect_noise` parses sigma with PyArg's `f` conversion before passing
+        // it to ImagingEffectNoise, so round it to FLOAT32 once at the boundary.
+        const RAND_MAX_F64: f64 = 2147483647.0;
+        for pixel in &mut values {
+            let (v1, radius) = loop {
+                // Exact match to PIL:
+                //   v1 = rand() * (2.0 / RAND_MAX) - 1.0;
+                //   v2 = rand() * (2.0 / RAND_MAX) - 1.0;
+                let v1 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
+                let v2 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
+                let radius = v1 * v1 + v2 * v2;
+                if radius < 1.0 {
+                    break (v1, radius);
+                }
+            };
+            // factor = sqrt(-2.0 * log(radius) / radius)
+            let factor = (-2.0 * radius.ln() / radius).sqrt();
+            let this = factor * v1;
+            // PIL: CLIP8(128 + sigma * this)
+            // CLIP8: (v) <= 0 ? 0 : (v) >= 255.0 ? 255 : (UINT8)(v)
+            // Cast truncates toward zero (no rounding).
+            let v = 128.0 + sigma * this;
+            *pixel = if v <= 0.0 {
+                0
+            } else if v >= 255.0 {
+                255
+            } else {
+                v as u8
+            };
+        }
+    })?;
+    Ok(values)
 }
 
 // ── Transform ──

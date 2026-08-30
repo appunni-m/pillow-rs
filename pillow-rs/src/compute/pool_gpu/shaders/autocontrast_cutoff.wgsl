@@ -1,18 +1,9 @@
-// Autocontrast cutoff: find lo/hi after removing cutoff percent of extreme pixels.
-// 1 workgroup (256 threads), reads histogram from atomic storage into shared memory,
-// walks bins to locate cutoff boundaries, computes linear stretch parameters.
+// Autocontrast LUT derivation.
 //
-// CPU reference: Walk histogram bins to find lo/hi after cutoff removal.
-//   cutoff_low = total_pixels * cutoff / 100
-//   Walk bins 0->255 subtracting bin counts until cutoff_low exhausted -> lo
-//   Walk bins 255->0 subtracting until cutoff_low exhausted -> hi
-//   scale = 255.0 / (hi - lo), offset = -lo * scale
-//
-// Results: [lo, hi, scale_f32_bits, offset_f32_bits] written to storage at binding(1)
-//
-// Mode-aware: total_pixels adjusts for active channels.
-//   L/LA: 1 channel (R only); RGB/RGBA: 3 channels (R,G,B).
-// Params: cutoff_bits (f32 stored in u32) after standard header.
+// The host computes the percentile ranks with the same truncation as Pillow;
+// this pass performs only integer histogram lookup and integer LUT mapping.
+// That keeps the result independent of device f32 division and matches
+// `autocontrast_lut`'s `int(ix * scale + offset)` contract exactly.
 
 struct Params {
     width: u32,
@@ -20,71 +11,80 @@ struct Params {
     mode: u32,
     _pad: u32,
     cutoff_bits: u32,
+    cutoff_low: u32,
+    cutoff_high: u32,
+    selected_pixels: u32,
 }
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
-
 @group(0) @binding(0) var<storage, read> histogram_data: array<u32>;
-@group(0) @binding(1) var<storage, read_write> results: array<u32>;
+@group(0) @binding(1) var<storage, read_write> lut: array<u32, 256>;
 @group(0) @binding(2) var<uniform> params: Params;
 
-var<workgroup> shared_hist: array<u32, 256>;
+fn histogram_value(base: u32, rank: u32) -> u32 {
+    var remaining = rank;
+    for (var i = 0u; i < 256u; i = i + 1u) {
+        let count = histogram_data[base + i];
+        if remaining < count {
+            return i;
+        }
+        remaining = remaining - count;
+    }
+    return 0u;
+}
+
+fn remap(value: u32, lo: u32, hi: u32) -> u32 {
+    if value <= lo {
+        return 0u;
+    }
+    if value >= hi {
+        return 255u;
+    }
+    return ((value - lo) * 255u) / (hi - lo);
+}
 
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>) {
-    let tid = lid.x;
+    if lid.x != 0u {
+        return;
+    }
 
-    // Copy atomic histogram into shared memory for fast access
-    shared_hist[tid] = histogram_data[tid];
-    workgroupBarrier();
+    // Identity is also the correct result for an all-zero mask and for a
+    // channel whose selected samples all have the same value.
+    for (var i = 0u; i < 256u; i = i + 1u) {
+        lut[i] = i | (i << 8u) | (i << 16u) | 0xff000000u;
+    }
+    if params.selected_pixels == 0u {
+        return;
+    }
 
-    // Single thread performs the cutoff calculation
-    if tid == 0u {
-        // L/LA: 1 channel histogram (R only); RGB/RGBA: 3 channels (R+G+B)
-        let num_channels = select(1u, 3u, params.mode >= 2u);
-        let total_pixels = params.width * params.height * num_channels;
-        let cutoff = bitcast<f32>(params.cutoff_bits);
-        let cutoff_low = u32(f32(total_pixels) * cutoff / 100.0);
-
-        // Walk forward 0..255 to find lo
-        var accum: u32 = 0u;
-        var lo: u32 = 0u;
-        var found_lo: bool = false;
+    let low_rank = params.cutoff_low;
+    let high_rank = params.cutoff_high;
+    let red_lo = histogram_value(0u, low_rank);
+    let red_hi = histogram_value(0u, high_rank);
+    if red_hi > red_lo {
         for (var i = 0u; i < 256u; i = i + 1u) {
-            accum = accum + shared_hist[i];
-            if !found_lo && accum >= cutoff_low {
-                lo = i;
-                found_lo = true;
+            let value = remap(i, red_lo, red_hi);
+            lut[i] = (lut[i] & 0xffffff00u) | value;
+        }
+    }
+
+    if params.mode >= 2u {
+        let green_lo = histogram_value(256u, low_rank);
+        let green_hi = histogram_value(256u, high_rank);
+        if green_hi > green_lo {
+            for (var i = 0u; i < 256u; i = i + 1u) {
+                let value = remap(i, green_lo, green_hi);
+                lut[i] = (lut[i] & 0xffff00ffu) | (value << 8u);
             }
         }
 
-        // Walk backward 255..0 to find hi
-        accum = 0u;
-        var hi: u32 = 0u;
-        var found_hi: bool = false;
-        for (var i = 0u; i < 256u; i = i + 1u) {
-            let idx = 255u - i;
-            accum = accum + shared_hist[idx];
-            if !found_hi && accum >= cutoff_low {
-                hi = idx;
-                found_hi = true;
+        let blue_lo = histogram_value(512u, low_rank);
+        let blue_hi = histogram_value(512u, high_rank);
+        if blue_hi > blue_lo {
+            for (var i = 0u; i < 256u; i = i + 1u) {
+                let value = remap(i, blue_lo, blue_hi);
+                lut[i] = (lut[i] & 0xff00ffffu) | (value << 16u);
             }
         }
-
-        // Edge case: all pixels in same bin -> expand range
-        if hi == lo {
-            if hi < 255u { hi = hi + 1u; } else { lo = lo - 1u; }
-        }
-
-        // Compute scale and offset as f32, store u32 bit patterns
-        let scale = 255.0 / f32(hi - lo);
-        let offset = -f32(lo) * scale;
-
-        results[0] = lo;
-        results[1] = hi;
-        results[2] = bitcast<u32>(scale);
-        results[3] = bitcast<u32>(offset);
     }
 }

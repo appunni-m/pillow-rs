@@ -2301,13 +2301,8 @@ pub(crate) fn bresenham_line<C: DrawCanvas>(
 /// Geometry consumers such as the SIMD drawing adapter use this callback to
 /// keep the integer control path shared while writing the destination through
 /// their own native data-plane kernel.
-pub(crate) fn for_each_bresenham_point<F>(
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-    mut visit: F,
-) where
+pub(crate) fn for_each_bresenham_point<F>(x0: i32, y0: i32, x1: i32, y1: i32, mut visit: F)
+where
     F: FnMut(i32, i32),
 {
     // Match Pillow src/libImaging/Draw.c::{line8,line32,line32rgba}.
@@ -2559,8 +2554,7 @@ pub(crate) fn for_each_polygon_fill_span<F>(
     img_w: u32,
     img_h: u32,
     mut visit: F,
-)
-where
+) where
     F: FnMut(i32, i32, i32),
 {
     let n = points.len();

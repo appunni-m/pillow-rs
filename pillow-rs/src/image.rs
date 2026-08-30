@@ -227,7 +227,8 @@ fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
         PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some("RGBA"),
         PixelMode::L | PixelMode::LA => Some("LA"),
         PixelMode::RGBA => Some("RGBA"),
-        PixelMode::CMYK => None,
+        PixelMode::P | PixelMode::PA => Some("PA"),
+        PixelMode::CMYK => Some("RGBA"),
         // Palette putalpha is tagged as PA in push_op before this planner is
         // reached. Public putalpha also rejects 1/I/F, YCbCr, and HSV before
         // queueing; keep this fallback for malformed/internal descriptors.
@@ -1750,9 +1751,8 @@ impl Image {
         // Image.open() reports every decoder rejection, including malformed
         // payloads and an allow-list mismatch, as UnidentifiedImageError.
         // Deferred load/verify paths retain their more specific codec errors.
-        let source = EncodedImage::new(Arc::clone(&data)).map_err(|_| {
-            PilError::UnidentifiedImageError("memory".to_owned())
-        })?;
+        let source = EncodedImage::new(Arc::clone(&data))
+            .map_err(|_| PilError::UnidentifiedImageError("memory".to_owned()))?;
         let info = source.info().clone();
         if requested
             .as_ref()
@@ -2245,17 +2245,16 @@ impl Image {
         // executor boundary. RGBX and RGBa share RGBA storage, but their fourth
         // byte has different Pillow semantics; the pipeline output tag is the
         // destination and cannot stand in for that source tag.
-        let convert_source_mode = if ops.len() == 1
-            && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
-        {
-            // The concrete buffer is still in the source layout when a
-            // one-step conversion begins. In particular, RGB -> CMYK/HSV/
-            // YCbCr carries a nonstandard destination tag on the lazy result,
-            // but preflight and the adapter must inspect the source mode.
-            Some(source.mode()?)
-        } else {
-            None
-        };
+        let convert_source_mode =
+            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::Convert { .. })) {
+                // The concrete buffer is still in the source layout when a
+                // one-step conversion begins. In particular, RGB -> CMYK/HSV/
+                // YCbCr carries a nonstandard destination tag on the lazy result,
+                // but preflight and the adapter must inspect the source mode.
+                Some(source.mode()?)
+            } else {
+                None
+            };
         // Encoded I;16 inputs decode to the generic Luma16 buffer while their
         // source-only mode remains in the lazy Bytes header. Preserve that
         // mode at the executor boundary so a strict SIMD resize can select
@@ -2270,10 +2269,25 @@ impl Image {
         } else {
             None
         };
+        // A flattened pipeline still starts with the root source buffer.  A
+        // terminal Convert/Colorize/etc. may set `explicit_mode` to the
+        // destination mode, but that tag must not be used to interpret the
+        // bytes written by earlier setup operations such as PutPixel.  Keep
+        // the source layout as the initial GPU mode and let the batch planner
+        // advance it after each representable mode-changing operation.
+        let initial_source_mode = if remap_source_mode.is_none()
+            && convert_source_mode.is_none()
+            && source_luma16_mode.is_none()
+        {
+            Some(source.mode()?)
+        } else {
+            None
+        };
         let execution_mode = remap_source_mode
             .as_deref()
             .or(convert_source_mode.as_deref())
             .or(source_luma16_mode.as_deref())
+            .or(initial_source_mode.as_deref())
             .or(explicit_mode.as_deref());
         // RGBX uses RGBA storage but its fourth byte is padding, not an alpha
         // sample. The native SIMD Convert kernel carries that logical source
@@ -2455,13 +2469,13 @@ impl Image {
                             ops_len: ops.len(),
                             materialized: Arc::clone(pipeline_materialized),
                         })
-                    } else if let Some(prefix_cache) = ops.prefix_cache().cloned() {
-                        Some(prefix_cache)
                     } else {
-                        Some(PipelinePrefixCache {
-                            ops_len: ops.len(),
-                            materialized: Arc::clone(pipeline_materialized),
-                        })
+                        // An unmaterialized prefix must stay part of the
+                        // flattened batch. Marking its empty cache here
+                        // makes evaluate_pipeline split every lazy chain
+                        // into a prefix and suffix submission, defeating
+                        // GPU batching and adding an avoidable frame copy.
+                        ops.prefix_cache().cloned()
                     }
                 } else {
                     None

@@ -61,6 +61,7 @@ pub struct OpEntry {
 
 impl OpEntry {
     /// Creates a registry entry with only a CPU implementation.
+    #[cfg_attr(feature = "gpu", allow(dead_code))]
     pub const fn cpu_only(f: CpuOpFn) -> Self {
         OpEntry {
             cpu_fn: Some(f),
@@ -254,26 +255,366 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 /// Returns whether the GPU backend has an implementation for `op`.
 #[cfg(feature = "gpu")]
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    if !gpu_shader_contract_is_supported(op) {
-        return Ok(false);
-    }
-    if matches!(
+    // Filter exactness depends on the logical sample contract.  The GPU pool
+    // performs the final image-aware check after lazy materialization, so let
+    // contextual filters cross this operation-only registry gate even when
+    // their byte-mode kernel is not admitted by the fixed-point proof.
+    let contextual_filter = matches!(
         op,
-        PipelineOp::Rotate { nearest: true, .. }
-            | PipelineOp::Rotate {
-                center: Some(_),
-                ..
-            }
-            | PipelineOp::Rotate {
-                translate: Some(_),
-                ..
-            }
-    ) {
+        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+    );
+    if !gpu_shader_contract_is_supported(op) && !contextual_filter {
         return Ok(false);
     }
     Ok(registry()?
         .get(variant_key(op))
         .is_some_and(|e| e.gpu_shader.is_some()))
+}
+
+/// Return the fixed-point brightness parameter when the integer WGSL kernel
+/// is bit-exact for every possible byte sample.
+///
+/// Pillow's byte implementation evaluates `sample * factor` as f64 and
+/// truncates only after clamping. The shader uses `sample * factor_int / 1000`.
+/// Checking all 256 samples here keeps the preflight scalar while allowing
+/// arbitrary public factors whose quantized representation has the same byte
+/// result. Values that would overflow the shader's u32 product remain on the
+/// CPU path.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_brightness_factor_int(factor: f64) -> Option<u32> {
+    if !factor.is_finite() {
+        return None;
+    }
+    if factor <= 0.0 {
+        return Some(0);
+    }
+
+    // The WGSL kernel multiplies a byte by this integer before dividing by
+    // 1000. Keep the product within u32 for every byte value.
+    let max_factor = f64::from(u32::MAX) / (255.0 * 1000.0);
+    if factor > max_factor {
+        return None;
+    }
+    let factor_int = (factor * 1000.0) as u32;
+    for sample in 0..=255_u32 {
+        let cpu = (f64::from(sample) * factor).clamp(0.0, 255.0) as u32;
+        let shader = (sample * factor_int / 1000).min(255);
+        if cpu != shader {
+            return None;
+        }
+    }
+    Some(factor_int)
+}
+
+/// Return the fixed-point factor when the Color enhancement WGSL kernel is
+/// exact for every possible byte sample and grayscale value.  Pillow computes
+/// the grayscale anchor with integer BT.601 arithmetic, then evaluates the
+/// channel blend in f64 and truncates after clamping.  The shader uses the
+/// same integer luma and a factor scaled by 1000; proving the two byte
+/// contracts in scalar preflight avoids admitting a neighboring rounding
+/// result as a GPU implementation.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_color_saturation_factor_int(factor: f64) -> Option<u32> {
+    if !factor.is_finite() || factor < 0.0 {
+        return None;
+    }
+    let scaled = factor * 1000.0;
+    if !scaled.is_finite() || scaled > f64::from(i32::MAX) || scaled < 0.0 {
+        return None;
+    }
+    let factor_int = scaled as u32;
+    // The WGSL affine expression multiplies a byte by the factor numerator
+    // in i32.  Bound the numerator before the proof so every intermediate is
+    // representable on the device as well as in this host calculation.
+    if factor_int > (i32::MAX as u32) / 255 {
+        return None;
+    }
+    if f64::from(factor_int) != scaled {
+        return None;
+    }
+    let factor_int = factor_int as i32;
+    for luma in 0..=255_i32 {
+        for channel in 0..=255_i32 {
+            let cpu =
+                (f64::from(luma) + factor * f64::from(channel - luma)).clamp(0.0, 255.0) as u8;
+            let shader = (luma * (1000 - factor_int) + channel * factor_int)
+                .div_euclid(1000)
+                .clamp(0, 255) as u8;
+            if cpu != shader {
+                return None;
+            }
+        }
+    }
+    Some(factor_int as u32)
+}
+
+/// Return the fixed-point factor when the Sharpness WGSL blend is exact for
+/// every possible blurred/original byte pair. The 3x3 smooth kernel is
+/// represented with integer weights in the shader; this helper proves the
+/// remaining f64 blend against its integer numerator before dispatch.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_sharpness_factor_int(factor: f64) -> Option<u32> {
+    if !factor.is_finite() || factor < 0.0 {
+        return None;
+    }
+    let scaled = factor * 1000.0;
+    if !scaled.is_finite() || scaled < 0.0 || scaled > f64::from(i32::MAX) {
+        return None;
+    }
+    let factor_int = scaled as u32;
+    if f64::from(factor_int) != scaled {
+        return None;
+    }
+    // The WGSL numerator is `blurred * (1000 - factor) + original * factor`.
+    // Bound both terms before admitting the operation so i32 arithmetic stays
+    // defined for every byte value, including unsharp factors above 1.
+    let max_factor = (i32::MAX as u32) / 255;
+    if factor_int > max_factor || factor_int.saturating_add(1000) > max_factor {
+        return None;
+    }
+    let factor_i32 = factor_int as i32;
+    for blurred in 0..=255_i32 {
+        for original in 0..=255_i32 {
+            let cpu = (f64::from(blurred) * (1.0 - factor) + f64::from(original) * factor)
+                .clamp(0.0, 255.0) as u8;
+            let shader = (blurred * (1000 - factor_i32) + original * factor_i32)
+                .div_euclid(1000)
+                .clamp(0, 255) as u8;
+            if cpu != shader {
+                return None;
+            }
+        }
+    }
+    Some(factor_int)
+}
+
+/// Return the fixed-point factor when the Contrast WGSL blend is exact for
+/// every possible image midpoint and byte sample. Pillow computes the
+/// midpoint from the source image in scalar control code, then evaluates the
+/// per-channel blend in f64. The shader receives that midpoint and uses the
+/// same integer numerator; proving the complete byte domain here prevents a
+/// f32 or signed-division rounding difference from being presented as GPU
+/// parity.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_contrast_factor_int(factor: f64) -> Option<u32> {
+    if !factor.is_finite() {
+        return None;
+    }
+    let scaled = factor * 1000.0;
+    if !scaled.is_finite() || scaled < f64::from(i32::MIN) || scaled > f64::from(i32::MAX) {
+        return None;
+    }
+    let factor_int = scaled as i32;
+    if f64::from(factor_int) != scaled {
+        return None;
+    }
+    // Bound the signed WGSL numerator for every midpoint/sample pair.
+    let max_factor = i64::from(i32::MAX) / 255;
+    let min_factor = i64::from(i32::MIN) / 255;
+    if i64::from(factor_int) > max_factor.saturating_sub(1000)
+        || i64::from(factor_int) < min_factor.saturating_add(1000)
+    {
+        return None;
+    }
+    for mean in 0..=255_i32 {
+        for sample in 0..=255_i32 {
+            let cpu = (f64::from(mean) + factor * f64::from(sample - mean)).clamp(0.0, 255.0) as u8;
+            let numerator = mean * (1000 - factor_int) + sample * factor_int;
+            let shader = numerator.div_euclid(1000).clamp(0, 255) as u8;
+            if cpu != shader {
+                return None;
+            }
+        }
+    }
+    Some(factor_int as u32)
+}
+
+/// Return whether the convolution WGSL path is safe for a finite normalized
+/// kernel.
+///
+/// Pillow evaluates the normalized coefficients and each row in `f32`, with
+/// the middle product followed by fused multiply-adds. The WGSL byte path now
+/// uses the same contraction order. The scalar preflight therefore needs to
+/// prove only that all normalized coefficients and the full bounded byte
+/// accumulation remain finite; the shader receives the host-computed `f32`
+/// coefficient bits verbatim and performs the same operations on every byte
+/// channel. This admits non-dyadic public kernels without substituting a
+/// different fixed-point rounding contract.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_filter_kernel_is_exact(kernel: &[f32], scale: f32, offset: i32) -> bool {
+    if !scale.is_finite() {
+        return false;
+    }
+    let denominator = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let normalized: Vec<f32> = kernel
+        .iter()
+        .map(|coefficient| *coefficient / denominator)
+        .collect();
+    if normalized
+        .iter()
+        .any(|coefficient| !coefficient.is_finite())
+    {
+        return false;
+    }
+
+    let coefficient_abs_sum: f64 = normalized
+        .iter()
+        .map(|coefficient| f64::from(coefficient.abs()))
+        .sum();
+    let maximum_abs = coefficient_abs_sum * 255.0 + f64::from(offset.abs()) + 0.5;
+    maximum_abs.is_finite() && maximum_abs <= f64::from(f32::MAX)
+}
+
+/// Return an integer denominator for a convolution whose normalized f32
+/// coefficients are exactly representable as small rational values.
+///
+/// The byte WGSL path can then evaluate the public truncating conversion with
+/// integer arithmetic instead of allowing f32 accumulation to cross an
+/// integer boundary.  The denominator is deliberately bounded: this helper
+/// is a capability proof for the real shader contract, not a general-purpose
+/// rational approximation of arbitrary user kernels.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_filter_rational_denominator(
+    kernel: &[f32],
+    scale: f32,
+    offset: i32,
+) -> Option<u32> {
+    if !scale.is_finite() || scale == 0.0 {
+        return None;
+    }
+    let normalized: Vec<f32> = kernel
+        .iter()
+        .map(|coefficient| *coefficient / scale)
+        .collect();
+    if normalized
+        .iter()
+        .any(|coefficient| !coefficient.is_finite())
+    {
+        return None;
+    }
+
+    for denominator in 1..=512_u32 {
+        let denominator_f32 = denominator as f32;
+        let mut coefficient_abs_sum = 0_i64;
+        let mut exact = true;
+        for coefficient in &normalized {
+            let scaled = *coefficient * denominator_f32;
+            let numerator = scaled.round();
+            // Requiring the reconstruction to have the same f32 value keeps
+            // the shader's integer numerator tied to the host's normalized
+            // coefficient rather than accepting a loose approximation.
+            if !scaled.is_finite()
+                || (numerator / denominator_f32).to_bits() != coefficient.to_bits()
+            {
+                exact = false;
+                break;
+            }
+            let Ok(numerator) = i64::try_from(numerator as i128) else {
+                exact = false;
+                break;
+            };
+            coefficient_abs_sum = coefficient_abs_sum.checked_add(numerator.abs())?;
+        }
+        if !exact {
+            continue;
+        }
+
+        // The shader forms 2 * (sum + offset * denominator) + denominator
+        // before truncating. Keep that intermediate inside signed i32.
+        let maximum_abs = coefficient_abs_sum
+            .checked_mul(255)?
+            .checked_add(
+                i64::from(offset)
+                    .abs()
+                    .checked_mul(i64::from(denominator))?,
+            )?
+            .checked_mul(2)?
+            .checked_add(i64::from(denominator))?;
+        if maximum_abs <= i64::from(i32::MAX) {
+            return Some(denominator);
+        }
+    }
+    None
+}
+
+/// Return the f32 parameters when the Add/Subtract WGSL kernel is exact for
+/// every possible pair of byte samples.
+///
+/// The public Pillow operation evaluates the affine expression in f64 and
+/// truncates after clamping. The shader evaluates the same expression in f32,
+/// so checking all 256 × 256 byte pairs in scalar preflight proves the
+/// selected parameterization before a vector dispatch is admitted. A zero
+/// divisor remains CPU-only because WGSL division by zero is not a safe way to
+/// represent Pillow's historical C behavior.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_chops_affine_params(scale: f64, offset: f64, subtract: bool) -> Option<[u32; 2]> {
+    if !scale.is_finite() || scale == 0.0 || !offset.is_finite() {
+        return None;
+    }
+
+    let scale_f32 = scale as f32;
+    let offset_f32 = offset as f32;
+    if !scale_f32.is_finite()
+        || !offset_f32.is_finite()
+        || scale_f32 as f64 != scale
+        || offset_f32 as f64 != offset
+    {
+        return None;
+    }
+
+    for a in 0..=255_u32 {
+        for b in 0..=255_u32 {
+            let numerator = if subtract {
+                f64::from(a) - f64::from(b)
+            } else {
+                f64::from(a) + f64::from(b)
+            };
+            let cpu = (numerator / scale + offset).clamp(0.0, 255.0) as u8;
+
+            let numerator_f32 = if subtract {
+                a as f32 - b as f32
+            } else {
+                a as f32 + b as f32
+            };
+            let shader = (numerator_f32 / scale_f32 + offset_f32).clamp(0.0, 255.0) as u8;
+            if cpu != shader {
+                return None;
+            }
+        }
+    }
+
+    Some([scale_f32.to_bits(), offset_f32.to_bits()])
+}
+
+/// Return the f32 alpha bits when the BlendModule WGSL kernel is exact for
+/// every possible pair of byte samples.
+///
+/// Pillow evaluates the blend expression in f64 and truncates only after
+/// clamping. The GPU kernel evaluates the same expression in f32. Prove the
+/// selected parameterization over the complete byte domain before admitting
+/// the vector path, including the documented extrapolation range.
+#[cfg(feature = "gpu")]
+pub(crate) fn gpu_blend_alpha_params(alpha: f64) -> Option<u32> {
+    if !alpha.is_finite() {
+        return None;
+    }
+    let alpha_f32 = alpha as f32;
+    if !alpha_f32.is_finite() {
+        return None;
+    }
+
+    for a in 0..=255_u32 {
+        for b in 0..=255_u32 {
+            let cpu = (f64::from(a) * (1.0 - alpha) + f64::from(b) * alpha).clamp(0.0, 255.0) as u8;
+            let shader =
+                ((a as f32) * (1.0 - alpha_f32) + (b as f32) * alpha_f32).clamp(0.0, 255.0) as u8;
+            if cpu != shader {
+                return None;
+            }
+        }
+    }
+
+    Some(alpha_f32.to_bits())
 }
 
 /// Returns whether the registered single-dispatch shader actually represents
@@ -287,32 +628,37 @@ pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 #[cfg(feature = "gpu")]
 fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
     match op {
-        // PIL resize uses a two-pass, fixed-point coefficient table (and has
-        // additional premultiplied-alpha behavior). The retained shaders are
-        // useful validation/future-work assets, but the current single-pass
-        // transport is not an exact public Resize implementation for any
-        // filter, so keep the operation on the CPU.
-        PipelineOp::Resize { .. } => false,
-        // These shaders do not currently carry the complete host-side sizing
-        // and crop/contain contract. The pool already has a CPU fallback.
-        PipelineOp::Thumbnail { .. }
-        | PipelineOp::Contain { .. }
-        | PipelineOp::Cover { .. }
-        | PipelineOp::Fit { .. } => false,
-        // Pad is a contain-then-paste operation. The retained shader places
-        // pixels with a scale/offset, but it does not reproduce Pillow's
-        // contain sizing, bankers-rounded placement, or mode-specific
-        // default fill. Keep the source available for validation and route
-        // the public operation through the CPU implementation.
-        PipelineOp::Pad { .. } => false,
-        // Scale's retained shader is nearest-neighbour only, but Pillow's
-        // nearest path uses cumulative f64 stepping. The shader's f32 ratio
-        // can select a neighboring source pixel at exact boundaries, so keep
-        // the public Scale operation on CPU until the mapping is represented
-        // exactly.
-        PipelineOp::Scale { .. } => false,
-        // The current shader implements only the four byte modes and has no
-        // matrix or dithering parameter path.
+        // NEAREST is a single-dispatch relocation. The other filters expand
+        // into the pool's exact horizontal/vertical fixed-point kernels; the
+        // registry entry remains the public operation marker while the pool
+        // resolves those filters to their private two-pass pipelines.
+        PipelineOp::Resize { .. } => true,
+        // Thumbnail lowers to the exact Resize plan in the GPU executor.
+        // Fit retains a dedicated shader because its crop box can be
+        // fractional; both operations are admitted after image-aware
+        // geometry validation in the executor.
+        PipelineOp::Thumbnail { .. } | PipelineOp::Fit { .. } => true,
+        // Contain and Cover are scalar geometry wrappers around the exact
+        // Resize contract. The GPU pool computes Pillow's aspect-ratio size
+        // before replacing them with the internal resize plan; retaining the
+        // public entries here lets valid byte-mode calls reach that plan while
+        // invalid/typed cases still fail preflight before device work.
+        PipelineOp::Contain { .. } | PipelineOp::Cover { .. } => true,
+        // Pad is resolved by the GPU pool into the exact separable resize
+        // followed by a device-side fill/copy placement pass. The public
+        // registry entry remains the capability marker while the pool owns
+        // the multi-dispatch implementation.
+        PipelineOp::Pad { .. } => true,
+        // Scale is normalized by the GPU pool to the exact Resize plan after
+        // Pillow's ties-to-even output dimensions have been computed. The
+        // retained public shader is not used for this path; admitting the
+        // operation here lets valid byte-mode Scale nodes reach the same
+        // nearest or fixed-point convolution kernels as Resize.
+        PipelineOp::Scale { .. } => true,
+        // The current shader implements the byte/scalar targets whose output
+        // is representable by the packed transport. It has no matrix or
+        // dithering parameter path. Non-standard byte/scalar targets retain
+        // their Pillow storage shape at this executor boundary.
         PipelineOp::Convert {
             mode,
             matrix,
@@ -320,112 +666,196 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         } => {
             matrix.is_none()
                 && dither.is_none()
-                && matches!(mode, ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA)
+                && matches!(
+                    mode,
+                    ColorMode::L
+                        | ColorMode::LA
+                        | ColorMode::RGB
+                        | ColorMode::RGBA
+                        | ColorMode::CMYK
+                        | ColorMode::YCbCr
+                        | ColorMode::HSV
+                        | ColorMode::I
+                        | ColorMode::F
+                )
         }
         // Quantize returns a palette-backed image in Pillow. The shader is a
         // per-channel uniform quantizer and cannot produce that public result.
-        PipelineOp::Quantize { .. }
-        // The active shader is missing Pillow's midpoint/blackpoint/whitepoint
-        // piecewise colorize contract.
-        | PipelineOp::Colorize { .. }
-        // Autocontrast and Equalize require histogram/LUT passes; the active
-        // single-pass sources cannot derive those values from the image.
-        | PipelineOp::Autocontrast { .. }
-        | PipelineOp::Equalize => false,
-        // Contrast also depends on the image-wide mean. The retained shader
-        // uses a fixed midpoint and therefore is not a public implementation.
-        PipelineOp::Contrast { .. } => false,
-        // The CPU filter path deliberately follows Pillow's f32 contraction
-        // order (including fused multiply-adds on the pinned oracle). WGSL
-        // `*`/`+` contraction is implementation-dependent across GPU
-        // backends, so the retained convolution shaders are not a portable
-        // bit-exact public implementation yet. Keep them for validation and
-        // route Filter3x3/Filter5x5 through the CPU until their arithmetic is
-        // represented with a backend-independent fixed-point contract.
-        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => false,
-        // BoxBlurXY carries Pillow's tuple/fractional radius contract, which
-        // the integer-radius shader cannot represent. Keep this descriptor
-        // on the exact CPU path; the ordinary integer BoxBlur remains
-        // eligible for the existing backend contract.
-        PipelineOp::BoxBlurXY { .. } => false,
-        // These shaders transport factors as fixed-point values while the
-        // CPU contract evaluates f64 before truncation. Three-decimal
-        // factors can differ by one at an integer boundary, so only the
-        // identity/zero endpoints are universally exact for this dispatch.
-        PipelineOp::Brightness { factor } | PipelineOp::ColorSaturation { factor } => {
-            factor.is_finite() && (*factor == 0.0 || *factor == 1.0)
+        PipelineOp::Quantize { .. } => false,
+        // Autocontrast and Equalize are admitted here because the GPU pool
+        // expands them into their histogram/control/LUT/remap pass sequence.
+        // The operation-level registry cannot inspect the source image, so
+        // mode, mask, and dimensions remain contextual preflight checks.
+        PipelineOp::Autocontrast { .. } | PipelineOp::Equalize => true,
+        // Contrast receives Pillow's image-wide midpoint from scalar control
+        // code and performs the channel blend in the real WGSL data path.
+        PipelineOp::Contrast { factor } => gpu_contrast_factor_int(*factor).is_some(),
+        // The convolution shaders are exact for bounded kernels whose
+        // normalized coefficients are integers: byte products and sums stay
+        // exactly representable in f32, including Pillow's +0.5 bias. The
+        // scalar helper rejects fractional coefficients and large accumulators
+        // until they have a backend-independent fixed-point contract.
+        PipelineOp::Filter3x3 {
+            kernel,
+            scale,
+            offset,
+        } => {
+            gpu_filter_kernel_is_exact(kernel, *scale, *offset)
+                || gpu_filter_rational_denominator(kernel, *scale, *offset).is_some()
         }
-        // Sharpness performs a floating-point convolution before its blend.
-        // Even factor=0 can differ at a byte boundary across GPU contraction
-        // rules; factor=1 is the exact identity endpoint.
-        PipelineOp::Sharpness { factor } => factor.is_finite() && *factor == 1.0,
-        // The active Add/Subtract shaders receive f32 uniforms.  Their
-        // public implementation is f64 and truncates only after clamping,
-        // so the single-dispatch path is exact only for the common unit
-        // divisor and an exactly representable integral offset.  Keep
-        // fractional/scaled requests on CPU instead of allowing a silent
-        // f32 rounding difference at a byte boundary.
-        PipelineOp::Add { scale, offset, .. } | PipelineOp::Subtract { scale, offset, .. } => {
-            *scale == 1.0
-                && offset.is_finite()
-                && (*offset as f32) as f64 == *offset
-                && offset.fract() == 0.0
+        PipelineOp::Filter5x5 {
+            kernel,
+            scale,
+            offset,
+        } => {
+            gpu_filter_kernel_is_exact(kernel, *scale, *offset)
+                || gpu_filter_rational_denominator(kernel, *scale, *offset).is_some()
         }
-        // Blend's CPU contract evaluates arbitrary f64 alpha before the final
-        // truncating cast.  Even alpha=p/255 can land one ulp below an
-        // integer in that expression, while the integer shader lands on the
-        // mathematical rational.  Only the endpoint alphas are universally
-        // bit-exact across both paths; all interpolating requests stay CPU.
-        PipelineOp::BlendModule { alpha, .. } => {
-            alpha.is_finite() && (*alpha == 0.0 || *alpha == 1.0)
+        // The horizontal/vertical rolling shaders carry independent fixed-
+        // point parameters, so tuple and fractional radii use the same real
+        // GPU data path as the uniform integer form.
+        PipelineOp::BoxBlurXY { .. } => true,
+        // Brightness uses a scalar-verified fixed-point representation. The
+        // helper admits every factor whose 256 byte results match Pillow,
+        // rather than restricting the real vector kernel to endpoints.
+        PipelineOp::Brightness { factor } => gpu_brightness_factor_int(*factor).is_some(),
+        // Color saturation uses an integer luma anchor followed by the
+        // scalar-proven fixed-point blend represented by the real shader.
+        PipelineOp::ColorSaturation { factor } => {
+            gpu_color_saturation_factor_int(*factor).is_some()
         }
-        // The old Color3DLut source is intentionally a pass-through and is no
-        // longer registered as a GPU implementation, but keep this guard next
-        // to the other contract checks if a source is reintroduced.
-        PipelineOp::Color3DLut { .. } => false,
-        // Image.composite writes image2's canvas/mode, which the retained
-        // single-dispatch module path does not fully carry. Keep this public
-        // operation on CPU until the binding and output-mode contracts are
-        // explicit.
-        PipelineOp::CompositeModule { .. } => false,
-        // Pillow's overlay family is implemented through exact 256x256 LUTs;
-        // the compact WGSL formulas are only approximations at rounding
-        // boundaries. Keep these operations on the CPU until the LUT is
-        // uploaded as an explicit GPU resource.
+        // Colorize uses the same integer floor-division LUT construction as
+        // Pillow's ImageOps._lut path.  The shader consumes all six public
+        // parameters, including the optional midpoint color.
+        PipelineOp::Colorize {
+            mid,
+            blackpoint,
+            midpoint,
+            whitepoint,
+            ..
+        } => {
+            if mid.is_some() {
+                blackpoint <= midpoint && midpoint <= whitepoint
+            } else {
+                blackpoint <= whitepoint
+            }
+        }
+        // Sharpness uses integer 3x3 smooth weights and a scalar-proven
+        // fixed-point blend in the active WGSL implementation.
+        PipelineOp::Sharpness { factor } => gpu_sharpness_factor_int(*factor).is_some(),
+        // Add/Subtract use a scalar exhaustive proof for the f32 uniform
+        // representation instead of limiting the real vector kernel to the
+        // unit-divisor endpoint.
+        PipelineOp::Add { scale, offset, .. } => {
+            gpu_chops_affine_params(*scale, *offset, false).is_some()
+        }
+        PipelineOp::Subtract { scale, offset, .. } => {
+            gpu_chops_affine_params(*scale, *offset, true).is_some()
+        }
+        // Blend's CPU contract evaluates f64 alpha before the final
+        // truncating cast. The real WGSL path uses f32 arithmetic, so admit
+        // only alpha values exhaustively proven equivalent over all byte
+        // pairs.
+        PipelineOp::BlendModule { alpha, .. } => gpu_blend_alpha_params(*alpha).is_some(),
+        // Color3DLut uses the same signed 12.4 table preparation and 18.15
+        // coordinate scales as the CPU implementation. The table is packed
+        // into an auxiliary storage range by the GPU planner and the shader
+        // performs the three fixed-point interpolations.
+        PipelineOp::Color3DLut {
+            size,
+            table,
+            channels,
+            source_mode,
+            target_mode,
+        } => {
+            (2..=65).contains(&size.0)
+                && (2..=65).contains(&size.1)
+                && (2..=65).contains(&size.2)
+                && (*channels == 3 || *channels == 4)
+                && table.len()
+                    == size.0 as usize * size.1 as usize * size.2 as usize * *channels as usize
+                && matches!(
+                    source_mode,
+                    PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK
+                )
+                && matches!(
+                    target_mode,
+                    PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK
+                )
+                && table.iter().all(|value| value.is_finite())
+        }
+        // Spread/Noise use exact scalar RNG control bytes uploaded as an
+        // auxiliary image; the device shader only performs the deterministic
+        // packed gather.
+        PipelineOp::EffectSpread { .. } | PipelineOp::EffectNoise { .. } => true,
+        // The composite shader carries image2's canvas dimensions and the
+        // mask channel explicitly. The pool's contextual preflight below
+        // still rejects mixed layouts and unsupported mask representations;
+        // equal native byte layouts use the real three-input GPU path.
+        PipelineOp::CompositeModule { .. } => true,
+        // Pillow's overlay family is implemented through exact 256x256 LUTs.
+        // The integer WGSL formulas are the same LUT contract; alpha and CMYK
+        // K are ordinary stored bands and are transformed just like RGB.
         PipelineOp::Overlay { .. }
         | PipelineOp::HardLight { .. }
-        | PipelineOp::SoftLight { .. } => false,
-        // The WGSL rotate path does not reproduce Pillow's pixel-centered
-        // affine mapping, fast paths for right angles, fill defaults, or
-        // premultiplied-alpha interpolation. Keep it as a reviewed shader
-        // asset, but do not advertise a partial public implementation.
-        PipelineOp::Rotate { .. } => false,
-        // Transform has the same pixel-center and premultiplied-alpha
-        // requirements. Its affine shader is useful for future work, but the
-        // current single dispatch is not a complete Pillow contract.
-        PipelineOp::Transform { .. } => false,
-        // Reduce uses Pillow's fixed-point division multiplier, including
-        // partial edge blocks. The retained shader's rounded integer average
-        // is not bit-exact at all inputs, so do not advertise it as public GPU
-        // behavior until that coefficient path is implemented.
-        PipelineOp::Reduce { .. } => false,
-        // The shader remaps packed bytes independently and cannot preserve
-        // Pillow's indexed palette metadata. Public P/PA inputs are normally
-        // filtered earlier, but keep this guard correct for direct core use.
-        PipelineOp::RemapPalette { .. } => false,
-        // The packed shader transport currently represents only ordinary byte
-        // modes. Indexed, integer, float, and CMYK alpha promotion must stay
-        // on CPU until their native sample layouts are preserved end to end.
-        PipelineOp::PutAlpha { mode, .. } => {
-            matches!(mode, PixelMode::L | PixelMode::LA | PixelMode::RGB | PixelMode::RGBA)
-        }
-        PipelineOp::PutData { mode, .. } => {
-            matches!(mode, PixelMode::L | PixelMode::LA | PixelMode::RGB | PixelMode::RGBA)
-        }
-        // A palette-index write is meaningful only in the indexed sample
-        // layout, which the packed RGBA shader cannot identify from the
-        // dynamic image alone.
-        PipelineOp::PutPixel { palette_index, .. } => !palette_index,
+        | PipelineOp::SoftLight { .. } => true,
+        // Rotate lowers to the exact affine Transform/Transpose plans in the
+        // GPU executor. Keep the public registry entry as the capability
+        // marker so strict routing can validate the original operation before
+        // lowering.
+        PipelineOp::Rotate { .. } => true,
+        // Affine Transform uses the scalar pixel-center/parameter decision
+        // from the host and a mode-aware nearest/bilinear shader data path.
+        // Perspective, Quad, Mesh, and unsupported filters are rejected by
+        // the pool's image-aware preflight before this entry is dispatched.
+        PipelineOp::Transform { .. } => true,
+        // Reduce is implemented by the WGSL shader with Pillow's truncated
+        // fixed-point reciprocal and premultiplied-alpha path, including
+        // partial right/bottom blocks. Identity factors are handled as an
+        // explicit zero-dispatch no-op by the GPU executor.
+        PipelineOp::Reduce { .. } => true,
+        // RemapPalette operates on raw L/P index bytes. The surrounding Image
+        // pipeline carries the reordered palette metadata, so the shader only
+        // needs to perform the exact inverse-index LUT lookup.
+        PipelineOp::RemapPalette { .. } => true,
+        // The packed shader transport represents ordinary byte modes plus the
+        // raw P/PA and CMYK layouts used by Image.putalpha. P/PA are backed by
+        // L/LA storage at this boundary, while CMYK is backed by RGBA storage
+        // with K in byte three; put_alpha.wgsl handles both reinterpretations.
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => matches!(
+            mode,
+            PixelMode::L
+                | PixelMode::LA
+                | PixelMode::RGB
+                | PixelMode::RGBA
+                | PixelMode::P
+                | PixelMode::PA
+                | PixelMode::CMYK
+        ),
+        // PutData replaces raw logical bytes. The shader carries the logical
+        // channel count and only packs those bytes for transport, so every
+        // byte-backed Pillow mode is representable here; the pool separately
+        // proves that its concrete source layout matches the logical mode.
+        PipelineOp::PutData { mode, .. } => matches!(
+            mode,
+            PixelMode::L
+                | PixelMode::LA
+                | PixelMode::RGB
+                | PixelMode::RGBA
+                | PixelMode::P
+                | PixelMode::PA
+                | PixelMode::CMYK
+                | PixelMode::Mode1
+                | PixelMode::YCbCr
+                | PixelMode::HSV
+                | PixelMode::I
+                | PixelMode::F
+        ),
+        // P/PA pipelines pass raw indexed samples as Luma8/LumaA8 at the
+        // executor boundary. The GPU pool performs the logical-mode check
+        // before dispatch, so both ordinary and palette-index writes use the
+        // same packed byte kernel here.
+        PipelineOp::PutPixel { .. } => true,
         // These operations are exposed as eager Image-module constructors in
         // the public core. Their retained shader assets do not reproduce the
         // full mode-specific byte contracts: gradients support 1/P/I/F and
@@ -471,6 +901,7 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
             | PipelineOp::Autocontrast { .. }
             | PipelineOp::Equalize
             | PipelineOp::Eval { .. }
+            | PipelineOp::RemapPalette { .. }
             | PipelineOp::PutData { .. }
             | PipelineOp::ExtractBand { .. }
             | PipelineOp::Offset { .. }
@@ -566,10 +997,29 @@ pub fn execute_cpu(
 /// no shader parameter block return an empty vector.
 #[cfg(feature = "gpu")]
 fn separable_box_blur_params(radius: u32) -> [u32; 3] {
-    let radius = radius.min(16);
+    let radius = radius.min(64);
     let window = radius.saturating_mul(2).saturating_add(1);
     let weight = ((1u64 << 24) / u64::from(window)) as u32;
     [radius, weight, 0]
+}
+
+/// Compute the exact fixed-point parameters used by Pillow's one-dimensional
+/// box blur for a finite non-negative radius.  The integer radius selects the
+/// replicated samples in the rolling window; the fractional remainder is
+/// represented by the two edge weights.  Keeping this calculation in the
+/// scalar control plane lets the GPU data plane use the same 24-bit contract
+/// for both tuple and fractional public inputs.
+#[cfg(feature = "gpu")]
+pub(crate) fn separable_box_blur_params_f32(radius: f32) -> Option<[u32; 3]> {
+    if !radius.is_finite() || radius < 0.0 || radius > 64.0 {
+        return None;
+    }
+    let integer_radius = radius as u32;
+    let window = integer_radius.saturating_mul(2).saturating_add(1);
+    let weight = (((1u64 << 24) as f32 / (radius * 2.0 + 1.0)) as u32).min(1 << 24);
+    let used = u64::from(window).saturating_mul(u64::from(weight));
+    let edge_weight = ((1u64 << 24).saturating_sub(used) / 2) as u32;
+    Some([integer_radius, weight, edge_weight])
 }
 
 /// Compute the exact fractional box-blur parameters used by Pillow's
@@ -577,9 +1027,17 @@ fn separable_box_blur_params(radius: u32) -> [u32; 3] {
 /// consume these fixed-point words directly, so a Gaussian operation can be
 /// expanded into six ordered dispatches without a CPU readback between them.
 #[cfg(feature = "gpu")]
-pub(crate) fn separable_gaussian_blur_params(sigma: f32) -> [u32; 3] {
-    if !sigma.is_finite() || sigma <= 0.0 {
-        return separable_box_blur_params(0);
+fn separable_gaussian_blur_radius_and_fraction(sigma: f32) -> Option<(u32, f32)> {
+    if !sigma.is_finite() {
+        return None;
+    }
+    // Pillow's ImagingGaussianBlur normalizes each radius by magnitude. Keep
+    // the GPU parameter proof aligned with the CPU implementation and the
+    // oracle: negative finite radii are valid and produce the same result as
+    // their positive counterparts.
+    let sigma = sigma.abs();
+    if sigma == 0.0 {
+        return Some((0, 0.0));
     }
     let sigma2 = f64::from(sigma) * f64::from(sigma) / 3.0;
     let l = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
@@ -589,16 +1047,32 @@ pub(crate) fn separable_gaussian_blur_params(sigma: f32) -> [u32; 3] {
     let a_den = 6.0 * (sigma2 - l1 * l1);
     let a = a_num / a_den;
     let radius = (l + a) as f32;
-    if !radius.is_finite() || radius < 0.0 {
-        return separable_box_blur_params(0);
+    // The rolling WGSL kernels and their bounded loop contract support the
+    // complete radius range through 64.  Keep the host proof aligned with
+    // that shader limit so small images with a large Pillow sigma do not take
+    // an unnecessary CPU path.
+    if !radius.is_finite() || radius < 0.0 || radius > 64.0 {
+        return None;
     }
-    let radius = radius.min(16.0);
-    let radius_int = radius as u32;
-    let window = radius_int.saturating_mul(2).saturating_add(1);
-    let weight = (((1u64 << 24) as f32 / (radius * 2.0 + 1.0)) as u32).min(1 << 24);
+    Some((radius as u32, radius))
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn separable_gaussian_blur_radius(sigma: f32) -> Option<u32> {
+    separable_gaussian_blur_radius_and_fraction(sigma).map(|(radius, _)| radius)
+}
+
+#[cfg(feature = "gpu")]
+pub(crate) fn separable_gaussian_blur_params(sigma: f32) -> [u32; 3] {
+    let Some((radius, fractional_radius)) = separable_gaussian_blur_radius_and_fraction(sigma)
+    else {
+        return separable_box_blur_params(0);
+    };
+    let window = radius.saturating_mul(2).saturating_add(1);
+    let weight = (((1u64 << 24) as f32 / (fractional_radius * 2.0 + 1.0)) as u32).min(1 << 24);
     let used = u64::from(window) * u64::from(weight);
     let edge_weight = ((1u64 << 24).saturating_sub(used) / 2) as u32;
-    [radius_int, weight, edge_weight]
+    [radius, weight, edge_weight]
 }
 
 #[cfg(feature = "gpu")]
@@ -637,13 +1111,25 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── Posterize: bits ──
         PipelineOp::Posterize { bits } => vec![*bits as u32],
 
-        // ── Brightness / Contrast / ColorSaturation: factor * 1000 as u32 ──
-        PipelineOp::Brightness { factor }
-        | PipelineOp::Contrast { factor }
-        | PipelineOp::ColorSaturation { factor } => vec![(factor * 1000.0) as u32],
+        // ── Brightness: scalar-verified fixed-point factor ──
+        PipelineOp::Brightness { factor } => {
+            vec![gpu_brightness_factor_int(*factor).unwrap_or(0)]
+        }
 
-        // ── Sharpness: factor * 1000 as u32 ──
-        PipelineOp::Sharpness { factor } => vec![(factor * 1000.0) as u32],
+        // ── Contrast: scalar-proven factor * 1000 ──
+        PipelineOp::Contrast { factor } => {
+            vec![gpu_contrast_factor_int(*factor).unwrap_or(0)]
+        }
+
+        // ── ColorSaturation: scalar-proven factor * 1000 ──
+        PipelineOp::ColorSaturation { factor } => {
+            vec![gpu_color_saturation_factor_int(*factor).unwrap_or(0)]
+        }
+
+        // ── Sharpness: scalar-proven fixed-point factor ──
+        PipelineOp::Sharpness { factor } => {
+            vec![gpu_sharpness_factor_int(*factor).unwrap_or(0)]
+        }
 
         // ── Colorize: pack black/white/mid as u32 RGBA (0xAABBGGRR) ──
         PipelineOp::Colorize {
@@ -674,6 +1160,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
                 *blackpoint as u32,
                 *midpoint as u32,
                 *whitepoint as u32,
+                u32::from(mid.is_some()),
             ]
         }
 
@@ -686,36 +1173,40 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // 16-bit range would change valid offsets on wide/tall images.
         PipelineOp::Offset { x, y } => vec![*x as u32, *y as u32],
 
-        // ── Add / Subtract: scale (f32 bits as u32), offset (f32 bits as u32) ──
-        PipelineOp::Add { scale, offset, .. } | PipelineOp::Subtract { scale, offset, .. } => {
-            vec![(*scale as f32).to_bits(), (*offset as f32).to_bits()]
+        // ── Add / Subtract: scalar-proven f32 parameter bits ──
+        PipelineOp::Add { scale, offset, .. } => gpu_chops_affine_params(*scale, *offset, false)
+            .unwrap_or([0, 0])
+            .to_vec(),
+        PipelineOp::Subtract { scale, offset, .. } => {
+            gpu_chops_affine_params(*scale, *offset, true)
+                .unwrap_or([0, 0])
+                .to_vec()
         }
 
-        // ── BlendModule: alpha * 255 as u32 ──
+        // ── BlendModule: scalar-proven f32 alpha bits ──
         PipelineOp::BlendModule { alpha, .. } => {
-            vec![(alpha.clamp(0.0, 1.0) * 255.0) as u32]
+            vec![gpu_blend_alpha_params(*alpha).unwrap_or(0)]
         }
 
-        // ── BoxBlur: radius ──
-        PipelineOp::BoxBlur { radius } => separable_box_blur_params(*radius).to_vec(),
-        // BoxBlurXY is deliberately CPU-only. Keep a deterministic parameter
-        // shape here for GPU contract inspection if a caller constructs the
-        // descriptor directly, while the support gate prevents dispatch.
+        // ── BoxBlur: horizontal and vertical radius/weight triplets ──
+        PipelineOp::BoxBlur { radius } => {
+            let params = separable_box_blur_params(*radius);
+            params.into_iter().chain(params).collect()
+        }
+        // BoxBlurXY uses the same six-word parameter block. The pass count is
+        // used by the GPU encoder to repeat the horizontal and vertical
+        // dispatches, so it does not need to be copied into the uniform block.
         PipelineOp::BoxBlurXY {
             radius_x,
             radius_y,
             passes,
         } => {
-            let params = [*radius_x, *radius_y]
-                .into_iter()
-                .map(|radius| {
-                    let integer_radius = radius as u32;
-                    separable_box_blur_params(integer_radius)
-                })
-                .flatten()
-                .chain(std::iter::once(*passes))
-                .collect();
-            params
+            let x = separable_box_blur_params_f32(*radius_x)
+                .unwrap_or_else(|| separable_box_blur_params(0));
+            let y = separable_box_blur_params_f32(*radius_y)
+                .unwrap_or_else(|| separable_box_blur_params(0));
+            let _ = passes;
+            x.into_iter().chain(y).collect()
         }
 
         // ── MedianFilter / MaxFilter / MinFilter: size ──
@@ -726,33 +1217,42 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── RankFilter: size, rank ──
         PipelineOp::RankFilter { size, rank } => vec![*size, *rank],
 
-        // ── Filter3x3: kernel [9] f32 bits + offset bits ──
+        // ── Filter3x3: kernel [9] f32 bits + offset + rational denominator ──
         PipelineOp::Filter3x3 {
             kernel,
             scale,
             offset,
         } => {
             let s = if scale.abs() < 1e-10 { 1.0 } else { *scale };
-            let mut params = Vec::with_capacity(10);
+            let mut params = Vec::with_capacity(11);
             for k in kernel.iter() {
                 params.push((k / s).to_bits());
             }
             params.push(*offset as u32);
+            // The byte kernel follows Pillow's f32/FMA contraction order.
+            // Keep the optional integer mode disabled here: integer
+            // rationalization can move an exact half-way value across the
+            // truncation boundary even when the coefficients reconstruct
+            // their normalized f32 values.
+            params.push(0);
             params
         }
 
-        // ── Filter5x5: kernel [25] f32 bits + offset bits ──
+        // ── Filter5x5: kernel [25] f32 bits + offset + rational denominator ──
         PipelineOp::Filter5x5 {
             kernel,
             scale,
             offset,
         } => {
             let s = if scale.abs() < 1e-10 { 1.0 } else { *scale };
-            let mut params = Vec::with_capacity(26);
+            let mut params = Vec::with_capacity(27);
             for k in kernel.iter() {
                 params.push((k / s).to_bits());
             }
             params.push(*offset as u32);
+            // See the 3x3 path: preserve Pillow's f32/FMA rounding rather
+            // than replacing it with integer rational arithmetic.
+            params.push(0);
             params
         }
 
@@ -950,8 +1450,11 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![cos_t, sin_t, fill_color, *expand as u32]
         }
 
-        // ── GaussianBlur: radius, box weight, fractional edge weight ──
-        PipelineOp::GaussianBlur { sigma } => separable_gaussian_blur_params(*sigma).to_vec(),
+        // ── GaussianBlur: identical horizontal/vertical triplets ──
+        PipelineOp::GaussianBlur { sigma } => {
+            let params = separable_gaussian_blur_params(*sigma);
+            params.into_iter().chain(params).collect()
+        }
 
         // ── Autocontrast: cutoff ──
         PipelineOp::Autocontrast { cutoff, .. } => vec![(*cutoff as f32).to_bits()],
@@ -1046,7 +1549,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     Err(PilError::ValueError("expected Resize op".into()))
                 }
             },
-            "resize_bilinear.wgsl"
+            "resize_nearest.wgsl"
         ),
     );
     m.insert(
@@ -1961,13 +2464,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
 
     // ── Effects ──
     // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
-    // rand() sequentially and performs collision-prone scatter writes. The
-    // former per-pixel SIMD LCG and GPU hash/gather paths were different
-    // algorithms, so the general scatter contract is deliberately registered
-    // on CPU; SIMD adds only the exact distance<=1 identity contract below.
+    // rand() sequentially and performs collision-prone scatter writes. The GPU
+    // entry receives a host-generated relocation map, so its gather shader
+    // preserves that order-dependent contract without inventing a second RNG.
     m.insert(
         "EffectSpread",
-        OpEntry::cpu_only(
+        gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -1978,6 +2480,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     Err(PilError::ValueError("expected EffectSpread op".into()))
                 }
             },
+            "effect_spread.wgsl"
         ),
     );
     m.insert(
@@ -2017,13 +2520,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     );
 
     // ── Module fns ──
-    // Merge is CPU-only: GPU requires multi-band data packing that doesn't fit the
-    // current single/dual-image upload infrastructure. The binding layout (4 bindings
-    // with extra_bands as storage read) is incompatible with existing LUT/dual-input
-    // layout detection. A future enhancement can add a custom binding layout for it.
+    // Merge packs the remaining single-band images into one auxiliary storage
+    // range. The GPU planner validates the band count, modes, and dimensions
+    // before constructing that range, so this shader only interleaves validated
+    // bytes.
     m.insert(
         "Merge",
-        OpEntry::cpu_only(
+        gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2038,6 +2541,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     Err(PilError::ValueError("expected Merge op".into()))
                 }
             },
+            "merge.wgsl"
         ),
     );
     m.insert(
@@ -2090,11 +2594,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     m.insert(
         "EffectNoise",
         // Pillow's effect consumes one sequential libc RNG stream with a
-        // rejection loop and returns a new L image. SIMD owns the scalar RNG
-        // control sequence but vectorizes the per-sample affine/clamp data
-        // plane; GPU remains unsupported because it cannot reproduce the
-        // process-global stream deterministically.
-        OpEntry::cpu_only(
+        // rejection loop and returns a new L image. The GPU path uploads the
+        // exact host-generated bytes and only performs the packed transport
+        // gather, keeping the process-global stream deterministic.
+        gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2105,6 +2608,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     Err(PilError::ValueError("expected EffectNoise op".into()))
                 }
             },
+            "effect_noise.wgsl"
         ),
     );
 
@@ -2194,10 +2698,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     );
     m.insert(
         "Color3DLut",
-        // The former WGSL shader was a pass-through and never uploaded or
-        // sampled the LUT. Do not advertise GPU support until that backend
-        // implements Pillow's signed fixed-point interpolation exactly.
-        OpEntry::cpu_only(
+        gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2215,6 +2716,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     Err(PilError::ValueError("expected Color3DLut op".into()))
                 }
             },
+            "color_3dlut.wgsl"
         ),
     );
     m.insert(
@@ -2239,7 +2741,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     );
     m.insert(
         "PutAlphaData",
-        OpEntry::cpu_only(
+        gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -2250,6 +2752,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     Err(PilError::ValueError("expected PutAlphaData op".into()))
                 }
             },
+            "put_alpha_data.wgsl"
         ),
     );
 
@@ -2283,10 +2786,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_only_entry!("effect_mandelbrot.wgsl"),
     );
 
-    // ── ImageDraw ops (CPU-only for now) ──
+    // ── ImageDraw ops ──
+    // The exact Pillow scan conversion remains a scalar geometry/control
+    // step; the GPU entry uploads its resulting packed canvas and performs the
+    // native data-plane copy in draw.wgsl.
     macro_rules! draw_entry {
         ($key:expr, $func:expr) => {
-            m.insert($key, OpEntry::cpu_only($func));
+            m.insert($key, gpu_entry!($func, "draw.wgsl"));
         };
     }
     draw_entry!("DrawLine", |img, op, mode| {
@@ -2580,6 +3086,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Sharpness", adapters::simd_sharpness)?;
     simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
     simd_set(m, "Equalize", adapters::simd_equalize)?;
+    simd_set(m, "RemapPalette", adapters::simd_remap_palette)?;
     simd_set(m, "Resize", adapters::simd_resize)?;
     simd_set(m, "Scale", adapters::simd_scale)?;
     simd_set(m, "Thumbnail", adapters::simd_thumbnail)?;

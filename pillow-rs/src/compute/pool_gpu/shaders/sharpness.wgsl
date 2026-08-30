@@ -27,14 +27,6 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> params: Params;
 
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
-
-fn clamp8(v: f32) -> u32 {
-    if v <= 0.0 { return 0u; }
-    if v >= 255.0 { return 255u; }
-    return u32(v);
-}
-
 fn blend_fixed(blurred: u32, original: u32, factor: u32) -> u32 {
     // The host only advertises factors representable as factor*1000. Integer
     // truncation here matches the CPU's positive f64 result cast to u8 and
@@ -49,9 +41,8 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     let h = params.height;
     let idx = y * w + x;
 
-    // The active GPU contract currently admits only factor=1.0. Return the
-    // exact identity before loading a 3x3 neighborhood so this endpoint
-    // cannot consume convolution work or trip a device watchdog.
+    // Return the exact identity before loading a 3x3 neighborhood so this
+    // endpoint cannot consume convolution work or trip a device watchdog.
     if params.factor == 1000u {
         return input[idx];
     }
@@ -64,12 +55,6 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     if x == 0u || x >= w - 1u || y == 0u || y >= h - 1u {
         return input[idx];
     }
-
-    // SMOOTH kernel: [1,1,1, 1,5,1, 1,1,1] / 13
-    let inv_scale = 1.0 / 13.0;
-    let k = inv_scale;         // edges = 1/13
-    let kc = 5.0 * inv_scale;  // center = 5/13
-    let rounding_bias = 0.5;   // offset=0 => 0.0 + 0.5
 
     // Load 9 neighborhood pixels (same indexed as filter_3x3)
     // pY_X: Y=row (0=top, 1=center, 2=bottom), X=col
@@ -105,34 +90,21 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     let r22 = p2_2 & 0xffu;        let g22 = (p2_2 >> 8u) & 0xffu;
     let b22 = (p2_2 >> 16u) & 0xffu; let a22 = (p2_2 >> 24u) & 0xffu;
 
-    // Bottom row (y+1): kernel[0..2] = 1,1,1 (all k)
-    let row_b_r = f32(r20) * k + f32(r21) * k + f32(r22) * k;
-    let row_b_g = f32(g20) * k + f32(g21) * k + f32(g22) * k;
-    let row_b_b = f32(b20) * k + f32(b21) * k + f32(b22) * k;
-    let row_b_a = f32(a20) * k + f32(a21) * k + f32(a22) * k;
-
-    // Center row (y): kernel[3..5] = 1,5,1 (k, kc, k)
-    let row_c_r = f32(r10) * k + f32(r11) * kc + f32(r12) * k;
-    let row_c_g = f32(g10) * k + f32(g11) * kc + f32(g12) * k;
-    let row_c_b = f32(b10) * k + f32(b11) * kc + f32(b12) * k;
-    let row_c_a = f32(a10) * k + f32(a11) * kc + f32(a12) * k;
-
-    // Top row (y-1): kernel[6..8] = 1,1,1 (all k)
-    let row_t_r = f32(r00) * k + f32(r01) * k + f32(r02) * k;
-    let row_t_g = f32(g00) * k + f32(g01) * k + f32(g02) * k;
-    let row_t_b = f32(b00) * k + f32(b01) * k + f32(b02) * k;
-    let row_t_a = f32(a00) * k + f32(a01) * k + f32(a02) * k;
-
-    // Accumulate: rounding_bias + bottom + center + top
-    let blur_r = rounding_bias + row_b_r + row_c_r + row_t_r;
-    let blur_g = rounding_bias + row_b_g + row_c_g + row_t_g;
-    let blur_b = rounding_bias + row_b_b + row_c_b + row_t_b;
-    let blur_a = rounding_bias + row_b_a + row_c_a + row_t_a;
-
-    // Clamp blurred channels to [0, 255]
-    let blur_r_u = clamp8(blur_r);
-    let blur_g_u = clamp8(blur_g);
-    let blur_b_u = clamp8(blur_b);
+    // The CPU computes 0.5 + weighted_sum / 13 and truncates to u8. All
+    // samples are non-negative, so the equivalent integer rounding is
+    // floor((2 * weighted_sum + 13) / 26), with no floating-point drift.
+    let blur_r_u = (
+        2u * (r00 + r01 + r02 + r10 + 5u * r11 + r12 + r20 + r21 + r22) + 13u
+    ) / 26u;
+    let blur_g_u = (
+        2u * (g00 + g01 + g02 + g10 + 5u * g11 + g12 + g20 + g21 + g22) + 13u
+    ) / 26u;
+    let blur_b_u = (
+        2u * (b00 + b01 + b02 + b10 + 5u * b11 + b12 + b20 + b21 + b22) + 13u
+    ) / 26u;
+    let blur_a_u = (
+        2u * (a00 + a01 + a02 + a10 + 5u * a11 + a12 + a20 + a21 + a22) + 13u
+    ) / 26u;
 
     // Original pixel channels (read from input since border cells may differ)
     let in_pixel = input[idx];
@@ -153,9 +125,14 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     // different luma on the way back to L/LA.
     let out_g = blend_fixed(blur_g_u, orig_g, params.factor);
     let out_b = blend_fixed(blur_b_u, orig_b, params.factor);
-    // ImageEnhance preserves alpha for LA/RGBA; it sharpens only the visible
-    // color channels. Non-alpha modes remain opaque in the packed transport.
-    let out_a = select(255u, orig_a, mode_has_a(params.mode));
+    // ImageEnhance preserves alpha for LA/RGBA. CMYK uses byte three as the K
+    // channel, so it follows the same sharpened-channel path as C/M/Y.
+    var out_a = 255u;
+    if (params.mode == 1u || params.mode == 3u) {
+        out_a = orig_a;
+    } else if (params.mode == 4u) {
+        out_a = blend_fixed(blur_a_u, orig_a, params.factor);
+    }
 
     return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

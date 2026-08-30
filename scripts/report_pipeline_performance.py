@@ -3,7 +3,7 @@
 
 This report is performance evidence, not an LLVM coverage report and not a
 parity denominator.  Every selected workload and every subject is retained;
-unsupported or failed subjects remain visible in ``status_counts`` and in the
+incomplete or failed subjects remain visible in ``status_counts`` and in the
 per-workload receipt.  The operation denominator is delegated to the same
 authoritative audit used by ``report_pipeline_benchmark_coverage.py``.
 """
@@ -84,6 +84,11 @@ def execution_summary(subject: dict[str, Any]) -> dict[str, Any]:
         "resource": resource_summary,
         "sample_count": execution.get("sample_count"),
         "cached_sample_count": execution.get("cached_sample_count"),
+        # Keep normalized execution errors beside timing/receipt fields.  A
+        # report consumer must be able to distinguish a missing receipt from
+        # an exact expected error or a failed backend workflow without
+        # reopening the raw benchmark artifact.
+        "errors": execution.get("errors", []),
     }
 
 

@@ -121,10 +121,7 @@ where
     let source_x = (-(i64::from(xoffset))).rem_euclid(i64::from(width)) as u32;
     let source_y = (-(i64::from(yoffset))).rem_euclid(i64::from(height)) as u32;
     ImageBuffer::from_fn(width, height, |x, y| {
-        *image.get_pixel(
-            (x + source_x) % width,
-            (y + source_y) % height,
-        )
+        *image.get_pixel((x + source_x) % width, (y + source_y) % height)
     })
 }
 
@@ -286,9 +283,9 @@ impl DynamicImage {
             DynamicImage::ImageRgba8(image) => {
                 DynamicImage::ImageRgba8(offset_image(image, xoffset, yoffset))
             }
-            DynamicImage::ImageLuma16(image) => DynamicImage::ImageLuma16(
-                offset_luma16(image, xoffset, yoffset, mode),
-            ),
+            DynamicImage::ImageLuma16(image) => {
+                DynamicImage::ImageLuma16(offset_luma16(image, xoffset, yoffset, mode))
+            }
             DynamicImage::ImageLumaA16(image) => {
                 DynamicImage::ImageLumaA16(offset_image(image, xoffset, yoffset))
             }

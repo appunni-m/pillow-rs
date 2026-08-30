@@ -1,7 +1,8 @@
 // Merge: interleave single-channel band images into one multi-channel output.
-// Extra bands (1-3) are packed sequentially in buf_img2 at offsets:
+// Extra bands (1-3) are packed sequentially in the second input at offsets:
 //   band1 at offset 0, band2 at offset n, band3 at offset 2*n (where n = width*height)
-// Uses standard 4-binding layout (compatible with existing GPU pool).
+// Uses the standard dual-input 4-binding layout used by the GPU pool:
+// [band0(read), extra_bands(read), output(read_write), params(uniform)].
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 
 struct Params {
@@ -13,9 +14,9 @@ struct Params {
 }
 
 @group(0) @binding(0) var<storage, read> band0: array<u32>;   // R / L channel
-@group(0) @binding(1) var<storage, read_write> output: array<u32>;
-@group(0) @binding(2) var<uniform> params: Params;
-@group(0) @binding(3) var<storage, read> extra_bands: array<u32>;  // bands 1-3 packed
+@group(0) @binding(1) var<storage, read> extra_bands: array<u32>;  // bands 1-3 packed
+@group(0) @binding(2) var<storage, read_write> output: array<u32>;
+@group(0) @binding(3) var<uniform> params: Params;
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {

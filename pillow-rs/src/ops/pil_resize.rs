@@ -1777,12 +1777,10 @@ fn pil_resize_f_boxed(
         .and_then(|pixels| pixels.checked_mul(4))
         .unwrap_or(0);
     if dst_w == 0 || dst_h == 0 || source_width == 0 || source_height == 0 {
-        return DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_raw(
-            dst_w,
-            dst_h,
-            vec![0; output_len],
-        )
-        .unwrap_or_else(|| crate::raster::RgbaImage::new(dst_w, dst_h)));
+        return DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(dst_w, dst_h, vec![0; output_len])
+                .unwrap_or_else(|| crate::raster::RgbaImage::new(dst_w, dst_h)),
+        );
     }
     let source: Vec<f32> = rgba
         .as_raw()
@@ -1804,8 +1802,7 @@ fn pil_resize_f_boxed(
             let source_y = (box_top + (f64::from(dy) + 0.5) * scale_y).floor() as i64;
             let source_y = source_y.clamp(0, last_y) as usize;
             for dx in 0..dst_w {
-                let source_x =
-                    (box_left + (f64::from(dx) + 0.5) * scale_x).floor() as i64;
+                let source_x = (box_left + (f64::from(dx) + 0.5) * scale_x).floor() as i64;
                 let source_x = source_x.clamp(0, last_x) as usize;
                 output.extend_from_slice(
                     &source[(source_y * source_width as usize + source_x)..][..1]
@@ -1819,20 +1816,8 @@ fn pil_resize_f_boxed(
         return raw_to_dynamic(&output, dst_w, dst_h, 4);
     }
 
-    let horizontal = precompute_coeffs_f64_boxed(
-        dst_w,
-        source_width,
-        box_left,
-        box_right,
-        filter,
-    );
-    let vertical = precompute_coeffs_f64_boxed(
-        dst_h,
-        source_height,
-        box_top,
-        box_bottom,
-        filter,
-    );
+    let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
+    let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
     let mut intermediate = vec![0.0f32; source_height as usize * dst_w as usize];
     for source_y in 0..source_height as usize {
         let source_start = source_y * source_width as usize;
@@ -1884,14 +1869,7 @@ pub fn pil_resize_boxed(
     let orig_img = img;
     if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
         return pil_resize_f_boxed(
-            img,
-            dst_w,
-            dst_h,
-            box_left,
-            box_top,
-            box_right,
-            box_bottom,
-            filter,
+            img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
         );
     }
     let is_cmyk = explicit_mode == Some("CMYK");

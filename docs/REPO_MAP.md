@@ -372,43 +372,43 @@ generated reports, build outputs, and package installs.
 |       `-- putdata.rs
 |-- rust-toolchain.toml
 |-- rustfmt.toml
-|-- scripts/
-|   |-- aggregate_migration_parity.py
-|   |-- audit_rust_result_methods.py
-|   |-- build_migration_parity_inputs.py
-|   |-- build_migration_parity_manifest.py
-|   |-- check_bindings.py
-|   |-- check_migration_parity_inputs.py
-|   |-- check_pipeline_benchmark_budgets.py
-|   |-- check_public_api_boundary.py
-|   |-- check_repo_map.py
-|   |-- generate_migration_parity_docs.py
-|   |-- lint.sh
-|   |-- migration_parity_inventory.py
-|   |-- profile_migration_benchmark.py
-|   |-- report_migration_parity_region_coverage.py
-|   |-- report_pipeline_benchmark_coverage.py
-|   |-- report_pipeline_performance.py
-|   |-- report_pipeline_roadmap_status.py
-|   |-- review_migration_parity_cases.py
-|   |-- run_all_backend_tests.py
-|   |-- run_migration_benchmark.py
-|   |-- run_migration_coverage.py
-|   |-- run_migration_font_native_cases.py
-|   |-- run_migration_imagecolor_native_cases.py
-|   |-- run_migration_imagecore_native_cases.py
-|   |-- run_migration_imagedraw_native_cases.py
-|   |-- run_migration_imageops_native_cases.py
-|   |-- run_migration_imagepalette_native_cases.py
-|   |-- run_migration_imagesequence_native_cases.py
-|   |-- run_migration_parity.py
-|   |-- run_migration_rust_coverage.py
-|   |-- validate_migration_parity_contract.py
-|   `-- validate_migration_parity_result.py
-`-- tests/
-    |-- test_migration_parity_cases.py
-    |-- test_migration_parity_contract.py
-    |-- test_migration_parity_evidence.py
-    `-- test_migration_parity_inventory.py
+`-- scripts/
+    |-- aggregate_migration_parity.py
+    |-- audit_rust_result_methods.py
+    |-- build_migration_parity_inputs.py
+    |-- build_migration_parity_manifest.py
+    |-- check_bindings.py
+    |-- check_migration_parity_inputs.py
+    |-- check_pipeline_benchmark_budgets.py
+    |-- check_public_api_boundary.py
+    |-- check_repo_map.py
+    |-- codex-worktree-setup.sh
+    |-- generate_migration_parity_docs.py
+    |-- lint.sh
+    |-- migration_parity_inventory.py
+    |-- profile_migration_benchmark.py
+    |-- report_migration_js_parity_gaps.py
+    |-- report_migration_parity_region_coverage.py
+    |-- report_migration_pillow_missing.py
+    |-- report_pipeline_benchmark_coverage.py
+    |-- report_pipeline_performance.py
+    |-- report_pipeline_roadmap_status.py
+    |-- review_migration_parity_cases.py
+    |-- run_all_backend_tests.py
+    |-- run_migration_benchmark.py
+    |-- run_migration_coverage.py
+    |-- run_migration_font_native_cases.py
+    |-- run_migration_imagecolor_native_cases.py
+    |-- run_migration_imagecore_native_cases.py
+    |-- run_migration_imagedraw_native_cases.py
+    |-- run_migration_imageops_native_cases.py
+    |-- run_migration_imagepalette_native_cases.py
+    |-- run_migration_imagesequence_native_cases.py
+    |-- run_migration_js_parity.py
+    |-- run_migration_parity.py
+    |-- run_migration_pillow_coverage.py
+    |-- run_migration_rust_coverage.py
+    |-- validate_migration_parity_contract.py
+    `-- validate_migration_parity_result.py
 ```
 <!-- END GENERATED CODE TREE -->

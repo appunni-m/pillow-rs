@@ -721,12 +721,27 @@ impl Image {
         }
 
         let mode_enum = parse_mode(mode)?;
+        // Pillow accepts a dither argument on convert(), but its standard
+        // byte-mode converters do not consume it. Keep the descriptor free of
+        // a phantom default Floyd-Steinberg value so the GPU contract can
+        // dispatch the exact byte-to-byte kernel. Binary and palette targets
+        // still retain the normalized dither because their conversion paths
+        // use it above.
+        let pipeline_dither = if matches!(mode, "P" | "1") {
+            dither_enum
+        } else {
+            // Pillow's byte and scalar converters do not consume the dither
+            // enum. Keeping the default Floyd-Steinberg value on CMYK/HSV/
+            // YCbCr/I/F descriptors needlessly blocks their exact GPU byte
+            // kernels and does not describe an operation the converter uses.
+            None
+        };
         let mut result = Image::push_op(
             self,
             PipelineOp::Convert {
                 mode: mode_enum,
                 matrix: None,
-                dither: dither_enum,
+                dither: pipeline_dither,
             },
         );
         // Set explicit_mode on the pipeline for non-standard modes

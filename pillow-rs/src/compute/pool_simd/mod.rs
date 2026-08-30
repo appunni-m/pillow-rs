@@ -288,11 +288,8 @@ impl BackendImpl for SimdPool {
                         },
                     ) = (&ops[index], &ops[index + 1])
                     {
-                        if !ops::adapters::simd_supports_for_image(
-                            input,
-                            &ops[index + 1],
-                            op_mode,
-                        ) {
+                        if !ops::adapters::simd_supports_for_image(input, &ops[index + 1], op_mode)
+                        {
                             let key = registry::variant_key(&ops[index + 1]);
                             crate::compute::record_pipeline_operation_unsupported(key);
                             return Err(PilError::NotImplementedError(format!(
@@ -323,10 +320,8 @@ impl BackendImpl for SimdPool {
                             resources.fused_operation_count =
                                 resources.fused_operation_count.saturating_add(2);
                             current = Some(fused);
-                            current_mode = ops::adapters::simd_mode_after_op(
-                                &ops[index + 1],
-                                op_mode,
-                            );
+                            current_mode =
+                                ops::adapters::simd_mode_after_op(&ops[index + 1], op_mode);
                             index += 2;
                             continue;
                         }
@@ -353,9 +348,7 @@ impl BackendImpl for SimdPool {
                     if consumed > 1 {
                         if let Some(unsupported) = ops[index..index + consumed]
                             .iter()
-                            .find(|op| {
-                                !ops::adapters::simd_supports_for_image(input, op, op_mode)
-                            })
+                            .find(|op| !ops::adapters::simd_supports_for_image(input, op, op_mode))
                         {
                             let key = registry::variant_key(unsupported);
                             crate::compute::record_pipeline_operation_unsupported(key);
@@ -380,9 +373,7 @@ impl BackendImpl for SimdPool {
                             Ok(next) => next,
                             Err(error) => {
                                 for _ in 0..consumed {
-                                    crate::compute::record_pipeline_operation_path(
-                                        "unsupported",
-                                    );
+                                    crate::compute::record_pipeline_operation_path("unsupported");
                                     crate::compute::finish_pipeline_operation_telemetry();
                                 }
                                 return Err(error);
@@ -392,19 +383,13 @@ impl BackendImpl for SimdPool {
                             crate::compute::record_pipeline_operation_path("native-copy");
                             crate::compute::finish_pipeline_operation_telemetry();
                         }
-                        crate::compute::account_host_buffer_boundary(
-                            &mut resources,
-                            input,
-                            &next,
-                        );
+                        crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
                         resources.fused_operation_count = resources
                             .fused_operation_count
                             .saturating_add(consumed as u64);
                         current = Some(next);
-                        current_mode = ops::adapters::simd_mode_after_op(
-                            &ops[index + consumed - 1],
-                            op_mode,
-                        );
+                        current_mode =
+                            ops::adapters::simd_mode_after_op(&ops[index + consumed - 1], op_mode);
                         index += consumed;
                         continue;
                     }
@@ -422,27 +407,24 @@ impl BackendImpl for SimdPool {
                     )));
                 }
                 for op in &ops[index..index + consumed] {
-                    crate::compute::begin_pipeline_operation_telemetry(
-                        registry::variant_key(op),
-                    );
+                    crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
                 }
-                let next = if let Some(native) =
-                    ops::adapters::native_point_lut(input, op_mode, &lut)
-                {
-                    native
-                } else {
-                    let fused = PipelineOp::Eval { lut: lut.into() };
-                    match ops::adapters::simd_eval(input, &fused, op_mode) {
-                        Ok(next) => next,
-                        Err(error) => {
-                            for _ in 0..consumed {
-                                crate::compute::record_pipeline_operation_path("unsupported");
-                                crate::compute::finish_pipeline_operation_telemetry();
+                let next =
+                    if let Some(native) = ops::adapters::native_point_lut(input, op_mode, &lut) {
+                        native
+                    } else {
+                        let fused = PipelineOp::Eval { lut: lut.into() };
+                        match ops::adapters::simd_eval(input, &fused, op_mode) {
+                            Ok(next) => next,
+                            Err(error) => {
+                                for _ in 0..consumed {
+                                    crate::compute::record_pipeline_operation_path("unsupported");
+                                    crate::compute::finish_pipeline_operation_telemetry();
+                                }
+                                return Err(error);
                             }
-                            return Err(error);
                         }
-                    }
-                };
+                    };
                 for _ in 0..consumed {
                     crate::compute::record_pipeline_operation_path("vector");
                     crate::compute::finish_pipeline_operation_telemetry();
@@ -452,10 +434,8 @@ impl BackendImpl for SimdPool {
                     .fused_operation_count
                     .saturating_add(consumed as u64);
                 current = Some(next);
-                current_mode = ops::adapters::simd_mode_after_op(
-                    &ops[index + consumed - 1],
-                    op_mode,
-                );
+                current_mode =
+                    ops::adapters::simd_mode_after_op(&ops[index + consumed - 1], op_mode);
                 index += consumed;
                 continue;
             }
@@ -472,9 +452,9 @@ impl BackendImpl for SimdPool {
                 let mut owned = current
                     .take()
                     .expect("current.is_some() guarantees an owned image");
-                crate::compute::begin_pipeline_operation_telemetry(
-                    registry::variant_key(current_op),
-                );
+                crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(
+                    current_op,
+                ));
                 match ops::adapters::simd_execute_in_place(&mut owned, current_op, op_mode) {
                     Ok(true) => {
                         crate::compute::finish_pipeline_operation_telemetry();

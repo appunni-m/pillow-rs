@@ -1,0 +1,174 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagesequence-iterator.iter.standard",
+      "covers": [
+        "PIL.ImageSequence.Iterator.__iter__.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageSequence.Iterator.__iter__.behavior.default"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-imagesequence-iterator.next.standard",
+      "covers": [
+        "PIL.ImageSequence.Iterator.__next__.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [
+          {
+            "id": "image-asset",
+            "kind": "ref",
+            "path": "image/p-small.gif",
+            "sha256": "dacb11c9a76f1a096f7aa5768c1395e548b95ba11d3495c6936156d955042b72",
+            "media_type": "image/gif"
+          }
+        ],
+        "steps": [
+          {
+            "step_id": "image",
+            "surface": "PIL.Image",
+            "operation": "open",
+            "receiver": null,
+            "arguments": {
+              "fp": {
+                "kind": "asset",
+                "asset_id": "image-asset"
+              }
+            }
+          },
+          {
+            "step_id": "iterator",
+            "surface": "PIL.ImageSequence",
+            "operation": "Iterator",
+            "receiver": null,
+            "arguments": {
+              "im": {
+                "kind": "binding",
+                "step_id": "image"
+              }
+            }
+          },
+          {
+            "step_id": "next",
+            "surface": "PIL.ImageSequence.Iterator",
+            "operation": "__next__",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "iterator"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "next"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 3,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagesequence-iterator.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageSequence.Iterator.",
+      "members": [
+        {
+          "workload_id": "pil-imagesequence-iterator.iter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagesequence-iterator.next.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

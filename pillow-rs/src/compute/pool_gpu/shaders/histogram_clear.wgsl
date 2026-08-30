@@ -21,7 +21,7 @@ fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 @group(0) @binding(0) var<storage, read> _input: array<u32>;
-@group(0) @binding(1) var<storage, read_write> target: array<u32>;
+@group(0) @binding(1) var<storage, read_write> histogram: array<u32>;
 @group(0) @binding(2) var<uniform> _params: Params;
 
 @compute @workgroup_size(256)
@@ -31,8 +31,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     // 256 threads each clear 4 slots = 1024 total
     // Binding 1 is declared as array<u32> with no explicit size,
     // the backend binds the full buffer.
-    target[tid] = 0u;
-    target[tid + 256u] = 0u;
-    target[tid + 512u] = 0u;
-    target[tid + 768u] = 0u;
+    histogram[tid] = 0u;
+    histogram[tid + 256u] = 0u;
+    histogram[tid + 512u] = 0u;
+    histogram[tid + 768u] = 0u;
 }
