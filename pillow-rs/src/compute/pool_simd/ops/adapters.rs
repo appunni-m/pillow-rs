@@ -14184,6 +14184,7 @@ fn simd_native_blur_channels(img: &DynamicImage, mode: Option<&str>) -> Option<u
 }
 
 const SIMD_REDUCE_LANES: usize = 8;
+#[cfg(feature = "parallel")]
 const SIMD_REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 /// Return the fixed-point block parameters used by Pillow's Reduce.c for one
