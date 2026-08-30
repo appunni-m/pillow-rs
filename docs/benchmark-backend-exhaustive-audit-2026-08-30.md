@@ -2684,7 +2684,7 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   `3ba3206fc88f6dfb507130bfd94e2b18bdd5415437753289f1f69bd2c149f70b`).
 - Full live-oracle parity: `build/migration-parity/all-backends-after-equalize-identity.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 (SHA-256
-  pending final receipt regeneration).
+  `228a662c4843a0f7dd67d40f41c45c70c819b38629e82fdb5d344b6dfac0f6f8`).
 - Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).
@@ -2695,7 +2695,7 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
 - Combined all-backends gate: `build/migration-parity/all-backends-after-equalize-identity.json`,
-  pending completion of the final post-Equalize receipt.
+  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952.
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission
   constrained) and emits the repository's existing warning set but no errors.
