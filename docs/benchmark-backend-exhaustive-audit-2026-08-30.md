@@ -2597,7 +2597,7 @@ public case receives an exact value/error result.
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release run
-is `final-standard-after-native-geometry.json` (744 selected/measured, zero
+is `final-standard-after-convolution-load.json` (744 selected/measured, zero
 not-run), so the following figures supersede the earlier row-kernel snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
@@ -2620,30 +2620,58 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root; comparing this run with the previous standard
-  artifact reports **625** guarded violations without weakening the gate.
-  These are performance regressions against the older benchmark lineage, not
-  parity failures or unsupported public operations.
+  as the repository root; the fresh post-optimization comparison is recorded
+  in `pipeline-budget-check-after-convolution-load.json` and reports **577**
+  guarded violations without weakening the gate.  Same-day reruns are noisy
+  (an intermediate run reported 303), so this remains open performance
+  evidence rather than a closure claim.  These are performance regressions
+  against the older benchmark lineage, not parity failures or unsupported
+  public operations.
+- The SIMD native-byte convolution kernels now group adjacent two- and
+  four-channel pixels into contiguous byte loads before the exact `f32x8`
+  middle-first FMA sequence; the grouped 5×5 path streams those vectors
+  directly without an intermediate array round trip, while one-channel and
+  RGB retain their lower-overhead x-lane gather path.  The focused maintained
+  receipt `/private/tmp/simd-5x5-direct-vector-benchmark.json` passed all four
+  selected workloads with CPU/SIMD medians of RGBA 3×3 (4.995/3.094 ms), RGBA
+  5×5 (6.193/4.575 ms), LA 3×3 (2.438/1.212 ms), and LA 5×5 (4.785/2.530
+  ms), all actual SIMD with no fallbacks.  A repeat remained parity-safe but
+  was noisy enough that it does not establish an independent microchange
+  speedup.  The full strict SIMD corpus after this change is
+  `/private/tmp/simd-strict-conv-direct.json`: 10,952/10,952 passed with zero
+  failures, not-run cases, or infrastructure errors.
+- The GPU RGB8 upload path now widens directly into `wgpu` staging, removing
+  the temporary RGBA allocation while preserving byte-exact `[R,G,B,255]`
+  storage.  The verified Metal A/B shows the RGB crop median improving from
+  7.804917 to 7.237625 ms (-7.27%) with p95 improving 8.911909 to 8.183329 ms
+  (-8.18%); the GaussianBlur+Invert control improved 1.29%, and the RGBA
+  negative control drifted only +1.16% median / +2.22% p95.  The strict
+  actual-GPU probe passed 1/1 and the helper tests passed 2/2.  The full
+  post-integration all-backends receipt still must be regenerated before this
+  optimization can be folded into the aggregate performance comparison.
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-native-geometry.json`,
-  744/744 workloads measured and parity-passing.
+- Standard benchmark: `build/migration-parity/final-standard-after-convolution-load.json`,
+  744/744 workloads measured and parity-passing (SHA-256
+  `32dddfee698762325c2ab12b1c6cf1008dcf7ed933f64d74beae3ec6cc50c5bc`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-native-geometry.json`.
+  `build/migration-parity/pipeline-performance-report-after-convolution-load.json`.
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-native-geometry.json`
-  and `build/migration-parity/pipeline-roadmap-status-after-native-geometry.json`.
-- Full live-oracle parity: `build/migration-parity/all-backends-after-native-geometry.json`,
-  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952.
-- Strict SIMD parity: `/private/tmp/simd-strict-native-geometry-final.json`,
-  10,952/10,952 passed with zero failed/not-run/infrastructure-error cases.
+  `build/migration-parity/pipeline-benchmark-coverage-after-convolution-load.json`
+  and `build/migration-parity/pipeline-roadmap-status-after-convolution-load.json`.
+- Full live-oracle parity: `build/migration-parity/all-backends-after-convolution-load.json`,
+  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 (SHA-256
+  `ce7f2ddaae1b20518ecf4292eb40062faf4d0cb0662ffe3eac517ce88a077096`).
+- Strict SIMD parity: `/private/tmp/simd-strict-conv-direct.json`,
+  10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
+  (SHA-256 `a7bcb3590f0a94f0113f13cc37165beade030ab56395e8b5201a3ac65a1f5fc2`).
 - Strict GPU parity: `/private/tmp/gpu-strict-native-geometry-final.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases.
 - Normal GPU parity is included in the current all-backends run; its public
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
-- Combined all-backends gate: `build/migration-parity/all-backends-after-native-geometry.json`,
+- Combined all-backends gate: `build/migration-parity/all-backends-after-convolution-load.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952.
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission

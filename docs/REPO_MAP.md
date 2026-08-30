@@ -210,9 +210,11 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- crop_border.wgsl
 |   |   |   |       |-- darker.wgsl
 |   |   |   |       |-- difference.wgsl
+|   |   |   |       |-- draw.wgsl
 |   |   |   |       |-- duplicate.wgsl
 |   |   |   |       |-- effect_mandelbrot.wgsl
 |   |   |   |       |-- effect_noise.wgsl
+|   |   |   |       |-- effect_spread.wgsl
 |   |   |   |       |-- equalize.wgsl
 |   |   |   |       |-- equalize_cdf.wgsl
 |   |   |   |       |-- equalize_histogram.wgsl
@@ -249,6 +251,7 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- point_op.wgsl
 |   |   |   |       |-- posterize.wgsl
 |   |   |   |       |-- put_alpha.wgsl
+|   |   |   |       |-- put_alpha_data.wgsl
 |   |   |   |       |-- put_data.wgsl
 |   |   |   |       |-- put_pixel.wgsl
 |   |   |   |       |-- quantize.wgsl
@@ -257,6 +260,8 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- reduce.wgsl
 |   |   |   |       |-- remap_palette.wgsl
 |   |   |   |       |-- resize_bilinear.wgsl
+|   |   |   |       |-- resize_convolution_h.wgsl
+|   |   |   |       |-- resize_convolution_v.wgsl
 |   |   |   |       |-- resize_nearest.wgsl
 |   |   |   |       |-- rotate.wgsl
 |   |   |   |       |-- scale.wgsl
