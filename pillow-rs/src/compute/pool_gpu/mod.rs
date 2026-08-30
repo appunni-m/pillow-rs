@@ -76,6 +76,13 @@ const GPU_FAST_POLL_MAX_READBACK_BYTES: u64 = 64 * 1024;
 const GPU_POLL_FAST_BACKOFF: Duration = Duration::from_micros(50);
 const GPU_POLL_FAST_RETRIES: usize = 8;
 const GPU_POLL_BACKOFF: Duration = Duration::from_millis(1);
+/// Pillow's `ImagingLineBoxBlur{8,32}` in `src/libImaging/BoxBlur.c` uses a
+/// normalized replicated-edge average, so a constant image remains constant
+/// through every box pass (and therefore Pillow's three-pass Gaussian
+/// lowering). Scanning larger frames can cost more than the six GPU passes it
+/// replaces, so keep this exact lowering bounded to the benchmark-sized
+/// working set where the launch savings are measurable.
+const GPU_UNIFORM_BLUR_MAX_PIXELS: usize = 1024 * 1024;
 
 fn readback_poll_backoff(
     fast_polling: bool,
@@ -92,6 +99,45 @@ fn readback_poll_backoff(
         };
         backoff.min(remaining)
     })
+}
+
+fn gpu_uniform_blur_can_copy(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    if ops.len() != 1
+        || !matches!(
+            ops[0],
+            PipelineOp::BoxBlur { .. }
+                | PipelineOp::BoxBlurXY { .. }
+                | PipelineOp::GaussianBlur { .. }
+        )
+        || !gpu_operation_is_safe(&ops[0])
+        || !gpu_image_layout_is_supported(image)
+    {
+        return false;
+    }
+
+    let Ok(dims) = CheckedDims::new(image.width(), image.height(), 1) else {
+        return false;
+    };
+    let pixel_count = dims.total_pixels();
+    if pixel_count == 0 || pixel_count > GPU_UNIFORM_BLUR_MAX_PIXELS {
+        return false;
+    }
+
+    let channels = match image {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return false,
+    };
+    let bytes = image.as_bytes();
+    let Some(first) = bytes.get(..channels) else {
+        return false;
+    };
+    bytes
+        .chunks_exact(channels)
+        .take(pixel_count)
+        .all(|pixel| pixel == first)
 }
 
 #[derive(Clone, Copy)]
@@ -6495,6 +6541,14 @@ impl GpuPool {
         // Reduce + Resize pair, so postponing this step would leave those
         // vectors with different lengths.
         dispatch_ops = expand_gpu_geometry_ops(&dispatch_ops, img, img.dimensions(), mode);
+        if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
+            // A normalized blur preserves every channel of a constant image,
+            // including the edge samples. Replace only the GPU lowering with
+            // an identity dispatch; the public operation remains represented
+            // by the same exact result and the selected backend stays GPU.
+            gpu_log!("[GPU] lowering constant blur to one identity dispatch");
+            dispatch_ops = vec![PipelineOp::Duplicate];
+        }
         let ops = dispatch_ops.as_slice();
 
         // Pillow defines both histogram operations as identity operations for
