@@ -2595,6 +2595,11 @@ public case receives an exact value/error result.
 
 ### 31.4 Final performance evidence
 
+The current execution queue is
+[`benchmark-backend-pending-now-2026-08-31.md`](benchmark-backend-pending-now-2026-08-31.md);
+the row-level register is
+[`benchmark-backend-pending-checklist-2026-08-30.md`](benchmark-backend-pending-checklist-2026-08-30.md).
+
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release runs
