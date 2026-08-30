@@ -806,6 +806,76 @@ fn filter_5x5_byte_rows(
     }
 }
 
+/// Evaluate a constant native-byte 3x3 convolution without visiting every
+/// neighborhood.  The border remains the cloned input, matching the scalar
+/// kernel's untouched edge pixels; every interior pixel has the same result
+/// because all source tuples are equal.
+fn filter_3x3_constant_bytes(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) {
+    let mut filtered = [0u8; 4];
+    for channel in 0..channels {
+        let sample = raw[channel] as f32;
+        let row_b = pillow_kernel_row_3([sample; 3], &kernel[0..3]);
+        let row_c = pillow_kernel_row_3([sample; 3], &kernel[3..6]);
+        let row_t = pillow_kernel_row_3([sample; 3], &kernel[6..9]);
+        let mut value = rounding_bias;
+        value += row_b;
+        value += row_c;
+        value += row_t;
+        filtered[channel] = clip8_filter(value);
+    }
+    let row_stride = width * channels;
+    for y in 1..height.saturating_sub(1) {
+        for x in 1..width.saturating_sub(1) {
+            let base = y * row_stride + x * channels;
+            out[base..base + channels].copy_from_slice(&filtered[..channels]);
+        }
+    }
+}
+
+/// Evaluate a constant native-byte 5x5 convolution with one computed interior
+/// tuple and the same untouched border contract as the regular scalar path.
+fn filter_5x5_constant_bytes(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+) {
+    let mut filtered = [0u8; 4];
+    for channel in 0..channels {
+        let sample = raw[channel] as f32;
+        let row0 = pillow_kernel_row_5([sample; 5], &kernel[0..5]);
+        let row1 = pillow_kernel_row_5([sample; 5], &kernel[5..10]);
+        let row2 = pillow_kernel_row_5([sample; 5], &kernel[10..15]);
+        let row3 = pillow_kernel_row_5([sample; 5], &kernel[15..20]);
+        let row4 = pillow_kernel_row_5([sample; 5], &kernel[20..25]);
+        let mut value = rounding_bias;
+        value += row0;
+        value += row1;
+        value += row2;
+        value += row3;
+        value += row4;
+        filtered[channel] = clip8_filter(value);
+    }
+    let row_stride = width * channels;
+    for y in 2..height.saturating_sub(2) {
+        for x in 2..width.saturating_sub(2) {
+            let base = y * row_stride + x * channels;
+            out[base..base + channels].copy_from_slice(&filtered[..channels]);
+        }
+    }
+}
+
 // ── PIL-style box blur ──
 
 const BOX_BLUR_SCALE: u32 = 1 << 24;
@@ -1295,6 +1365,30 @@ fn pil_box_blur_xy_impl(
 // ── Rank filter ──
 
 const SMALL_RANK_AREA: usize = 49;
+const SMALL_UNIFORM_BYTE_MAX_PIXELS: usize = 64 * 64;
+
+/// Return whether a small native-byte image contains one repeated channel tuple.
+///
+/// A replicated-edge rank filter leaves a constant image unchanged.  Keep the
+/// scan bounded so the fast path cannot add a full-frame pass to large or
+/// non-uniform inputs.
+#[inline]
+fn native_small_uniform_byte_image(img: &DynamicImage, channels: usize, max_pixels: usize) -> bool {
+    if channels == 0 || img.width() == 0 || img.height() == 0 {
+        return false;
+    }
+    let Some(pixel_count) = (img.width() as usize).checked_mul(img.height() as usize) else {
+        return false;
+    };
+    if pixel_count > max_pixels {
+        return false;
+    }
+    let raw = img.as_bytes();
+    let Some(first) = raw.get(..channels) else {
+        return false;
+    };
+    raw.chunks_exact(channels).all(|pixel| pixel == first)
+}
 
 #[inline]
 fn select_rank_histogram(histogram: &[usize; 256], rank: usize) -> u8 {
@@ -1675,6 +1769,14 @@ fn rank_filter_impl(
             | DynamicImage::ImageRgb8(_)
             | DynamicImage::ImageRgba8(_)
     );
+    if native_byte_layout
+        && (rank == 0 || rank == area - 1)
+        && native_small_uniform_byte_image(img, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS)
+    {
+        // C's rank-filter window replicates edge samples, so every output
+        // tuple is identical to the input tuple when the source is uniform.
+        return Ok(img.clone());
+    }
     let separable_extreme =
         native_byte_layout && size >= 5 && w.max(h) > 512 && (rank == 0 || rank == area - 1);
     if separable_extreme
@@ -1727,6 +1829,28 @@ pub fn execute_filter3x3(
     let normalized_kernel: [f32; 9] = std::array::from_fn(|index| kernel[index] / scale);
     let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.to_vec();
+    let native_byte_layout = matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    );
+    if native_byte_layout
+        && native_small_uniform_byte_image(img, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS)
+    {
+        filter_3x3_constant_bytes(
+            raw,
+            &mut out,
+            w_u32 as usize,
+            h_u32 as usize,
+            channels,
+            &normalized_kernel,
+            rounding_bias,
+        );
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
     filter_3x3_byte_rows(
         raw,
         &mut out,
@@ -1761,6 +1885,28 @@ pub fn execute_filter5x5(
     let normalized_kernel: [f32; 25] = std::array::from_fn(|index| kernel[index] / scale);
     let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.to_vec();
+    let native_byte_layout = matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    );
+    if native_byte_layout
+        && native_small_uniform_byte_image(img, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS)
+    {
+        filter_5x5_constant_bytes(
+            raw,
+            &mut out,
+            w_u32 as usize,
+            h_u32 as usize,
+            channels,
+            &normalized_kernel,
+            rounding_bias,
+        );
+        let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
     filter_5x5_byte_rows(
         raw,
         &mut out,
