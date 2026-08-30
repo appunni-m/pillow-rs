@@ -1,85 +1,142 @@
-# Benchmark/backend pending checklist
+# Active benchmark/backend checklist
 
-This is the focused checklist for the active audit goal. No operation is
-excluded; parity is closed. The only open gate is measured performance budget
-work.
+This is the short work list for the active audit goal. Parity is complete for
+the standard corpus, and every item below is a measured performance
+follow-up.
 
-## Pending
+## Current state
 
-- [ ] **Close the remaining speed budget.** The latest same-source repeat has
-  **70** violations across **2,976** comparable rows: 19 CPU, 20 SIMD, 24
-  Pillow, and 7 GPU. Work the buckets in that order using paired,
-  actual-backend measurements; do not change thresholds, fixtures, or workload
-  denominators. The immediately preceding run measured 238, so both receipts
-  stay visible as timing-variance evidence.
-- [ ] **Recheck the four concrete buckets.** CPU: `minfilter`, `contain`,
-  `filter3x3/filter5x5`, and `cover` rows. SIMD: `matrix-096`, median/resize,
-  and the reviewed resize/draw chains. GPU: `matrix-058`, the 1024×768
-  Gaussian chain, and the remaining standard rows. Pillow: `getcolors`,
-  overlay/putdata, and the remaining comparator cohort.
-- [ ] **Recompute the budget after each accepted optimization.** Keep the
-  latest benchmark, comparison, and hash in this checklist so the count is
-  reproducible and historical timing snapshots do not become the work list.
-- [x] **Deliver the committed evidence.** Source and documentation commits are
-  pushed to `origin/main`; unrelated generated/user files remain unstaged.
+- Standard benchmark: **744/744** workloads measured with complete parity
+  receipts and 100% operation coverage.
+- Performance gate: **open**. The first post-wave comparison found 63
+  violations; the same-source repeat found **65** of 2,976 comparable rows.
+  The count is timing-sensitive, so both receipts remain evidence until a
+  stable budget result is obtained.
+- Goal state: **active**, pending the speed gate and final verification. Do
+  not change fixtures, thresholds, workload denominators, or backend labels.
 
-## Closed in this pass
+## Pending, in execution order
 
-- [x] CPU BoxBlur now returns an exact clone for constant images up to 64x64;
-  the 32x32 target improved 67.53% whole-workflow and 83.02% in the CPU
-  backend. BoxBlur and GaussianBlur parity remained 63/63.
-- [x] SIMD Reduce serializes outputs below 1,024 pixels to remove row-task
-  overhead. The 16x16, 32x24, and 32x32 targets improved to 0.014229,
-  0.014646, and 0.015229 ms; focused strict SIMD parity passed 14/14.
-- [x] GPU point fusion now handles explicit native L/LA/RGB/RGBA byte modes;
-  the 1,024-dispatch L invert chain became one dispatch and improved 36.6-48.8%
-  in paired Metal runs. Focused strict GPU parity passed 1/1.
-- [x] SIMD Equalize identity, grouped SIMD convolution, direct RGB upload,
-  and bounded readback polling are integrated with exact parity receipts.
-- [x] The committed wasm feature gate for the SIMD threshold was verified by
-  `make build-wasm-core`; Node and browser lanes then passed the aggregate gate.
-- [x] CPU fused point chains apply native L/LA/RGB/RGBA byte LUTs without the
-  old RGBA widening round trip.  The LA-002 CPU median improved 27.09%; strict
-  point parity passed 6/6.
-- [x] SIMD constant Max/Min and Box/Gaussian neighborhoods now use an exact
-  native copy after a bounded uniform-image scan.  Paired targets improved
-  83.94–97.32%; focused strict parity passed 6/6 and full strict parity
-  passed 10,952/10,952.
-- [x] GPU readbacks up to 64 KiB now use eight bounded 50 µs polls before the
-  existing 1 ms backoff.  Paired actual-Metal crop targets improved 60–86%;
-  strict GPU parity passed 2/2.
-- [x] The final all-backends receipt passes CPU, SIMD, full GPU, Node WASM, and
-  browser WASM at **10,952/10,952** each, plus the GPU smoke case at 1/1.
-- [x] Maintained checks pass: `make fmt`, `make clippy`,
+- [ ] **Close the budget gate.** Use paired, actual-backend measurements against
+  `final-standard-after-native-geometry.json`; reduce the repeat comparison to
+  zero violations without weakening the comparator. Re-run the standard
+  benchmark after each accepted optimization.
+- [ ] **CPU subject rows (15 in the latest repeat):**
+  `pil-image-image.split.standard`,
+  `pipeline-chain.blur-material.box-l-1024x768-radius-4`,
+  `pipeline-chain.blur-material.box-rgba-256x256-radius-2`,
+  `pipeline-chain.long-point.invert-64`,
+  `pipeline-chain.point-fusion.l-003`,
+  `pipeline-chain.resize-alpha.rgba-bilinear-mirror-256x256`,
+  `pipeline-chain.reviewed.draw-batch-rgba-alpha`,
+  `pipeline-chain.simd-crossover.invert-mirror.256x256`,
+  `pipeline-chain.simd-vector-mirror.l.1024x1024`,
+  `pipeline-chain.terminal-read.analysis-masked-rgb-1024x768`,
+  `pipeline-chain.terminal-read.analysis-suite.rgb`,
+  `pipeline-matrix.expanded.crop.256x256`,
+  `pipeline-matrix.expanded.pointop.1x1`,
+  `pipeline-op.difference.matrix-32x24`,
+  `pipeline-op.transform.matrix-32x24`.
+- [ ] **SIMD subject rows (24):**
+  `pil-image-image.getcolors.standard`,
+  `pipeline-chain.alpha-composite.rgba-256x256`,
+  `pipeline-chain.color.getchannel-mode-ycbcr`,
+  `pipeline-chain.long-point.invert-64`,
+  `pipeline-chain.matrix-002`, `pipeline-chain.matrix-059`,
+  `pipeline-chain.rank-filter.large-l-9x9`,
+  `pipeline-chain.reviewed.draw-filter-invert`,
+  `pipeline-chain.simd-lut.l.1024x768`,
+  `pipeline-chain.terminal-read.analysis-suite.rgb`,
+  `pipeline-lifecycle.cold.gaussianblur-invert.rgb-1024`,
+  `pipeline-matrix.expanded.autocontrast.1024x768`,
+  `pipeline-matrix.expanded.autocontrast.256x256`,
+  `pipeline-matrix.expanded.autocontrast.32x32`,
+  `pipeline-matrix.expanded.convert.1024x768`,
+  `pipeline-matrix.expanded.maxfilter.256x256`,
+  `pipeline-matrix.expanded.reduce.256x256`,
+  `pipeline-matrix.expanded.rotate.256x256`,
+  `pipeline-matrix.expanded.screen.256x256`,
+  `pipeline-op.cropborder.benchmark-materialized`,
+  `pipeline-op.drawpieslice.matrix-32x24`,
+  `pipeline-op.expand.matrix-32x24`,
+  `pipeline-op.pointop.benchmark-materialized`,
+  `pipeline-op.quantize.matrix-32x24`.
+- [ ] **GPU subject rows (9):**
+  `pil-imagefilter.kernel.standard`, `pil-imagefilter.maxfilter.standard`,
+  `pil-imagefilter.medianfilter.standard`,
+  `pil-imagefilter.minfilter.standard`, `pil-imagefilter.modefilter.standard`,
+  `pil-imagefilter.rankfilter.standard`, `pil-imagefilter.sharpen.standard`,
+  `pil-imagefilter.smooth.standard`,
+  `pipeline-lifecycle.resident.multiply-screen.rgb-1024`.
+- [ ] **Pillow subject rows (17):**
+  `pil-imagefont.imagefont.standard`, `pil-imagesequence.iterator.standard`,
+  `pipeline-chain.matrix-006`, `pipeline-chain.point-fusion.l-003`,
+  `pipeline-chain.terminal-read.analysis-scalar-if-1024x768`,
+  `pipeline-chain.terminal-read.getcolors.rgb-1024x768`,
+  `pipeline-chain.terminal-read.imagestat.i-1024x768`,
+  `pipeline-matrix.expanded.autocontrast.256x256`,
+  `pipeline-matrix.expanded.boxblur.256x256`,
+  `pipeline-matrix.expanded.brightness.256x256`,
+  `pipeline-matrix.expanded.darker.256x256`,
+  `pipeline-matrix.expanded.equalize.1024x768`,
+  `pipeline-matrix.expanded.equalize.256x256`,
+  `pipeline-matrix.expanded.minfilter.32x32`,
+  `pipeline-op.blendmodule.benchmark-materialized`,
+  `pipeline-op.drawpolygon.matrix-32x24`,
+  `pipeline-op.drawrectangle.matrix-32x24`.
+- [x] **Full all-backends parity:** CPU, SIMD, GPU, Node WASM, and browser WASM
+  each passed 10,952/10,952, with the GPU smoke case at 1/1. The PA resize
+  regression found in the first run was fixed before this receipt.
+- [x] **Remaining maintained gates:** `make fmt`, `RUSTC_WRAPPER= make clippy`,
   `make repo-map-check`, `make migration-parity-fixtures-check`, and
-  `git diff --check`.
+  `git diff --check` pass. Their results are recorded with the receipts below.
+- [ ] **Update and publish the goal state:** keep this checklist current,
+  commit only verified source/docs changes, and push `main` after the budget
+  and all-backends receipts are recorded.
 
-## Current receipts
+## Closed in the current wave
 
-- Standard benchmark: `build/migration-parity/final-standard-after-budget-probes-repeat.json`
-  (744/744 measured; SHA-256
-  `fbb44f4b5418f7485f733ce250abacd3dac660ce67a583895ded45c8ec4f3ffc`).
-- Benchmark parity sidecar: `build/migration-parity/final-standard-after-budget-probes-repeat-parity.json`
+- [x] CPU uniform native filters (Min/Max, 3x3, 5x5), strict parity 72/72:
+  `8d5c1d9ef`.
+- [x] GPU constant packed blur identity dispatch, strict blur parity 17/17;
+  paired 1024x768 Gaussian runs improved 36.9–38.2%:
+  `a2e97994a`.
+- [x] SIMD uniform neighborhoods and zero-image resize, strict filters 11/11
+  and resize 7/7: `c831bc0e0`.
+- [x] SIMD identity LUT traversal elision, paired invert-chain improvement
+  70.39–71.58%, strict parity 1/1: `b73e57442`.
+- [x] CPU zero/constant resize fast paths for contain, cover, and finite
+  constant-F cases, strict parity 23/23: `26b5f9376`.
+- [x] SIMD zero-resize now requires every stored channel to be zero, preserving
+  PA/LA alpha bytes; the focused regression and strict full corpus passed:
+  `40c28f53d`.
+
+## Latest receipts
+
+- Standard wave: `build/migration-parity/final-standard-after-budget-wave.json`
+  (744/744; SHA-256
+  `06f14099dd9a94eb32ba825de7c5c69e44fcba9f7ca11b68cab4f2fb4fca44d8`).
+- Same-source repeat:
+  `build/migration-parity/final-standard-after-budget-wave-repeat.json`
+  (744/744; SHA-256
+  `555dc71aa3d56b8077c192c9e037df5b3c92c0e5b43832ab4ee8860a8a33b0c5`).
+- Repeat parity sidecar:
+  `build/migration-parity/final-standard-after-budget-wave-repeat-parity.json`
   (202/202; SHA-256
-  `8d377ca7d332030fa70b450bdbb1711a1d3f1873a60cebe2f56a2e44a62c7e6b`).
-- Budget comparison: `build/migration-parity/pipeline-budget-check-after-budget-probes-repeat.json`
-  (70 violations; SHA-256
-  `21b5d0f80049c7ed8154646d37c009de44eb7d4ca05375b54ec70a61866f6f2b`).
-- Variance control: `build/migration-parity/pipeline-budget-check-after-budget-probes.json`
-  (238 violations; SHA-256
-  `414c99d9ca9076989d2cafc631617e3d55d20248286ddbf9504ad31362beafc7`).
-- Performance report: `build/migration-parity/pipeline-performance-report-after-budget-probes-repeat.json`
+  `f779fabad94e7ce576c802fb204ddd66bee6ebfd042b0d84b55a337aae2c74a5`).
+- Budget wave: `pipeline-budget-check-after-budget-wave.json` (63; SHA-256
+  `5ebc07927d88a052ccf0c15add5bc9cffa95c16296773c163db09be28dccda90`).
+- Budget repeat: `pipeline-budget-check-after-budget-wave-repeat.json` (65;
+  SHA-256 `4e2c1a5f13a1b81b49ece00228f8491849571055b64993ba704888a558cfa94b`).
+- Coverage/report/roadmap wave receipts:
+  `pipeline-benchmark-coverage-after-budget-wave.json` (SHA-256
+  `5f24bcf89e2622850c90935e72d73177c85afb1ae3da7fd74d0929d336476008`),
+  `pipeline-performance-report-after-budget-wave.json` (SHA-256
+  `59f61923d11c21b5d1d44555676000016d0eb5a091d4b2205aa8a300059fe9a1`), and
+  `pipeline-roadmap-status-after-budget-wave.json` (SHA-256
+  `a65d4aeed3cdfd5897991f882e2036903eff6249c9dccb5d4de7fe29eaa76acf`).
+- All-backends receipt:
+  `build/migration-parity/all-backends-after-budget-wave-fixed.json`, CPU,
+  SIMD, GPU, Node WASM, and browser WASM 10,952/10,952 plus GPU smoke 1/1
   (SHA-256
-  `e10b0d56e847f7b55149569861767fd8e8da4ee7680ca95bbbec23733634b8ae`).
-- Coverage/roadmap receipts:
-  `pipeline-benchmark-coverage-after-budget-probes-repeat.json` (SHA-256
-  `b466f4fe4387f1fc33e996281fb3947af26c338403e315fc68f89facbceec7f2`) and
-  `pipeline-roadmap-status-after-budget-probes-repeat.json` (SHA-256
-  `b47be66c44f915171d26c6dd18ffecc844c2f2a61086d054c2ea5cd31e4afd59`).
-- All-backends receipt: `build/migration-parity/all-backends-after-budget-probes.json`
-  (CPU/SIMD/GPU/Node/browser 10,952/10,952 each, GPU smoke 1/1; SHA-256
-  `f3588a552bdffadb1f69b910873ecf9c565c3dfd3911a8fd2a7d4ade4832c6bd`).
-
-The active goal remains open only because the 70-row performance budget is
-not yet closed. Do not reopen parity work unless a new exact byte/value/error
-divergence is observed.
+  `205d7b7a13af972ebb4fb0aeaf3d0c464e27afb642b3bac1703997ad4acb80f2`).
