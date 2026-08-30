@@ -810,6 +810,7 @@ fn filter_5x5_byte_rows(
 
 const BOX_BLUR_SCALE: u32 = 1 << 24;
 const BOX_BLUR_BIAS: u32 = 1 << 23;
+const UNIFORM_BOX_BLUR_MAX_PIXELS: usize = 64 * 64;
 
 #[inline(always)]
 fn blur_line_step(
@@ -1170,7 +1171,27 @@ fn pil_box_blur_xy_impl(
     if w_u32 == 0 || h_u32 == 0 || (radius_x == 0.0 && radius_y == 0.0) {
         return Ok(img.clone());
     }
+
     let (width, height) = (w_u32 as usize, h_u32 as usize);
+
+    // ImagingBoxBlur's replicated-edge average is identity for an image whose
+    // every pixel has the same channel tuple. Detect that common small-image
+    // case before allocating the horizontal/vertical work buffers; the
+    // fixed-point weights below sum to exactly 1.0, including fractional
+    // radii, so this preserves the byte result for every blur pass and native
+    // mode. Larger frames use the linear sliding-window recurrence directly;
+    // scanning and then cloning a full frame would add a memory-bandwidth pass
+    // that costs more than the blur itself.
+    if width.saturating_mul(height) <= UNIFORM_BOX_BLUR_MAX_PIXELS {
+        let raw = img.as_bytes();
+        let mut pixels = raw.chunks_exact(channels);
+        if let Some(first_pixel) = pixels.next()
+            && pixels.all(|pixel| pixel == first_pixel)
+            && pixels.remainder().is_empty()
+        {
+            return Ok(img.clone());
+        }
+    }
 
     let blur_parameters = |radius: f32| {
         // Integer part of radius (PIL: (int)floatRadius).
