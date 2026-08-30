@@ -2598,7 +2598,7 @@ public case receives an exact value/error result.
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release run
-is `final-standard-after-gpu-readback.json` (744 selected/measured, zero
+is `final-standard-after-equalize-identity.json` (744 selected/measured, zero
 not-run), so the following figures supersede the earlier row-kernel snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
@@ -2621,9 +2621,10 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root; the latest post-readback comparison is recorded in
-  `pipeline-budget-check-after-gpu-readback.json` and reports **247** guarded
-  violations (12 GPU, 93 CPU, 79 SIMD, 63 Pillow) without weakening the gate.
+  as the repository root; the latest post-Equalize comparison is recorded in
+  `pipeline-budget-check-after-equalize-identity.json` and reports **203**
+  guarded violations (28 GPU, 50 CPU, 66 SIMD, 59 Pillow) without weakening
+  the gate.
   Earlier same-day snapshots reported 577 and 312, demonstrating host timing
   noise; this remains open performance evidence rather than a closure claim.
   These are performance regressions against the older benchmark lineage, not
@@ -2641,15 +2642,24 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   speedup.  The full strict SIMD corpus after this change is
   `/private/tmp/simd-strict-conv-direct.json`: 10,952/10,952 passed with zero
   failures, not-run cases, or infrastructure errors.
+- The SIMD Equalize path now returns a native copy when its computed LUT is
+  identity and uses fixed-band L/RGB histogram loops for the scalar control
+  phase.  The paired RGB 256×256 identity workload improved 67.51% and 89.41%
+  whole-workflow (73.22% and 93.03% backend), with final SIMD/CPU ratios of
+  0.758 and 0.172.  The nonidentity RGB LUT control stayed within the 5%
+  budget.  Focused strict SIMD passed 6/6 and the full strict corpus passed
+  10,952/10,952.  The verified source change is commit
+  `976567232c5086138339156d87b4cbaab2441fb8`; paired benchmark hashes are
+  `e9c35d2d14543165a8a3f5f152a231decfb73c950e8f22621f3a52dd1d66fe2e` and
+  `eaec538f867b5c6fb53b7b98501587d95ee8fb5c840c045b0274c048a9133361`.
 - The GPU RGB8 upload path now widens directly into `wgpu` staging, removing
   the temporary RGBA allocation while preserving byte-exact `[R,G,B,255]`
   storage.  The verified Metal A/B shows the RGB crop median improving from
   7.804917 to 7.237625 ms (-7.27%) with p95 improving 8.911909 to 8.183329 ms
   (-8.18%); the GaussianBlur+Invert control improved 1.29%, and the RGBA
   negative control drifted only +1.16% median / +2.22% p95.  The strict
-  actual-GPU probe passed 1/1 and the helper tests passed 2/2.  The full
-  post-integration all-backends receipt still must be regenerated before this
-  optimization can be folded into the aggregate performance comparison.
+  actual-GPU probe passed 1/1 and the helper tests passed 2/2.  The final
+  post-integration all-backends receipt is tracked below.
 - The GPU readback loop now polls the device, checks the completion channel, and
   uses a bounded 1 ms backoff instead of sleeping for 5 ms between polls.  On
   actual Metal this reduced the RGB crop backend median by 66.51% (7.411000 to
@@ -2661,33 +2671,31 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-gpu-readback.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-equalize-identity.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `c54198ca909a32e0e24ed7bc0229dbee6b8788f6527fd2bbd690ed2674a80a7b`).
+  `2a7c9d0d7106dc60d6b1b2c4ffcd71a78c7f8cd2f6438b16e358022d0444c284`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-gpu-readback.json`.
+  `build/migration-parity/pipeline-performance-report-after-equalize-identity.json`.
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-gpu-readback.json`
-  and `build/migration-parity/pipeline-roadmap-status-after-gpu-readback.json`.
-- Current guarded budget comparison: `build/migration-parity/pipeline-budget-check-after-gpu-readback.json`,
-  247 violations (SHA-256
-  `ca7ddf0c4d48b0a0da6222e048d96344fc2e841fa5a963b9e57889b4d405fbd4`).
-- Full live-oracle parity: `build/migration-parity/all-backends-after-convolution-load.json`,
+  `build/migration-parity/pipeline-benchmark-coverage-after-equalize-identity.json`
+  and `build/migration-parity/pipeline-roadmap-status-after-equalize-identity.json`.
+- Current guarded budget comparison: `build/migration-parity/pipeline-budget-check-after-equalize-identity.json`,
+  203 violations (SHA-256
+  `3ba3206fc88f6dfb507130bfd94e2b18bdd5415437753289f1f69bd2c149f70b`).
+- Full live-oracle parity: `build/migration-parity/all-backends-after-equalize-identity.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 (SHA-256
-  `ce7f2ddaae1b20518ecf4292eb40062faf4d0cb0662ffe3eac517ce88a077096`).
-- Strict SIMD parity: `/private/tmp/simd-strict-conv-direct.json`,
+  pending final receipt regeneration).
+- Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
-  (SHA-256 `a7bcb3590f0a94f0113f13cc37165beade030ab56395e8b5201a3ac65a1f5fc2`).
+  (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).
 - Strict GPU parity: `/private/tmp/gpu-strict-after-readback.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `ac332a1390f7752098fbd5c85789207cb93f2da0ace53c45990b42addf6b042c`).
 - Normal GPU parity is included in the current all-backends run; its public
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
-- Combined all-backends gate: `build/migration-parity/all-backends-after-convolution-load.json`,
-  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 before the
-  readback-only change; regenerate this receipt after the latest commit for
-  final delivery.
+- Combined all-backends gate: `build/migration-parity/all-backends-after-equalize-identity.json`,
+  pending completion of the final post-Equalize receipt.
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission
   constrained) and emits the repository's existing warning set but no errors.
