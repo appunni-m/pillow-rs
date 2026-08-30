@@ -7465,6 +7465,14 @@ pub(crate) fn native_point_lut(
     if lut.len() != 256 * channels || !has_valid_byte_data(img, channels) {
         return None;
     }
+    // A composed point chain can cancel exactly (for example, eight
+    // ImageOps.invert calls).  Preserve the required copy-on-write boundary,
+    // but avoid rebuilding the byte-shuffle tables and traversing every row
+    // when the composed map is identity.
+    if native_lut_is_identity(lut, channels) {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
     let mut result = img.clone();
     let bytes = result.as_bytes_mut()?;
     let (vector_blocks, scalar_tail) = native_lut_apply(
