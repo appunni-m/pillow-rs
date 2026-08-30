@@ -19408,7 +19408,12 @@ pub fn simd_resize(
     if img.width() == 0 || img.height() == 0 {
         return simd_resize_zero_source(img, *w, *h, channels);
     }
-    if native_small_uniform_byte_image(img, channels) && img.as_bytes().first().copied() == Some(0)
+    // The zero-fill shortcut is valid only when every stored channel is zero.
+    // A PA/LA image can have a zero first sample and a nonzero alpha byte; in
+    // that case the resize must preserve the constant tuple instead of
+    // discarding the alpha plane.
+    if native_small_uniform_byte_image(img, channels)
+        && img.as_bytes().iter().all(|&byte| byte == 0)
     {
         let output_len = usize::try_from(*w)
             .ok()
