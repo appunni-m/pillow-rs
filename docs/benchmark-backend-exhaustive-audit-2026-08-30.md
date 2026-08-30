@@ -2598,8 +2598,8 @@ public case receives an exact value/error result.
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release runs
-are `final-standard-after-budget-wave.json` and its same-source repeat
-`final-standard-after-budget-wave-repeat.json` (744 selected/measured and zero
+are `final-standard-after-next-wave.json` and its same-source repeat
+`final-standard-after-next-wave-repeat.json` (744 selected/measured and zero
 not-run in each), so the following figures supersede the earlier row-kernel
 snapshot:
 
@@ -2623,13 +2623,13 @@ snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root.  The post-wave comparison is recorded in
-  `pipeline-budget-check-after-budget-wave.json` and reports **63** guarded
-  violations (23 Pillow, 21 CPU, 14 SIMD, 5 GPU subject rows).  Its
-  same-source repeat, `pipeline-budget-check-after-budget-wave-repeat.json`,
-  reports **65** (17 Pillow, 15 CPU, 24 SIMD, 9 GPU subject rows).  The two
-  receipts are retained as timing-variance evidence, and the speed gate
-  remains open rather than being closed on a favorable sample.
+  as the repository root.  The next-wave comparison is recorded in
+  `pipeline-budget-check-after-next-wave.json` and reports **81** guarded
+  violations (41 Pillow, 19 CPU, 16 SIMD, 5 GPU subject rows).  Its same-source
+  repeat, `pipeline-budget-check-after-next-wave-repeat.json`, also reports
+  **81** (the exact row IDs vary with timing).  The two receipts are retained
+  as timing-variance evidence, and the speed gate remains open rather than
+  being closed on a favorable sample.
   These are performance regressions against the older benchmark lineage, not
   parity failures or public-operation exclusions.
 - The SIMD native-byte convolution kernels now group adjacent two- and
@@ -2729,40 +2729,57 @@ snapshot:
   plane.  Requiring every stored channel to be zero restores the exact PA
   tuple; the focused case and the strict SIMD corpus both pass after
   `40c28f53d`.
+- The next budget wave collapsed repeated CPU `ImageOps.invert` point chains
+  by parity while preserving copy-on-write identity results.  Paired actual
+  CPU median improved 0.188395→0.160771 ms (backend 0.022688→0.002208 ms),
+  with strict non-uniform parity 24/24 and managed CPU parity 1/1.  The
+  verified source commit is `56877bdfa`.
+- The next SIMD wave adds bounded exact zero-image copies for Max/Min/Reduce
+  and skips the redundant fill for borderless Expand.  Paired actual-SIMD
+  medians improved MaxFilter 267,354→62,833 ns, Reduce 152,834→54,917 ns,
+  and Expand 3,000→1,417 ns; strict parity passed 32/32.  The verified
+  source commit is `7bc416892`.
+- A GPU uniform multiply→screen constant-output shader was not integrated:
+  strict byte parity passed, but the authoritative resident row was cached and
+  its paired median regressed 0.263708→0.267667 ms.  This leaves all five GPU
+  rows in the latest repeat pending and keeps the speed gate honest.
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-budget-wave-repeat.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-next-wave.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `555dc71aa3d56b8077c192c9e037df5b3c92c0e5b43832ab4ee8860a8a33b0c5`).
+  `8c6a06999de2dfb101df8057278591c98eb7e4e3482b168b37cc80bd119ade6d`).
+- Same-tree repeat: `build/migration-parity/final-standard-after-next-wave-repeat.json`,
+  744/744 workloads measured and parity-passing (SHA-256
+  `f44a4c1b259f7cf95ae84b7cf9cce6c9d16da811ae85b1f79aee0fd1de380b07`).
 - Benchmark parity sidecar:
-  `build/migration-parity/final-standard-after-budget-wave-repeat-parity.json`,
+  `build/migration-parity/final-standard-after-next-wave-repeat-parity.json`,
   202/202 (SHA-256
-  `f779fabad94e7ce576c802fb204ddd66bee6ebfd042b0d84b55a337aae2c74a5`).
+  `b297df24c3263b2df9057bb09820db48435a38625be0bf4cffac393dfa1804cc`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-budget-wave.json`
+  `build/migration-parity/pipeline-performance-report-after-next-wave-repeat.json`
   (SHA-256
-  `59f61923d11c21b5d1d44555676000016d0eb5a091d4b2205aa8a300059fe9a1`).
+  `2bf4f6c134c75669f236748281d3b9da449bd17f8e4e4f8daf6a2428f5240928`).
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-budget-wave.json`
-  (SHA-256
-  `5f24bcf89e2622850c90935e72d73177c85afb1ae3da7fd74d0929d336476008`) and
-  `build/migration-parity/pipeline-roadmap-status-after-budget-wave.json`
-  (SHA-256
-  `a65d4aeed3cdfd5897991f882e2036903eff6249c9dccb5d4de7fe29eaa76acf`).
+  `build/migration-parity/pipeline-benchmark-coverage-after-next-wave-repeat.json`
+  and `build/migration-parity/pipeline-roadmap-status-after-next-wave-repeat.json`
+  (SHA-256 `724630253264a78703d14a4f8ed1460ecb9cfd30886be105e5f570404cb34a2c`
+  and `9eeb682a5e2e220d29f5f63ea341f159af9686201e3fd82bf10ac8011bbaf603`,
+  respectively; roadmap reports 14 closed, 50 open, and 100% operation
+  coverage).
 - Current guarded budget comparison:
-  `build/migration-parity/pipeline-budget-check-after-budget-wave-repeat.json`,
-  65 violations (15 CPU, 24 SIMD, 17 Pillow, 9 GPU subject rows; SHA-256
-  `4e2c1a5f13a1b81b49ece00228f8491849571055b64993ba704888a558cfa94b`).
-- First post-wave budget comparison:
-  `build/migration-parity/pipeline-budget-check-after-budget-wave.json`,
-  63 violations (21 CPU, 14 SIMD, 23 Pillow, 5 GPU subject rows; SHA-256
-  `5ebc07927d88a052ccf0c15add5bc9cffa95c16296773c163db09be28dccda90`).
+  `build/migration-parity/pipeline-budget-check-after-next-wave-repeat.json`,
+  81 violations (19 CPU, 16 SIMD, 41 Pillow, 5 GPU subject rows; SHA-256
+  `dca1bb65d06c85f03a3ec24ba89e72abaff1efe6b4a89ce131af6967cb1718e4`).
+- First next-wave budget comparison:
+  `build/migration-parity/pipeline-budget-check-after-next-wave.json`,
+  81 violations (19 CPU, 16 SIMD, 41 Pillow, 5 GPU subject rows; SHA-256
+  `97394ddb6d3d3f8cdc8c997e906aa5e609d06abd90ccee27e64756a539b17f02`).
 - Full live-oracle parity:
-  `build/migration-parity/all-backends-after-budget-wave-fixed.json`,
-  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 and GPU smoke
-  passed 1/1 (SHA-256
-  `205d7b7a13af972ebb4fb0aeaf3d0c464e27afb642b3bac1703997ad4acb80f2`).
+  `build/migration-parity/all-backends-after-next-wave.json`, CPU/SIMD/GPU,
+  Node, and browser lanes all passed 10,952/10,952 and GPU smoke passed 1/1
+  (SHA-256
+  `fcf35f32347d64d3916000d0f93bb363e981139fb438e75a17f49855defcb307`).
 - Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).

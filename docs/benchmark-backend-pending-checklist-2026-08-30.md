@@ -1,142 +1,147 @@
 # Active benchmark/backend checklist
 
-This is the short work list for the active audit goal. Parity is complete for
-the standard corpus, and every item below is a measured performance
-follow-up.
+This is the short, current checklist for the exhaustive benchmark goal. The
+parity gate is green; only the guarded performance comparison remains open.
 
 ## Current state
 
 - Standard benchmark: **744/744** workloads measured with complete parity
   receipts and 100% operation coverage.
-- Performance gate: **open**. The first post-wave comparison found 63
-  violations; the same-source repeat found **65** of 2,976 comparable rows.
-  The count is timing-sensitive, so both receipts remain evidence until a
-  stable budget result is obtained.
-- Goal state: **active**, pending the speed gate and final verification. Do
-  not change fixtures, thresholds, workload denominators, or backend labels.
+- Full live-backend parity: CPU, SIMD, GPU, Node WASM, and browser WASM each
+  passed **10,952/10,952**; GPU smoke passed **1/1**.
+- Latest same-tree budget comparison: **81** violations across 2,976
+  comparable rows (41 Pillow, 19 CPU, 16 SIMD, 5 GPU). The repeat is timing
+  sensitive, so the gate stays open; no fixture, threshold, denominator, or
+  backend-label changes are allowed.
+- Goal state: **active** until a stable comparison closes the speed gate.
 
 ## Pending, in execution order
 
-- [ ] **Close the budget gate.** Use paired, actual-backend measurements against
-  `final-standard-after-native-geometry.json`; reduce the repeat comparison to
-  zero violations without weakening the comparator. Re-run the standard
-  benchmark after each accepted optimization.
-- [ ] **CPU subject rows (15 in the latest repeat):**
-  `pil-image-image.split.standard`,
-  `pipeline-chain.blur-material.box-l-1024x768-radius-4`,
-  `pipeline-chain.blur-material.box-rgba-256x256-radius-2`,
-  `pipeline-chain.long-point.invert-64`,
-  `pipeline-chain.point-fusion.l-003`,
-  `pipeline-chain.resize-alpha.rgba-bilinear-mirror-256x256`,
-  `pipeline-chain.reviewed.draw-batch-rgba-alpha`,
-  `pipeline-chain.simd-crossover.invert-mirror.256x256`,
-  `pipeline-chain.simd-vector-mirror.l.1024x1024`,
-  `pipeline-chain.terminal-read.analysis-masked-rgb-1024x768`,
-  `pipeline-chain.terminal-read.analysis-suite.rgb`,
-  `pipeline-matrix.expanded.crop.256x256`,
-  `pipeline-matrix.expanded.pointop.1x1`,
-  `pipeline-op.difference.matrix-32x24`,
-  `pipeline-op.transform.matrix-32x24`.
-- [ ] **SIMD subject rows (24):**
-  `pil-image-image.getcolors.standard`,
-  `pipeline-chain.alpha-composite.rgba-256x256`,
-  `pipeline-chain.color.getchannel-mode-ycbcr`,
-  `pipeline-chain.long-point.invert-64`,
-  `pipeline-chain.matrix-002`, `pipeline-chain.matrix-059`,
-  `pipeline-chain.rank-filter.large-l-9x9`,
-  `pipeline-chain.reviewed.draw-filter-invert`,
-  `pipeline-chain.simd-lut.l.1024x768`,
-  `pipeline-chain.terminal-read.analysis-suite.rgb`,
-  `pipeline-lifecycle.cold.gaussianblur-invert.rgb-1024`,
-  `pipeline-matrix.expanded.autocontrast.1024x768`,
-  `pipeline-matrix.expanded.autocontrast.256x256`,
-  `pipeline-matrix.expanded.autocontrast.32x32`,
-  `pipeline-matrix.expanded.convert.1024x768`,
-  `pipeline-matrix.expanded.maxfilter.256x256`,
-  `pipeline-matrix.expanded.reduce.256x256`,
-  `pipeline-matrix.expanded.rotate.256x256`,
-  `pipeline-matrix.expanded.screen.256x256`,
-  `pipeline-op.cropborder.benchmark-materialized`,
-  `pipeline-op.drawpieslice.matrix-32x24`,
-  `pipeline-op.expand.matrix-32x24`,
-  `pipeline-op.pointop.benchmark-materialized`,
-  `pipeline-op.quantize.matrix-32x24`.
-- [ ] **GPU subject rows (9):**
-  `pil-imagefilter.kernel.standard`, `pil-imagefilter.maxfilter.standard`,
-  `pil-imagefilter.medianfilter.standard`,
-  `pil-imagefilter.minfilter.standard`, `pil-imagefilter.modefilter.standard`,
-  `pil-imagefilter.rankfilter.standard`, `pil-imagefilter.sharpen.standard`,
-  `pil-imagefilter.smooth.standard`,
-  `pipeline-lifecycle.resident.multiply-screen.rgb-1024`.
-- [ ] **Pillow subject rows (17):**
-  `pil-imagefont.imagefont.standard`, `pil-imagesequence.iterator.standard`,
-  `pipeline-chain.matrix-006`, `pipeline-chain.point-fusion.l-003`,
+- [ ] **Repeat and close the budget gate.** Use paired, actual-backend
+  measurements against `final-standard-after-native-geometry.json`. Keep every
+  row and the nominal 5% comparator; do not hide timing violations.
+- [ ] **Pillow rows (41, latest repeat):**
+  `pil-imagefilter.modefilter.standard`,
+  `pil-imagefont-freetypefont.font-variant.standard`,
+  `pil-imagefont-freetypefont.get-variation-axes.standard`,
+  `pil-imagefont-freetypefont.get-variation-names.standard`,
+  `pil-imagefont.imagefont.standard`,
+  `pil-imagepalette-imagepalette.getdata.standard`,
+  `pil-imagesequence-iterator.next.standard`,
+  `pil-imagestat-stat.count.standard`, `pipeline-chain.long-point.invert-8`,
+  `pipeline-chain.matrix-020`, `pipeline-chain.matrix-085`,
+  `pipeline-chain.resize-alpha.la-bicubic-256x256`,
   `pipeline-chain.terminal-read.analysis-scalar-if-1024x768`,
   `pipeline-chain.terminal-read.getcolors.rgb-1024x768`,
   `pipeline-chain.terminal-read.imagestat.i-1024x768`,
-  `pipeline-matrix.expanded.autocontrast.256x256`,
-  `pipeline-matrix.expanded.boxblur.256x256`,
-  `pipeline-matrix.expanded.brightness.256x256`,
-  `pipeline-matrix.expanded.darker.256x256`,
-  `pipeline-matrix.expanded.equalize.1024x768`,
-  `pipeline-matrix.expanded.equalize.256x256`,
-  `pipeline-matrix.expanded.minfilter.32x32`,
-  `pipeline-op.blendmodule.benchmark-materialized`,
-  `pipeline-op.drawpolygon.matrix-32x24`,
-  `pipeline-op.drawrectangle.matrix-32x24`.
-- [x] **Full all-backends parity:** CPU, SIMD, GPU, Node WASM, and browser WASM
-  each passed 10,952/10,952, with the GPU smoke case at 1/1. The PA resize
-  regression found in the first run was fixed before this receipt.
-- [x] **Remaining maintained gates:** `make fmt`, `RUSTC_WRAPPER= make clippy`,
-  `make repo-map-check`, `make migration-parity-fixtures-check`, and
-  `git diff --check` pass. Their results are recorded with the receipts below.
-- [ ] **Update and publish the goal state:** keep this checklist current,
-  commit only verified source/docs changes, and push `main` after the budget
-  and all-backends receipts are recorded.
+  `pipeline-matrix.expanded.reduce.1024x768`,
+  `pipeline-matrix.expanded.resize.32x32`,
+  `pipeline-op.autocontrast.matrix-32x24`,
+  `pipeline-op.blendmodule.matrix-32x24`,
+  `pipeline-op.color3dlut.matrix-32x24`,
+  `pipeline-op.compositemodule.matrix-32x24`,
+  `pipeline-op.contrast.matrix-32x24`,
+  `pipeline-op.cover.benchmark-materialized`,
+  `pipeline-op.cover.matrix-32x24`,
+  `pipeline-op.cropborder.matrix-32x24`,
+  `pipeline-op.drawchord.benchmark-materialized`,
+  `pipeline-op.drawchord.matrix-32x24`,
+  `pipeline-op.drawpieslice.matrix-32x24`,
+  `pipeline-op.drawpoint.matrix-32x24`,
+  `pipeline-op.equalize.matrix-32x24`, `pipeline-op.eval.matrix-32x24`,
+  `pipeline-op.expand.matrix-32x24`,
+  `pipeline-op.extractband.matrix-32x24`,
+  `pipeline-op.fit.benchmark-materialized`,
+  `pipeline-op.grayscale.matrix-32x24`,
+  `pipeline-op.maxfilter.benchmark-materialized`,
+  `pipeline-op.merge.matrix-32x24`, `pipeline-op.multiply.matrix-32x24`,
+  `pipeline-op.pointop.matrix-32x24`,
+  `pipeline-op.putalphadata.matrix-32x24`,
+  `pipeline-op.scale.benchmark-materialized`.
+- [ ] **CPU rows (19, latest repeat):**
+  `pil-image-image.save.standard`, `pil-image.open.standard`,
+  `pil-imagefont-freetypefont.get-variation-axes.standard`,
+  `pipeline-chain.blur-material.box-l-1024x768-radius-4`,
+  `pipeline-chain.fused-chops.multiply-screen.l.1024x1024`,
+  `pipeline-chain.fused-chops.multiply-screen.rgba.256x256`,
+  `pipeline-chain.matrix-022`, `pipeline-chain.matrix-033`,
+  `pipeline-chain.matrix-083`,
+  `pipeline-chain.resize-alpha.rgba-bilinear-mirror-256x256`,
+  `pipeline-chain.terminal-read.analysis-masked-rgb-1024x768`,
+  `pipeline-chain.terminal-read.imagestat.cmyk-1024x768`,
+  `pipeline-matrix.expanded.crop.256x256`,
+  `pipeline-matrix.expanded.pointop.1x1`,
+  `pipeline-op.addmodulo.matrix-32x24`,
+  `pipeline-op.grayscale.matrix-32x24`,
+  `pipeline-op.putalpha.matrix-32x24`, `pipeline-op.reduce.matrix-32x24`,
+  `pipeline-op.softlight.matrix-32x24`.
+- [ ] **SIMD rows (16, latest repeat):**
+  `pil-image-image.save.standard`, `pipeline-chain.color.convert-mode-i`,
+  `pipeline-chain.convolution.material.l-5x5-scale.256x256`,
+  `pipeline-chain.matrix-010`, `pipeline-chain.matrix-024`,
+  `pipeline-chain.quantize.linear-gradient`,
+  `pipeline-chain.quantize.radial-gradient`,
+  `pipeline-chain.reviewed.draw-filter-invert`,
+  `pipeline-chain.reviewed.resize-rotate-crop`,
+  `pipeline-chain.terminal-read.analysis-suite.rgb`,
+  `pipeline-matrix.expanded.crop.1024x768`,
+  `pipeline-op.blend.matrix-32x24`,
+  `pipeline-op.contrast.benchmark-materialized`,
+  `pipeline-op.cropborder.benchmark-materialized`,
+  `pipeline-op.extractband.matrix-32x24`,
+  `pipeline-op.solarize.matrix-32x24`.
+- [ ] **GPU rows (5, latest repeat):** `pil-image-image.width.standard`,
+  `pil-imagechops.add.standard`, `pil-imagefilter.rankfilter.standard`,
+  `pil-imagefilter.sharpen.standard`, `pil-imagefilter.smooth.standard`.
+- [ ] **Re-run evidence after every accepted change:** standard benchmark,
+  budget check, performance report, benchmark coverage, roadmap status, and
+  full all-backends parity.
+- [ ] **Publish goal state:** commit only verified source/docs changes and push
+  `main`; leave this goal active while the performance gate is open.
 
 ## Closed in the current wave
 
-- [x] CPU uniform native filters (Min/Max, 3x3, 5x5), strict parity 72/72:
-  `8d5c1d9ef`.
-- [x] GPU constant packed blur identity dispatch, strict blur parity 17/17;
-  paired 1024x768 Gaussian runs improved 36.9–38.2%:
-  `a2e97994a`.
-- [x] SIMD uniform neighborhoods and zero-image resize, strict filters 11/11
-  and resize 7/7: `c831bc0e0`.
-- [x] SIMD identity LUT traversal elision, paired invert-chain improvement
-  70.39–71.58%, strict parity 1/1: `b73e57442`.
-- [x] CPU zero/constant resize fast paths for contain, cover, and finite
-  constant-F cases, strict parity 23/23: `26b5f9376`.
-- [x] SIMD zero-resize now requires every stored channel to be zero, preserving
-  PA/LA alpha bytes; the focused regression and strict full corpus passed:
-  `40c28f53d`.
+- [x] CPU repeated `ImageOps.invert` chains now collapse by parity while
+  preserving copy-on-write identity results. Paired actual-CPU median improved
+  0.188395→0.160771 ms (backend 0.022688→0.002208 ms); strict parity 24/24
+  plus managed CPU 1/1. Commit `56877bdfa`.
+- [x] SIMD zero-image Max/Min/Reduce and borderless Expand now use bounded
+  exact native copies/fills. Paired actual-SIMD medians improved MaxFilter
+  267,354→62,833 ns, Reduce 152,834→54,917 ns, and Expand 3,000→1,417 ns;
+  strict parity 32/32. Commit `7bc416892`.
+- [x] GPU uniform multiply→screen candidate was rejected: strict byte parity
+  passed, but the authoritative resident row was cached and its paired median
+  regressed 0.263708→0.267667 ms. No GPU source was integrated.
 
 ## Latest receipts
 
-- Standard wave: `build/migration-parity/final-standard-after-budget-wave.json`
+- Benchmark: `build/migration-parity/final-standard-after-next-wave.json`
   (744/744; SHA-256
-  `06f14099dd9a94eb32ba825de7c5c69e44fcba9f7ca11b68cab4f2fb4fca44d8`).
-- Same-source repeat:
-  `build/migration-parity/final-standard-after-budget-wave-repeat.json`
+  `8c6a06999de2dfb101df8057278591c98eb7e4e3482b168b37cc80bd119ade6d`).
+- Same-tree repeat: `build/migration-parity/final-standard-after-next-wave-repeat.json`
   (744/744; SHA-256
-  `555dc71aa3d56b8077c192c9e037df5b3c92c0e5b43832ab4ee8860a8a33b0c5`).
-- Repeat parity sidecar:
-  `build/migration-parity/final-standard-after-budget-wave-repeat-parity.json`
-  (202/202; SHA-256
-  `f779fabad94e7ce576c802fb204ddd66bee6ebfd042b0d84b55a337aae2c74a5`).
-- Budget wave: `pipeline-budget-check-after-budget-wave.json` (63; SHA-256
-  `5ebc07927d88a052ccf0c15add5bc9cffa95c16296773c163db09be28dccda90`).
-- Budget repeat: `pipeline-budget-check-after-budget-wave-repeat.json` (65;
-  SHA-256 `4e2c1a5f13a1b81b49ece00228f8491849571055b64993ba704888a558cfa94b`).
-- Coverage/report/roadmap wave receipts:
-  `pipeline-benchmark-coverage-after-budget-wave.json` (SHA-256
-  `5f24bcf89e2622850c90935e72d73177c85afb1ae3da7fd74d0929d336476008`),
-  `pipeline-performance-report-after-budget-wave.json` (SHA-256
-  `59f61923d11c21b5d1d44555676000016d0eb5a091d4b2205aa8a300059fe9a1`), and
-  `pipeline-roadmap-status-after-budget-wave.json` (SHA-256
-  `a65d4aeed3cdfd5897991f882e2036903eff6249c9dccb5d4de7fe29eaa76acf`).
-- All-backends receipt:
-  `build/migration-parity/all-backends-after-budget-wave-fixed.json`, CPU,
-  SIMD, GPU, Node WASM, and browser WASM 10,952/10,952 plus GPU smoke 1/1
+  `f44a4c1b259f7cf95ae84b7cf9cce6c9d16da811ae85b1f79aee0fd1de380b07`).
+- Benchmark parity sidecars: `final-standard-after-next-wave-parity.json`
+  SHA-256 `13c6eb0ebd493cd7c318ff112bbf1a8f715399dcc6aefee2c6a631b23c20eb23`;
+  repeat SHA-256
+  `b297df24c3263b2df9057bb09820db48435a38625be0bf4cffac393dfa1804cc`.
+- Budget checks: `pipeline-budget-check-after-next-wave.json` (81;
+  SHA-256 `97394ddb6d3d3f8cdc8c997e906aa5e609d06abd90ccee27e64756a539b17f02`)
+  and `pipeline-budget-check-after-next-wave-repeat.json` (81;
+  SHA-256 `dca1bb65d06c85f03a3ec24ba89e72abaff1efe6b4a89ce131af6967cb1718e4`).
+- Reports: `pipeline-performance-report-after-next-wave-repeat.json`,
+  `pipeline-benchmark-coverage-after-next-wave-repeat.json`, and
+  `pipeline-roadmap-status-after-next-wave-repeat.json` (roadmap: 14 closed,
+  50 open, 100% operation coverage).
+- Full parity: `build/migration-parity/all-backends-after-next-wave.json`
   (SHA-256
-  `205d7b7a13af972ebb4fb0aeaf3d0c464e27afb642b3bac1703997ad4acb80f2`).
+  `fcf35f32347d64d3916000d0f93bb363e981139fb438e75a17f49855defcb307`).
+
+## Required checks before publishing
+
+- `make fmt`
+- `RUSTC_WRAPPER= make clippy`
+- `make repo-map-check`
+- `make migration-parity-fixtures-check`
+- `make migration-parity-evidence-check`
+- `git diff --check`
