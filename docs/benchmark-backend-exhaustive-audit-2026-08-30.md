@@ -2597,9 +2597,10 @@ public case receives an exact value/error result.
 
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
-still does not prove the requested speed contract.  The current release run
-is `final-standard-after-budget-probes-repeat.json` (744 selected/measured,
-zero not-run), so the following figures supersede the earlier row-kernel
+still does not prove the requested speed contract.  The current release runs
+are `final-standard-after-budget-wave.json` and its same-source repeat
+`final-standard-after-budget-wave-repeat.json` (744 selected/measured and zero
+not-run in each), so the following figures supersede the earlier row-kernel
 snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
@@ -2622,12 +2623,12 @@ snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root; the latest post-probe comparison is recorded in
-  `pipeline-budget-check-after-budget-probes-repeat.json` and reports **70**
-  guarded violations (7 GPU, 19 CPU, 20 SIMD, 24 Pillow) without weakening the
-  gate.  The immediately preceding same-source run reported 238 (4 GPU, 95
-  CPU, 55 SIMD, 84 Pillow); earlier same-day snapshots reported 577 and 312.
-  The spread is retained as host timing-variance evidence, and the speed gate
+  as the repository root.  The post-wave comparison is recorded in
+  `pipeline-budget-check-after-budget-wave.json` and reports **63** guarded
+  violations (23 Pillow, 21 CPU, 14 SIMD, 5 GPU subject rows).  Its
+  same-source repeat, `pipeline-budget-check-after-budget-wave-repeat.json`,
+  reports **65** (17 Pillow, 15 CPU, 24 SIMD, 9 GPU subject rows).  The two
+  receipts are retained as timing-variance evidence, and the speed gate
   remains open rather than being closed on a favorable sample.
   These are performance regressions against the older benchmark lineage, not
   parity failures or public-operation exclusions.
@@ -2702,39 +2703,73 @@ snapshot:
   existing 1 ms backoff.  Two paired actual-Metal repeats improved the selected
   crop targets by 60–86% with unchanged timeout/device-loss semantics; strict
   GPU parity passed 2/2.  The integrated commit is `a9aee75eb`.
+- CPU uniform native filters now short-circuit constant Min/Max, 3x3, and 5x5
+  images while preserving border and scalar-rounding behavior.  The paired
+  MinFilter, Filter3x3, and Filter5x5 CPU medians improved by 69.1%, 74.3%,
+  and 50.4%; strict CPU parity passed 72/72.  The integrated commit is
+  `8d5c1d9ef`.
+- GPU constant packed BoxBlur, BoxBlurXY, and GaussianBlur now lower to one
+  identity dispatch.  Paired actual-Metal Gaussian RGBA 1024x768 runs improved
+  36.9–38.2% with unchanged resource receipts; strict blur parity passed 17/17.
+  The integrated commit is `a2e97994a`.
+- SIMD uniform native-byte neighborhoods and zero-image resize now return
+  exact copies/fills within bounded image sizes.  Paired matrix-096, median,
+  and resize targets improved 65.1–85.3%; strict filters passed 11/11 and
+  resize passed 7/7.  The integrated commit is `c831bc0e0`.
+- SIMD fused chains now elide identity LUT construction and traversal by
+  cloning the source while retaining copy-on-write semantics.  The paired
+  `pipeline-chain.metadata-cache.invert-8.l` target improved 70.39–71.58%;
+  strict parity passed 1/1.  The integrated commit is `b73e57442`.
+- CPU contain, cover, and finite constant-F resizes now use direct native-byte
+  fills for uniform images while preserving negative-zero and non-finite
+  scalar behavior.  Strict CPU parity passed 23/23.  The integrated commit is
+  `26b5f9376`.
+- The first post-wave all-backends run exposed a PA resize regression: the SIMD
+  zero-fill check looked only at the first byte and dropped a nonzero alpha
+  plane.  Requiring every stored channel to be zero restores the exact PA
+  tuple; the focused case and the strict SIMD corpus both pass after
+  `40c28f53d`.
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-budget-probes-repeat.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-budget-wave-repeat.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `fbb44f4b5418f7485f733ce250abacd3dac660ce67a583895ded45c8ec4f3ffc`).
+  `555dc71aa3d56b8077c192c9e037df5b3c92c0e5b43832ab4ee8860a8a33b0c5`).
 - Benchmark parity sidecar:
-  `build/migration-parity/final-standard-after-budget-probes-repeat-parity.json`,
+  `build/migration-parity/final-standard-after-budget-wave-repeat-parity.json`,
   202/202 (SHA-256
-  `8d377ca7d332030fa70b450bdbb1711a1d3f1873a60cebe2f56a2e44a62c7e6b`).
+  `f779fabad94e7ce576c802fb204ddd66bee6ebfd042b0d84b55a337aae2c74a5`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-budget-probes-repeat.json`
+  `build/migration-parity/pipeline-performance-report-after-budget-wave.json`
   (SHA-256
-  `e10b0d56e847f7b55149569861767fd8e8da4ee7680ca95bbbec23733634b8ae`).
+  `59f61923d11c21b5d1d44555676000016d0eb5a091d4b2205aa8a300059fe9a1`).
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-budget-probes-repeat.json`
+  `build/migration-parity/pipeline-benchmark-coverage-after-budget-wave.json`
   (SHA-256
-  `b466f4fe4387f1fc33e996281fb3947af26c338403e315fc68f89facbceec7f2`) and
-  `build/migration-parity/pipeline-roadmap-status-after-budget-probes-repeat.json`
+  `5f24bcf89e2622850c90935e72d73177c85afb1ae3da7fd74d0929d336476008`) and
+  `build/migration-parity/pipeline-roadmap-status-after-budget-wave.json`
   (SHA-256
-  `b47be66c44f915171d26c6dd18ffecc844c2f2a61086d054c2ea5cd31e4afd59`).
+  `a65d4aeed3cdfd5897991f882e2036903eff6249c9dccb5d4de7fe29eaa76acf`).
 - Current guarded budget comparison:
-  `build/migration-parity/pipeline-budget-check-after-budget-probes-repeat.json`,
-  70 violations (19 CPU, 20 SIMD, 24 Pillow, 7 GPU; SHA-256
-  `21b5d0f80049c7ed8154646d37c009de44eb7d4ca05375b54ec70a61866f6f2b`).
+  `build/migration-parity/pipeline-budget-check-after-budget-wave-repeat.json`,
+  65 violations (15 CPU, 24 SIMD, 17 Pillow, 9 GPU subject rows; SHA-256
+  `4e2c1a5f13a1b81b49ece00228f8491849571055b64993ba704888a558cfa94b`).
+- First post-wave budget comparison:
+  `build/migration-parity/pipeline-budget-check-after-budget-wave.json`,
+  63 violations (21 CPU, 14 SIMD, 23 Pillow, 5 GPU subject rows; SHA-256
+  `5ebc07927d88a052ccf0c15add5bc9cffa95c16296773c163db09be28dccda90`).
 - Full live-oracle parity:
-  `build/migration-parity/all-backends-after-budget-probes.json`,
+  `build/migration-parity/all-backends-after-budget-wave-fixed.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 and GPU smoke
   passed 1/1 (SHA-256
-  `f3588a552bdffadb1f69b910873ecf9c565c3dfd3911a8fd2a7d4ade4832c6bd`).
+  `205d7b7a13af972ebb4fb0aeaf3d0c464e27afb642b3bac1703997ad4acb80f2`).
 - Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).
+- Latest strict SIMD parity:
+  `build/migration-parity/simd-strict-parity-result.json`, 10,952/10,952
+  passed with zero failed/not-run/infrastructure-error cases (SHA-256
+  `12b89565bb1e286f0e82995a0450057f3ef0d5810292932e04a42e2bb5a4a740`).
 - Strict GPU parity: `/private/tmp/gpu-strict-after-readback.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `ac332a1390f7752098fbd5c85789207cb93f2da0ace53c45990b42addf6b042c`).
@@ -2742,9 +2777,10 @@ snapshot:
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
 - Combined all-backends gate:
-  `build/migration-parity/all-backends-after-budget-probes.json`,
+  `build/migration-parity/all-backends-after-budget-wave-fixed.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 and GPU smoke
-  passed 1/1.
+  passed 1/1 (SHA-256
+  `205d7b7a13af972ebb4fb0aeaf3d0c464e27afb642b3bac1703997ad4acb80f2`).
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission
   constrained) and emits the repository's existing warning set but no errors.
