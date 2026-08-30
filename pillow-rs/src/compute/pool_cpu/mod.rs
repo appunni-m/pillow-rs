@@ -89,6 +89,28 @@ fn point_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
     }
 }
 
+#[inline]
+fn point_lut_is_identity(lut: &[u8], bands: usize) -> bool {
+    lut.len() == bands.saturating_mul(256)
+        && lut.chunks_exact(256).all(|table| {
+            table
+                .iter()
+                .enumerate()
+                .all(|(index, &value)| value == index as u8)
+        })
+}
+
+fn repeated_invert_lut(bands: usize, inverted: bool) -> Vec<u8> {
+    (0..bands)
+        .flat_map(|_| {
+            (0u16..=255).map(move |value| {
+                let value = value as u8;
+                if inverted { u8::MAX - value } else { value }
+            })
+        })
+        .collect()
+}
+
 /// Compose adjacent point/LUT operations into one lookup-table traversal.
 ///
 /// The returned count is at least two.  A single operation remains on the
@@ -103,6 +125,26 @@ fn fused_point_batch(
         return None;
     }
     let bands = point_band_count(img)?;
+
+    // ImageOps.invert is the same byte-wise involution at every step. The
+    // long-point benchmark intentionally repeats it many times; composing
+    // that run through the generic per-op LUT builder makes the control work
+    // O(steps * bands * 256) even though the result only depends on parity.
+    // Pillow's point contract is exact for these native byte layouts, so
+    // reduce a consecutive invert run to one map before the general composer.
+    let invert_run = ops
+        .iter()
+        .take_while(|op| matches!(op, PipelineOp::Invert))
+        .count();
+    if invert_run >= 2 {
+        return Some((
+            invert_run,
+            PipelineOp::PointOp {
+                lut: repeated_invert_lut(bands, invert_run % 2 == 1).into(),
+            },
+        ));
+    }
+
     let mut composed: Vec<u8> = (0..bands)
         .flat_map(|_| (0u16..=255).map(|value| value as u8))
         .collect();
@@ -341,7 +383,23 @@ impl BackendImpl for CpuPool {
                 for op in &ops[index..index + consumed] {
                     crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
                 }
-                let next = match registry::execute_cpu(&fused, input, current_mode.as_deref()) {
+                // A long point chain can cancel exactly (for example, an
+                // even number of ImageOps.invert calls). The composed LUT is
+                // already known to be exact; keep the copy-on-write boundary
+                // but avoid allocating and traversing a second image when it
+                // is the identity map. This mirrors the C/Pillow contract:
+                // identity point operations still return an independent image
+                // object with the same native bytes and mode.
+                let next = match &fused {
+                    PipelineOp::PointOp { lut }
+                        if point_band_count(input)
+                            .is_some_and(|bands| point_lut_is_identity(lut, bands)) =>
+                    {
+                        Ok(input.clone())
+                    }
+                    _ => registry::execute_cpu(&fused, input, current_mode.as_deref()),
+                };
+                let next = match next {
                     Ok(next) => next,
                     Err(error) => {
                         for _ in 0..consumed {
