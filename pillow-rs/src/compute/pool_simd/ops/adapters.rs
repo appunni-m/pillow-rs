@@ -14184,6 +14184,7 @@ fn simd_native_blur_channels(img: &DynamicImage, mode: Option<&str>) -> Option<u
 }
 
 const SIMD_REDUCE_LANES: usize = 8;
+const SIMD_REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 /// Return the fixed-point block parameters used by Pillow's Reduce.c for one
 /// output pixel. The address selection is scalar control work; the sums and
@@ -14525,95 +14526,21 @@ fn native_reduce_bytes(
         output_width % SIMD_REDUCE_LANES
     };
 
-    // Reduction output rows are independent. Keep all source gathers and
-    // block geometry exact, but let the approved row splitter distribute the
-    // work across the same Rayon pool used by the CPU implementation. The
-    // previous SIMD loop processed the entire reduced image on one thread,
-    // making a native vector average slower than the CPU row-parallel path.
-    #[cfg(feature = "parallel")]
-    {
-        let failed = AtomicBool::new(false);
-        crate::par_rows_mut!(
-            &mut output,
-            output_width * channels,
-            output_height,
-            |row_start, _row_end, y, row| {
-                let row_start_pixel = (y as usize).saturating_mul(output_width);
-                let vector_limit = if output_width < SIMD_REDUCE_LANES {
-                    output_width
-                } else {
-                    output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
-                };
-                for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
-                    let start_index = row_start_pixel.saturating_add(local);
-                    let Some(block) = native_reduce_vector_block(
-                        source,
-                        width,
-                        height,
-                        output_width,
-                        output_pixels,
-                        channels,
-                        premultiplied_alpha,
-                        x_factor,
-                        y_factor,
-                        start_index,
-                    ) else {
-                        failed.store(true, Ordering::Relaxed);
-                        return;
-                    };
-                    let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
-                    let dst_start = local * channels;
-                    let dst_end = dst_start + valid_pixels * channels;
-                    let Some(dst) = row.get_mut(dst_start..dst_end) else {
-                        failed.store(true, Ordering::Relaxed);
-                        return;
-                    };
-                    dst.copy_from_slice(&block[..valid_pixels * channels]);
-                }
-                for local in vector_limit..output_width {
-                    let index = row_start_pixel.saturating_add(local);
-                    let Some(pixel) = native_reduce_scalar_pixel(
-                        source,
-                        width,
-                        height,
-                        channels,
-                        premultiplied_alpha,
-                        x_factor,
-                        y_factor,
-                        local,
-                        y as usize,
-                    ) else {
-                        failed.store(true, Ordering::Relaxed);
-                        return;
-                    };
-                    let dst_start = (index - row_start_pixel) * channels;
-                    let dst_end = dst_start + channels;
-                    let Some(dst) = row.get_mut(dst_start..dst_end) else {
-                        failed.store(true, Ordering::Relaxed);
-                        return;
-                    };
-                    dst.copy_from_slice(&pixel[..channels]);
-                }
-                let _ = row_start;
-            }
-        );
-        if failed.load(Ordering::Relaxed) {
-            return None;
-        }
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    for y in 0..output_height {
-        let row_start_pixel = y * output_width;
-        let row_start = row_start_pixel * channels;
-        let row = &mut output[row_start..row_start + output_width * channels];
+    // Reduction output rows are independent, but a Rayon task per tiny row
+    // costs more than the scalar address setup around this SIMD kernel. Keep
+    // the same vector arithmetic and exact source gathers while using a
+    // serial row loop below the small-output threshold; large reductions still
+    // use the shared row-parallel execution policy.
+    let process_row = |y: usize, row: &mut [u8]| -> bool {
+        let row_start_pixel = y.saturating_mul(output_width);
         let vector_limit = if output_width < SIMD_REDUCE_LANES {
             output_width
         } else {
             output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
         };
         for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
-            let block = native_reduce_vector_block(
+            let start_index = row_start_pixel.saturating_add(local);
+            let Some(block) = native_reduce_vector_block(
                 source,
                 width,
                 height,
@@ -14623,15 +14550,21 @@ fn native_reduce_bytes(
                 premultiplied_alpha,
                 x_factor,
                 y_factor,
-                row_start_pixel + local,
-            )?;
+                start_index,
+            ) else {
+                return false;
+            };
             let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
             let dst_start = local * channels;
-            row[dst_start..dst_start + valid_pixels * channels]
-                .copy_from_slice(&block[..valid_pixels * channels]);
+            let dst_end = dst_start + valid_pixels * channels;
+            let Some(dst) = row.get_mut(dst_start..dst_end) else {
+                return false;
+            };
+            dst.copy_from_slice(&block[..valid_pixels * channels]);
         }
         for local in vector_limit..output_width {
-            let pixel = native_reduce_scalar_pixel(
+            let index = row_start_pixel.saturating_add(local);
+            let Some(pixel) = native_reduce_scalar_pixel(
                 source,
                 width,
                 height,
@@ -14641,9 +14574,55 @@ fn native_reduce_bytes(
                 y_factor,
                 local,
                 y,
-            )?;
-            let dst_start = local * channels;
-            row[dst_start..dst_start + channels].copy_from_slice(&pixel[..channels]);
+            ) else {
+                return false;
+            };
+            let dst_start = (index - row_start_pixel) * channels;
+            let dst_end = dst_start + channels;
+            let Some(dst) = row.get_mut(dst_start..dst_end) else {
+                return false;
+            };
+            dst.copy_from_slice(&pixel[..channels]);
+        }
+        true
+    };
+
+    #[cfg(feature = "parallel")]
+    if output_pixels >= SIMD_REDUCE_PARALLEL_PIXEL_THRESHOLD {
+        let failed = AtomicBool::new(false);
+        crate::par_rows_mut!(
+            &mut output,
+            output_width * channels,
+            output_height,
+            |_row_start, _row_end, y, row| {
+                if !process_row(y as usize, row) {
+                    failed.store(true, Ordering::Relaxed);
+                }
+            }
+        );
+        if failed.load(Ordering::Relaxed) {
+            return None;
+        }
+    } else {
+        for y in 0..output_height {
+            let row_start = y * output_width * channels;
+            if !process_row(
+                y,
+                &mut output[row_start..row_start + output_width * channels],
+            ) {
+                return None;
+            }
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..output_height {
+        let row_start = y * output_width * channels;
+        if !process_row(
+            y,
+            &mut output[row_start..row_start + output_width * channels],
+        ) {
+            return None;
         }
     }
     let vector_blocks = (vector_blocks_per_row * output_height) as u64;
