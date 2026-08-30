@@ -31,8 +31,8 @@ work.
   and bounded readback polling are integrated with exact parity receipts.
 - [x] The committed wasm feature gate for the SIMD threshold was verified by
   `make build-wasm-core`; Node and browser lanes then passed the aggregate gate.
-- [x] The final all-backends receipt passes CPU, SIMD, GPU smoke/full, Node WASM,
-  and browser WASM at **10,952/10,952** each.
+- [x] The final all-backends receipt passes CPU, SIMD, full GPU, Node WASM, and
+  browser WASM at **10,952/10,952** each, plus the GPU smoke case at 1/1.
 - [x] Maintained checks pass: `make fmt`, `make clippy`,
   `make repo-map-check`, `make migration-parity-fixtures-check`, and
   `git diff --check`.
