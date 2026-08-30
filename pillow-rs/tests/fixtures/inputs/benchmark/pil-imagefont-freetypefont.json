@@ -79,7 +79,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.behavior.default"
+        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -132,7 +132,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.behavior.default"
+        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.variable-font"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -503,7 +503,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.behavior.default"
+        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -556,7 +556,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.behavior.default"
+        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -578,7 +578,7 @@
           0
         ],
         "mode": "unknown",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"

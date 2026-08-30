@@ -79,7 +79,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+        "case_id": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append"
       },
       "measurement": {
         "boundary": "whole_workflow",

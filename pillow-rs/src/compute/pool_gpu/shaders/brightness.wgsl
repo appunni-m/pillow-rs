@@ -1,6 +1,7 @@
 // Brightness: clamp(ch * factor_int / 1000, 0, 255)
-// Mode-aware: only processes channels present in the image mode.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode-aware: preserves alpha for LA/RGBA and processes all four bytes for
+// explicit CMYK (mode 4, where byte 3 is K rather than alpha).
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
@@ -14,6 +15,7 @@ struct Params {
 // ── Mode helpers ──
 
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_is_cmyk(m: u32) -> bool { return m == 4u; }
 
 fn brightness_apply(c: u32, f: u32) -> u32 {
     return min((c * f) / 1000u, 255u);
@@ -46,7 +48,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let out_r = val_r;
     let out_g = val_g;
     let out_b = val_b;
-    let out_a = select(255u, a, mode_has_a(params.mode));
+    let out_a = select(
+        select(255u, a, mode_has_a(params.mode)),
+        brightness_apply(a, f),
+        mode_is_cmyk(params.mode),
+    );
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

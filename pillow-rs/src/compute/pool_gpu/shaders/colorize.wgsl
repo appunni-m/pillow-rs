@@ -1,9 +1,9 @@
-// Colorize: lerp(black_color, white_color, luma/255)
-// Param[0] = black_color packed as 0x00BBGGRR
-// Param[1] = white_color packed as 0x00BBGGRR
-// Mode-aware: for L/LA (only R carries luma), only process R;
-// for RGB/RGBA, process all RGB channels.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Colorize: apply Pillow's integer LUT mapping from grayscale to RGB.
+// Param[0] = black_color packed as 0xAABBGGRR
+// Param[1] = white_color packed as 0xAABBGGRR
+// Param[2] = midpoint color (ignored when has_mid is zero)
+// Param[3..5] = blackpoint, midpoint, whitepoint
+// Param[6] = has_mid
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
@@ -13,19 +13,73 @@ struct Params {
     _pad: u32,
     black_color: u32,
     white_color: u32,
+    mid_color: u32,
+    blackpoint: u32,
+    midpoint: u32,
+    whitepoint: u32,
+    has_mid: u32,
 }
 
-// ── Mode helpers ──
+// Pillow's LUT uses floor division for negative color deltas. WGSL integer
+// division truncates toward zero, so spell out mathematical floor division.
+fn floor_div(n: i32, d: i32) -> i32 {
+    if n >= 0i {
+        return n / d;
+    }
+    return -((-n + d - 1i) / d);
+}
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn colorize_channel(
+    black: u32,
+    white: u32,
+    mid: u32,
+    luma: u32,
+    blackpoint: u32,
+    midpoint: u32,
+    whitepoint: u32,
+    has_mid: u32,
+) -> u32 {
+    let index = i32(luma);
+    let bp = i32(blackpoint);
+    let mp = i32(midpoint);
+    let wp = i32(whitepoint);
+    let black_value = i32(black);
+    let white_value = i32(white);
+    let mid_value = i32(mid);
+    var value: i32;
 
-fn colorize_lerp(black: u32, white: u32, luma: u32) -> u32 {
-    // Use signed arithmetic so a valid inverted ramp (white < black) does
-    // not underflow the unsigned expression before the final clamp.
-    let val = i32(black) * 255i + (i32(white) - i32(black)) * i32(luma);
-    return u32(clamp((val + 127i) / 255i, 0i, 255i));
+    if index < bp {
+        value = black_value;
+    } else if has_mid != 0u {
+        if index < mp {
+            let span = mp - bp;
+            var step: i32 = 0i;
+            if span != 0i {
+                step = floor_div((index - bp) * (mid_value - black_value), span);
+            }
+            value = black_value + step;
+        } else if index < wp {
+            let span = wp - mp;
+            var step: i32 = 0i;
+            if span != 0i {
+                step = floor_div((index - mp) * (white_value - mid_value), span);
+            }
+            value = mid_value + step;
+        } else {
+            value = white_value;
+        }
+    } else if index < wp {
+        let span = wp - bp;
+        var step: i32 = 0i;
+        if span != 0i {
+            step = floor_div((index - bp) * (white_value - black_value), span);
+        }
+        value = black_value + step;
+    } else {
+        value = white_value;
+    }
+
+    return u32(clamp(value, 0i, 255i));
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -43,13 +97,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let b = (pixel >> 16u) & 0xffu;
     let a = (pixel >> 24u) & 0xffu;
 
-    // For L/LA: luma = r (single channel, only R carries luma)
-    // For RGB/RGBA: luma = BT.601
-    let luma = select(r, (299u * r + 587u * g + 114u * b) / 1000u, mode_has_g(params.mode));
+    // ImageOps.colorize validates an L source. Its packed transport stores
+    // the grayscale sample in byte zero, so no RGB conversion is required.
+    let luma = r;
 
     // Extract black/white colors
     let bc = params.black_color;
     let wc = params.white_color;
+    let mc = params.mid_color;
     let br = bc & 0xffu;
     let bg = (bc >> 8u) & 0xffu;
     let bb = (bc >> 16u) & 0xffu;
@@ -57,16 +112,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let wg = (wc >> 8u) & 0xffu;
     let wb = (wc >> 16u) & 0xffu;
 
-    // lerp: black + (white - black) * luma / 255
-    let val_r = colorize_lerp(br, wr, luma);
-    let val_g = colorize_lerp(bg, wg, luma);
-    let val_b = colorize_lerp(bb, wb, luma);
+    let mr = mc & 0xffu;
+    let mg = (mc >> 8u) & 0xffu;
+    let mb = (mc >> 16u) & 0xffu;
 
-    // For L/LA: only process R (luma); G and B pass through unchanged
-    let out_r = val_r;
-    let out_g = select(g, val_g, mode_has_g(params.mode));
-    let out_b = select(b, val_b, mode_has_b(params.mode));
-    let out_a = select(255u, a, mode_has_a(params.mode));
+    let out_r = colorize_channel(
+        br, wr, mr, luma, params.blackpoint, params.midpoint,
+        params.whitepoint, params.has_mid,
+    );
+    let out_g = colorize_channel(
+        bg, wg, mg, luma, params.blackpoint, params.midpoint,
+        params.whitepoint, params.has_mid,
+    );
+    let out_b = colorize_channel(
+        bb, wb, mb, luma, params.blackpoint, params.midpoint,
+        params.whitepoint, params.has_mid,
+    );
+    let out_a = 255u;
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

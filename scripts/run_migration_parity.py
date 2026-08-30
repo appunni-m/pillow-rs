@@ -1087,7 +1087,7 @@ def run_case(
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
-                    receipt["status"] = "completed"
+                    receipt["status"] = "partial"
                     receipt["step_id"] = step_id
                     pipeline_execution_sink.append(receipt)
             error = normalized_public_error(
@@ -1167,7 +1167,7 @@ def run_case(
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
-                    receipt["status"] = "completed"
+                    receipt["status"] = "partial"
                     receipt["step_id"] = observation_id
                     pipeline_execution_sink.append(receipt)
             observations.append(
@@ -1209,7 +1209,10 @@ def _phase_totals(
         duration = durations.get(step_id, 0)
         if step_id == "materialize" or step.get("operation") == "tobytes":
             terminal += duration
-        elif str(step_id).startswith("setup") or step.get("operation") == "new":
+        elif (
+            str(step_id).startswith("setup")
+            or step.get("operation") in {"new", "open", "load"}
+        ):
             setup += duration
         else:
             pipeline += duration
@@ -1955,6 +1958,12 @@ def run_resident_case(
             break
 
     if setup_errors or not terminal_steps:
+        if telemetry_api is not None and setup_errors:
+            receipt = telemetry_api.take_pipeline_telemetry()
+            if receipt is not None:
+                receipt["status"] = "partial"
+                receipt["step_id"] = setup_errors[-1]["step_id"]
+                execution_sink.append(receipt)
         return {
             "case_id": case["case_id"],
             "status": "not_run",
@@ -2006,7 +2015,11 @@ def run_resident_case(
             except BaseException as exc:  # public terminal failures are benchmark data
                 execution_errors.append(normalized_error(step, exc))
                 if telemetry_api is not None:
-                    telemetry_api.take_pipeline_telemetry()
+                    receipt = telemetry_api.take_pipeline_telemetry()
+                    if receipt is not None:
+                        receipt["status"] = "partial"
+                        receipt["step_id"] = step["step_id"]
+                        execution_sink.append(receipt)
                 continue
             elapsed_ns = time.perf_counter_ns() - started_ns
             timing_sink.append(elapsed_ns)
@@ -2120,7 +2133,13 @@ def run_side(args: argparse.Namespace) -> int:
                         if telemetry_api is not None:
                             receipt = telemetry_api.take_pipeline_telemetry()
                             if receipt is not None:
-                                receipt["status"] = "completed"
+                                has_errors = result.get("status") != "completed" or any(
+                                    item.get("status") == "error"
+                                    for item in result.get("observations", [])
+                                ) or bool(result.get("execution_errors", []))
+                                receipt["status"] = (
+                                    "partial" if has_errors else "completed"
+                                )
                                 execution_sink.append(receipt)
                             elif not execution_sink:
                                 execution_sink.append({"status": "not_recorded"})

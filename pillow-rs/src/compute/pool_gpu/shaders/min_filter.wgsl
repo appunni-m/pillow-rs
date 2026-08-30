@@ -1,5 +1,6 @@
 // Min filter: window minimum for each channel independently.
 // Mode-aware: for L/LA (0/1) only computes min on R channel (luma).
+// Mode 8 is F: one packed word is one little-endian f32 sample.
 // CPU reference (image.rs:2784): rank_filter_impl(img, size, 0)
 // For each pixel: find minimum value in size×size window per channel.
 // Border pixels: clamp source coordinates to image bounds (matching PIL).
@@ -20,11 +21,38 @@ fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
+fn min_float_pixel(x: u32, y: u32) -> u32 {
+    let w = params.width;
+    let h = params.height;
+    let size = min(params.size, 9u);
+    let idx = y * w + x;
+    if size == 0u || size % 2u == 0u {
+        return input[idx];
+    }
+    let half = i32(size) / 2i;
+    let y_i32 = i32(y);
+    let x_i32 = i32(x);
+    let w_i32 = i32(w);
+    let h_i32 = i32(h);
+    var selected = bitcast<f32>(input[idx]);
+    for (var dy = -half; dy <= half; dy++) {
+        let sy = clamp(y_i32 + dy, 0, h_i32 - 1);
+        for (var dx = -half; dx <= half; dx++) {
+            let sx = clamp(x_i32 + dx, 0, w_i32 - 1);
+            selected = min(selected, bitcast<f32>(input[u32(sy) * w + u32(sx)]));
+        }
+    }
+    return bitcast<u32>(selected);
+}
+
 fn min_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let h = params.height;
     let size = min(params.size, 9u);
     let idx = y * w + x;
+    if params.mode == 8u {
+        return min_float_pixel(x, y);
+    }
     if size == 0u || size % 2u == 0u {
         return input[idx];
     }

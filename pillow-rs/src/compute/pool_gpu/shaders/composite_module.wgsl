@@ -26,7 +26,10 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+// CMYK uses the same four-byte transport as RGBA, but byte three is K rather
+// than alpha. It is still an active channel for Image.composite and must be
+// blended instead of being replaced with an opaque padding value.
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
 @group(0) @binding(0) var<storage, read> input_a: array<u32>;
 @group(0) @binding(1) var<storage, read> input_b: array<u32>;

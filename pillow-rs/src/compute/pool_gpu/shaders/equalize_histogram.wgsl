@@ -1,12 +1,8 @@
-// Equalize histogram: atomic accumulation of R/G/B channel values.
-// Identical algorithm to autocontrast_histogram. Separate shader for pipeline
-// clarity and so the registry can reference a unique entry point.
+// Equalize histogram gather.
 //
-// CPU reference (image.rs:2108): histogram accumulation, same pattern.
-// 1 workgroup (256 threads), each thread processes a chunk of pixels.
-//
-// Mode-aware: L/LA only accumulate R channel (luma); RGB/RGBA accumulate R,G,B.
-// Params: standard header.
+// Equalize derives a separate LUT for each active byte channel. Keep the
+// channel histograms disjoint so the LUT pass can reproduce Pillow's per-band
+// integer step calculation exactly.
 
 struct Params {
     width: u32,
@@ -17,11 +13,11 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
-@group(0) @binding(1) var<storage, read_write> histogram: array<atomic<u32>, 256>;
-@group(0) @binding(2) var<uniform> params: Params;
+@group(0) @binding(1) var<storage, read> _mask: array<u32>;
+@group(0) @binding(2) var<storage, read_write> histogram: array<atomic<u32>, 1024>;
+@group(0) @binding(3) var<uniform> params: Params;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -31,20 +27,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let start = tid * pixels_per_thread;
     let end = min(start + pixels_per_thread, total_pixels);
 
-    let mode = params.mode;
-
     for (var i = start; i < end; i = i + 1u) {
         let pixel = input[i];
         let r = pixel & 0xffu;
         atomicAdd(&histogram[r], 1u);
 
-        if mode_has_g(mode) {
+        if mode_has_g(params.mode) {
             let g = (pixel >> 8u) & 0xffu;
-            atomicAdd(&histogram[g], 1u);
+            atomicAdd(&histogram[256u + g], 1u);
         }
-        if mode_has_b(mode) {
+        if mode_has_b(params.mode) {
             let b = (pixel >> 16u) & 0xffu;
-            atomicAdd(&histogram[b], 1u);
+            atomicAdd(&histogram[512u + b], 1u);
         }
     }
 }

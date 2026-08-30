@@ -1,11 +1,7 @@
-// Fit: scale to fit within target box with optional bleed, then center-position.
-// 1. Scale source to nw x nh: scale = min(tw/sw, th/sh) * (1 + bleed),
-//    nw = ceil(sw * scale), nh = ceil(sh * scale).
-// 2. Position in target box: crop_x = floor((tw - nw) * centering),
-//    crop_y = floor((th - nh) * centering). (All computed on CPU.)
-// 3. For each output pixel, bilinear inverse-map from target position through
-//    the scaled image back to source.
-// Uses PIL pixel-centered bilinear sampling (same as resize_bilinear.wgsl).
+// Fit: resample Pillow's fractional source crop box directly into the target
+// dimensions.  The crop box is computed by the Rust control plane using the
+// ImageOps.fit bleed/centering contract and transported as f32 bit patterns.
+// The pixel-centre mapping below matches the scalar boxed-resize path.
 // Mode-aware: for L/LA (0/1) only interpolates R channel (luma).
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
@@ -17,10 +13,11 @@ struct Params {
     _pad: u32,
     dst_w: u32,    // output / target width
     dst_h: u32,    // output / target height
-    nw: u32,       // scaled (fit) width
-    nh: u32,       // scaled (fit) height
-    crop_x: u32,   // positioning X offset in target box
-    crop_y: u32,   // positioning Y offset in target box
+    crop_left: u32,  // f32 bits
+    crop_top: u32,   // f32 bits
+    crop_w: u32,     // f32 bits
+    crop_h: u32,     // f32 bits
+    filter_code: u32, // 0=nearest, all other values use bilinear fallback
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -36,17 +33,31 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     return a * (1.0 - t) + b * t;
 }
 
+fn nearest_sample(cx: f32, cy: f32) -> u32 {
+    let sx = u32(clamp(cx, 0.0, f32(params.width) - 1.0));
+    let sy = u32(clamp(cy, 0.0, f32(params.height) - 1.0));
+    let p = input[sy * params.width + sx];
+    let r = p & 0xffu;
+    let g = (p >> 8u) & 0xffu;
+    let b = (p >> 16u) & 0xffu;
+    let a = (p >> 24u) & 0xffu;
+    return r
+        | (select(0u, g, mode_has_g(params.mode)) << 8u)
+        | (select(0u, b, mode_has_b(params.mode)) << 16u)
+        | (select(255u, a, mode_has_a(params.mode)) << 24u);
+}
+
 fn bilinear_sample(dx: u32, dy: u32) -> u32 {
     let src_w = params.width;
     let src_h = params.height;
-    let nw = params.nw;
-    let nh = params.nh;
+    let crop_left = bitcast<f32>(params.crop_left);
+    let crop_top = bitcast<f32>(params.crop_top);
+    let crop_w = bitcast<f32>(params.crop_w);
+    let crop_h = bitcast<f32>(params.crop_h);
 
-    // Map output pixel (dx, dy) to position in scaled image, then to source.
-    // Position in scaled image = (crop_x + dx, crop_y + dy).
-    // PIL pixel-centered inverse-map to source:
-    let cx = (f32(params.crop_x + dx) + 0.5) * f32(src_w) / f32(nw);
-    let cy = (f32(params.crop_y + dy) + 0.5) * f32(src_h) / f32(nh);
+    // Map each output pixel centre into the fractional source crop box.
+    let cx = crop_left + (f32(dx) + 0.5) * crop_w / f32(params.dst_w);
+    let cy = crop_top + (f32(dy) + 0.5) * crop_h / f32(params.dst_h);
 
     // Floor and fractional parts
     let sx_floor = floor(cx);
@@ -107,5 +118,15 @@ fn bilinear_sample(dx: u32, dy: u32) -> u32 {
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.dst_w || gid.y >= params.dst_h { return; }
     let idx = gid.y * params.dst_w + gid.x;
-    output[idx] = bilinear_sample(gid.x, gid.y);
+    if params.filter_code == 0u {
+        let crop_left = bitcast<f32>(params.crop_left);
+        let crop_top = bitcast<f32>(params.crop_top);
+        let crop_w = bitcast<f32>(params.crop_w);
+        let crop_h = bitcast<f32>(params.crop_h);
+        let cx = crop_left + (f32(gid.x) + 0.5) * crop_w / f32(params.dst_w);
+        let cy = crop_top + (f32(gid.y) + 0.5) * crop_h / f32(params.dst_h);
+        output[idx] = nearest_sample(cx, cy);
+    } else {
+        output[idx] = bilinear_sample(gid.x, gid.y);
+    }
 }

@@ -79,7 +79,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.colorize.behavior.default"
+        "case_id": "pipeline-case.colorize.materialized-smoke"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -100,7 +100,7 @@
           16,
           16
         ],
-        "mode": "RGB",
+        "mode": "L",
         "chain_length": 1,
         "operation_class": "point",
         "cache_state": "warm",
@@ -665,12 +665,8 @@
         "case_id": "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "pipeline-primary",
-          "pipeline-secondary",
-          "materialize"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"

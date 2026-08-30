@@ -541,6 +541,10 @@ migration-parity-pipeline-roadmap-status: ## Generate per-FIL roadmap status and
 		--check
 
 migration-parity-pipeline-budget-check: ## Compare compatible benchmark lineages against guarded budgets
+	@test -n "$(strip $(MIGRATION_BENCHMARK_BUDGET_BASELINE))" || { \
+		printf "Set MIGRATION_BENCHMARK_BUDGET_BASELINE to a prior benchmark result before running the budget check.\n" >&2; \
+		exit 2; \
+	}
 	$(PYTHON) scripts/check_pipeline_benchmark_budgets.py \
 		--current "$(MIGRATION_BENCHMARK_OUTPUT)" \
 		--baseline "$(MIGRATION_BENCHMARK_BUDGET_BASELINE)" \

@@ -26,7 +26,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.arc.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.arc.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -79,7 +79,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.bitmap.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.bitmap.mode.l"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -100,7 +100,7 @@
           16,
           16
         ],
-        "mode": "RGB",
+        "mode": "L",
         "chain_length": 1,
         "operation_class": "draw",
         "cache_state": "warm",
@@ -132,7 +132,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.chord.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.chord.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -238,7 +238,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.ellipse.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.ellipse.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -503,7 +503,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.pieslice.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.pieslice.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -609,7 +609,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.polygon.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.polygon.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -662,7 +662,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.rectangle.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.rectangle.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -715,7 +715,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.triangle"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -768,7 +768,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.rounded_rectangle.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.rounded_rectangle.parameter-combination.legacy-001"
       },
       "measurement": {
         "boundary": "whole_workflow",

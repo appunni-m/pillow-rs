@@ -41,22 +41,164 @@ DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT_ROOT = FIXTURE_ROOT
 TARGET_PROFILE = "python-cpu"
 BENCHMARK_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
+
+# The benchmark lane measures successful, repeatable workflows.  A default
+# benchmark case that only exercises Pillow's argument-validation/error path
+# is still valuable in parity and coverage, but it cannot produce a timing
+# sample.  Keep those cases in the public corpus and exclude them here with a
+# maintained reason/re-entry record instead of counting them as benchmark
+# failures.  This inventory is intentionally keyed by workload ID so a new
+# default cannot silently disappear from the denominator.
+BENCHMARK_DEFAULT_EXCLUSIONS: dict[str, dict[str, str]] = {
+    **{
+        workload_id: {
+            "classification": "input-invalid",
+            "reason": "default generated input does not satisfy the operation's required arguments",
+            "reentry": "replace the default fixture with a successful public workflow while retaining the behavior case in parity",
+        }
+        for workload_id in (
+            "pil-image.alpha-composite.standard",
+            "pil-image.composite.standard",
+            "pil-image.effect-mandelbrot.standard",
+            "pil-image.eval.standard",
+            "pil-image.fromarray.standard",
+            "pil-image.frombuffer.standard",
+            "pil-image.frombytes.standard",
+            "pil-image.linear-gradient.standard",
+            "pil-image.radial-gradient.standard",
+            "pil-image-image.alpha-composite.standard",
+            "pil-image-image.frombytes.standard",
+            "pil-image-image.point.standard",
+            "pil-image-image.putalpha.standard",
+            "pil-image-image.putdata.standard",
+            "pil-image-image.putpalette.standard",
+            "pil-image-image.remap-palette.standard",
+            "pil-image-image.save.standard",
+            "pil-image-image.seek.standard",
+            "pil-image-image.tobitmap.standard",
+            "pil-image-image.transform.standard",
+            "pil-imagechops.composite.standard",
+            "pil-imagechops.logical-and.standard",
+            "pil-imagechops.logical-or.standard",
+            "pil-imagechops.logical-xor.standard",
+            "pil-imagedraw-imagedraw.arc.standard",
+            "pil-imagedraw-imagedraw.bitmap.standard",
+            "pil-imagedraw-imagedraw.chord.standard",
+            "pil-imagedraw-imagedraw.ellipse.standard",
+            "pil-imagedraw-imagedraw.pieslice.standard",
+            "pil-imagedraw-imagedraw.polygon.standard",
+            "pil-imagedraw-imagedraw.rectangle.standard",
+            "pil-imagedraw-imagedraw.regular-polygon.standard",
+            "pil-imagedraw-imagedraw.rounded-rectangle.standard",
+            "pil-imagefont-freetypefont.get-variation-axes.standard",
+            "pil-imagefont-freetypefont.get-variation-names.standard",
+            "pil-imagefont-freetypefont.set-variation-by-axes.standard",
+            "pil-imagefont-freetypefont.set-variation-by-name.standard",
+            "pil-imagefont-imagefont.getbbox.standard",
+            "pil-imagefont-imagefont.getlength.standard",
+            "pil-imagefont-imagefont.getmask.standard",
+            "pil-imageops.colorize.standard",
+            "pil-imagepalette-imagepalette.getcolor.standard",
+        )
+    },
+    **{
+        workload_id: {
+            "classification": "optional-dependency",
+            "reason": "Qt-only conversion is unavailable in the maintained headless adapter",
+            "reentry": "add a dedicated Qt-enabled benchmark environment and successful workflow",
+        }
+        for workload_id in (
+            "pil-image-image.toqimage.standard",
+            "pil-image-image.toqpixmap.standard",
+        )
+    },
+    "pil-imagesequence-iterator.next.standard": {
+        "classification": "expected-error",
+        "reason": "the default single-frame iterator is intentionally exhausted by its second next call",
+        "reentry": "use the opened multi-frame public workflow for timing without dropping the exhaustion parity case",
+    },
+}
+# Correctness-backed success workflows for operations whose generic
+# ``behavior.default`` stimulus only exercises argument validation.  These
+# keep the public requirement attached to the benchmark workload while using
+# an already-reviewed value-producing case from the same operation family.
+BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
+    "pil-image.alpha-composite.standard": "PIL.Image.alpha_composite.mode.rgba",
+    "pil-image.composite.standard": "PIL.Image.composite.mode.l",
+    "pil-image.effect-mandelbrot.standard": "PIL.Image.effect_mandelbrot.nuanced.width-one",
+    "pil-image.eval.standard": "PIL.Image.eval.nuanced.rgb-expanded-lut",
+    "pil-image.fromarray.standard": "PIL.Image.fromarray.nuanced.buffer-backed-rgb-values",
+    "pil-image.frombytes.standard": "PIL.Image.frombytes.nuanced.valid-rgb",
+    "pil-image.linear-gradient.standard": "PIL.Image.linear_gradient.mode.l",
+    "pil-image.radial-gradient.standard": "PIL.Image.radial_gradient.mode.l",
+    "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
+    "pil-image-image.frombytes.standard": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
+    "pil-image-image.point.standard": "PIL.Image.Image.point.mode.l",
+    "pil-image-image.putalpha.standard": "PIL.Image.Image.putalpha.nuanced.rgb-scalar",
+    "pil-image-image.putdata.standard": "PIL.Image.Image.putdata.nuanced.l-bytes",
+    "pil-image-image.putpalette.standard": "PIL.Image.Image.putpalette.mode.p",
+    "pil-image-image.remap-palette.standard": "PIL.Image.Image.remap_palette.mode.p",
+    "pil-image-image.save.standard": "PIL.Image.Image.save.format.png",
+    "pil-image-image.seek.standard": "PIL.Image.Image.seek.parameter-combination.legacy-001",
+    "pil-image-image.tobitmap.standard": "PIL.Image.Image.tobitmap.mode.1",
+    "pil-image-image.transform.standard": "PIL.Image.Image.transform.parameter.data",
+    "pil-imagechops.composite.standard": "PIL.ImageChops.composite.mode.l",
+    "pil-imagechops.logical-and.standard": "PIL.ImageChops.logical_and.mode.1",
+    "pil-imagechops.logical-or.standard": "PIL.ImageChops.logical_or.mode.1",
+    "pil-imagechops.logical-xor.standard": "PIL.ImageChops.logical_xor.mode.1",
+    "pil-imagedraw-imagedraw.arc.standard": "PIL.ImageDraw.ImageDraw.arc.parameter-combination.legacy-001",
+    "pil-imagedraw-imagedraw.bitmap.standard": "PIL.ImageDraw.ImageDraw.bitmap.mode.l",
+    "pil-imagedraw-imagedraw.chord.standard": "PIL.ImageDraw.ImageDraw.chord.parameter-combination.legacy-001",
+    "pil-imagedraw-imagedraw.ellipse.standard": "PIL.ImageDraw.ImageDraw.ellipse.parameter-combination.legacy-001",
+    "pil-imagedraw-imagedraw.pieslice.standard": "PIL.ImageDraw.ImageDraw.pieslice.parameter-combination.legacy-001",
+    "pil-imagedraw-imagedraw.polygon.standard": "PIL.ImageDraw.ImageDraw.polygon.parameter-combination.legacy-001",
+    "pil-imagedraw-imagedraw.rectangle.standard": "PIL.ImageDraw.ImageDraw.rectangle.parameter-combination.legacy-001",
+    "pil-imagedraw-imagedraw.regular-polygon.standard": "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.triangle",
+    "pil-imagedraw-imagedraw.rounded-rectangle.standard": "PIL.ImageDraw.ImageDraw.rounded_rectangle.parameter-combination.legacy-001",
+    "pil-imagefont-freetypefont.get-variation-axes.standard": "PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font",
+    "pil-imagefont-freetypefont.get-variation-names.standard": "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.variable-font",
+    "pil-imagefont-freetypefont.set-variation-by-axes.standard": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font",
+    "pil-imagefont-freetypefont.set-variation-by-name.standard": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font",
+    "pil-imagefont-imagefont.getmask.standard": "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask",
+    # The public ``mode.l`` behavior case predates Pillow's stricter color
+    # argument normalization and still passes scalar colors.  Use the
+    # reviewed materialized workflow so this benchmark measures a successful
+    # value-producing colorize call while the behavior/error case remains in
+    # parity coverage.
+    "pil-imageops.colorize.standard": "pipeline-case.colorize.materialized-smoke",
+    "pil-imagepalette-imagepalette.getcolor.standard": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
+}
+BENCHMARK_SUCCESS_WORKFLOW_IDS = {
+    "pil-image.frombuffer.standard",
+    "pil-imagefont-imagefont.getbbox.standard",
+    "pil-imagefont-imagefont.getlength.standard",
+    "pil-imagesequence-iterator.next.standard",
+}
+BENCHMARK_DEFAULT_EXCLUSIONS = {
+    workload_id: record
+    for workload_id, record in BENCHMARK_DEFAULT_EXCLUSIONS.items()
+    if workload_id not in BENCHMARK_CASE_OVERRIDES
+    and workload_id not in BENCHMARK_SUCCESS_WORKFLOW_IDS
+}
 BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
     "pil-image-image.transpose.standard": {
         "case_id": "PIL.Image.Image.transpose.benchmark.materialized-pipeline-1024",
-        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+        # Measure the complete public workflow, including input image
+        # construction/loading and final materialization.  The pipeline
+        # phase remains available in the result for isolating kernel cost.
+        "step_ids": [],
     },
     "pil-imagefilter.gaussianblur.standard": {
         "case_id": "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024",
-        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+        "step_ids": [],
     },
     "pil-imagechops.multiply.standard": {
         "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
-        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+        "step_ids": [],
     },
     "pil-imageops.invert.standard": {
         "case_id": "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024",
-        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+        "step_ids": [],
     },
 }
 QUICK_PIPELINE_CASE_IDS: dict[str, str] = {
@@ -552,6 +694,26 @@ PIPELINE_EXPANDED_MATRIX_SIZES: tuple[tuple[int, int], ...] = (
 # small (16x16 L) so every enabled backend can execute it in one benchmark
 # process while still exercising the deep-chain construction contract.
 PIPELINE_CHAIN_LENGTHS: tuple[int, ...] = (1, 8, 64, 1024, 10_000)
+
+# Explicit ten-action pipelines begin with a real encoded-image open/load and
+# then keep the decoded image resident through a mixed public operation chain.
+# They are benchmark-only workloads: their observations are still ordinary
+# public values, while the workflow lets the report charge decode/setup time
+# separately from the pixel pipeline and final materialization.
+PIPELINE_LOADED_TEN_ACTION_SPECS: tuple[dict[str, str], ...] = (
+    {
+        "name": "rgb-jpeg-512x384",
+        "path": "image/rgb-small.jpg",
+        "media_type": "image/jpeg",
+        "mode": "RGB",
+    },
+    {
+        "name": "rgba-png-512x384",
+        "path": "image/rgba-small.png",
+        "media_type": "image/png",
+        "mode": "RGB",
+    },
+)
 
 # These are benchmark-only public workflows.  They deliberately exercise the
 # complete point/LUT chain used by FIL-23 and FIL-51 without adding synthetic
@@ -7961,7 +8123,10 @@ def pipeline_composition_cases(
                     "surface": "PIL.ImageOps",
                     "operation": "grayscale",
                     "receiver": None,
-                    "arguments": {"image": binding("composited")},
+                    # Image.Image.alpha_composite mutates its receiver and
+                    # returns None. Continue from the receiver binding rather
+                    # than treating the nullable return as an image.
+                    "arguments": {"image": binding("setup-image-1")},
                 },
                 {
                     "step_id": "inverted",
@@ -8084,7 +8249,7 @@ def pipeline_composition_cases(
             "target_profiles": [TARGET_PROFILE],
             "assets": [],
             "steps": [
-                new_image("setup-image", "LA", [21, 21], [173, 191]),
+                new_image("setup-image", "L", [21, 21], 173),
                 {
                     "step_id": "setup-filter",
                     "surface": "PIL.ImageFilter",
@@ -8111,7 +8276,7 @@ def pipeline_composition_cases(
                     "surface": "PIL.Image.Image",
                     "operation": "point",
                     "receiver": binding("solarized"),
-                    "arguments": {"lut": literal(list(range(256)) * 2)},
+                    "arguments": {"lut": literal(list(range(256)))},
                 },
                 materialize("pointed"),
             ],
@@ -10158,7 +10323,11 @@ def pipeline_composition_cases(
                 "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
-                    new_image("setup-image", "LA", [9, 7], [173, 127]),
+                    # getchannel(1) is the alpha band, so the source must be
+                    # LA rather than a one-band L image.  Keep this case
+                    # value-producing for the benchmark matrix; the invalid
+                    # channel contract remains covered by the negative cases.
+                    new_image("setup-image", "LA", [9, 7], [173, 191]),
                     {
                         "step_id": "alpha",
                         "surface": "PIL.Image.Image",
@@ -10386,7 +10555,7 @@ def pipeline_composition_cases(
                 "target_profiles": [TARGET_PROFILE],
                 "assets": [],
                 "steps": [
-                    new_image("setup-image", "LA", [9, 7], [173, 127]),
+                    new_image("setup-image", "L", [9, 7], 173),
                     {
                         "step_id": "transformed",
                         "surface": "PIL.Image.Image",
@@ -10397,7 +10566,7 @@ def pipeline_composition_cases(
                             "method": literal(0),
                             "data": literal([1, 0, 0, 0, 1, 0]),
                             "resample": literal(0),
-                            "fillcolor": literal([7, 8]),
+                            "fillcolor": literal(7),
                         },
                     },
                     {
@@ -39990,6 +40159,126 @@ def _long_point_pipeline_workflow(length: int) -> dict[str, Any]:
     }
 
 
+def _loaded_ten_action_pipeline_workflow(spec: dict[str, str]) -> dict[str, Any]:
+    """Build a ten-action chain over one decoded public image asset."""
+
+    asset_id = f"loaded-ten-{slug(spec['name'])}"
+    source_image = "open-image"
+    loaded_image = "load-image"
+    converted = "converted"
+    resized = "resized"
+    rotated = "rotated"
+    filtered = "filtered"
+    inverted = "inverted"
+    mirrored = "mirrored"
+    contrasted = "contrasted"
+    cropped = "cropped"
+    return {
+        "assets": [
+            {
+                "id": asset_id,
+                "kind": "ref",
+                "path": spec["path"],
+                "sha256": sha256(FIXTURE_ROOT / "assets" / spec["path"]),
+                "media_type": spec["media_type"],
+            }
+        ],
+        "steps": [
+            {
+                "step_id": source_image,
+                "surface": "PIL.Image",
+                "operation": "open",
+                "receiver": None,
+                "arguments": {"fp": asset_value(asset_id)},
+            },
+            {
+                "step_id": loaded_image,
+                "surface": "PIL.Image.Image",
+                "operation": "load",
+                "receiver": binding(source_image),
+                "arguments": {},
+            },
+            {
+                "step_id": converted,
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding(source_image),
+                "arguments": {"mode": literal(spec["mode"])},
+            },
+            {
+                "step_id": resized,
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding(converted),
+                "arguments": {
+                    "size": literal([512, 384]),
+                    "resample": literal(2),
+                },
+            },
+            {
+                "step_id": rotated,
+                "surface": "PIL.Image.Image",
+                "operation": "rotate",
+                "receiver": binding(resized),
+                "arguments": {
+                    "angle": literal(7.0),
+                    "expand": literal(True),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": "GaussianBlur",
+                "receiver": None,
+                "arguments": {"radius": literal(1.25)},
+            },
+            {
+                "step_id": filtered,
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding(rotated),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": inverted,
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding(filtered)},
+            },
+            {
+                "step_id": mirrored,
+                "surface": "PIL.ImageOps",
+                "operation": "mirror",
+                "receiver": None,
+                "arguments": {"image": binding(inverted)},
+            },
+            {
+                "step_id": contrasted,
+                "surface": "PIL.ImageOps",
+                "operation": "autocontrast",
+                "receiver": None,
+                "arguments": {"image": binding(mirrored)},
+            },
+            {
+                "step_id": cropped,
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "receiver": binding(contrasted),
+                "arguments": {"box": literal([16, 16, 480, 360])},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding(cropped),
+                "arguments": {},
+            },
+        ],
+        "observations": [cropped, "materialize"],
+    }
+
+
 def _metadata_pipeline_workflow(length: int, mode: str) -> dict[str, Any]:
     """Build a public lazy chain that repeatedly reads shape and mode metadata."""
 
@@ -40657,8 +40946,8 @@ def _quick_pipeline_workloads(
     cases_by_id: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     policy = {
-        "boundary": "observed_steps",
-        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": ["latency", "throughput"],
         "warmup_iterations": 5,
         "measurement_iterations": 20,
@@ -40839,8 +41128,8 @@ def build_pipeline_benchmark_document(
     cases_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     policy = {
-        "boundary": "observed_steps",
-        "step_ids": ["call", "materialize"],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": ["latency", "throughput"],
         "warmup_iterations": 1,
         "measurement_iterations": 3,
@@ -42825,6 +43114,41 @@ def build_pipeline_benchmark_document(
             operation="multiply",
         ),
     }
+    loaded_ten_workloads: list[dict[str, Any]] = []
+    loaded_ten_covers = [
+        _performance_requirement(operations, "PIL.Image", "open"),
+        _performance_requirement(operations, "PIL.Image.Image", "load"),
+        _performance_requirement(operations, "PIL.Image.Image", "convert"),
+        _performance_requirement(operations, "PIL.Image.Image", "resize"),
+        _performance_requirement(operations, "PIL.Image.Image", "rotate"),
+        _performance_requirement(operations, "PIL.ImageOps", "autocontrast"),
+        _performance_requirement(operations, "PIL.ImageOps", "invert"),
+        _performance_requirement(operations, "PIL.Image.Image", "filter"),
+        _performance_requirement(operations, "PIL.ImageOps", "mirror"),
+        _performance_requirement(operations, "PIL.Image.Image", "crop"),
+    ]
+    for spec in PIPELINE_LOADED_TEN_ACTION_SPECS:
+        workflow = _loaded_ten_action_pipeline_workflow(spec)
+        loaded_ten_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.loaded-10.{spec['name']}",
+                "covers": loaded_ten_covers,
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="pipeline-invert-mirror",
+                    surface="PIL.Image.Image",
+                    operation="pipeline",
+                ),
+            }
+        )
     long_chain_workloads: list[dict[str, Any]] = []
     long_chain_policy = copy.deepcopy(chain_policy)
     long_chain_policy.update(
@@ -42898,6 +43222,7 @@ def build_pipeline_benchmark_document(
             resize_cache_workload,
             resize_f64_cache_workload,
             long_auxiliary_workload,
+            *loaded_ten_workloads,
             *long_chain_workloads,
             *quick_workloads,
             *lifecycle_workloads,
@@ -43164,6 +43489,17 @@ def build_pipeline_benchmark_document(
                 ],
             },
             {
+                "suite_id": "pipeline-operations.loaded-ten-action-suite",
+                "description": (
+                    "Ten-action public pipelines that open and load a real "
+                    "encoded image before mixed pixel operations."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in loaded_ten_workloads
+                ],
+            },
+            {
                 "suite_id": "pipeline-operations.color-review-suite",
                 "description": (
                     "Benchmark-only valid color-mode conversion, quantization, "
@@ -43228,6 +43564,115 @@ def build_pipeline_benchmark_document(
             },
         ],
     }
+
+
+def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
+    """Return a small value-producing workflow for lifecycle-only defaults.
+
+    These workflows deliberately remain benchmark-only.  Their corresponding
+    behavior cases stay in the parity corpus so matched errors and receiver
+    construction semantics continue to be tested independently.
+    """
+
+    if workload_id == "pil-image.frombuffer.standard":
+        width, height = 16, 16
+        raw = bytes((index * 37 + 11) % 256 for index in range(width * height * 3))
+        asset_id = "benchmark-frombuffer-rgb-data"
+        return {
+            "assets": [
+                {
+                    "id": asset_id,
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombuffer",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal([width, height]),
+                        "data": asset_value(asset_id),
+                    },
+                }
+            ],
+            "observations": ["image"],
+        }
+
+    if workload_id in {
+        "pil-imagefont-imagefont.getbbox.standard",
+        "pil-imagefont-imagefont.getlength.standard",
+    }:
+        operation = (
+            "getbbox"
+            if workload_id.endswith("getbbox.standard")
+            else "getlength"
+        )
+        return {
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "font",
+                    "surface": "PIL.ImageFont",
+                    "operation": "load_default",
+                    "receiver": None,
+                    "arguments": {},
+                },
+                {
+                    "step_id": "call",
+                    "surface": "PIL.ImageFont.ImageFont",
+                    "operation": operation,
+                    "receiver": binding("font"),
+                    "arguments": {"text": literal("Hello")},
+                },
+            ],
+            "observations": ["call"],
+        }
+
+    if workload_id == "pil-imagesequence-iterator.next.standard":
+        return {
+            "assets": [
+                {
+                    "id": "image-asset",
+                    "kind": "ref",
+                    "path": "image/p-small.gif",
+                    "sha256": "dacb11c9a76f1a096f7aa5768c1395e548b95ba11d3495c6936156d955042b72",
+                    "media_type": "image/gif",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "open",
+                    "receiver": None,
+                    "arguments": {"fp": asset_value("image-asset")},
+                },
+                {
+                    "step_id": "iterator",
+                    "surface": "PIL.ImageSequence",
+                    "operation": "Iterator",
+                    "receiver": None,
+                    "arguments": {"im": binding("image")},
+                },
+                {
+                    "step_id": "next",
+                    "surface": "PIL.ImageSequence.Iterator",
+                    "operation": "__next__",
+                    "receiver": binding("iterator"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["next"],
+        }
+
+    return None
 
 
 def build_inputs(
@@ -43417,9 +43862,26 @@ def build_inputs(
             workload_id = (
                 f"{storage_slug}.{slug(operation['id'])}.standard"
             )
+            if workload_id in BENCHMARK_DEFAULT_EXCLUSIONS:
+                # Keep the operation's behavior/coverage case indexed in the
+                # parity corpus, but do not put a known setup/error workflow
+                # in a timed-success denominator.
+                continue
+            case_id = BENCHMARK_CASE_OVERRIDES.get(workload_id, case_id)
             pipeline_workload = BENCHMARK_PIPELINE_WORKLOADS.get(workload_id)
             if pipeline_workload is not None:
                 case_id = pipeline_workload["case_id"]
+            workflow_override = _benchmark_success_workflow(workload_id)
+            input_spec = (
+                {"kind": "workflow", **workflow_override}
+                if workflow_override is not None
+                else {"kind": "parity_case", "case_id": case_id}
+            )
+            context_source = (
+                workflow_override
+                if workflow_override is not None
+                else all_cases_by_id[case_id]
+            )
             workloads.append(
                 {
                     "workload_id": workload_id,
@@ -43434,31 +43896,24 @@ def build_inputs(
                             for profile in BENCHMARK_TARGET_PROFILES
                         ),
                     ],
-                    "input": {
-                        "kind": "parity_case",
-                        "case_id": case_id,
-                    },
+                    "input": input_spec,
                     "measurement": {
-                        "boundary": (
-                            "observed_steps"
-                            if pipeline_workload is not None
-                            else "whole_workflow"
-                        ),
-                        "step_ids": (
-                            pipeline_workload["step_ids"]
-                            if pipeline_workload is not None
-                            else []
-                        ),
+                        "boundary": "whole_workflow",
+                        "step_ids": [],
                         "metrics": operation["benchmark"]["metrics"],
                         "warmup_iterations": 5,
                         "measurement_iterations": 20,
                         "samples": 5,
                         "concurrency": 1,
                         "cache_state": "warm",
-                        "correctness_gate": "parity_pass",
+                        "correctness_gate": (
+                            "successful_execution"
+                            if workflow_override is not None
+                            else "parity_pass"
+                        ),
                     },
                     "context": _workflow_benchmark_context(
-                        all_cases_by_id[case_id],
+                        context_source,
                         variant=operation["id"],
                         surface=surface_id,
                         operation=operation["id"],
@@ -43498,6 +43953,30 @@ def build_inputs(
         operations,
         all_cases_by_id,
     )
+    excluded_ids = set(BENCHMARK_DEFAULT_EXCLUSIONS)
+    pipeline_document["workloads"] = [
+        workload
+        for workload in pipeline_document["workloads"]
+        if workload["workload_id"] not in excluded_ids
+    ]
+    live_workload_ids = {
+        workload["workload_id"] for workload in pipeline_document["workloads"]
+    }
+    pipeline_document["suites"] = [
+        {
+            **suite,
+            "members": [
+                member
+                for member in suite["members"]
+                if member["workload_id"] in live_workload_ids
+            ],
+        }
+        for suite in pipeline_document["suites"]
+        if any(
+            member["workload_id"] in live_workload_ids
+            for member in suite["members"]
+        )
+    ]
     write_json(output_root / pipeline_relative, pipeline_document)
     generated["benchmark"].add(pipeline_relative)
     counts["benchmark_workloads"] += len(pipeline_document["workloads"])

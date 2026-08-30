@@ -1,7 +1,7 @@
 // Mirror: horizontal coordinate inversion
 // output[y][x] = input[y][W-1-x]
 // Mode-aware: preserves pixel channels, sets alpha=255 for non-alpha modes.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 8=F raw four-byte samples.
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
@@ -15,7 +15,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 5u || m == 7u || m == 8u; }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;

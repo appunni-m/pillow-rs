@@ -246,6 +246,12 @@ impl BackendImpl for CpuPool {
         let mut result: Option<DynamicImage> = None;
         let mut resources = crate::compute::host_resource_telemetry(img);
         let mut index = 0usize;
+        // A lazy pipeline carries one mode tag for its final result, but each
+        // operation sees the concrete output of the preceding operation. Keep
+        // that logical mode in lockstep with the owned `DynamicImage`; using
+        // the original tag for every step makes a Convert(RGB) -> ... chain
+        // incorrectly present the later RGB buffer as the source mode.
+        let mut current_mode = mode.map(str::to_owned);
         while index < ops.len() {
             let input = result.as_ref().unwrap_or(img);
             if ops::draw::is_draw_op(&ops[index]) {
@@ -255,11 +261,12 @@ impl BackendImpl for CpuPool {
                 }
                 if end - index >= 2 {
                     for op in &ops[index..end] {
-                        crate::compute::begin_pipeline_operation_telemetry(
-                            registry::variant_key(op),
-                        );
+                        crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(
+                            op,
+                        ));
                     }
-                    let next = match ops::draw::execute_draw_batch(input, &ops[index..end], mode)
+                    let op_mode = current_mode.as_deref();
+                    let next = match ops::draw::execute_draw_batch(input, &ops[index..end], op_mode)
                     {
                         Ok(next) => next,
                         Err(error) => {
@@ -276,6 +283,12 @@ impl BackendImpl for CpuPool {
                     }
                     crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
                     result = Some(next);
+                    for op in &ops[index..end] {
+                        current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                            op,
+                            current_mode.as_deref(),
+                        );
+                    }
                     index = end;
                     continue;
                 }
@@ -288,23 +301,30 @@ impl BackendImpl for CpuPool {
                     },
                 ) = (&ops[index], &ops[index + 1])
                 {
-                    if let Some(fused) =
-                        fused_multiply_screen(input, first_other, second_other, mode)?
-                    {
+                    if let Some(fused) = fused_multiply_screen(
+                        input,
+                        first_other,
+                        second_other,
+                        current_mode.as_deref(),
+                    )? {
                         crate::compute::begin_pipeline_operation_telemetry("Multiply");
                         crate::compute::begin_pipeline_operation_telemetry("Screen");
                         crate::compute::record_pipeline_operation_path("cpu");
                         crate::compute::finish_pipeline_operation_telemetry();
                         crate::compute::record_pipeline_operation_path("cpu");
                         crate::compute::finish_pipeline_operation_telemetry();
-                        crate::compute::account_host_buffer_boundary(
-                            &mut resources,
-                            input,
-                            &fused,
-                        );
+                        crate::compute::account_host_buffer_boundary(&mut resources, input, &fused);
                         resources.fused_operation_count =
                             resources.fused_operation_count.saturating_add(2);
                         result = Some(fused);
+                        current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                            &ops[index],
+                            current_mode.as_deref(),
+                        );
+                        current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                            &ops[index + 1],
+                            current_mode.as_deref(),
+                        );
                         index += 2;
                         continue;
                     }
@@ -315,13 +335,13 @@ impl BackendImpl for CpuPool {
             // layouts, so keep the fusion attempt outside the old
             // `mode.is_none()` gate and let the image/mode check decide
             // whether it is exact.
-            if let Some((consumed, fused)) = fused_point_batch(&ops[index..], input, mode) {
+            if let Some((consumed, fused)) =
+                fused_point_batch(&ops[index..], input, current_mode.as_deref())
+            {
                 for op in &ops[index..index + consumed] {
-                    crate::compute::begin_pipeline_operation_telemetry(
-                        registry::variant_key(op),
-                    );
+                    crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
                 }
-                let next = match registry::execute_cpu(&fused, input, mode) {
+                let next = match registry::execute_cpu(&fused, input, current_mode.as_deref()) {
                     Ok(next) => next,
                     Err(error) => {
                         for _ in 0..consumed {
@@ -340,12 +360,18 @@ impl BackendImpl for CpuPool {
                     .fused_operation_count
                     .saturating_add(consumed as u64);
                 result = Some(next);
+                for op in &ops[index..index + consumed] {
+                    current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                        op,
+                        current_mode.as_deref(),
+                    );
+                }
                 index += consumed;
                 continue;
             }
             let op = &ops[index];
             crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
-            let next = match registry::execute_cpu(op, input, mode) {
+            let next = match registry::execute_cpu(op, input, current_mode.as_deref()) {
                 Ok(next) => next,
                 Err(error) => {
                     crate::compute::record_pipeline_operation_path("cpu");
@@ -357,6 +383,10 @@ impl BackendImpl for CpuPool {
             crate::compute::finish_pipeline_operation_telemetry();
             crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
             result = Some(next);
+            current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
+                op,
+                current_mode.as_deref(),
+            );
             index += 1;
         }
         crate::compute::record_pipeline_resource_telemetry(resources);

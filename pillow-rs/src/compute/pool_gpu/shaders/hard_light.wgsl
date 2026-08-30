@@ -15,7 +15,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
 fn hardlight_ch(a: u32, b: u32) -> u32 {
     var result: u32;
@@ -54,7 +54,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let out_g = select(ag, out_g_raw, mode_has_g(params.mode));
     let out_b = select(ab, out_b_raw, mode_has_b(params.mode));
-    let out_a = select(255u, aa, mode_has_a(params.mode));
+    let ba = (pb >> 24u) & 0xffu;
+    let out_a = select(255u, hardlight_ch(aa, ba), mode_has_a(params.mode));
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

@@ -129116,7 +129116,7 @@
     "active_manifest_sha256": "7fb0ed379ee29f57ed979dde9a20dbc9ab5c8aa957465210eab3f28836428597",
     "coverage_report": "target/coverage/migration-parity-pillow.json",
     "coverage_report_format": 3,
-    "coverage_report_sha256": "523cfcde976abdb15649ecb6a967137f5a58a9fa8f2b39267622f6ec76571c9d",
+    "coverage_report_sha256": "9f888d38411fefa3cea500aa991e30719b23852202fffefbbca92a2b932502ac",
     "coverage_report_version": "7.15.2",
     "receipt": "build/migration-parity/pillow-oracle-coverage-result.json",
     "receipt_coverage": {

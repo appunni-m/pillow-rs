@@ -1,7 +1,7 @@
 // Image.blend: (a * (255 - alpha) + b * alpha) / 255 per stored channel.
-// alpha param as u32 (0-255)
+// alpha param is the bit pattern of the f32 alpha value.
 // Mode-aware: only processes channels present in the image mode.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
@@ -9,7 +9,7 @@ struct Params {
     height: u32,
     mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
     _pad: u32,
-    alpha: u32,
+    alpha: f32,
     _pad2: u32,
     _pad3: u32,
     _pad4: u32,
@@ -19,7 +19,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
 @group(0) @binding(0) var<storage, read> input_a: array<u32>;
 @group(0) @binding(1) var<storage, read> input_b: array<u32>;
@@ -43,15 +43,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let bb = (pb >> 16u) & 0xffu;
 
     let alpha = params.alpha;
-    let inv_alpha = 255u - alpha;
-
-    let out_r = (ar * inv_alpha + br * alpha) / 255u;
-    let out_g_raw = (ag * inv_alpha + bg * alpha) / 255u;
-    let out_b_raw = (ab * inv_alpha + bb * alpha) / 255u;
+    let out_r = u32(clamp(f32(ar) * (1.0 - alpha) + f32(br) * alpha, 0.0, 255.0));
+    let out_g_raw = u32(clamp(f32(ag) * (1.0 - alpha) + f32(bg) * alpha, 0.0, 255.0));
+    let out_b_raw = u32(clamp(f32(ab) * (1.0 - alpha) + f32(bb) * alpha, 0.0, 255.0));
 
     let out_g = select(ag, out_g_raw, mode_has_g(params.mode));
     let out_b = select(ab, out_b_raw, mode_has_b(params.mode));
-    let out_a_raw = (aa * inv_alpha + ((pb >> 24u) & 0xffu) * alpha) / 255u;
+    let ba = (pb >> 24u) & 0xffu;
+    let out_a_raw = u32(clamp(f32(aa) * (1.0 - alpha) + f32(ba) * alpha, 0.0, 255.0));
     let out_a = select(255u, out_a_raw, mode_has_a(params.mode));
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);

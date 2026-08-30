@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import math
 import os
@@ -56,6 +57,10 @@ TARGET_BACKENDS = ("cpu", "simd", "gpu")
 TARGET_PROFILES = tuple(f"python-{backend}" for backend in TARGET_BACKENDS)
 DEFAULT_GPU_BENCHMARK_TIMEOUT_SECONDS = 900
 MAX_GPU_BENCHMARK_TIMEOUT_SECONDS = 1800
+# A suite aggregate is a statistical claim, not merely a record that one
+# workload happened to complete.  Keep singleton intersections visible, but
+# mark them non-comparable so a ratio cannot be mistaken for a cohort result.
+MIN_COMPARABLE_SUITE_MEMBERS = 2
 
 
 def target_profile_for_backend(backend: str) -> str:
@@ -535,7 +540,9 @@ def execution_result(
     subject_id: str,
     execution_records: list[dict[str, Any]],
     policy: dict[str, Any],
+    errors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    errors = list(errors or [])
     if subject_kind == "oracle":
         return {
             "status": "not_applicable",
@@ -558,6 +565,7 @@ def execution_result(
             "resource": execution_resource_summary([]),
             "sample_count": 0,
             "cached_sample_count": 0,
+            "errors": errors,
         }
 
     warmup = int(policy["warmup_iterations"])
@@ -575,23 +583,57 @@ def execution_result(
     cached_sample_count = sum(
         1 for record in measured if record.get("status") == "cached"
     )
+    partial_count = sum(
+        1 for record in measured if record.get("status") == "partial"
+    )
+    not_applicable_count = sum(
+        1 for record in measured if record.get("status") == "not_applicable"
+    )
     actual_counts: dict[str, int] = {}
-    for record in completed:
-        backend = str(record["actual_backend"])
-        actual_counts[backend] = actual_counts.get(backend, 0) + 1
+    for record in measured:
+        if record.get("status") not in {"completed", "partial"}:
+            continue
+        if isinstance(record.get("actual_backend"), str):
+            backend = str(record["actual_backend"])
+            actual_counts[backend] = actual_counts.get(backend, 0) + 1
     fallback_counts: dict[str, int] = {}
-    for record in completed:
+    for record in measured:
+        if record.get("status") not in {"completed", "partial"}:
+            continue
         reason = record.get("fallback_reason")
         if isinstance(reason, str) and reason:
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
     actual_backends = sorted(actual_counts)
     requested_backend = subject_id.removeprefix("python-")
+    complete = len(completed) + cached_sample_count == len(measured) == measured_count
+    has_partial = partial_count > 0 or bool(errors)
+    all_not_applicable = (
+        bool(measured)
+        and not errors
+        and not_applicable_count == len(measured)
+    )
+    if all_not_applicable:
+        # Public lifecycle/draw/metadata calls can be valid benchmark timings
+        # without entering the compute-pipeline telemetry boundary. Keep that
+        # distinction explicit instead of calling the row ``not_proven`` (or
+        # implying a backend capability failure); it remains excluded from
+        # actual-backend performance cohorts by its null receipt.
+        status = "not_applicable"
+    elif complete and not has_partial:
+        status = "completed"
+    elif has_partial and (completed or cached_sample_count):
+        status = "partial"
+    elif errors and all(
+        isinstance(item, dict)
+        and isinstance(item.get("error"), dict)
+        and item["error"].get("kind") == "unsupported"
+        for item in errors
+    ):
+        status = "unsupported"
+    else:
+        status = "not_proven"
     return {
-        "status": (
-            "completed"
-            if len(completed) + cached_sample_count == len(measured) == measured_count
-            else "not_proven"
-        ),
+        "status": status,
         "requested_backend": requested_backend,
         "actual_backend": (
             actual_backends[0]
@@ -617,6 +659,7 @@ def execution_result(
         "resource": execution_resource_summary(completed),
         "sample_count": len(completed),
         "cached_sample_count": cached_sample_count,
+        "errors": errors,
     }
 
 
@@ -627,6 +670,7 @@ def subject_result(
     phase_records: list[dict[str, int]],
     execution_records: list[dict[str, Any]],
     policy: dict[str, Any],
+    errors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     warmup = int(policy["warmup_iterations"])
     iterations = int(policy["measurement_iterations"])
@@ -652,6 +696,7 @@ def subject_result(
         subject_id,
         execution_records,
         policy,
+        errors,
     )
     if len(measured) != iterations * samples or len(measured_phases) != iterations * samples:
         return {
@@ -1100,6 +1145,11 @@ def run(args: argparse.Namespace) -> int:
         # adapter or an unsupported GPU cell must not erase CPU/SIMD samples
         # from the same declared parity case; the workload correctness gate
         # remains not_proven until every required subject completes.
+        def errors_for(kind: str, subject_id: str) -> list[dict[str, Any]]:
+            if kind == "oracle":
+                return source_execution_errors.get(case_id, [])
+            return target_execution_errors.get(subject_id, {}).get(case_id, [])
+
         if parity_pass or benchmark_execution:
             def durations_for(kind: str, subject_id: str) -> list[int]:
                 if kind == "oracle":
@@ -1131,6 +1181,7 @@ def run(args: argparse.Namespace) -> int:
                         else target_execution.get(subject_id, {}).get(case_id, [])
                     ),
                     workload["measurement"],
+                    errors_for(kind, subject_id),
                 )
                 for kind, subject_id in benchmark_subjects()
             ]
@@ -1147,6 +1198,7 @@ def run(args: argparse.Namespace) -> int:
                         subject_id,
                         [],
                         workload["measurement"],
+                        errors_for(kind, subject_id),
                     ),
                 }
                 for kind, subject_id in benchmark_subjects()
@@ -1192,7 +1244,12 @@ def run(args: argparse.Namespace) -> int:
                 "measurements": measurements,
             })
         oracle_subject = next(item for item in suite_subjects if item["id"] == "pillow")
-        oracle_values = {item["metric"]: item["weighted_mean"] for item in oracle_subject["measurements"]}
+        oracle_values = {
+            item["metric"]: item["weighted_mean"]
+            for item in oracle_subject["measurements"]
+        }
+        declared_members = list(suite["members"])
+        declared_member_count = len(declared_members)
         for target_profile in TARGET_PROFILES:
             target_subject = next(
                 item for item in suite_subjects if item["id"] == target_profile
@@ -1201,9 +1258,85 @@ def run(args: argparse.Namespace) -> int:
                 item["metric"]: item["weighted_mean"]
                 for item in target_subject["measurements"]
             }
-            for metric in sorted(set(oracle_values) & set(target_values)):
-                baseline = oracle_values[metric]
-                target_value = target_values[metric]
+            common_members: list[dict[str, Any]] = []
+            excluded_members: list[dict[str, Any]] = []
+            for member in declared_members:
+                workload = workload_by_id.get(member["workload_id"])
+                if workload is None:
+                    excluded_members.append(
+                        {
+                            "workload_id": member["workload_id"],
+                            "baseline_status": "missing",
+                            "subject_status": "missing",
+                        }
+                    )
+                    continue
+                subjects_by_id = {
+                    item["id"]: item for item in workload["subjects"]
+                }
+                baseline_subject = subjects_by_id.get("pillow", {})
+                target_member_subject = subjects_by_id.get(target_profile, {})
+                if (
+                    baseline_subject.get("status") == "completed"
+                    and target_member_subject.get("status") == "completed"
+                ):
+                    common_members.append(member)
+                else:
+                    excluded_members.append(
+                        {
+                            "workload_id": member["workload_id"],
+                            "baseline_status": baseline_subject.get("status", "missing"),
+                            "subject_status": target_member_subject.get("status", "missing"),
+                        }
+                    )
+            common_ids = sorted(member["workload_id"] for member in common_members)
+            common_digest = hashlib.sha256(
+                ("\n".join(common_ids) + "\n").encode()
+            ).hexdigest()
+
+            # Recompute both sides from exactly the same completed workload
+            # IDs.  The independent suite subject summaries above remain
+            # useful for coverage, but may not be used as a speed comparison.
+            pair_values: dict[str, dict[str, list[tuple[float, int]]]] = {
+                "pillow": {},
+                target_profile: {},
+            }
+            for member in common_members:
+                workload = workload_by_id[member["workload_id"]]
+                weight = int(member["weight"])
+                for subject_id in ("pillow", target_profile):
+                    subject = next(
+                        item
+                        for item in workload["subjects"]
+                        if item["id"] == subject_id
+                    )
+                    for measurement in subject["measurements"]:
+                        mean = measurement["statistics"].get("mean")
+                        if mean is not None:
+                            pair_values[subject_id].setdefault(
+                                measurement["metric"], []
+                            ).append((float(mean), weight))
+
+            pair_metrics = sorted(
+                set(pair_values["pillow"]) & set(pair_values[target_profile])
+            )
+            for metric in pair_metrics:
+                baseline_values = pair_values["pillow"][metric]
+                target_metric_values = pair_values[target_profile][metric]
+                baseline_weight = sum(weight for _, weight in baseline_values)
+                target_weight = sum(weight for _, weight in target_metric_values)
+                baseline = (
+                    sum(value * weight for value, weight in baseline_values)
+                    / baseline_weight
+                    if baseline_weight
+                    else None
+                )
+                target_value = (
+                    sum(value * weight for value, weight in target_metric_values)
+                    / target_weight
+                    if target_weight
+                    else None
+                )
                 comparisons.append({
                     "baseline_subject": "pillow",
                     "subject_id": target_profile,
@@ -1212,7 +1345,35 @@ def run(args: argparse.Namespace) -> int:
                     "subject_value": target_value,
                     "unit": "millisecond" if metric == "latency" else "operations_per_second",
                     "ratio": target_value / baseline if baseline else None,
+                    "declared_member_count": declared_member_count,
+                    "common_member_count": len(common_ids),
+                    "common_member_ids_sha256": common_digest,
+                    "excluded_members": excluded_members,
+                    "status": (
+                        "comparable"
+                        if len(common_ids) >= MIN_COMPARABLE_SUITE_MEMBERS
+                        else "not_comparable"
+                    ),
                 })
+            if not pair_metrics:
+                # Retain an explicit non-comparable record when no pair has a
+                # measurable metric.  Otherwise a suite with no common IDs
+                # would silently disappear from the comparison denominator.
+                for metric in sorted(set(oracle_values) | set(target_values) | {"latency"}):
+                    comparisons.append({
+                        "baseline_subject": "pillow",
+                        "subject_id": target_profile,
+                        "metric": metric,
+                        "baseline_value": None,
+                        "subject_value": None,
+                        "unit": "millisecond" if metric == "latency" else "operations_per_second",
+                        "ratio": None,
+                        "declared_member_count": declared_member_count,
+                        "common_member_count": len(common_ids),
+                        "common_member_ids_sha256": common_digest,
+                        "excluded_members": excluded_members,
+                        "status": "not_comparable",
+                    })
         suites.append({"suite_id": suite["suite_id"], "members": suite["members"], "subjects": suite_subjects, "comparisons": comparisons})
     input_paths = sorted(
         {

@@ -23,7 +23,10 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+// Modes 4+ use all four packed bytes as data (CMYK, RGBX, I, and F), not an
+// alpha channel.  Nearest resize is a raw sample relocation for those modes,
+// so the fourth byte must be copied instead of being replaced with 255.
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m >= 4u; }
 
 fn nearest_sample(dx: u32, dy: u32) -> u32 {
     let src_w = params.width;

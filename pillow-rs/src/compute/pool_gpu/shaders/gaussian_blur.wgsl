@@ -17,7 +17,7 @@ struct Params {
 
 // Host validation enforces this too; the shader cap is defense in depth for
 // malformed uniforms so a bad value can never create an unbounded loop.
-const MAX_RADIUS: u32 = 16u;
+const MAX_RADIUS: u32 = 64u;
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }

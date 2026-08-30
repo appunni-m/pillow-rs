@@ -455,9 +455,8 @@ pub(crate) fn begin_pipeline_operation_telemetry(operation: &'static str) {
             vector_block_count: 0,
             scalar_tail_count: 0,
             mode_conversion_count: 0,
-            handoff_count: PENDING_PIPELINE_HANDOFFS.with(|pending| {
-                std::mem::take(&mut *pending.borrow_mut())
-            }),
+            handoff_count: PENDING_PIPELINE_HANDOFFS
+                .with(|pending| std::mem::take(&mut *pending.borrow_mut())),
         });
     });
 }
@@ -1098,6 +1097,31 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
         if pool.supports(op)? {
             continue;
         }
+        // GPU strict parity must reach the executor even when a public
+        // operation has not yet acquired a native shader contract.  The GPU
+        // pool performs its contextual checks after materialization and can
+        // run the exact host implementation for that operation, preserving
+        // Pillow's result/error semantics instead of manufacturing an
+        // operation-level NotImplementedError before the image is seen.
+        // Keep genuinely descriptor-only operations (no CPU implementation)
+        // on the existing validation error path.
+        if backend == Backend::Gpu && registry::cpu_supports(op)? {
+            continue;
+        }
+        // GPU convolution support is contextual: the same shader is exact for
+        // byte layouts only for the operation-level fixed-point subset, while
+        // the I-mode path applies the normalized f32 kernel to signed samples.
+        // The source image is intentionally not materialized in this phase,
+        // so defer these two operation-only checks to the GPU's image-aware
+        // preflight instead of rejecting valid I-mode filters prematurely.
+        if backend == Backend::Gpu
+            && matches!(
+                op,
+                PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+            )
+        {
+            continue;
+        }
         if matches!(backend, Backend::Simd | Backend::Gpu) {
             let key = registry::variant_key(op);
             record_pipeline_operation_unsupported(key);
@@ -1138,8 +1162,12 @@ fn merge_pipeline_resource_telemetry(
     total.mode_conversion_count = total
         .mode_conversion_count
         .saturating_add(next.mode_conversion_count);
-    total.host_buffer_count = total.host_buffer_count.saturating_add(next.host_buffer_count);
-    total.host_buffer_bytes = total.host_buffer_bytes.saturating_add(next.host_buffer_bytes);
+    total.host_buffer_count = total
+        .host_buffer_count
+        .saturating_add(next.host_buffer_count);
+    total.host_buffer_bytes = total
+        .host_buffer_bytes
+        .saturating_add(next.host_buffer_bytes);
     total.peak_live_host_bytes = total.peak_live_host_bytes.max(next.peak_live_host_bytes);
     total.fused_operation_count = total
         .fused_operation_count
@@ -1245,7 +1273,8 @@ fn execute_automatic_simd_segments(
         current = Some(next);
         previous_backend = Some(backend);
         for op in segment_ops {
-            current_mode = pool_simd::ops::adapters::simd_mode_after_op(op, current_mode.as_deref());
+            current_mode =
+                pool_simd::ops::adapters::simd_mode_after_op(op, current_mode.as_deref());
         }
         index = end;
     }

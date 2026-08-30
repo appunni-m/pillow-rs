@@ -9,7 +9,7 @@
 struct Params {
     width: u32,
     height: u32,
-    mode: u32,     // 0=L, 1=LA, 2=RGB, 3=RGBA
+    mode: u32,     // 0=L, 1=LA, 2=RGB, 3=RGBA, 6=RGBX
     _pad: u32,
     op_code: u32,
     _pad2: u32,
@@ -23,7 +23,7 @@ struct Params {
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 5u || m == 6u || m == 7u || m == 8u; }
 
 fn get_src_coord(x: u32, y: u32, src_w: u32, src_h: u32, op: u32) -> vec2<u32> {
     var sx = x;

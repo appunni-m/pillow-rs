@@ -506,12 +506,8 @@
         "case_id": "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "pipeline-primary",
-          "pipeline-secondary",
-          "materialize"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"

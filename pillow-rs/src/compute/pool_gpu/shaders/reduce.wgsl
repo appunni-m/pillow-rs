@@ -1,7 +1,7 @@
-// Reduce: downsample by integer factor using box averaging.
-// Output dimensions = w/factor x h/factor.
-// Each output pixel averages a factor x factor block from the source.
-// Accumulate in u32, divide with rounding: (sum + count/2) / count.
+// Reduce: downsample by integer factor using Pillow's box averaging contract.
+// Output dimensions = ceil(w/factor) x ceil(h/factor).
+// Pillow uses a truncated fixed-point reciprocal for division and averages
+// color channels premultiplied by alpha for LA/RGBA before unpremultiplying.
 // Mode-aware: only averages channels present in the image mode.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
@@ -29,6 +29,22 @@ const MAX_FACTOR: u32 = 64u;
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_fourth(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
+
+// This matches Reduce.c's division_UINT32(divider, 8) path:
+// multiplier = floor(2^32 / (256 * divider)) = floor(2^24 / divider),
+// result = ((sum + divider/2) * multiplier) >> 24.
+// The host bounds factors at 64, so the product remains within u32 for
+// byte-valued samples and every valid block size.
+fn pil_average(sum: u32, count: u32) -> u32 {
+    let multiplier = 16777216u / count;
+    return ((sum + count / 2u) * multiplier) >> 24u;
+}
+
+fn unpremultiply(value: u32, alpha: u32) -> u32 {
+    if alpha == 0u { return 0u; }
+    return (value * 255u) / alpha;
+}
 
 fn reduce_pixel(dx: u32, dy: u32) -> u32 {
     let src_w = params.width;
@@ -58,10 +74,23 @@ fn reduce_pixel(dx: u32, dy: u32) -> u32 {
         loop {
             if sx >= sx_end { break; }
             let pixel = input[sy * src_w + sx];
-            sum_r = sum_r + (pixel & 0xffu);
-            sum_g = sum_g + ((pixel >> 8u) & 0xffu);
-            sum_b = sum_b + ((pixel >> 16u) & 0xffu);
-            sum_a = sum_a + ((pixel >> 24u) & 0xffu);
+            let alpha = (pixel >> 24u) & 0xffu;
+            let red = pixel & 0xffu;
+            let green = (pixel >> 8u) & 0xffu;
+            let blue = (pixel >> 16u) & 0xffu;
+            // The packed transport uses opaque alpha for L/RGB, so this
+            // branch is harmless there and preserves the native LA/RGBA
+            // premultiplied-alpha semantics.
+            if mode_has_a(params.mode) {
+                sum_r = sum_r + (red * alpha + 127u) / 255u;
+                sum_g = sum_g + (green * alpha + 127u) / 255u;
+                sum_b = sum_b + (blue * alpha + 127u) / 255u;
+            } else {
+                sum_r = sum_r + red;
+                sum_g = sum_g + green;
+                sum_b = sum_b + blue;
+            }
+            sum_a = sum_a + alpha;
             count = count + 1u;
             sx = sx + 1u;
         }
@@ -73,12 +102,26 @@ fn reduce_pixel(dx: u32, dy: u32) -> u32 {
     // not turn the final channel divisions into a zero-denominator operation.
     if count == 0u { return 0u; }
 
-    // Divide with rounding: (sum + count/2) / count
-    let half = count / 2u;
-    let out_r = (sum_r + half) / count;
-    let out_g = select(0u, (sum_g + half) / count, mode_has_g(params.mode));
-    let out_b = select(0u, (sum_b + half) / count, mode_has_b(params.mode));
-    let out_a = select(255u, (sum_a + half) / count, mode_has_a(params.mode));
+    let average_r = pil_average(sum_r, count);
+    let average_g = pil_average(sum_g, count);
+    let average_b = pil_average(sum_b, count);
+    let average_a = pil_average(sum_a, count);
+    let out_r = select(
+        average_r,
+        unpremultiply(average_r, average_a),
+        mode_has_a(params.mode),
+    );
+    let out_g = select(
+        0u,
+        unpremultiply(average_g, average_a),
+        mode_has_g(params.mode),
+    );
+    let out_b = select(
+        0u,
+        unpremultiply(average_b, average_a),
+        mode_has_b(params.mode),
+    );
+    let out_a = select(255u, average_a, mode_has_fourth(params.mode));
 
     return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }
