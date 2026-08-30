@@ -4266,6 +4266,22 @@ fn gpu_point_lut(op: &PipelineOp, mode: u32) -> Option<Vec<u8>> {
     Some(lut)
 }
 
+/// Return whether a logical mode has the same byte-band contract as the
+/// concrete image storage.  The point LUT composes complete byte-band maps,
+/// so this is exact for ordinary L/LA/RGB/RGBA images even when the public
+/// lazy image retains its explicit mode tag.  Palette and typed modes remain
+/// excluded because their public point operations have additional sample
+/// semantics beyond a packed byte lookup.
+fn gpu_byte_point_mode_allowed(image: &DynamicImage, mode: Option<&str>) -> bool {
+    match image {
+        DynamicImage::ImageLuma8(_) => matches!(mode, None | Some("L")),
+        DynamicImage::ImageLumaA8(_) => matches!(mode, None | Some("LA")),
+        DynamicImage::ImageRgb8(_) => matches!(mode, None | Some("RGB")),
+        DynamicImage::ImageRgba8(_) => matches!(mode, None | Some("RGBA")),
+        _ => false,
+    }
+}
+
 /// Collapse adjacent exact point operations into one generic LUT dispatch.
 ///
 /// The public operation count remains the original count in the outer
@@ -6428,9 +6444,9 @@ impl GpuPool {
 
         // Keep the public operation list intact for routing and parity, but
         // execute contiguous exact point runs as one LUT dispatch when the
-        // source already has a packed native layout.  Explicit logical modes
-        // retain their existing path because their byte interpretation is not
-        // represented by the batch-wide GPU mode word.
+        // logical mode matches the source's native byte layout.  The helper
+        // below excludes palette and typed modes whose public point contract
+        // is not represented by the batch-wide GPU mode word.
         let mut dispatch_ops: Vec<PipelineOp> = ops
             .iter()
             .filter(|op| !gpu_reduce_is_identity(op))
@@ -6443,7 +6459,7 @@ impl GpuPool {
             crate::compute::record_pipeline_dispatch_count(0);
             return Ok(img.clone());
         }
-        dispatch_ops = if mode.is_none() && gpu_image_layout_is_supported(img) {
+        dispatch_ops = if gpu_byte_point_mode_allowed(img, mode) {
             fuse_gpu_point_ops(&dispatch_ops, mode_code(img))
         } else {
             dispatch_ops
@@ -7242,9 +7258,8 @@ impl GpuPool {
 mod tests {
     #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
-    use super::{GPU_POLL_BACKOFF, readback_poll_backoff};
-    #[cfg(target_endian = "little")]
-    use crate::raster::{DynamicImage, RgbImage};
+    use super::{GPU_POLL_BACKOFF, gpu_byte_point_mode_allowed, readback_poll_backoff};
+    use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
     use std::time::{Duration, Instant};
 
     #[cfg(target_endian = "little")]
@@ -7298,5 +7313,23 @@ mod tests {
             readback_poll_backoff(now + Duration::from_nanos(1), now),
             None
         );
+    }
+
+    #[test]
+    fn byte_point_fusion_requires_matching_native_mode() {
+        let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(1, 1, vec![7]).unwrap());
+        let gray_alpha =
+            DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(1, 1, vec![7, 9]).unwrap());
+        let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(1, 1, vec![7, 9, 11]).unwrap());
+        let rgba = DynamicImage::ImageRgba8(RgbaImage::from_raw(1, 1, vec![7, 9, 11, 13]).unwrap());
+
+        assert!(gpu_byte_point_mode_allowed(&luma, None));
+        assert!(gpu_byte_point_mode_allowed(&luma, Some("L")));
+        assert!(!gpu_byte_point_mode_allowed(&luma, Some("P")));
+        assert!(gpu_byte_point_mode_allowed(&gray_alpha, Some("LA")));
+        assert!(!gpu_byte_point_mode_allowed(&gray_alpha, Some("L")));
+        assert!(gpu_byte_point_mode_allowed(&rgb, Some("RGB")));
+        assert!(gpu_byte_point_mode_allowed(&rgba, Some("RGBA")));
+        assert!(!gpu_byte_point_mode_allowed(&rgba, Some("RGBX")));
     }
 }
