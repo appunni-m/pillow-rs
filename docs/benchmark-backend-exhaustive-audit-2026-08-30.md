@@ -2598,7 +2598,7 @@ public case receives an exact value/error result.
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release run
-is `final-standard-after-equalize-identity.json` (744 selected/measured, zero
+is `final-standard-after-latest.json` (744 selected/measured, zero
 not-run), so the following figures supersede the earlier row-kernel snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
@@ -2621,10 +2621,9 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root; the latest post-Equalize comparison is recorded in
-  `pipeline-budget-check-after-equalize-identity.json` and reports **203**
-  guarded violations (28 GPU, 50 CPU, 66 SIMD, 59 Pillow) without weakening
-  the gate.
+  as the repository root; the latest post-probe comparison is recorded in
+  `pipeline-budget-check-after-latest.json` and reports **139** guarded
+  violations (18 GPU, 52 CPU, 40 SIMD, 29 Pillow) without weakening the gate.
   Earlier same-day snapshots reported 577 and 312, demonstrating host timing
   noise; this remains open performance evidence rather than a closure claim.
   These are performance regressions against the older benchmark lineage, not
@@ -2668,23 +2667,40 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   Gaussian probe passed 1/1 and the focused pool tests passed 3/3.  This is a
   readback scheduling improvement; it changes no pixels, dispatches, or
   fallback semantics.
+- The CPU BoxBlur path now detects constant images up to 64×64 and returns an
+  exact clone, matching ImagingBoxBlur's replicated-edge identity while
+  avoiding work-buffer setup.  The 32×32 target improved 67.53% whole-workflow
+  and 83.02% in the CPU backend; BoxBlur and GaussianBlur parity remained
+  63/63.  The verified source commit is `c8a3cda51`.
+- SIMD Reduce now processes outputs below 1,024 pixels serially and keeps the
+  existing Rayon row splitter for larger outputs.  The 16×16, 32×24, and
+  32×32 targets improved to 0.014229, 0.014646, and 0.015229 ms, with focused
+  strict SIMD parity 14/14.  The verified source commit is `375fa8286`.
+- GPU point fusion now covers explicit native L/LA/RGB/RGBA byte modes when
+  the logical mode matches the storage layout.  The 1,024-dispatch L invert
+  chain became one dispatch and improved 36.6–48.8% in paired Metal runs;
+  focused strict GPU parity passed 1/1.  The verified source commit is
+  `f195bb854`.
+- The SIMD Reduce threshold is feature-gated for wasm builds.  `make
+  build-wasm-core` and the committed all-backends run both pass; this fix is
+  `3669db981`.
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-equalize-identity.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-latest.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `2a7c9d0d7106dc60d6b1b2c4ffcd71a78c7f8cd2f6438b16e358022d0444c284`).
+  `300c4dc3597b7034317a7d3f68e5335986083df1ec98b242f5d30a4d9df621fe`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-equalize-identity.json`.
+  `build/migration-parity/pipeline-performance-report-after-latest.json`.
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-equalize-identity.json`
-  and `build/migration-parity/pipeline-roadmap-status-after-equalize-identity.json`.
-- Current guarded budget comparison: `build/migration-parity/pipeline-budget-check-after-equalize-identity.json`,
-  203 violations (SHA-256
-  `3ba3206fc88f6dfb507130bfd94e2b18bdd5415437753289f1f69bd2c149f70b`).
-- Full live-oracle parity: `build/migration-parity/all-backends-after-equalize-identity.json`,
+  `build/migration-parity/pipeline-benchmark-coverage-after-latest.json`
+  and `build/migration-parity/pipeline-roadmap-status-after-latest.json`.
+- Current guarded budget comparison: `build/migration-parity/pipeline-budget-check-after-latest.json`,
+  139 violations (SHA-256
+  `21bc30a5c6cecfc28f1e6b6e40f7410dd40a4685e02111a4acd2f3bbaefcbec0`).
+- Full live-oracle parity: `build/migration-parity/all-backends-after-latest.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 (SHA-256
-  `228a662c4843a0f7dd67d40f41c45c70c819b38629e82fdb5d344b6dfac0f6f8`).
+  `138b37213c107a4d8149ae13a3f58dc5c0f0064a08c28ce4f650f391cde7fe94`).
 - Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).
@@ -2694,7 +2710,7 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
 - Normal GPU parity is included in the current all-backends run; its public
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
-- Combined all-backends gate: `build/migration-parity/all-backends-after-equalize-identity.json`,
+- Combined all-backends gate: `build/migration-parity/all-backends-after-latest.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952.
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission
