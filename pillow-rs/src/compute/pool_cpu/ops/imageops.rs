@@ -148,9 +148,17 @@ pub(crate) fn equalize_lut(img: &DynamicImage, channels: usize) -> Option<Vec<u8
     }
 
     let mut histograms = [[0u32; 256]; 3];
-    for pixel in raw.chunks_exact(channels) {
-        for channel in 0..channels {
-            histograms[channel][usize::from(pixel[channel])] += 1;
+    // Keep the admitted L/RGB layouts in fixed-band loops. A runtime channel
+    // index makes this scalar reduction dominate identity equalize workloads.
+    if channels == 1 {
+        for &value in raw {
+            histograms[0][usize::from(value)] += 1;
+        }
+    } else {
+        for pixel in raw.chunks_exact(3) {
+            histograms[0][usize::from(pixel[0])] += 1;
+            histograms[1][usize::from(pixel[1])] += 1;
+            histograms[2][usize::from(pixel[2])] += 1;
         }
     }
 

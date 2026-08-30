@@ -10897,6 +10897,10 @@ pub fn simd_equalize(
     let Some(lut) = crate::compute::pool_cpu::ops::imageops::equalize_lut(img, channels) else {
         return Err(simd_unsupported("Equalize"));
     };
+    if native_lut_is_identity(&lut, channels) {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(img.clone());
+    }
     let mut result = img.clone();
     let Some(bytes) = result.as_bytes_mut() else {
         return Err(simd_unsupported("Equalize"));
