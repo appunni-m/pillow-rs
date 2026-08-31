@@ -897,9 +897,26 @@ pub fn scale_with_input(
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; deferred pipeline execution reports invalid
-/// crop geometry or later materialization failures.
+/// Returns Pillow's width-first or height-second crop-coordinate error when
+/// the requested border is strictly larger than half of the corresponding
+/// dimension.  Pillow validates the derived box in `ImageOps.crop` before it
+/// returns a lazy image; doing the same here prevents an invalid request from
+/// queueing a `CropBorder` operation and then failing only at materialization.
 pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
+    let (width, height) = image.size()?;
+    // Use division instead of `2 * border` so an oversized u32 border cannot
+    // wrap before the comparison.  Equality is valid and produces Pillow's
+    // empty image; only a strictly larger border is rejected.
+    if border > width / 2 {
+        return Err(PilError::ValueError(
+            "Coordinate 'right' is less than 'left'".into(),
+        ));
+    }
+    if border > height / 2 {
+        return Err(PilError::ValueError(
+            "Coordinate 'lower' is less than 'upper'".into(),
+        ));
+    }
     Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
 }
 

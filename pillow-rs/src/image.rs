@@ -3012,18 +3012,11 @@ impl Image {
             if (max_val - min_val).abs() < f64::EPSILON {
                 // Pillow's I/F histogram is empty when every value is equal
                 // (max == min), so its Stat min/max fall back to the histogram
-                // defaults of 255 and 0 for every band.
+                // defaults of 255 and 0 for every band. The empty histogram
+                // also reports count zero and leaves the median at its
+                // initialized value of 255.
                 return Ok(vec![vec![
-                    n_pixels as f64,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    255.0,
-                    0.0,
+                    0.0, 0.0, 0.0, 0.0, 255.0, 0.0, 0.0, 0.0, 255.0, 0.0,
                 ]]);
             }
             let mut hist = [0i64; 256];
