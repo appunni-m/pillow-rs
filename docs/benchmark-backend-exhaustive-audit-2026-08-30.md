@@ -2917,3 +2917,35 @@ source snapshots.  The current focused queue is
   NaN, infinity, and negative-zero words; all 40 were native GPU with no
   fallback. Non-identity arithmetic filters, other Box ratios, and the
   pipeline-applicable denominator remain open.
+
+### 32.1 Focused rerun after the 2026-09-01 parity fixes
+
+The active queue is now the concise
+[`benchmark-backend-pending-2026-09-01.md`](benchmark-backend-pending-2026-09-01.md).
+The full maintained all-backend run at source `6fff4d8cc` kept every public
+lane value-exact: CPU, SIMD, GPU, Node WASM, and browser WASM each passed
+10,952/10,952, and GPU smoke passed 1/1. The aggregate status remains
+`passed_with_backend_gaps` because backend proof is intentionally stricter
+than value parity.
+
+- Normal execution sidecars are now schema
+  `migration-parity/pipeline-execution-evidence@2` and partition all 10,952
+  IDs. CPU/GPU each report 6,513 complete, 877 partial, 20 missing, 2,530
+  not-applicable, and 1,012 indeterminate cases. SIMD reports 6,518 complete,
+  884 partial, 20 missing, 2,519 not-applicable, and 1,011 indeterminate.
+  The 20 missing and all partial/indeterminate cases remain backend-proof
+  gaps; no public case was removed or relabeled to improve the denominator.
+  The all-backends artifact SHA-256 is
+  `75c1d460d1e29aa8bfbcca05857acdcdb68bbd27cdeb8f8f7382b4ea90ee40`.
+- F-mode GPU admission now includes a proof-gated dyadic subset: fixed/f64
+  coefficient-table agreement, same-sign normal power-of-two source words,
+  Bilinear, and one-axis power-of-two Box reductions through 64:1. Focused
+  lowering tests and direct native byte/telemetry tests pass; heterogeneous,
+  non-dyadic, nonfinite, negative-zero, and unproven two-axis arithmetic stay
+  on exact host control.
+- GPU working-buffer reuse is bounded to four times the requested capacity.
+  In a controlled order-sensitive pair, the small draw workload moved from
+  about 2.4 ms with a 6.3 MiB retained pool to about 0.59 ms with a 19 KiB
+  pool, with exact/native output. The ratio-bounded 11-ID timing comparisons
+  still show 5 and 6 budget violations, so the equal-receipt performance gate
+  remains open.

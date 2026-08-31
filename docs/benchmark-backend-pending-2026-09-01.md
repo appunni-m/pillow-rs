@@ -23,18 +23,22 @@ rename, relabel, or weaken a case to make a gate green.
 - Same-size filtered F resizes and bounded 2:1 Box F resizes have direct
   native-GPU byte proofs, including non-finite/negative-zero coverage where
   the proof admits it.
+- The new proof-gated dyadic F lane is also exact/native for the admitted
+  Bilinear and one-axis power-of-two Box cases; heterogeneous/non-dyadic
+  inputs remain on exact host control.
 
 ## Pending — do these in order
 
 ### P0 — exact F-mode GPU resize arithmetic
 
-- [ ] Implement and prove non-identity arithmetic filters and remaining Box
-  ratios on changed geometry. The device path must match Pillow bit-for-bit,
-  including NaN, infinity, and negative zero; keep unproven inputs on exact
-  host control until a native proof exists.
-- [ ] Add focused direct byte matrices and a regression test for every newly
-  admitted native lane. Require terminal `actual_backend=gpu` receipts with
-  no fallback for the admitted cohort.
+- [x] Implement and prove the bounded dyadic subset: fixed/f64 coefficient
+  agreement, same-sign normal power-of-two F words, Bilinear, and one-axis
+  power-of-two Box reductions through 64:1. The direct native matrix is
+  byte-exact with terminal `actual_backend=gpu` receipts and no fallback.
+- [ ] Extend exact arithmetic coverage to heterogeneous/non-dyadic Bilinear,
+  Bicubic/Lanczos/Hamming, two-axis Box reductions beyond the existing 2:1
+  proof, and remaining Box ratios. Keep every unproven input on exact host
+  control, including NaN, infinity, and negative zero.
 
 ### P1 — honest backend-proof denominator
 
@@ -46,22 +50,25 @@ rename, relabel, or weaken a case to make a gate green.
   leave the backend-proof cohort; missing, partial, and indeterminate paths
   remain proof gaps. The all-backend envelope stays schema-v3, and old @1
   sidecars are diagnostic-only until regenerated.
-- [ ] Regenerate the schema-v3 all-backend artifact and review the resulting
-  partition. A classification of the last @1 CPU/GPU artifact predicts
-  **6,513 complete + 877 partial + 20 missing + 2,530 not applicable + 1,012
-  indeterminate**; SIMD predicts **6,518 + 884 + 20 + 2,519 not applicable +
-  1,011 indeterminate**. These
-  are planning counts, not replacement evidence; the rerun must retain every
-  case and preserve requested/actual backend and fallback receipts.
+- [x] Regenerate and review the schema-v3 all-backend artifact. At source
+  `6fff4d8cc`, the live partition is CPU/GPU **6,513 complete + 877 partial +
+  20 missing + 2,530 not applicable + 1,012 indeterminate**; SIMD is
+  **6,518 + 884 + 20 + 2,519 + 1,011**. All six public lanes remain
+  10,952/10,952 and GPU smoke is 1/1; the aggregate is correctly
+  `passed_with_backend_gaps`. Artifact SHA-256:
+  `75c1d460d1e29aa8bfbcca05857acdcdb68bbd27cdeb8f8f7382b4ea90ee40`.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
 
 ### P2 — performance acceptance
 
+- [x] Bound GPU working-buffer reuse to four times the requested capacity;
+  the controlled small-draw case dropped from about 2.4 ms with a 6.3 MiB
+  retained pool to about 0.59 ms with a 19 KiB pool, with exact/native output.
 - [ ] Run the same equal-ID, equal-receipt cohort twice consecutively with
-  **zero** budget violations. The latest comparable reports still show **8**
-  and **9** violations (44 pairings each), so the speed gate remains open.
+  **zero** budget violations. The ratio-bounded cohort still reports **5**
+  and **6** violations (44 pairings each); timing acceptance remains open.
 
 ## Required closeout
 
@@ -69,5 +76,5 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, format/lint checks, then commit and push only after
   the corresponding evidence changes.
 
-Last verified source: `920efe009` (targeted benchmark run; working tree has
+Last verified source: `6fff4d8cc` (full all-backend run; working tree has
 pre-existing unrelated changes). The overall goal is intentionally **active**.
