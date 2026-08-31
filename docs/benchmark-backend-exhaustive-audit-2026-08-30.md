@@ -3077,3 +3077,39 @@ and core clippy completes with warnings only. The aggregate remains
 `passed_with_backend_gaps`; broader native-GPU F arithmetic, fallback/backend
 identity evidence, and two consecutive zero-violation timing reports remain
 open in the focused checklist.
+
+## 32.5 F nearest and RGBa Fit parity fixes (2026-09-01)
+
+The next source-only parity wave fixed two first divergences without changing
+the public case IDs, expected values, thresholds, or denominators:
+
+- Pillow's `libImaging/Geometry.c::ImagingScaleAffine` advances the F-mode
+  nearest vertical coordinate cumulatively in f64. Rust recomputed each row as
+  `(y + 0.5) * scale`, which selected the wrong source row at exact-integer
+  boundaries. Pillow's F convolution path also stores the float32 accumulator
+  directly; Rust had canonicalized every zero to positive zero. The CPU fix in
+  `963f385a6` matches the cumulative walk and preserves signed-zero bits. The
+  GPU path in `506b9e0f7` now uses the same host one-tap tables and an opaque
+  word-copy marker, so NaN, infinity, and negative zero do not pass through
+  device arithmetic. Focused F parity is 13/13; the native GPU regression
+  covers finite and special-value 1x2-to-1x7 inputs, and the core suite is
+  15/15.
+- GPU preflight omitted `PipelineOp::Fit` from the `RGBa` logical-mode
+  whitelist even though Pillow keeps RGBa's stored four-byte premultiplied
+  channels through boxed resize. `75ce2865a` admits only that existing raw
+  coefficient path and adds a native receipt regression. The strict Fit matrix
+  is 89/89 value-exact, with the formerly excluded RGBa case included in the
+  6/6 native-receipt subset.
+
+At source `5cc713f99848239c099f9c03e01c7815564cc582`, the refreshed schema-v3
+all-backend artifact remains value-exact for CPU, SIMD, GPU, Node WASM, and
+browser WASM at **10,952/10,952**, with GPU smoke **1/1** and zero failed,
+not-run, or infrastructure-error cases. Its SHA-256 is
+`93eba42234b785614daf7f8cc8651fd04731607de6934bb5f46a74c78e808672`; the
+case-ID digest remains
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+Native CPU/GPU receipts remain **7,090 complete + 102 partial + 0 missing +
+3,327 not applicable + 433 indeterminate**; SIMD remains **7,102 + 102 + 0 +
+3,315 + 433**. The GPU fallback taxonomy loses one `RGBa` logical-mode entry,
+but the aggregate proof gate stays open for the remaining receipt gaps,
+broader F arithmetic, and performance acceptance.
