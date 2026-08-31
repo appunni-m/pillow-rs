@@ -66,9 +66,16 @@ fn filtered_float(output_x: u32, output_y: u32) -> f32 {
 
 fn unpremultiply(value: u32, alpha: u32) -> u32 {
     if alpha == 0u {
-        return 0u;
+        // The scalar path leaves a premultiplied channel unchanged when the
+        // filtered alpha is zero; preserve that byte instead of discarding
+        // it before the final pack.
+        return value;
     }
-    return (value * 255u) / alpha;
+    // Pillow clips the unpremultiplied channel to one byte after the
+    // fixed-point vertical pass.  Without this clamp, ringing filters can
+    // produce a quotient above 255; packing that u32 into the RGBA word then
+    // wraps the channel instead of matching CLIP8.
+    return min((value * 255u) / alpha, 255u);
 }
 
 fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
