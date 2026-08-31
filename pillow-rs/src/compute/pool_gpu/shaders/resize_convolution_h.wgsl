@@ -72,7 +72,20 @@ fn filtered_float(source_y: u32, output_x: u32) -> f32 {
     return sum;
 }
 
+fn filtered_typed(source_y: u32, output_x: u32) -> u32 {
+    let metadata = output_x * 3u;
+    let source_x = u32(coefficients[metadata]);
+    return input[source_y * params.width + source_x];
+}
+
 fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
+    if params.mode == 7u {
+        // I-mode nearest resize uses the host-generated one-tap table for
+        // Pillow's cumulative f64 coordinate walk. Copy the complete signed
+        // sample word; treating its bytes as independent channels changes
+        // negative values and is not the I-mode contract.
+        return filtered_typed(source_y, output_x);
+    }
     if params.mode == 8u {
         return bitcast<u32>(filtered_float(source_y, output_x));
     }

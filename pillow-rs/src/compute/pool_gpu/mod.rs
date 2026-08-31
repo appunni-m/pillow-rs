@@ -794,15 +794,16 @@ fn append_arena_slice(arena: &mut Vec<u32>, values: &[u32], alignment_bytes: usi
 
 /// Return whether a nearest resize uses the packed byte convolution plan.
 ///
-/// The byte plan receives host-generated one-tap tables so its source index
-/// follows Pillow's cumulative f64 stepping exactly. Typed F/I/I;16 and
-/// binary mode paths retain the dedicated relocation shaders or their native
-/// CPU contract, where interpreting the sample as an 8-bit convolution value
-/// would be incorrect.
+/// The convolution plan receives host-generated one-tap tables so its source
+/// index follows Pillow's cumulative f64 stepping exactly. I-mode needs that
+/// plan too: its four-byte samples are copied opaquely by the typed branch in
+/// the resize shaders, rather than being interpreted as four byte channels.
+/// F and I;16 retain their established relocation shaders until their own
+/// nearest-coordinate receipts are expanded with the same proof.
 fn gpu_resize_nearest_uses_coefficients(logical_mode: Option<&str>) -> bool {
     !matches!(
         logical_mode,
-        Some("1" | "F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N")
+        Some("1" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N")
     )
 }
 
@@ -3215,14 +3216,72 @@ impl GpuInner {
     ) -> Result<bool, PilError> {
         let resolved = self.resolve_batch_pipelines(ops, logical_mode)?;
         let mut current_is_a = start_is_a;
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("gpu_batch_compute"),
-            timestamp_writes: None,
-        });
         for (index, pipeline) in resolved.iter().enumerate() {
             if matches!(pipeline, ResolvedPipeline::Skip) {
                 continue;
             }
+            // Metal requires an explicit compute-pass boundary between the
+            // horizontal and vertical typed resize passes.  Both passes
+            // ping-pong the same two storage buffers; keeping them in one
+            // pass leaves the second dispatch racing the first on some
+            // drivers, producing a stale row while the host coefficients
+            // themselves remain exact.  The ordinary byte path retains its
+            // grouped pass for the existing throughput contract.
+            if logical_mode == Some("I")
+                && matches!(
+                    ops.get(index),
+                    Some(PipelineOp::Resize {
+                        filter: ResampleFilter::Nearest,
+                        ..
+                    })
+                )
+                && matches!(pipeline, ResolvedPipeline::Resize { .. })
+            {
+                let ResolvedPipeline::Resize {
+                    horizontal,
+                    vertical,
+                } = pipeline
+                else {
+                    unreachable!("typed resize pipeline shape changed")
+                };
+                {
+                    let mut resize_pass =
+                        encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                            label: Some("gpu_batch_compute_resize_h"),
+                            timestamp_writes: None,
+                        });
+                    current_is_a = self.encode_dispatch(
+                        &mut resize_pass,
+                        horizontal,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        prepared.input_dims[index],
+                        prepared.output_dims[index],
+                    )?;
+                }
+                {
+                    let mut resize_pass =
+                        encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                            label: Some("gpu_batch_compute_resize_v"),
+                            timestamp_writes: None,
+                        });
+                    current_is_a = self.encode_dispatch(
+                        &mut resize_pass,
+                        vertical,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        prepared.input_dims[index],
+                        prepared.output_dims[index],
+                    )?;
+                }
+                continue;
+            }
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_batch_compute"),
+                timestamp_writes: None,
+            });
             if let ResolvedPipeline::Blur {
                 horizontal,
                 vertical,
@@ -3374,8 +3433,8 @@ impl GpuInner {
                     prepared.output_dims[index],
                 )?;
             }
+            drop(cpass);
         }
-        drop(cpass);
         Ok(current_is_a)
     }
 
@@ -6026,6 +6085,7 @@ fn gpu_batch_capacity(
     ops: &[PipelineOp],
     image: &DynamicImage,
     auxiliary_images: &[AuxiliaryImages],
+    logical_mode: Option<&str>,
 ) -> Result<u32, PilError> {
     if ops.len() != auxiliary_images.len() {
         return Err(PilError::InternalError(
@@ -6061,6 +6121,22 @@ fn gpu_batch_capacity(
             None => (cur_w, cur_h),
         };
         high_water = high_water.max(pixels((out_w, out_h))?);
+        if logical_mode == Some("I")
+            && matches!(
+                op,
+                PipelineOp::Resize {
+                    filter: ResampleFilter::Nearest,
+                    ..
+                }
+            )
+        {
+            // The separable resize plan materializes an intermediate frame
+            // with the destination width and source height before its
+            // vertical pass.  A wide, short resize can therefore need more
+            // storage than either endpoint; account for that frame before
+            // the device buffers are allocated.
+            high_water = high_water.max(pixels((out_w, cur_h))?);
+        }
         if let PipelineOp::PutData { data, mode } = op {
             high_water = high_water.max(data.len().div_ceil(mode.channels()));
         }
@@ -6582,6 +6658,98 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
         || !gpu_image_layout_is_supported(image)
 }
 
+/// Return whether a typed nearest affine transform can use the fixed-point
+/// relocation shader without changing Pillow's source selection.
+///
+/// `Geometry.c` computes the six affine values as signed 16.16 integers and
+/// then walks each output row with integer additions.  The GPU shader carries
+/// those same integers, but its arithmetic is i32 while the scalar path uses
+/// i64.  Keep the admission proof deliberately explicit: every coefficient,
+/// row origin, and absolute output-coordinate sum must fit i32, and the
+/// source dimensions must fit the shader's signed bounds checks.  The typed
+/// sample itself remains an opaque four-byte word, so no integer/float
+/// conversion or approximation is introduced.
+fn gpu_typed_nearest_affine_is_exact(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
+    let PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data,
+        filter,
+        ..
+    } = op
+    else {
+        return false;
+    };
+    if !matches!(mode, Some("I"))
+        || !matches!(image, DynamicImage::ImageRgba8(_))
+        || !matches!(method, TransformMethod::Affine)
+        || !matches!(filter, ResampleFilter::Nearest)
+        || source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || source_dimensions.0 > i32::MAX as u32
+        || source_dimensions.1 > i32::MAX as u32
+        || *w == 0
+        || *h == 0
+        || data.len() < 6
+        || data[..6]
+            .iter()
+            .any(|value| !value.is_finite() || (*value as f32).is_infinite())
+    {
+        return false;
+    }
+
+    // Keep this expression byte-for-byte equivalent to the fixed-point
+    // encoding in `prepare_batch` and `affine_nearest_fixed`.
+    let fixed = |value: f64| {
+        let rounded = value.mul_add(65_536.0, 0.5).floor();
+        rounded.is_finite().then_some(rounded as i64)
+    };
+    let [a, b, c, d, e, f] = [data[0], data[1], data[2], data[3], data[4], data[5]];
+    let Some(step_x_x) = fixed(a) else {
+        return false;
+    };
+    let Some(step_y_x) = fixed(b) else {
+        return false;
+    };
+    let Some(origin_x) = fixed(c + a * 0.5 + b * 0.5) else {
+        return false;
+    };
+    let Some(step_x_y) = fixed(d) else {
+        return false;
+    };
+    let Some(step_y_y) = fixed(e) else {
+        return false;
+    };
+    let Some(origin_y) = fixed(f + d * 0.5 + e * 0.5) else {
+        return false;
+    };
+    if [step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y]
+        .into_iter()
+        .any(|value| i32::try_from(value).is_err())
+    {
+        return false;
+    }
+
+    // Bound both the final coordinate and the intermediate addends.  The
+    // absolute-sum form is conservative, but lets the shader use ordinary
+    // i32 arithmetic with no wraparound while preserving the scalar order.
+    let max_x = i128::from(w.saturating_sub(1));
+    let max_y = i128::from(h.saturating_sub(1));
+    let fits_i32 = |origin: i64, step_x: i64, step_y: i64| {
+        i128::from(origin).abs()
+            + i128::from(step_x).abs() * max_x
+            + i128::from(step_y).abs() * max_y
+            <= i128::from(i32::MAX)
+    };
+    fits_i32(origin_x, step_x_x, step_y_x) && fits_i32(origin_y, step_x_y, step_y_y)
+}
+
 fn gpu_geometry_requires_exact_host_control(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -6598,9 +6766,13 @@ fn gpu_geometry_requires_exact_host_control(
     for op in ops {
         let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
-        if thumbnail_needs_control
-            || (rotate_needs_typed_control
-                && matches!(op, PipelineOp::Transform { .. } | PipelineOp::Rotate { .. }))
+        let typed_transform_needs_control = rotate_needs_typed_control
+            && matches!(op, PipelineOp::Transform { .. })
+            && !gpu_typed_nearest_affine_is_exact(op, image, mode, dimensions);
+        if matches!(op, PipelineOp::Fit { .. })
+            || thumbnail_needs_control
+            || typed_transform_needs_control
+            || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
         {
             return true;
         }
@@ -6611,11 +6783,18 @@ fn gpu_geometry_requires_exact_host_control(
     // Nearest resize only relocates complete four-byte samples for F mode;
     // the raw mode-8 shader preserves those bytes and the affine coordinate
     // contract is already represented by its native relocation path. I mode
-    // is different: every resize filter performs signed integer convolution,
-    // so keep all I resizes on the exact host path until a typed convolution
-    // shader carries its integer accumulator and rounding rules.
-    let has_resize = ops.iter().any(|op| matches!(op, PipelineOp::Resize { .. }));
-    mode == Some("I") && has_resize
+    // uses the same opaque-word relocation, with host-generated one-tap
+    // tables preserving Pillow's cumulative f64 source walk. Keep filtered I
+    // resize on the exact host path until a typed convolution shader carries
+    // its integer accumulator and rounding rules.
+    let has_filtered_resize = ops.iter().any(|op| {
+        matches!(
+            op,
+            PipelineOp::Resize { filter, .. }
+                if !matches!(filter, ResampleFilter::Nearest)
+        )
+    });
+    mode == Some("I") && has_filtered_resize
         || (mode == Some("F")
             && ops.iter().any(|op| {
                 matches!(
@@ -7423,7 +7602,7 @@ impl GpuPool {
                 "adapter workgroup limit",
             );
         }
-        let capacity = gpu_batch_capacity(ops, img, &auxiliary_images)?;
+        let capacity = gpu_batch_capacity(ops, img, &auxiliary_images, mode)?;
         let limits = gpu.device.limits();
         if gpu_buffer_capacity_exceeds_limits(
             capacity,
