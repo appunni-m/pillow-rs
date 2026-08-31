@@ -6769,8 +6769,7 @@ fn gpu_geometry_requires_exact_host_control(
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_typed_nearest_affine_is_exact(op, image, mode, dimensions);
-        if matches!(op, PipelineOp::Fit { .. })
-            || thumbnail_needs_control
+        if thumbnail_needs_control
             || typed_transform_needs_control
             || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
         {
