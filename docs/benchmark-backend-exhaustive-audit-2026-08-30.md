@@ -2645,6 +2645,7 @@ snapshot:
   0.474896 ms and 0.475958 ms in the two repeats versus the 0.488875 ms
   baseline (−2.85% and −2.64%), so the row clears the 5% budget in both
   receipts. Strict SIMD and all-backends parity each remained fully green.
+  The verified source change is commit `d2e433ba3`.
 - The SIMD native-byte convolution kernels now group adjacent two- and
   four-channel pixels into contiguous byte loads before the exact `f32x8`
   middle-first FMA sequence; the grouped 5×5 path streams those vectors
