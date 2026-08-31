@@ -72,6 +72,20 @@ fn filtered_float(source_y: u32, output_x: u32) -> f32 {
     return sum;
 }
 
+fn filtered_box_average(source_y: u32, output_x: u32) -> f32 {
+    let metadata = output_x * 3u;
+    let source_x = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    var sum: f32 = 0.0;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let sample = bitcast<f32>(input[source_y * params.width + source_x + tap]);
+        // Divide each sample before adding so the largest finite f32 value
+        // cannot overflow an intermediate fixed-point-scale multiply.
+        sum = sum + sample * 0.5;
+    }
+    return sum;
+}
+
 fn filtered_typed(source_y: u32, output_x: u32) -> u32 {
     let metadata = output_x * 3u;
     let source_x = u32(coefficients[metadata]);
@@ -98,6 +112,19 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
             // F-mode Box upscales have one normalized unit-weight tap. Copy
             // that source word so the finite f32 values admitted by the host
             // proof retain their exact representation.
+            return filtered_typed(source_y, output_x);
+        }
+        if params.premultiply == 4u {
+            // An exact 2:1 Box downscale has two normalized 0.5 taps. The
+            // host proof excludes subnormal inputs, so this f32 reduction has
+            // the same final bits as Pillow's f64 sum followed by f32 store.
+            let count = u32(coefficients[output_x * 3u + 1u]);
+            if count == 2u {
+                return bitcast<u32>(filtered_box_average(source_y, output_x));
+            }
+            // The orthogonal unchanged axis has one unit tap. It shares the
+            // proof tag but must copy that sample without applying arithmetic
+            // (including fixed-point scaling that could overflow a max-f32).
             return filtered_typed(source_y, output_x);
         }
         return bitcast<u32>(filtered_float(source_y, output_x));
