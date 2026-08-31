@@ -446,7 +446,9 @@ fn gpu_f_resize_box_average_is_exact(
 /// followed by the F-mode f32 store.  Two-tap non-ringing arithmetic filters
 /// use the same product/addition proof.  A two-axis Box resize is safe here as
 /// well: every horizontal average is exactly representable before the vertical
-/// pass consumes it.
+/// pass consumes it.  Multiple all-Box resizes are admitted with the same
+/// bound accumulated across their passes; scanned `PutData` words can replace
+/// an intermediate without widening the proven value domain.
 //
 // This mirrors Pillow's `Resample.c::precompute_coeffs` and
 // `ImagingResample` f64-accumulate/f32-store boundary.  It intentionally does
@@ -554,6 +556,7 @@ fn gpu_f_resize_dyadic_is_exact(
     let mut changed_axis = false;
     let mut changed_axis_count = 0usize;
     let mut filter_kind = None;
+    let mut resize_geometries = Vec::new();
     for op in ops {
         match op {
             PipelineOp::PutData {
@@ -577,13 +580,14 @@ fn gpu_f_resize_dyadic_is_exact(
             }
             PipelineOp::Resize { w, h, filter } => {
                 resize_count = resize_count.saturating_add(1);
-                if resize_count != 1 || *w == 0 || *h == 0 {
+                if *w == 0 || *h == 0 {
                     return false;
                 }
                 changed_axis_count += usize::from(*w != dimensions.0);
                 changed_axis_count += usize::from(*h != dimensions.1);
                 changed_axis |= (*w, *h) != dimensions;
                 filter_kind = Some(*filter);
+                resize_geometries.push((dimensions, (*w, *h), *filter));
                 dimensions = (*w, *h);
             }
             _ => return false,
@@ -592,7 +596,7 @@ fn gpu_f_resize_dyadic_is_exact(
     let Some(filter) = filter_kind else {
         return false;
     };
-    if resize_count != 1 || !changed_axis || changed_axis_count == 0 {
+    if resize_count == 0 || !changed_axis || changed_axis_count == 0 {
         return false;
     }
 
@@ -608,9 +612,6 @@ fn gpu_f_resize_dyadic_is_exact(
         return false;
     }
 
-    let (source_w, source_h) = image.dimensions();
-    let (output_w, output_h) = dimensions;
-    let (kernel, support) = filter_from_resample(filter);
     let rows_match = |fixed: &FilterCoeffs, exact: &FilterCoeffsF64| {
         if fixed.xmin != exact.xmin || fixed.count != exact.count {
             return false;
@@ -634,6 +635,69 @@ fn gpu_f_resize_dyadic_is_exact(
         }
         true
     };
+    if resize_count > 1 {
+        // A chain has no single arithmetic-filter proof yet. Keep the
+        // expanded admission limited to all-Box passes, for which each
+        // intermediate is still an exact f32 sum and every following tap is
+        // only a power-of-two scaling of that sum.
+        let box_axis_shift = |coeffs: &FilterCoeffs| -> Option<i32> {
+            let mut max_shift = 0i32;
+            for (row, &count) in coeffs.count.iter().enumerate() {
+                let count = u32::try_from(count).ok()?;
+                if count == 0 || count > MAX_BOX_TAPS || !count.is_power_of_two() {
+                    return None;
+                }
+                let shift = count.trailing_zeros() as i32;
+                max_shift = max_shift.max(shift);
+                let expected_weight = (1i64 << 22) / i64::from(count);
+                let start = coeffs.offsets[row];
+                let weights = coeffs
+                    .weights
+                    .get(start..start.saturating_add(count as usize))?;
+                if weights.iter().any(|&weight| weight != expected_weight) {
+                    return None;
+                }
+            }
+            Some(max_shift)
+        };
+        let mut total_shift = 0i32;
+        for &(source_dimensions, output_dimensions, filter) in &resize_geometries {
+            if !matches!(filter, ResampleFilter::Box) {
+                return false;
+            }
+            let (kernel, support) = filter_from_resample(filter);
+            let horizontal =
+                gpu_resize_coefficients(output_dimensions.0, source_dimensions.0, filter);
+            let vertical =
+                gpu_resize_coefficients(output_dimensions.1, source_dimensions.1, filter);
+            let horizontal_f64 =
+                precompute_coeffs_f64(output_dimensions.0, source_dimensions.0, kernel, support);
+            let vertical_f64 =
+                precompute_coeffs_f64(output_dimensions.1, source_dimensions.1, kernel, support);
+            if !rows_match(&horizontal, &horizontal_f64) || !rows_match(&vertical, &vertical_f64) {
+                return false;
+            }
+            let Some(horizontal_shift) = box_axis_shift(&horizontal) else {
+                return false;
+            };
+            let Some(vertical_shift) = box_axis_shift(&vertical) else {
+                return false;
+            };
+            total_shift = total_shift
+                .checked_add(horizontal_shift)
+                .and_then(|shift| shift.checked_add(vertical_shift))
+                .unwrap_or(i32::MAX);
+        }
+
+        return max_exponent
+            .saturating_sub(min_exponent)
+            .saturating_add(total_shift)
+            <= 23;
+    }
+
+    let (source_w, source_h) = image.dimensions();
+    let (output_w, output_h) = dimensions;
+    let (kernel, support) = filter_from_resample(filter);
     let horizontal = gpu_resize_coefficients(output_w, source_w, filter);
     let vertical = gpu_resize_coefficients(output_h, source_h, filter);
     let horizontal_f64 = precompute_coeffs_f64(output_w, source_w, kernel, support);
@@ -648,10 +712,10 @@ fn gpu_f_resize_dyadic_is_exact(
         | ResampleFilter::Lanczos
         | ResampleFilter::Hamming => {
             // With power-of-two source words, every dyadic fixed coefficient
-            // product is an exactly representable f32 value.  Restrict the
+            // product is an exactly representable f32 value. Restrict the
             // arithmetic filters to non-negative rows with at most two taps:
             // one f32 addition is then correctly rounded to the same value as
-            // Pillow's f64 sum followed by its f32 store.  The non-negative
+            // Pillow's f64 sum followed by its f32 store. The non-negative
             // condition also excludes ringing-filter cancellation, which can
             // create a signed zero or a low normal value that native adapters
             // do not preserve uniformly.
@@ -672,10 +736,10 @@ fn gpu_f_resize_dyadic_is_exact(
         ResampleFilter::Box => {
             // Box rows are safe for the dyadic shader beyond integral
             // reductions when every row still has an exact power-of-two
-            // number of equal taps.  Pillow's normalized Box table then has
+            // number of equal taps. Pillow's normalized Box table then has
             // weights `1 / count`; checking the emitted fixed rows (rather
             // than inferring a ratio from dimensions) keeps non-divisor
-            // geometry honest.  This covers, for example, 5 -> 3 where all
+            // geometry honest. This covers, for example, 5 -> 3 where all
             // rows are two 1/2 taps, while 7 -> 3 remains host-controlled
             // if any row needs a non-dyadic three-tap normalization.
             let box_axis_shift = |coeffs: &FilterCoeffs| -> Option<i32> {
@@ -713,8 +777,8 @@ fn gpu_f_resize_dyadic_is_exact(
             if max_exponent.saturating_sub(min_exponent) + horizontal_shift + vertical_shift > 23 {
                 return false;
             }
-            // A resize must still change at least one axis.  The identity
-            // path has a separate proof that preserves every bit pattern.
+            // A resize must still change at least one axis. The identity path
+            // has a separate proof that preserves every bit pattern.
             changed_axis_count > 0
         }
         _ => false,
@@ -8849,6 +8913,50 @@ mod tests {
             &image,
             Some("F")
         ));
+        // Chained Box reductions retain exactness when the cumulative dyadic
+        // shift stays within the same 24-bit significand bound.  The second
+        // resize consumes f32 intermediates that are no longer single powers
+        // of two, so this guards the chain proof rather than the one-pass
+        // source-word check above.
+        assert!(gpu_f_resize_dyadic_is_exact(
+            &[box_resize(2, 1), box_resize(1, 1)],
+            &image,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_dyadic_is_exact(
+            &[
+                box_resize(3, 2),
+                PipelineOp::PutData {
+                    data: Arc::from(
+                        [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0]
+                            .into_iter()
+                            .flat_map(f32::to_le_bytes)
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    ),
+                    mode: PixelMode::F,
+                },
+                box_resize(2, 1),
+                box_resize(1, 1),
+            ],
+            &image,
+            Some("F")
+        ));
+        // Mixing an arithmetic filter into the chain is still outside the
+        // proof: only Box's power-of-two scaling preserves the exact value
+        // domain after an intermediate f32 store.
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            &[
+                box_resize(2, 1),
+                PipelineOp::Resize {
+                    w: 1,
+                    h: 1,
+                    filter: ResampleFilter::Bilinear,
+                },
+            ],
+            &image,
+            Some("F")
+        ));
         // Non-divisor Box geometry can still be dyadic when each output row
         // uses only one or two equal taps.  The 4 -> 3 table is [1, 2, 1]
         // taps, so it exercises the generalized row proof rather than the
@@ -9170,6 +9278,40 @@ mod tests {
             assert_eq!(telemetry.6, Some(2));
             assert_eq!(telemetry.7, None);
         }
+
+        // Two sequential 2:1 Box reductions exercise the chain proof: the
+        // first pass stores non-power-of-two f32 averages, and the second
+        // pass must still match Pillow's f64 accumulation and f32 store.
+        let chain_values = [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0];
+        let chain_source = Image::frombytes("F", (4, 2), &bytes(&chain_values.map(f32::to_bits)))
+            .expect("F chain source");
+        let chain_actual = match chain_source
+            .resize((2, 1), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("first Box resize")
+            .resize((1, 1), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("second Box resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F Box chain failed: {error}"),
+        };
+        assert_eq!(chain_actual, bytes(&[0x41ff_0000]));
+        let chain_telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU F Box chain must publish a telemetry receipt");
+        assert_eq!(chain_telemetry.0, Some(Backend::Gpu));
+        assert_eq!(chain_telemetry.1, Backend::Gpu);
+        assert_eq!(chain_telemetry.6, Some(4));
+        assert_eq!(chain_telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
