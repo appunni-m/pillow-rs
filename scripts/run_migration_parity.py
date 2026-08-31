@@ -1097,6 +1097,15 @@ _PIPELINE_ALWAYS_OPS = {
     ("PIL.ImageOps", "solarize"),
 }
 
+# ``PIL.ImageFilter`` entries above are public parameter constructors.  Their
+# ``__init__`` methods only validate/store filter arguments; the image's
+# ``filter`` call is what invokes the Rust pipeline.  Keep this derived set
+# explicit so a constructor that precedes a validation error cannot masquerade
+# as an earlier deferred image operation.
+_PIPELINE_FILTER_PARAMETER_OPS = {
+    key for key in _PIPELINE_ALWAYS_OPS if key[0] == "PIL.ImageFilter"
+}
+
 # A successful call may be eager for a particular mode or argument.  If one
 # of these is the only possible pipeline operation, a no-receipt case is not
 # safe to call non-pipeline; classify it as indeterminate unless a scalar
@@ -1514,6 +1523,10 @@ def classify_pipeline_case(
 
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
+        if key in _PIPELINE_FILTER_PARAMETER_OPS:
+            # Filter classes construct an eager descriptor.  Only applying the
+            # descriptor to an image can create a deferred pipeline node.
+            return True
         if key == ("PIL.ImageFilter", "ModeFilter"):
             # This step constructs the parameter object consumed by the
             # eager ``Image::mode_filter`` implementation in
