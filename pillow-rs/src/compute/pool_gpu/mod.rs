@@ -440,10 +440,12 @@ fn gpu_f_resize_box_average_is_exact(
 /// It then admits only source words that are normal powers of two, all with
 /// one sign, so multiplying by those non-negative dyadic coefficients is
 /// exact.  Bilinear rows have at most two taps (one rounded sum), while Box
-/// downscales are limited to one changed axis and at most 64 equal power-of-
-/// two taps.  The exponent-span bound keeps every multi-tap Box partial sum
-/// representable in f32, making its sequential shader reduction equal to the
-/// exact f64 sum followed by the F-mode f32 store.
+/// downscales use at most 64 equal power-of-two taps on each changed axis.
+/// The exponent-span bound keeps every multi-tap Box partial sum representable
+/// in f32, making its sequential shader reduction equal to the exact f64 sum
+/// followed by the F-mode f32 store.  A two-axis Box resize is safe here as
+/// well: every horizontal average is exactly representable before the vertical
+/// pass consumes it.
 //
 // This mirrors Pillow's `Resample.c::precompute_coeffs` and
 // `ImagingResample` f64-accumulate/f32-store boundary.  It intentionally does
@@ -650,11 +652,40 @@ fn gpu_f_resize_dyadic_is_exact(
                 .all(|&count| count <= 2)
         }
         ResampleFilter::Box => {
-            // A changed Box axis must be an exact power-of-two reduction.
-            // Requiring one changed axis avoids a second f32 reduction over
-            // already-rounded horizontal sums; the existing 2:1 proof owns
-            // the broader two-axis case.
-            if changed_axis_count != 1 {
+            let reduction_shift = |input: u32, output: u32| {
+                if input == output {
+                    return Some(0i32);
+                }
+                let factor = input.checked_div(output)?;
+                (factor >= 2
+                    && factor <= MAX_BOX_TAPS
+                    && factor.is_power_of_two()
+                    && input % output == 0)
+                    .then_some(factor.trailing_zeros() as i32)
+            };
+            let Some(horizontal_shift) = reduction_shift(source_w, output_w) else {
+                return false;
+            };
+            let Some(vertical_shift) = reduction_shift(source_h, output_h) else {
+                return false;
+            };
+            // If both axes reduce, horizontal averages may span one extra
+            // `log2(factor)` range below the source minimum before the
+            // vertical pass adds its own terms. Keep the complete dyadic sum
+            // within f32's 24-bit significand so the sequential shader
+            // reduction is still identical to Pillow's f64 accumulation.
+            if changed_axis_count == 2
+                && max_exponent.saturating_sub(min_exponent) + horizontal_shift + vertical_shift
+                    > 23
+            {
+                return false;
+            }
+            // Every changed Box axis must be an exact power-of-two reduction.
+            // The source-domain proof above makes each horizontal average
+            // exactly representable in f32, so a second vertical reduction
+            // remains exact when both axes change. The separate 2:1 proof
+            // still owns the broader non-dyadic source domain.
+            if !(1..=2).contains(&changed_axis_count) {
                 return false;
             }
             let axis_ok = |input: u32, output: u32, coeffs: &FilterCoeffs| {
@@ -8804,11 +8835,39 @@ mod tests {
             Some("F")
         ));
 
-        // Two changed Box axes would reduce already-rounded horizontal
-        // values again, so it remains outside this proof.
-        assert!(!gpu_f_resize_dyadic_is_exact(
+        // Two changed power-of-two Box axes remain exact because every
+        // horizontal dyadic average is exactly representable before the
+        // vertical pass consumes it.
+        assert!(gpu_f_resize_dyadic_is_exact(
             &[box_resize(1, 1)],
             &image,
+            Some("F")
+        ));
+        let wide_two_axis = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                4,
+                2,
+                [
+                    2.0f32.powi(-80),
+                    2.0f32.powi(-59),
+                    2.0f32.powi(-59),
+                    2.0f32.powi(-59),
+                    2.0f32.powi(-59),
+                    2.0f32.powi(-59),
+                    2.0f32.powi(-59),
+                    2.0f32.powi(-59),
+                ]
+                .into_iter()
+                .flat_map(f32::to_le_bytes)
+                .collect(),
+            )
+            .unwrap(),
+        );
+        // A second reduction would expose a 24-bit-plus significand span;
+        // retain exact host control rather than relying on device rounding.
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            &[box_resize(1, 1)],
+            &wide_two_axis,
             Some("F")
         ));
         assert!(!gpu_f_resize_dyadic_is_exact(
@@ -8938,6 +8997,32 @@ mod tests {
                     2.0f32.powi(-73),
                 ],
                 vec![0x1870_0000, 0x1a70_0000],
+            ),
+            (
+                (4, 2),
+                (1, 1),
+                ResampleInput::Name("BOX".into()),
+                vec![1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0],
+                vec![0x41ff_0000],
+            ),
+            (
+                (4, 2),
+                (1, 1),
+                ResampleInput::Name("BOX".into()),
+                vec![
+                    2.0f32.powi(-80),
+                    2.0f32.powi(-79),
+                    2.0f32.powi(-78),
+                    2.0f32.powi(-77),
+                    2.0f32.powi(-76),
+                    2.0f32.powi(-75),
+                    2.0f32.powi(-74),
+                    2.0f32.powi(-73),
+                ]
+                .into_iter()
+                .map(|value| -value)
+                .collect(),
+                vec![0x99ff_0000],
             ),
         ];
 
