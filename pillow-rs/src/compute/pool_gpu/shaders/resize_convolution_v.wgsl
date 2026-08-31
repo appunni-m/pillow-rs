@@ -119,6 +119,12 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
             // proof retain their exact representation.
             return filtered_typed(output_x, output_y);
         }
+        if params.premultiply == 5u {
+            // A same-size filtered F resize is an identity in Pillow's
+            // resize_f path. Copy the word so NaN, infinity, and negative
+            // zero retain their exact representation.
+            return input[output_y * params.dst_w + output_x];
+        }
         if params.premultiply == 4u {
             // An exact 2:1 Box downscale has two normalized 0.5 taps. The
             // host proof excludes subnormal inputs, so this f32 reduction has
