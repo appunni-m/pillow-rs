@@ -17,8 +17,8 @@ diagnostic implementation state, not a completed native-backend claim.
   WASM each compare **10,952/10,952**, and the GPU smoke gate is **1/1**.
   The latest schema-v3 receipt is
   `build/migration-parity/all-backends-test-result.json`, generated at pushed
-  source `fb74a1122` (SHA-256
-  `b2d3fe6b7444331abccecd5d4c5054ad32f1d9b180a8d533e5ef2c7f0fb0e86e`).
+  source `2fdc6bb57` (SHA-256
+  `2c3b8ce4575de3b243fce2fc9ba85c55b958c9be52bd5ac9019f9633a6c437fa`).
 - Schema-v3 correctly reports `passed_with_backend_gaps`, not plain `passed`:
   CPU and GPU each have 6,513 terminal-complete pipeline receipts; SIMD has
   6,518.  CPU has 3,562 no-receipt and 877 terminal-incomplete cases; SIMD
@@ -34,20 +34,21 @@ diagnostic implementation state, not a completed native-backend claim.
 - The maintained 70-row GPU cohort is value-exact and currently classified as
   70 native GPU / 0 host-control / 0 failures. Constant-F lowering is exact;
   finite nonconstant Box upscales add a 144/144 native-GPU exact matrix, while
-  the bounded F Box 2:1 downscale lane now has direct native byte checks after
-  `fb74a1122`; the small-frame CPU Gaussian path has a focused terminal
-  benchmark after `888f1bba5`.
+  the bounded one- or two-axis F Box 2:1 downscale lane now has direct native
+  byte checks after `2fdc6bb57`; the small-frame CPU Gaussian path has a
+  focused terminal benchmark after `888f1bba5`.
 
 ## Pending — only these items remain
 
 ### P0. General exact F-mode GPU lowering
 
-- [x] Added a bounded pure-Rust/WGSL lane for one-axis 2:1 Box downscales:
-  finite, same-sign F samples at or above `2^-20` use a two-tap half-before-add
-  shader branch and copy the unchanged axis opaquely. Direct Pillow byte checks
-  covered 2,000 finite extreme cases: all 2,000 matched; 1,179 ran as native
-  GPU with terminal no-fallback receipts and 821 deliberately negative-zero
-  cases stayed on exact host control.
+- [x] Added a bounded pure-Rust/WGSL lane for one- or two-axis 2:1 Box
+  downscales: finite, same-sign F samples at or above `2^-20` use a two-tap
+  half-before-add shader branch and copy unchanged axes opaquely. Direct
+  Pillow byte checks covered 2,000 one-axis finite extreme cases (all matched;
+  1,179 native GPU and 821 deliberate negative-zero host-control) plus 3,000
+  two-axis cases (all matched; 2,500 native GPU and 500 deliberate
+  negative-zero host-control).
 - [ ] Extend filtered F-mode resize beyond finite constant samples and the
   bounded finite Box upsample copy and the new 2:1 Box lane. Arithmetic
   filters, other Box ratios, and nonfinite/negative-zero samples still require
@@ -67,7 +68,7 @@ diagnostic implementation state, not a completed native-backend claim.
   fallback taxonomy. Cases that do not enter the pipeline remain explicitly
   counted outside that cohort; they are not relabeled or silently dropped.
 - [x] Regenerated the schema-v3 all-backends artifact after final source
-  commit `fb74a1122`; the validator keeps `passed_with_backend_gaps` visible
+  commit `2fdc6bb57`; the validator keeps `passed_with_backend_gaps` visible
   until the denominator is proven.
 - Acceptance: reproducible receipt sidecars, equal case-ID digests, exact
   requested/actual backend counts, and no false plain-`passed` aggregate.
