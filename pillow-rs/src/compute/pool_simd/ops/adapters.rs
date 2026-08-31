@@ -5091,7 +5091,7 @@ fn shape_native_float_rank_supported(
         && mode == Some("F")
         && size != 0
         && size % 2 == 1
-        && size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE
+        && size <= SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE
         && u64::from(rank) < area
         && shape.width != 0
         && shape.height != 0
@@ -12901,7 +12901,7 @@ fn native_float_rank_supported_for_image(
         && mode == Some("F")
         && size != 0
         && size % 2 == 1
-        && size <= SIMD_ORDER_STATISTIC_SORT_MAX_SIZE
+        && size <= SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE
         && u64::from(rank) < area
         && img.width() != 0
         && img.height() != 0
@@ -13685,6 +13685,10 @@ fn simd_order_statistic_filter(
 
 const SIMD_FLOAT_ORDER_STATISTIC_MAX_AREA: usize = 81;
 const SIMD_FLOAT_ORDER_STATISTIC_LANES: usize = 8;
+// The byte-domain selector switches away from the fixed network above 5x5,
+// but the existing F-mode vector sorter is independently bounded by its
+// 9x9/81-value storage. Keep that exact F-mode contract available.
+const SIMD_FLOAT_ORDER_STATISTIC_MAX_SIZE: u32 = 9;
 
 #[inline]
 fn sort_float_order_statistic_vectors(values: &mut [f32x8]) {
