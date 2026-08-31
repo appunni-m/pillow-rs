@@ -36,6 +36,11 @@ rename, relabel, or weaken a case to make a gate green.
 - RGBa `ImageOps.fit` now uses the existing exact boxed coefficient path on
   GPU. The strict Fit matrix is 89/89 value-exact, with the formerly excluded
   RGBa case included in the 6/6 native-receipt subset.
+- `ImageDraw.rounded_rectangle` now rejects reversed boxes at the public Rust
+  boundary in Pillow's x-first/y-second order. Previously a radius-zero box
+  with only a reversed y axis reached the empty-span rectangle kernel and was
+  silently accepted; the focused regression and Python facade probe now match
+  Pillow's `ValueError` messages.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row

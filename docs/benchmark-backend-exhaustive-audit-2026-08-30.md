@@ -3113,3 +3113,16 @@ Native CPU/GPU receipts remain **7,090 complete + 102 partial + 0 missing +
 3,315 + 433**. The GPU fallback taxonomy loses one `RGBa` logical-mode entry,
 but the aggregate proof gate stays open for the remaining receipt gaps,
 broader F arithmetic, and performance acceptance.
+
+## 32.6 Rounded-rectangle public validation parity (2026-09-01)
+
+The source parity queue fixed the first divergence for reversed
+`ImageDraw.rounded_rectangle` boxes. Pillow validates the x axis first and
+then the y axis before dispatching its radius-zero rectangle fallback. Rust
+previously validated only inside the deferred CPU kernel, so `(1, 5, 5, 1)`
+was silently accepted as an empty draw. `Draw::rounded_rectangle` now returns
+`ValueError("x1 must be greater than or equal to x0")` or
+`ValueError("y1 must be greater than or equal to y0")` at the public boundary;
+the core regression and Python facade probes match Pillow for both reversed
+axes and for a valid box. No case IDs, expected outputs, thresholds, or
+backend classifications changed.

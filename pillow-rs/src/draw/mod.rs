@@ -1608,6 +1608,21 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        // Pillow validates the two axes before dispatching the radius-zero
+        // fallback.  Without this boundary check a reversed y axis reached
+        // DrawRectangle, whose defensive kernel treats it as an empty span;
+        // that silently accepted an invalid public box instead of reporting
+        // Pillow's axis-specific ValueError.
+        if x1 < x0 {
+            return Err(PilError::ValueError(
+                "x1 must be greater than or equal to x0".into(),
+            ));
+        }
+        if y1 < y0 {
+            return Err(PilError::ValueError(
+                "y1 must be greater than or equal to y0".into(),
+            ));
+        }
         let (fill, outline) = self.shape_inks(fill, outline);
         let r = radius.round() as i32;
         let mut d = r * 2;
@@ -2740,4 +2755,29 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
             canvas.put_rgba(x as u32, y as u32, rgba);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Draw;
+    use crate::image::Image;
+
+    #[test]
+    fn rounded_rectangle_rejects_reversed_axes_in_pillow_order() {
+        let image = Image::new(8, 8, "L", (0, 0, 0, 255)).expect("test image");
+        let mut draw = Draw::new(image, None);
+
+        let error = draw
+            .rounded_rectangle(1, 5, 5, 1, 0.0, None, None, 1)
+            .expect_err("reversed y axis must fail");
+        assert_eq!(error.to_string(), "y1 must be greater than or equal to y0");
+
+        let error = draw
+            .rounded_rectangle(5, 5, 1, 1, 0.0, None, None, 1)
+            .expect_err("reversed x axis must fail");
+        assert_eq!(error.to_string(), "x1 must be greater than or equal to x0");
+
+        draw.rounded_rectangle(1, 1, 5, 5, 0.0, None, None, 1)
+            .expect("a non-reversed box remains valid");
+    }
 }
