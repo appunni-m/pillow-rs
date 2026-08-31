@@ -92,6 +92,13 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
         return filtered_typed(output_x, output_y);
     }
     if params.mode == 8u {
+        // F-mode constant resize uses the unused channel/premultiply slots
+        // as an exact sample bit-pattern. Pillow's normalized filter rows
+        // preserve finite constants, while the ordinary f32 accumulation
+        // below can introduce a byte-visible rounding error.
+        if params.premultiply == 2u {
+            return params.channels;
+        }
         return bitcast<u32>(filtered_float(output_x, output_y));
     }
     let alpha = select(
