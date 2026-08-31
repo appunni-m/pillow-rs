@@ -1,6 +1,8 @@
 # Exact parity-first pending checklist — 2026-08-31
 
-This is the short active queue. The exhaustive historical audit remains in
+**Superseded on 2026-09-01.** Use the [current focused checklist](benchmark-backend-pending-2026-09-01.md)
+as the only active queue. This snapshot is retained for evidence history. The
+exhaustive historical audit remains in
 [`benchmark-backend-exhaustive-audit-2026-08-30.md`](benchmark-backend-exhaustive-audit-2026-08-30.md);
 closed waves and row-by-row history stay there.
 
