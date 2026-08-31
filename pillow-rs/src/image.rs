@@ -2208,19 +2208,32 @@ impl Image {
                 "P"
             };
 
-            if let Some(palette) = palette.clone().or_else(|| source.extract_palette()) {
+            // PA always expands through a palette before color-dependent
+            // operations, even when no palette is attached. Pillow's
+            // libImaging/Convert.c indexed path treats an empty PA palette
+            // as all black; falling through to the raw LA bytes would
+            // incorrectly expose the index as grayscale (for example, index
+            // 7 would become RGB(7, 7, 7)).
+            let palette = palette.clone().or_else(|| source.extract_palette());
+            if palette_mode == "PA" {
+                let expanded = expand_palette_alpha(
+                    &img.to_luma_alpha8(),
+                    palette.as_deref().unwrap_or_default(),
+                );
+                let result = crate::compute::execute_prepared(
+                    prepared,
+                    ops,
+                    &expanded,
+                    explicit_mode.as_deref(),
+                )?;
+                return Ok(Arc::new(result));
+            }
+            if let Some(palette) = palette {
                 let palette_alpha = palette_alpha
                     .clone()
                     .or_else(|| source.palette_alpha())
                     .unwrap_or_default();
-                let expanded = if palette_mode == "PA" {
-                    // PIL's Convert.c PA path takes RGB from the palette and
-                    // alpha exclusively from each PA sample. Any RGBA palette
-                    // alpha is intentionally ignored.
-                    expand_palette_alpha(&img.to_luma_alpha8(), &palette)
-                } else {
-                    expand_palette(&img.to_luma8(), &palette, &palette_alpha)
-                };
+                let expanded = expand_palette(&img.to_luma8(), &palette, &palette_alpha);
                 let result = crate::compute::execute_prepared(
                     prepared,
                     ops,
