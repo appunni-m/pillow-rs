@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from scripts.run_all_backend_tests import (
     backend_coverage_report,
@@ -16,6 +17,7 @@ from scripts.run_all_backend_tests import (
 from scripts.run_migration_benchmark import execution_result
 from scripts.run_migration_parity import (
     classify_pipeline_case,
+    run_case,
     write_pipeline_execution_evidence,
 )
 from scripts.validate_migration_parity_result import (
@@ -311,6 +313,84 @@ def classification_case(
     }
 
 
+def eager_mode_filter_case() -> dict[str, object]:
+    """Build a workflow for the eager ModeFilter implementation path."""
+
+    return {
+        "case_id": "mode-filter-eager",
+        "steps": [
+            {
+                "step_id": "new",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "arguments": {
+                    "mode": {"kind": "literal", "value": "L"},
+                    "size": {"kind": "literal", "value": [1, 1]},
+                },
+            },
+            {
+                "step_id": "filter-type",
+                "surface": "PIL.ImageFilter",
+                "operation": "ModeFilter",
+                "arguments": {},
+            },
+            {
+                "step_id": "filter",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": {"kind": "binding", "step_id": "new"},
+                "arguments": {
+                    "filter": {"kind": "binding", "step_id": "filter-type"}
+                },
+            },
+        ],
+        "observations": ["filter"],
+    }
+
+
+def crop_discard_case() -> dict[str, object]:
+    """Build a workflow whose degenerate crop discards a queued PutPixel."""
+
+    return {
+        "case_id": "crop-discard",
+        "steps": [
+            {
+                "step_id": "new",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "arguments": {
+                    "mode": {"kind": "literal", "value": "L"},
+                    "size": {"kind": "literal", "value": [1, 1]},
+                },
+            },
+            {
+                "step_id": "pixel",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "receiver": {"kind": "binding", "step_id": "new"},
+                "arguments": {},
+            },
+            {
+                "step_id": "crop",
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "receiver": {"kind": "binding", "step_id": "new"},
+                "arguments": {
+                    "box": {"kind": "literal", "value": [2.0, 0.0, 2.0, 1.0]}
+                },
+            },
+            {
+                "step_id": "bytes",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": {"kind": "binding", "step_id": "crop"},
+                "arguments": {},
+            },
+        ],
+        "observations": ["crop", "bytes"],
+    }
+
+
 class ReceiptStateTests(unittest.TestCase):
     def test_backend_coverage_requires_terminal_and_requested_backend_receipts(self) -> None:
         lanes = [
@@ -529,6 +609,152 @@ class ReceiptStateTests(unittest.TestCase):
             )["status"],
             "complete",
         )
+
+    def test_pipeline_case_classification_recognizes_eager_mode_filter(self) -> None:
+        self.assertEqual(
+            classify_pipeline_case(eager_mode_filter_case(), []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+
+    def test_pipeline_case_classification_ignores_queued_pixel_discarded_by_crop(
+        self,
+    ) -> None:
+        self.assertEqual(
+            classify_pipeline_case(crop_discard_case(), []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+
+    def test_successful_final_observation_keeps_prior_receipt_terminal(self) -> None:
+        class Telemetry:
+            def __init__(self) -> None:
+                self.samples: list[dict[str, object] | None] = [
+                    {"actual_backend": "cpu"},
+                    None,
+                    None,
+                ]
+
+            def take_pipeline_telemetry(self) -> dict[str, object] | None:
+                return self.samples.pop(0)
+
+        case = {
+            "case_id": "final-observation-receipt",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "new",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "bytes",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "arguments": {},
+                },
+            ],
+            "observations": ["bytes"],
+        }
+        sink: list[dict[str, object]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "scalar"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=[object(), object()],
+                ),
+                patch(
+                    "scripts.run_migration_parity.serialize_value",
+                    return_value=7,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    pipeline_execution_api=Telemetry(),
+                    pipeline_execution_sink=sink,
+                )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["observations"], [{"step_id": "bytes", "status": "ok", "value": 7}])
+        self.assertEqual(len(sink), 1)
+        self.assertTrue(sink[0]["terminal_complete"])
+
+    def test_unobserved_final_step_clears_prior_receipt_candidate(self) -> None:
+        class Telemetry:
+            def __init__(self) -> None:
+                self.samples: list[dict[str, object] | None] = [
+                    None,
+                    {"actual_backend": "cpu"},
+                    None,
+                    None,
+                ]
+
+            def take_pipeline_telemetry(self) -> dict[str, object] | None:
+                return self.samples.pop(0)
+
+        case = {
+            "case_id": "unobserved-final-step-receipt",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "new",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "resize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "unobserved",
+                    "surface": "PIL.Image.Image",
+                    "operation": "getbands",
+                    "arguments": {},
+                },
+            ],
+            "observations": ["resize"],
+        }
+        sink: list[dict[str, object]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "scalar"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=[object(), object(), object()],
+                ),
+                patch(
+                    "scripts.run_migration_parity.serialize_value",
+                    return_value=7,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    pipeline_execution_api=Telemetry(),
+                    pipeline_execution_sink=sink,
+                )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(sink), 1)
+        self.assertFalse(sink[0]["terminal_complete"])
 
     def test_sidecar_rejects_dropped_pipeline_case_classification(self) -> None:
         cases = [classification_case("deferred", "resize")]

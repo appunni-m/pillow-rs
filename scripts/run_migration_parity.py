@@ -1299,8 +1299,72 @@ def classify_pipeline_case(
     steps = [step for step in case.get("steps", []) if isinstance(step, dict)]
     modes = _workflow_modes(case)
 
+    def receiver_binding(step: dict[str, Any]) -> str | None:
+        receiver = step.get("receiver")
+        if isinstance(receiver, dict) and receiver.get("kind") == "binding":
+            value = receiver.get("step_id")
+            return value if isinstance(value, str) else None
+        return None
+
+    def crop_discards_source(step: dict[str, Any]) -> bool:
+        """Return whether ``Image::crop_signed`` produces a blank canvas."""
+
+        # ``crop_signed`` in ``pillow-rs/src/ops/crop.rs`` routes empty or
+        # fully out-of-source boxes to ``crop_canvas`` without reading pixels.
+        if (step.get("surface"), step.get("operation")) != (
+            "PIL.Image.Image",
+            "crop",
+        ):
+            return False
+        arguments = step.get("arguments")
+        if (
+            not isinstance(arguments, dict)
+            or "box" not in arguments
+            or _workflow_literal(arguments, "box") is None
+        ):
+            return False
+        box = _workflow_literal(arguments, "box")
+        source_id = receiver_binding(step)
+        source = next(
+            (
+                item
+                for item in steps
+                if item.get("step_id") == source_id
+                and item.get("surface") == "PIL.Image"
+                and item.get("operation") == "new"
+            ),
+            None,
+        )
+        size = (
+            _workflow_literal(source.get("arguments"), "size")
+            if source is not None
+            else None
+        )
+        if not (
+            isinstance(box, (list, tuple))
+            and len(box) == 4
+            and all(isinstance(item, (int, float)) for item in box)
+            and size is not None
+        ):
+            return False
+        left, top, right, bottom = box
+        width, height = size
+        if right <= left or bottom <= top:
+            return True
+        clip_left = max(left, 0)
+        clip_top = max(top, 0)
+        clip_right = min(right, width)
+        clip_bottom = min(bottom, height)
+        return clip_right <= clip_left or clip_bottom <= clip_top
+
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
+        if key == ("PIL.ImageFilter", "ModeFilter"):
+            # This step constructs the parameter object consumed by the
+            # eager ``Image::mode_filter`` implementation in
+            # ``pillow-rs/src/ops/param_filters.rs``; it is not itself a
+            # deferred image-pipeline operation.
+            return True
         if key == ("PIL.Image.Image", "crop"):
             # Pillow's optional box form is an independent copy, not a
             # deferred Crop node. Treat both omission and an explicit None as
@@ -1312,39 +1376,41 @@ def classify_pipeline_case(
                 or _workflow_literal(arguments, "box") is None
             ):
                 return True
-            box = _workflow_literal(arguments, "box")
-            sizes = [
-                _workflow_literal(item.get("arguments"), "size")
-                for item in steps
-                if item.get("operation") == "new"
-            ]
-            size = next(
-                (
-                    value
-                    for value in sizes
-                    if isinstance(value, (list, tuple))
-                    and len(value) == 2
-                    and all(isinstance(item, (int, float)) for item in value)
-                ),
-                None,
+            return crop_discards_source(step)
+        if key == ("PIL.Image.Image", "filter"):
+            # ``ImageFilter.ModeFilter`` is implemented as an eager core
+            # operation (it materializes and reconstructs the result), unlike
+            # the deferred convolution filters exposed through the same
+            # Python method.  Follow its workflow binding rather than
+            # treating every ``filter`` call as a pending pipeline node.
+            arguments = step.get("arguments")
+            filter_desc = (
+                arguments.get("filter") if isinstance(arguments, dict) else None
             )
-            if (
-                isinstance(box, (list, tuple))
-                and len(box) == 4
-                and all(isinstance(item, (int, float)) for item in box)
-                and size is not None
-            ):
-                left, top, right, bottom = box
-                width, height = size
-                if right <= left or bottom <= top:
-                    return True
-                clip_left = max(left, 0)
-                clip_top = max(top, 0)
-                clip_right = min(right, width)
-                clip_bottom = min(bottom, height)
-                if clip_right <= clip_left or clip_bottom <= clip_top:
-                    return True
+            if isinstance(filter_desc, dict) and filter_desc.get("kind") == "binding":
+                filter_step_id = filter_desc.get("step_id")
+                return any(
+                    candidate.get("step_id") == filter_step_id
+                    and candidate.get("surface") == "PIL.ImageFilter"
+                    and candidate.get("operation") == "ModeFilter"
+                    for candidate in steps
+                )
             return False
+        if key == ("PIL.Image.Image", "putpixel"):
+            # A degenerate/out-of-source crop creates a new blank canvas and
+            # never reads the receiver.  A preceding queued PutPixel is
+            # therefore not part of the observed result and cannot require a
+            # backend receipt.  Restrict this proof to the same bound image.
+            receiver = receiver_binding(step)
+            step_index = next(
+                (index for index, candidate in enumerate(steps) if candidate is step),
+                len(steps),
+            )
+            return receiver is not None and any(
+                receiver_binding(later) == receiver
+                and crop_discards_source(later)
+                for later in steps[step_index + 1 :]
+            )
         if key == ("PIL.Image.Image", "point"):
             # The Rust core mirrors Pillow's eager scalar affine path for
             # I/F/I;16* images. Byte LUTs still use the deferred Eval path.
@@ -1514,9 +1580,16 @@ def run_case(
                     append_execution_receipt(
                         receipt, status="completed", step_id=step_id
                     )
-                elif step_index == len(case["steps"]) - 1:
-                    # A missing terminal receipt must not inherit an earlier
-                    # dispatch and masquerade as proof for this workflow.
+                elif (
+                    step_index == len(case["steps"]) - 1
+                    and step_id not in case.get("observations", [])
+                ):
+                    # A missing receipt on a final pipeline operation must
+                    # not inherit an earlier dispatch and masquerade as proof
+                    # for this workflow.  An observed final result is the
+                    # exception: its successful serialization is the boundary
+                    # that proves the prior candidate ran, even when the
+                    # result operation itself emits no separate receipt.
                     terminal_receipt_index = None
             step_elapsed_ns = time.perf_counter_ns() - step_started_ns
             if telemetry_sink is not None:
