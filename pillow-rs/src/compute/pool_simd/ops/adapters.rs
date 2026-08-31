@@ -7250,6 +7250,13 @@ pub(crate) fn simd_execute_in_place(
             }))
         }
         PipelineOp::Brightness { factor } => {
+            // Pillow's Brightness enhancement blends the source with black;
+            // factor 1.0 is therefore an exact source copy. Preserve the
+            // native layout and avoid rebuilding/scanning an identity LUT.
+            if *factor == 1.0 {
+                crate::compute::record_pipeline_operation_path("native-copy");
+                return Ok(true);
+            }
             let factor_fp = (*factor * 1000.0) as u32;
             let lut: Vec<u8> = (0u32..=255)
                 .map(|value| ((value as u64 * factor_fp as u64) / 1000).min(255) as u8)
@@ -10624,6 +10631,16 @@ pub fn simd_brightness(
     let PipelineOp::Brightness { factor } = op else {
         return Err(PilError::ValueError("expected Brightness op".into()));
     };
+    // Pillow's Brightness enhancement blends the source with black; factor
+    // 1.0 is therefore an exact source copy. Preserve the native layout and
+    // avoid rebuilding/scanning an identity LUT.
+    if *factor == 1.0
+        && native_brightness_layout(img, mode)
+            .is_some_and(|channels| has_nonempty_byte_data(img, channels))
+    {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(img.clone());
+    }
     // The packed scalar adapter intentionally quantizes the public factor
     // to the same fixed-point domain as the SIMD operation. Build that exact
     // 256-entry map once and apply it in native L/LA/RGB/RGBA/CMYK storage;

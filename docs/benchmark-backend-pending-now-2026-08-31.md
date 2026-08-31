@@ -86,10 +86,40 @@ receipts with no fallback, and a maintained regression input for every row.
 
 - [ ] Produce two consecutive budget reports with zero violations on the same
   source and equal receipt cohorts. Current reports are not closure evidence:
-  112 and 56 one-run violations; the stable intersection is 11 rows.
+  56 and 197 one-run violations; the stable intersection is 11 rows.
 - [ ] Investigate only the stable 11-row cohort first; retain the noisy union
   as variance evidence. The current rows are listed in the historical audit's
   performance appendix.
+
+### Recomputed cohort and bounded optimization (2026-08-31)
+
+The two current same-source receipts have 14 raw pair intersections, but three
+are not comparable: a target row lacks a terminal `actual_backend` receipt or
+has a non-completed execution. Applying the equal-ID/no-fallback filter leaves
+11 stable rows. The first filtered receipt has 46 violations and the repeat
+has 165; these counts remain open performance evidence, not a passing gate.
+
+Stable IDs:
+
+- Pillow: `pillow/pipeline-chain.reviewed.draw-batch-rgb-shapes`
+- CPU: `pipeline-chain.simd-constant.1024x768`,
+  `pipeline-chain.terminal-read.analysis-masked-rgb-1024x768`,
+  `pipeline-chain.terminal-read.imagestat.cmyk-1024x768`,
+  `pipeline-matrix.expanded.autocontrast.32x32`
+- SIMD: `pipeline-chain.matrix-002`, `pipeline-chain.matrix-020`,
+  `pipeline-chain.metadata-cache.extractband-rgba`,
+  `pipeline-chain.reviewed.draw-filter-invert`,
+  `pipeline-chain.reviewed.resize-rotate-crop`,
+  `pipeline-matrix.expanded.brightness.256x256`
+
+- [x] SIMD Brightness factor `1.0` now takes an exact native-copy path in
+  direct and owned-segment execution, avoiding the identity LUT build and
+  frame scan. Focused SIMD parity remains exact (`1/1`); the maintained
+  benchmark's SIMD median for `pipeline-matrix.expanded.brightness.256x256`
+  moved from `0.0870625 ms` to `0.0442915 ms` (backend phase
+  `46666.5 ns` to `4354.5 ns`).
+- [ ] Re-run paired full receipts after this source change; do not infer gate
+  closure from the focused timing sample.
 
 ## Publication
 
