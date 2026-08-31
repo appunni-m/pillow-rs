@@ -7918,12 +7918,14 @@ impl GpuPool {
                                 }
                         )
                     }))
-                // RGBa uses the same four-byte storage as RGBA.  Pillow's
-                // ImageChops kernels operate on the stored premultiplied
-                // channels directly; they do not unpremultiply before an
-                // add/multiply/difference operation.  Keep this whitelist
-                // limited to those raw channel kernels and the corresponding
-                // four-byte pixel write.
+                // RGBa uses the same four-byte storage as RGBA. Pillow's
+                // Image.resize leaves RGBa in its already-premultiplied
+                // representation (PIL/Image.py resize mode dispatch), so
+                // boxed Fit can use the same coefficient kernels with
+                // `premultiply = 0`; ImageChops likewise operates on these
+                // stored bytes directly. Keep this whitelist limited to
+                // raw-channel operations and geometry that preserves that
+                // four-byte sample contract.
                 || (logical_mode == "RGBa"
                     && ops.iter().all(|op| {
                         matches!(
@@ -7948,6 +7950,7 @@ impl GpuPool {
                                 | PipelineOp::Cover { .. }
                                 | PipelineOp::Pad { .. }
                                 | PipelineOp::Transform { .. }
+                                | PipelineOp::Fit { .. }
                                 | PipelineOp::Resize {
                                     ..
                                 }
@@ -9440,5 +9443,42 @@ mod tests {
             &image,
             Some("I")
         ));
+    }
+
+    #[test]
+    fn rgb_a_fit_uses_native_raw_channel_resize() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let mut source_bytes = vec![0u8; 9 * 8 * 4];
+        source_bytes[(3 * 9 + 2) * 4..][..4].copy_from_slice(&[200, 100, 50, 128]);
+        let source = Image::frombytes("RGBa", (9, 8), &source_bytes).expect("RGBa source");
+        let fitted = crate::ops::imageops::fit(&source, 4, 3, Some("BILINEAR"), 0.0, (0.5, 0.5))
+            .expect("RGBa Fit operation");
+        let actual = match fitted.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU RGBa Fit failed: {error}"),
+        };
+        assert_eq!(
+            actual,
+            vec![
+                4, 2, 1, 3, 5, 3, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 14, 7, 3, 9, 19, 9, 5, 12, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ]
+        );
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU RGBa Fit must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 }
