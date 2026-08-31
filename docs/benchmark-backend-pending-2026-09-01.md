@@ -26,6 +26,9 @@ rename, relabel, or weaken a case to make a gate green.
 - Finite nonconstant F Box upscales have a separate exact copy proof for
   arbitrary non-downscaling geometry, including mixed `PutData(F)` plus Box
   chains (144/144 direct native-GPU samples).
+- Finite heterogeneous F bicubic arithmetic now matches Pillow's Horner/FMA
+  evaluation and coefficient rounding: the focused matrix is 9,000/9,000,
+  with the maintained F resize slice at 23/23 after the correction.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
@@ -45,11 +48,12 @@ rename, relabel, or weaken a case to make a gate green.
 - [x] Keep the finite nonconstant Box-upscale copy lane admitted for arbitrary
   non-downscaling geometry; its one-tap relocation proof is separate from
   arithmetic-filter admission.
-- [ ] Extend exact arithmetic coverage to heterogeneous/non-dyadic Bilinear,
-  broader Bicubic/Lanczos/Hamming rows, Box downscales outside the proven
-  dyadic row limits, and chains outside the cumulative significand-span
-  proof. Keep every unproven arithmetic input on exact host control,
-  including NaN, infinity, and negative zero.
+- [ ] Extend native-GPU exact arithmetic coverage to heterogeneous/non-dyadic
+  Bilinear, broader Bicubic/Lanczos/Hamming rows, Box downscales outside the
+  proven dyadic row limits, and chains outside the cumulative
+  significand-span proof. CPU bicubic parity is fixed; keep every unproven
+  device arithmetic input on exact host control, including NaN, infinity,
+  and negative zero.
 
 ### P1 — honest backend-proof denominator
 
@@ -61,21 +65,22 @@ rename, relabel, or weaken a case to make a gate green.
   leave the backend-proof cohort; missing, partial, and indeterminate paths
   remain proof gaps. The all-backend envelope stays schema-v3, and old @1
   sidecars are diagnostic-only until regenerated.
-- [x] Regenerate and review the schema-v3 all-backend artifact. At source
-  `41e17d199`, CPU/GPU report **6,924 complete + 466 partial + 0 missing +
-  3,129 not applicable + 433 indeterminate**; SIMD reports
-  **6,936 + 466 + 0 + 3,117 + 433**. All six public lanes remain
-  10,952/10,952 and GPU smoke is 1/1; the aggregate is correctly
-  `passed_with_backend_gaps`. Artifact SHA-256:
-  `af33826af2951bef114107c3596522af24f2cc6db8c1ab8b948c4fc196fb0d73`.
+- [x] Regenerate and review the schema-v3 all-backend artifact at the
+  committed source `d1926bf64`. CPU/GPU report **7,090 complete + 102
+  partial + 0 missing + 3,327 not applicable + 433 indeterminate**; SIMD
+  reports **7,102 complete + 102 partial + 0 missing + 3,315 not applicable +
+  433 indeterminate**. All six public lanes remain 10,952/10,952 and GPU
+  smoke is 1/1; the aggregate is correctly `passed_with_backend_gaps`.
+  Artifact SHA-256: `a08da83b07a58e1ffe888d94041cd9ba8947110a6f4ef53c1421fa9070a66f41`.
 - [x] Fix the receipt boundary and classifier gaps without changing IDs or
   denominators: an observed final serialization may prove an earlier
   dispatch, while eager filter constructors/`ModeFilter`, source-backed
   conversion/no-op paths, and source-independent degenerate or out-of-bounds
-  crops are not deferred pipeline work. The final run keeps CPU/GPU at 466
-  partial + 0 missing and moves the indeterminate partition to 433; SIMD
-  remains 466 partial + 0 missing with 433 indeterminate. Receipt/evidence
-  regression tests pass (19/19).
+  crops are not deferred pipeline work. Canonical Stat/getbbox/getdata
+  observations and public crop validation now remove fixture-only prefixes;
+  the final run keeps CPU/GPU at 102 partial + 0 missing and SIMD at 102
+  partial + 0 missing, with 433 indeterminate cases in each native lane.
+  Receipt/evidence regression tests pass (19/19).
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -98,9 +103,9 @@ rename, relabel, or weaken a case to make a gate green.
 
 ## Required closeout
 
-- [ ] Run the maintained focused lane, full strict all-backend parity, receipt
-  and evidence validators, format/lint checks, then commit and push only after
-  the corresponding evidence changes.
+- [x] Run the maintained focused lanes, full strict all-backend parity, receipt
+  and evidence validators, and format/core-lint checks. Push the corresponding
+  source and checklist commits only after the final artifact is validated.
 
-Last verified source: `41e17d199` (full all-backend run; working tree has
+Last verified source: `d1926bf64` (full all-backend run; working tree has
 pre-existing unrelated changes). The overall goal is intentionally **active**.

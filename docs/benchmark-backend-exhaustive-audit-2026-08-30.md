@@ -3037,3 +3037,43 @@ The remaining actionable buckets are the broader F-mode arithmetic proof,
 the 466 partial and 433 indeterminate receipt cases, GPU fallback/backend
 identity evidence, and two consecutive zero-violation timing reports. The
 overall parity goal remains active.
+
+## 32.4 Final parity-first rerun (2026-09-01)
+
+The concise queue is [`benchmark-backend-pending-2026-09-01.md`](benchmark-backend-pending-2026-09-01.md).
+Two source-level parity divergences were fixed and verified without changing
+case IDs, expected values, thresholds, or backend admissions:
+
+- `ImageOps.crop` now validates the derived box at the public call boundary,
+  matching Pillow's width-first `right < left` and height-second `lower < upper`
+  errors while retaining the valid equality/empty-image case. The prior Rust
+  path queued an invalid `CropBorder` and failed only at materialization.
+- Constant `I`/`F` statistics now match Pillow's empty equal-extrema histogram:
+  count `0`, median `255`, min `255`, and max `0`. The prior Rust path reported
+  the pixel count and median `0`. Canonical input generation also corrected
+  fixture-only `Stat.extrema`, `getbbox`, and `getdata` observation contracts
+  while preserving the fixed 10,952-case denominator.
+- Pillow-compatible F bicubic Horner/FMA evaluation and coefficient rounding
+  now match the pinned arm64 oracle. The finite heterogeneous matrix is
+  9,000/9,000, the maintained F resize slice is 23/23, and the core regression
+  suite is 12/12.
+
+At committed source `d1926bf649e0e9e8a50d10de892af6f53ea21873`, the maintained
+full all-backend run keeps CPU, SIMD, GPU, Node WASM, and browser WASM at
+10,952/10,952 value-exact comparisons with zero failed, not-run, or
+infrastructure-error cases; GPU smoke is 1/1. The schema-v3 artifact is
+`build/migration-parity/all-backends-test-result.json` with SHA-256
+`a08da83b07a58e1ffe888d94041cd9ba8947110a6f4ef53c1421fa9070a66f41`, and the
+case-ID digest remains
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+
+The corrected native receipt partitions are CPU/GPU **7,090 complete + 102
+partial + 0 missing + 3,327 not applicable + 433 indeterminate**, and SIMD
+**7,102 + 102 + 0 + 3,315 + 433**. The 102 partial prefixes are the remaining
+real error-path workflows (pad, wrong-mode histogram, and nine miscellaneous
+edge errors); the former crop/stat/getbbox/getdata observation prefixes are
+gone. Receipt/evidence checks pass 19/19, input regeneration is deterministic,
+and core clippy completes with warnings only. The aggregate remains
+`passed_with_backend_gaps`; broader native-GPU F arithmetic, fallback/backend
+identity evidence, and two consecutive zero-violation timing reports remain
+open in the focused checklist.
