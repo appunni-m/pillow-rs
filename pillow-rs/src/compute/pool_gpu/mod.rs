@@ -14,7 +14,7 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
 use crate::error::PilError;
-use crate::ops::pil_resize::{FilterCoeffs, precompute_coeffs};
+use crate::ops::pil_resize::{FilterCoeffs, precompute_coeffs, precompute_coeffs_boxed_for_filter};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -978,6 +978,129 @@ fn gpu_resize_coefficients_are_safe(
     resize_coeff_word_count(&horizontal).is_ok() && resize_coeff_word_count(&vertical).is_ok()
 }
 
+/// Build the exact two-pass coefficient tables for ImageOps.fit's fractional
+/// source box.  The boxed builder performs Pillow's required f32 boundary
+/// conversion before calculating f64 centers and 22-bit weights; reusing it
+/// here keeps the GPU's control table identical to `pil_resize_boxed` while
+/// leaving all sample reads, accumulation, and writes on the device.
+/// This follows Pillow's `libImaging/Resample.c::precompute_coeffs` contract:
+/// `ImageOps.fit` passes its crop box through the float ABI before those
+/// coefficients are calculated, so retaining the fractional box is essential
+/// at pixel boundaries.
+fn gpu_fit_coefficients(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    bleed: f64,
+    centering: (f64, f64),
+    filter: ResampleFilter,
+) -> Option<(FilterCoeffs, FilterCoeffs)> {
+    let (crop_left, crop_top, crop_w, crop_h) = gpu_fit_box(
+        source_dimensions.0,
+        source_dimensions.1,
+        output_dimensions.0,
+        output_dimensions.1,
+        bleed,
+        centering,
+    )?;
+    if matches!(filter, ResampleFilter::Nearest) {
+        return Some((
+            gpu_fit_nearest_coefficients(
+                output_dimensions.0,
+                source_dimensions.0,
+                crop_left,
+                crop_left + crop_w,
+            ),
+            gpu_fit_nearest_coefficients(
+                output_dimensions.1,
+                source_dimensions.1,
+                crop_top,
+                crop_top + crop_h,
+            ),
+        ));
+    }
+    Some((
+        precompute_coeffs_boxed_for_filter(
+            output_dimensions.0,
+            source_dimensions.0,
+            crop_left,
+            crop_left + crop_w,
+            filter,
+        ),
+        precompute_coeffs_boxed_for_filter(
+            output_dimensions.1,
+            source_dimensions.1,
+            crop_top,
+            crop_top + crop_h,
+            filter,
+        ),
+    ))
+}
+
+/// Build one-tap tables for Pillow's boxed nearest affine mapping.
+///
+/// `Image.resize(box=...)` does not use the convolution coefficients for
+/// `NEAREST`: `ImagingScaleAffine` evaluates the source coordinate from the
+/// float box bounds for each output pixel.  Keep that mapping in the host
+/// control table (after the same f32 boundary conversion) so the exact
+/// resize kernels can still own every byte read and write.
+fn gpu_fit_nearest_coefficients(
+    output_size: u32,
+    source_size: u32,
+    box_start: f64,
+    box_end: f64,
+) -> FilterCoeffs {
+    if output_size == 0 || source_size == 0 {
+        return FilterCoeffs {
+            xmin: Vec::new(),
+            count: Vec::new(),
+            offsets: Vec::new(),
+            weights: Vec::new(),
+        };
+    }
+    let box_start_f32 = box_start as f32;
+    let box_end_f32 = box_end as f32;
+    let box_start = box_start_f32 as f64;
+    let scale = f64::from(box_end_f32 - box_start_f32) / f64::from(output_size);
+    let last_source = i64::from(source_size - 1);
+    let mut xmin = Vec::with_capacity(output_size as usize);
+    let mut count = Vec::with_capacity(output_size as usize);
+    let mut offsets = Vec::with_capacity(output_size as usize);
+    let mut weights = Vec::with_capacity(output_size as usize);
+    for output in 0..output_size {
+        let coordinate = box_start + (f64::from(output) + 0.5) * scale;
+        let source = (coordinate.floor() as i64).clamp(0, last_source);
+        xmin.push(source);
+        count.push(1);
+        offsets.push(weights.len());
+        weights.push(1i64 << 22);
+    }
+    FilterCoeffs {
+        xmin,
+        count,
+        offsets,
+        weights,
+    }
+}
+
+fn gpu_fit_coefficients_are_safe(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    bleed: f64,
+    centering: (f64, f64),
+    filter: ResampleFilter,
+) -> bool {
+    let Some((horizontal, vertical)) = gpu_fit_coefficients(
+        source_dimensions,
+        output_dimensions,
+        bleed,
+        centering,
+        filter,
+    ) else {
+        return false;
+    };
+    resize_coeff_word_count(&horizontal).is_ok() && resize_coeff_word_count(&vertical).is_ok()
+}
+
 fn create_sized_buffer(
     device: &wgpu::Device,
     label: &'static str,
@@ -1500,6 +1623,21 @@ impl GpuInner {
                     horizontal,
                     vertical,
                     place,
+                });
+            } else if matches!(op, PipelineOp::Fit { .. }) {
+                let horizontal = self.resolve_pipeline(
+                    "__internal_resize_h",
+                    "resize_convolution_h.wgsl",
+                    include_str!("shaders/resize_convolution_h.wgsl"),
+                )?;
+                let vertical = self.resolve_pipeline(
+                    "__internal_resize_v",
+                    "resize_convolution_v.wgsl",
+                    include_str!("shaders/resize_convolution_v.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Resize {
+                    horizontal,
+                    vertical,
                 });
             } else if matches!(op, PipelineOp::Resize { filter, .. }
                 if matches!(filter, ResampleFilter::Nearest)
@@ -2137,6 +2275,11 @@ impl GpuInner {
             // Header + resize controls + placement controls. The final
             // output dimensions appended below are included separately.
             9
+        } else if matches!(op, PipelineOp::Fit { .. }) {
+            // Fit is lowered to the exact separable resize kernels. Its
+            // fractional crop is carried by the coefficient ranges, leaving
+            // the same four resize control words as a public Resize.
+            4
         } else if let PipelineOp::Transform { method, .. } = op {
             // extract_params contributes ten public words; the executor then
             // adds premultiply, method, two projective values, and (for one
@@ -2239,6 +2382,40 @@ impl GpuInner {
                 })
                 .ok_or_else(|| {
                     PilError::ValueError("GPU resize coefficient arena size overflow".into())
+                })?;
+        }
+
+        if let PipelineOp::Fit {
+            w,
+            h,
+            bleed,
+            centering,
+            filter,
+            ..
+        } = op
+        {
+            let (horizontal, vertical) =
+                gpu_fit_coefficients(source_dimensions, (*w, *h), *bleed, *centering, *filter)
+                    .ok_or_else(|| {
+                        PilError::ValueError("GPU Fit has no safe crop geometry".into())
+                    })?;
+            let horizontal_bytes = resize_coeff_word_count(&horizontal)?
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU Fit coefficient arena size overflow".into())
+                })?;
+            let vertical_bytes = resize_coeff_word_count(&vertical)?
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU Fit coefficient arena size overflow".into())
+                })?;
+            total = total
+                .checked_add(aligned_bytes(horizontal_bytes, storage_alignment))
+                .and_then(|value| {
+                    value.checked_add(aligned_bytes(vertical_bytes, storage_alignment))
+                })
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU Fit coefficient arena size overflow".into())
                 })?;
         }
 
@@ -2406,6 +2583,15 @@ impl GpuInner {
                 // encode_batch; using the resize variant here makes the
                 // coefficient range and uniform preparation follow the same
                 // binding contract as public Resize.
+                self.resolve_pipeline(
+                    "__internal_resize_h",
+                    "resize_convolution_h.wgsl",
+                    include_str!("shaders/resize_convolution_h.wgsl"),
+                )?
+            } else if matches!(op, PipelineOp::Fit { .. }) {
+                // Fit's public crop box is fractional, but its exact byte
+                // implementation is the same boxed two-pass convolution as
+                // Resize once the host has supplied the coefficient tables.
                 self.resolve_pipeline(
                     "__internal_resize_h",
                     "resize_convolution_h.wgsl",
@@ -2623,29 +2809,21 @@ impl GpuInner {
                     scale(size.2),
                 ]);
                 params[2] = gpu_pixel_mode_code(*source_mode).unwrap_or(op_mode);
-            } else if let PipelineOp::Fit {
-                bleed,
-                centering,
-                filter,
-                ..
-            } = op
-            {
-                let (crop_left, crop_top, crop_w, crop_h) = gpu_fit_box(
-                    cur_w, cur_h, out_w, out_h, *bleed, *centering,
-                )
-                .ok_or_else(|| PilError::ValueError("GPU Fit has no safe crop geometry".into()))?;
-                // fit.wgsl consumes target dimensions followed by the
-                // fractional source crop box.  Keep the values as f32 bits
-                // in the uniform arena; the shader performs the same
-                // pixel-centre mapping as the scalar boxed-resize path.
+            } else if let PipelineOp::Fit { filter, .. } = op {
+                // Fit's fractional crop is represented exactly by its boxed
+                // coefficient ranges.  The convolution shaders therefore
+                // consume the same control words as Resize; no source pixels
+                // are materialized on the host and no f32 crop mapping is
+                // performed by a shader.
                 params.extend([
                     out_w,
                     out_h,
-                    (crop_left as f32).to_bits(),
-                    (crop_top as f32).to_bits(),
-                    (crop_w as f32).to_bits(),
-                    (crop_h as f32).to_bits(),
-                    gpu_resample_filter_code(*filter),
+                    gpu_resize_channel_count(op_mode),
+                    u32::from(gpu_resize_should_premultiply(
+                        op_mode,
+                        logical_mode,
+                        *filter,
+                    )),
                 ]);
             } else {
                 params.extend(registry::extract_params(op));
@@ -2701,6 +2879,31 @@ impl GpuInner {
                         &vertical,
                         storage_alignment,
                     )?)
+                }
+                PipelineOp::Fit {
+                    bleed,
+                    centering,
+                    filter,
+                    ..
+                } => {
+                    let (horizontal, vertical) = gpu_fit_coefficients(
+                        (cur_w, cur_h),
+                        (out_w, out_h),
+                        *bleed,
+                        *centering,
+                        *filter,
+                    )
+                    .ok_or_else(|| {
+                        PilError::ValueError("GPU Fit has no safe crop geometry".into())
+                    })?;
+                    let ranges = self.append_resize_coeff_ranges(
+                        &mut img2_arena,
+                        auxiliary_cache,
+                        &horizontal,
+                        &vertical,
+                        storage_alignment,
+                    )?;
+                    Some(ranges)
                 }
                 _ => None,
             };
@@ -4529,7 +4732,8 @@ fn gpu_dispatch_count(ops: &[PipelineOp], logical_mode: Option<&str>) -> u64 {
             // Histogram operations are one public step but four device
             // dispatches: clear, gather, LUT derivation, and remap.
             4
-        } else if matches!(&ops[index], PipelineOp::Resize { filter, .. }
+        } else if matches!(&ops[index], PipelineOp::Fit { .. })
+            || matches!(&ops[index], PipelineOp::Resize { filter, .. }
             if !matches!(filter, ResampleFilter::Nearest)
                 || gpu_resize_nearest_uses_coefficients(logical_mode))
         {
@@ -4625,23 +4829,12 @@ fn gpu_rotate_affine(
     Some(([a, b, c, d, e, f], (out_w, out_h)))
 }
 
-fn gpu_resample_filter_code(filter: ResampleFilter) -> u32 {
-    match filter {
-        ResampleFilter::Nearest => 0,
-        ResampleFilter::Bilinear => 1,
-        ResampleFilter::Bicubic => 2,
-        ResampleFilter::Lanczos => 3,
-        ResampleFilter::Box => 4,
-        ResampleFilter::Hamming => 5,
-    }
-}
-
 /// Return the floating-point source crop box used by ImageOps.fit.
 ///
 /// Fit's public contract resamples this box directly; rounding it to integer
 /// crop coordinates before resizing changes edge pixels for non-centred or
-/// bleed-enabled calls.  Keep all four values in the GPU uniform block so the
-/// shader can perform the same inverse mapping as the scalar implementation.
+/// bleed-enabled calls. The exact device path uses these values to build the
+/// same boxed coefficient tables as the scalar implementation.
 fn gpu_fit_box(
     source_w: u32,
     source_h: u32,
@@ -5255,8 +5448,8 @@ fn gpu_reduce_is_identity(op: &PipelineOp) -> bool {
 /// With no bleed and equal source/target dimensions, the fit planner's crop
 /// box is the complete source image.  Pillow's boxed resize is then an exact
 /// sample-preserving copy for every byte resampling filter; use the native
-/// Duplicate shader instead of sending this case through the fractional-box
-/// Fit shader (which intentionally remains host-controlled for real crops).
+/// Duplicate shader instead of building redundant fractional-box coefficient
+/// tables for this case.
 /// Keep the lowering limited to ordinary packed byte modes so a logical mode
 /// whose sample contract is not represented by the RGBA transport cannot be
 /// silently narrowed by the optimization.
@@ -5502,6 +5695,17 @@ fn gpu_dimensions_require_cpu(ops: &[PipelineOp], image: &DynamicImage) -> bool 
         | PipelineOp::Cover { filter, .. } = op
         {
             if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), next) {
+                return true;
+            }
+        }
+        if let PipelineOp::Fit {
+            bleed,
+            centering,
+            filter,
+            ..
+        } = op
+        {
+            if !gpu_fit_coefficients_are_safe((cur_w, cur_h), next, *bleed, *centering, *filter) {
                 return true;
             }
         }
@@ -5934,7 +6138,8 @@ fn gpu_dispatch_dimensions_require_cpu(
                 | PipelineOp::GaussianBlur { .. }
         ) {
             next.1 > max_workgroups_per_dimension || next.0 > max_workgroups_per_dimension
-        } else if matches!(op, PipelineOp::Resize { filter, .. }
+        } else if matches!(op, PipelineOp::Fit { .. })
+            || matches!(op, PipelineOp::Resize { filter, .. }
             if !matches!(filter, ResampleFilter::Nearest)
                 || gpu_resize_nearest_uses_coefficients(logical_mode))
         {
@@ -5970,7 +6175,8 @@ fn gpu_shader_work_items(
     // not the kernel radius, determines their safety.
     let output_pixels = u64::from(output_dimensions.0) * u64::from(output_dimensions.1);
     let (source_w, source_h) = source_dimensions;
-    if matches!(op, PipelineOp::Resize { filter, .. } | PipelineOp::Scale { filter, .. }
+    if matches!(op, PipelineOp::Fit { .. })
+        || matches!(op, PipelineOp::Resize { filter, .. } | PipelineOp::Scale { filter, .. }
         if !matches!(filter, ResampleFilter::Nearest)
             || gpu_resize_nearest_uses_coefficients(logical_mode))
     {
@@ -6392,8 +6598,7 @@ fn gpu_geometry_requires_exact_host_control(
     for op in ops {
         let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
-        if matches!(op, PipelineOp::Fit { .. })
-            || thumbnail_needs_control
+        if thumbnail_needs_control
             || (rotate_needs_typed_control
                 && matches!(op, PipelineOp::Transform { .. } | PipelineOp::Rotate { .. }))
         {
