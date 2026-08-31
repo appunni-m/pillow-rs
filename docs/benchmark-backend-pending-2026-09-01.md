@@ -29,6 +29,13 @@ rename, relabel, or weaken a case to make a gate green.
 - Finite heterogeneous F bicubic arithmetic now matches Pillow's Horner/FMA
   evaluation and coefficient rounding: the focused matrix is 9,000/9,000,
   with the maintained F resize slice at 23/23 after the correction.
+- F-mode nearest resize now follows Pillow's cumulative f64 affine stepping
+  and copies the opaque sample word on GPU, preserving boundary selection,
+  NaN, infinity, and signed zero. The focused F parity slice is 13/13, and
+  the native GPU regression covers finite and special-value 1x2→1x7 cases.
+- RGBa `ImageOps.fit` now uses the existing exact boxed coefficient path on
+  GPU. The strict Fit matrix is 89/89 value-exact, with the formerly excluded
+  RGBa case included in the 6/6 native-receipt subset.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
@@ -66,12 +73,12 @@ rename, relabel, or weaken a case to make a gate green.
   remain proof gaps. The all-backend envelope stays schema-v3, and old @1
   sidecars are diagnostic-only until regenerated.
 - [x] Regenerate and review the schema-v3 all-backend artifact at the
-  committed source `d1926bf64`. CPU/GPU report **7,090 complete + 102
+  committed source `5cc713f99`. CPU/GPU report **7,090 complete + 102
   partial + 0 missing + 3,327 not applicable + 433 indeterminate**; SIMD
   reports **7,102 complete + 102 partial + 0 missing + 3,315 not applicable +
   433 indeterminate**. All six public lanes remain 10,952/10,952 and GPU
   smoke is 1/1; the aggregate is correctly `passed_with_backend_gaps`.
-  Artifact SHA-256: `a08da83b07a58e1ffe888d94041cd9ba8947110a6f4ef53c1421fa9070a66f41`.
+  Artifact SHA-256: `93eba42234b785614daf7f8cc8651fd04731607de6934bb5f46a74c78e808672`.
 - [x] Fix the receipt boundary and classifier gaps without changing IDs or
   denominators: an observed final serialization may prove an earlier
   dispatch, while eager filter constructors/`ModeFilter`, source-backed
@@ -107,5 +114,5 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, and format/core-lint checks. Push the corresponding
   source and checklist commits only after the final artifact is validated.
 
-Last verified source: `d1926bf64` (full all-backend run; working tree has
+Last verified source: `5cc713f99` (full all-backend run; working tree has
 pre-existing unrelated changes). The overall goal is intentionally **active**.
