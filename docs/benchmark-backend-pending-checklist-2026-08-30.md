@@ -119,7 +119,7 @@ open. Use the focused checklist linked above for the execution order.
   dropped from roughly 64 µs to 3 µs at the adapter boundary, passed strict CPU
   parity 10,952/10,952, and is absent from both after-reduce violation lists.
   The source-pixel guard also fixed the initial output-pixel-threshold
-  regression on 1024×768 reductions; source change is commit `ec63b5924`.
+  regression on 1024×768 reductions; source change is commit `09fe72ee8`.
 
 ## Latest receipts
 
