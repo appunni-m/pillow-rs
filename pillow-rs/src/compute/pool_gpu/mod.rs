@@ -140,6 +140,53 @@ fn gpu_uniform_blur_can_copy(ops: &[PipelineOp], image: &DynamicImage) -> bool {
         .all(|pixel| pixel == first)
 }
 
+/// Return the exact `f32` bit pattern for a constant F-mode resize batch.
+///
+/// Pillow's `ImagingResample` normalizes each filter row, so its finite
+/// constant F sample remains unchanged; the CPU `resize_f` implementation
+/// uses the same invariant for its exact constant fast path.  The ordinary
+/// mode-8 WGSL convolution accumulates f32 values with quantized weights and
+/// therefore cannot promise those bytes for a mixed image.  Restrict the
+/// native constant lowering to an all-resize batch whose source words prove
+/// that invariant; callers keep mixed filtered F input on host semantic
+/// control until a general f64-equivalent device accumulator exists.
+fn gpu_f_resize_constant_bits(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> Option<u32> {
+    if logical_mode != Some("F")
+        || ops.is_empty()
+        || !ops.iter().all(|op| {
+            matches!(
+                op,
+                PipelineOp::Resize { filter, .. }
+                    if !matches!(filter, ResampleFilter::Nearest)
+            )
+        })
+    {
+        return None;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return None;
+    };
+    let expected = CheckedDims::new(image.width(), image.height(), 4)
+        .ok()?
+        .total_bytes();
+    let bytes = pixels.as_raw();
+    if bytes.len() != expected {
+        return None;
+    }
+    let first = bytes.get(..4)?;
+    let bits = u32::from_le_bytes([first[0], first[1], first[2], first[3]]);
+    let value = f32::from_bits(bits);
+    (value.is_finite() && bits != (-0.0f32).to_bits()).then_some(())?;
+    bytes
+        .chunks_exact(4)
+        .all(|sample| u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) == bits)
+        .then_some(bits)
+}
+
 #[derive(Clone, Copy)]
 struct BufferRange {
     offset: u64,
@@ -2520,6 +2567,7 @@ impl GpuInner {
         mode: u32,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
+        f_resize_constant_bits: Option<u32>,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -2670,15 +2718,27 @@ impl GpuInner {
                 ]);
             } else if let PipelineOp::Resize { filter, .. } = op {
                 debug_assert!(!matches!(filter, ResampleFilter::Nearest));
+                // F-mode constant images are lowered by the mode-8 shader as
+                // an exact bit-pattern fill.  `channels` is unused by that
+                // branch and `premultiply` is false for F, so carry the
+                // scalar without changing the shared uniform ABI.
+                let constant_bits = f_resize_constant_bits.filter(|_| {
+                    logical_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest)
+                });
                 params.extend([
                     out_w,
                     out_h,
-                    gpu_resize_channel_count(op_mode),
-                    u32::from(gpu_resize_should_premultiply(
-                        op_mode,
-                        logical_mode,
-                        *filter,
-                    )),
+                    constant_bits.unwrap_or_else(|| gpu_resize_channel_count(op_mode)),
+                    constant_bits.map_or_else(
+                        || {
+                            u32::from(gpu_resize_should_premultiply(
+                                op_mode,
+                                logical_mode,
+                                *filter,
+                            ))
+                        },
+                        |_| 2,
+                    ),
                 ]);
             } else if let PipelineOp::Pad { filter, .. } = op {
                 let ((resize_w, resize_h), (offset_x, offset_y)) =
@@ -3633,6 +3693,7 @@ impl GpuInner {
         mode: u32,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
+        f_resize_constant_bits: Option<u32>,
         buffers: &mut BufferPool,
     ) -> Result<
         (
@@ -3769,6 +3830,7 @@ impl GpuInner {
                 current_mode,
                 logical_mode,
                 contrast_mean,
+                f_resize_constant_bits,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -6754,6 +6816,7 @@ fn gpu_geometry_requires_exact_host_control(
     ops: &[PipelineOp],
     image: &DynamicImage,
     mode: Option<&str>,
+    f_resize_constant_bits: Option<u32>,
 ) -> bool {
     // The affine shader is byte-exact for the ordinary packed L/LA/RGB/RGBA
     // layouts.  Pillow's typed, indexed, and palette-alpha modes use a
@@ -6785,7 +6848,11 @@ fn gpu_geometry_requires_exact_host_control(
     // uses the same opaque-word relocation, with host-generated one-tap
     // tables preserving Pillow's cumulative f64 source walk. Keep filtered I
     // resize on the exact host path until a typed convolution shader carries
-    // its integer accumulator and rounding rules.
+    // its integer accumulator and rounding rules.  F-mode filtered resize is
+    // admitted only when `gpu_f_resize_constant_bits` proved the source is a
+    // finite constant; the mode-8 shader then fills that exact four-byte
+    // sample on the device. Mixed F samples remain on this host-controlled
+    // path because f32 convolution cannot reproduce Pillow's f64 rounding.
     let has_filtered_resize = ops.iter().any(|op| {
         matches!(
             op,
@@ -6793,15 +6860,8 @@ fn gpu_geometry_requires_exact_host_control(
                 if !matches!(filter, ResampleFilter::Nearest)
         )
     });
-    mode == Some("I") && has_filtered_resize
-        || (mode == Some("F")
-            && ops.iter().any(|op| {
-                matches!(
-                    op,
-                    PipelineOp::Resize { filter, .. }
-                        if !matches!(filter, ResampleFilter::Nearest)
-                )
-            }))
+    (mode == Some("I") && has_filtered_resize)
+        || (mode == Some("F") && has_filtered_resize && f_resize_constant_bits.is_none())
 }
 
 fn validate_gpu_operations(
@@ -6973,6 +7033,7 @@ impl GpuPool {
         // Reduce + Resize pair, so postponing this step would leave those
         // vectors with different lengths.
         dispatch_ops = expand_gpu_geometry_ops(&dispatch_ops, img, img.dimensions(), mode);
+        let f_resize_constant_bits = gpu_f_resize_constant_bits(&dispatch_ops, img, mode);
         if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
             // A normalized blur preserves every channel of a constant image,
             // including the edge samples. Replace only the GPU lowering with
@@ -7048,7 +7109,7 @@ impl GpuPool {
         // result.  The helper still performs a real GPU copy for packed byte
         // results, so this is a controlled host/GPU boundary rather than an
         // operation-level capability outcome.
-        if gpu_geometry_requires_exact_host_control(ops, img, mode) {
+        if gpu_geometry_requires_exact_host_control(ops, img, mode, f_resize_constant_bits) {
             return self.execute_exact_host_result(ops, img, mode);
         }
 
@@ -7665,6 +7726,7 @@ impl GpuPool {
             mcode,
             mode,
             contrast_mean,
+            f_resize_constant_bits,
             &mut buffers,
         )?;
         gpu_log!(
@@ -7769,8 +7831,9 @@ mod tests {
     use super::expand_rgb_into_rgba;
     use super::{
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
-        gpu_byte_point_mode_allowed, readback_poll_backoff,
+        gpu_byte_point_mode_allowed, gpu_f_resize_constant_bits, readback_poll_backoff,
     };
+    use crate::pipeline::{PipelineOp, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
     use std::time::{Duration, Instant};
 
@@ -7856,5 +7919,48 @@ mod tests {
         assert!(gpu_byte_point_mode_allowed(&rgb, Some("RGB")));
         assert!(gpu_byte_point_mode_allowed(&rgba, Some("RGBA")));
         assert!(!gpu_byte_point_mode_allowed(&rgba, Some("RGBX")));
+    }
+
+    #[test]
+    fn f_resize_constant_lowering_requires_exact_finite_source() {
+        let resize = PipelineOp::Resize {
+            w: 2,
+            h: 3,
+            filter: ResampleFilter::Bicubic,
+        };
+        let bits = 37.0f32.to_bits();
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(3, 2, 37.0f32.to_le_bytes().repeat(6)).unwrap(),
+        );
+        assert_eq!(
+            gpu_f_resize_constant_bits(std::slice::from_ref(&resize), &image, Some("F")),
+            Some(bits)
+        );
+
+        let mut mixed = 37.0f32.to_le_bytes().repeat(6);
+        mixed[4..8].copy_from_slice(&113.0f32.to_le_bytes());
+        let mixed = DynamicImage::ImageRgba8(RgbaImage::from_raw(3, 2, mixed).unwrap());
+        assert_eq!(
+            gpu_f_resize_constant_bits(std::slice::from_ref(&resize), &mixed, Some("F")),
+            None
+        );
+
+        let nearest = PipelineOp::Resize {
+            w: 2,
+            h: 3,
+            filter: ResampleFilter::Nearest,
+        };
+        assert_eq!(
+            gpu_f_resize_constant_bits(std::slice::from_ref(&nearest), &image, Some("F")),
+            None
+        );
+
+        let negative_zero = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(3, 2, (-0.0f32).to_le_bytes().repeat(6)).unwrap(),
+        );
+        assert_eq!(
+            gpu_f_resize_constant_bits(std::slice::from_ref(&resize), &negative_zero, Some("F")),
+            None
+        );
     }
 }
