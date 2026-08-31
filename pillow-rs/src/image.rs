@@ -5598,22 +5598,36 @@ impl Image {
     /// matching Pillow's masked-entropy semantics.
     pub fn entropy_with_mask(&self, mask: Option<&Image>) -> Result<f64, PilError> {
         let img = self.materialized_shared()?;
-        let mask_luma = if let Some(mask) = mask {
-            let mask_img = mask.materialize()?;
-            if (mask_img.width(), mask_img.height()) != (img.width(), img.height()) {
+        let mask_image = if let Some(mask) = mask {
+            let mask_image = mask.materialized_shared()?;
+            if (mask_image.width(), mask_image.height()) != (img.width(), img.height()) {
                 return Err(PilError::ValueError("images do not match".into()));
             }
             let mode = mask.mode()?;
             if mode != "1" && mode != "L" {
                 return Err(PilError::ValueError("bad transparency mask".into()));
             }
-            Some(mask_img.to_luma8())
+            Some(mask_image)
         } else {
             None
         };
-        let mask_raw = mask_luma
-            .as_ref()
-            .map(|mask_img| mask_img.as_raw().as_slice());
+        // Borrow native L8 mask bytes instead of cloning the full mask. Other
+        // valid mask layouts still use the same luma conversion as before.
+        let owned_mask_luma =
+            mask_image
+                .as_ref()
+                .and_then(|mask_image| match mask_image.as_ref() {
+                    crate::raster::DynamicImage::ImageLuma8(_) => None,
+                    _ => Some(mask_image.to_luma8().into_raw()),
+                });
+        let mask_raw: Option<&[u8]> = match (&mask_image, &owned_mask_luma) {
+            (Some(mask_image), None) => match mask_image.as_ref() {
+                crate::raster::DynamicImage::ImageLuma8(luma) => Some(luma.as_raw().as_slice()),
+                _ => unreachable!("native mask must use L8 storage"),
+            },
+            (_, Some(raw)) => Some(raw.as_slice()),
+            _ => None,
+        };
         let width = img.width() as usize;
         let masked = |index: usize| -> bool {
             match mask_raw {
@@ -5650,6 +5664,25 @@ impl Image {
                             continue;
                         }
                         hists[0][px[0] as usize] += 1;
+                    }
+                }
+            }
+            crate::raster::ColorType::Rgb8 => {
+                // Masked RGB entropy only reads the three logical color
+                // bands. Avoid materializing an equivalent RGBA buffer just
+                // to append an unused opaque alpha channel on this hot
+                // terminal path.
+                let crate::raster::DynamicImage::ImageRgb8(rgb) = img.as_ref() else {
+                    unreachable!("Rgb8 color must use native RGB storage");
+                };
+                for (y, row) in rgb.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked(y * width + x) {
+                            continue;
+                        }
+                        hists[0][px[0] as usize] += 1;
+                        hists[1][px[1] as usize] += 1;
+                        hists[2][px[2] as usize] += 1;
                     }
                 }
             }
