@@ -72,6 +72,23 @@ fn filtered_float(source_y: u32, output_x: u32) -> f32 {
     return sum;
 }
 
+fn filtered_dyadic(source_y: u32, output_x: u32) -> f32 {
+    let metadata = output_x * 3u;
+    let source_x = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
+    var sum: f32 = 0.0;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let sample = bitcast<f32>(input[source_y * params.width + source_x + tap]);
+        // Convert the 22-bit weight before multiplying.  Every weight
+        // admitted by the host proof is dyadic, so this avoids the overflow
+        // that `sample * integer_weight / 2^22` can trigger at max-f32.
+        let weight = f32(coefficients[weight_base + tap]) / 4194304.0;
+        sum = sum + sample * weight;
+    }
+    return sum;
+}
+
 fn filtered_box_average(source_y: u32, output_x: u32) -> f32 {
     let metadata = output_x * 3u;
     let source_x = u32(coefficients[metadata]);
@@ -132,6 +149,13 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
             // proof tag but must copy that sample without applying arithmetic
             // (including fixed-point scaling that could overflow a max-f32).
             return filtered_typed(source_y, output_x);
+        }
+        if params.premultiply == 6u {
+            // The host has proved exact f64/fixed-table agreement and a
+            // dyadic source/reduction domain. Keep the f32 arithmetic order
+            // explicit; the proof makes every product exact and bounds Box
+            // partial sums so the final bits match Pillow's f64 store.
+            return bitcast<u32>(filtered_dyadic(source_y, output_x));
         }
         return bitcast<u32>(filtered_float(source_y, output_x));
     }
