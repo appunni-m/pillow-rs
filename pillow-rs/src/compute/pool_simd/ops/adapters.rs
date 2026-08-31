@@ -14153,6 +14153,32 @@ fn simd_blur_row(
     );
 }
 
+#[inline]
+fn simd_blur_rows_serial(
+    source: &[u8],
+    destination: &mut [u8],
+    row_stride: usize,
+    width: usize,
+    height: usize,
+    channels: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    for row_index in 0..height {
+        let row_start = row_index * row_stride;
+        simd_blur_row(
+            &source[row_start..row_start + row_stride],
+            &mut destination[row_start..row_start + row_stride],
+            width,
+            channels,
+            radius,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+}
+
 fn simd_blur_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -14179,36 +14205,73 @@ fn simd_blur_rows(
     }
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        destination,
-        row_stride,
-        height,
-        |row_start, row_end, _y, row| {
-            simd_blur_row(
-                &source[row_start..row_end],
-                row,
-                width,
-                channels,
-                radius,
-                whole_weight,
-                fractional_weight,
-            );
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
-    for row_index in 0..height {
-        let row_start = row_index * row_stride;
-        simd_blur_row(
-            &source[row_start..row_start + row_stride],
-            &mut destination[row_start..row_start + row_stride],
+    if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            destination,
+            row_stride,
+            height,
+            |row_start, row_end, _y, row| {
+                simd_blur_row(
+                    &source[row_start..row_end],
+                    row,
+                    width,
+                    channels,
+                    radius,
+                    whole_weight,
+                    fractional_weight,
+                );
+            }
+        );
+    } else {
+        simd_blur_rows_serial(
+            source,
+            destination,
+            row_stride,
             width,
+            height,
             channels,
             radius,
             whole_weight,
             fractional_weight,
         );
     }
+    #[cfg(not(feature = "parallel"))]
+    simd_blur_rows_serial(
+        source,
+        destination,
+        row_stride,
+        width,
+        height,
+        channels,
+        radius,
+        whole_weight,
+        fractional_weight,
+    );
 }
+
+#[inline]
+fn simd_transpose_interleaved_rows_serial(
+    source: &[u8],
+    destination: &mut [u8],
+    source_row_stride: usize,
+    destination_row_stride: usize,
+    width: usize,
+    height: usize,
+    channels: usize,
+) {
+    for x in 0..width {
+        let destination_start = x * destination_row_stride;
+        for y in 0..height {
+            let source_start = y * source_row_stride + x * channels;
+            let output_start = destination_start + y * channels;
+            destination[output_start..output_start + channels]
+                .copy_from_slice(&source[source_start..source_start + channels]);
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+const SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 fn simd_transpose_interleaved_rows(
     source: &[u8],
@@ -14227,31 +14290,43 @@ fn simd_transpose_interleaved_rows(
     debug_assert_eq!(destination.len(), destination_dimensions.total_bytes());
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
+    if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            destination,
+            destination_row_stride,
+            width,
+            |row_start, row_end, x, row| {
+                let _ = (row_start, row_end);
+                let x = x as usize;
+                for y in 0..height {
+                    let source_start = y * source_row_stride + x * channels;
+                    let destination_start = y * channels;
+                    row[destination_start..destination_start + channels]
+                        .copy_from_slice(&source[source_start..source_start + channels]);
+                }
+            }
+        );
+    } else {
+        simd_transpose_interleaved_rows_serial(
+            source,
+            destination,
+            source_row_stride,
+            destination_row_stride,
+            width,
+            height,
+            channels,
+        );
+    }
+    #[cfg(not(feature = "parallel"))]
+    simd_transpose_interleaved_rows_serial(
+        source,
         destination,
+        source_row_stride,
         destination_row_stride,
         width,
-        |row_start, row_end, x, row| {
-            let _ = (row_start, row_end);
-            let x = x as usize;
-            for y in 0..height {
-                let source_start = y * source_row_stride + x * channels;
-                let destination_start = y * channels;
-                row[destination_start..destination_start + channels]
-                    .copy_from_slice(&source[source_start..source_start + channels]);
-            }
-        }
+        height,
+        channels,
     );
-    #[cfg(not(feature = "parallel"))]
-    for x in 0..width {
-        let destination_start = x * destination_row_stride;
-        for y in 0..height {
-            let source_start = y * source_row_stride + x * channels;
-            let output_start = destination_start + y * channels;
-            destination[output_start..output_start + channels]
-                .copy_from_slice(&source[source_start..source_start + channels]);
-        }
-    }
 }
 
 fn simd_pil_box_blur(
