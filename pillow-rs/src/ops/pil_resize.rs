@@ -31,9 +31,15 @@ fn kernel_triangle(x: f64) -> f64 {
 fn kernel_catrom(x: f64) -> f64 {
     let a = x.abs();
     if a < 1.0 {
-        1.5 * a.powi(3) - 2.5 * a.powi(2) + 1.0
+        // Match Pillow's Resample.c Horner evaluation exactly.  Expanding
+        // this polynomial with powi changes the last f64 bits for some
+        // heterogeneous F samples, which becomes a visible f32 ULP after
+        // ImagingResample stores the accumulated value.
+        let t = 1.5f64.mul_add(a, -2.5);
+        a.mul_add(t * a, 1.0)
     } else if a < 2.0 {
-        -0.5 * a.powi(3) + 2.5 * a.powi(2) - 4.0 * a + 2.0
+        let t = (a - 5.0).mul_add(a, 8.0);
+        a.mul_add(t, -4.0) * -0.5
     } else {
         0.0
     }
@@ -656,7 +662,10 @@ fn _precompute_coeffs_f64_impl(
         let mut wsum = 0.0;
         for ix in 0..cnt {
             let sx = x0 + ix as i64;
-            let val = kernel((sx as f64 + 0.5 - center) * ss);
+            // Resample.c evaluates `(x + xmin - center + 0.5)` with the
+            // source index addition still integral.  Subtracting the center
+            // before adding the half-pixel preserves its f64 rounding.
+            let val = kernel((sx as f64 - center + 0.5) * ss);
             w.push(val);
             wsum += val;
         }
@@ -716,7 +725,7 @@ pub(crate) fn precompute_coeffs_f64_boxed(
         let mut sum = 0.0;
         let ss = 1.0 / filterscale;
         for tap in 0..sample_count {
-            let value = kernel((x0 as f64 + tap as f64 + 0.5 - center) * ss);
+            let value = kernel((x0 as f64 + tap as f64 - center + 0.5) * ss);
             row_weights.push(value);
             sum += value;
         }
@@ -1892,7 +1901,7 @@ fn pil_resize_f_boxed(
             let mut sum = 0.0;
             for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
                 let source_x = (x0 + tap as i64) as usize;
-                sum += weight * f64::from(source[source_start + source_x]);
+                sum = weight.mul_add(f64::from(source[source_start + source_x]), sum);
             }
             intermediate[intermediate_start + output_x] = if sum == 0.0 { 0.0 } else { sum as f32 };
         }
@@ -1905,7 +1914,10 @@ fn pil_resize_f_boxed(
             let mut sum = 0.0;
             for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
                 let source_y = (y0 + tap as i64) as usize;
-                sum += weight * f64::from(intermediate[source_y * dst_w as usize + output_x]);
+                sum = weight.mul_add(
+                    f64::from(intermediate[source_y * dst_w as usize + output_x]),
+                    sum,
+                );
             }
             output_floats[output_y * dst_w as usize + output_x] =
                 if sum == 0.0 { 0.0 } else { sum as f32 };
