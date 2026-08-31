@@ -408,6 +408,13 @@ impl Image {
             && (target_is_standard
                 || mode == "CMYK"
                 || (mode == "PA" && effective_src_mode_name == "P"))
+            // PA→RGB can use the ordinary native byte converter after the
+            // pipeline evaluator expands its indexed samples through the
+            // retained palette.  Keep this one conversion lazy so SIMD/GPU
+            // adapters receive the same RGBA layout as every other RGB
+            // source; all other PA destinations still need the eager,
+            // mode-specific conversion below.
+            && !(effective_src_mode_name == "PA" && mode == "RGB")
         {
             let src_mode = effective_src_mode_name;
             // Extract palette before materializing (P-mode palette may be on Pipeline)
