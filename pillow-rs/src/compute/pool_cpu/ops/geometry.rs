@@ -34,9 +34,15 @@ fn f_kernel_triangle(x: f64) -> f64 {
 fn f_kernel_catrom(x: f64) -> f64 {
     let a = x.abs();
     if a < 1.0 {
-        1.5 * a.powi(3) - 2.5 * a.powi(2) + 1.0
+        // Match Pillow's Resample.c Horner evaluation exactly.  Expanding
+        // this polynomial with powi changes the last f64 bits for some
+        // heterogeneous F samples, which becomes a visible f32 ULP after
+        // ImagingResample stores the accumulated value.
+        let t = 1.5f64.mul_add(a, -2.5);
+        a.mul_add(t * a, 1.0)
     } else if a < 2.0 {
-        -0.5 * a.powi(3) + 2.5 * a.powi(2) - 4.0 * a + 2.0
+        let t = (a - 5.0).mul_add(a, 8.0);
+        a.mul_add(t, -4.0) * -0.5
     } else {
         0.0
     }
@@ -241,7 +247,11 @@ fn resize_f(
                     let mut acc = 0.0f64;
                     for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
                         let sx = (x0 + offset as i64) as usize;
-                        acc += weight * f64::from(src_floats[src_row_base + sx]);
+                        // Pillow's optimized Resample.c build contracts the
+                        // source/weight product with the running sum. Keep
+                        // that fused operation explicit so f32 storage sees
+                        // the same final rounding on heterogeneous samples.
+                        acc = weight.mul_add(f64::from(src_floats[src_row_base + sx]), acc);
                     }
                     *output = acc as f32;
                 }
@@ -255,7 +265,7 @@ fn resize_f(
                 let mut acc = 0.0f64;
                 for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
                     let sx = (x0 + offset as i64) as usize;
-                    acc += weight * f64::from(src_floats[src_row_base + sx]);
+                    acc = weight.mul_add(f64::from(src_floats[src_row_base + sx]), acc);
                 }
                 *output = acc as f32;
             }
@@ -292,7 +302,8 @@ fn resize_f(
                     let mut acc = 0.0f64;
                     for (offset, &weight) in v_coeffs.weights[dy as usize].iter().enumerate() {
                         let sy = (y0 + offset as i64) as usize;
-                        acc += weight * f64::from(intermediate[sy * dst_w as usize + dx]);
+                        acc =
+                            weight.mul_add(f64::from(intermediate[sy * dst_w as usize + dx]), acc);
                     }
                     // Pillow serializes exact zeroes as positive zero. Preserve
                     // that byte-level detail for symmetric kernels.
@@ -308,7 +319,7 @@ fn resize_f(
                 let mut acc = 0.0f64;
                 for (offset, &weight) in v_coeffs.weights[dy].iter().enumerate() {
                     let sy = (y0 + offset as i64) as usize;
-                    acc += weight * f64::from(intermediate[sy * dst_w as usize + dx]);
+                    acc = weight.mul_add(f64::from(intermediate[sy * dst_w as usize + dx]), acc);
                 }
                 let value = acc as f32;
                 *output = if value == 0.0 { 0.0 } else { value };
@@ -1635,4 +1646,39 @@ pub fn execute_reduce(
 
     let result = raw_bytes_to_image(new_w, new_h, out, channels)?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resize_f;
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_bicubic_preserves_pillow_f64_rounding() {
+        let source_words = [0xd9f6def9, 0x3210f3c9];
+        let source_bytes = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(1, 2, source_bytes).expect("source shape must be valid"),
+        );
+
+        let output = resize_f(&source, 2, 6, &ResampleFilter::Bicubic)
+            .expect("finite F-mode bicubic resize must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode resize must retain packed float storage");
+        };
+        let expected_words = [
+            0xda086dc0, 0xda086dc0, 0xd9f6def9, 0xd9f6def9, 0xd9accf48, 0xd9accf48, 0xd9141f62,
+            0xd9141f62, 0x3210f3c9, 0x3210f3c9, 0x584fe430, 0x584fe430,
+        ];
+        let expected_bytes: Vec<u8> = expected_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        assert_eq!(output.as_raw(), &expected_bytes);
+    }
 }
