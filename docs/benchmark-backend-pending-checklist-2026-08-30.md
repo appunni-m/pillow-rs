@@ -113,7 +113,7 @@ open. Use the focused checklist linked above for the execution order.
   256×256 for 5×5 filters only; 3×3, rank, and blur guards remain 64×64. The
   exact L=127 material row uses `Filter5x5: native-copy`, passed strict SIMD
   and all-backends parity, and cleared the guarded budget in both repeats.
-  Source change is the current working-tree candidate.
+  Source change is commit `d2e433ba3`.
 
 ## Latest receipts
 
