@@ -2871,7 +2871,7 @@ source snapshots.  The current focused queue is
   now carries an explicit terminal-completeness bit, and the all-backends
   aggregate is schema v3 with an independently reported backend-coverage
   verdict.
-- The current v3 run at pushed source `d0821989d` remains value-exact for all
+- The current v3 run at pushed source `fb74a1122` remains value-exact for all
   six public lanes (10,952/10,952 each; GPU smoke 1/1), but its status is
   **`passed_with_backend_gaps`**. CPU and GPU each have 6,513
   terminal-complete receipts; SIMD has 6,518. CPU/GPU retain 877
@@ -2887,7 +2887,7 @@ source snapshots.  The current focused queue is
   one-case proof is 1/1 terminal for CPU, SIMD, and GPU.
 - The regenerated v3 artifact is
   `build/migration-parity/all-backends-test-result.json` (SHA-256
-  `ccaa614f6758e13e05a5db1f1ecfaaedfcb0c9589cc4f8fb0dfe5ec080fe4b72`).  The
+  `b2d3fe6b7444331abccecd5d4c5054ad32f1d9b180a8d533e5ef2c7f0fb0e86e`).  The
   validator rejects a plain `passed` status when the persisted receipt
   evidence has these gaps. The next run must retain this distinction while
   reconciling the pipeline-applicable denominator; non-pipeline public cases
@@ -2901,7 +2901,11 @@ source snapshots.  The current focused queue is
 - The maintained 70-row GPU cohort and all strict value comparisons remain
   green.  The exact finite nonconstant F Box-upsample lowering in `9d8ab1ebe`
   adds 144/144 native-GPU exact samples and a mixed `PutData(F)` plus two-Box
-  chain with exact output.  Arithmetic F filters, Box downscales, and
-  nonfinite/negative-zero inputs remain host-controlled pending a portable
-  exact f64-equivalent device path; the equal-receipt performance gate is also
-  still open in the focused checklist.
+  chain with exact output.  Commit `fb74a1122` adds a narrower one-axis 2:1
+  Box-downscale proof for finite same-sign F samples at or above `2^-20`:
+  direct Pillow byte checks matched all 2,000 finite extreme cases, with 1,179
+  native-GPU receipts and 821 deliberate negative-zero host-control cases.
+  Arithmetic F filters, other Box ratios, and nonfinite/negative-zero inputs
+  remain host-controlled pending a portable exact f64-equivalent device path;
+  the equal-receipt performance gate is also still open in the focused
+  checklist.
