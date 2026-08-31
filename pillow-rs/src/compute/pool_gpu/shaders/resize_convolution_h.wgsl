@@ -118,6 +118,12 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
         return filtered_typed(source_y, output_x);
     }
     if params.mode == 8u {
+        if params.premultiply == 7u {
+            // F-mode nearest resize uses the host-generated one-tap table for
+            // Pillow's cumulative f64 coordinate walk. Copy the complete
+            // sample word so NaN, infinity, and signed zero survive exactly.
+            return filtered_typed(source_y, output_x);
+        }
         // F-mode constant resize uses the unused channel/premultiply slots
         // as an exact sample bit-pattern. Pillow's normalized filter rows
         // preserve finite constants, while the ordinary f32 accumulation

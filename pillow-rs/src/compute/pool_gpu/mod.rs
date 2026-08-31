@@ -1446,15 +1446,15 @@ fn append_arena_slice(arena: &mut Vec<u32>, values: &[u32], alignment_bytes: usi
 /// Return whether a nearest resize uses the packed byte convolution plan.
 ///
 /// The convolution plan receives host-generated one-tap tables so its source
-/// index follows Pillow's cumulative f64 stepping exactly. I-mode needs that
-/// plan too: its four-byte samples are copied opaquely by the typed branch in
-/// the resize shaders, rather than being interpreted as four byte channels.
-/// F and I;16 retain their established relocation shaders until their own
+/// index follows Pillow's cumulative f64 stepping exactly. I- and F-mode need
+/// that plan too: their four-byte samples are copied opaquely by the typed
+/// branch in the resize shaders, rather than being interpreted as four byte
+/// channels. I;16 retains its established relocation shader until its own
 /// nearest-coordinate receipts are expanded with the same proof.
 fn gpu_resize_nearest_uses_coefficients(logical_mode: Option<&str>) -> bool {
     !matches!(
         logical_mode,
-        Some("1" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N")
+        Some("1" | "I;16" | "I;16L" | "I;16B" | "I;16N")
     )
 }
 
@@ -3314,15 +3314,25 @@ impl GpuInner {
                     ..
                 }
             ) {
-                params.extend([
-                    out_w,
-                    out_h,
-                    gpu_resize_channel_count(op_mode),
+                // F-mode nearest samples are opaque f32 words. Use the
+                // coefficient path's host-generated one-tap table so its
+                // source row/column follows Pillow's cumulative f64 affine
+                // walk; the marker selects an exact word copy in WGSL and
+                // preserves NaN, infinity, and signed zero.
+                let nearest_mode = if logical_mode == Some("F") {
+                    7
+                } else {
                     u32::from(gpu_resize_should_premultiply(
                         op_mode,
                         logical_mode,
                         ResampleFilter::Nearest,
-                    )),
+                    ))
+                };
+                params.extend([
+                    out_w,
+                    out_h,
+                    gpu_resize_channel_count(op_mode),
+                    nearest_mode,
                 ]);
             } else if let PipelineOp::Resize { filter, .. } = op {
                 debug_assert!(!matches!(filter, ResampleFilter::Nearest));
@@ -8502,7 +8512,8 @@ mod tests {
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, gpu_buffer_reuse_allowed,
         gpu_byte_point_mode_allowed, gpu_f_resize_box_average_is_exact,
         gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact,
-        gpu_f_resize_identity_is_exact, readback_poll_backoff,
+        gpu_f_resize_identity_is_exact, gpu_resize_coefficients,
+        gpu_resize_nearest_uses_coefficients, readback_poll_backoff,
     };
     use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -8644,6 +8655,20 @@ mod tests {
         assert_eq!(
             gpu_f_resize_constant_bits(std::slice::from_ref(&resize), &negative_zero, Some("F")),
             None
+        );
+    }
+
+    #[test]
+    fn f_nearest_resize_uses_cumulative_coefficients() {
+        assert!(gpu_resize_nearest_uses_coefficients(Some("F")));
+        let coefficients = gpu_resize_coefficients(7, 2, ResampleFilter::Nearest);
+        assert_eq!(&coefficients.xmin, &[0, 0, 0, 0, 1, 1, 1]);
+        assert!(coefficients.count.iter().all(|&count| count == 1));
+        assert!(
+            coefficients
+                .weights
+                .iter()
+                .all(|&weight| weight == 1i64 << 22)
         );
     }
 
@@ -9143,6 +9168,36 @@ mod tests {
         }
 
         let cases = [
+            (
+                (1, 2),
+                (1, 7),
+                ResampleInput::Name("NEAREST".into()),
+                vec![1.0f32, 2.0],
+                vec![
+                    1.0f32.to_bits(),
+                    1.0f32.to_bits(),
+                    1.0f32.to_bits(),
+                    1.0f32.to_bits(),
+                    2.0f32.to_bits(),
+                    2.0f32.to_bits(),
+                    2.0f32.to_bits(),
+                ],
+            ),
+            (
+                (1, 2),
+                (1, 7),
+                ResampleInput::Name("NEAREST".into()),
+                vec![(-0.0f32), f32::NAN],
+                vec![
+                    (-0.0f32).to_bits(),
+                    (-0.0f32).to_bits(),
+                    (-0.0f32).to_bits(),
+                    (-0.0f32).to_bits(),
+                    f32::NAN.to_bits(),
+                    f32::NAN.to_bits(),
+                    f32::NAN.to_bits(),
+                ],
+            ),
             (
                 (2, 2),
                 (4, 4),
