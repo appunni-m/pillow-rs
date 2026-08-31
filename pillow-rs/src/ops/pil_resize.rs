@@ -1690,6 +1690,48 @@ pub fn pil_resize(
             xintab.push(if xi >= sw { sw - 1 } else { xi });
             xo += scale_x;
         }
+
+        // Native byte images already have the exact sample layout required by
+        // Pillow's affine nearest path. Copy complete source pixels directly
+        // instead of expanding each one through `pixel_at`'s four-channel
+        // f64 representation and then pushing bytes individually. This keeps
+        // the coordinate calculation identical while making the common
+        // byte-image path bandwidth-bound.
+        if matches!(
+            img,
+            DynamicImage::ImageLuma8(_)
+                | DynamicImage::ImageLumaA8(_)
+                | DynamicImage::ImageRgb8(_)
+                | DynamicImage::ImageRgba8(_)
+        ) {
+            let source = img.as_bytes();
+            let mut out_bytes = vec![0u8; n * channels];
+            let source_stride = sw as usize * channels;
+            let destination_stride = dw as usize * channels;
+            let mut yo = scale_y * 0.5;
+            for dy in 0..dh as usize {
+                let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 } as usize;
+                let source_row = sy * source_stride;
+                let destination_row = dy * destination_stride;
+                if channels == 1 {
+                    let destination =
+                        &mut out_bytes[destination_row..destination_row + destination_stride];
+                    for (destination_pixel, &sx) in destination.iter_mut().zip(&xintab) {
+                        *destination_pixel = source[source_row + sx as usize];
+                    }
+                } else {
+                    for (dx, &sx) in xintab.iter().enumerate() {
+                        let source_start = source_row + sx as usize * channels;
+                        let destination_start = destination_row + dx * channels;
+                        out_bytes[destination_start..destination_start + channels]
+                            .copy_from_slice(&source[source_start..source_start + channels]);
+                    }
+                }
+                yo += scale_y;
+            }
+            let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
+            return pil_preserve_mode(orig_img, result);
+        }
         // PIL also uses cumulative stepping for y: yo = a[4] * 0.5
         let mut yo = scale_y * 0.5;
         for _dy in 0..dh {
@@ -2036,6 +2078,30 @@ fn raw_to_dynamic(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage
         ),
         _ => DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
+        ),
+    }
+}
+
+/// Convert an owned native-byte resize result without copying its backing
+/// buffer. The borrowed helper remains for the convolution paths, which reuse
+/// their intermediate/output slices after constructing the image.
+fn raw_to_dynamic_owned(bytes: Vec<u8>, w: u32, h: u32, channels: usize) -> DynamicImage {
+    match channels {
+        1 => DynamicImage::ImageLuma8(
+            crate::raster::GrayImage::from_raw(w, h, bytes)
+                .unwrap_or_else(|| crate::raster::GrayImage::new(w, h)),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            crate::raster::GrayAlphaImage::from_raw(w, h, bytes)
+                .unwrap_or_else(|| crate::raster::GrayAlphaImage::new(w, h)),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            crate::raster::RgbImage::from_raw(w, h, bytes)
+                .unwrap_or_else(|| crate::raster::RgbImage::new(w, h)),
+        ),
+        _ => DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(w, h, bytes)
                 .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
         ),
     }
