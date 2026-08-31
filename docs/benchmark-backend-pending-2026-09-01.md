@@ -41,6 +41,11 @@ rename, relabel, or weaken a case to make a gate green.
   with only a reversed y axis reached the empty-span rectangle kernel and was
   silently accepted; the focused regression and Python facade probe now match
   Pillow's `ValueError` messages.
+- `ImageDraw` geometry now keeps `I;16`, `I;16L`, `I;16B`, and `I;16N` on a
+  native Luma16 canvas instead of widening them to RGBA8. Default shape ink,
+  packed integer colors, declared byte order, and the small Pillow distinction
+  between line/point and area/arc draw paths are covered by core and Python
+  probes against all four modes.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row

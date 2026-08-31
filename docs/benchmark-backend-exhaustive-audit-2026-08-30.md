@@ -3126,3 +3126,21 @@ was silently accepted as an empty draw. `Draw::rounded_rectangle` now returns
 the core regression and Python facade probes match Pillow for both reversed
 axes and for a valid box. No case IDs, expected outputs, thresholds, or
 backend classifications changed.
+
+## 32.7 I;16 ImageDraw geometry parity (2026-09-01)
+
+The next source-level divergence was the public `ImageDraw` geometry path for
+unsigned 16-bit luma modes. Pillow's `ImageDraw.shape(Outline)` defaults to a
+65535 sample for `I;16`, `I;16L`, `I;16B`, and `I;16N`; the existing Rust
+`default_shape_ink` returned no ink for those modes, and the CPU draw canvas
+then widened the typed Luma16 buffer through `to_rgba8()`, losing the native
+two-byte samples and the mode tag. The fix adds a native Luma16 canvas and
+mode-aware packed-ink handling. It preserves Pillow's observed distinction in
+the pinned arm64 oracle: line/point paths write packed little-endian bytes,
+while rectangle/ellipse/polygon/rounded/arc/chord/pieslice paths normalize the
+ink to the declared destination order (`I;16B` therefore exposes the swapped
+numeric values for line/point only). Integer and one-element tuple colors,
+default 65535 ink, and all four byte-order modes now match exact Python probes;
+the core regression covers the default shape and packed point boundary. No
+case IDs, denominators, expected outputs, thresholds, or backend
+classifications changed.
