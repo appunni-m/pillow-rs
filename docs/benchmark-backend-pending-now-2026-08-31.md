@@ -157,7 +157,7 @@ fix or an evidence-backed measurement disposition.
   the change (about 64 µs before), passed strict CPU parity 10,952/10,952,
   remained absent from both guarded violation receipts, and did not change
   large-source routing. The WASM-only compile guard is covered by the passing
-  `make build-wasm` run in this wave; source commit `ec63b5924`.
+  `make build-wasm` run in this wave; source commit `09fe72ee8`.
 
 ## Status rule
 

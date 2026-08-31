@@ -2700,7 +2700,7 @@ following figures supersede the earlier row-kernel snapshot:
   The exact 32×24 RGB workload's adapter backend median fell from roughly 64 µs
   to 3 µs, strict CPU parity remained 10,952/10,952, and the row is absent from
   both after-reduce violation receipts.  The source change is commit
-  `ec63b5924`.
+  `09fe72ee8`.
 - SIMD Reduce now processes outputs below 1,024 pixels serially and keeps the
   existing Rayon row splitter for larger outputs.  The 16×16, 32×24, and
   32×32 targets improved to 0.014229, 0.014646, and 0.015229 ms, with focused
