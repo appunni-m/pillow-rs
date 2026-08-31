@@ -2937,12 +2937,14 @@ than value parity.
   gaps; no public case was removed or relabeled to improve the denominator.
   The all-backends artifact SHA-256 is
   `75c1d460d1e29aa8bfbcca05857acdcdb68bbd27cdeb8f8f7382b4ea90ee40`.
-- F-mode GPU admission now includes a proof-gated dyadic subset: fixed/f64
-  coefficient-table agreement, same-sign normal power-of-two source words,
-  Bilinear, and one-axis power-of-two Box reductions through 64:1. Focused
-  lowering tests and direct native byte/telemetry tests pass; heterogeneous,
-  non-dyadic, nonfinite, negative-zero, and unproven two-axis arithmetic stay
-  on exact host control.
+- F-mode GPU admission now includes the finite nonconstant Box-upscale copy
+  proof from `9d8ab1ebe`, plus a proof-gated dyadic arithmetic subset:
+  fixed/f64 coefficient-table agreement, same-sign normal power-of-two source
+  words, Bilinear, and one-axis power-of-two Box reductions through 64:1.
+  Focused lowering tests and direct native byte/telemetry tests pass;
+  heterogeneous/non-dyadic arithmetic filters, nonfinite or negative-zero
+  arithmetic samples, and unproven two-axis reductions stay on exact host
+  control.
 - GPU working-buffer reuse is bounded to four times the requested capacity.
   In a controlled order-sensitive pair, the small draw workload moved from
   about 2.4 ms with a 6.3 MiB retained pool to about 0.59 ms with a 19 KiB

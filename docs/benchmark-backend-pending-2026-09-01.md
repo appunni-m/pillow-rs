@@ -23,6 +23,9 @@ rename, relabel, or weaken a case to make a gate green.
 - Same-size filtered F resizes and bounded 2:1 Box F resizes have direct
   native-GPU byte proofs, including non-finite/negative-zero coverage where
   the proof admits it.
+- Finite nonconstant F Box upscales have a separate exact copy proof for
+  arbitrary non-downscaling geometry, including mixed `PutData(F)` plus Box
+  chains (144/144 direct native-GPU samples).
 - The new proof-gated dyadic F lane is also exact/native for the admitted
   Bilinear and one-axis power-of-two Box cases; heterogeneous/non-dyadic
   inputs remain on exact host control.
@@ -35,10 +38,14 @@ rename, relabel, or weaken a case to make a gate green.
   agreement, same-sign normal power-of-two F words, Bilinear, and one-axis
   power-of-two Box reductions through 64:1. The direct native matrix is
   byte-exact with terminal `actual_backend=gpu` receipts and no fallback.
+- [x] Keep the finite nonconstant Box-upscale copy lane admitted for arbitrary
+  non-downscaling geometry; its one-tap relocation proof is separate from
+  arithmetic-filter admission.
 - [ ] Extend exact arithmetic coverage to heterogeneous/non-dyadic Bilinear,
-  Bicubic/Lanczos/Hamming, two-axis Box reductions beyond the existing 2:1
-  proof, and remaining Box ratios. Keep every unproven input on exact host
-  control, including NaN, infinity, and negative zero.
+  Bicubic/Lanczos/Hamming, Box downscales outside the proven 2:1 and
+  one-axis power-of-two limits, and unproven two-axis reductions. Keep every
+  unproven arithmetic input on exact host control, including NaN, infinity,
+  and negative zero.
 
 ### P1 — honest backend-proof denominator
 
