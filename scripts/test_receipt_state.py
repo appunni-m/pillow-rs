@@ -357,6 +357,41 @@ def eager_mode_filter_case() -> dict[str, object]:
     }
 
 
+def filter_constructor_error_case(operation: str) -> dict[str, object]:
+    """Build a workflow where a filter descriptor precedes call validation."""
+
+    return {
+        "case_id": f"filter-constructor-{operation}-error",
+        "steps": [
+            {
+                "step_id": "new",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "arguments": {
+                    "mode": {"kind": "literal", "value": "P"},
+                    "size": {"kind": "literal", "value": [1, 1]},
+                },
+            },
+            {
+                "step_id": "filter-type",
+                "surface": "PIL.ImageFilter",
+                "operation": operation,
+                "arguments": {},
+            },
+            {
+                "step_id": "call",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": {"kind": "binding", "step_id": "new"},
+                "arguments": {
+                    "filter": {"kind": "binding", "step_id": "filter-type"}
+                },
+            },
+        ],
+        "observations": ["call"],
+    }
+
+
 def crop_discard_case() -> dict[str, object]:
     """Build a workflow whose degenerate crop discards a queued PutPixel."""
 
@@ -772,6 +807,32 @@ class ReceiptStateTests(unittest.TestCase):
                 "reason": "workflow contains no deferred image-pipeline operation",
             },
         )
+
+    def test_pipeline_case_classification_does_not_count_filter_constructor_as_deferred(
+        self,
+    ) -> None:
+        for operation in ("BLUR", "BoxBlur", "Kernel", "RankFilter"):
+            with self.subTest(operation=operation):
+                self.assertEqual(
+                    classify_pipeline_case(
+                        filter_constructor_error_case(operation),
+                        [],
+                        result={
+                            "status": "completed",
+                            "observations": [
+                                {
+                                    "step_id": "call",
+                                    "status": "error",
+                                    "error": {"kind": "invalid_argument"},
+                                }
+                            ],
+                        },
+                    ),
+                    {
+                        "status": "not_applicable",
+                        "reason": "workflow ended in a public error before pipeline materialization",
+                    },
+                )
 
     def test_pipeline_case_classification_accepts_error_at_first_deferred_call(self) -> None:
         self.assertEqual(
