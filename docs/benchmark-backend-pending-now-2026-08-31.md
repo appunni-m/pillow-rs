@@ -17,8 +17,8 @@ diagnostic implementation state, not a completed native-backend claim.
   WASM each compare **10,952/10,952**, and the GPU smoke gate is **1/1**.
   The latest schema-v3 receipt is
   `build/migration-parity/all-backends-test-result.json`, generated at pushed
-  source `d0821989d` (SHA-256
-  `ccaa614f6758e13e05a5db1f1ecfaaedfcb0c9589cc4f8fb0dfe5ec080fe4b72`).
+  source `fb74a1122` (SHA-256
+  `b2d3fe6b7444331abccecd5d4c5054ad32f1d9b180a8d533e5ef2c7f0fb0e86e`).
 - Schema-v3 correctly reports `passed_with_backend_gaps`, not plain `passed`:
   CPU and GPU each have 6,513 terminal-complete pipeline receipts; SIMD has
   6,518.  CPU has 3,562 no-receipt and 877 terminal-incomplete cases; SIMD
@@ -34,18 +34,25 @@ diagnostic implementation state, not a completed native-backend claim.
 - The maintained 70-row GPU cohort is value-exact and currently classified as
   70 native GPU / 0 host-control / 0 failures. Constant-F lowering is exact;
   finite nonconstant Box upscales add a 144/144 native-GPU exact matrix, while
-  the small-frame CPU Gaussian path has a focused terminal benchmark after
-  `888f1bba5`.
+  the bounded F Box 2:1 downscale lane now has direct native byte checks after
+  `fb74a1122`; the small-frame CPU Gaussian path has a focused terminal
+  benchmark after `888f1bba5`.
 
 ## Pending — only these items remain
 
 ### P0. General exact F-mode GPU lowering
 
+- [x] Added a bounded pure-Rust/WGSL lane for one-axis 2:1 Box downscales:
+  finite, same-sign F samples at or above `2^-20` use a two-tap half-before-add
+  shader branch and copy the unchanged axis opaquely. Direct Pillow byte checks
+  covered 2,000 finite extreme cases: all 2,000 matched; 1,179 ran as native
+  GPU with terminal no-fallback receipts and 821 deliberately negative-zero
+  cases stayed on exact host control.
 - [ ] Extend filtered F-mode resize beyond finite constant samples and the
-  bounded finite Box upsample copy. Arithmetic filters, Box downscales, and
-  nonfinite/negative-zero samples still require the exact device
-  accumulator/rounding path. Keep every such input value-exact against Pillow
-  while the native proof is incomplete.
+  bounded finite Box upsample copy and the new 2:1 Box lane. Arithmetic
+  filters, other Box ratios, and nonfinite/negative-zero samples still require
+  an exact device accumulator/rounding path. Keep every such input value-exact
+  against Pillow while the native proof is incomplete.
 - Acceptance: direct byte checks covering finite, negative-zero, and non-finite
   values; terminal actual-GPU receipts with no fallback for the admitted native
   cohort; focused and full strict parity remain green.
@@ -60,7 +67,7 @@ diagnostic implementation state, not a completed native-backend claim.
   fallback taxonomy. Cases that do not enter the pipeline remain explicitly
   counted outside that cohort; they are not relabeled or silently dropped.
 - [x] Regenerated the schema-v3 all-backends artifact after final source
-  commit `d0821989d`; the validator keeps `passed_with_backend_gaps` visible
+  commit `fb74a1122`; the validator keeps `passed_with_backend_gaps` visible
   until the denominator is proven.
 - Acceptance: reproducible receipt sidecars, equal case-ID digests, exact
   requested/actual backend counts, and no false plain-`passed` aggregate.
