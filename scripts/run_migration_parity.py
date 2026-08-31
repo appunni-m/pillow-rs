@@ -1245,7 +1245,25 @@ def _workflow_error_before_deferred(
         # evidence obligation conservative when a deferred operation exists.
         return not deferred_indices
     first_error = min(error_indices)
-    return all(deferred_index > first_error for deferred_index in deferred_indices)
+    has_blocked_observation = any(
+        isinstance(observation, dict)
+        and observation.get("status") == "not_run"
+        for observation in observations
+    )
+    # Public operation wrappers validate their arguments before constructing
+    # a deferred pipeline node.  When the first error is raised by that
+    # operation itself and no earlier deferred node exists, the call cannot
+    # have dispatched this workflow; requiring a receipt here was the first
+    # divergence between the source validation boundary and this classifier.
+    # Keep the strict ordering for any earlier deferred node: it may already
+    # have materialized or dispatched before a later call failed.
+    if has_blocked_observation:
+        # A not_run observation can report a dependency failure rather than
+        # the observed operation's own validation error.  Without an emitted
+        # step-level error boundary, retain the old strict rule instead of
+        # turning an earlier setup failure into not_applicable.
+        return all(deferred_index > first_error for deferred_index in deferred_indices)
+    return all(deferred_index >= first_error for deferred_index in deferred_indices)
 
 
 def _workflow_terminal_boundary(case: dict[str, Any], deferred_indices: set[int]) -> bool:
@@ -1298,12 +1316,74 @@ def classify_pipeline_case(
         }
     steps = [step for step in case.get("steps", []) if isinstance(step, dict)]
     modes = _workflow_modes(case)
+    steps_by_id = {
+        step.get("step_id"): step
+        for step in steps
+        if isinstance(step.get("step_id"), str)
+    }
 
     def receiver_binding(step: dict[str, Any]) -> str | None:
         receiver = step.get("receiver")
         if isinstance(receiver, dict) and receiver.get("kind") == "binding":
             value = receiver.get("step_id")
             return value if isinstance(value, str) else None
+        return None
+
+    def argument_binding(step: dict[str, Any], name: str) -> dict[str, Any] | None:
+        arguments = step.get("arguments")
+        if not isinstance(arguments, dict):
+            return None
+        value = arguments.get(name)
+        if not isinstance(value, dict) or value.get("kind") != "binding":
+            return None
+        source_id = value.get("step_id")
+        return steps_by_id.get(source_id) if isinstance(source_id, str) else None
+
+    def receiver_source_mode(
+        step: dict[str, Any], seen: tuple[str, ...] = ()
+    ) -> str | None:
+        """Resolve a literal mode through the receiver's source chain."""
+
+        source_id = receiver_binding(step)
+        if source_id is None or source_id in seen:
+            return None
+        source = steps_by_id.get(source_id)
+        if source is None:
+            return None
+        key = (source.get("surface"), source.get("operation"))
+        if key in _IMAGE_SOURCE_MODE_OPS:
+            mode = _workflow_literal(source.get("arguments"), "mode")
+            return mode if isinstance(mode, str) else None
+        if key in {
+            ("PIL.Image", "linear_gradient"),
+            ("PIL.Image", "radial_gradient"),
+        }:
+            mode = _workflow_literal(source.get("arguments"), "mode")
+            return mode if isinstance(mode, str) else None
+        if key == ("PIL.Image.Image", "convert"):
+            mode = _workflow_literal(source.get("arguments"), "mode")
+            if isinstance(mode, str):
+                return mode
+            previous = receiver_source_mode(source, seen + (source_id,))
+            # ``convert(mode=None)`` copies every source except P, whose
+            # default target depends on palette transparency metadata.
+            return previous if previous != "P" else None
+        # These operations preserve the receiver's mode while returning an
+        # image. Keep this list narrow so an unknown producer never becomes a
+        # false source-mode proof for conversion classification.
+        if key in {
+            ("PIL.Image.Image", "copy"),
+            ("PIL.Image.Image", "crop"),
+            ("PIL.Image.Image", "resize"),
+            ("PIL.Image.Image", "rotate"),
+            ("PIL.Image.Image", "transform"),
+            ("PIL.Image.Image", "transpose"),
+            ("PIL.Image.Image", "filter"),
+            ("PIL.Image.Image", "point"),
+            ("PIL.Image.Image", "reduce"),
+            ("PIL.Image.Image", "getchannel"),
+        }:
+            return receiver_source_mode(source, seen + (source_id,))
         return None
 
     def crop_discards_source(step: dict[str, Any]) -> bool:
@@ -1357,6 +1437,81 @@ def classify_pipeline_case(
         clip_bottom = min(bottom, height)
         return clip_right <= clip_left or clip_bottom <= clip_top
 
+    def thumbnail_is_no_shrink(step: dict[str, Any]) -> bool:
+        """Return whether literal thumbnail bounds contain a literal source."""
+
+        if (step.get("surface"), step.get("operation")) != (
+            "PIL.Image.Image",
+            "thumbnail",
+        ):
+            return False
+        source = steps_by_id.get(receiver_binding(step))
+        source_size = (
+            _workflow_literal(source.get("arguments"), "size")
+            if source is not None
+            and (source.get("surface"), source.get("operation"))
+            in _IMAGE_SOURCE_MODE_OPS
+            else None
+        )
+        requested_size = _workflow_literal(step.get("arguments"), "size")
+        if not (
+            isinstance(source_size, (list, tuple))
+            and len(source_size) == 2
+            and all(isinstance(value, int) and not isinstance(value, bool) for value in source_size)
+            and isinstance(requested_size, (list, tuple))
+            and len(requested_size) == 2
+            and all(
+                isinstance(value, int) and not isinstance(value, bool)
+                for value in requested_size
+            )
+        ):
+            return False
+        source_width, source_height = source_size
+        requested_width, requested_height = requested_size
+        return (
+            requested_width >= source_width
+            and requested_height >= source_height
+            and requested_width >= 0
+            and requested_height >= 0
+        )
+
+    def paste_is_degenerate_solid(step: dict[str, Any]) -> bool:
+        """Return whether ``Image::paste_impl`` takes its solid no-op branch."""
+
+        if (step.get("surface"), step.get("operation")) != (
+            "PIL.Image.Image",
+            "paste",
+        ):
+            return False
+        arguments = step.get("arguments")
+        if not isinstance(arguments, dict):
+            return False
+        source = arguments.get("im")
+        box = _workflow_literal(arguments, "box")
+        if isinstance(source, dict) and source.get("kind") == "binding":
+            return False
+        if not (
+            isinstance(box, (list, tuple))
+            and len(box) == 4
+            and all(isinstance(value, int) and not isinstance(value, bool) for value in box)
+        ):
+            return False
+        return box[2] <= box[0] or box[3] <= box[1]
+
+    def exif_transpose_is_known_noop(step: dict[str, Any]) -> bool:
+        """Return whether a new image proves EXIF transpose has no orientation."""
+
+        if (step.get("surface"), step.get("operation")) != (
+            "PIL.ImageOps",
+            "exif_transpose",
+        ):
+            return False
+        source = argument_binding(step, "image")
+        return source is not None and (source.get("surface"), source.get("operation")) == (
+            "PIL.Image",
+            "new",
+        )
+
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
         if key == ("PIL.ImageFilter", "ModeFilter"):
@@ -1396,6 +1551,61 @@ def classify_pipeline_case(
                     for candidate in steps
                 )
             return False
+        if key == ("PIL.Image.Image", "apply_transparency"):
+            # ``Image::apply_transparency`` only commits palette metadata (or
+            # returns a public validation error); it never queues an operation.
+            # Any earlier deferred node remains in the denominator and still
+            # requires its own receipt.
+            return True
+        if key == ("PIL.Image.Image", "convert"):
+            # ``Image::convert_with_input`` returns a copy for mode=None on a
+            # known non-P source and for a same-mode request without a matrix.
+            # ``Image::convert`` then materializes all matrix, scalar I/F,
+            # non-standard-source, and 1/P/PA target paths before any
+            # PipelineOp::Convert is queued.  Resolve only a literal receiver
+            # source chain; opened/unknown images remain conservative.
+            arguments = step.get("arguments")
+            target_mode = _workflow_literal(arguments, "mode")
+            matrix = _workflow_literal(arguments, "matrix")
+            source_mode = receiver_source_mode(step)
+            if matrix is not None:
+                return True
+            if target_mode is None:
+                # ``convert_with_input`` chooses RGB/RGBA for a known P source
+                # and still executes that conversion eagerly; an unknown
+                # opened source is not resolved here and remains conservative.
+                return source_mode is not None
+            if source_mode is not None and target_mode == source_mode:
+                return True
+            if target_mode in {"1", "P", "PA"}:
+                return True
+            if source_mode in {"CMYK", "HSV", "YCbCr", "I", "F", "P", "PA"}:
+                # PA->RGB is the one non-standard conversion deliberately
+                # retained as a lazy byte converter in convert.rs.
+                if source_mode == "PA" and target_mode == "RGB":
+                    return False
+                # HSV/YCbCr -> I/F normalize through RGB, then queue the
+                # ordinary byte converter; do not claim eager execution.
+                if source_mode in {"HSV", "YCbCr"} and target_mode in {"I", "F"}:
+                    return False
+                return True
+            if source_mode in {"I;16", "I;16L", "I;16B", "I;16N"}:
+                return target_mode == "CMYK"
+            # The mode-1 source path expands to L before recursively
+            # converting; only an L target becomes the eager same-mode copy.
+            return source_mode == "1" and target_mode == "L"
+        if key == ("PIL.Image.Image", "paste"):
+            return paste_is_degenerate_solid(step)
+        if key == ("PIL.Image.Image", "thumbnail"):
+            # ``Image::thumbnail`` materializes synchronously and returns
+            # before any division or queueing when the requested bounds do
+            # not shrink a known source.
+            return thumbnail_is_no_shrink(step)
+        if key == ("PIL.ImageOps", "exif_transpose"):
+            # ``ImageOps.exif_transpose`` copies a freshly-created image with
+            # no EXIF record (or returns None in-place); only literal ``new``
+            # sources prove that no orientation transform is queued.
+            return exif_transpose_is_known_noop(step)
         if key == ("PIL.Image.Image", "putpixel"):
             # A degenerate/out-of-source crop creates a new blank canvas and
             # never reads the receiver.  A preceding queued PutPixel is
@@ -1406,6 +1616,8 @@ def classify_pipeline_case(
                 (index for index, candidate in enumerate(steps) if candidate is step),
                 len(steps),
             )
+            if receiver_source_mode(step) in _IMMEDIATE_SCALAR_MODES:
+                return True
             return receiver is not None and any(
                 receiver_binding(later) == receiver
                 and crop_discards_source(later)
