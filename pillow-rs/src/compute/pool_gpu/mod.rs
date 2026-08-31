@@ -259,16 +259,17 @@ fn gpu_f_resize_box_copy_is_exact(
     true
 }
 
-/// Return whether a single-axis 2x F-mode Box downscale is safe for the
+/// Return whether a one- or two-axis 2x F-mode Box downscale is safe for the
 /// shader's f32 accumulator.
 ///
 /// A Box row at an exact 2:1 ratio contains two normalized 0.5 taps. For
 /// finite samples whose halving stays in the normal range, each product is
 /// exact in f32 and the final two-term sum rounds identically to Pillow's
-/// f64 accumulation followed by an f32 store. Keep this proof deliberately
-/// narrow: two-axis reductions can feed a subnormal horizontal result into a
-/// second pass, and chained reductions need a new proof for their intermediate
-/// values. Those cases remain on exact host semantic control.
+/// f64 accumulation followed by an f32 store. The conservative `2^-20` floor
+/// leaves even a two-axis reduction above the normal range (`2^-22`) when zero
+/// samples are present; same-sign inputs prevent cancellation below that bound.
+/// Chained reductions and other ratios need a new proof and remain on exact
+/// host semantic control.
 // This mirrors Pillow's `Resample.c::precompute_coeffs` normalization and its
 // F-mode `ImagingResample` double-accumulate/f32-store boundary.
 fn gpu_f_resize_box_average_is_exact(
@@ -350,14 +351,10 @@ fn gpu_f_resize_box_average_is_exact(
                 let half_h = h.checked_mul(2) == Some(dimensions.1);
                 let same_w = *w == dimensions.0;
                 let same_h = *h == dimensions.1;
-                // Exactly one axis must be a 2:1 reduction; the other axis
-                // is copied unchanged so no reduced intermediate feeds a
-                // second convolution pass.
-                if (half_w == half_h)
-                    || (same_w == same_h)
-                    || (!half_w && !same_w)
-                    || (!half_h && !same_h)
-                {
+                // Each axis is either a 2:1 reduction or an unchanged copy;
+                // at least one axis must reduce. Up to two averaging passes
+                // are safe under the source-value floor above.
+                if (!half_w && !same_w) || (!half_h && !same_h) || (!half_w && !half_h) {
                     return false;
                 }
                 dimensions = (*w, *h);
@@ -8277,7 +8274,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_box_average_lowering_requires_single_axis_two_to_one() {
+    fn f_resize_box_average_lowering_requires_2x_axes_and_safe_values() {
         let image = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(
                 4,
@@ -8312,7 +8309,7 @@ mod tests {
             &image,
             Some("F")
         ));
-        assert!(!gpu_f_resize_box_average_is_exact(
+        assert!(gpu_f_resize_box_average_is_exact(
             &[box_resize(2, 2)],
             &image,
             Some("F")
