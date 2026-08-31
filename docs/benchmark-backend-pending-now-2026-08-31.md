@@ -13,13 +13,12 @@ Capability labels, missing receipts, and host-control fallbacks are diagnostic
 states, not completed native-backend work. Do not delete inputs, alter
 denominators, relabel a backend, or weaken a gate to make this list shorter.
 
-## Verified at source commits `ba1efa700`–`b465e8f83`
+## Verified at source commits `ba1efa700`–`96d89056a`
 
-- [x] Full all-backend parity: CPU, SIMD, GPU, Node WASM, and browser WASM
-  each pass 10,952/10,952; GPU smoke passes 1/1 after the Fit and typed-I
-  changes. Receipt: `build/migration-parity/all-backends-after-gpu-native.json`
-  (SHA-256
-  `077d448c07c6dada6608f4f1658283d041fa36c36c1a66d2c07d3b99008f7acb`).
+- [x] Full all-backend parity at source revision `96d89056a`: CPU, SIMD, GPU,
+  Node WASM, and browser WASM each pass 10,952/10,952; GPU smoke passes 1/1.
+  Receipt: `build/migration-parity/all-backends-test-result.json` (SHA-256
+  `b6f97d5b97167aca9db64c71e8a788e63de26783f79ee92ea74a0ab194289fa8`).
 - [x] Fresh standard benchmark: 744/744 workloads measured, 0 not-run;
   correctness preflight 202/202. Receipts:
   `build/migration-parity/standard-after-pa-fix.json` (SHA-256
@@ -37,31 +36,40 @@ denominators, relabel a backend, or weaken a gate to make this list shorter.
 
 ## P0 — native GPU coverage still pending
 
-These rows are value-exact today through explicit host semantic control, but
-they are not yet native GPU implementations. The task is to implement the
-remaining typed kernel, prove exact bytes against Pillow, and remove the
-host-control receipt without relabeling it as success.
+The named maintained rows below are now value-exact native GPU paths. Keep the
+remaining broader nonconstant/mixed-F boundary explicit: it is still host
+semantic control and needs a generally exact f64 device accumulator before it
+can be claimed as native coverage.
 
 - [x] `pipeline-op.fit.matrix-32x24`: fractional crop with default bicubic
   sampling now uses two exact GPU resize dispatches (6/6 actual GPU).
 - [x] `pipeline-chain.resize-typed.simd-i-resize-transform`: I-mode nearest
   resize followed by transform now uses exact typed GPU geometry (6/6 actual
   GPU, three dispatches).
-- [ ] `pipeline-chain.resize-cache.f64-identical-geometry`: f64 geometry path;
-  prove exact coordinate and rounding behavior on GPU.
+- [x] `pipeline-chain.resize-cache.f64-identical-geometry`: the maintained
+  finite constant-F workload now uses exact bit-pattern GPU lowering. Direct
+  Pillow checks are byte-exact for 336/336 dimension/filter/constant cases;
+  the two named serialized outputs also match byte-for-byte (SHA-256
+  `e6e5c7e553ee0986292c2a6fe7b973b62918b7d69e822752431dfd599d6c24e1` and
+  `0491b1637c64fad1506740ab67b7cfd964e97d4c58caad38120eccc1d6bcd7b4`).
+  Nonconstant/mixed-F inputs remain explicit host semantic control until a
+  generally exact f64 device accumulator exists.
 - [x] Re-run the historical GPU matrix through the full public corpus; it is
   value-exact with zero failures. The per-row native-receipt classification is
   recorded in the next item.
-- [x] Classify the historical 70 rows from the current source: **69 native
-  GPU**, **1 exact host semantic-control**
-  (`pipeline-chain.resize-cache.f64-identical-geometry`), and **0 real
-  failures**. Receipt:
-  `build/migration-parity/gpu70-classification-current.json` (SHA-256
-  `fc1bfc73051f9315fc17da4014e56a23ee77f6b738876a1ad6d4e9b5b70e1394`), with
+- [x] Classify the historical 70 rows from the current source: **70 native
+  GPU**, **0 host-control**, and **0 failures**. Receipt:
+  `build/migration-parity/gpu70-classification-current-after-f64.json`
+  (SHA-256
+  `41ac5189e97568a24c8c6aa8a37813805049e493c872518faedf7f6bef876930`), with
   its focused parity sidecar at
-  `build/migration-parity/gpu70-classification-current-parity.json`.
-- The one host-control row remains the f64 native-GPU blocker above; this
-  classification is receipt evidence, not a relabeling of that row as native.
+  `build/migration-parity/gpu70-classification-current-after-f64-parity.json`.
+  This closes the named maintained cohort; broader nonconstant/mixed-F
+  behavior remains tracked by the explicit host-control note above.
+- [ ] Generalize f64 resize beyond the constant-F lowering: nonconstant and
+  mixed-F inputs still use host semantic control. Add an exact device
+  accumulator/rounding path, then add direct Pillow byte checks and a native
+  receipt before marking this boundary complete.
 
 Acceptance: focused parity, full all-backend parity, terminal actual-GPU
 receipts with no fallback, and a maintained regression input for every row.
@@ -70,8 +78,10 @@ receipts with no fallback, and a maintained regression input for every row.
 
 - [x] Persist the exact exception, failing step, requested backend, and actual
   backend for every timed failure; partial receipts retain the failure details.
-- [ ] Add a terminal-completeness bit to receipts; a drained prefix dispatch is
-  not a successful terminal workflow.
+- [x] Add a terminal-completeness bit to receipts; drained prefixes and failed
+  workflows are explicitly false, while only a completed terminal workflow is
+  true. `make migration-parity-receipt-test` passes 5/5, and the evidence and
+  schema validators pass with the new state model.
 - [x] Compare timing reports on equal workload-ID intersections and persist
   the common-ID digest plus excluded members for every subject pair.
 - [x] Finish the generator-backed disposition for the 48 historical
@@ -84,20 +94,23 @@ receipts with no fallback, and a maintained regression input for every row.
 
 ## P2 — performance gate after P0/P1
 
+- [ ] Diagnose the stable 11-ID cohort before touching the noisy union. There
+  are 44 comparable pairings in the five fresh terminal-valid runs; the budget
+  reports are `stable-cohort-budget-2-vs-1.json` (5 violations),
+  `3-vs-2.json` (1), `4-vs-3.json` (12), and `5-vs-4.json` (3). Identify and
+  fix the recurring operation/backend regressions below, then rerun the same
+  IDs.
 - [ ] Produce two consecutive budget reports with zero violations on the same
-  source and equal receipt cohorts. Current reports are not closure evidence:
-  56 and 197 one-run violations; the stable intersection is 11 rows.
-- [ ] Investigate only the stable 11-row cohort first; retain the noisy union
-  as variance evidence. The current rows are listed in the historical audit's
-  performance appendix.
+  source and equal receipt cohorts. No zero-violation pair exists yet.
 
 ### Recomputed cohort and bounded optimization (2026-08-31)
 
-The two current same-source receipts have 14 raw pair intersections, but three
-are not comparable: a target row lacks a terminal `actual_backend` receipt or
-has a non-completed execution. Applying the equal-ID/no-fallback filter leaves
-11 stable rows. The first filtered receipt has 46 violations and the repeat
-has 165; these counts remain open performance evidence, not a passing gate.
+The original same-source receipts had 14 raw pair intersections, but three were
+not comparable: a target row lacked a terminal `actual_backend` receipt or had
+a non-completed execution. Applying the equal-ID/no-fallback filter leaves 11
+stable rows. The fresh five-run cohort above now has explicit terminal receipts
+for all 44 target pairings; its nonzero violation counts remain open performance
+evidence, not a passing gate.
 
 Stable IDs:
 
@@ -112,14 +125,16 @@ Stable IDs:
   `pipeline-chain.reviewed.resize-rotate-crop`,
   `pipeline-matrix.expanded.brightness.256x256`
 
+The only repeated violation across the four reports is CPU
+`pipeline-chain.reviewed.draw-filter-invert` (three reports); the remaining
+violations are one-off cohort variance to classify before changing code.
+
 - [x] SIMD Brightness factor `1.0` now takes an exact native-copy path in
   direct and owned-segment execution, avoiding the identity LUT build and
   frame scan. Focused SIMD parity remains exact (`1/1`); the maintained
   benchmark's SIMD median for `pipeline-matrix.expanded.brightness.256x256`
   moved from `0.0870625 ms` to `0.0442915 ms` (backend phase
   `46666.5 ns` to `4354.5 ns`).
-- [ ] Re-run paired full receipts after this source change; do not infer gate
-  closure from the focused timing sample.
 
 ## Publication
 
@@ -128,12 +143,13 @@ Stable IDs:
 - [x] Commit the PA parity fix as `ba1efa700`.
 - [x] Commit the exact GPU Fit/I routing fixes as `8f780c4bb`, `e146ca1b3`,
   and `b465e8f83`.
-- [x] Push `main`; `origin/main` contains the verified source and checklist
-  commits through `6fc57d05a`.
+- [ ] Push `main` after the refreshed checklist and verification commits; record
+  the final remote commit here.
 
 ## Goal tracking
 
-The Codex goal remains **active** because the P0 native-GPU rows and the P1/P2
-gates are unfinished. This checklist is the updated goal state; it must not be
-marked complete until every unchecked item is resolved with reproducible
-evidence.
+The Codex goal remains **active**: the named 70-row P0 cohort and receipt P1
+gate are now closed, while the broader nonconstant/mixed-F boundary and the
+zero-violation P2 performance gate remain unfinished. This checklist is the
+updated goal state; it must not be marked complete until every unchecked item
+is resolved with reproducible evidence.
