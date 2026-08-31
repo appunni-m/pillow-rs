@@ -6369,7 +6369,19 @@ fn gpu_geometry_requires_exact_host_control(
             dimensions = next;
         }
     }
-    matches!(mode, Some("F" | "I")) && ops.iter().any(|op| matches!(op, PipelineOp::Resize { .. }))
+    // Nearest resize only relocates complete four-byte samples for F mode;
+    // the raw mode-8 shader preserves those bytes and the affine coordinate
+    // contract is already represented by its native relocation path. Keep
+    // filtered F/I resize on the exact host path until a typed convolution
+    // shader carries its f64 sample and rounding rules.
+    matches!(mode, Some("F"))
+        && ops.iter().any(|op| {
+            matches!(
+                op,
+                PipelineOp::Resize { filter, .. }
+                    if !matches!(filter, ResampleFilter::Nearest)
+            )
+        })
 }
 
 fn validate_gpu_operations(
