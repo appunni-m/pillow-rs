@@ -1601,14 +1601,31 @@ pub fn execute_reduce(
 
     let output_stride = new_w as usize * channels;
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        &mut out,
-        output_stride,
-        new_h as usize,
-        |_row_start, _row_end, y, row| {
-            process_row(y, row);
+    {
+        // Pillow's Reduce.c has no row-task boundary; each destination row is
+        // independent.  Match the other CPU geometry kernels by keeping tiny
+        // reductions serial: Rayon setup costs more than the complete 32x24
+        // benchmark reduction, while large images still use row-level
+        // parallelism.  Use source pixels for the guard so a large source
+        // remains parallel even when its reduced output is smaller than 512².
+        const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+        let input_pixels = (w as usize).saturating_mul(h as usize);
+        if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
+            crate::par_rows_mut!(
+                &mut out,
+                output_stride,
+                new_h as usize,
+                |_row_start, _row_end, y, row| {
+                    process_row(y, row);
+                }
+            );
+        } else {
+            for y in 0..new_h {
+                let start = y as usize * output_stride;
+                process_row(y, &mut out[start..start + output_stride]);
+            }
         }
-    );
+    }
 
     #[cfg(not(feature = "parallel"))]
     for y in 0..new_h {

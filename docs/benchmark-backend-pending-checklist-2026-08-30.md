@@ -14,11 +14,11 @@ open. Use the focused checklist linked above for the execution order.
   receipts and 100% operation coverage.
 - Full live-backend parity: CPU, SIMD, GPU, Node WASM, and browser WASM each
   passed **10,952/10,952**; GPU smoke passed **1/1**.
-- Latest same-tree budget comparison: **71** violations across 2,976
-  comparable rows (20 Pillow, 24 CPU, 19 SIMD, 8 GPU). The immediately
-  preceding repeat had 51; timing-sensitive membership is retained rather than
-  hidden, and no fixture, threshold, denominator, or backend-label changes are
-  allowed.
+- Latest same-tree budget comparison: **197** timing-sensitive violations
+  across 2,976 comparable rows (63 Pillow, 47 CPU, 78 SIMD, 9 GPU). The first
+  after-reduce comparison had **56** (27 Pillow, 12 CPU, 15 SIMD, 2 GPU);
+  timing-sensitive membership is retained rather than hidden, and no fixture,
+  threshold, denominator, or backend-label changes are allowed.
 - Goal state: **active** until a stable comparison closes the speed gate.
 
 ## Pending, in execution order
@@ -114,30 +114,38 @@ open. Use the focused checklist linked above for the execution order.
   exact L=127 material row uses `Filter5x5: native-copy`, passed strict SIMD
   and all-backends parity, and cleared the guarded budget in both repeats.
   Source change is commit `d2e433ba3`.
+- [x] CPU Reduce now serializes only sub-512×512 source images and keeps the
+  established row-parallel path for larger sources. The 32×24 RGB reduction
+  dropped from roughly 64 µs to 3 µs at the adapter boundary, passed strict CPU
+  parity 10,952/10,952, and is absent from both after-reduce violation lists.
+  The source-pixel guard also fixed the initial output-pixel-threshold
+  regression on 1024×768 reductions; source change is commit `ec63b5924`.
 
 ## Latest receipts
 
-- Benchmark: `build/migration-parity/final-standard-after-conv-wave.json`
+- Benchmark: `build/migration-parity/final-standard-after-reduce-source-threshold.json`
   (744/744; SHA-256
-  `4baf4dbb7dfe941948b5b64a83181aa258d04f9e8075889d54ba1bc294a00d6e`).
-- Same-tree repeat: `build/migration-parity/final-standard-after-conv-wave-repeat.json`
+  `224b3f80800169327895e4139b4fe411c0d06f02ed86c0c3e4c559ebfffd15a9`).
+- Same-tree repeat: `build/migration-parity/final-standard-after-reduce-source-threshold-repeat.json`
   (744/744; SHA-256
-  `40b413ad0c901815d680f21a311cd9885a591926429d8987c7dfe428d0950dbb`).
-- Benchmark parity sidecars: `final-standard-after-conv-wave-parity.json`
-  SHA-256 `186fe79f5c516630df2f0db7e8bcac80b4ade60a00cab76b05cc36a142b9c848`;
+  `5512b16940d3cab4a76d18e1aac3998edff8ba3fbfc9271fcc78337c023972c5`).
+- Benchmark parity sidecars: `final-standard-after-reduce-source-threshold-parity.json`
+  SHA-256 `76b23eb3614991acc36f801536b6a8485964acce6508a2505235e2c1df39157b`;
   repeat SHA-256
-  `16f57bfb92a96b2797fb68d52e0e67c66958e63ee003095d43c86e13c087ef32`.
-- Budget checks: `pipeline-budget-check-after-conv-wave.json` (51;
-  SHA-256 `9ca1295ebd9324996ccd3fe6e2d171b126e00ce4612cb1bbb1ded497c8326b9d`)
-  and `pipeline-budget-check-after-conv-wave-repeat.json` (71;
-  SHA-256 `f967d5234d43fcb1ec0295e69f8d0b71ec6144ac906081cff1da3ed789d1b980`).
-- Reports: `pipeline-performance-report-after-conv-wave-repeat.json`,
-  `pipeline-benchmark-coverage-after-conv-wave-repeat.json`, and
-  `pipeline-roadmap-status-after-conv-wave-repeat.json` (roadmap: 14 closed,
-  50 open, 100% operation coverage).
-- Full parity: `build/migration-parity/all-backends-after-conv-wave.json`
-  (SHA-256
-  `bf9c3008510c3265c70449671dd435407a65e594ccdf401efe5bc0aeeeb7a077`).
+  `a815b62ab274f1cb25808e79892a106955875433d0a47eca94221edbc667b2e8`.
+- Budget checks: `pipeline-budget-check-after-reduce-source-threshold.json`
+  (56; SHA-256
+  `601ec408f53887a8b35ca67b0de956913f205101c5d2bbc2e59dd70a1b080fd6`) and
+  `pipeline-budget-check-after-reduce-source-threshold-repeat.json` (197;
+  SHA-256
+  `a68699a9ea3135774b076883362c800daed43134d943f9624c04503fa151ad49`).
+- Reports: `pipeline-performance-report-after-reduce-source-threshold-repeat.json`,
+  `pipeline-benchmark-coverage-after-reduce-source-threshold-repeat.json`, and
+  `pipeline-roadmap-status-after-reduce-source-threshold-repeat.json` (roadmap:
+  14 closed, 50 open, 100% operation coverage).
+- Full parity: `build/migration-parity/all-backends-after-reduce-wave2.json`
+  (CPU/SIMD/GPU/Node/browser 10,952/10,952, GPU smoke 1/1; SHA-256
+  `30f0ec37d0aef34256036e6b8ce7eacf307e3cd7ba76e76abc2d018eac260752`).
 
 ## Required checks before publishing
 

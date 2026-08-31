@@ -2602,11 +2602,12 @@ the row-level register is
 
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
-still does not prove the requested speed contract.  The current release runs
-are `final-standard-after-conv-wave.json` and its same-source repeat
-`final-standard-after-conv-wave-repeat.json` (744 selected/measured and zero
-not-run in each), so the following figures supersede the earlier row-kernel
-snapshot:
+still does not prove the requested speed contract.  The latest release runs
+are `final-standard-after-reduce-source-threshold.json` and its same-source
+repeat `final-standard-after-reduce-source-threshold-repeat.json` (744
+selected/measured and zero not-run in each).  The immediately preceding
+convolution-wave pair remains retained as historical timing evidence, so the
+following figures supersede the earlier row-kernel snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
   the benchmark report persists every per-workload median, p95, actual backend,
@@ -2628,14 +2629,16 @@ snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root.  The first convolution-wave comparison is recorded
-  in `pipeline-budget-check-after-conv-wave.json` and reports **51** guarded
-  violations (20 Pillow, 12 CPU, 13 SIMD, 6 GPU subject rows).  Its same-source
-  repeat, `pipeline-budget-check-after-conv-wave-repeat.json`, reports **71**
-  (20 Pillow, 24 CPU, 19 SIMD, 8 GPU; the exact row IDs vary with timing).
-  The two receipts are retained
-  as timing-variance evidence, and the speed gate remains open rather than
-  being closed on a favorable sample.
+  as the repository root.  The first after-reduce-source-threshold comparison
+  is recorded in `pipeline-budget-check-after-reduce-source-threshold.json`
+  and reports **56** guarded violations (27 Pillow, 12 CPU, 15 SIMD, 2 GPU
+  subject rows).  Its same-source repeat,
+  `pipeline-budget-check-after-reduce-source-threshold-repeat.json`, reports
+  **197** (63 Pillow, 47 CPU, 78 SIMD, 9 GPU; exact row IDs vary with timing).
+  The two receipts are retained as timing-variance evidence, and the speed
+  gate remains open rather than being closed on a favorable sample.  The
+  preceding convolution-wave pair (51 then 71) remains in the register for
+  lineage comparison.
   These are performance regressions against the older benchmark lineage, not
   parity failures or public-operation exclusions.
 - The SIMD 5×5 convolution identity proof now scans uniform native-byte images
@@ -2690,6 +2693,14 @@ snapshot:
   avoiding work-buffer setup.  The 32×32 target improved 67.53% whole-workflow
   and 83.02% in the CPU backend; BoxBlur and GaussianBlur parity remained
   63/63.  The verified source commit is `c8a3cda51`.
+- CPU Reduce now serializes only sub-512×512 source images and keeps the
+  established Rayon row splitter for larger sources.  The first output-pixel
+  guard accidentally serialized 1024×768 sources whose reduced output was
+  smaller than 512²; switching the guard to source pixels restored that route.
+  The exact 32×24 RGB workload's adapter backend median fell from roughly 64 µs
+  to 3 µs, strict CPU parity remained 10,952/10,952, and the row is absent from
+  both after-reduce violation receipts.  The source change is commit
+  `ec63b5924`.
 - SIMD Reduce now processes outputs below 1,024 pixels serially and keeps the
   existing Rayon row splitter for larger outputs.  The 16×16, 32×24, and
   32×32 targets improved to 0.014229, 0.014646, and 0.015229 ms, with focused
@@ -2759,6 +2770,38 @@ snapshot:
   rows in the latest repeat pending and keeps the speed gate honest.
 
 ### 31.5 Reproducible final artifacts
+
+- Latest reduce-threshold standard benchmark:
+  `build/migration-parity/final-standard-after-reduce-source-threshold.json`,
+  744/744 measured (SHA-256
+  `224b3f80800169327895e4139b4fe411c0d06f02ed86c0c3e4c559ebfffd15a9`).
+- Same-tree repeat:
+  `build/migration-parity/final-standard-after-reduce-source-threshold-repeat.json`,
+  744/744 measured (SHA-256
+  `5512b16940d3cab4a76d18e1aac3998edff8ba3fbfc9271fcc78337c023972c5`).
+- Latest benchmark parity sidecars:
+  `build/migration-parity/final-standard-after-reduce-source-threshold-parity.json`
+  and `build/migration-parity/final-standard-after-reduce-source-threshold-repeat-parity.json`
+  (SHA-256 `76b23eb3614991acc36f801536b6a8485964acce6508a2505235e2c1df39157b`
+  and `a815b62ab274f1cb25808e79892a106955875433d0a47eca94221edbc667b2e8`).
+- Latest budget receipts:
+  `build/migration-parity/pipeline-budget-check-after-reduce-source-threshold.json`
+  (56 violations, SHA-256
+  `601ec408f53887a8b35ca67b0de956913f205101c5d2bbc2e59dd70a1b080fd6`) and
+  `build/migration-parity/pipeline-budget-check-after-reduce-source-threshold-repeat.json`
+  (197 violations, SHA-256
+  `a68699a9ea3135774b076883362c800daed43134d943f9624c04503fa151ad49`).
+- Latest full all-backends parity:
+  `build/migration-parity/all-backends-after-reduce-wave2.json`, CPU/SIMD/GPU,
+  Node, and browser lanes 10,952/10,952 with GPU smoke 1/1 (SHA-256
+  `30f0ec37d0aef34256036e6b8ce7eacf307e3cd7ba76e76abc2d018eac260752`).
+- Latest strict CPU parity:
+  `build/migration-parity/cpu-strict-after-reduce.json`, 10,952/10,952
+  (SHA-256 `efda569adc6e357b1b65e65ea70e45e8405b13a8f00ecaadce86580a21a35768`).
+- Latest performance, coverage, and roadmap reports are the
+  `*-after-reduce-source-threshold[-repeat].json` artifacts; both report
+  variants retain 100% operation coverage, 744 pipeline workloads, and a
+  roadmap status of 14 closed / 50 open.
 
 - Standard benchmark: `build/migration-parity/final-standard-after-conv-wave.json`,
   744/744 workloads measured and parity-passing (SHA-256
