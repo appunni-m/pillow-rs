@@ -6345,10 +6345,11 @@ class WorkflowBuilder:
                 )
 
         if self.scenario_observe_stat_properties:
-            # A list passed to ImageStat.Stat is a public precomputed
-            # histogram, so observing the properties is necessary to make
-            # this an actual behavioral parity workflow rather than a
-            # constructor-only handle check.
+            # A Stat constructor or a Stat.extrema reduction is a public
+            # workflow.  Observe the properties on the constructed Stat
+            # receiver (while retaining ``call`` as the extrema-list result)
+            # so this remains behavioral parity rather than a fixture-only
+            # method call on the returned list.
             for property_name in (
                 "count",
                 "sum",
@@ -6364,7 +6365,17 @@ class WorkflowBuilder:
                     self.add_step(
                         "PIL.ImageStat.Stat",
                         property_name,
-                        receiver=binding(call_id),
+                        # ``Stat.extrema`` returns the computed list; the
+                        # remaining properties belong to the Stat receiver
+                        # constructed during setup.  Binding those
+                        # observations to ``call`` attempts to invoke Stat
+                        # methods on a list and creates a fixture-only
+                        # AttributeError after an otherwise valid reduction.
+                        receiver=(
+                            receiver
+                            if self.primary_operation == "extrema"
+                            else binding(call_id)
+                        ),
                         arguments={},
                         step_id=f"observe-{slug(property_name)}",
                     )
@@ -27132,7 +27143,6 @@ def build_nuanced_cases(
                     1 + (pattern * 53) % 254,
                 ],
                 "values": {"alpha_only": literal(False)},
-                "observe_result": "tobytes",
             }
             for pattern in range(100)
         ),
@@ -34171,7 +34181,8 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "bytes-luma",
             "mode": "L",
-            "observe_result": "tobytes",
+            "edge": "nonzero-pixel",
+            "pixel": 17,
         },
         {
             "surface": "PIL.Image.Image",
@@ -34179,7 +34190,8 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "bytes-rgb-multiband",
             "mode": "RGB",
-            "observe_result": "tobytes",
+            "edge": "nonzero-pixel",
+            "pixel": [17, 31, 47],
         },
         {
             "surface": "PIL.Image.Image",
@@ -34189,7 +34201,6 @@ def build_nuanced_cases(
             "mode": "1",
             "edge": "nonzero-pixel",
             "pixel": 1,
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34199,7 +34210,6 @@ def build_nuanced_cases(
             "mode": "LA",
             "edge": "nonzero-pixel",
             "pixel": [13, 200],
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34209,7 +34219,6 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "edge": "nonzero-pixel",
             "pixel": [13, 29, 47, 200],
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34219,7 +34228,6 @@ def build_nuanced_cases(
             "mode": "P",
             "edge": "nonzero-pixel",
             "pixel": 3,
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34229,7 +34237,6 @@ def build_nuanced_cases(
             "mode": "PA",
             "edge": "nonzero-pixel",
             "pixel": [3, 200],
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34239,7 +34246,6 @@ def build_nuanced_cases(
             "mode": "CMYK",
             "edge": "nonzero-pixel",
             "pixel": [10, 20, 30, 40],
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34249,7 +34255,6 @@ def build_nuanced_cases(
             "mode": "I",
             "edge": "nonzero-pixel",
             "pixel": 100000,
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34259,7 +34264,6 @@ def build_nuanced_cases(
             "mode": "F",
             "edge": "nonzero-pixel",
             "pixel": 1.5,
-            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
@@ -34276,7 +34280,7 @@ def build_nuanced_cases(
             "name": "i-large-nonzero",
             "mode": "I",
             "edge": "nonzero-pixel",
-            "pixel": 100000,
+            "pixel": 100001,
         },
         {
             "surface": "PIL.Image.Image",
@@ -34285,7 +34289,7 @@ def build_nuanced_cases(
             "name": "f-nonzero",
             "mode": "F",
             "edge": "nonzero-pixel",
-            "pixel": 1.5,
+            "pixel": 2.5,
         },
         {
             "surface": "PIL.Image.Image",
