@@ -2871,18 +2871,25 @@ source snapshots.  The current focused queue is
   now carries an explicit terminal-completeness bit, and the all-backends
   aggregate is schema v3 with an independently reported backend-coverage
   verdict.
-- The current v3 run at source `9d8ab1ebe` remains value-exact for all six
-  public lanes (10,952/10,952 each; GPU smoke 1/1), but its status is
-  **`passed_with_backend_gaps`**.  The CPU/SIMD/GPU pipeline sidecars each have
-  937 terminal-complete receipts; CPU has 3,562 cases with no receipt, SIMD has
-  3,550, and GPU has 3,562.  SIMD includes 43 terminal CPU receipts, while GPU
-  includes 41 terminal CPU receipts and fallback reasons across the complete
-  workflow.  These counts are explicit evidence gaps, not parity exemptions.
-- The v3 artifact is
+- The current v3 run at pushed source `d0821989d` remains value-exact for all
+  six public lanes (10,952/10,952 each; GPU smoke 1/1), but its status is
+  **`passed_with_backend_gaps`**. CPU and GPU each have 6,513
+  terminal-complete receipts; SIMD has 6,518. CPU/GPU retain 877
+  terminal-incomplete and 3,562 no-receipt cases; SIMD retains 884 and 3,550.
+  SIMD includes 300 terminal CPU receipts, while GPU includes 389 terminal CPU
+  receipts and the same explicit fallback reasons across the complete
+  workflow. These counts are explicit evidence gaps, not parity exemptions.
+- The receipt producer correction in `d0821989d` fixes the first divergence:
+  the observation boundary previously discarded a successful pipeline receipt
+  whenever serialization emitted no telemetry, leaving valid workflows
+  terminal-incomplete. The corrected producer retains that receipt as a
+  candidate and marks it only after all public observations succeed; the
+  one-case proof is 1/1 terminal for CPU, SIMD, and GPU.
+- The regenerated v3 artifact is
   `build/migration-parity/all-backends-test-result.json` (SHA-256
-  `acf3e1e6a497148d64ccb335245f5bcdad6d6a6b8faef4ad8afd624f5cc901d3`).  The
+  `ccaa614f6758e13e05a5db1f1ecfaaedfcb0c9589cc4f8fb0dfe5ec080fe4b72`).  The
   validator rejects a plain `passed` status when the persisted receipt
-  evidence has these gaps.  The next run must retain this distinction while
+  evidence has these gaps. The next run must retain this distinction while
   reconciling the pipeline-applicable denominator; non-pipeline public cases
   must remain counted rather than being renamed or removed.
 - The bounded CPU Gaussian row optimization in `888f1bba5` clears the recurring
