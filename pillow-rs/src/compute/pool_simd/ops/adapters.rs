@@ -13403,7 +13403,9 @@ pub fn simd_min_filter(
 }
 
 const SIMD_ORDER_STATISTIC_MAX_AREA: usize = 225;
-const SIMD_ORDER_STATISTIC_SORT_MAX_SIZE: u32 = 9;
+// The fixed network's quadratic comparisons overtake eight byte-domain
+// selection rounds at 7x7, so retain it only through 5x5 windows.
+const SIMD_ORDER_STATISTIC_SORT_MAX_SIZE: u32 = 5;
 const SIMD_ORDER_STATISTIC_HISTOGRAM_MAX_SIZE: u32 = 15;
 
 /// Sort one order-statistic window independently in every vector lane.
