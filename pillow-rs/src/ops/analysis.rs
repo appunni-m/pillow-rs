@@ -68,15 +68,13 @@ impl Image {
 fn histogram_l16_pillow(
     img: &crate::raster::DynamicImage,
     mode: &str,
-    mask: Option<&crate::raster::GrayImage>,
+    mask_raw: Option<&[u8]>,
 ) -> Vec<u32> {
     let samples = img.to_luma16();
     let width = img.width() as usize;
     let height = img.height() as usize;
     let mut hist = vec![0u32; 256];
     let big_endian = mode == "I;16B" || (mode != "I;16L" && cfg!(target_endian = "big"));
-    let mask_raw = mask.map(|mask| mask.as_raw().as_slice());
-
     for y in 0..height {
         for x in 0..width {
             if matches!(mask_raw, Some(mask) if mask[y * width + x] == 0) {
@@ -424,21 +422,39 @@ impl Image {
     pub fn histogram_with_mask(&self, mask: Option<&Image>) -> Result<Vec<u32>, PilError> {
         let img = self.materialized_shared()?;
         let mode = self.mode_from_materialized(&img);
-        let mask_luma = if let Some(mask) = mask {
-            let mask_img = mask.materialized_shared()?;
-            if (mask_img.width(), mask_img.height()) != (img.width(), img.height()) {
+        let mask_image = if let Some(mask) = mask {
+            let mask_image = mask.materialized_shared()?;
+            if (mask_image.width(), mask_image.height()) != (img.width(), img.height()) {
                 return Err(PilError::ValueError("images do not match".into()));
             }
             let mode = mask.mode()?;
             if mode != "1" && mode != "L" {
                 return Err(PilError::ValueError("bad transparency mask".into()));
             }
-            Some(mask_img.to_luma8())
+            Some(mask_image)
         } else {
             None
         };
+        // Native L8 masks already expose the exact bytes needed by Pillow's
+        // non-zero mask test. Borrow them directly; only converted layouts
+        // need an owned luma buffer.
+        let owned_mask_luma =
+            mask_image
+                .as_ref()
+                .and_then(|mask_image| match mask_image.as_ref() {
+                    crate::raster::DynamicImage::ImageLuma8(_) => None,
+                    _ => Some(mask_image.to_luma8().into_raw()),
+                });
+        let mask_raw: Option<&[u8]> = match (&mask_image, &owned_mask_luma) {
+            (Some(mask_image), None) => match mask_image.as_ref() {
+                crate::raster::DynamicImage::ImageLuma8(luma) => Some(luma.as_raw().as_slice()),
+                _ => unreachable!("native mask must use L8 storage"),
+            },
+            (_, Some(raw)) => Some(raw.as_slice()),
+            _ => None,
+        };
         if matches!(mode.as_str(), "I" | "F") {
-            if mask_luma.is_some() {
+            if mask_raw.is_some() {
                 // Pillow's masked scalar histogram call uses the byte-image
                 // entry point and rejects I/F images as the wrong mode.
                 return Err(PilError::ValueError("image has wrong mode".into()));
@@ -455,7 +471,7 @@ impl Image {
         if img.color() == crate::raster::ColorType::L16
             && matches!(mode.as_str(), "I;16" | "I;16L" | "I;16B" | "I;16N")
         {
-            return Ok(histogram_l16_pillow(&img, &mode, mask_luma.as_ref()));
+            return Ok(histogram_l16_pillow(&img, &mode, mask_raw));
         }
         let n_bands = match img.color() {
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
@@ -464,9 +480,6 @@ impl Image {
             _ => 4,
         };
         let mut hist = vec![0u32; 256 * n_bands];
-        let mask_raw = mask_luma
-            .as_ref()
-            .map(|mask_img| mask_img.as_raw().as_slice());
         let width = img.width() as usize;
         let masked_pixel = |index: usize| -> bool {
             match mask_raw {
@@ -490,7 +503,7 @@ impl Image {
                         // source-compatible behavior only for the masked
                         // path; the unmasked path retains the native alpha
                         // histogram.
-                        let second = if mask_luma.is_some() { px[0] } else { px[1] };
+                        let second = if mask_image.is_some() { px[0] } else { px[1] };
                         hist[256 + second as usize] += 1;
                     }
                 }
