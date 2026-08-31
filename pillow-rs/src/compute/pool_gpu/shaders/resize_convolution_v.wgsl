@@ -99,6 +99,12 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
         if params.premultiply == 2u {
             return params.channels;
         }
+        if params.premultiply == 3u {
+            // F-mode Box upscales have one normalized unit-weight tap. Copy
+            // that source word so the finite f32 values admitted by the host
+            // proof retain their exact representation.
+            return filtered_typed(output_x, output_y);
+        }
         return bitcast<u32>(filtered_float(output_x, output_y));
     }
     let alpha = select(
