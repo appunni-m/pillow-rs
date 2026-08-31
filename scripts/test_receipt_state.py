@@ -14,7 +14,10 @@ from scripts.run_all_backend_tests import (
     pipeline_execution_evidence,
 )
 from scripts.run_migration_benchmark import execution_result
-from scripts.run_migration_parity import write_pipeline_execution_evidence
+from scripts.run_migration_parity import (
+    classify_pipeline_case,
+    write_pipeline_execution_evidence,
+)
 from scripts.validate_migration_parity_result import (
     all_backends as validate_all_backends,
     execution_receipt,
@@ -61,24 +64,62 @@ def coverage_lane(
     backend: str,
     *,
     actual_backend_counts: dict[str, int],
+    selected: int | None = None,
     terminal_complete_receipts: int = 1,
     terminal_incomplete_cases: int = 0,
     not_recorded_cases: int = 0,
+    pipeline_applicable_cases: int | None = None,
+    pipeline_complete_cases: int | None = None,
+    pipeline_missing_receipt_cases: int | None = None,
+    pipeline_partial_receipt_cases: int | None = None,
+    pipeline_not_applicable_cases: int = 0,
+    pipeline_indeterminate_cases: int = 0,
     fallback_reason_counts: dict[str, int] | None = None,
 ) -> dict[str, object]:
+    if pipeline_complete_cases is None:
+        pipeline_complete_cases = terminal_complete_receipts
+    if pipeline_partial_receipt_cases is None:
+        pipeline_partial_receipt_cases = terminal_incomplete_cases
+    if pipeline_missing_receipt_cases is None:
+        pipeline_missing_receipt_cases = not_recorded_cases
+    if pipeline_applicable_cases is None:
+        pipeline_applicable_cases = (
+            pipeline_complete_cases
+            + pipeline_missing_receipt_cases
+            + pipeline_partial_receipt_cases
+        )
+    if selected is None:
+        selected = max(
+            1,
+            not_recorded_cases
+            + int(
+                bool(
+                    terminal_complete_receipts
+                    or terminal_incomplete_cases
+                    or pipeline_not_applicable_cases
+                    or pipeline_indeterminate_cases
+                )
+            ),
+        )
     return {
         "lane_id": lane_id,
         "status": "passed",
-        "scope": {"selected": 1},
+        "scope": {"selected": selected},
         "execution_evidence": {
             "status": "measured",
             "summary": {
-                "selected": 1,
-                "receipt_cases": 1,
+                "selected": selected,
+                "receipt_cases": selected - not_recorded_cases,
                 "not_recorded_cases": not_recorded_cases,
                 "completed_receipts": 1,
                 "terminal_complete_receipts": terminal_complete_receipts,
                 "terminal_incomplete_cases": terminal_incomplete_cases,
+                "pipeline_applicable_cases": pipeline_applicable_cases,
+                "pipeline_complete_cases": pipeline_complete_cases,
+                "pipeline_missing_receipt_cases": pipeline_missing_receipt_cases,
+                "pipeline_partial_receipt_cases": pipeline_partial_receipt_cases,
+                "pipeline_not_applicable_cases": pipeline_not_applicable_cases,
+                "pipeline_indeterminate_cases": pipeline_indeterminate_cases,
                 "actual_backend_counts": actual_backend_counts,
                 "fallback_reason_counts": fallback_reason_counts or {},
             },
@@ -98,6 +139,12 @@ def complete_execution_summary(
         "completed_receipts": 1,
         "terminal_complete_receipts": 1,
         "terminal_incomplete_cases": 0,
+        "pipeline_applicable_cases": 1,
+        "pipeline_complete_cases": 1,
+        "pipeline_missing_receipt_cases": 0,
+        "pipeline_partial_receipt_cases": 0,
+        "pipeline_not_applicable_cases": 0,
+        "pipeline_indeterminate_cases": 0,
         "actual_backend_counts": {actual: 1},
         "fallback_reason_counts": {},
     }
@@ -220,6 +267,48 @@ def execution_receipt_value(
     if terminal_complete is not None:
         value["terminal_complete"] = terminal_complete
     return value
+
+
+def classification_case(
+    case_id: str,
+    operation: str,
+    *,
+    mode: str = "RGB",
+) -> dict[str, object]:
+    """Build the smallest workflow that exercises one receipt partition."""
+
+    operation_arguments: dict[str, object] = {}
+    if operation == "resize":
+        operation_arguments = {
+            "size": {"kind": "literal", "value": [1, 1]},
+        }
+    return {
+        "case_id": case_id,
+        "steps": [
+            {
+                "step_id": "new",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "arguments": {
+                    "mode": {"kind": "literal", "value": mode},
+                    "size": {"kind": "literal", "value": [1, 1]},
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": "PIL.Image.Image",
+                "operation": operation,
+                "arguments": operation_arguments,
+            },
+            {
+                "step_id": "observe",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "arguments": {},
+            },
+        ],
+        "observations": ["observe"],
+    }
 
 
 class ReceiptStateTests(unittest.TestCase):
@@ -395,6 +484,77 @@ class ReceiptStateTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(ValueError, "cannot carry execution errors"):
             execution_receipt(completed_with_error, "invalid.execution")
+
+    def test_pipeline_case_classification_preserves_receipt_gaps(self) -> None:
+        deferred = classification_case("deferred", "resize")
+        eager = classification_case("eager", "putdata")
+        maybe = classification_case("maybe", "convert")
+        partial = classification_case("partial", "resize")
+
+        self.assertEqual(
+            classify_pipeline_case(deferred, []),
+            {
+                "status": "missing_receipt",
+                "reason": "deferred image pipeline reached an observed boundary without a receipt",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(eager, []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(maybe, []),
+            {
+                "status": "indeterminate",
+                "reason": "workflow may use an eager or deferred path; no receipt was recorded",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(
+                partial,
+                [{"status": "partial", "terminal_complete": False}],
+            ),
+            {
+                "status": "partial_receipt",
+                "reason": "receipt recorded without a terminal-complete boundary",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(
+                deferred,
+                [{"status": "completed", "terminal_complete": True}],
+            )["status"],
+            "complete",
+        )
+
+    def test_sidecar_rejects_dropped_pipeline_case_classification(self) -> None:
+        cases = [classification_case("deferred", "resize")]
+        execution = {"deferred": []}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "execution.json"
+            write_pipeline_execution_evidence(
+                path,
+                cases,
+                {"side": "target", "backend": "gpu"},
+                execution,
+            )
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["pipeline_case_status"] = {}
+            path.write_text(json.dumps(document), encoding="utf-8")
+            evidence = pipeline_execution_evidence(
+                path,
+                expected_scope={
+                    "kind": "public-parity-corpus",
+                    "selected": 1,
+                    "case_ids_sha256": hashlib.sha256(b"deferred\n").hexdigest(),
+                },
+                expected_backend="gpu",
+            )
+            self.assertEqual(evidence["status"], "not_measured")
+            self.assertIn("case IDs do not match", evidence["reason"])
 
     def test_sidecar_keeps_prefix_and_exact_errors_out_of_terminal_counts(self) -> None:
         cases = [{"case_id": "case-prefix"}]

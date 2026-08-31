@@ -38,11 +38,21 @@ rename, relabel, or weaken a case to make a gate green.
 
 ### P1 — honest backend-proof denominator
 
-- [ ] Reconcile the schema-v3 receipt gaps without hiding cases: CPU/GPU each
-  currently have **3,562** no-receipt and **877** terminal-incomplete cases;
-  SIMD has **3,550** and **884**. Distinguish explicitly non-pipeline cases
-  from missing/partial receipts, while retaining every case in the public
-  denominator.
+- [x] The receipt sidecars now emit schema `pipeline-execution-evidence@2`
+  with one status for every selected case: `complete`, `partial_receipt`,
+  `missing_receipt`, `not_applicable`, or `indeterminate`. The summary keeps
+  the historical no-receipt counts and adds a partition whose total remains
+  the fixed **10,952** public cases. Only high-confidence non-pipeline paths
+  leave the backend-proof cohort; missing, partial, and indeterminate paths
+  remain proof gaps. The all-backend envelope stays schema-v3, and old @1
+  sidecars are diagnostic-only until regenerated.
+- [ ] Regenerate the schema-v3 all-backend artifact and review the resulting
+  partition. A classification of the last @1 CPU/GPU artifact predicts
+  **6,513 complete + 877 partial + 20 missing + 2,530 not applicable + 1,012
+  indeterminate**; SIMD predicts **6,518 + 884 + 20 + 2,519 not applicable +
+  1,011 indeterminate**. These
+  are planning counts, not replacement evidence; the rerun must retain every
+  case and preserve requested/actual backend and fallback receipts.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
