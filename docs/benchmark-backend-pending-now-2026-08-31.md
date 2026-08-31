@@ -91,7 +91,8 @@ receipts with no fallback, and a maintained regression input for every row.
 - [x] Commit the PA parity fix as `ba1efa700`.
 - [x] Commit the exact GPU Fit/I routing fixes as `8f780c4bb`, `e146ca1b3`,
   and `b465e8f83`.
-- [ ] Push `main` after this checklist update is committed.
+- [x] Push `main`; `origin/main` contains the verified source and checklist
+  commits through `2140a547f`.
 
 ## Goal tracking
 
