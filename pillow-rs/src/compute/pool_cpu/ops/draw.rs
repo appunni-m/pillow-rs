@@ -13,22 +13,33 @@ use crate::draw::{
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use crate::raster::{
+    DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, RgbImage, RgbaImage,
+};
 
 enum NativeDrawCanvas {
     L(GrayImage),
     LA(GrayAlphaImage),
     RGB(RgbImage, bool),
     RGBA(RgbaImage),
+    /// Unsigned 16-bit luma storage used by Pillow's I;16* draw modes.
+    ///
+    /// The raster keeps host-native samples. Pillow's draw backend, however,
+    /// writes the packed little-endian ink bytes before the logical mode's
+    /// byte-order adapter is applied, so retain that mode bit while drawing.
+    L16(ImageBuffer<Luma<u16>, Vec<u16>>, bool),
 }
 
 impl NativeDrawCanvas {
-    fn from_image(image: &DynamicImage, alpha_blend_rgb: bool) -> Self {
+    fn from_image(image: &DynamicImage, alpha_blend_rgb: bool, mode: Option<&str>) -> Self {
         match image {
             DynamicImage::ImageLuma8(pixels) => Self::L(pixels.clone()),
             DynamicImage::ImageLumaA8(pixels) => Self::LA(pixels.clone()),
             DynamicImage::ImageRgb8(pixels) => Self::RGB(pixels.clone(), alpha_blend_rgb),
             DynamicImage::ImageRgba8(pixels) => Self::RGBA(pixels.clone()),
+            DynamicImage::ImageLuma16(pixels) => {
+                Self::L16(pixels.clone(), l16_draw_uses_big_endian(mode))
+            }
             _ => Self::RGBA(image.to_rgba8()),
         }
     }
@@ -39,12 +50,23 @@ impl NativeDrawCanvas {
             Self::LA(pixels) => DynamicImage::ImageLumaA8(pixels),
             Self::RGB(pixels, _) => DynamicImage::ImageRgb8(pixels),
             Self::RGBA(pixels) => DynamicImage::ImageRgba8(pixels),
+            Self::L16(pixels, _) => DynamicImage::ImageLuma16(pixels),
         }
     }
 
     fn set_alpha_blend_rgb(&mut self, enabled: bool) {
         if let Self::RGB(_, alpha_blend_rgb) = self {
             *alpha_blend_rgb = enabled;
+        }
+    }
+
+    fn set_l16_ink_order(&mut self, mode: Option<&str>, packed_bytes: bool) {
+        if let Self::L16(_, big_endian) = self {
+            // Line/point paths in Pillow write the packed little-endian ink
+            // bytes verbatim, while the area/arc paths normalize the ink to
+            // the destination's declared I;16 byte order. Keep that small C
+            // backend distinction explicit at the canvas boundary.
+            *big_endian = packed_bytes && l16_draw_uses_big_endian(mode);
         }
     }
 }
@@ -56,6 +78,7 @@ impl DrawCanvas for NativeDrawCanvas {
             Self::LA(pixels) => pixels.width(),
             Self::RGB(pixels, _) => pixels.width(),
             Self::RGBA(pixels) => pixels.width(),
+            Self::L16(pixels, _) => pixels.width(),
         }
     }
 
@@ -65,6 +88,7 @@ impl DrawCanvas for NativeDrawCanvas {
             Self::LA(pixels) => pixels.height(),
             Self::RGB(pixels, _) => pixels.height(),
             Self::RGBA(pixels) => pixels.height(),
+            Self::L16(pixels, _) => pixels.height(),
         }
     }
 
@@ -101,16 +125,38 @@ impl DrawCanvas for NativeDrawCanvas {
             Self::RGBA(pixels) => {
                 pixels.put_pixel(x, y, crate::raster::Rgba(color));
             }
+            Self::L16(pixels, big_endian) => {
+                // ImageDraw's I;16* color parser supplies the low two bytes
+                // of the packed integer ink. The C canvas writes those bytes
+                // verbatim; convert them into the host-native u16 sample so
+                // the public mode serializer can restore the declared order.
+                let raw = u16::from_le_bytes([color[0], color[1]]);
+                let sample = if *big_endian { raw.swap_bytes() } else { raw };
+                pixels.put_pixel(x, y, crate::raster::Luma([sample]));
+            }
         }
     }
 }
 
+fn l16_draw_uses_big_endian(mode: Option<&str>) -> bool {
+    match mode {
+        Some("I;16B") => true,
+        Some("I;16") | Some("I;16N") => cfg!(target_endian = "big"),
+        _ => false,
+    }
+}
+
 /// Draw directly in the destination's native byte layout.
-fn draw_native<F>(img: &DynamicImage, alpha_blend_rgb: bool, draw_fn: F) -> DynamicImage
+fn draw_native<F>(
+    img: &DynamicImage,
+    alpha_blend_rgb: bool,
+    mode: Option<&str>,
+    draw_fn: F,
+) -> DynamicImage
 where
     F: Fn(&mut NativeDrawCanvas),
 {
-    let mut canvas = NativeDrawCanvas::from_image(img, alpha_blend_rgb);
+    let mut canvas = NativeDrawCanvas::from_image(img, alpha_blend_rgb, mode);
     draw_fn(&mut canvas);
     canvas.into_image()
 }
@@ -1354,6 +1400,11 @@ fn draw_op_on_canvas(
     // Select the blend setting per operation so a mixed draw context retains
     // the same RGB alpha behavior as the one-operation path.
     canvas.set_alpha_blend_rgb(alpha_blend_rgb);
+    let packed_ink = matches!(
+        op,
+        PipelineOp::DrawLine { .. } | PipelineOp::DrawPoint { .. }
+    );
+    canvas.set_l16_ink_order(mode, packed_ink);
     match op {
         PipelineOp::DrawLine {
             x0,
@@ -1521,7 +1572,7 @@ pub(crate) fn execute_draw_batch(
             validate_rounded_rect(*x0, *y0, *x1, *y1)?;
         }
     }
-    let mut canvas = NativeDrawCanvas::from_image(img, false);
+    let mut canvas = NativeDrawCanvas::from_image(img, false, mode);
     for op in ops {
         draw_op_on_canvas(&mut canvas, op, mode)?;
     }
@@ -1539,9 +1590,9 @@ pub fn op_draw_line(
     fill: (u8, u8, u8, u8),
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
         draw_line_on_canvas(canvas, x0, y0, x1, y1, fill, width);
     }))
 }
@@ -1556,9 +1607,10 @@ pub fn op_draw_rectangle(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
     }))
 }
@@ -1574,10 +1626,11 @@ pub fn op_draw_rounded_rect(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     validate_rounded_rect(x0, y0, x1, y1)?;
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_rounded_rect_on_canvas(canvas, x0, y0, x1, y1, radius, fill, outline, width);
     }))
 }
@@ -1592,9 +1645,10 @@ pub fn op_draw_ellipse(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
     }))
 }
@@ -1608,7 +1662,7 @@ pub fn op_draw_circle(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     op_draw_ellipse(
         img,
@@ -1620,7 +1674,7 @@ pub fn op_draw_circle(
         outline,
         width,
         alpha_blend_rgb,
-        _mode,
+        mode,
     )
 }
 
@@ -1631,14 +1685,15 @@ pub fn op_draw_polygon(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
     // Pillow's floating-point ImagingDraw polygon path accepts an outline
     // argument but stores only the fill sample.  Preserve that observable
     // mode-specific behavior before entering the generic native canvas.
-    let outline = if _mode == Some("F") { None } else { outline };
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    let outline = if mode == Some("F") { None } else { outline };
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_polygon_on_canvas(canvas, &pts, fill, outline, width);
     }))
 }
@@ -1654,12 +1709,13 @@ pub fn op_draw_arc(
     fill: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let Some(fc) = fill else {
         return Ok(img.clone());
     };
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_arc_on_canvas(canvas, x0, y0, x1, y1, start, end, fc, width);
     }))
 }
@@ -1676,9 +1732,10 @@ pub fn op_draw_chord(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_chord_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline, width);
     }))
 }
@@ -1695,9 +1752,10 @@ pub fn op_draw_pieslice(
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
+        canvas.set_l16_ink_order(mode, false);
         draw_pieslice_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline, width);
     }))
 }
@@ -1707,10 +1765,10 @@ pub fn op_draw_point(
     points: &[(i32, i32)],
     fill: (u8, u8, u8, u8),
     alpha_blend_rgb: bool,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
-    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, mode, |canvas| {
         let (img_w, img_h) = (canvas.width(), canvas.height());
         for &(x, y) in &pts {
             plot(canvas, x, y, fill, img_w, img_h, false);

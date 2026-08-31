@@ -269,8 +269,15 @@ fn draw_color_error() -> PilError {
     )
 }
 
+fn is_l16_mode(mode: &str) -> bool {
+    matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+}
+
 fn draw_float_color_error(mode: &str) -> PilError {
-    if matches!(mode, "1" | "L" | "P" | "I") {
+    if matches!(
+        mode,
+        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+    ) {
         PilError::TypeError("color must be int or single-element tuple".to_owned())
     } else {
         PilError::TypeError("color must be int or tuple".to_owned())
@@ -292,6 +299,14 @@ fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), Pil
         let value = i32::try_from(value).map_err(|_| draw_color_error())?;
         let bytes = value.to_le_bytes();
         return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+    }
+    if is_l16_mode(mode) {
+        // Pillow's I;16* draw path packs an integer as a native 32-bit ink
+        // and stores its low two bytes. Keep the packed little-endian bytes
+        // here; the native canvas applies the declared I;16B byte-order tag
+        // when turning them into its host-native u16 sample.
+        let bytes = (value as i32 as u16).to_le_bytes();
+        return Ok((bytes[0], bytes[1], 0, 255));
     }
     let signed_value = value;
     let packed = i32::try_from(value)
@@ -315,6 +330,15 @@ fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), Pil
 }
 
 fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    if is_l16_mode(mode) {
+        if values.len() != 1 {
+            return Err(PilError::TypeError(
+                "color must be int or single-element tuple".to_owned(),
+            ));
+        }
+        let bytes = (values[0] as i32 as u16).to_le_bytes();
+        return Ok((bytes[0], bytes[1], 0, 255));
+    }
     let components = || values.iter().copied().map(draw_byte).collect::<Vec<_>>();
     if mode == "PA" {
         let components = components();
@@ -510,6 +534,9 @@ impl Draw {
             // tuples are the native little-endian representations carried by
             // the explicit-mode RGBA canvas used by this crate.
             "I" => Some((1, 0, 0, 0)),
+            // I;16* uses Pillow's draw_ink(-1) default. The native canvas
+            // consumes the low two packed bytes as the full 65535 sample.
+            "I;16" | "I;16L" | "I;16B" | "I;16N" => Some((255, 255, 255, 255)),
             "F" => Some((0, 0, 128, 63)),
             // Pillow's draw_ink(-1) is not a valid ink for these single-byte
             // and palette-indexed modes, so shape() remains a no-op.
@@ -2760,7 +2787,7 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
 #[cfg(test)]
 mod tests {
     use super::Draw;
-    use crate::image::Image;
+    use crate::image::{FormattedPixelValue, Image};
 
     #[test]
     fn rounded_rectangle_rejects_reversed_axes_in_pillow_order() {
@@ -2779,5 +2806,32 @@ mod tests {
 
         draw.rounded_rectangle(1, 1, 5, 5, 0.0, None, None, 1)
             .expect("a non-reversed box remains valid");
+    }
+
+    #[test]
+    fn i16_geometry_uses_native_samples_and_declared_byte_order() {
+        for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
+            let image = Image::new(4, 4, mode, (0, 0, 0, 0)).expect("test image");
+            let mut draw = Draw::new(image, None);
+            draw.shape(&[(0, 0), (2, 0), (0, 2)], None, None)
+                .expect("default shape ink");
+            let image = draw.into_image();
+            assert_eq!(image.mode().expect("mode"), mode);
+            assert_eq!(
+                image.getpixel_formatted(0, 0).expect("shape pixel"),
+                FormattedPixelValue::Integer(65535)
+            );
+
+            let image = Image::new(1, 1, mode, (0, 0, 0, 0)).expect("test image");
+            let mut draw = Draw::new(image, None);
+            draw.point(&[(0, 0)], (1, 0, 0, 255))
+                .expect("packed point ink");
+            let image = draw.into_image();
+            let expected = if mode == "I;16B" { 256 } else { 1 };
+            assert_eq!(
+                image.getpixel_formatted(0, 0).expect("point pixel"),
+                FormattedPixelValue::Integer(expected)
+            );
+        }
     }
 }
