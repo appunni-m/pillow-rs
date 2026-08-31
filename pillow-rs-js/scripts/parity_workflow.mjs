@@ -2035,20 +2035,26 @@ function publicError(error) {
     return { class: className, kind, message: String(error?.message ?? error), stage: 'call', code: null };
 }
 
-function takePipelineTelemetry(wasm, sink, stepId) {
+function takePipelineTelemetry(wasm, sink, stepId, status = 'completed') {
     if (!sink || typeof wasm.takePipelineTelemetry !== 'function') return;
     const receipt = wasm.takePipelineTelemetry();
     if (receipt == null) return;
     const completed = jsonSafe(receipt);
-    completed.status = 'completed';
+    completed.status = status;
+    // A per-step dispatch is only a prefix until the workflow's public
+    // observation boundary succeeds.  The Python harness applies the same
+    // state transition for its target adapter.
+    completed.terminal_complete = false;
     if (stepId != null) completed.step_id = stepId;
     sink.push(completed);
+    return sink.length - 1;
 }
 
 function runCase(wasm, item, operations, assets, executionSink) {
     const bindings = {};
     const results = {};
     let blockedReason = null;
+    let terminalReceiptIndex = null;
     const owned = new Set();
     // A previous workflow cannot leave an unassociated receipt in a healthy
     // run, but clear it at the case boundary so a malformed host extension
@@ -2059,6 +2065,7 @@ function runCase(wasm, item, operations, assets, executionSink) {
             results[step.step_id] = { step_id: step.step_id, status: 'not_run', reason: blockedReason };
             continue;
         }
+        let stepExecutionStatus = 'completed';
         try {
             const value = callStep(wasm, step, bindings, operations, assets);
             if (value && typeof value.free === 'function') owned.add(value);
@@ -2067,12 +2074,23 @@ function runCase(wasm, item, operations, assets, executionSink) {
         } catch (error) {
             results[step.step_id] = { step_id: step.step_id, status: 'error', error: publicError(error) };
             blockedReason = `dependency step ${step.step_id} failed`;
+            stepExecutionStatus = 'partial';
         } finally {
-            takePipelineTelemetry(wasm, executionSink, step.step_id);
+            const receiptIndex = takePipelineTelemetry(
+                wasm,
+                executionSink,
+                step.step_id,
+                stepExecutionStatus,
+            );
+            if (step === item.steps[item.steps.length - 1]) {
+                terminalReceiptIndex = receiptIndex ?? null;
+            }
         }
     }
     const observations = [];
-    for (const observationId of item.observations ?? []) {
+    const observationIds = item.observations ?? [];
+    if (observationIds.length > 0) terminalReceiptIndex = null;
+    for (const [observation_index, observationId] of observationIds.entries()) {
         const result = results[observationId];
         if (!result) {
             observations.push({ step_id: observationId, status: 'not_run', reason: 'observation step is not present in workflow' });
@@ -2084,13 +2102,28 @@ function runCase(wasm, item, operations, assets, executionSink) {
         }
         const step = item.steps.find((candidate) => candidate.step_id === observationId);
         const info = operations[key(step.surface, step.operation)] ?? {};
+        let observationExecutionStatus = 'completed';
         try {
             observations.push({ step_id: observationId, status: 'ok', value: serialize(result.value, info.shape) });
         } catch (error) {
             observations.push({ step_id: observationId, status: 'error', error: publicError(error) });
+            observationExecutionStatus = 'partial';
         } finally {
-            takePipelineTelemetry(wasm, executionSink, observationId);
+            const receiptIndex = takePipelineTelemetry(
+                wasm,
+                executionSink,
+                observationId,
+                observationExecutionStatus,
+            );
+            if (observation_index === observationIds.length - 1) {
+                terminalReceiptIndex = receiptIndex ?? null;
+            }
         }
+    }
+    const workflowComplete = blockedReason == null
+        && observations.every((observation) => observation.status === 'ok');
+    if (workflowComplete && terminalReceiptIndex != null && executionSink?.[terminalReceiptIndex]) {
+        executionSink[terminalReceiptIndex].terminal_complete = true;
     }
     for (const value of owned) {
         try { value.free(); } catch (_) { /* best-effort wasm handle cleanup */ }
