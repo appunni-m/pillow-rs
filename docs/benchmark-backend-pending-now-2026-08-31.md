@@ -143,8 +143,9 @@ violations are one-off cohort variance to classify before changing code.
 - [x] Commit the PA parity fix as `ba1efa700`.
 - [x] Commit the exact GPU Fit/I routing fixes as `8f780c4bb`, `e146ca1b3`,
   and `b465e8f83`.
-- [ ] Push `main` after the refreshed checklist and verification commits; record
-  the final remote commit here.
+- [x] Push `main` after the refreshed checklist and verification commits;
+  `origin/main` now contains the published checklist and source through
+  `76056f331`.
 
 ## Goal tracking
 
