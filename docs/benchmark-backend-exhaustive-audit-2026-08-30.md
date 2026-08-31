@@ -2997,3 +2997,43 @@ same-tree 11-workload pair (44 comparable backend pairings) is recorded at
 `p2-root-post-2.json`; its guarded comparison
 `p2-root-post-2-vs-1.json` has **18** statistically credible violations, so
 the two-consecutive-zero performance gate remains open.
+
+## 32.3 Final integrated rerun (2026-09-01)
+
+The focused queue is [`benchmark-backend-pending-2026-09-01.md`](benchmark-backend-pending-2026-09-01.md).
+After the 2026-09-01 worker waves, the integrated source at `41e17d199`
+completed the maintained full all-backend run. CPU, SIMD, GPU, Node WASM, and
+browser WASM each compare **10,952/10,952** with zero failed, not-run, or
+infrastructure-error cases; the GPU smoke case is **1/1**. The aggregate stays
+`passed_with_backend_gaps` because backend proof is stricter than value parity.
+The schema-v3 artifact is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`af33826af2951bef114107c3596522af24f2cc6db8c1ab8b948c4fc196fb0d73`). The
+fixed case-ID digest is
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+
+- CPU and GPU receipt partitions are **6,924 complete + 466 partial + 0
+  missing + 3,129 not applicable + 433 indeterminate**. SIMD is **6,936 +
+  466 + 0 + 3,117 + 433**. The receipt classifier now excludes filter
+  constructors as parameter objects and proves only source-backed eager or
+  pre-dispatch paths; it does not alter IDs, denominators, expected values, or
+  backend labels. Nineteen receipt/evidence regression tests pass.
+- GPU F-mode admission now includes row-level dyadic Bilinear and narrow
+  two-tap Bicubic/Lanczos/Hamming cases, one- or two-axis power-of-two Box
+  rows through 64:1, and chained all-Box passes. The direct native matrix is
+  9/9 byte-exact with terminal GPU receipts and no fallback; the chained case
+  uses four dispatches and matches Pillow's `31.875` (`0x41ff0000`).
+  Heterogeneous/non-dyadic, nonfinite/signed-zero, and cumulative-bound
+  overflow inputs remain exact host-controlled.
+- The CPU L/LA→CMYK path now reads native luma directly, and factor-1.0
+  Brightness returns an exact copy for guarded byte layouts. The latter is
+  exact across nine byte modes and its focused lane is 7/7; CPU medians moved
+  from roughly `0.181/0.163 ms` to `0.042/0.049/0.042 ms`. The fixed 11-ID
+  performance cohort retains 44/44 terminal no-fallback subjects, but repeated
+  comparisons still report 3–6 timing violations, so the zero-violation gate
+  remains open.
+
+The remaining actionable buckets are the broader F-mode arithmetic proof,
+the 466 partial and 433 indeterminate receipt cases, GPU fallback/backend
+identity evidence, and two consecutive zero-violation timing reports. The
+overall parity goal remains active.
