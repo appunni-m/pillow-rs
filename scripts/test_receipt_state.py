@@ -284,6 +284,13 @@ def classification_case(
         operation_arguments = {
             "size": {"kind": "literal", "value": [1, 1]},
         }
+    elif operation == "convert":
+        # RGB->L is the ordinary lazy byte converter; use it for the generic
+        # maybe-path fixture instead of convert(mode=None), which is a proven
+        # eager copy in the Rust source contract.
+        operation_arguments = {
+            "mode": {"kind": "literal", "value": "L"},
+        }
     return {
         "case_id": case_id,
         "steps": [
@@ -300,12 +307,14 @@ def classification_case(
                 "step_id": "call",
                 "surface": "PIL.Image.Image",
                 "operation": operation,
+                "receiver": {"kind": "binding", "step_id": "new"},
                 "arguments": operation_arguments,
             },
             {
                 "step_id": "observe",
                 "surface": "PIL.Image.Image",
                 "operation": "tobytes",
+                "receiver": {"kind": "binding", "step_id": "call"},
                 "arguments": {},
             },
         ],
@@ -388,6 +397,84 @@ def crop_discard_case() -> dict[str, object]:
             },
         ],
         "observations": ["crop", "bytes"],
+    }
+
+
+def error_at_deferred_call_case(*, earlier_deferred: bool = False) -> dict[str, object]:
+    """Build a workflow whose public call fails before it can queue work."""
+
+    steps: list[dict[str, object]] = [
+        {
+            "step_id": "new",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "arguments": {
+                "mode": {"kind": "literal", "value": "RGB"},
+                "size": {"kind": "literal", "value": [1, 1]},
+            },
+        }
+    ]
+    if earlier_deferred:
+        steps.append(
+            {
+                "step_id": "resize",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": {"kind": "binding", "step_id": "new"},
+                "arguments": {"size": {"kind": "literal", "value": [1, 1]}},
+            }
+        )
+        receiver = "resize"
+    else:
+        receiver = "new"
+    steps.extend(
+        [
+            {
+                "step_id": "call",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": {"kind": "binding", "step_id": receiver},
+                "arguments": {
+                    "size": {"kind": "literal", "value": [0, 1]},
+                },
+            }
+        ]
+    )
+    return {
+        "case_id": "error-at-deferred-call",
+        "steps": steps,
+        "observations": ["call"],
+    }
+
+
+def eager_exif_transpose_case(*, in_place: bool = False) -> dict[str, object]:
+    """Build a workflow whose new image has no EXIF orientation to apply."""
+
+    arguments: dict[str, object] = {
+        "image": {"kind": "binding", "step_id": "new"},
+    }
+    if in_place:
+        arguments["in_place"] = {"kind": "literal", "value": True}
+    return {
+        "case_id": "exif-transpose-no-orientation",
+        "steps": [
+            {
+                "step_id": "new",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "arguments": {
+                    "mode": {"kind": "literal", "value": "RGB"},
+                    "size": {"kind": "literal", "value": [1, 1]},
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": "PIL.ImageOps",
+                "operation": "exif_transpose",
+                "arguments": arguments,
+            },
+        ],
+        "observations": ["call"],
     }
 
 
@@ -569,6 +656,29 @@ class ReceiptStateTests(unittest.TestCase):
         deferred = classification_case("deferred", "resize")
         eager = classification_case("eager", "putdata")
         maybe = classification_case("maybe", "convert")
+        eager_default = classification_case("eager-default", "convert")
+        eager_default["steps"][1]["arguments"] = {}
+        eager_scalar = classification_case("eager-scalar", "convert", mode="F")
+        eager_matrix = classification_case("eager-matrix", "convert")
+        eager_matrix["steps"][1]["arguments"] = {
+            "mode": {"kind": "literal", "value": "L"},
+            "matrix": {"kind": "literal", "value": [1, 0, 0, 0]},
+        }
+        eager_palette_default = classification_case(
+            "eager-palette-default", "convert", mode="P"
+        )
+        eager_palette_default["steps"][1]["arguments"] = {}
+        eager_transparency = classification_case("eager-transparency", "apply_transparency")
+        eager_thumbnail = classification_case("eager-thumbnail", "thumbnail")
+        eager_thumbnail["steps"][1]["arguments"] = {
+            "size": {"kind": "literal", "value": [2, 2]},
+        }
+        eager_paste = classification_case("eager-paste", "paste")
+        eager_paste["steps"][1]["arguments"] = {
+            "im": {"kind": "literal", "value": 0},
+            "box": {"kind": "literal", "value": [0, 0, 0, 1]},
+        }
+        eager_pixel = classification_case("eager-pixel", "putpixel", mode="I;16")
         partial = classification_case("partial", "resize")
 
         self.assertEqual(
@@ -593,6 +703,50 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
         self.assertEqual(
+            classify_pipeline_case(eager_default, []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(eager_scalar, []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(eager_matrix, []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(eager_palette_default, []),
+            {
+                "status": "not_applicable",
+                "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+        for eager_case in (
+            eager_transparency,
+            eager_thumbnail,
+            eager_paste,
+            eager_pixel,
+            eager_exif_transpose_case(),
+            eager_exif_transpose_case(in_place=True),
+        ):
+            with self.subTest(case_id=eager_case["case_id"]):
+                self.assertEqual(
+                    classify_pipeline_case(eager_case, []),
+                    {
+                        "status": "not_applicable",
+                        "reason": "workflow contains no deferred image-pipeline operation",
+                    },
+                )
+        self.assertEqual(
             classify_pipeline_case(
                 partial,
                 [{"status": "partial", "terminal_complete": False}],
@@ -616,6 +770,72 @@ class ReceiptStateTests(unittest.TestCase):
             {
                 "status": "not_applicable",
                 "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+
+    def test_pipeline_case_classification_accepts_error_at_first_deferred_call(self) -> None:
+        self.assertEqual(
+            classify_pipeline_case(
+                error_at_deferred_call_case(),
+                [],
+                result={
+                    "status": "completed",
+                    "observations": [
+                        {
+                            "step_id": "call",
+                            "status": "error",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
+                },
+            ),
+            {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            },
+        )
+
+    def test_pipeline_case_classification_keeps_earlier_deferred_error_indeterminate(self) -> None:
+        self.assertEqual(
+            classify_pipeline_case(
+                error_at_deferred_call_case(earlier_deferred=True),
+                [],
+                result={
+                    "status": "completed",
+                    "observations": [
+                        {
+                            "step_id": "call",
+                            "status": "error",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
+                },
+            ),
+            {
+                "status": "indeterminate",
+                "reason": "workflow errored after or during a potentially deferred operation",
+            },
+        )
+
+    def test_pipeline_case_classification_keeps_blocked_dependency_conservative(self) -> None:
+        self.assertEqual(
+            classify_pipeline_case(
+                error_at_deferred_call_case(),
+                [],
+                result={
+                    "status": "completed",
+                    "observations": [
+                        {
+                            "step_id": "call",
+                            "status": "not_run",
+                            "reason": "dependency step setup failed",
+                        }
+                    ],
+                },
+            ),
+            {
+                "status": "indeterminate",
+                "reason": "workflow errored after or during a potentially deferred operation",
             },
         )
 
