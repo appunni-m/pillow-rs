@@ -45,6 +45,11 @@ GPU_FULL_DISABLED_REASON = (
     "but the full GPU corpus remains not proven"
 )
 BACKENDS = ("cpu", "simd")
+TARGET_PARITY_LANES = (
+    ("parity-cpu", "cpu"),
+    ("parity-simd", "simd"),
+    ("parity-gpu", "gpu"),
+)
 WGSL_ROOT = ROOT / "pillow-rs" / "src" / "compute" / "pool_gpu" / "shaders"
 
 
@@ -590,6 +595,107 @@ def lane_record(
     return record
 
 
+def backend_coverage_report(lanes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Classify target backend proof independently from public parity status.
+
+    A public parity pass only proves that serialized Pillow observations agree;
+    it does not prove that a requested target backend produced those values.
+    Keep this verdict explicit so a normal fallback lane cannot be presented as
+    complete backend coverage.  The report requires the current terminal-bit
+    summary shape; legacy summaries remain readable in diagnostic validators but
+    cannot establish a current backend-coverage claim.
+    """
+
+    by_lane = {
+        lane.get("lane_id"): lane
+        for lane in lanes
+        if isinstance(lane, dict) and isinstance(lane.get("lane_id"), str)
+    }
+    target_lanes: list[dict[str, Any]] = []
+    for lane_id, expected_backend in TARGET_PARITY_LANES:
+        lane = by_lane.get(lane_id)
+        scope = lane.get("scope", {}) if isinstance(lane, dict) else {}
+        selected = scope.get("selected", 0) if isinstance(scope, dict) else 0
+        if type(selected) is not int or selected < 0:
+            selected = 0
+        evidence = lane.get("execution_evidence") if isinstance(lane, dict) else None
+        summary = evidence.get("summary") if isinstance(evidence, dict) else None
+        reasons: list[str] = []
+        terminal_complete_receipts = 0
+        terminal_incomplete_cases = 0
+        not_recorded_cases = 0
+        actual_backend_counts: dict[str, int] = {}
+        fallback_reason_counts: dict[str, int] = {}
+
+        if not isinstance(lane, dict) or lane.get("status") != "passed":
+            reasons.append("public parity lane did not pass")
+        if (
+            not isinstance(evidence, dict)
+            or evidence.get("status") != "measured"
+            or not isinstance(summary, dict)
+        ):
+            reasons.append("terminal execution evidence is missing")
+        else:
+            required_summary = {
+                "selected",
+                "receipt_cases",
+                "not_recorded_cases",
+                "completed_receipts",
+                "terminal_complete_receipts",
+                "terminal_incomplete_cases",
+                "actual_backend_counts",
+                "fallback_reason_counts",
+            }
+            if not required_summary.issubset(summary):
+                reasons.append("terminal-complete summary is missing")
+            else:
+                terminal_complete_receipts = summary["terminal_complete_receipts"]
+                terminal_incomplete_cases = summary["terminal_incomplete_cases"]
+                not_recorded_cases = summary["not_recorded_cases"]
+                actual_backend_counts = dict(summary["actual_backend_counts"])
+                fallback_reason_counts = dict(summary["fallback_reason_counts"])
+                if terminal_complete_receipts == 0 and selected:
+                    reasons.append("no terminal-complete receipt")
+                if terminal_incomplete_cases:
+                    reasons.append(
+                        f"{terminal_incomplete_cases} cases lack terminal-complete receipts"
+                    )
+                if not_recorded_cases:
+                    reasons.append(f"{not_recorded_cases} cases have no receipt")
+                if actual_backend_counts != {
+                    expected_backend: terminal_complete_receipts
+                }:
+                    reasons.append(
+                        "actual backend counts do not equal the requested backend "
+                        "for every terminal-complete receipt"
+                    )
+                if fallback_reason_counts:
+                    reasons.append("fallback reasons are present")
+
+        target_lanes.append(
+            {
+                "lane_id": lane_id,
+                "requested_backend": expected_backend,
+                "status": "proven" if not reasons else "not_proven",
+                "selected": selected,
+                "terminal_complete_receipts": terminal_complete_receipts,
+                "terminal_incomplete_cases": terminal_incomplete_cases,
+                "not_recorded_cases": not_recorded_cases,
+                "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
+                "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
+                "reasons": reasons,
+            }
+        )
+    return {
+        "status": (
+            "proven"
+            if all(item["status"] == "proven" for item in target_lanes)
+            else "not_proven"
+        ),
+        "target_lanes": target_lanes,
+    }
+
+
 def run_parity_lane(
     backend: str,
     *,
@@ -993,11 +1099,18 @@ def run_campaign(args: argparse.Namespace) -> int:
     )
 
     required_failures = [lane for lane in lanes if lane["status"] == "failed"]
+    backend_coverage = backend_coverage_report(lanes)
     status = "passed" if not required_failures else "failed"
-    if (smoke["status"] != "passed" or not args.gpu_full) and status == "passed":
+    if status == "passed" and (smoke["status"] != "passed" or not args.gpu_full):
         status = "passed_with_gpu_skipped"
+    elif status == "passed" and backend_coverage["status"] != "proven":
+        # Public observations can agree even when a target silently routes to
+        # CPU or never reaches a terminal receipt.  Keep that parity result
+        # usable, but make the missing backend proof impossible to mistake for
+        # a complete all-backends claim.
+        status = "passed_with_backend_gaps"
     result = {
-        "schema": "migration-parity/all-backends-test-result@2",
+        "schema": "migration-parity/all-backends-test-result@3",
         "status": status,
         "started_at": started_at,
         "finished_at": now(),
@@ -1009,11 +1122,16 @@ def run_campaign(args: argparse.Namespace) -> int:
             "timeout_seconds": GPU_SMOKE_TIMEOUT_SECONDS,
         },
         "gpu_full_requested": args.gpu_full,
+        "backend_coverage": backend_coverage,
         "lanes": lanes,
     }
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if status in {"passed", "passed_with_gpu_skipped"} else 1
+    return 0 if status in {
+        "passed",
+        "passed_with_gpu_skipped",
+        "passed_with_backend_gaps",
+    } else 1
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

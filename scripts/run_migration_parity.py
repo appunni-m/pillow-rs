@@ -1950,6 +1950,11 @@ def write_pipeline_execution_evidence(
                 actual_backend_counts["unattributed"] = (
                     actual_backend_counts.get("unattributed", 0) + 1
                 )
+        # A no-fallback claim applies to the complete workflow, not merely the
+        # final observation receipt.  An earlier host-controlled operation can
+        # still be followed by a terminal GPU receipt, so retain every
+        # fallback reason in the case history for backend-coverage gating.
+        for receipt in receipts:
             reason = receipt.get("fallback_reason")
             if isinstance(reason, str) and reason:
                 fallback_reason_counts[reason] = (

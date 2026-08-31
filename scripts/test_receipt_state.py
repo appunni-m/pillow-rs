@@ -9,10 +9,16 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from scripts.run_all_backend_tests import pipeline_execution_evidence
+from scripts.run_all_backend_tests import (
+    backend_coverage_report,
+    pipeline_execution_evidence,
+)
 from scripts.run_migration_benchmark import execution_result
 from scripts.run_migration_parity import write_pipeline_execution_evidence
-from scripts.validate_migration_parity_result import execution_receipt
+from scripts.validate_migration_parity_result import (
+    all_backends as validate_all_backends,
+    execution_receipt,
+)
 
 
 RESOURCE_FIELDS = (
@@ -48,6 +54,98 @@ def benchmark_record(*, terminal_complete: bool) -> dict[str, object]:
 
 def aggregate_policy() -> dict[str, int]:
     return {"warmup_iterations": 0, "measurement_iterations": 1, "samples": 1}
+
+
+def coverage_lane(
+    lane_id: str,
+    backend: str,
+    *,
+    actual_backend_counts: dict[str, int],
+    terminal_complete_receipts: int = 1,
+    terminal_incomplete_cases: int = 0,
+    not_recorded_cases: int = 0,
+    fallback_reason_counts: dict[str, int] | None = None,
+) -> dict[str, object]:
+    return {
+        "lane_id": lane_id,
+        "status": "passed",
+        "scope": {"selected": 1},
+        "execution_evidence": {
+            "status": "measured",
+            "summary": {
+                "selected": 1,
+                "receipt_cases": 1,
+                "not_recorded_cases": not_recorded_cases,
+                "completed_receipts": 1,
+                "terminal_complete_receipts": terminal_complete_receipts,
+                "terminal_incomplete_cases": terminal_incomplete_cases,
+                "actual_backend_counts": actual_backend_counts,
+                "fallback_reason_counts": fallback_reason_counts or {},
+            },
+        },
+        "backend": backend,
+    }
+
+
+def complete_execution_summary(
+    backend: str, *, actual_backend: str | None = None
+) -> dict[str, object]:
+    actual = actual_backend or backend
+    return {
+        "selected": 1,
+        "receipt_cases": 1,
+        "not_recorded_cases": 0,
+        "completed_receipts": 1,
+        "terminal_complete_receipts": 1,
+        "terminal_incomplete_cases": 0,
+        "actual_backend_counts": {actual: 1},
+        "fallback_reason_counts": {},
+    }
+
+
+def all_backends_lane(
+    lane_id: str,
+    *,
+    kind: str = "python-py3-parity",
+    backend: str | None = None,
+    execution_summary: dict[str, object] | None = None,
+) -> dict[str, object]:
+    scope = {
+        "kind": "public-parity-corpus",
+        "selected": 1,
+        "case_ids_sha256": hashlib.sha256(b"case\n").hexdigest(),
+        "filter": None,
+        "executed": 1,
+        "pending": 0,
+    }
+    lane: dict[str, object] = {
+        "lane_id": lane_id,
+        "kind": kind,
+        "backend": backend,
+        "command": ["make", "migration-parity-test"],
+        "status": "passed",
+        "returncode": 0,
+        "timed_out": False,
+        "scope": scope,
+    }
+    if execution_summary is not None:
+        lane["execution_evidence"] = {
+            "status": "measured",
+            "reason": "",
+            "artifact": "execution.json",
+            "summary": execution_summary,
+        }
+    if lane_id == "browser-wasm-parity":
+        lane["capabilities"] = {
+            "webgpu": {
+                "api": "available",
+                "adapter": "available",
+                "device": "available",
+                "shader_dispatch": "available",
+                "reason": "test capability receipt",
+            }
+        }
+    return lane
 
 
 def execution_receipt_value(
@@ -125,6 +223,121 @@ def execution_receipt_value(
 
 
 class ReceiptStateTests(unittest.TestCase):
+    def test_backend_coverage_requires_terminal_and_requested_backend_receipts(self) -> None:
+        lanes = [
+            coverage_lane(
+                "parity-cpu",
+                "cpu",
+                actual_backend_counts={"cpu": 1},
+                not_recorded_cases=1,
+            ),
+            coverage_lane(
+                "parity-simd",
+                "simd",
+                actual_backend_counts={"cpu": 1},
+                terminal_incomplete_cases=1,
+            ),
+            coverage_lane(
+                "parity-gpu",
+                "gpu",
+                actual_backend_counts={"gpu": 1},
+                fallback_reason_counts={"exact host semantic control": 1},
+            ),
+        ]
+        report = backend_coverage_report(lanes)
+        self.assertEqual(report["status"], "not_proven")
+        by_lane = {item["lane_id"]: item for item in report["target_lanes"]}
+        self.assertEqual(by_lane["parity-cpu"]["status"], "not_proven")
+        self.assertEqual(by_lane["parity-simd"]["status"], "not_proven")
+        self.assertEqual(by_lane["parity-gpu"]["status"], "not_proven")
+
+    def test_backend_coverage_can_be_proven_only_with_exact_receipts(self) -> None:
+        report = backend_coverage_report(
+            [
+                coverage_lane(
+                    "parity-cpu", "cpu", actual_backend_counts={"cpu": 1}
+                ),
+                coverage_lane(
+                    "parity-simd", "simd", actual_backend_counts={"simd": 1}
+                ),
+                coverage_lane(
+                    "parity-gpu", "gpu", actual_backend_counts={"gpu": 1}
+                ),
+            ]
+        )
+        self.assertEqual(report["status"], "proven")
+
+    def test_benchmark_execution_keeps_prefix_fallbacks_out_of_no_fallback_claim(self) -> None:
+        first = benchmark_record(terminal_complete=True)
+        first["fallback_reason"] = "exact host semantic control"
+        result = execution_result(
+            "target_profile",
+            "python-gpu",
+            [first, benchmark_record(terminal_complete=True)],
+            {"warmup_iterations": 0, "measurement_iterations": 1, "samples": 2},
+        )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(
+            result["fallback_reason_counts"],
+            {"exact host semantic control": 1},
+        )
+
+    def test_all_backends_rejects_plain_pass_with_backend_gaps(self) -> None:
+        lanes = [
+            all_backends_lane(
+                "parity-cpu",
+                backend="cpu",
+                execution_summary=complete_execution_summary("cpu"),
+            ),
+            all_backends_lane(
+                "parity-simd",
+                backend="simd",
+                execution_summary=complete_execution_summary("simd"),
+            ),
+            all_backends_lane("parity-gpu-smoke", backend="gpu"),
+            all_backends_lane(
+                "parity-gpu",
+                backend="gpu",
+                execution_summary=complete_execution_summary(
+                    "gpu", actual_backend="cpu"
+                ),
+            ),
+            all_backends_lane(
+                "js-wasm-parity",
+                kind="javascript-wasm-parity",
+            ),
+            all_backends_lane(
+                "browser-wasm-parity",
+                kind="browser-wasm-parity",
+            ),
+        ]
+        backend_coverage = backend_coverage_report(lanes)
+        result = {
+            "schema": "migration-parity/all-backends-test-result@3",
+            "status": "passed",
+            "started_at": "2026-01-01T00:00:00Z",
+            "finished_at": "2026-01-01T00:00:01Z",
+            "revision": "test-revision",
+            "input_scope": {
+                "kind": "public-parity-corpus",
+                "selected": 1,
+                "case_ids_sha256": hashlib.sha256(b"case\n").hexdigest(),
+                "filter": None,
+            },
+            "gpu_gate": {
+                "case_id": "case",
+                "status": "passed",
+                "timeout_seconds": 180,
+            },
+            "gpu_full_requested": True,
+            "backend_coverage": backend_coverage,
+            "lanes": lanes,
+        }
+        with self.assertRaisesRegex(ValueError, "status does not match"):
+            validate_all_backends(result)
+        result["status"] = "passed_with_backend_gaps"
+        validate_all_backends(result)
+
     def test_drained_prefix_with_exact_error_is_partial_not_completed(self) -> None:
         result = execution_result(
             "target_profile",
@@ -191,6 +404,7 @@ class ReceiptStateTests(unittest.TestCase):
                     "status": "completed",
                     "terminal_complete": False,
                     "actual_backend": "gpu",
+                    "fallback_reason": "exact host semantic control",
                 },
                 {"status": "partial", "terminal_complete": False},
             ]
@@ -225,6 +439,10 @@ class ReceiptStateTests(unittest.TestCase):
             self.assertEqual(document["summary"]["terminal_complete_receipts"], 0)
             self.assertEqual(document["summary"]["terminal_incomplete_cases"], 1)
             self.assertEqual(document["summary"]["actual_backend_counts"], {})
+            self.assertEqual(
+                document["summary"]["fallback_reason_counts"],
+                {"exact host semantic control": 1},
+            )
             self.assertEqual(document["errors"]["case-prefix"], [exact_error])
             digest = hashlib.sha256(b"case-prefix\n").hexdigest()
             evidence = pipeline_execution_evidence(

@@ -606,8 +606,12 @@ def execution_result(
         if isinstance(record.get("actual_backend"), str):
             backend = str(record["actual_backend"])
             actual_counts[backend] = actual_counts.get(backend, 0) + 1
+    # The no-fallback predicate covers the complete measured workflow.  A
+    # host-controlled setup/prefix receipt can be followed by a terminal GPU
+    # receipt, so counting only ``completed`` would falsely admit that row to
+    # an actual-backend cohort.
     fallback_counts: dict[str, int] = {}
-    for record in completed:
+    for record in measured:
         reason = record.get("fallback_reason")
         if isinstance(reason, str) and reason:
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
