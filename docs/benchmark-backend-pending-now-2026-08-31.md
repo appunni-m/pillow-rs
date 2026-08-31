@@ -1,180 +1,215 @@
-# Focused pending checklist — benchmark/backend goal (2026-08-31)
+# Active parity-first checklist — benchmark/backend goal (2026-08-31)
 
-This is the execution list for the current benchmark goal. The exhaustive
-row-by-row inventory remains in
-[`benchmark-backend-pending-checklist-2026-08-30.md`](benchmark-backend-pending-checklist-2026-08-30.md);
-this file is intentionally short enough to run as a work queue.
+This is the short execution queue for the active benchmark/backend goal. The
+row-by-row evidence remains in
+[`benchmark-backend-exhaustive-audit-2026-08-30.md`](benchmark-backend-exhaustive-audit-2026-08-30.md)
+and the historical classification register remains in
+[`benchmark-backend-pending-checklist-2026-08-30.md`](benchmark-backend-pending-checklist-2026-08-30.md).
 
-## Goal
+## Goal state
 
-**Close the guarded performance gate without changing behavior or coverage.**
-The goal stays **active**: parity is green, but the latest same-tree comparison
-has 197 timing-sensitive regressions (the paired comparison had 56).
-No public operation, input, denominator,
-threshold, or backend result may be removed or relabeled to make the gate pass.
+**Active — parity first, then performance.** A row reported as
+`NotImplemented`, `unsupported`, `not_proven`, or a failed terminal receipt is
+not a completed backend result. It may be classified for diagnosis, but it
+cannot close this goal. Do not remove inputs, lower denominators, relabel a
+backend, or weaken a correctness/performance gate.
 
-## Verified baseline
+Current fixed evidence (revision `907c7a1ef`):
 
-- Standard benchmark: 744/744 workloads, exact parity.
-- Live backend parity: CPU, SIMD, GPU, Node WASM, and browser WASM each
-  10,952/10,952; GPU smoke 1/1.
-- Guarded comparison: the first after-reduce comparison has 56 violations
-  across 2,976 comparable rows (27 Pillow, 12 CPU, 15 SIMD, 2 GPU). Its
-  same-tree repeat has 197 timing-sensitive violations (63 Pillow, 47 CPU,
-  78 SIMD, 9 GPU); both receipts are retained and neither changes the parity
-  denominator.
-- Baseline: `build/migration-parity/final-standard-after-native-geometry.json`.
-- Current pair:
-  `build/migration-parity/pipeline-budget-check-after-reduce-source-threshold.json`
-  and `build/migration-parity/pipeline-budget-check-after-reduce-source-threshold-repeat.json`.
+- Standard benchmark: 744/744 measured; 202/202 parity preflight passed.
+- All-backend parity: CPU/SIMD/GPU/Node/browser 10,952/10,952; GPU smoke 1/1.
+  GPU execution recorded 14,601 actual GPU receipts; host-control and typed
+  mode rows remain open below.
+- Final standard backend receipts: CPU 4,285; SIMD 4,385 actual SIMD plus
+  6 CPU samples for `matrix-058`; GPU 4,267 actual GPU plus 18 exact-host
+  samples across the three remaining GPU rows.
+- The two same-tree standard comparisons recorded 112 and 56 timing
+  violations; their stable intersection is 11 rows (the noisy union is not a
+  performance conclusion).
+- Merged source fixes: `e4cf004ad` (SIMD rank-window selector),
+  `91fa214b2` (native-byte nearest resize), `e2dca2cf5` (native masked
+  entropy/histogram), `4329e3e8e` (F-mode rank cutoff separation),
+  `5c542cafb` (exact F-nearest GPU resize admission), `67a8375d2`
+  (identity Fit lowered to a GPU Duplicate dispatch), and `907c7a1ef`
+  (retain exact I-mode resize routing after the full-corpus regression gate).
 
-## Work queue
+## P0 — exact parity blockers (must close)
 
-### 1. Stabilize the measurement gate first
+### CPU/SIMD completion mismatch (three exact IDs)
 
-- [ ] Run two paired, same-host standard repeats against the fixed baseline.
-- [ ] Preserve every receipt, actual-backend field, fallback field, median, and
-  p95; timing-sensitive row membership must be reported, not discarded.
-- [ ] For each remaining row, record one disposition: Rust implementation,
-  backend routing/receipt accounting, benchmark harness, or Pillow-side
-  baseline. A disposition is not a closure.
+- [x] `pipeline-chain.loaded-10.rgba-png-512x384` — the stale logical-mode
+  bug was fixed in ancestor `9ed4dadee`; the current focused run completes
+  CPU/SIMD/GPU with exact RGB output (hash
+  `7cdb79780776686f81239d2d0591cf13367fc064ac0b5277160c367d65b32d52`).
+- [x] `pipeline-matrix.expanded.rotate.1x1` — current standard and focused
+  runs complete actual SIMD with a scalar tail and exact parity.
+- [x] `pipeline-matrix.expanded.add.1x1` — current standard and focused runs
+  complete actual SIMD through the padded bytewise tail with exact parity.
 
-**Done when:** both repeats are reproducible enough to compare the same cohorts,
-and every row has an evidence-backed disposition.
+The old audit's three completion-mismatch rows therefore do not reproduce on
+the current revision; keep the exact cases as regression checks.
 
-### 2. CPU implementation cohort (12 rows in the primary comparison)
+Acceptance for this block is met on the current revision: the three IDs have
+equal source/target value contracts and the focused receipts prove actual
+CPU/SIMD/GPU execution. Re-run them after every backend change.
 
-Inspect `pillow-rs/src/compute/pool_cpu/` and `pillow-rs/src/pipeline.rs` in
-this order: `pipeline-chain.geometry-material.reduce-rgb-1024x768` (watch row),
-`pipeline-chain.fused-chops.multiply-screen.rgba.256x256`,
-`pipeline-chain.matrix-022`, `pipeline-op.grayscale.matrix-32x24`, then the
-remaining rows below. `pipeline-op.reduce.matrix-32x24` is closed in this wave;
-its small-output Rayon overhead is fixed without serializing large sources.
+### GPU exact implementation/routing block
 
-- [ ] `pil-image-image.save.standard`, `pil-image-image.transform.standard`,
-  `pil-image.open.standard`, `pipeline-chain.color.convert-mode-f`,
-  `pipeline-chain.matrix-054`, `pipeline-chain.reviewed.convert-rgba-cmyk-la`,
-  `pipeline-chain.simd-constant.1024x768`,
-  `pipeline-chain.terminal-read.analysis-masked-rgb-1024x768`,
-  `pipeline-chain.terminal-read.imagestat.cmyk-1024x768`,
-  `pipeline-matrix.expanded.autocontrast.32x32`,
-  `pipeline-matrix.expanded.convert.256x256`,
-  `pipeline-op.lighter.matrix-32x24`
+The historical audit recorded 70 GPU failures. Most no longer reproduce after
+the intervening GPU work, so do not carry that stale count into a new gate.
+The focused post-fix receipts now close two of the five concrete GPU routing
+rows; the remaining rows must be repaired or made exact before closure:
 
-**Done when:** each accepted CPU change has a first-divergence note, strict
-CPU parity, and a paired median improvement with no regression control.
+- [x] `pipeline-op.fit.benchmark-materialized` — identity Fit now lowers to
+  one GPU `Duplicate` dispatch; focused receipt is 6/6 actual GPU with strict
+  RGB parity.
+- [ ] `pipeline-op.fit.matrix-32x24` — fractional crop plus default bicubic
+  remains an exact-host path; implement a filter-exact GPU Fit shader before
+  changing this disposition.
+- [x] `pipeline-chain.resize-typed.simd-f-resize-transpose` — F-mode nearest
+  resize plus transpose now uses two GPU dispatches; focused strict output is
+  byte-exact (hash `af4d75fa7a8a71c71205096640167ab230ff32c2a81846f8ed54f41575715eed`).
+- [ ] `pipeline-chain.resize-typed.simd-i-resize-transform` and
+  `pipeline-chain.resize-cache.f64-identical-geometry` — still complete
+  through CPU with `exact host semantic control`; implement exact typed GPU
+  geometry or retain the explicit open blocker.
 
-### 3. SIMD implementation cohort (15 rows in the primary comparison)
+- [ ] Re-run the historical 70-row GPU matrix against the current revision
+  after the current GPU changes; reopen only IDs that still produce a failed
+  terminal workflow or a host-control fallback. The exact IDs and prior
+  evidence remain in audit section 12, but they are not current failures until
+  reproduced.
 
-Inspect `pillow-rs/src/compute/pool_simd/` and the adapter dispatch before
-adding a new fast path. Prioritize the two reviewed chains, the 1024×768
-crop-border row, and terminal-read analysis.
+Acceptance for each current GPU row: focused exact case parity, a completed
+terminal actual-GPU receipt with no fallback, strict all-backend parity, and a
+regression case in the maintained generator. Historical rows must be rerun
+against the current revision before being reopened.
 
-- [ ] `pipeline-chain.geometry-copy.cropborder-la-1024x768`,
-  `pipeline-chain.matrix-002`, `pipeline-chain.matrix-020`,
-  `pipeline-chain.matrix-022`, `pipeline-chain.matrix-058`,
-  `pipeline-chain.metadata-cache.extractband-rgba`,
-  `pipeline-chain.rank-filter.large-l-9x9`,
-  `pipeline-chain.reviewed.crop-expand-mirror`,
-  `pipeline-chain.reviewed.draw-filter-invert`,
-  `pipeline-chain.reviewed.resize-rotate-crop`,
-  `pipeline-matrix.expanded.brightness.256x256`,
-  `pipeline-matrix.expanded.crop.1024x768`,
-  `pipeline-op.effectmandelbrot.benchmark-materialized`,
-  `pipeline-op.logicalxor.benchmark-materialized`,
-  `pipeline-op.putdata.benchmark-materialized`
+### SIMD typed-conversion block
 
-**Done when:** each accepted SIMD change has strict full-corpus parity
-10,952/10,952 and a paired actual-SIMD improvement; rejected candidates stay
-documented with their measurements.
+- [ ] `pipeline-chain.matrix-058` — the standard benchmark completes the
+  requested SIMD profile through actual CPU because the RGBA→PA→RGB palette
+  transition is not admitted by the SIMD converter. Add a typed palette plan
+  (or a real vectorized palette-table path) and prove actual SIMD; do not call
+  a CPU fallback a SIMD result.
 
-### 4. GPU cohort and receipt accounting (2 rows in the primary comparison)
+## P1 — benchmark correctness and evidence (do not defer)
 
-Inspect the actual-backend and fallback fields before changing a shader. The
-rows are:
+- [ ] Persist the exact exception, failing step, and requested/actual backend
+  for every timed failure; a missing error is not `not_proven` evidence.
+- [ ] Add terminal-completeness to receipts. A drained one-dispatch prefix is
+  not a successful terminal workflow (currently affects Thumbnail and
+  `pipeline-chain.matrix-021`).
+- [ ] Compare suite timings only on equal workload-ID intersections and print
+  the intersection/union/symmetric difference for every subject pair.
+- [ ] Classify all 48 all-subject not-run inputs from the audit. Keep their
+  matched-error/API coverage visible; only a generator-backed decision can
+  remove an input from the performance denominator.
+- [ ] Require every default performance workload to preflight to a successful
+  Pillow value. Matched expected errors remain parity tests, not performance
+  passes.
 
-- [ ] `pipeline-chain.rank-filter.material.l-9x9-256x256`,
-  `pipeline-lifecycle.resident.multiply-screen.rgb-1024`
+## P2 — stable performance cohorts after parity
 
-**Done when:** each row has a real-device receipt or an explicitly measured
-host-control path, plus strict byte parity and a paired GPU performance result;
-cached or missing receipts do not count as proof.
+Do not chase the noisy one-run union. The current stable intersection contains
+11 rows and is the only timing cohort to investigate next:
 
-### 5. Pillow-side and harness cohort (27 rows in the primary comparison)
+- `pillow / pipeline-matrix.expanded.darker.256x256`
+- `pillow / pipeline-matrix.expanded.equalize.1024x768`
+- `pillow / pipeline-matrix.expanded.equalize.256x256`
+- `pillow / pipeline-op.effectmandelbrot.benchmark-materialized`
+- `python-cpu / pil-image.open.standard`
+- `python-cpu / pil-imageops.mirror.standard`
+- `python-cpu / pipeline-op.fit.benchmark-materialized`
+- `python-simd / pil-image.open.standard`
+- `python-simd / pipeline-chain.matrix-024`
+- `python-simd / pipeline-chain.reviewed.draw-filter-invert`
+- `python-simd / pipeline-op.remappalette.benchmark-materialized`
 
-- [ ] Reproduce the 27 Pillow regressions from the primary comparison (the
-  repeat contains 63 timing-sensitive Pillow rows) and separate
-  oracle timing, binding overhead, and benchmark setup from Rust execution.
-- [ ] Primary row IDs: `pil-image-image.split.standard`,
-  `pil-image-image.tell.standard`, `pil-imagefilter-color3dlut.repr.standard`,
-  `pil-imagefilter.kernel.standard`, `pil-imagefilter.maxfilter.standard`,
-  `pil-imagefilter.medianfilter.standard`, `pil-imagefilter.rankfilter.standard`,
-  `pil-imagefilter.sharpen.standard`, `pil-imagefilter.smooth-more.standard`,
-  `pil-imagefilter.smooth.standard`, `pil-imagefilter.unsharpmask.standard`,
-  `pil-imagefont.imagefont.standard`, `pil-imagefont.transposedfont.standard`,
-  `pil-imagepalette-imagepalette.tobytes.standard`, `pil-imagestat-stat.count.standard`,
-  `pipeline-chain.color.convert-mode-la`, `pipeline-chain.long-point.invert-64`,
-  `pipeline-chain.long-point.invert-8`, `pipeline-chain.matrix-058`,
-  `pipeline-chain.reviewed.draw-batch-rgb-shapes`,
-  `pipeline-chain.reviewed.draw-filter-invert`,
-  `pipeline-chain.simd-vector-mirror.l.32x32`,
-  `pipeline-matrix.expanded.effectspread.32x32`,
-  `pipeline-op.alphacomposite.benchmark-materialized`,
-  `pipeline-op.cover.benchmark-materialized`,
-  `pipeline-op.grayscale.benchmark-materialized`,
-  `pipeline-op.transpose.benchmark-materialized`.
-- [ ] Keep the exact row IDs in the repeat receipt and the exhaustive register;
-  do not “fix” this cohort by changing the denominator or comparator.
-- [ ] If a harness defect is confirmed, fix the maintained generator/runner and
-  regenerate receipts; if the Pillow timing is authoritative, leave the row
-  visible as an open performance item.
+The GPU resident RGB multiply/screen +17%/+58% row remains a cached-read/setup
+variance disposition, not proof of a measured multiply/screen regression.
 
-**Done when:** every row has a reproducible cause and an approved source-level
-fix or an evidence-backed measurement disposition.
+The masked-analysis row is now materially faster in a targeted CPU run
+(3.929 ms median versus 4.759 ms baseline) while the four exact masked cases
+pass. The SIMD rank worker measured an exact 9×9 kernel improvement (~42%) and
+strict Rank/Median parity 129/129. These are candidates until the paired full
+reports confirm them.
 
-### 6. Close and publish
+## Verification and publication
 
-- [ ] Re-run standard benchmark and full all-backends parity after every merged
-  source change.
-- [ ] Re-run budget, performance, coverage, and roadmap reports.
+- [x] Finish and validate the post-GPU-fix all-backend run (all six lanes pass;
+  the pre-I-guard regression receipt is retained as historical evidence).
+- [x] Commit the native masked entropy/histogram change after strict CPU,
+  full all-backend, fixture, and evidence checks pass (`e2dca2cf5`).
+- [x] Restore F-mode 9×9 SIMD RankFilter coverage after the 5×5 byte cutoff
+  change (`4329e3e8e`); strict SIMD now passes 10,952/10,952.
+- [x] Re-run the full standard benchmark after the GPU/I-mode fixes, then
+  capture a same-tree repeat against the fixed baseline; retain both JSON
+  receipts, parity sidecars, budget reports, hashes, and actual-backend fields.
 - [ ] Require two consecutive budget reports with zero violations before
-  declaring the performance goal complete.
-- [ ] Run `make fmt`, `RUSTC_WRAPPER= make clippy`,
+  marking the performance gate complete. Until then the goal status is
+  **active**.
+- [x] Run `make fmt`, `RUSTC_WRAPPER= make clippy-core`,
   `make repo-map-check`, `make migration-parity-fixtures-check`,
   `make migration-parity-evidence-check`, and `git diff --check`.
 - [ ] Commit only verified source/docs changes and push `main`.
 
 ## Closed in this wave
 
-- [x] SIMD 5×5 convolution identity proof now scans uniform byte images up to
-  256×256 for 5×5 filters only; 3×3, rank, and blur guards remain 64×64.
-  The exact L=127 material row now uses `Filter5x5: native-copy`, passed strict
-  SIMD and all-backends parity, and cleared the guarded budget in both repeats.
-  Source change is commit `d2e433ba3`.
-- [x] CPU Reduce now keeps tiny output workloads serial and uses the existing
-  row-parallel path only when the source image is at least 512×512 pixels.
-  The exact 32×24 RGB row measured ~3 µs at the adapter backend boundary after
-  the change (about 64 µs before), passed strict CPU parity 10,952/10,952,
-  remained absent from both guarded violation receipts, and did not change
-  large-source routing. The WASM-only compile guard is covered by the passing
-  `make build-wasm` run in this wave; source commit `09fe72ee8`.
+- [x] `e4cf004ad` — SIMD 7×7/9×9 rank windows use the exact byte-domain
+  selector; strict Rank/Median parity 129/129 and direct materialized 9×9
+  measurement pass.
+- [x] `91fa214b2` — nearest resize copies native L8/LA8/RGB8/RGBA8 bytes while
+  preserving cumulative Pillow coordinates; direct parity passes and the CPU
+  resize boundary improved 75.9% in the matched profile.
+- [x] `09fe72ee8` — tiny CPU Reduce workloads avoid Rayon overhead while large
+  source images remain row-parallel.
+- [x] `5c542cafb` — F-mode nearest resize plus transpose is admitted to the
+  GPU only for the byte-preserving nearest path; strict focused output is
+  exact.
+- [x] `67a8375d2` — identity Fit lowers to one GPU `Duplicate` dispatch while
+  fractional/filter-specific Fits remain exact-host.
+- [x] `907c7a1ef` — I-mode Resize stays on the exact host path after the full
+  corpus caught four raw-shader convolution mismatches.
 
-## Status rule
+## Live receipts
 
-The goal remains active until the zero-violation evidence gate is met. Parity
-success is already recorded; it does not close the performance gate by itself.
-
-## Latest receipts
-
-- Full all-backends parity: `build/migration-parity/all-backends-after-reduce-wave2.json`
-  (SHA-256 `30f0ec37d0aef34256036e6b8ce7eacf307e3cd7ba76e76abc2d018eac260752`).
-- Primary benchmark/budget: `final-standard-after-reduce-source-threshold.json`
-  / `pipeline-budget-check-after-reduce-source-threshold.json` (744/744;
-  budget 56; hashes `224b3f80800169327895e4139b4fe411c0d06f02ed86c0c3e4c559ebfffd15a9`
-  / `601ec408f53887a8b35ca67b0de956913f205101c5d2bbc2e59dd70a1b080fd6`).
-- Same-tree repeat: `final-standard-after-reduce-source-threshold-repeat.json`
-  / `pipeline-budget-check-after-reduce-source-threshold-repeat.json` (744/744;
-  budget 197; hashes `5512b16940d3cab4a76d18e1aac3998edff8ba3fbfc9271fcc78337c023972c5`
-  / `a68699a9ea3135774b076883362c800daed43134d943f9624c04503fa151ad49`).
-- Full strict CPU parity: `build/migration-parity/cpu-strict-after-reduce.json`
-  (10,952/10,952; SHA-256 `efda569adc6e357b1b65e65ea70e45e8405b13a8f00ecaadce86580a21a35768`).
+- Baseline: `build/migration-parity/final-standard-after-native-geometry.json`.
+- Pre-F-mode receipts: `final-standard-after-mask-resize-rank.json` (744/744;
+  two SIMD F-rank rows failed), budgets 77 and 280.
+- Pre-GPU-fix post-F-mode standard: `build/migration-parity/final-standard-after-f-rank.json`
+  (744/744 measured; all subjects completed; SIMD F-rank fixed, one SIMD
+  palette CPU fallback and five GPU host-control fallbacks remain).
+- Pre-GPU-fix post-F-mode budget: `build/migration-parity/pipeline-budget-check-after-f-rank.json`
+  (294 one-run violations; not a performance closure).
+- Post-F-mode strict SIMD: `build/migration-parity/simd-strict-after-float-rank.json`
+  (10,952/10,952).
+- Post-F-mode pre-GPU-fix all-backend receipt:
+  `build/migration-parity/all-backends-after-f-rank.json` (10,952/10,952;
+  revision `4329e3e8e`; retained as historical evidence).
+- Pre-I-guard regression receipt:
+  `build/migration-parity/all-backends-after-gpu-fixes.json` (GPU 10,948/10,952;
+  four I-mode resize mismatches; rejected and retained as the regression
+  witness).
+- Post-I-guard all-backend receipt:
+  `build/migration-parity/all-backends-after-i-guard.json` (all six lanes pass;
+  revision `907c7a1ef`; SHA-256
+  `2866336c830632e6b6e96da6482ce05989ba830d9d97ac9403c331b9a7b05ced`).
+- Final standard benchmark:
+  `build/migration-parity/final-standard-after-gpu-fixes.json` (744/744;
+  parity 202/202; SHA-256
+  `2fa139baaa8294aceefa1c359b82da2d8d145f0b5aeac6ac95ae8c73aa0f1325`;
+  parity sidecar SHA-256
+  `22cd8808fff14e465825b932b9a83fcc002af6ea389b33b6de9cee80f5afa5b2`).
+- Final same-tree repeat:
+  `build/migration-parity/final-standard-after-gpu-fixes-repeat.json`
+  (744/744; parity sidecar 202/202; SHA-256
+  `dcbff52f0baaa2517099151c589cf788399a656d3194b5113e902836c24f9259`;
+  parity sidecar SHA-256
+  `b3d34729b12172c41aaecb1ba6f6556a922aef6c419d5aeb7b18f01d6cbc4e86`).
+- Budget reports against the fixed baseline:
+  `pipeline-budget-check-after-gpu-fixes.json` (112 violations) and
+  `pipeline-budget-check-after-gpu-fixes-repeat.json` (56 violations); hashes
+  are `f9bbbf2cf0156dd582837ff11706a837db9fdeb9810b5ea096b8c37f994e2c3d` and
+  `261b6a0854613abad75f8751128777266f6556a6fd28aee4eaf01f46ced8d72b`.
+  Zero violations are not yet proven.
