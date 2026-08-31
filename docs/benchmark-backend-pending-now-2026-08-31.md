@@ -51,10 +51,17 @@ host-control receipt without relabeling it as success.
   prove exact coordinate and rounding behavior on GPU.
 - [x] Re-run the historical GPU matrix through the full public corpus; it is
   value-exact with zero failures. The per-row native-receipt classification is
-  retained as the remaining P0 bookkeeping item below.
-- [ ] Classify the historical 70 rows as native-GPU, exact host-control, or a
-  real failure. The current full-corpus receipt is green; f64 geometry remains
-  the only named typed native-GPU blocker.
+  recorded in the next item.
+- [x] Classify the historical 70 rows from the current source: **69 native
+  GPU**, **1 exact host semantic-control**
+  (`pipeline-chain.resize-cache.f64-identical-geometry`), and **0 real
+  failures**. Receipt:
+  `build/migration-parity/gpu70-classification-current.json` (SHA-256
+  `fc1bfc73051f9315fc17da4014e56a23ee77f6b738876a1ad6d4e9b5b70e1394`), with
+  its focused parity sidecar at
+  `build/migration-parity/gpu70-classification-current-parity.json`.
+- The one host-control row remains the f64 native-GPU blocker above; this
+  classification is receipt evidence, not a relabeling of that row as native.
 
 Acceptance: focused parity, full all-backend parity, terminal actual-GPU
 receipts with no fallback, and a maintained regression input for every row.
@@ -92,7 +99,7 @@ receipts with no fallback, and a maintained regression input for every row.
 - [x] Commit the exact GPU Fit/I routing fixes as `8f780c4bb`, `e146ca1b3`,
   and `b465e8f83`.
 - [x] Push `main`; `origin/main` contains the verified source and checklist
-  commits through `2140a547f`.
+  commits through `6fc57d05a`.
 
 ## Goal tracking
 
