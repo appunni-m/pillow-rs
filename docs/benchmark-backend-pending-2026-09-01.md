@@ -27,7 +27,8 @@ rename, relabel, or weaken a case to make a gate green.
   arbitrary non-downscaling geometry, including mixed `PutData(F)` plus Box
   chains (144/144 direct native-GPU samples).
 - The new proof-gated dyadic F lane is also exact/native for the admitted
-  Bilinear and one-axis power-of-two Box cases; heterogeneous/non-dyadic
+  Bilinear and one- or two-axis power-of-two Box cases; the two-axis proof is
+  bounded by the source significand-span check. Heterogeneous/non-dyadic
   inputs remain on exact host control.
 
 ## Pending — do these in order
@@ -35,17 +36,18 @@ rename, relabel, or weaken a case to make a gate green.
 ### P0 — exact F-mode GPU resize arithmetic
 
 - [x] Implement and prove the bounded dyadic subset: fixed/f64 coefficient
-  agreement, same-sign normal power-of-two F words, Bilinear, and one-axis
-  power-of-two Box reductions through 64:1. The direct native matrix is
-  byte-exact with terminal `actual_backend=gpu` receipts and no fallback.
+  agreement, same-sign normal power-of-two F words, Bilinear, and one- or
+  two-axis power-of-two Box reductions through 64:1 (with the two-axis
+  significand-span bound). The direct native matrix is byte-exact with
+  terminal `actual_backend=gpu` receipts and no fallback.
 - [x] Keep the finite nonconstant Box-upscale copy lane admitted for arbitrary
   non-downscaling geometry; its one-tap relocation proof is separate from
   arithmetic-filter admission.
 - [ ] Extend exact arithmetic coverage to heterogeneous/non-dyadic Bilinear,
   Bicubic/Lanczos/Hamming, Box downscales outside the proven 2:1 and
-  one-axis power-of-two limits, and unproven two-axis reductions. Keep every
-  unproven arithmetic input on exact host control, including NaN, infinity,
-  and negative zero.
+  one-/two-axis power-of-two limits, and two-axis reductions outside the
+  significand-span proof. Keep every unproven arithmetic input on exact host
+  control, including NaN, infinity, and negative zero.
 
 ### P1 — honest backend-proof denominator
 
@@ -58,12 +60,18 @@ rename, relabel, or weaken a case to make a gate green.
   remain proof gaps. The all-backend envelope stays schema-v3, and old @1
   sidecars are diagnostic-only until regenerated.
 - [x] Regenerate and review the schema-v3 all-backend artifact. At source
-  `6fff4d8cc`, the live partition is CPU/GPU **6,513 complete + 877 partial +
-  20 missing + 2,530 not applicable + 1,012 indeterminate**; SIMD is
-  **6,518 + 884 + 20 + 2,519 + 1,011**. All six public lanes remain
+  `a053a7422`, CPU/GPU report **6,924 complete + 466 partial + 0 missing +
+  2,550 not applicable + 1,012 indeterminate**; SIMD reports
+  **6,936 + 466 + 0 + 2,539 + 1,011**. All six public lanes remain
   10,952/10,952 and GPU smoke is 1/1; the aggregate is correctly
   `passed_with_backend_gaps`. Artifact SHA-256:
-  `75c1d460d1e29aa8bfbcca05857acdcdb68bbd27cdeb8f8f7382b4ea90ee40`.
+  `6f9be35154e337a90b4b8be2bd0251cd8ea89b1253b8c3b2aa0aa2346dd0c9e4`.
+- [x] Fix the receipt boundary and classifier gaps without changing IDs or
+  denominators: an observed final serialization may prove an earlier
+  dispatch, while eager `ModeFilter` and source-independent degenerate or
+  out-of-bounds crops are not deferred pipeline work. The focused partitions
+  moved CPU/GPU from 877 partial + 20 missing to 466 partial + 0 missing, and
+  SIMD from 884 + 20 to 466 + 0; receipt/evidence regression tests pass.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -74,8 +82,9 @@ rename, relabel, or weaken a case to make a gate green.
   the controlled small-draw case dropped from about 2.4 ms with a 6.3 MiB
   retained pool to about 0.59 ms with a 19 KiB pool, with exact/native output.
 - [ ] Run the same equal-ID, equal-receipt cohort twice consecutively with
-  **zero** budget violations. The ratio-bounded cohort still reports **5**
-  and **6** violations (44 pairings each); timing acceptance remains open.
+  **zero** budget violations. The current post-fix pair has all 44 pairings
+  comparable but **18** violations; the earlier ratio-bounded cohort reported
+  **5** and **6** (44 pairings each). Timing acceptance remains open.
 
 ## Required closeout
 
@@ -83,5 +92,5 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, format/lint checks, then commit and push only after
   the corresponding evidence changes.
 
-Last verified source: `6fff4d8cc` (full all-backend run; working tree has
+Last verified source: `a053a7422` (full all-backend run; working tree has
 pre-existing unrelated changes). The overall goal is intentionally **active**.
