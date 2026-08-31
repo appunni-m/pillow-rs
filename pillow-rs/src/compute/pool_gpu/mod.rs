@@ -5250,6 +5250,33 @@ fn gpu_reduce_is_identity(op: &PipelineOp) -> bool {
     )
 }
 
+/// Return whether `ImageOps.fit` is the exact identity for this GPU segment.
+///
+/// With no bleed and equal source/target dimensions, the fit planner's crop
+/// box is the complete source image.  Pillow's boxed resize is then an exact
+/// sample-preserving copy for every byte resampling filter; use the native
+/// Duplicate shader instead of sending this case through the fractional-box
+/// Fit shader (which intentionally remains host-controlled for real crops).
+/// Keep the lowering limited to ordinary packed byte modes so a logical mode
+/// whose sample contract is not represented by the RGBA transport cannot be
+/// silently narrowed by the optimization.
+fn gpu_fit_is_exact_identity(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    let PipelineOp::Fit { w, h, bleed, .. } = op else {
+        return false;
+    };
+    source_dimensions.0 > 0
+        && source_dimensions.1 > 0
+        && (*w, *h) == source_dimensions
+        && *bleed == 0.0
+        && gpu_image_layout_is_supported(image)
+        && logical_mode.is_none_or(|mode| matches!(mode, "L" | "LA" | "RGB" | "RGBA"))
+}
+
 /// Replace valid aspect-ratio/Scale nodes with the equivalent exact Resize
 /// operation.
 ///
@@ -5269,6 +5296,13 @@ fn expand_gpu_geometry_ops(
     let mut expanded = Vec::with_capacity(ops.len());
     let (mut cur_w, mut cur_h) = dimensions;
     for op in ops {
+        if gpu_fit_is_exact_identity(op, (cur_w, cur_h), image, logical_mode) {
+            // The operation still needs an independent result image and a
+            // terminal GPU receipt, so lower to a real copy rather than
+            // dropping Fit as a no-op.
+            expanded.push(PipelineOp::Duplicate);
+            continue;
+        }
         // Pillow's default Thumbnail reducing_gap=2.0 performs an integer
         // box reduction before the final resize.  When both source axes are
         // divisible by the chosen factors, the exact two-step contract is
