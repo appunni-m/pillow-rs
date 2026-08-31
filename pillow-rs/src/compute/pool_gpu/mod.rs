@@ -259,6 +259,63 @@ fn gpu_f_resize_box_copy_is_exact(
     true
 }
 
+/// Return whether an F-mode filtered resize is an exact same-size copy.
+///
+/// `resize_f` returns the source image unchanged when both output dimensions
+/// already match. Preserve that contract for every bit pattern, including
+/// nonfinite values and negative zero; no filter arithmetic is required for
+/// this geometry. Keep the proof limited to one resize plus optional F-mode
+/// PutData updates so a later operation cannot consume an unproved result.
+fn gpu_f_resize_identity_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") || ops.is_empty() || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let expected = CheckedDims::new(image.width(), image.height(), 4)
+        .ok()
+        .map(|dims| dims.total_bytes());
+    if expected != Some(pixels.as_raw().len()) {
+        return false;
+    }
+
+    let mut dimensions = image.dimensions();
+    if dimensions.0 == 0 || dimensions.1 == 0 {
+        return false;
+    }
+    let mut resize_count = 0usize;
+    for op in ops {
+        match op {
+            PipelineOp::PutData {
+                data,
+                mode: PixelMode::F,
+            } => {
+                let expected = CheckedDims::new(dimensions.0, dimensions.1, 4)
+                    .ok()
+                    .map(|dims| dims.total_bytes());
+                if expected != Some(data.len()) {
+                    return false;
+                }
+            }
+            PipelineOp::Resize { w, h, .. } => {
+                resize_count = resize_count.saturating_add(1);
+                if resize_count != 1 || *w == 0 || *h == 0 || (*w, *h) != dimensions {
+                    return false;
+                }
+                dimensions = (*w, *h);
+            }
+            _ => return false,
+        }
+    }
+    resize_count == 1
+}
+
 /// Return whether a one- or two-axis 2x F-mode Box downscale is safe for the
 /// shader's f32 accumulator.
 ///
@@ -2748,6 +2805,7 @@ impl GpuInner {
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
         f_resize_box_copy_is_exact: bool,
+        f_resize_identity_is_exact: bool,
         f_resize_box_average_is_exact: bool,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
@@ -2909,6 +2967,7 @@ impl GpuInner {
                 let box_copy_is_exact = f_resize_box_copy_is_exact
                     && logical_mode == Some("F")
                     && matches!(filter, ResampleFilter::Box);
+                let identity_is_exact = f_resize_identity_is_exact && logical_mode == Some("F");
                 let box_average_is_exact = f_resize_box_average_is_exact
                     && logical_mode == Some("F")
                     && matches!(filter, ResampleFilter::Box);
@@ -2920,6 +2979,8 @@ impl GpuInner {
                         2
                     } else if box_copy_is_exact {
                         3
+                    } else if identity_is_exact {
+                        5
                     } else if box_average_is_exact {
                         4
                     } else {
@@ -3885,6 +3946,7 @@ impl GpuInner {
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
         f_resize_box_copy_is_exact: bool,
+        f_resize_identity_is_exact: bool,
         f_resize_box_average_is_exact: bool,
         buffers: &mut BufferPool,
     ) -> Result<
@@ -4024,6 +4086,7 @@ impl GpuInner {
                 contrast_mean,
                 f_resize_constant_bits,
                 f_resize_box_copy_is_exact,
+                f_resize_identity_is_exact,
                 f_resize_box_average_is_exact,
                 buffers,
                 &auxiliary_cache,
@@ -7012,6 +7075,7 @@ fn gpu_geometry_requires_exact_host_control(
     mode: Option<&str>,
     f_resize_constant_bits: Option<u32>,
     f_resize_box_copy_is_exact: bool,
+    f_resize_identity_is_exact: bool,
     f_resize_box_average_is_exact: bool,
 ) -> bool {
     // The affine shader is byte-exact for the ordinary packed L/LA/RGB/RGBA
@@ -7045,11 +7109,10 @@ fn gpu_geometry_requires_exact_host_control(
     // tables preserving Pillow's cumulative f64 source walk. Keep filtered I
     // resize on the exact host path until a typed convolution shader carries
     // its integer accumulator and rounding rules. F-mode filtered resize is
-    // admitted only when `gpu_f_resize_constant_bits` proved the source is a
-    // finite constant, or when the Box geometry proof established a one-tap
-    // source-word relocation. Mixed F samples and arithmetic filters remain
-    // on this host-controlled path because f32 convolution cannot reproduce
-    // Pillow's f64 rounding.
+    // admitted only when `gpu_f_resize_constant_bits` proved a finite
+    // constant, a same-size identity copy, or a bounded Box geometry proof.
+    // Mixed F samples and arithmetic filters remain on this host-controlled
+    // path because f32 convolution cannot reproduce Pillow's f64 rounding.
     let has_filtered_resize = ops.iter().any(|op| {
         matches!(
             op,
@@ -7062,6 +7125,7 @@ fn gpu_geometry_requires_exact_host_control(
             && has_filtered_resize
             && f_resize_constant_bits.is_none()
             && !f_resize_box_copy_is_exact
+            && !f_resize_identity_is_exact
             && !f_resize_box_average_is_exact)
 }
 
@@ -7236,6 +7300,7 @@ impl GpuPool {
         dispatch_ops = expand_gpu_geometry_ops(&dispatch_ops, img, img.dimensions(), mode);
         let f_resize_constant_bits = gpu_f_resize_constant_bits(&dispatch_ops, img, mode);
         let f_resize_box_copy_is_exact = gpu_f_resize_box_copy_is_exact(&dispatch_ops, img, mode);
+        let f_resize_identity_is_exact = gpu_f_resize_identity_is_exact(&dispatch_ops, img, mode);
         let f_resize_box_average_is_exact =
             gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
         if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
@@ -7319,6 +7384,7 @@ impl GpuPool {
             mode,
             f_resize_constant_bits,
             f_resize_box_copy_is_exact,
+            f_resize_identity_is_exact,
             f_resize_box_average_is_exact,
         ) {
             return self.execute_exact_host_result(ops, img, mode);
@@ -7939,6 +8005,7 @@ impl GpuPool {
             contrast_mean,
             f_resize_constant_bits,
             f_resize_box_copy_is_exact,
+            f_resize_identity_is_exact,
             f_resize_box_average_is_exact,
             &mut buffers,
         )?;
@@ -8045,7 +8112,8 @@ mod tests {
     use super::{
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
         gpu_byte_point_mode_allowed, gpu_f_resize_box_average_is_exact,
-        gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, readback_poll_backoff,
+        gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, gpu_f_resize_identity_is_exact,
+        readback_poll_backoff,
     };
     use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -8386,6 +8454,78 @@ mod tests {
             &[box_resize(2, 4)],
             &negative_zero,
             Some("F")
+        ));
+    }
+
+    #[test]
+    fn f_resize_identity_lowering_copies_nonfinite_words() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                4,
+                4,
+                [
+                    f32::NAN.to_bits(),
+                    f32::INFINITY.to_bits(),
+                    (-0.0f32).to_bits(),
+                    (-1.25f32).to_bits(),
+                    0.0f32.to_bits(),
+                    1.0f32.to_bits(),
+                    2.0f32.to_bits(),
+                    3.0f32.to_bits(),
+                    4.0f32.to_bits(),
+                    5.0f32.to_bits(),
+                    6.0f32.to_bits(),
+                    7.0f32.to_bits(),
+                    8.0f32.to_bits(),
+                    9.0f32.to_bits(),
+                    10.0f32.to_bits(),
+                    11.0f32.to_bits(),
+                ]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            )
+            .unwrap(),
+        );
+        let same_size = PipelineOp::Resize {
+            w: 4,
+            h: 4,
+            filter: ResampleFilter::Bicubic,
+        };
+        assert!(gpu_f_resize_identity_is_exact(
+            std::slice::from_ref(&same_size),
+            &image,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_identity_is_exact(
+            &[
+                PipelineOp::PutData {
+                    data: Arc::from(vec![0xde, 0xad, 0xbe, 0xef].repeat(16).into_boxed_slice()),
+                    mode: PixelMode::F,
+                },
+                same_size.clone(),
+            ],
+            &image,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_identity_is_exact(
+            &[PipelineOp::Resize {
+                w: 3,
+                h: 4,
+                filter: ResampleFilter::Bilinear,
+            }],
+            &image,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_identity_is_exact(
+            &[same_size.clone(), PipelineOp::Mirror],
+            &image,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_identity_is_exact(
+            std::slice::from_ref(&same_size),
+            &image,
+            Some("I")
         ));
     }
 }
