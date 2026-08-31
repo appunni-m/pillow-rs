@@ -16,14 +16,21 @@ diagnostic implementation state, not a completed native-backend claim.
 - Public all-backend values are green: CPU, SIMD, GPU, Node WASM, and browser
   WASM each compare **10,952/10,952**, and the GPU smoke gate is **1/1**.
   The latest schema-v3 receipt is
-  `build/migration-parity/all-backends-test-result.json`, generated at
-  `9d8ab1ebe` (SHA-256
-  `acf3e1e6a497148d64ccb335245f5bcdad6d6a6b8faef4ad8afd624f5cc901d3`).
+  `build/migration-parity/all-backends-test-result.json`, generated at pushed
+  source `d0821989d` (SHA-256
+  `ccaa614f6758e13e05a5db1f1ecfaaedfcb0c9589cc4f8fb0dfe5ec080fe4b72`).
 - Schema-v3 correctly reports `passed_with_backend_gaps`, not plain `passed`:
-  the full lanes have 937 terminal-complete pipeline receipts, thousands of
-  non-pipeline or incomplete cases, SIMD has 43 CPU receipts, and GPU has 41
-  CPU receipts plus recorded host-control/fallback reasons. This is an
-  evidence gap, not a parity failure or an excuse to remove cases.
+  CPU and GPU each have 6,513 terminal-complete pipeline receipts; SIMD has
+  6,518.  CPU has 3,562 no-receipt and 877 terminal-incomplete cases; SIMD
+  has 3,550 no-receipt and 884 terminal-incomplete cases.  SIMD has 300
+  terminal CPU receipts, and GPU has 389 terminal CPU receipts plus recorded
+  host-control/fallback reasons. This is an evidence gap, not a parity
+  failure or an excuse to remove cases.
+- The receipt-boundary correction in `d0821989d` keeps a successful pipeline
+  receipt as the terminal candidate when observation serialization emits no
+  separate telemetry, then marks it only after every public observation is
+  successful. A one-case CPU/SIMD/GPU check proved 1/1 terminal receipts per
+  lane; the full run confirms the larger counts above.
 - The maintained 70-row GPU cohort is value-exact and currently classified as
   70 native GPU / 0 host-control / 0 failures. Constant-F lowering is exact;
   finite nonconstant Box upscales add a 144/144 native-GPU exact matrix, while
@@ -45,13 +52,15 @@ diagnostic implementation state, not a completed native-backend claim.
 
 ### P1. Close the backend-proof denominator honestly
 
-- [ ] Reconcile the 10,952 public cases with pipeline applicability. Every case
-  admitted to a CPU/SIMD/GPU native cohort must have a terminal-complete
-  receipt, the requested actual backend, and an empty fallback taxonomy. Cases
-  that do not enter the pipeline remain explicitly counted outside that cohort;
-  they are not relabeled or silently dropped.
-- [ ] Regenerate the schema-v3 all-backends artifact after the final source
-  commit and require the validator to keep `passed_with_backend_gaps` visible
+- [ ] Reconcile the 10,952 public cases with pipeline applicability. The
+  receipt boundary is now correct, but CPU/GPU still have 877 terminal-
+  incomplete cases and 3,562 no-receipt cases; SIMD has 884 and 3,550.
+  Every case admitted to a CPU/SIMD/GPU native cohort must have a
+  terminal-complete receipt, the requested actual backend, and an empty
+  fallback taxonomy. Cases that do not enter the pipeline remain explicitly
+  counted outside that cohort; they are not relabeled or silently dropped.
+- [x] Regenerated the schema-v3 all-backends artifact after final source
+  commit `d0821989d`; the validator keeps `passed_with_backend_gaps` visible
   until the denominator is proven.
 - Acceptance: reproducible receipt sidecars, equal case-ID digests, exact
   requested/actual backend counts, and no false plain-`passed` aggregate.
