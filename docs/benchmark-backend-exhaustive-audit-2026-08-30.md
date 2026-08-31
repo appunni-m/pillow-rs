@@ -2951,3 +2951,49 @@ than value parity.
   pool, with exact/native output. The ratio-bounded 11-ID timing comparisons
   still show 5 and 6 budget violations, so the equal-receipt performance gate
   remains open.
+
+### 32.2 Receipt closeout and current parity snapshot (2026-09-01)
+
+The receipt/classification fix in `a053a7422` closes genuine evidence gaps
+without changing the public case IDs or denominator. The first divergence was
+in `run_case`: a successful observed final serialization such as `tobytes`
+could follow an earlier dispatch without emitting a second telemetry record;
+the runner cleared the earlier receipt and classified the case as partial.
+The runner now retains that candidate only at an observed final boundary and
+still clears unobserved final pipeline steps. The classifier also follows the
+pure-Rust contracts for eager `ModeFilter` and source-independent degenerate
+or fully out-of-source crops. Fifteen receipt/classification regression tests
+cover these transitions; the maintained receipt and evidence checks pass.
+
+The regenerated schema-v3 all-backend artifact at source `a053a7422` is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`6f9be35154e337a90b4b8be2bd0251cd8ea89b1253b8c3b2aa0aa2346dd0c9e4`). CPU
+and GPU each report 10,952/10,952 value-exact comparisons and a receipt
+partition of **6,924 complete + 466 partial + 0 missing + 2,550 not applicable
++ 1,012 indeterminate**. SIMD reports 10,952/10,952 with **6,936 + 466 + 0
++ 2,539 + 1,011**. GPU smoke is 1/1. The aggregate remains
+`passed_with_backend_gaps`: the remaining partial/indeterminate cohort, SIMD
+CPU receipts, GPU fallbacks, and non-empty actual-backend differences are
+explicit proof gaps rather than parity exemptions. Node and browser WASM also
+remain 10,952/10,952 value-exact.
+
+The F-mode GPU proof in `24305fcaa` extends the prior dyadic admission from one
+changed axis to one or two power-of-two Box axes (factors through 64:1), while
+requiring fixed/f64 coefficient agreement, same-sign normal power-of-two words,
+and a two-axis significand-span bound. Four direct native byte/telemetry cases
+pass, including positive and low-magnitude negative samples; wide-span and
+other arithmetic inputs stay on exact host control. Heterogeneous/non-dyadic
+Bilinear, Bicubic/Lanczos/Hamming, Box ratios outside the proven bounds, and
+nonfinite or negative-zero arithmetic remain open.
+
+The SIMD small-blur fix in `3343ae132` addresses the first performance
+divergence: 32x24 Gaussian blur and transpose passes paid Rayon scheduling
+overhead even though Pillow's small workflow did not. Workloads below 32x32
+pixels now use the same vector kernels and operation order serially; larger
+workloads remain parallel. The focused `draw-filter-invert` comparison against
+the stable ratio-bounded baseline is zero-violation and schema-valid. A fresh
+same-tree 11-workload pair (44 comparable backend pairings) is recorded at
+`build/migration-parity/incremental/p2-root-post-1.json` and
+`p2-root-post-2.json`; its guarded comparison
+`p2-root-post-2-vs-1.json` has **18** statistically credible violations, so
+the two-consecutive-zero performance gate remains open.
