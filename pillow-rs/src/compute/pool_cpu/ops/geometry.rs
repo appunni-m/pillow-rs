@@ -125,8 +125,9 @@ fn resize_f(
     // storage directly before the generic `to_rgba8` clone and f32 decode;
     // Pillow's normalized F-mode resampler preserves an ordinary finite
     // constant sample exactly, so the cache-control resize can be filled
-    // without either pass.  Keep negative zero on the scalar path: except for
-    // NEAREST, convolution normalizes it to positive zero.
+    // without either pass.  Keep negative zero out of this fast path: the
+    // scalar path below preserves its sign bit when Pillow's convolution
+    // arithmetic produces one.
     if let DynamicImage::ImageRgba8(rgba) = img {
         let raw = rgba.as_raw();
         if let Some(first) = raw.get(..4) {
@@ -192,6 +193,20 @@ fn resize_f(
             xintab.push(sx.min(sw - 1));
             source_x += scale_x;
         }
+        // Pillow's `libImaging/Geometry.c::ImagingScaleAffine` initializes the
+        // vertical coordinate once and advances it after each row. Keep that
+        // cumulative f64 sequence
+        // instead of recomputing `(y + 0.5) * scale_y`: the two expressions
+        // differ at exact-integer boundaries (for example, 2 / 7 reaches
+        // 1.0 when multiplied directly but remains just below 1.0 after
+        // three cumulative additions), changing the selected source row.
+        let mut yintab = Vec::with_capacity(dst_h as usize);
+        let mut source_y = scale_y * 0.5;
+        for _ in 0..dst_h {
+            let sy = source_y as u32;
+            yintab.push(sy.min(sh - 1));
+            source_y += scale_y;
+        }
         let mut out_floats = vec![0.0f32; (dst_w * dst_h) as usize];
         #[cfg(feature = "parallel")]
         crate::par_rows_mut_typed!(
@@ -199,8 +214,7 @@ fn resize_f(
             dst_w as usize,
             dst_h as usize,
             |_row_start, _row_end, y, row| {
-                let source_y = (f64::from(y) + 0.5) * scale_y;
-                let sy = (source_y as u32).min(sh - 1);
+                let sy = yintab[y as usize];
                 for (out, &sx) in row.iter_mut().zip(&xintab) {
                     *out = src_floats[(sy * sw + sx) as usize];
                 }
@@ -208,8 +222,7 @@ fn resize_f(
         );
         #[cfg(not(feature = "parallel"))]
         for (y, row) in out_floats.chunks_mut(dst_w as usize).enumerate() {
-            let source_y = (y as f64 + 0.5) * scale_y;
-            let sy = (source_y as u32).min(sh - 1);
+            let sy = yintab[y];
             for (out, &sx) in row.iter_mut().zip(&xintab) {
                 *out = src_floats[(sy * sw + sx) as usize];
             }
@@ -305,10 +318,10 @@ fn resize_f(
                         acc =
                             weight.mul_add(f64::from(intermediate[sy * dst_w as usize + dx]), acc);
                     }
-                    // Pillow serializes exact zeroes as positive zero. Preserve
-                    // that byte-level detail for symmetric kernels.
-                    let value = acc as f32;
-                    *output = if value == 0.0 { 0.0 } else { value };
+                    // Pillow's `libImaging/Resample.c::ImagingResampleVertical_32bpc`
+                    // stores the float32 accumulator directly; do not
+                    // canonicalize a negative zero produced by the sum.
+                    *output = acc as f32;
                 }
             }
         );
@@ -321,8 +334,8 @@ fn resize_f(
                     let sy = (y0 + offset as i64) as usize;
                     acc = weight.mul_add(f64::from(intermediate[sy * dst_w as usize + dx]), acc);
                 }
-                let value = acc as f32;
-                *output = if value == 0.0 { 0.0 } else { value };
+                // Keep the sign of zero, matching the scalar C path.
+                *output = acc as f32;
             }
         }
         output
@@ -1675,6 +1688,64 @@ mod tests {
             0xda086dc0, 0xda086dc0, 0xd9f6def9, 0xd9f6def9, 0xd9accf48, 0xd9accf48, 0xd9141f62,
             0xd9141f62, 0x3210f3c9, 0x3210f3c9, 0x584fe430, 0x584fe430,
         ];
+        let expected_bytes: Vec<u8> = expected_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_nearest_uses_pillow_cumulative_row_mapping() {
+        let source_words = [1.0f32.to_bits(), 2.0f32.to_bits()];
+        let source_bytes = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(1, 2, source_bytes).expect("source shape must be valid"),
+        );
+
+        let output = resize_f(&source, 1, 7, &ResampleFilter::Nearest)
+            .expect("finite F-mode nearest resize must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode resize must retain packed float storage");
+        };
+        let expected_words = [
+            1.0f32.to_bits(),
+            1.0f32.to_bits(),
+            1.0f32.to_bits(),
+            1.0f32.to_bits(),
+            2.0f32.to_bits(),
+            2.0f32.to_bits(),
+            2.0f32.to_bits(),
+        ];
+        let expected_bytes: Vec<u8> = expected_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_convolution_preserves_pillow_signed_zero() {
+        let source_words = [0x8000_0000, 0x0000_0001];
+        let source_bytes = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(1, 2, source_bytes).expect("source shape must be valid"),
+        );
+
+        let output = resize_f(&source, 1, 3, &ResampleFilter::Bicubic)
+            .expect("mixed signed-zero F-mode bicubic resize must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode resize must retain packed float storage");
+        };
+        let expected_words = [0x8000_0000, 0x0000_0000, 0x0000_0001];
         let expected_bytes: Vec<u8> = expected_words
             .into_iter()
             .flat_map(u32::to_le_bytes)
