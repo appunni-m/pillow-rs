@@ -12785,6 +12785,7 @@ const SIMD_RANK_FILTER_LANES: usize = 16;
 const SIMD_RANK_FILTER_MIN_VECTOR_PIXELS: usize = 1;
 const SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS: usize = 64 * 64;
 const SIMD_ZERO_NEIGHBORHOOD_MAX_PIXELS: usize = 256 * 256;
+const SIMD_UNIFORM_CONVOLUTION_MAX_PIXELS: usize = 256 * 256;
 
 /// Detect a bounded all-zero native-byte image before a neighborhood pass.
 ///
@@ -12807,8 +12808,17 @@ fn native_zero_byte_image(img: &DynamicImage, channels: usize) -> bool {
 /// exactly. Limit the scan to small images, where avoiding the kernel work is
 /// cheaper than adding a full read pass to large non-uniform frames.
 fn native_small_uniform_byte_image(img: &DynamicImage, channels: usize) -> bool {
+    native_uniform_byte_image_up_to(img, channels, SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS)
+}
+
+/// Detect a constant native-byte image with an operation-specific bound.
+///
+/// Convolution can amortize a larger proof scan because a 5x5 pass evaluates
+/// twenty-five taps for every interior pixel. Keep the larger bound private to
+/// the identity proof so rank/blur paths retain their existing 64x64 guard.
+fn native_uniform_byte_image_up_to(img: &DynamicImage, channels: usize, max_pixels: usize) -> bool {
     let pixels = (img.width() as usize).saturating_mul(img.height() as usize);
-    if pixels == 0 || pixels > SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS {
+    if pixels == 0 || pixels > max_pixels {
         return false;
     }
     let raw = img.as_bytes();
@@ -12833,9 +12843,14 @@ fn native_small_uniform_convolution_identity(
     row_width: usize,
     rounding_bias: f32,
 ) -> bool {
+    let max_pixels = if row_width == 5 {
+        SIMD_UNIFORM_CONVOLUTION_MAX_PIXELS
+    } else {
+        SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS
+    };
     if row_width == 0
         || kernel.len() != row_width.saturating_mul(row_width)
-        || !native_small_uniform_byte_image(img, channels)
+        || !native_uniform_byte_image_up_to(img, channels, max_pixels)
     {
         return false;
     }

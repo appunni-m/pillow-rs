@@ -2603,8 +2603,8 @@ the row-level register is
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release runs
-are `final-standard-after-next-wave.json` and its same-source repeat
-`final-standard-after-next-wave-repeat.json` (744 selected/measured and zero
+are `final-standard-after-conv-wave.json` and its same-source repeat
+`final-standard-after-conv-wave-repeat.json` (744 selected/measured and zero
 not-run in each), so the following figures supersede the earlier row-kernel
 snapshot:
 
@@ -2628,15 +2628,23 @@ snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root.  The next-wave comparison is recorded in
-  `pipeline-budget-check-after-next-wave.json` and reports **81** guarded
-  violations (41 Pillow, 19 CPU, 16 SIMD, 5 GPU subject rows).  Its same-source
-  repeat, `pipeline-budget-check-after-next-wave-repeat.json`, also reports
-  **81** (the exact row IDs vary with timing).  The two receipts are retained
+  as the repository root.  The first convolution-wave comparison is recorded
+  in `pipeline-budget-check-after-conv-wave.json` and reports **51** guarded
+  violations (20 Pillow, 12 CPU, 13 SIMD, 6 GPU subject rows).  Its same-source
+  repeat, `pipeline-budget-check-after-conv-wave-repeat.json`, reports **71**
+  (20 Pillow, 24 CPU, 19 SIMD, 8 GPU; the exact row IDs vary with timing).
+  The two receipts are retained
   as timing-variance evidence, and the speed gate remains open rather than
   being closed on a favorable sample.
   These are performance regressions against the older benchmark lineage, not
   parity failures or public-operation exclusions.
+- The SIMD 5×5 convolution identity proof now scans uniform native-byte images
+  up to 256×256 for 5×5 filters only; 3×3, rank, and blur retain the 64×64
+  guard. The material L=127 row therefore takes `Filter5x5: native-copy` and
+  remains actual SIMD with no fallback. Its whole-workflow SIMD medians were
+  0.474896 ms and 0.475958 ms in the two repeats versus the 0.488875 ms
+  baseline (−2.85% and −2.64%), so the row clears the 5% budget in both
+  receipts. Strict SIMD and all-backends parity each remained fully green.
 - The SIMD native-byte convolution kernels now group adjacent two- and
   four-channel pixels into contiguous byte loads before the exact `f32x8`
   middle-first FMA sequence; the grouped 5×5 path streams those vectors
@@ -2751,47 +2759,47 @@ snapshot:
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-next-wave.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-conv-wave.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `8c6a06999de2dfb101df8057278591c98eb7e4e3482b168b37cc80bd119ade6d`).
-- Same-tree repeat: `build/migration-parity/final-standard-after-next-wave-repeat.json`,
+  `4baf4dbb7dfe941948b5b64a83181aa258d04f9e8075889d54ba1bc294a00d6e`).
+- Same-tree repeat: `build/migration-parity/final-standard-after-conv-wave-repeat.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `f44a4c1b259f7cf95ae84b7cf9cce6c9d16da811ae85b1f79aee0fd1de380b07`).
+  `40b413ad0c901815d680f21a311cd9885a591926429d8987c7dfe428d0950dbb`).
 - Benchmark parity sidecar:
-  `build/migration-parity/final-standard-after-next-wave-repeat-parity.json`,
+  `build/migration-parity/final-standard-after-conv-wave-repeat-parity.json`,
   202/202 (SHA-256
-  `b297df24c3263b2df9057bb09820db48435a38625be0bf4cffac393dfa1804cc`).
+  `16f57bfb92a96b2797fb68d52e0e67c66958e63ee003095d43c86e13c087ef32`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-next-wave-repeat.json`
+  `build/migration-parity/pipeline-performance-report-after-conv-wave-repeat.json`
   (SHA-256
-  `2bf4f6c134c75669f236748281d3b9da449bd17f8e4e4f8daf6a2428f5240928`).
+  `5e0e14da71d9e65a9317dd49e3676f895bbe2c1b774991fbf8dc87915ce69a7a`).
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-next-wave-repeat.json`
-  and `build/migration-parity/pipeline-roadmap-status-after-next-wave-repeat.json`
-  (SHA-256 `724630253264a78703d14a4f8ed1460ecb9cfd30886be105e5f570404cb34a2c`
-  and `9eeb682a5e2e220d29f5f63ea341f159af9686201e3fd82bf10ac8011bbaf603`,
+  `build/migration-parity/pipeline-benchmark-coverage-after-conv-wave-repeat.json`
+  and `build/migration-parity/pipeline-roadmap-status-after-conv-wave-repeat.json`
+  (SHA-256 `0bcf947db20226b4bf3dd44abf0c48ea01499edacb9cc38296ccb89d76df0071`
+  and `80a8b554b27644da6998b3ffb25805cbc0c3bfa89eccdaff5e8ff12c336ce688`,
   respectively; roadmap reports 14 closed, 50 open, and 100% operation
   coverage).
 - Current guarded budget comparison:
-  `build/migration-parity/pipeline-budget-check-after-next-wave-repeat.json`,
-  81 violations (19 CPU, 16 SIMD, 41 Pillow, 5 GPU subject rows; SHA-256
-  `dca1bb65d06c85f03a3ec24ba89e72abaff1efe6b4a89ce131af6967cb1718e4`).
-- First next-wave budget comparison:
-  `build/migration-parity/pipeline-budget-check-after-next-wave.json`,
-  81 violations (19 CPU, 16 SIMD, 41 Pillow, 5 GPU subject rows; SHA-256
-  `97394ddb6d3d3f8cdc8c997e906aa5e609d06abd90ccee27e64756a539b17f02`).
+  `build/migration-parity/pipeline-budget-check-after-conv-wave-repeat.json`,
+  71 violations (24 CPU, 19 SIMD, 20 Pillow, 8 GPU subject rows; SHA-256
+  `f967d5234d43fcb1ec0295e69f8d0b71ec6144ac906081cff1da3ed789d1b980`).
+- First convolution-wave budget comparison:
+  `build/migration-parity/pipeline-budget-check-after-conv-wave.json`,
+  51 violations (12 CPU, 13 SIMD, 20 Pillow, 6 GPU subject rows; SHA-256
+  `9ca1295ebd9324996ccd3fe6e2d171b126e00ce4612cb1bbb1ded497c8326b9d`).
 - Full live-oracle parity:
-  `build/migration-parity/all-backends-after-next-wave.json`, CPU/SIMD/GPU,
+  `build/migration-parity/all-backends-after-conv-wave.json`, CPU/SIMD/GPU,
   Node, and browser lanes all passed 10,952/10,952 and GPU smoke passed 1/1
   (SHA-256
-  `fcf35f32347d64d3916000d0f93bb363e981139fb438e75a17f49855defcb307`).
+  `bf9c3008510c3265c70449671dd435407a65e594ccdf401efe5bc0aeeeb7a077`).
 - Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).
 - Latest strict SIMD parity:
   `build/migration-parity/simd-strict-parity-result.json`, 10,952/10,952
   passed with zero failed/not-run/infrastructure-error cases (SHA-256
-  `12b89565bb1e286f0e82995a0450057f3ef0d5810292932e04a42e2bb5a4a740`).
+  `706f08486e00b8106fe4729be8f6444941232889af9a6c3d50d805a840ec0eba`).
 - Strict GPU parity: `/private/tmp/gpu-strict-after-readback.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `ac332a1390f7752098fbd5c85789207cb93f2da0ace53c45990b42addf6b042c`).
