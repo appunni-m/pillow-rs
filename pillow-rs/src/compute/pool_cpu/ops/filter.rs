@@ -1095,6 +1095,9 @@ fn blur_one_row(
 }
 
 #[cfg(feature = "parallel")]
+const PARALLEL_BLUR_MIN_BYTES: usize = 256 * 1024;
+
+#[cfg(feature = "parallel")]
 fn blur_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -1106,15 +1109,34 @@ fn blur_rows(
     fractional_weight: u32,
 ) {
     let row_length = width * channels;
-    crate::par_rows_mut!(
-        destination,
-        row_length,
-        height,
-        |row_start, _row_end, _y, row| {
+    // A Rayon split has measurable scheduling cost for the small frames that
+    // are common at this boundary. Keep the recurrence and row order exactly
+    // the same, but stay on the caller for small buffers; larger frames still
+    // use the existing row-parallel path.
+    if destination.len() >= PARALLEL_BLUR_MIN_BYTES && row_length != 0 {
+        crate::par_rows_mut!(
+            destination,
+            row_length,
+            height,
+            |row_start, _row_end, _y, row| {
+                blur_one_row(
+                    source,
+                    row,
+                    row_start,
+                    width,
+                    channels,
+                    radius,
+                    whole_weight,
+                    fractional_weight,
+                );
+            }
+        );
+    } else {
+        for row in 0..height {
             blur_one_row(
                 source,
-                row,
-                row_start,
+                &mut destination[row * row_length..(row + 1) * row_length],
+                row * row_length,
                 width,
                 channels,
                 radius,
@@ -1122,7 +1144,7 @@ fn blur_rows(
                 fractional_weight,
             );
         }
-    );
+    }
 }
 
 #[cfg(not(feature = "parallel"))]
