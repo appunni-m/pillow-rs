@@ -544,13 +544,19 @@ def all_backends(result: dict[str, Any]) -> None:
             "input_scope",
             "gpu_gate",
             "gpu_full_requested",
+            "backend_coverage",
             "lanes",
         },
         "all_backends",
     )
-    if result["schema"] != "migration-parity/all-backends-test-result@2":
+    if result["schema"] != "migration-parity/all-backends-test-result@3":
         raise ValueError("all_backends.schema: unsupported schema")
-    if result["status"] not in {"passed", "passed_with_gpu_skipped", "failed"}:
+    if result["status"] not in {
+        "passed",
+        "passed_with_gpu_skipped",
+        "passed_with_backend_gaps",
+        "failed",
+    }:
         raise ValueError("all_backends.status: invalid status")
     for field in ("started_at", "finished_at", "revision"):
         string(result[field], f"all_backends.{field}")
@@ -578,6 +584,7 @@ def all_backends(result: dict[str, Any]) -> None:
         "browser-wasm-parity",
     }
     lane_ids: list[str] = []
+    lanes_by_id: dict[str, dict[str, Any]] = {}
     failed_required = False
     smoke_status: str | None = None
     full_gpu_status: str | None = None
@@ -608,6 +615,7 @@ def all_backends(result: dict[str, Any]) -> None:
         for field in ("lane_id", "kind", "status"):
             string(lane.get(field), f"{prefix}.{field}")
         lane_ids.append(lane["lane_id"])
+        lanes_by_id[lane["lane_id"]] = lane
         if lane["status"] not in {"passed", "failed", "skipped"}:
             raise ValueError(f"{prefix}.status: invalid status")
         if lane["kind"] not in {
@@ -739,12 +747,101 @@ def all_backends(result: dict[str, Any]) -> None:
         raise ValueError("all_backends: the non-requested full GPU lane must be recorded as skipped")
     if smoke_status in {"failed", "skipped"} and full_gpu_status != "skipped":
         raise ValueError("all_backends: a non-passing GPU gate must skip the full GPU lane")
+
+    # The public parity lanes and the backend-proof lanes are intentionally
+    # separate claims.  Recompute the receipt verdict from the lane evidence
+    # instead of trusting a producer-supplied status: a plain ``passed`` result
+    # must never hide missing terminal receipts, CPU controls in a SIMD/GPU
+    # lane, or non-empty fallback taxonomy.
+    backend_coverage = result["backend_coverage"]
+    exact(
+        backend_coverage,
+        {"status", "target_lanes"},
+        "all_backends.backend_coverage",
+    )
+    if backend_coverage["status"] not in {"proven", "not_proven"}:
+        raise ValueError("all_backends.backend_coverage.status: invalid status")
+    if not isinstance(backend_coverage["target_lanes"], list):
+        raise ValueError(
+            "all_backends.backend_coverage.target_lanes: expected list"
+        )
+    coverage_lane_ids: list[str] = []
+    for index, coverage_lane in enumerate(backend_coverage["target_lanes"]):
+        prefix = f"all_backends.backend_coverage.target_lanes[{index}]"
+        exact(
+            coverage_lane,
+            {
+                "lane_id",
+                "requested_backend",
+                "status",
+                "selected",
+                "terminal_complete_receipts",
+                "terminal_incomplete_cases",
+                "not_recorded_cases",
+                "actual_backend_counts",
+                "fallback_reason_counts",
+                "reasons",
+            },
+            prefix,
+        )
+        string(coverage_lane["lane_id"], f"{prefix}.lane_id")
+        coverage_lane_ids.append(coverage_lane["lane_id"])
+        string(coverage_lane["requested_backend"], f"{prefix}.requested_backend")
+        if coverage_lane["status"] not in {"proven", "not_proven"}:
+            raise ValueError(f"{prefix}.status: invalid status")
+        for field in (
+            "selected",
+            "terminal_complete_receipts",
+            "terminal_incomplete_cases",
+            "not_recorded_cases",
+        ):
+            non_negative_int(coverage_lane[field], f"{prefix}.{field}")
+        for field in ("actual_backend_counts", "fallback_reason_counts"):
+            counts = coverage_lane[field]
+            if not isinstance(counts, dict):
+                raise ValueError(f"{prefix}.{field}: expected object")
+            for key, count in counts.items():
+                string(key, f"{prefix}.{field} key")
+                non_negative_int(count, f"{prefix}.{field}[{key}]")
+        if not isinstance(coverage_lane["reasons"], list) or not all(
+            isinstance(reason, str) and reason for reason in coverage_lane["reasons"]
+        ):
+            raise ValueError(f"{prefix}.reasons: expected non-empty string array")
+        if coverage_lane["status"] == "proven" and coverage_lane["reasons"]:
+            raise ValueError(f"{prefix}: proven lane cannot have reasons")
+        if coverage_lane["status"] == "not_proven" and not coverage_lane["reasons"]:
+            raise ValueError(f"{prefix}: not-proven lane requires reasons")
+    unique(coverage_lane_ids, "all_backends.backend_coverage.target_lanes")
+    expected_coverage_lane_ids = {
+        "parity-cpu",
+        "parity-simd",
+        "parity-gpu",
+    }
+    if set(coverage_lane_ids) != expected_coverage_lane_ids:
+        raise ValueError(
+            "all_backends.backend_coverage.target_lanes: expected CPU, SIMD, and GPU lanes"
+        )
+
+    try:
+        from run_all_backend_tests import backend_coverage_report
+    except ModuleNotFoundError:  # imported as ``scripts.validate_migration_parity_result``
+        from scripts.run_all_backend_tests import backend_coverage_report
+
+    expected_backend_coverage = backend_coverage_report(
+        [lanes_by_id[lane_id] for lane_id in sorted(lanes_by_id)]
+    )
+    if backend_coverage != expected_backend_coverage:
+        raise ValueError(
+            "all_backends.backend_coverage does not match lane receipt evidence"
+        )
     expected_status = (
         "failed"
         if failed_required
-        else "passed"
-        if smoke_status == "passed" and result["gpu_full_requested"]
         else "passed_with_gpu_skipped"
+        if smoke_status != "passed" or not result["gpu_full_requested"]
+        else "passed_with_backend_gaps"
+        if backend_coverage["status"] != "proven"
+        else "passed"
     )
     if result["status"] != expected_status:
         raise ValueError("all_backends.status does not match lane outcomes")
