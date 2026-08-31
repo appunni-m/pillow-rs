@@ -2871,7 +2871,7 @@ source snapshots.  The current focused queue is
   now carries an explicit terminal-completeness bit, and the all-backends
   aggregate is schema v3 with an independently reported backend-coverage
   verdict.
-- The current v3 run at source `e72971f21` remains value-exact for all six
+- The current v3 run at source `9d8ab1ebe` remains value-exact for all six
   public lanes (10,952/10,952 each; GPU smoke 1/1), but its status is
   **`passed_with_backend_gaps`**.  The CPU/SIMD/GPU pipeline sidecars each have
   937 terminal-complete receipts; CPU has 3,562 cases with no receipt, SIMD has
@@ -2880,7 +2880,7 @@ source snapshots.  The current focused queue is
   workflow.  These counts are explicit evidence gaps, not parity exemptions.
 - The v3 artifact is
   `build/migration-parity/all-backends-test-result.json` (SHA-256
-  `363133834538efaad80ed444ea5716e66d6407c5d7f936fbbfb1e0c78798eaf2`).  The
+  `acf3e1e6a497148d64ccb335245f5bcdad6d6a6b8faef4ad8afd624f5cc901d3`).  The
   validator rejects a plain `passed` status when the persisted receipt
   evidence has these gaps.  The next run must retain this distinction while
   reconciling the pipeline-applicable denominator; non-pipeline public cases
@@ -2888,7 +2888,13 @@ source snapshots.  The current focused queue is
 - The bounded CPU Gaussian row optimization in `888f1bba5` clears the recurring
   `draw-filter-invert` CPU timing target in a focused run (0.055396 ms median,
   terminal actual-CPU receipt) without changing pixels.  The stable 11-ID
-  cohort still needs two consecutive zero-violation budget reports.
+  cohort was rerun with 44 comparable pairings; successive reports contain 8
+  and 9 nonzero violations, so it still needs two consecutive zero-violation
+  budget reports.
 - The maintained 70-row GPU cohort and all strict value comparisons remain
-  green.  General nonconstant/mixed-F device lowering and the equal-receipt
-  performance gate are still open in the focused checklist.
+  green.  The exact finite nonconstant F Box-upsample lowering in `9d8ab1ebe`
+  adds 144/144 native-GPU exact samples and a mixed `PutData(F)` plus two-Box
+  chain with exact output.  Arithmetic F filters, Box downscales, and
+  nonfinite/negative-zero inputs remain host-controlled pending a portable
+  exact f64-equivalent device path; the equal-receipt performance gate is also
+  still open in the focused checklist.
