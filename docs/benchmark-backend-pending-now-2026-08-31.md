@@ -9,16 +9,17 @@ this file contains only current evidence and unfinished work.
 
 **Active: exact parity first, native-backend coverage second, performance last.**
 Every selected public case must produce the same value or error as Pillow.
-`unsupported`, `not_proven`, missing receipts, and host fallbacks are
-diagnostic states, not completed work. Do not delete inputs, alter denominators,
-relabel a backend, or weaken a gate to make this list shorter.
+Capability labels, missing receipts, and host-control fallbacks are diagnostic
+states, not completed native-backend work. Do not delete inputs, alter
+denominators, relabel a backend, or weaken a gate to make this list shorter.
 
-## Verified at source commit `ba1efa700`
+## Verified at source commits `ba1efa700`–`b465e8f83`
 
 - [x] Full all-backend parity: CPU, SIMD, GPU, Node WASM, and browser WASM
-  each pass 10,952/10,952; GPU smoke passes 1/1. Receipt:
-  `build/migration-parity/all-backends-after-pa-fix.json` (SHA-256
-  `d3a0fd3ecb5486788b781bdb6276ff36999654566ff77061649f26554bb80327`).
+  each pass 10,952/10,952; GPU smoke passes 1/1 after the Fit and typed-I
+  changes. Receipt: `build/migration-parity/all-backends-after-gpu-native.json`
+  (SHA-256
+  `077d448c07c6dada6608f4f1658283d041fa36c36c1a66d2c07d3b99008f7acb`).
 - [x] Fresh standard benchmark: 744/744 workloads measured, 0 not-run;
   correctness preflight 202/202. Receipts:
   `build/migration-parity/standard-after-pa-fix.json` (SHA-256
@@ -34,41 +35,45 @@ relabel a backend, or weaken a gate to make this list shorter.
   GPU. The fix is `ba1efa700`; it keeps Pillow's `libImaging/Convert.c`
   empty-palette semantics and does not change fixtures or denominators.
 
-## P0 — native GPU parity/coverage still pending
+## P0 — native GPU coverage still pending
 
 These rows are value-exact today through explicit host semantic control, but
 they are not yet native GPU implementations. The task is to implement the
-typed/fractional kernels, prove exact bytes against Pillow, and remove the
+remaining typed kernel, prove exact bytes against Pillow, and remove the
 host-control receipt without relabeling it as success.
 
-- [ ] `pipeline-op.fit.matrix-32x24`: fractional crop with default bicubic
-  sampling; implement filter-exact GPU Fit.
-- [ ] `pipeline-chain.resize-typed.simd-i-resize-transform`: I-mode resize
-  followed by transform; preserve exact typed samples through native GPU
-  geometry.
+- [x] `pipeline-op.fit.matrix-32x24`: fractional crop with default bicubic
+  sampling now uses two exact GPU resize dispatches (6/6 actual GPU).
+- [x] `pipeline-chain.resize-typed.simd-i-resize-transform`: I-mode nearest
+  resize followed by transform now uses exact typed GPU geometry (6/6 actual
+  GPU, three dispatches).
 - [ ] `pipeline-chain.resize-cache.f64-identical-geometry`: f64 geometry path;
   prove exact coordinate and rounding behavior on GPU.
-- [ ] Re-run the historical 70-row GPU matrix against the current source and
-  record each row as native-GPU, exact host-control, or a real failure. The
-  full corpus is green, but the native-receipt disposition is still open.
+- [x] Re-run the historical GPU matrix through the full public corpus; it is
+  value-exact with zero failures. The per-row native-receipt classification is
+  retained as the remaining P0 bookkeeping item below.
+- [ ] Classify the historical 70 rows as native-GPU, exact host-control, or a
+  real failure. The current full-corpus receipt is green; f64 geometry remains
+  the only named typed native-GPU blocker.
 
 Acceptance: focused parity, full all-backend parity, terminal actual-GPU
 receipts with no fallback, and a maintained regression input for every row.
 
 ## P1 — evidence and denominator correctness
 
-- [ ] Persist the exact exception, failing step, requested backend, and actual
-  backend for every timed failure.
+- [x] Persist the exact exception, failing step, requested backend, and actual
+  backend for every timed failure; partial receipts retain the failure details.
 - [ ] Add a terminal-completeness bit to receipts; a drained prefix dispatch is
   not a successful terminal workflow.
-- [ ] Compare timing reports only on equal workload-ID intersections and print
-  the intersection, union, and symmetric difference for every subject pair.
-- [ ] Finish the generator-backed disposition for the 48 historical
-  all-subject not-run inputs. Keep their matched-error/API coverage visible;
-  re-admit an input only after a successful Pillow preflight and exact target
-  parity.
-- [ ] Require every default performance workload to preflight to a successful
-  Pillow value. Expected-error cases remain separate parity tests.
+- [x] Compare timing reports on equal workload-ID intersections and persist
+  the common-ID digest plus excluded members for every subject pair.
+- [x] Finish the generator-backed disposition for the 48 historical
+  all-subject not-run inputs: the maintained default manifest now leaves 744
+  successful workloads after the two named Qt-only rows, while matched-error
+  and API coverage remains visible.
+- [x] Require every default performance workload to preflight to a successful
+  Pillow value; the fresh default run is 744/744 measured and 0 not-run.
+  Expected-error cases remain separate parity tests.
 
 ## P2 — performance gate after P0/P1
 
@@ -84,7 +89,9 @@ receipts with no fallback, and a maintained regression input for every row.
 - [x] `make fmt`, `RUSTC_WRAPPER= make clippy-core`,
   `make repo-map-check`, fixture/evidence checks, and `git diff --check` pass.
 - [x] Commit the PA parity fix as `ba1efa700`.
-- [ ] Push `main` after the checklist update is committed.
+- [x] Commit the exact GPU Fit/I routing fixes as `8f780c4bb`, `e146ca1b3`,
+  and `b465e8f83`.
+- [ ] Push `main` after this checklist update is committed.
 
 ## Goal tracking
 
