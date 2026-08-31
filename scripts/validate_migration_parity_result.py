@@ -298,9 +298,17 @@ def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
         "fallback_reason_counts",
     }
     current = legacy | {"terminal_complete_receipts", "terminal_incomplete_cases"}
-    if not isinstance(value, dict) or set(value) not in (legacy, current):
+    versioned = current | {
+        "pipeline_applicable_cases",
+        "pipeline_complete_cases",
+        "pipeline_missing_receipt_cases",
+        "pipeline_partial_receipt_cases",
+        "pipeline_not_applicable_cases",
+        "pipeline_indeterminate_cases",
+    }
+    if not isinstance(value, dict) or set(value) not in (legacy, current, versioned):
         raise ValueError(
-            f"{label}: expected legacy or terminal-complete summary keys"
+            f"{label}: expected legacy, terminal-complete, or partitioned summary keys"
         )
     for field in (
         "selected",
@@ -321,7 +329,7 @@ def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
         != value["selected"]
     ):
         raise ValueError(f"{label}: receipt case counts are inconsistent")
-    if set(value) == current:
+    if set(value) in (current, versioned):
         non_negative_int(
             value["terminal_complete_receipts"],
             f"{label}.terminal_complete_receipts",
@@ -341,6 +349,29 @@ def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
         backend_denominator = value["terminal_complete_receipts"]
     else:
         backend_denominator = value["completed_receipts"]
+    if set(value) == versioned:
+        for field in versioned - current:
+            non_negative_int(value[field], f"{label}.{field}")
+        if (
+            value["pipeline_applicable_cases"]
+            != value["pipeline_complete_cases"]
+            + value["pipeline_missing_receipt_cases"]
+            + value["pipeline_partial_receipt_cases"]
+        ):
+            raise ValueError(f"{label}: pipeline-applicable case counts are inconsistent")
+        if (
+            value["pipeline_applicable_cases"]
+            + value["pipeline_not_applicable_cases"]
+            + value["pipeline_indeterminate_cases"]
+            != value["selected"]
+        ):
+            raise ValueError(f"{label}: pipeline case partition does not match selected")
+        if value["pipeline_partial_receipt_cases"] != value[
+            "terminal_incomplete_cases"
+        ]:
+            raise ValueError(f"{label}: partial receipt count is inconsistent")
+        if value["pipeline_complete_cases"] > value["terminal_complete_receipts"]:
+            raise ValueError(f"{label}: complete case count exceeds terminal receipts")
     if sum(value["actual_backend_counts"].values()) != backend_denominator:
         raise ValueError(f"{label}: backend counts are inconsistent")
 
@@ -778,6 +809,12 @@ def all_backends(result: dict[str, Any]) -> None:
                 "terminal_complete_receipts",
                 "terminal_incomplete_cases",
                 "not_recorded_cases",
+                "pipeline_applicable_cases",
+                "pipeline_complete_cases",
+                "pipeline_missing_receipt_cases",
+                "pipeline_partial_receipt_cases",
+                "pipeline_not_applicable_cases",
+                "pipeline_indeterminate_cases",
                 "actual_backend_counts",
                 "fallback_reason_counts",
                 "reasons",
@@ -794,8 +831,32 @@ def all_backends(result: dict[str, Any]) -> None:
             "terminal_complete_receipts",
             "terminal_incomplete_cases",
             "not_recorded_cases",
+            "pipeline_applicable_cases",
+            "pipeline_complete_cases",
+            "pipeline_missing_receipt_cases",
+            "pipeline_partial_receipt_cases",
+            "pipeline_not_applicable_cases",
+            "pipeline_indeterminate_cases",
         ):
             non_negative_int(coverage_lane[field], f"{prefix}.{field}")
+        if (
+            coverage_lane["pipeline_applicable_cases"]
+            != coverage_lane["pipeline_complete_cases"]
+            + coverage_lane["pipeline_missing_receipt_cases"]
+            + coverage_lane["pipeline_partial_receipt_cases"]
+        ):
+            raise ValueError(f"{prefix}: pipeline-applicable counts are inconsistent")
+        if (
+            coverage_lane["pipeline_applicable_cases"]
+            + coverage_lane["pipeline_not_applicable_cases"]
+            + coverage_lane["pipeline_indeterminate_cases"]
+            != coverage_lane["selected"]
+        ):
+            raise ValueError(f"{prefix}: pipeline case partition does not match selected")
+        if coverage_lane["pipeline_partial_receipt_cases"] != coverage_lane[
+            "terminal_incomplete_cases"
+        ]:
+            raise ValueError(f"{prefix}: partial receipt count is inconsistent")
         for field in ("actual_backend_counts", "fallback_reason_counts"):
             counts = coverage_lane[field]
             if not isinstance(counts, dict):

@@ -37,6 +37,7 @@ try:
         FIXTURE_ROOT,
         build_operation_index,
         compare_case,
+        classify_pipeline_case,
         load_cases,
         load_manifest,
         receipt_terminal_complete,
@@ -48,6 +49,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
         FIXTURE_ROOT,
         build_operation_index,
         compare_case,
+        classify_pipeline_case,
         load_cases,
         load_manifest,
         receipt_terminal_complete,
@@ -679,6 +681,15 @@ def execution_evidence_document(
     receipt_cases = 0
     not_recorded_cases = 0
     terminal_incomplete_cases = 0
+    pipeline_case_status: dict[str, dict[str, str]] = {}
+    pipeline_status_counts = {
+        "complete": 0,
+        "missing_receipt": 0,
+        "partial_receipt": 0,
+        "not_applicable": 0,
+        "indeterminate": 0,
+    }
+    cases_by_id = {case["case_id"]: case for case in cases}
     for case_id in case_ids:
         receipts = execution.get(case_id, [])
         completed = [
@@ -704,6 +715,12 @@ def execution_evidence_document(
         terminal_complete_receipts += len(terminal)
         if has_receipt and not terminal:
             terminal_incomplete_cases += 1
+        classification = classify_pipeline_case(
+            cases_by_id[case_id],
+            receipts,
+        )
+        pipeline_case_status[case_id] = classification
+        pipeline_status_counts[classification["status"]] += 1
         for receipt in terminal:
             backend = receipt.get("actual_backend")
             if isinstance(backend, str):
@@ -724,12 +741,15 @@ def execution_evidence_document(
                 )
 
     return {
-        "schema": "migration-parity/pipeline-execution-evidence@1",
+        "schema": "migration-parity/pipeline-execution-evidence@2",
         "status": "measured" if identity is not None else "not_measured",
         "reason": (
             "The shared Node/browser WASM workflow collected completed receipts "
-            "for workflow calls and observations; cases without a receipt did "
-            "not materialize a target image pipeline."
+            "for workflow calls and observations.  Each selected case also "
+            "carries an explicit pipeline/receipt classification; only "
+            "high-confidence non-pipeline cases are outside the backend-proof "
+            "cohort, while missing, partial, and indeterminate cases remain "
+            "gaps."
             if identity is not None
             else "The WASM facade did not expose pipeline execution telemetry."
         ),
@@ -746,9 +766,28 @@ def execution_evidence_document(
             "completed_receipts": completed_receipts,
             "terminal_complete_receipts": terminal_complete_receipts,
             "terminal_incomplete_cases": terminal_incomplete_cases,
+            "pipeline_applicable_cases": (
+                pipeline_status_counts["complete"]
+                + pipeline_status_counts["missing_receipt"]
+                + pipeline_status_counts["partial_receipt"]
+            ),
+            "pipeline_complete_cases": pipeline_status_counts["complete"],
+            "pipeline_missing_receipt_cases": pipeline_status_counts[
+                "missing_receipt"
+            ],
+            "pipeline_partial_receipt_cases": pipeline_status_counts[
+                "partial_receipt"
+            ],
+            "pipeline_not_applicable_cases": pipeline_status_counts[
+                "not_applicable"
+            ],
+            "pipeline_indeterminate_cases": pipeline_status_counts[
+                "indeterminate"
+            ],
             "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
             "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
         },
+        "pipeline_case_status": pipeline_case_status,
         "cases": {case_id: execution.get(case_id, []) for case_id in case_ids},
     }
 

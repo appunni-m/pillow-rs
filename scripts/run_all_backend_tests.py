@@ -387,6 +387,81 @@ def validate_execution_receipts(
     return None
 
 
+PIPELINE_CASE_STATUSES = {
+    "not_applicable",
+    "complete",
+    "missing_receipt",
+    "partial_receipt",
+    "indeterminate",
+}
+PIPELINE_SUMMARY_FIELDS = {
+    "pipeline_applicable_cases",
+    "pipeline_complete_cases",
+    "pipeline_missing_receipt_cases",
+    "pipeline_partial_receipt_cases",
+    "pipeline_not_applicable_cases",
+    "pipeline_indeterminate_cases",
+}
+
+
+def validate_pipeline_case_status(
+    statuses: Any,
+    cases: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    label: str,
+) -> str | None:
+    """Validate the per-case receipt/applicability partition.
+
+    The raw receipt list remains authoritative for complete/partial states.
+    A producer may choose among the three no-receipt states, but it cannot
+    turn a recorded receipt into a non-pipeline case or omit a selected ID.
+    """
+
+    if not isinstance(statuses, dict):
+        return f"{label} is not an object"
+    if set(statuses) != set(cases):
+        return f"{label} case IDs do not match receipt cases"
+    counts = {status: 0 for status in PIPELINE_CASE_STATUSES}
+    for case_id, value in statuses.items():
+        if not isinstance(value, dict) or set(value) != {"status", "reason"}:
+            return f"{label} contains malformed classification for {case_id!r}"
+        status = value.get("status")
+        reason = value.get("reason")
+        if status not in PIPELINE_CASE_STATUSES:
+            return f"{label} contains an unsupported status for {case_id!r}"
+        if not isinstance(reason, str) or not reason:
+            return f"{label} contains an invalid reason for {case_id!r}"
+        receipts = cases[case_id]
+        meaningful = any(
+            receipt.get("status") not in {"not_recorded", "not_applicable"}
+            for receipt in receipts
+        )
+        terminal = any(receipt_terminal_complete(receipt) for receipt in receipts)
+        if terminal and status != "complete":
+            return f"{label} hides a terminal receipt for {case_id!r}"
+        if meaningful and not terminal and status != "partial_receipt":
+            return f"{label} hides a partial receipt for {case_id!r}"
+        if not meaningful and status in {"complete", "partial_receipt"}:
+            return f"{label} claims a receipt without a recorded receipt for {case_id!r}"
+        counts[status] += 1
+
+    expected = {
+        "pipeline_applicable_cases": counts["complete"]
+        + counts["missing_receipt"]
+        + counts["partial_receipt"],
+        "pipeline_complete_cases": counts["complete"],
+        "pipeline_missing_receipt_cases": counts["missing_receipt"],
+        "pipeline_partial_receipt_cases": counts["partial_receipt"],
+        "pipeline_not_applicable_cases": counts["not_applicable"],
+        "pipeline_indeterminate_cases": counts["indeterminate"],
+    }
+    for field, value in expected.items():
+        if summary.get(field) != value:
+            return f"{label} disagrees with summary.{field}"
+    return None
+
+
 def validate_execution_summary(
     summary: Any, *, expected_selected: int, label: str
 ) -> str | None:
@@ -406,7 +481,8 @@ def validate_execution_summary(
         "terminal_complete_receipts",
         "terminal_incomplete_cases",
     }
-    if set(summary) not in (legacy, current):
+    versioned = current | PIPELINE_SUMMARY_FIELDS
+    if set(summary) not in (legacy, current, versioned):
         return f"{label} summary has an unsupported key set"
     for field in (
         "selected",
@@ -433,7 +509,7 @@ def validate_execution_summary(
         "selected"
     ]:
         return f"{label} summary case counts are inconsistent"
-    if set(summary) == current:
+    if set(summary) in (current, versioned):
         for field in ("terminal_complete_receipts", "terminal_incomplete_cases"):
             if type(summary[field]) is not int or summary[field] < 0:
                 return f"{label} summary has an invalid {field}"
@@ -444,6 +520,32 @@ def validate_execution_summary(
         denominator = summary["terminal_complete_receipts"]
     else:
         denominator = summary["completed_receipts"]
+    if set(summary) == versioned:
+        for field in PIPELINE_SUMMARY_FIELDS:
+            if type(summary[field]) is not int or summary[field] < 0:
+                return f"{label} summary has an invalid {field}"
+        if (
+            summary["pipeline_applicable_cases"]
+            != summary["pipeline_complete_cases"]
+            + summary["pipeline_missing_receipt_cases"]
+            + summary["pipeline_partial_receipt_cases"]
+        ):
+            return f"{label} pipeline-applicable case counts are inconsistent"
+        if (
+            summary["pipeline_applicable_cases"]
+            + summary["pipeline_not_applicable_cases"]
+            + summary["pipeline_indeterminate_cases"]
+            != summary["selected"]
+        ):
+            return f"{label} pipeline case partition does not match selected"
+        if summary["pipeline_partial_receipt_cases"] != summary[
+            "terminal_incomplete_cases"
+        ]:
+            return f"{label} partial receipt count is inconsistent"
+        if summary["pipeline_complete_cases"] > summary[
+            "terminal_complete_receipts"
+        ]:
+            return f"{label} complete case count exceeds terminal receipts"
     if sum(summary["actual_backend_counts"].values()) != denominator:
         return f"{label} backend counts are inconsistent"
     return None
@@ -465,7 +567,7 @@ def pipeline_execution_evidence(
             "reason": "normal-parity pipeline execution sidecar was not produced",
             "artifact": relative_path,
         }
-    if raw.get("schema") != "migration-parity/pipeline-execution-evidence@1":
+    if raw.get("schema") != "migration-parity/pipeline-execution-evidence@2":
         return {
             "status": "not_measured",
             "reason": "normal-parity pipeline execution sidecar has an unsupported schema",
@@ -488,16 +590,21 @@ def pipeline_execution_evidence(
             "reason": "normal-parity pipeline execution sidecar identity or scope did not match the lane",
             "artifact": relative_path,
         }
-    if "cases" in raw:
-        receipt_error = validate_execution_receipts(
-            raw.get("cases"), label="normal-parity pipeline execution sidecar"
-        )
-        if receipt_error is not None:
-            return {
-                "status": "not_measured",
-                "reason": receipt_error,
-                "artifact": relative_path,
-            }
+    if "cases" not in raw or "pipeline_case_status" not in raw:
+        return {
+            "status": "not_measured",
+            "reason": "normal-parity pipeline execution sidecar has no complete case classification",
+            "artifact": relative_path,
+        }
+    receipt_error = validate_execution_receipts(
+        raw.get("cases"), label="normal-parity pipeline execution sidecar"
+    )
+    if receipt_error is not None:
+        return {
+            "status": "not_measured",
+            "reason": receipt_error,
+            "artifact": relative_path,
+        }
     summary_error = validate_execution_summary(
         summary,
         expected_selected=expected_scope.get("selected", -1),
@@ -507,6 +614,18 @@ def pipeline_execution_evidence(
         return {
             "status": "not_measured",
             "reason": summary_error,
+            "artifact": relative_path,
+        }
+    classification_error = validate_pipeline_case_status(
+        raw.get("pipeline_case_status"),
+        raw["cases"],
+        summary,
+        label="normal-parity pipeline execution sidecar.pipeline_case_status",
+    )
+    if classification_error is not None:
+        return {
+            "status": "not_measured",
+            "reason": classification_error,
             "artifact": relative_path,
         }
     return {
@@ -624,6 +743,12 @@ def backend_coverage_report(lanes: list[dict[str, Any]]) -> dict[str, Any]:
         terminal_complete_receipts = 0
         terminal_incomplete_cases = 0
         not_recorded_cases = 0
+        pipeline_applicable_cases = 0
+        pipeline_complete_cases = 0
+        pipeline_missing_receipt_cases = 0
+        pipeline_partial_receipt_cases = 0
+        pipeline_not_applicable_cases = 0
+        pipeline_indeterminate_cases = 0
         actual_backend_counts: dict[str, int] = {}
         fallback_reason_counts: dict[str, int] = {}
 
@@ -652,16 +777,54 @@ def backend_coverage_report(lanes: list[dict[str, Any]]) -> dict[str, Any]:
                 terminal_complete_receipts = summary["terminal_complete_receipts"]
                 terminal_incomplete_cases = summary["terminal_incomplete_cases"]
                 not_recorded_cases = summary["not_recorded_cases"]
+                if PIPELINE_SUMMARY_FIELDS.issubset(summary):
+                    pipeline_applicable_cases = summary[
+                        "pipeline_applicable_cases"
+                    ]
+                    pipeline_complete_cases = summary["pipeline_complete_cases"]
+                    pipeline_missing_receipt_cases = summary[
+                        "pipeline_missing_receipt_cases"
+                    ]
+                    pipeline_partial_receipt_cases = summary[
+                        "pipeline_partial_receipt_cases"
+                    ]
+                    pipeline_not_applicable_cases = summary[
+                        "pipeline_not_applicable_cases"
+                    ]
+                    pipeline_indeterminate_cases = summary[
+                        "pipeline_indeterminate_cases"
+                    ]
+                else:
+                    # Keep old normalized artifacts readable for diagnostics.
+                    # Their single no-receipt bucket cannot establish that a
+                    # case was outside the pipeline, so retain the old strict
+                    # proof interpretation until a schema-2 sidecar is run.
+                    pipeline_applicable_cases = selected
+                    pipeline_complete_cases = terminal_complete_receipts
+                    pipeline_missing_receipt_cases = not_recorded_cases
+                    pipeline_partial_receipt_cases = terminal_incomplete_cases
                 actual_backend_counts = dict(summary["actual_backend_counts"])
                 fallback_reason_counts = dict(summary["fallback_reason_counts"])
-                if terminal_complete_receipts == 0 and selected:
+                if terminal_complete_receipts == 0 and pipeline_applicable_cases:
                     reasons.append("no terminal-complete receipt")
                 if terminal_incomplete_cases:
                     reasons.append(
                         f"{terminal_incomplete_cases} cases lack terminal-complete receipts"
                     )
-                if not_recorded_cases:
-                    reasons.append(f"{not_recorded_cases} cases have no receipt")
+                if pipeline_missing_receipt_cases:
+                    reasons.append(
+                        f"{pipeline_missing_receipt_cases} pipeline-applicable cases have no receipt"
+                    )
+                if pipeline_partial_receipt_cases:
+                    reasons.append(
+                        f"{pipeline_partial_receipt_cases} pipeline-applicable cases have partial receipts"
+                    )
+                if pipeline_indeterminate_cases:
+                    reasons.append(
+                        f"{pipeline_indeterminate_cases} cases have indeterminate pipeline applicability"
+                    )
+                if pipeline_applicable_cases == 0 and selected:
+                    reasons.append("no pipeline-applicable cases were selected")
                 if actual_backend_counts != {
                     expected_backend: terminal_complete_receipts
                 }:
@@ -681,6 +844,12 @@ def backend_coverage_report(lanes: list[dict[str, Any]]) -> dict[str, Any]:
                 "terminal_complete_receipts": terminal_complete_receipts,
                 "terminal_incomplete_cases": terminal_incomplete_cases,
                 "not_recorded_cases": not_recorded_cases,
+                "pipeline_applicable_cases": pipeline_applicable_cases,
+                "pipeline_complete_cases": pipeline_complete_cases,
+                "pipeline_missing_receipt_cases": pipeline_missing_receipt_cases,
+                "pipeline_partial_receipt_cases": pipeline_partial_receipt_cases,
+                "pipeline_not_applicable_cases": pipeline_not_applicable_cases,
+                "pipeline_indeterminate_cases": pipeline_indeterminate_cases,
                 "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
                 "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
                 "reasons": reasons,
@@ -902,7 +1071,7 @@ def wasm_lane_record(
             execution_summary = raw_execution.get("summary")
             if (
                 raw_execution.get("schema")
-                != "migration-parity/pipeline-execution-evidence@1"
+                != "migration-parity/pipeline-execution-evidence@2"
                 or raw_execution.get("status") != "measured"
                 or not isinstance(execution_scope, dict)
                 or execution_scope.get("kind") != expected_scope.get("kind")
@@ -916,7 +1085,13 @@ def wasm_lane_record(
                     "reason": "WASM pipeline execution evidence identity or scope did not match the lane",
                     "artifact": relative_artifact,
                 }
-            elif "cases" in raw_execution and (
+            elif "cases" not in raw_execution or "pipeline_case_status" not in raw_execution:
+                execution_evidence = {
+                    "status": "not_measured",
+                    "reason": "WASM pipeline execution evidence has no complete case classification",
+                    "artifact": relative_artifact,
+                }
+            elif (
                 receipt_error := validate_execution_receipts(
                     raw_execution.get("cases"),
                     label="WASM pipeline execution evidence",
@@ -925,6 +1100,19 @@ def wasm_lane_record(
                 execution_evidence = {
                     "status": "not_measured",
                     "reason": receipt_error,
+                    "artifact": relative_artifact,
+                }
+            elif (
+                classification_error := validate_pipeline_case_status(
+                    raw_execution.get("pipeline_case_status"),
+                    raw_execution["cases"],
+                    execution_summary,
+                    label="WASM pipeline execution evidence.pipeline_case_status",
+                )
+            ) is not None:
+                execution_evidence = {
+                    "status": "not_measured",
+                    "reason": classification_error,
                     "artifact": relative_artifact,
                 }
             elif (

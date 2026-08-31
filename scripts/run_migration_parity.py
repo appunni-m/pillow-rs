@@ -1015,6 +1015,415 @@ def set_receipt_terminal_complete(
     return receipt
 
 
+# These are the public operations for which the target image implementation
+# creates a deferred pipeline node on a successful call.  The receipt sidecar
+# is deliberately more conservative than this list: operations with a
+# mode-/argument-dependent eager path are kept in ``_PIPELINE_MAYBE_OPS`` and
+# become ``indeterminate`` when a workflow has no receipt.  This keeps a
+# missing receipt visible instead of allowing a heuristic to erase a backend
+# proof obligation.
+_PIPELINE_ALWAYS_OPS = {
+    ("PIL.Image", "alpha_composite"),
+    ("PIL.Image", "blend"),
+    ("PIL.Image", "composite"),
+    ("PIL.Image", "eval"),
+    ("PIL.Image", "merge"),
+    ("PIL.Image.Image", "crop"),
+    ("PIL.Image.Image", "filter"),
+    ("PIL.Image.Image", "getchannel"),
+    ("PIL.Image.Image", "point"),
+    ("PIL.Image.Image", "reduce"),
+    ("PIL.Image.Image", "resize"),
+    ("PIL.Image.Image", "rotate"),
+    ("PIL.Image.Image", "transform"),
+    ("PIL.Image.Image", "transpose"),
+    ("PIL.ImageChops", "add"),
+    ("PIL.ImageChops", "add_modulo"),
+    ("PIL.ImageChops", "blend"),
+    ("PIL.ImageChops", "composite"),
+    ("PIL.ImageChops", "darker"),
+    ("PIL.ImageChops", "difference"),
+    ("PIL.ImageChops", "hard_light"),
+    ("PIL.ImageChops", "invert"),
+    ("PIL.ImageChops", "lighter"),
+    ("PIL.ImageChops", "logical_and"),
+    ("PIL.ImageChops", "logical_or"),
+    ("PIL.ImageChops", "logical_xor"),
+    ("PIL.ImageChops", "multiply"),
+    ("PIL.ImageChops", "offset"),
+    ("PIL.ImageChops", "overlay"),
+    ("PIL.ImageChops", "screen"),
+    ("PIL.ImageChops", "soft_light"),
+    ("PIL.ImageChops", "subtract"),
+    ("PIL.ImageChops", "subtract_modulo"),
+    ("PIL.ImageEnhance.Brightness", "enhance"),
+    ("PIL.ImageEnhance.Color", "enhance"),
+    ("PIL.ImageEnhance.Contrast", "enhance"),
+    ("PIL.ImageEnhance.Sharpness", "enhance"),
+    ("PIL.ImageFilter", "BLUR"),
+    ("PIL.ImageFilter", "BoxBlur"),
+    ("PIL.ImageFilter", "CONTOUR"),
+    ("PIL.ImageFilter", "DETAIL"),
+    ("PIL.ImageFilter", "EDGE_ENHANCE"),
+    ("PIL.ImageFilter", "EDGE_ENHANCE_MORE"),
+    ("PIL.ImageFilter", "EMBOSS"),
+    ("PIL.ImageFilter", "FIND_EDGES"),
+    ("PIL.ImageFilter", "GaussianBlur"),
+    ("PIL.ImageFilter", "Kernel"),
+    ("PIL.ImageFilter", "MaxFilter"),
+    ("PIL.ImageFilter", "MedianFilter"),
+    ("PIL.ImageFilter", "MinFilter"),
+    ("PIL.ImageFilter", "ModeFilter"),
+    ("PIL.ImageFilter", "RankFilter"),
+    ("PIL.ImageFilter", "SHARPEN"),
+    ("PIL.ImageFilter", "SMOOTH"),
+    ("PIL.ImageFilter", "SMOOTH_MORE"),
+    ("PIL.ImageFilter", "UnsharpMask"),
+    ("PIL.ImageOps", "autocontrast"),
+    ("PIL.ImageOps", "colorize"),
+    ("PIL.ImageOps", "contain"),
+    ("PIL.ImageOps", "cover"),
+    ("PIL.ImageOps", "crop"),
+    ("PIL.ImageOps", "equalize"),
+    ("PIL.ImageOps", "expand"),
+    ("PIL.ImageOps", "fit"),
+    ("PIL.ImageOps", "flip"),
+    ("PIL.ImageOps", "grayscale"),
+    ("PIL.ImageOps", "invert"),
+    ("PIL.ImageOps", "mirror"),
+    ("PIL.ImageOps", "pad"),
+    ("PIL.ImageOps", "posterize"),
+    ("PIL.ImageOps", "scale"),
+    ("PIL.ImageOps", "solarize"),
+}
+
+# A successful call may be eager for a particular mode or argument.  If one
+# of these is the only possible pipeline operation, a no-receipt case is not
+# safe to call non-pipeline; classify it as indeterminate unless a scalar
+# storage mode proves the direct putpixel path.
+_PIPELINE_MAYBE_OPS = {
+    ("PIL.Image.Image", "apply_transparency"),
+    ("PIL.Image.Image", "convert"),
+    ("PIL.Image.Image", "paste"),
+    ("PIL.Image.Image", "putalpha"),
+    ("PIL.Image.Image", "putpixel"),
+    ("PIL.Image.Image", "remap_palette"),
+    ("PIL.Image.Image", "thumbnail"),
+    ("PIL.ImageOps", "exif_transpose"),
+}
+
+# Operations that return a value which can expose a pending image.  A
+# mutating operation such as putpixel/paste is not a terminal boundary by
+# itself; an observed tobytes/getdata/etc. step after it is.  Maybe-deferred
+# result operations stay in this set so a no-receipt convert/thumbnail path is
+# reported as an evidence gap rather than silently treated as non-pipeline.
+_PIPELINE_MUTATING_OPS = {
+    ("PIL.Image.Image", "apply_transparency"),
+    ("PIL.Image.Image", "paste"),
+    ("PIL.Image.Image", "putalpha"),
+    ("PIL.Image.Image", "putpixel"),
+    ("PIL.Image.Image", "remap_palette"),
+    ("PIL.Image.Image", "thumbnail"),
+}
+_PIPELINE_RESULT_OPS = _PIPELINE_ALWAYS_OPS | _PIPELINE_MAYBE_OPS
+_TERMINAL_OBSERVATION_OPS = {
+    "getbands",
+    "getbbox",
+    "getcolors",
+    "getdata",
+    "getextrema",
+    "get_flattened_data",
+    "getpixel",
+    "getprojection",
+    "histogram",
+    "load",
+    "save",
+    "tobitmap",
+    "tobytes",
+    "verify",
+    "entropy",
+    "extrema",
+    "count",
+    "sum",
+    "sum2",
+    "mean",
+    "median",
+    "rms",
+    "var",
+    "stddev",
+}
+_IMMEDIATE_SCALAR_MODES = {
+    "F",
+    "I",
+    "I;16",
+    "I;16B",
+    "I;16L",
+    "I;16N",
+}
+_IMAGE_SOURCE_MODE_OPS = {
+    ("PIL.Image", "new"),
+    ("PIL.Image", "fromarray"),
+    ("PIL.Image", "frombuffer"),
+    ("PIL.Image", "frombytes"),
+    ("PIL.Image", "fromstring"),
+}
+_PIPELINE_CASE_STATUSES = {
+    "not_applicable",
+    "complete",
+    "missing_receipt",
+    "partial_receipt",
+    "indeterminate",
+}
+
+
+def _workflow_literal(arguments: Any, name: str) -> Any:
+    if not isinstance(arguments, dict):
+        return None
+    value = arguments.get(name)
+    if isinstance(value, dict) and value.get("kind") == "literal":
+        return value.get("value")
+    return None
+
+
+def _workflow_modes(case: dict[str, Any]) -> set[str]:
+    modes: set[str] = set()
+    for step in case.get("steps", []):
+        if not isinstance(step, dict):
+            continue
+        if (
+            step.get("surface"),
+            step.get("operation"),
+        ) not in _IMAGE_SOURCE_MODE_OPS:
+            continue
+        mode = _workflow_literal(step.get("arguments"), "mode")
+        if isinstance(mode, str):
+            modes.add(mode)
+    return modes
+
+
+def _workflow_has_public_error(result: dict[str, Any] | None) -> bool:
+    if not isinstance(result, dict):
+        return False
+    if result.get("status") == "not_run":
+        return True
+    observations = result.get("observations", [])
+    if not isinstance(observations, list):
+        return False
+    return any(
+        isinstance(observation, dict)
+        and observation.get("status") in {"error", "not_run"}
+        for observation in observations
+    )
+
+
+def _workflow_error_before_deferred(
+    case: dict[str, Any],
+    deferred_indices: set[int],
+    result: dict[str, Any] | None,
+) -> bool:
+    """Return whether an error prevented every deferred operation from running."""
+
+    if not _workflow_has_public_error(result):
+        return False
+    observations = result.get("observations", [])
+    if not isinstance(observations, list):
+        return not deferred_indices
+    step_indices = {
+        step.get("step_id"): index
+        for index, step in enumerate(case.get("steps", []))
+        if isinstance(step, dict)
+    }
+    error_indices = [
+        step_indices[observation.get("step_id")]
+        for observation in observations
+        if isinstance(observation, dict)
+        and observation.get("status") in {"error", "not_run"}
+        and observation.get("step_id") in step_indices
+    ]
+    if not error_indices:
+        # An adapter-level not_run has no reliable step boundary. Keep the
+        # evidence obligation conservative when a deferred operation exists.
+        return not deferred_indices
+    first_error = min(error_indices)
+    return all(deferred_index > first_error for deferred_index in deferred_indices)
+
+
+def _workflow_terminal_boundary(case: dict[str, Any], deferred_indices: set[int]) -> bool:
+    observations = set(case.get("observations", []))
+    if not observations:
+        return False
+    for index, step in enumerate(case.get("steps", [])):
+        if not isinstance(step, dict) or step.get("step_id") not in observations:
+            continue
+        key = (step.get("surface"), step.get("operation"))
+        operation = step.get("operation")
+        if operation in _TERMINAL_OBSERVATION_OPS:
+            if any(index > deferred_index for deferred_index in deferred_indices):
+                return True
+        if key in _PIPELINE_RESULT_OPS and key not in _PIPELINE_MUTATING_OPS:
+            if any(index >= deferred_index for deferred_index in deferred_indices):
+                return True
+    return False
+
+
+def classify_pipeline_case(
+    case: dict[str, Any],
+    receipts: list[dict[str, Any]],
+    *,
+    result: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Classify one public case without shrinking the receipt denominator.
+
+    A terminal or partial receipt is authoritative. For a case with no
+    receipt, a workflow with no deferred operation (or one that never reached
+    a materialization boundary) is ``not_applicable``. Mode-/argument-
+    dependent paths remain ``indeterminate``; a known deferred operation with
+    an observed boundary is ``missing_receipt``. All non-complete states stay
+    backend-proof gaps in the aggregate report.
+    """
+
+    meaningful = [
+        receipt
+        for receipt in receipts
+        if isinstance(receipt, dict)
+        and receipt.get("status") not in {"not_recorded", "not_applicable"}
+    ]
+    terminal = [receipt for receipt in receipts if receipt_terminal_complete(receipt)]
+    if terminal:
+        return {"status": "complete", "reason": "terminal-complete receipt recorded"}
+    if meaningful:
+        return {
+            "status": "partial_receipt",
+            "reason": "receipt recorded without a terminal-complete boundary",
+        }
+    steps = [step for step in case.get("steps", []) if isinstance(step, dict)]
+    modes = _workflow_modes(case)
+
+    def definitely_eager(step: dict[str, Any]) -> bool:
+        key = (step.get("surface"), step.get("operation"))
+        if key == ("PIL.Image.Image", "crop"):
+            # Pillow's optional box form is an independent copy, not a
+            # deferred Crop node. Treat both omission and an explicit None as
+            # non-pipeline; ordinary boxes stay conservative below.
+            arguments = step.get("arguments")
+            if (
+                not isinstance(arguments, dict)
+                or "box" not in arguments
+                or _workflow_literal(arguments, "box") is None
+            ):
+                return True
+            box = _workflow_literal(arguments, "box")
+            sizes = [
+                _workflow_literal(item.get("arguments"), "size")
+                for item in steps
+                if item.get("operation") == "new"
+            ]
+            size = next(
+                (
+                    value
+                    for value in sizes
+                    if isinstance(value, (list, tuple))
+                    and len(value) == 2
+                    and all(isinstance(item, (int, float)) for item in value)
+                ),
+                None,
+            )
+            if (
+                isinstance(box, (list, tuple))
+                and len(box) == 4
+                and all(isinstance(item, (int, float)) for item in box)
+                and size is not None
+            ):
+                left, top, right, bottom = box
+                width, height = size
+                if right <= left or bottom <= top:
+                    return True
+                clip_left = max(left, 0)
+                clip_top = max(top, 0)
+                clip_right = min(right, width)
+                clip_bottom = min(bottom, height)
+                if clip_right <= clip_left or clip_bottom <= clip_top:
+                    return True
+            return False
+        if key == ("PIL.Image.Image", "point"):
+            # The Rust core mirrors Pillow's eager scalar affine path for
+            # I/F/I;16* images. Byte LUTs still use the deferred Eval path.
+            point_mode = _workflow_literal(step.get("arguments"), "mode")
+            return point_mode == "F" or (
+                bool(modes) and modes <= _IMMEDIATE_SCALAR_MODES
+            )
+        if key == ("PIL.Image.Image", "transform"):
+            # An empty mesh is a direct filled image in Pillow, while affine,
+            # extent, perspective, quad, and non-empty mesh transforms queue
+            # a Transform node.
+            method = _workflow_literal(step.get("arguments"), "method")
+            data = _workflow_literal(step.get("arguments"), "data")
+            return method == 4 and data == []
+        return False
+
+    always_indices = {
+        index
+        for index, step in enumerate(steps)
+        if not definitely_eager(step)
+        if (step.get("surface"), step.get("operation")) in _PIPELINE_ALWAYS_OPS
+    }
+    maybe_indices = {
+        index
+        for index, step in enumerate(steps)
+        if not definitely_eager(step)
+        if (step.get("surface"), step.get("operation")) in _PIPELINE_MAYBE_OPS
+    }
+    deferred_indices = always_indices | maybe_indices
+    if _workflow_error_before_deferred(case, deferred_indices, result):
+        return {
+            "status": "not_applicable",
+            "reason": "workflow ended in a public error before pipeline materialization",
+        }
+    if _workflow_has_public_error(result):
+        return {
+            "status": "indeterminate",
+            "reason": "workflow errored after or during a potentially deferred operation",
+        }
+    if not deferred_indices:
+        return {
+            "status": "not_applicable",
+            "reason": "workflow contains no deferred image-pipeline operation",
+        }
+    if not _workflow_terminal_boundary(case, deferred_indices):
+        return {
+            "status": "not_applicable",
+            "reason": "workflow has no observed image-materialization boundary",
+        }
+
+    if maybe_indices and not always_indices:
+        maybe_keys = {
+            (steps[index].get("surface"), steps[index].get("operation"))
+            for index in maybe_indices
+        }
+        if maybe_keys == {("PIL.Image.Image", "putpixel")} and modes and modes <= _IMMEDIATE_SCALAR_MODES:
+            return {
+                "status": "not_applicable",
+                "reason": "putpixel uses immediate scalar storage for the declared image mode",
+            }
+        if (
+            maybe_keys == {("PIL.Image.Image", "putpixel")}
+            and modes
+            and modes.isdisjoint(_IMMEDIATE_SCALAR_MODES)
+        ):
+            return {
+                "status": "missing_receipt",
+                "reason": "byte-oriented putpixel reached an observed boundary without a receipt",
+            }
+        return {
+            "status": "indeterminate",
+            "reason": "workflow may use an eager or deferred path; no receipt was recorded",
+        }
+    return {
+        "status": "missing_receipt",
+        "reason": "deferred image pipeline reached an observed boundary without a receipt",
+    }
+
+
 def normalized_public_error(
     exc: BaseException, *, side: str, step: dict[str, Any], tempdir: Path
 ) -> dict[str, Any]:
@@ -1906,6 +2315,7 @@ def write_pipeline_execution_evidence(
     """
 
     case_ids = sorted(case["case_id"] for case in cases)
+    cases_by_id = {case["case_id"]: case for case in cases}
     digest = hashlib.sha256(("\n".join(case_ids) + "\n").encode()).hexdigest()
     actual_backend_counts: dict[str, int] = {}
     fallback_reason_counts: dict[str, int] = {}
@@ -1914,6 +2324,8 @@ def write_pipeline_execution_evidence(
     receipt_cases = 0
     not_recorded_cases = 0
     terminal_incomplete_cases = 0
+    pipeline_case_status: dict[str, dict[str, str]] = {}
+    pipeline_status_counts = {status: 0 for status in _PIPELINE_CASE_STATUSES}
     errors: dict[str, list[dict[str, Any]]] = {}
     for case_id in case_ids:
         receipts = execution.get(case_id, [])
@@ -1939,6 +2351,13 @@ def write_pipeline_execution_evidence(
         if has_receipt and not terminal:
             terminal_incomplete_cases += 1
         terminal_complete_receipts += len(terminal)
+        classification = classify_pipeline_case(
+            cases_by_id[case_id],
+            receipts,
+            result=(results or {}).get(case_id),
+        )
+        pipeline_case_status[case_id] = classification
+        pipeline_status_counts[classification["status"]] += 1
         for receipt in terminal:
             backend = receipt.get("actual_backend")
             if isinstance(backend, str):
@@ -1989,12 +2408,15 @@ def write_pipeline_execution_evidence(
             errors[case_id] = case_errors
 
     result = {
-        "schema": "migration-parity/pipeline-execution-evidence@1",
+        "schema": "migration-parity/pipeline-execution-evidence@2",
         "status": "measured",
         "reason": (
             "Normal parity workflows collected completed pipeline receipts "
-            "for workflow calls and observations; cases without a receipt did "
-            "not materialize a target image pipeline."
+            "for workflow calls and observations.  Each selected case also "
+            "carries an explicit pipeline/receipt classification; only "
+            "high-confidence non-pipeline cases are outside the backend-proof "
+            "cohort, while missing, partial, and indeterminate cases remain "
+            "gaps."
         ),
         "identity": {
             "side": identity.get("side"),
@@ -2014,9 +2436,28 @@ def write_pipeline_execution_evidence(
             "completed_receipts": completed_receipts,
             "terminal_complete_receipts": terminal_complete_receipts,
             "terminal_incomplete_cases": terminal_incomplete_cases,
+            "pipeline_applicable_cases": (
+                pipeline_status_counts["complete"]
+                + pipeline_status_counts["missing_receipt"]
+                + pipeline_status_counts["partial_receipt"]
+            ),
+            "pipeline_complete_cases": pipeline_status_counts["complete"],
+            "pipeline_missing_receipt_cases": pipeline_status_counts[
+                "missing_receipt"
+            ],
+            "pipeline_partial_receipt_cases": pipeline_status_counts[
+                "partial_receipt"
+            ],
+            "pipeline_not_applicable_cases": pipeline_status_counts[
+                "not_applicable"
+            ],
+            "pipeline_indeterminate_cases": pipeline_status_counts[
+                "indeterminate"
+            ],
             "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
             "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
         },
+        "pipeline_case_status": pipeline_case_status,
         "cases": {case_id: execution.get(case_id, []) for case_id in case_ids},
         "errors": errors,
     }
