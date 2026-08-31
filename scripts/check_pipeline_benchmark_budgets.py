@@ -53,6 +53,66 @@ def latency(subject: dict[str, Any]) -> dict[str, float] | None:
     return None
 
 
+def execution_comparability(
+    subject: dict[str, Any], subject_id: str, stats: dict[str, float]
+) -> tuple[bool, str]:
+    """Require a terminal, backend-identifying receipt before comparing time.
+
+    A benchmark subject can have a latency measurement even when its pipeline
+    execution was never observed (for example a drained prefix, a resident
+    cache hit, or a missing adapter receipt).  Treating that timing as a
+    backend cohort would make ``actual_backend: null`` look comparable.  The
+    source oracle has no pipeline telemetry by design, so its explicit
+    Pillow receipt is the only special case.
+    """
+
+    execution = subject.get("execution")
+    if not isinstance(execution, dict):
+        return False, "missing_execution_receipt"
+    if execution.get("errors"):
+        return False, "execution_errors"
+    fallback_counts = execution.get("fallback_reason_counts")
+    if fallback_counts != {}:
+        return False, "execution_fallback"
+
+    expected_backend = (
+        "pillow" if subject_id == "pillow" else subject_id.removeprefix("python-")
+    )
+    if subject_id == "pillow":
+        if execution.get("status") != "not_applicable":
+            return False, "oracle_execution_not_applicable_missing"
+        if (
+            execution.get("requested_backend") != "pillow"
+            or execution.get("actual_backend") != "pillow"
+        ):
+            return False, "oracle_backend_identity_invalid"
+        return True, ""
+
+    if execution.get("status") != "completed":
+        return False, "execution_not_completed"
+    # New receipts must explicitly prove that the final public observation
+    # completed.  Missing is deliberately not treated as legacy success: an
+    # old artifact cannot prove that a drained prefix was terminal.
+    if execution.get("terminal_complete") is not True:
+        return False, "terminal_receipt_incomplete"
+    if execution.get("requested_backend") != expected_backend:
+        return False, "requested_backend_changed"
+    if execution.get("actual_backend") != expected_backend:
+        return False, "actual_backend_not_proven"
+    actual_counts = execution.get("actual_backend_counts")
+    if not isinstance(actual_counts, dict) or set(actual_counts) != {expected_backend}:
+        return False, "actual_backend_counts_invalid"
+    count = actual_counts.get(expected_backend)
+    if not isinstance(count, int) or count <= 0:
+        return False, "actual_backend_counts_invalid"
+    sample_count = execution.get("sample_count")
+    if not isinstance(sample_count, int) or sample_count <= 0:
+        return False, "execution_samples_missing"
+    if int(sample_count) != int(stats["sample_count"]):
+        return False, "execution_sample_count_mismatch"
+    return True, ""
+
+
 def subject_map(workload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(subject.get("id")): subject for subject in workload.get("subjects", [])}
 
@@ -84,11 +144,32 @@ def compare(current_path: Path, baseline_path: Path, budget: float) -> dict[str,
                 continue
             current_stats = latency(current_subject)
             baseline_stats = latency(baseline_subject)
-            current_backend = current_subject.get("execution", {}).get("actual_backend")
-            baseline_backend = baseline_subject.get("execution", {}).get("actual_backend")
             if current_stats is None or baseline_stats is None:
                 comparisons.append({**key, "status": "not_comparable", "reason": "subject_not_completed"})
                 continue
+            current_comparable, current_reason = execution_comparability(
+                current_subject, subject_id, current_stats
+            )
+            baseline_comparable, baseline_reason = execution_comparability(
+                baseline_subject, subject_id, baseline_stats
+            )
+            if not current_comparable or not baseline_comparable:
+                comparisons.append(
+                    {
+                        **key,
+                        "status": "not_comparable",
+                        "reason": (
+                            f"current_{current_reason}"
+                            if not current_comparable
+                            else f"baseline_{baseline_reason}"
+                        ),
+                        "current_reason": current_reason,
+                        "baseline_reason": baseline_reason,
+                    }
+                )
+                continue
+            current_backend = current_subject["execution"]["actual_backend"]
+            baseline_backend = baseline_subject["execution"]["actual_backend"]
             if current_backend != baseline_backend:
                 comparisons.append(
                     {
