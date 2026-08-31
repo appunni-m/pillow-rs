@@ -64,6 +64,12 @@ fn filtered_float(output_x: u32, output_y: u32) -> f32 {
     return sum;
 }
 
+fn filtered_typed(output_x: u32, output_y: u32) -> u32 {
+    let metadata = output_y * 3u;
+    let source_y = u32(coefficients[metadata]);
+    return input[source_y * params.dst_w + output_x];
+}
+
 fn unpremultiply(value: u32, alpha: u32) -> u32 {
     if alpha == 0u {
         // The scalar path leaves a premultiplied channel unchanged when the
@@ -79,6 +85,12 @@ fn unpremultiply(value: u32, alpha: u32) -> u32 {
 }
 
 fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
+    if params.mode == 7u {
+        // I-mode nearest resize uses the host-generated one-tap table for
+        // Pillow's cumulative f64 coordinate walk. Copy the complete signed
+        // sample word rather than filtering its bytes as color channels.
+        return filtered_typed(output_x, output_y);
+    }
     if params.mode == 8u {
         return bitcast<u32>(filtered_float(output_x, output_y));
     }
