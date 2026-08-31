@@ -103,11 +103,25 @@ pub fn op_convert(
                 DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
             ) {
                 let (w, h) = img.dimensions();
-                let gray =
-                    crate::raster::DynamicImage::ImageLuma8(crate::color::pil_grayscale(img)?);
                 let mut out = crate::raster::RgbaImage::new(w, h);
-                for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                    *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp.2[0])]);
+                // Convert.c's luma-to-CMYK branch copies L directly before
+                // subtracting it from 255 for K.  The generic grayscale
+                // helper would first allocate an RGB image and a second L
+                // image even though that conversion is an identity for L/LA;
+                // read the native luma byte directly while preserving the
+                // exact C=M=Y=0, K=255-L result.
+                match img {
+                    DynamicImage::ImageLuma8(luma) => {
+                        for (op, gp) in out.pixels_mut().zip(luma.pixels()) {
+                            *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp[0])]);
+                        }
+                    }
+                    DynamicImage::ImageLumaA8(la) => {
+                        for (op, gp) in out.pixels_mut().zip(la.pixels()) {
+                            *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp[0])]);
+                        }
+                    }
+                    _ => unreachable!("luma CMYK conversion matched an invalid layout"),
                 }
                 Ok(DynamicImage::ImageRgba8(out))
             } else {
