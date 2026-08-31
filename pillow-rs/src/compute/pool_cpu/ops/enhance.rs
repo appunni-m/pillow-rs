@@ -55,6 +55,27 @@ pub fn op_enhance_brightness(
     factor: f64,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    // Pillow's ImageEnhance.Brightness blends the source with a black image;
+    // factor 1.0 is therefore an exact copy. Native 8-bit layouts already
+    // have the requested result, so avoid widening (L/LA) or scanning every
+    // byte through the floating-point multiply. Keep typed 16-bit/float
+    // inputs on the conversion path below: their public enhancer contract is
+    // distinct from the byte-oriented layouts represented here.
+    if factor == 1.0
+        && matches!(
+            mode,
+            None | Some("L" | "LA" | "RGB" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "HSV" | "YCbCr")
+        )
+        && matches!(
+            img,
+            DynamicImage::ImageLuma8(_)
+                | DynamicImage::ImageLumaA8(_)
+                | DynamicImage::ImageRgb8(_)
+                | DynamicImage::ImageRgba8(_)
+        )
+    {
+        return Ok(img.clone());
+    }
     // CMYK mode: stored as RGBA8 (C→R, M→G, Y→B, K→A). Operate on all 4 channels.
     if mode == Some("CMYK") {
         let mut rgba = img.to_rgba8();
