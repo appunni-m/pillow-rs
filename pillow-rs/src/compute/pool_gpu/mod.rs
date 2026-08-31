@@ -37,6 +37,10 @@ const MAX_GPU_OPS_PER_SUBMISSION: usize = 256;
 const MAX_GPU_RESOURCE_BYTES_PER_SUBMISSION: usize = 64 * 1024 * 1024;
 const MAX_RETAINED_GPU_WORKING_SETS: usize = 2;
 const MAX_RETAINED_GPU_WORKING_BYTES: u64 = 128 * 1024 * 1024;
+// Reusing a much larger working set for a tiny image materially increases
+// Metal's command-buffer/readback cost. Keep a bounded amount of
+// over-allocation while allowing the pool to reuse neighboring image sizes.
+const MAX_GPU_BUFFER_REUSE_RATIO: u32 = 4;
 const MAX_RETAINED_GPU_STAGING_BUFFERS: usize = 2;
 const MAX_RETAINED_GPU_STAGING_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_GPU_AUXILIARY_CACHE_BYTES: usize = 64 * 1024 * 1024;
@@ -877,6 +881,12 @@ fn gpu_working_set_bytes(capacity: u32) -> u64 {
         .saturating_add(GPU_HISTOGRAM_BYTES as u64)
 }
 
+fn gpu_buffer_reuse_allowed(capacity: u32, minimum_capacity: u32) -> bool {
+    capacity >= minimum_capacity
+        && (minimum_capacity == 0
+            || capacity <= minimum_capacity.saturating_mul(MAX_GPU_BUFFER_REUSE_RATIO))
+}
+
 #[cfg(target_endian = "little")]
 fn expand_rgb_into_rgba(rgb: &[u8], rgba: &mut [u8]) -> Result<(), PilError> {
     if !rgb.len().is_multiple_of(3) {
@@ -1697,7 +1707,7 @@ impl GpuInner {
         let candidate = available
             .iter()
             .enumerate()
-            .filter(|(_, buffers)| buffers.capacity >= minimum_capacity)
+            .filter(|(_, buffers)| gpu_buffer_reuse_allowed(buffers.capacity, minimum_capacity))
             .min_by_key(|(_, buffers)| buffers.capacity)
             .map(|(index, _)| index);
         Ok(match candidate {
@@ -8110,7 +8120,7 @@ mod tests {
     #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
     use super::{
-        GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
+        GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, gpu_buffer_reuse_allowed,
         gpu_byte_point_mode_allowed, gpu_f_resize_box_average_is_exact,
         gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, gpu_f_resize_identity_is_exact,
         readback_poll_backoff,
@@ -8119,6 +8129,16 @@ mod tests {
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn gpu_buffer_reuse_rejects_oversized_working_sets() {
+        assert!(gpu_buffer_reuse_allowed(3_072, 768));
+        assert!(gpu_buffer_reuse_allowed(768, 768));
+        assert!(!gpu_buffer_reuse_allowed(3_073, 768));
+        assert!(!gpu_buffer_reuse_allowed(786_432, 768));
+        assert!(gpu_buffer_reuse_allowed(u32::MAX, 0));
+        assert!(!gpu_buffer_reuse_allowed(u32::MAX, 1));
+    }
 
     #[cfg(target_endian = "little")]
     #[test]
