@@ -206,6 +206,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-case-review$(NC) Review duplicate and nuanced case selection\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Verify strict aggregate/result interfaces\n"
+	@printf "  $(CYAN)make migration-parity-receipt-test$(NC) Verify terminal-complete receipt state transitions\n"
 	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build parity, coverage, and benchmark inputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make fmt$(NC)            Check Rust formatting\n"
@@ -780,7 +781,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check image-backend-fixtures putdata-fixtures
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check migration-parity-receipt-test image-backend-fixtures putdata-fixtures
 .PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
@@ -833,6 +834,9 @@ migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
 	@if test -f "$(MIGRATION_ALL_BACKENDS_OUTPUT)"; then \
 		$(PYTHON) scripts/validate_migration_parity_result.py all_backends "$(MIGRATION_ALL_BACKENDS_OUTPUT)"; \
 	fi
+
+migration-parity-receipt-test: ## Verify terminal-complete receipt state transitions
+	$(PYTHON) -m unittest discover -s scripts -p 'test_receipt_state.py' -v
 
 image-backend-fixtures putdata-fixtures imagefont-getmask2-fixtures \
 	compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures \

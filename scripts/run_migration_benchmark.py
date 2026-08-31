@@ -36,6 +36,7 @@ try:
         git_revision,
         process_group_options,
         reap_timed_out_process,
+        receipt_terminal_complete,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` in tests
     from scripts.run_migration_parity import (
@@ -46,6 +47,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` i
         git_revision,
         process_group_options,
         reap_timed_out_process,
+        receipt_terminal_complete,
     )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -546,6 +548,7 @@ def execution_result(
     if subject_kind == "oracle":
         return {
             "status": "not_applicable",
+            "terminal_complete": False,
             "requested_backend": "pillow",
             "actual_backend": "pillow",
             "actual_backend_counts": {"pillow": 1},
@@ -572,7 +575,7 @@ def execution_result(
     measured_count = int(policy["measurement_iterations"]) * int(policy["samples"])
     expected = warmup + measured_count
     measured = execution_records[warmup:expected]
-    completed = [
+    completed_candidates = [
         record
         for record in measured
         if record.get("status") == "completed"
@@ -580,9 +583,18 @@ def execution_result(
         and isinstance(record.get("operation_count"), int)
         and record["operation_count"] > 0
     ]
-    cached_sample_count = sum(
-        1 for record in measured if record.get("status") == "cached"
-    )
+    cached_candidates = [
+        record for record in measured if record.get("status") == "cached"
+    ]
+    completed = [
+        record
+        for record in completed_candidates
+        if receipt_terminal_complete(record)
+    ]
+    cached = [
+        record for record in cached_candidates if receipt_terminal_complete(record)
+    ]
+    cached_sample_count = len(cached)
     partial_count = sum(
         1 for record in measured if record.get("status") == "partial"
     )
@@ -590,23 +602,29 @@ def execution_result(
         1 for record in measured if record.get("status") == "not_applicable"
     )
     actual_counts: dict[str, int] = {}
-    for record in measured:
-        if record.get("status") not in {"completed", "partial"}:
-            continue
+    for record in completed:
         if isinstance(record.get("actual_backend"), str):
             backend = str(record["actual_backend"])
             actual_counts[backend] = actual_counts.get(backend, 0) + 1
     fallback_counts: dict[str, int] = {}
-    for record in measured:
-        if record.get("status") not in {"completed", "partial"}:
-            continue
+    for record in completed:
         reason = record.get("fallback_reason")
         if isinstance(reason, str) and reason:
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
     actual_backends = sorted(actual_counts)
     requested_backend = subject_id.removeprefix("python-")
-    complete = len(completed) + cached_sample_count == len(measured) == measured_count
-    has_partial = partial_count > 0 or bool(errors)
+    complete = (
+        len(completed_candidates) + len(cached_candidates)
+        == len(measured)
+        == measured_count
+    )
+    terminal_complete = (
+        complete
+        and len(completed) + len(cached) == measured_count
+        and not errors
+    )
+    terminal_gap = complete and not terminal_complete
+    has_partial = partial_count > 0 or bool(errors) or terminal_gap
     all_not_applicable = (
         bool(measured)
         and not errors
@@ -619,9 +637,11 @@ def execution_result(
         # implying a backend capability failure); it remains excluded from
         # actual-backend performance cohorts by its null receipt.
         status = "not_applicable"
-    elif complete and not has_partial:
+    elif terminal_complete and not has_partial:
         status = "completed"
-    elif has_partial and (completed or cached_sample_count):
+    elif has_partial and (
+        completed_candidates or cached_candidates or completed or cached
+    ):
         status = "partial"
     elif errors and all(
         isinstance(item, dict)
@@ -634,6 +654,7 @@ def execution_result(
         status = "not_proven"
     return {
         "status": status,
+        "terminal_complete": terminal_complete,
         "requested_backend": requested_backend,
         "actual_backend": (
             actual_backends[0]

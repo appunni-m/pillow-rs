@@ -991,6 +991,30 @@ def public_error(exc: BaseException) -> dict[str, Any]:
     }
 
 
+def receipt_terminal_complete(receipt: dict[str, Any]) -> bool:
+    """Return whether a pipeline receipt covers a successful terminal boundary.
+
+    Receipts written before the explicit bit was introduced remain readable by
+    treating their completed/cached status as the legacy terminal signal.  New
+    producers always write the bit, including false for drained prefixes and
+    non-applicable/not-recorded markers.
+    """
+
+    value = receipt.get("terminal_complete")
+    if value is None:
+        return receipt.get("status") in {"completed", "cached"}
+    return type(value) is bool and value
+
+
+def set_receipt_terminal_complete(
+    receipt: dict[str, Any], complete: bool = False
+) -> dict[str, Any]:
+    """Set the explicit terminal-completeness bit and return ``receipt``."""
+
+    receipt["terminal_complete"] = bool(complete)
+    return receipt
+
+
 def normalized_public_error(
     exc: BaseException, *, side: str, step: dict[str, Any], tempdir: Path
 ) -> dict[str, Any]:
@@ -1027,6 +1051,19 @@ def run_case(
     bindings: dict[str, Any] = {}
     step_results: dict[str, dict[str, Any]] = {}
     blocked_reason: str | None = None
+    terminal_receipt_index: int | None = None
+
+    def append_execution_receipt(
+        receipt: dict[str, Any], *, status: str, step_id: str
+    ) -> None:
+        nonlocal terminal_receipt_index
+        receipt["status"] = status
+        receipt["step_id"] = step_id
+        set_receipt_terminal_complete(receipt)
+        assert pipeline_execution_sink is not None
+        pipeline_execution_sink.append(receipt)
+        terminal_receipt_index = len(pipeline_execution_sink) - 1
+
     selected_indices = [
         index
         for index, step in enumerate(case["steps"])
@@ -1065,9 +1102,13 @@ def run_case(
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
-                    receipt["status"] = "completed"
-                    receipt["step_id"] = step_id
-                    pipeline_execution_sink.append(receipt)
+                    append_execution_receipt(
+                        receipt, status="completed", step_id=step_id
+                    )
+                elif step_index == len(case["steps"]) - 1:
+                    # A missing terminal receipt must not inherit an earlier
+                    # dispatch and masquerade as proof for this workflow.
+                    terminal_receipt_index = None
             step_elapsed_ns = time.perf_counter_ns() - step_started_ns
             if telemetry_sink is not None:
                 step_receipts.append(
@@ -1087,9 +1128,11 @@ def run_case(
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
-                    receipt["status"] = "partial"
-                    receipt["step_id"] = step_id
-                    pipeline_execution_sink.append(receipt)
+                    append_execution_receipt(
+                        receipt, status="partial", step_id=step_id
+                    )
+                if step_index == len(case["steps"]) - 1:
+                    terminal_receipt_index = None
             error = normalized_public_error(
                 exc, side=side, step=step, tempdir=tempdir
             )
@@ -1120,6 +1163,11 @@ def run_case(
             for step_id, result in step_results.items()
             if result.get("status") == "error"
         ]
+        if blocked_reason is None and terminal_receipt_index is not None:
+            if pipeline_execution_sink is not None:
+                set_receipt_terminal_complete(
+                    pipeline_execution_sink[terminal_receipt_index], True
+                )
         return {
             "case_id": case["case_id"],
             # Timing receipts are also the execution gate for benchmark-only
@@ -1132,7 +1180,13 @@ def run_case(
         }
 
     observations: list[dict[str, Any]] = []
-    for observation_id in case.get("observations", []):
+    observation_ids = list(case.get("observations", []))
+    if observation_ids:
+        # Observation serialization is the public terminal boundary when a
+        # workflow exposes observations.  Do not retain the operation receipt
+        # as terminal proof if the final observation cannot be materialized.
+        terminal_receipt_index = None
+    for observation_index, observation_id in enumerate(observation_ids):
         result = step_results.get(observation_id)
         if result is None:
             observations.append(
@@ -1160,16 +1214,20 @@ def run_case(
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
-                    receipt["status"] = "completed"
-                    receipt["step_id"] = observation_id
-                    pipeline_execution_sink.append(receipt)
+                    append_execution_receipt(
+                        receipt, status="completed", step_id=observation_id
+                    )
+                elif observation_index == len(observation_ids) - 1:
+                    terminal_receipt_index = None
         except BaseException as exc:  # materialization is a public observation
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
                 if receipt is not None:
-                    receipt["status"] = "partial"
-                    receipt["step_id"] = observation_id
-                    pipeline_execution_sink.append(receipt)
+                    append_execution_receipt(
+                        receipt, status="partial", step_id=observation_id
+                    )
+                if observation_index == len(observation_ids) - 1:
+                    terminal_receipt_index = None
             observations.append(
                 {
                     "step_id": observation_id,
@@ -1182,6 +1240,17 @@ def run_case(
             continue
         observations.append(
             {"step_id": observation_id, "status": "ok", "value": value}
+        )
+    workflow_complete = blocked_reason is None and all(
+        observation.get("status") == "ok" for observation in observations
+    )
+    if (
+        workflow_complete
+        and terminal_receipt_index is not None
+        and pipeline_execution_sink is not None
+    ):
+        set_receipt_terminal_complete(
+            pipeline_execution_sink[terminal_receipt_index], True
         )
     return {
         "case_id": case["case_id"],
@@ -1455,7 +1524,11 @@ def run_side_subprocess(
 
     if final_execution:
         write_pipeline_execution_evidence(
-            Path(final_execution), cases, identity, execution
+            Path(final_execution),
+            cases,
+            identity,
+            execution,
+            results=results,
         )
     if final_shader_coverage:
         write_gpu_shader_coverage(
@@ -1817,6 +1890,8 @@ def write_pipeline_execution_evidence(
     cases: list[dict[str, Any]],
     identity: dict[str, Any],
     execution: dict[str, list[dict[str, Any]]],
+    *,
+    results: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """Write normal-parity backend receipts without changing parity output.
 
@@ -1832,8 +1907,11 @@ def write_pipeline_execution_evidence(
     actual_backend_counts: dict[str, int] = {}
     fallback_reason_counts: dict[str, int] = {}
     completed_receipts = 0
+    terminal_complete_receipts = 0
     receipt_cases = 0
     not_recorded_cases = 0
+    terminal_incomplete_cases = 0
+    errors: dict[str, list[dict[str, Any]]] = {}
     for case_id in case_ids:
         receipts = execution.get(case_id, [])
         completed = [
@@ -1841,12 +1919,24 @@ def write_pipeline_execution_evidence(
             for receipt in receipts
             if receipt.get("status") == "completed"
         ]
-        if not completed:
+        has_receipt = any(
+            receipt.get("status") not in {"not_recorded", "not_applicable"}
+            for receipt in receipts
+        )
+        if not has_receipt:
             not_recorded_cases += 1
-            continue
-        receipt_cases += 1
-        completed_receipts += len(completed)
-        for receipt in completed:
+        else:
+            receipt_cases += 1
+            completed_receipts += len(completed)
+        terminal = [
+            receipt
+            for receipt in receipts
+            if receipt_terminal_complete(receipt)
+        ]
+        if has_receipt and not terminal:
+            terminal_incomplete_cases += 1
+        terminal_complete_receipts += len(terminal)
+        for receipt in terminal:
             backend = receipt.get("actual_backend")
             if isinstance(backend, str):
                 actual_backend_counts[backend] = (
@@ -1865,6 +1955,30 @@ def write_pipeline_execution_evidence(
                 fallback_reason_counts[reason] = (
                     fallback_reason_counts.get(reason, 0) + 1
                 )
+        result = (results or {}).get(case_id)
+        case_errors: list[dict[str, Any]] = []
+        if isinstance(result, dict):
+            execution_errors = result.get("execution_errors")
+            if isinstance(execution_errors, list):
+                case_errors.extend(
+                    item
+                    for item in execution_errors
+                    if isinstance(item, dict)
+                )
+            for observation in result.get("observations", []):
+                if (
+                    isinstance(observation, dict)
+                    and observation.get("status") == "error"
+                    and isinstance(observation.get("error"), dict)
+                ):
+                    case_errors.append(
+                        {
+                            "step_id": observation.get("step_id"),
+                            "error": observation["error"],
+                        }
+                    )
+        if case_errors:
+            errors[case_id] = case_errors
 
     result = {
         "schema": "migration-parity/pipeline-execution-evidence@1",
@@ -1890,10 +2004,13 @@ def write_pipeline_execution_evidence(
             "receipt_cases": receipt_cases,
             "not_recorded_cases": not_recorded_cases,
             "completed_receipts": completed_receipts,
+            "terminal_complete_receipts": terminal_complete_receipts,
+            "terminal_incomplete_cases": terminal_incomplete_cases,
             "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
             "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
         },
         "cases": {case_id: execution.get(case_id, []) for case_id in case_ids},
+        "errors": errors,
     }
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1963,6 +2080,7 @@ def run_resident_case(
             if receipt is not None:
                 receipt["status"] = "partial"
                 receipt["step_id"] = setup_errors[-1]["step_id"]
+                set_receipt_terminal_complete(receipt)
                 execution_sink.append(receipt)
         return {
             "case_id": case["case_id"],
@@ -1996,6 +2114,8 @@ def run_resident_case(
     execution_errors: list[dict[str, Any]] = []
     observed_execution = False
     for _ in range(repeat):
+        iteration_start = len(execution_sink)
+        iteration_failed = False
         for step in terminal_steps:
             if telemetry_api is not None:
                 telemetry_api.take_pipeline_telemetry()
@@ -2014,11 +2134,13 @@ def run_resident_case(
                 )
             except BaseException as exc:  # public terminal failures are benchmark data
                 execution_errors.append(normalized_error(step, exc))
+                iteration_failed = True
                 if telemetry_api is not None:
                     receipt = telemetry_api.take_pipeline_telemetry()
                     if receipt is not None:
                         receipt["status"] = "partial"
                         receipt["step_id"] = step["step_id"]
+                        set_receipt_terminal_complete(receipt)
                         execution_sink.append(receipt)
                 continue
             elapsed_ns = time.perf_counter_ns() - started_ns
@@ -2032,17 +2154,27 @@ def run_resident_case(
                 }
             )
             if telemetry_api is None:
-                execution_sink.append({"status": "not_applicable"})
+                execution_sink.append(
+                    {"status": "not_applicable", "terminal_complete": False}
+                )
             else:
                 receipt = telemetry_api.take_pipeline_telemetry()
                 if receipt is None:
                     execution_sink.append(
-                        {"status": "cached" if observed_execution else "not_recorded"}
+                        {
+                            "status": "cached" if observed_execution else "not_recorded",
+                            "terminal_complete": False,
+                        }
                     )
                 else:
                     receipt["status"] = "completed"
+                    set_receipt_terminal_complete(receipt)
                     execution_sink.append(receipt)
                     observed_execution = True
+        if not iteration_failed:
+            for receipt in execution_sink[iteration_start:]:
+                if receipt.get("status") in {"completed", "cached"}:
+                    set_receipt_terminal_complete(receipt, True)
 
     return {
         "case_id": case["case_id"],
@@ -2140,11 +2272,22 @@ def run_side(args: argparse.Namespace) -> int:
                                 receipt["status"] = (
                                     "partial" if has_errors else "completed"
                                 )
+                                set_receipt_terminal_complete(receipt, not has_errors)
                                 execution_sink.append(receipt)
                             elif not execution_sink:
-                                execution_sink.append({"status": "not_recorded"})
+                                execution_sink.append(
+                                    {
+                                        "status": "not_recorded",
+                                        "terminal_complete": False,
+                                    }
+                                )
                         elif args.timings:
-                            execution_sink.append({"status": "not_applicable"})
+                            execution_sink.append(
+                                {
+                                    "status": "not_applicable",
+                                    "terminal_complete": False,
+                                }
+                            )
                 assert result is not None
                 results.append(result)
                 if execution_output or args.timings:
@@ -2180,6 +2323,7 @@ def run_side(args: argparse.Namespace) -> int:
             cases,
             handshake,
             execution,
+            results={item["case_id"]: item for item in results},
         )
     envelope: dict[str, Any] = {"identity": handshake, "results": results}
     if args.timings:

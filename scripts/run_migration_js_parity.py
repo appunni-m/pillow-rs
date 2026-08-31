@@ -39,6 +39,7 @@ try:
         compare_case,
         load_cases,
         load_manifest,
+        receipt_terminal_complete,
         run_side_subprocess,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
@@ -49,6 +50,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
         compare_case,
         load_cases,
         load_manifest,
+        receipt_terminal_complete,
         run_side_subprocess,
     )
 
@@ -673,8 +675,10 @@ def execution_evidence_document(
     actual_backend_counts: dict[str, int] = {}
     fallback_reason_counts: dict[str, int] = {}
     completed_receipts = 0
+    terminal_complete_receipts = 0
     receipt_cases = 0
     not_recorded_cases = 0
+    terminal_incomplete_cases = 0
     for case_id in case_ids:
         receipts = execution.get(case_id, [])
         completed = [
@@ -682,12 +686,25 @@ def execution_evidence_document(
             for receipt in receipts
             if isinstance(receipt, dict) and receipt.get("status") == "completed"
         ]
-        if not completed:
+        has_receipt = any(
+            isinstance(receipt, dict)
+            and receipt.get("status") not in {"not_recorded", "not_applicable"}
+            for receipt in receipts
+        )
+        if not has_receipt:
             not_recorded_cases += 1
-            continue
-        receipt_cases += 1
-        completed_receipts += len(completed)
-        for receipt in completed:
+        else:
+            receipt_cases += 1
+            completed_receipts += len(completed)
+        terminal = [
+            receipt
+            for receipt in receipts
+            if isinstance(receipt, dict) and receipt_terminal_complete(receipt)
+        ]
+        terminal_complete_receipts += len(terminal)
+        if has_receipt and not terminal:
+            terminal_incomplete_cases += 1
+        for receipt in terminal:
             backend = receipt.get("actual_backend")
             if isinstance(backend, str):
                 actual_backend_counts[backend] = (
@@ -727,6 +744,8 @@ def execution_evidence_document(
             "receipt_cases": receipt_cases,
             "not_recorded_cases": not_recorded_cases,
             "completed_receipts": completed_receipts,
+            "terminal_complete_receipts": terminal_complete_receipts,
+            "terminal_incomplete_cases": terminal_incomplete_cases,
             "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
             "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
         },

@@ -131,12 +131,17 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
         "sample_count",
         "cached_sample_count",
     }
-    allowed = required | {"errors"}
-    if not isinstance(value, dict) or set(value) not in (required, allowed):
+    legacy_allowed = (required, required | {"errors"})
+    current_required = required | {"terminal_complete"}
+    current_allowed = (current_required, current_required | {"errors"})
+    if not isinstance(value, dict) or set(value) not in legacy_allowed + current_allowed:
         raise ValueError(
             f"{label}: expected execution receipt keys {sorted(required)}"
-            " with optional errors"
+            " plus terminal_complete, with optional errors"
         )
+    explicit_terminal_state = "terminal_complete" in value
+    if explicit_terminal_state and type(value["terminal_complete"]) is not bool:
+        raise ValueError(f"{label}.terminal_complete: expected boolean")
     if value["status"] not in {
         "completed",
         "partial",
@@ -237,6 +242,20 @@ def execution_receipt(value: dict[str, Any], label: str) -> None:
                     allow_empty=field == "message",
                 )
             string(item["error"]["code"], f"{error_label}.error.code", nullable=True)
+    if explicit_terminal_state:
+        terminal_complete = value["terminal_complete"]
+        if terminal_complete and value["status"] != "completed":
+            raise ValueError(
+                f"{label}: terminal_complete=true requires status=completed"
+            )
+        if value["status"] == "completed" and not terminal_complete:
+            raise ValueError(
+                f"{label}: status=completed requires terminal_complete=true"
+            )
+        if terminal_complete and value.get("errors"):
+            raise ValueError(
+                f"{label}: terminal_complete=true cannot carry execution errors"
+            )
 
 
 def workflow(value: dict[str, Any], label: str) -> None:
@@ -265,6 +284,65 @@ def workflow(value: dict[str, Any], label: str) -> None:
         if observation["status"] == "not_run":
             string(observation["reason"], f"{prefix}.reason")
     unique(observation_ids, f"{label}.observations")
+
+
+def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
+    """Validate sidecar receipt counts, accepting the pre-bit summary shape."""
+
+    legacy = {
+        "selected",
+        "receipt_cases",
+        "not_recorded_cases",
+        "completed_receipts",
+        "actual_backend_counts",
+        "fallback_reason_counts",
+    }
+    current = legacy | {"terminal_complete_receipts", "terminal_incomplete_cases"}
+    if not isinstance(value, dict) or set(value) not in (legacy, current):
+        raise ValueError(
+            f"{label}: expected legacy or terminal-complete summary keys"
+        )
+    for field in (
+        "selected",
+        "receipt_cases",
+        "not_recorded_cases",
+        "completed_receipts",
+    ):
+        non_negative_int(value[field], f"{label}.{field}")
+    for field in ("actual_backend_counts", "fallback_reason_counts"):
+        counts = value[field]
+        if not isinstance(counts, dict):
+            raise ValueError(f"{label}.{field}: expected object")
+        for key, count in counts.items():
+            string(key, f"{label}.{field} key")
+            non_negative_int(count, f"{label}.{field}[{key}]")
+    if (
+        value["receipt_cases"] + value["not_recorded_cases"]
+        != value["selected"]
+    ):
+        raise ValueError(f"{label}: receipt case counts are inconsistent")
+    if set(value) == current:
+        non_negative_int(
+            value["terminal_complete_receipts"],
+            f"{label}.terminal_complete_receipts",
+        )
+        non_negative_int(
+            value["terminal_incomplete_cases"],
+            f"{label}.terminal_incomplete_cases",
+        )
+        if value["terminal_complete_receipts"] > value["completed_receipts"]:
+            raise ValueError(
+                f"{label}: terminal receipts cannot exceed completed receipts"
+            )
+        if value["terminal_incomplete_cases"] > value["receipt_cases"]:
+            raise ValueError(
+                f"{label}: incomplete cases cannot exceed receipt cases"
+            )
+        backend_denominator = value["terminal_complete_receipts"]
+    else:
+        backend_denominator = value["completed_receipts"]
+    if sum(value["actual_backend_counts"].values()) != backend_denominator:
+        raise ValueError(f"{label}: backend counts are inconsistent")
 
 
 def parity(result: dict[str, Any]) -> None:
@@ -590,53 +668,10 @@ def all_backends(result: dict[str, Any]) -> None:
             string(evidence["artifact"], f"{prefix}.execution_evidence.artifact")
             if evidence_status == "measured":
                 execution_summary = evidence["summary"]
-                exact(
+                execution_evidence_summary(
                     execution_summary,
-                    {
-                        "selected",
-                        "receipt_cases",
-                        "not_recorded_cases",
-                        "completed_receipts",
-                        "actual_backend_counts",
-                        "fallback_reason_counts",
-                    },
                     f"{prefix}.execution_evidence.summary",
                 )
-                for field in (
-                    "selected",
-                    "receipt_cases",
-                    "not_recorded_cases",
-                    "completed_receipts",
-                ):
-                    non_negative_int(
-                        execution_summary[field],
-                        f"{prefix}.execution_evidence.summary.{field}",
-                    )
-                for field in ("actual_backend_counts", "fallback_reason_counts"):
-                    counts = execution_summary[field]
-                    if not isinstance(counts, dict):
-                        raise ValueError(
-                            f"{prefix}.execution_evidence.summary.{field}: expected object"
-                        )
-                    for key, count in counts.items():
-                        string(
-                            key,
-                            f"{prefix}.execution_evidence.summary.{field} key",
-                        )
-                        non_negative_int(
-                            count,
-                            f"{prefix}.execution_evidence.summary.{field}[{key}]",
-                        )
-                if (
-                    execution_summary["receipt_cases"]
-                    + execution_summary["not_recorded_cases"]
-                    != execution_summary["selected"]
-                    or sum(execution_summary["actual_backend_counts"].values())
-                    != execution_summary["completed_receipts"]
-                ):
-                    raise ValueError(
-                        f"{prefix}.execution_evidence.summary: inconsistent counts"
-                    )
         if "capabilities" in lane:
             capabilities = lane["capabilities"]
             exact(capabilities, {"webgpu"}, f"{prefix}.capabilities")

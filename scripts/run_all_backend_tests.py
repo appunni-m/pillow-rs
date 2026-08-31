@@ -343,6 +343,107 @@ def scope_with_execution(scope: dict[str, Any], *, executed: int, pending: int =
     return result
 
 
+def receipt_terminal_complete(receipt: dict[str, Any]) -> bool:
+    """Interpret the explicit terminal bit while reading old sidecars."""
+
+    value = receipt.get("terminal_complete")
+    if value is None:
+        return receipt.get("status") in {"completed", "cached"}
+    return type(value) is bool and value
+
+
+def validate_execution_receipts(
+    cases: Any, *, label: str
+) -> str | None:
+    """Reject impossible receipt states before exposing lane evidence."""
+
+    if not isinstance(cases, dict):
+        return f"{label} cases are not an object"
+    for case_id, receipts in cases.items():
+        if not isinstance(case_id, str) or not isinstance(receipts, list):
+            return f"{label} contains malformed case receipts"
+        for receipt in receipts:
+            if not isinstance(receipt, dict):
+                return f"{label} contains a malformed receipt"
+            if "terminal_complete" in receipt and type(
+                receipt["terminal_complete"]
+            ) is not bool:
+                return f"{label} contains a non-boolean terminal_complete bit"
+            if receipt_terminal_complete(receipt) and receipt.get("status") not in {
+                "completed",
+                "cached",
+            }:
+                return (
+                    f"{label} contains terminal_complete=true for a non-terminal "
+                    f"status ({receipt.get('status')!r})"
+                )
+            if receipt_terminal_complete(receipt) and receipt.get("errors"):
+                return f"{label} contains terminal_complete=true with errors"
+    return None
+
+
+def validate_execution_summary(
+    summary: Any, *, expected_selected: int, label: str
+) -> str | None:
+    """Validate legacy/current receipt denominators without hiding prefixes."""
+
+    if not isinstance(summary, dict):
+        return f"{label} summary is not an object"
+    legacy = {
+        "selected",
+        "receipt_cases",
+        "not_recorded_cases",
+        "completed_receipts",
+        "actual_backend_counts",
+        "fallback_reason_counts",
+    }
+    current = legacy | {
+        "terminal_complete_receipts",
+        "terminal_incomplete_cases",
+    }
+    if set(summary) not in (legacy, current):
+        return f"{label} summary has an unsupported key set"
+    for field in (
+        "selected",
+        "receipt_cases",
+        "not_recorded_cases",
+        "completed_receipts",
+    ):
+        if type(summary[field]) is not int or summary[field] < 0:
+            return f"{label} summary has an invalid {field}"
+    for field in ("actual_backend_counts", "fallback_reason_counts"):
+        counts = summary[field]
+        if not isinstance(counts, dict):
+            return f"{label} summary has an invalid {field}"
+        if any(
+            not isinstance(key, str)
+            or type(count) is not int
+            or count < 0
+            for key, count in counts.items()
+        ):
+            return f"{label} summary has invalid {field} entries"
+    if summary["selected"] != expected_selected:
+        return f"{label} summary selected count does not match the lane"
+    if summary["receipt_cases"] + summary["not_recorded_cases"] != summary[
+        "selected"
+    ]:
+        return f"{label} summary case counts are inconsistent"
+    if set(summary) == current:
+        for field in ("terminal_complete_receipts", "terminal_incomplete_cases"):
+            if type(summary[field]) is not int or summary[field] < 0:
+                return f"{label} summary has an invalid {field}"
+        if summary["terminal_complete_receipts"] > summary["completed_receipts"]:
+            return f"{label} terminal receipts exceed completed receipts"
+        if summary["terminal_incomplete_cases"] > summary["receipt_cases"]:
+            return f"{label} incomplete cases exceed receipt cases"
+        denominator = summary["terminal_complete_receipts"]
+    else:
+        denominator = summary["completed_receipts"]
+    if sum(summary["actual_backend_counts"].values()) != denominator:
+        return f"{label} backend counts are inconsistent"
+    return None
+
+
 def pipeline_execution_evidence(
     path: Path,
     *,
@@ -382,30 +483,25 @@ def pipeline_execution_evidence(
             "reason": "normal-parity pipeline execution sidecar identity or scope did not match the lane",
             "artifact": relative_path,
         }
-    required_summary = {
-        "selected",
-        "receipt_cases",
-        "not_recorded_cases",
-        "completed_receipts",
-        "actual_backend_counts",
-        "fallback_reason_counts",
-    }
-    if set(summary) != required_summary:
+    if "cases" in raw:
+        receipt_error = validate_execution_receipts(
+            raw.get("cases"), label="normal-parity pipeline execution sidecar"
+        )
+        if receipt_error is not None:
+            return {
+                "status": "not_measured",
+                "reason": receipt_error,
+                "artifact": relative_path,
+            }
+    summary_error = validate_execution_summary(
+        summary,
+        expected_selected=expected_scope.get("selected", -1),
+        label="normal-parity pipeline execution sidecar",
+    )
+    if summary_error is not None:
         return {
             "status": "not_measured",
-            "reason": "normal-parity pipeline execution sidecar summary is incomplete",
-            "artifact": relative_path,
-        }
-    if (
-        summary["selected"] != expected_scope.get("selected")
-        or summary["receipt_cases"] + summary["not_recorded_cases"]
-        != summary["selected"]
-        or sum(summary["actual_backend_counts"].values())
-        != summary["completed_receipts"]
-    ):
-        return {
-            "status": "not_measured",
-            "reason": "normal-parity pipeline execution sidecar summary is inconsistent",
+            "reason": summary_error,
             "artifact": relative_path,
         }
     return {
@@ -714,17 +810,27 @@ def wasm_lane_record(
                     "reason": "WASM pipeline execution evidence identity or scope did not match the lane",
                     "artifact": relative_artifact,
                 }
-            elif (
-                execution_summary.get("selected") != expected_scope.get("selected")
-                or execution_summary.get("receipt_cases", 0)
-                + execution_summary.get("not_recorded_cases", 0)
-                != expected_scope.get("selected")
-                or sum(execution_summary.get("actual_backend_counts", {}).values())
-                != execution_summary.get("completed_receipts")
-            ):
+            elif "cases" in raw_execution and (
+                receipt_error := validate_execution_receipts(
+                    raw_execution.get("cases"),
+                    label="WASM pipeline execution evidence",
+                )
+            ) is not None:
                 execution_evidence = {
                     "status": "not_measured",
-                    "reason": "WASM pipeline execution evidence summary is inconsistent",
+                    "reason": receipt_error,
+                    "artifact": relative_artifact,
+                }
+            elif (
+                summary_error := validate_execution_summary(
+                    execution_summary,
+                    expected_selected=expected_scope.get("selected", -1),
+                    label="WASM pipeline execution evidence",
+                )
+            ) is not None:
+                execution_evidence = {
+                    "status": "not_measured",
+                    "reason": summary_error,
                     "artifact": relative_artifact,
                 }
             else:
