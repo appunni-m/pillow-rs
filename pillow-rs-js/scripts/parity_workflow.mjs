@@ -2089,7 +2089,11 @@ function runCase(wasm, item, operations, assets, executionSink) {
     }
     const observations = [];
     const observationIds = item.observations ?? [];
-    if (observationIds.length > 0) terminalReceiptIndex = null;
+    // Keep the last successful pipeline receipt as a terminal candidate when
+    // observation serialization itself emits no telemetry.  The workflow
+    // result below remains the public success gate: a failed observation leaves
+    // every receipt non-terminal, while a successful observation proves that
+    // this final pipeline result was exposed to the caller.
     for (const [observation_index, observationId] of observationIds.entries()) {
         const result = results[observationId];
         if (!result) {
@@ -2115,8 +2119,8 @@ function runCase(wasm, item, operations, assets, executionSink) {
                 observationId,
                 observationExecutionStatus,
             );
-            if (observation_index === observationIds.length - 1) {
-                terminalReceiptIndex = receiptIndex ?? null;
+            if (observation_index === observationIds.length - 1 && receiptIndex != null) {
+                terminalReceiptIndex = receiptIndex;
             }
         }
     }

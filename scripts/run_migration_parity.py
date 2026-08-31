@@ -1181,11 +1181,11 @@ def run_case(
 
     observations: list[dict[str, Any]] = []
     observation_ids = list(case.get("observations", []))
-    if observation_ids:
-        # Observation serialization is the public terminal boundary when a
-        # workflow exposes observations.  Do not retain the operation receipt
-        # as terminal proof if the final observation cannot be materialized.
-        terminal_receipt_index = None
+    # Keep the last successful pipeline receipt as a terminal candidate when
+    # observation serialization itself emits no telemetry.  The workflow
+    # result below is still the public success gate: a failed observation
+    # leaves every receipt non-terminal, while a successful observation proves
+    # that this final pipeline result was actually exposed to the caller.
     for observation_index, observation_id in enumerate(observation_ids):
         result = step_results.get(observation_id)
         if result is None:
@@ -1217,8 +1217,9 @@ def run_case(
                     append_execution_receipt(
                         receipt, status="completed", step_id=observation_id
                     )
-                elif observation_index == len(observation_ids) - 1:
-                    terminal_receipt_index = None
+                # If the observation has no separate pipeline telemetry, keep
+                # the last operation receipt as the terminal candidate.  Its
+                # terminal bit is set only after all observations succeed.
         except BaseException as exc:  # materialization is a public observation
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
@@ -1227,6 +1228,8 @@ def run_case(
                         receipt, status="partial", step_id=observation_id
                     )
                 if observation_index == len(observation_ids) - 1:
+                    # A failed final observation invalidates the candidate;
+                    # earlier receipts must not masquerade as terminal proof.
                     terminal_receipt_index = None
             observations.append(
                 {
