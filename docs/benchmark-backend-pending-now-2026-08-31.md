@@ -17,8 +17,8 @@ diagnostic implementation state, not a completed native-backend claim.
   WASM each compare **10,952/10,952**, and the GPU smoke gate is **1/1**.
   The latest schema-v3 receipt is
   `build/migration-parity/all-backends-test-result.json`, generated at pushed
-  source `2fdc6bb57` (SHA-256
-  `2c3b8ce4575de3b243fce2fc9ba85c55b958c9be52bd5ac9019f9633a6c437fa`).
+  source `8b5c19bba` (SHA-256
+  `dfdf18316946d2ed899242e7e51e13606cfd0991ff87d76a1c915b343f9ab637`).
 - Schema-v3 correctly reports `passed_with_backend_gaps`, not plain `passed`:
   CPU and GPU each have 6,513 terminal-complete pipeline receipts; SIMD has
   6,518.  CPU has 3,562 no-receipt and 877 terminal-incomplete cases; SIMD
@@ -42,6 +42,12 @@ diagnostic implementation state, not a completed native-backend claim.
 
 ### P0. General exact F-mode GPU lowering
 
+- [x] Added an exact same-size filtered F resize copy lane. Pillow's
+  `resize_f` returns the source unchanged when both axes match, so the
+  marker-5 WGSL path copies each source word by coordinate and preserves NaN,
+  infinity, and negative zero. Direct Pillow byte checks covered **35/35**
+  dimension/filter cases plus **5/5** `PutData(F)` cases; all 40 receipts were
+  native GPU with no fallback.
 - [x] Added a bounded pure-Rust/WGSL lane for one- or two-axis 2:1 Box
   downscales: finite, same-sign F samples at or above `2^-20` use a two-tap
   half-before-add shader branch and copy unchanged axes opaquely. Direct
@@ -49,11 +55,12 @@ diagnostic implementation state, not a completed native-backend claim.
   1,179 native GPU and 821 deliberate negative-zero host-control) plus 3,000
   two-axis cases (all matched; 2,500 native GPU and 500 deliberate
   negative-zero host-control).
-- [ ] Extend filtered F-mode resize beyond finite constant samples and the
-  bounded finite Box upsample copy and the new 2:1 Box lane. Arithmetic
-  filters, other Box ratios, and nonfinite/negative-zero samples still require
-  an exact device accumulator/rounding path. Keep every such input value-exact
-  against Pillow while the native proof is incomplete.
+- [ ] Extend non-identity filtered F-mode resize beyond finite constant
+  samples, the bounded finite Box upsample copy, and the new 2:1 Box lane.
+  Arithmetic filters, other Box ratios, and nonfinite/negative-zero samples
+  on changed geometry still require an exact device accumulator/rounding path.
+  Keep every such input value-exact against Pillow while the native proof is
+  incomplete.
 - Acceptance: direct byte checks covering finite, negative-zero, and non-finite
   values; terminal actual-GPU receipts with no fallback for the admitted native
   cohort; focused and full strict parity remain green.
@@ -68,7 +75,7 @@ diagnostic implementation state, not a completed native-backend claim.
   fallback taxonomy. Cases that do not enter the pipeline remain explicitly
   counted outside that cohort; they are not relabeled or silently dropped.
 - [x] Regenerated the schema-v3 all-backends artifact after final source
-  commit `2fdc6bb57`; the validator keeps `passed_with_backend_gaps` visible
+  commit `8b5c19bba`; the validator keeps `passed_with_backend_gaps` visible
   until the denominator is proven.
 - Acceptance: reproducible receipt sidecars, equal case-ID digests, exact
   requested/actual backend counts, and no false plain-`passed` aggregate.

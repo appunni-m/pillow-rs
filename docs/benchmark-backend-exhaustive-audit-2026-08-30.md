@@ -2871,7 +2871,7 @@ source snapshots.  The current focused queue is
   now carries an explicit terminal-completeness bit, and the all-backends
   aggregate is schema v3 with an independently reported backend-coverage
   verdict.
-- The current v3 run at pushed source `2fdc6bb57` remains value-exact for all
+- The current v3 run at pushed source `8b5c19bba` remains value-exact for all
   six public lanes (10,952/10,952 each; GPU smoke 1/1), but its status is
   **`passed_with_backend_gaps`**. CPU and GPU each have 6,513
   terminal-complete receipts; SIMD has 6,518. CPU/GPU retain 877
@@ -2887,7 +2887,7 @@ source snapshots.  The current focused queue is
   one-case proof is 1/1 terminal for CPU, SIMD, and GPU.
 - The regenerated v3 artifact is
   `build/migration-parity/all-backends-test-result.json` (SHA-256
-  `2c3b8ce4575de3b243fce2fc9ba85c55b958c9be52bd5ac9019f9633a6c437fa`).  The
+  `dfdf18316946d2ed899242e7e51e13606cfd0991ff87d76a1c915b343f9ab637`).  The
   validator rejects a plain `passed` status when the persisted receipt
   evidence has these gaps. The next run must retain this distinction while
   reconciling the pipeline-applicable denominator; non-pipeline public cases
@@ -2910,3 +2910,10 @@ source snapshots.  The current focused queue is
   remain host-controlled pending a portable exact f64-equivalent device path;
   the equal-receipt performance gate is also still open in the focused
   checklist.
+- Commit `8b5c19bba` adds the next bounded F-mode proof: same-size filtered
+  resizes now copy source words by output coordinate in WGSL, matching
+  Pillow's `resize_f` identity before any filter arithmetic. Direct byte
+  probes covered 35 dimension/filter cases and 5 `PutData(F)` cases, including
+  NaN, infinity, and negative-zero words; all 40 were native GPU with no
+  fallback. Non-identity arithmetic filters, other Box ratios, and the
+  pipeline-applicable denominator remain open.
