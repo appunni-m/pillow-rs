@@ -26,9 +26,10 @@ rename, relabel, or weaken a case to make a gate green.
 - Finite nonconstant F Box upscales have a separate exact copy proof for
   arbitrary non-downscaling geometry, including mixed `PutData(F)` plus Box
   chains (144/144 direct native-GPU samples).
-- The new proof-gated dyadic F lane is also exact/native for the admitted
-  Bilinear and one- or two-axis power-of-two Box cases; the two-axis proof is
-  bounded by the source significand-span check. Heterogeneous/non-dyadic
+- The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
+  narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
+  and chained all-Box cases; every admission is bounded by fixed/f64 row
+  agreement and the source significand-span check. Heterogeneous/non-dyadic
   inputs remain on exact host control.
 
 ## Pending — do these in order
@@ -36,18 +37,19 @@ rename, relabel, or weaken a case to make a gate green.
 ### P0 — exact F-mode GPU resize arithmetic
 
 - [x] Implement and prove the bounded dyadic subset: fixed/f64 coefficient
-  agreement, same-sign normal power-of-two F words, Bilinear, and one- or
-  two-axis power-of-two Box reductions through 64:1 (with the two-axis
+  agreement, same-sign normal power-of-two F words, Bilinear, narrow
+  two-tap Bicubic/Lanczos/Hamming rows, one- or two-axis power-of-two Box
+  reductions through 64:1, and chained all-Box passes (with the cumulative
   significand-span bound). The direct native matrix is byte-exact with
-  terminal `actual_backend=gpu` receipts and no fallback.
+  terminal `actual_backend=gpu` receipts and no fallback (9 admitted cases).
 - [x] Keep the finite nonconstant Box-upscale copy lane admitted for arbitrary
   non-downscaling geometry; its one-tap relocation proof is separate from
   arithmetic-filter admission.
 - [ ] Extend exact arithmetic coverage to heterogeneous/non-dyadic Bilinear,
-  Bicubic/Lanczos/Hamming, Box downscales outside the proven 2:1 and
-  one-/two-axis power-of-two limits, and two-axis reductions outside the
-  significand-span proof. Keep every unproven arithmetic input on exact host
-  control, including NaN, infinity, and negative zero.
+  broader Bicubic/Lanczos/Hamming rows, Box downscales outside the proven
+  dyadic row limits, and chains outside the cumulative significand-span
+  proof. Keep every unproven arithmetic input on exact host control,
+  including NaN, infinity, and negative zero.
 
 ### P1 — honest backend-proof denominator
 
@@ -60,18 +62,20 @@ rename, relabel, or weaken a case to make a gate green.
   remain proof gaps. The all-backend envelope stays schema-v3, and old @1
   sidecars are diagnostic-only until regenerated.
 - [x] Regenerate and review the schema-v3 all-backend artifact. At source
-  `a053a7422`, CPU/GPU report **6,924 complete + 466 partial + 0 missing +
-  2,550 not applicable + 1,012 indeterminate**; SIMD reports
-  **6,936 + 466 + 0 + 2,539 + 1,011**. All six public lanes remain
+  `41e17d199`, CPU/GPU report **6,924 complete + 466 partial + 0 missing +
+  3,129 not applicable + 433 indeterminate**; SIMD reports
+  **6,936 + 466 + 0 + 3,117 + 433**. All six public lanes remain
   10,952/10,952 and GPU smoke is 1/1; the aggregate is correctly
   `passed_with_backend_gaps`. Artifact SHA-256:
-  `6f9be35154e337a90b4b8be2bd0251cd8ea89b1253b8c3b2aa0aa2346dd0c9e4`.
+  `af33826af2951bef114107c3596522af24f2cc6db8c1ab8b948c4fc196fb0d73`.
 - [x] Fix the receipt boundary and classifier gaps without changing IDs or
   denominators: an observed final serialization may prove an earlier
-  dispatch, while eager `ModeFilter` and source-independent degenerate or
-  out-of-bounds crops are not deferred pipeline work. The focused partitions
-  moved CPU/GPU from 877 partial + 20 missing to 466 partial + 0 missing, and
-  SIMD from 884 + 20 to 466 + 0; receipt/evidence regression tests pass.
+  dispatch, while eager filter constructors/`ModeFilter`, source-backed
+  conversion/no-op paths, and source-independent degenerate or out-of-bounds
+  crops are not deferred pipeline work. The final run keeps CPU/GPU at 466
+  partial + 0 missing and moves the indeterminate partition to 433; SIMD
+  remains 466 partial + 0 missing with 433 indeterminate. Receipt/evidence
+  regression tests pass (19/19).
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -81,10 +85,16 @@ rename, relabel, or weaken a case to make a gate green.
 - [x] Bound GPU working-buffer reuse to four times the requested capacity;
   the controlled small-draw case dropped from about 2.4 ms with a 6.3 MiB
   retained pool to about 0.59 ms with a 19 KiB pool, with exact/native output.
+- [x] Elide the factor-1.0 Brightness scan for native byte layouts. The
+  mode-guarded identity path is exact across nine byte modes and the focused
+  Brightness parity lane remains 7/7; CPU medians improved from about
+  0.181/0.163 ms to 0.042/0.049/0.042 ms.
 - [ ] Run the same equal-ID, equal-receipt cohort twice consecutively with
-  **zero** budget violations. The current post-fix pair has all 44 pairings
-  comparable but **18** violations; the earlier ratio-bounded cohort reported
-  **5** and **6** (44 pairings each). Timing acceptance remains open.
+  **zero** budget violations. The Brightness optimization is a deterministic
+  row-level improvement, but the aggregate cohort remains noise-sensitive:
+  the latest fixed-11-ID comparisons retain 44/44 comparable subjects and
+  report 3, 4, and 6 violations across repeated baselines/posts. Timing
+  acceptance remains open.
 
 ## Required closeout
 
@@ -92,5 +102,5 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, format/lint checks, then commit and push only after
   the corresponding evidence changes.
 
-Last verified source: `a053a7422` (full all-backend run; working tree has
+Last verified source: `41e17d199` (full all-backend run; working tree has
 pre-existing unrelated changes). The overall goal is intentionally **active**.
