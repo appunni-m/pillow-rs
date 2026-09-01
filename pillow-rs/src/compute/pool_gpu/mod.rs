@@ -199,12 +199,13 @@ fn gpu_f_resize_constant_bits(
 /// With `output >= input`, Pillow's Box coefficient table has exactly one
 /// source tap per output coordinate and that tap has normalized weight one.
 /// The CPU F path still travels through its scalar resampler, but no sample
-/// arithmetic is required for this geometry: a finite source `f32` value
-/// other than negative zero keeps its bit pattern when multiplied by one and
-/// narrowed back to `f32`. PutData(F) is also allowed when all of its words
-/// meet that same condition; keep this proof limited to that source update
-/// plus all-Box Resize chains so a mixed filter or any downsampling continues
-/// to use exact host control.
+/// arithmetic is required for this geometry: the native lowering copies the
+/// selected four-byte word and canonicalizes negative zero to positive zero,
+/// matching Pillow's f64 accumulator at the final store. Every other f32 bit
+/// pattern is therefore safe here, including NaNs and infinities. PutData(F)
+/// is also allowed when its byte length matches the current image; keep this
+/// proof limited to that source update plus all-Box Resize chains so a mixed
+/// filter or any downsampling continues to use exact host control.
 fn gpu_f_resize_box_copy_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -215,13 +216,7 @@ fn gpu_f_resize_box_copy_is_exact(
         return false;
     }
 
-    let words_are_supported = |bytes: &[u8]| {
-        bytes.chunks_exact(4).remainder().is_empty()
-            && bytes.chunks_exact(4).all(|sample| {
-                let bits = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                f32::from_bits(bits).is_finite() && bits != (-0.0f32).to_bits()
-            })
-    };
+    let words_are_supported = |bytes: &[u8]| bytes.chunks_exact(4).remainder().is_empty();
     let DynamicImage::ImageRgba8(pixels) = image else {
         return false;
     };
@@ -9983,7 +9978,7 @@ mod tests {
         let negative_zero = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(3, 2, (-0.0f32).to_le_bytes().repeat(6)).unwrap(),
         );
-        assert!(!gpu_f_resize_box_copy_is_exact(
+        assert!(gpu_f_resize_box_copy_is_exact(
             &[box_resize(6, 4)],
             &negative_zero,
             Some("F")
@@ -9991,9 +9986,17 @@ mod tests {
         let nan = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(3, 2, f32::NAN.to_le_bytes().repeat(6)).unwrap(),
         );
-        assert!(!gpu_f_resize_box_copy_is_exact(
+        assert!(gpu_f_resize_box_copy_is_exact(
             &[box_resize(6, 4)],
             &nan,
+            Some("F")
+        ));
+        let infinity = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(3, 2, f32::INFINITY.to_le_bytes().repeat(6)).unwrap(),
+        );
+        assert!(gpu_f_resize_box_copy_is_exact(
+            &[box_resize(6, 4)],
+            &infinity,
             Some("F")
         ));
     }
@@ -10836,6 +10839,71 @@ mod tests {
         assert_eq!(chain_telemetry.1, Backend::Gpu);
         assert_eq!(chain_telemetry.6, Some(4));
         assert_eq!(chain_telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_box_copy_native_preserves_special_words() {
+        let words: [u32; 7] = [
+            0x7fc0_1234, // quiet NaN with a payload
+            0xffc0_1234, // negative NaN with a payload
+            0x7f80_0000, // positive infinity
+            0xff80_0000, // negative infinity
+            0x8000_0000, // negative zero
+            0x0000_0000, // positive zero
+            0x3fc0_0000, // finite control word
+        ];
+        let source_bytes: Vec<u8> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+        let source = Image::frombytes("F", (7, 1), &source_bytes).expect("F source");
+        let expected_words: Vec<u32> = words
+            .iter()
+            .flat_map(|word| {
+                let copied = if *word == 0x8000_0000 { 0 } else { *word };
+                [copied, copied]
+            })
+            .chain(words.iter().flat_map(|word| {
+                let copied = if *word == 0x8000_0000 { 0 } else { *word };
+                [copied, copied]
+            }))
+            .collect();
+        let expected: Vec<u8> = expected_words
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect();
+        let cpu = source
+            .resize((14, 2), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("CPU resize operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU special-word resize");
+        assert_eq!(cpu, expected, "Pillow Box copy special words");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((14, 2), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("GPU resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU special-word Box resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU Box copy special words");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU special-word Box resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 

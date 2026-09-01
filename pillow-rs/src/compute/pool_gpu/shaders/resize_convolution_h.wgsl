@@ -638,6 +638,14 @@ fn filtered_typed(source_y: u32, output_x: u32) -> u32 {
     return input[source_y * params.width + source_x];
 }
 
+fn filtered_box_copy(source_y: u32, output_x: u32) -> u32 {
+    let word = filtered_typed(source_y, output_x);
+    // Pillow's f64 accumulator starts at +0.0, so a one-tap Box copy
+    // canonicalizes an input negative zero at the final f32 store. Preserve
+    // every other bit pattern, including NaN payloads and infinities.
+    return select(word, 0u, word == 0x80000000u);
+}
+
 fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
     if params.mode == 7u {
         // I-mode nearest resize uses the host-generated one-tap table for
@@ -662,9 +670,10 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
         }
         if params.premultiply == 3u {
             // F-mode Box upscales have one normalized unit-weight tap. Copy
-            // that source word so the finite f32 values admitted by the host
-            // proof retain their exact representation.
-            return filtered_typed(source_y, output_x);
+            // that source word so all special values retain their Pillow
+            // representation; the helper canonicalizes negative zero at the
+            // same final f32 store boundary as the host implementation.
+            return filtered_box_copy(source_y, output_x);
         }
         if params.premultiply == 5u {
             // A same-size filtered F resize is an identity in Pillow's
