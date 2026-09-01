@@ -3355,3 +3355,42 @@ WASM. Its native partition is `pipeline_not_applicable=6` and
 `pipeline_missing_receipt=0`; the complete-corpus aggregate still needs a
 fresh run before its overall proof status can change. No fixture inputs,
 expected outputs, thresholds, IDs, or denominators changed.
+
+## 32.20 F-mode GPU arithmetic admission audit (2026-09-01)
+
+The remaining P0 bucket is broader native-GPU arithmetic for heterogeneous and
+non-dyadic F resizes. A direct probe of 40 finite cases (eight source/output
+geometries across Bilinear, Bicubic, Lanczos, Hamming, and Box), plus signed
+zero and edge values, is byte-exact under the integrated host-controlled route;
+unproven rows carry `requested_backend=gpu`, `actual_backend=cpu`, and the
+explicit exact-host semantic-control fallback. The only native row in that
+probe is a proven finite Box upscale.
+
+A disposable forced-generic-WGSL run is not a viable admission proof: the first
+5×4→3×2 words differ from Pillow for every heterogeneous Bilinear/Bicubic/
+Lanczos/Hamming case, and a 7×5→3×2 non-dyadic Box case differs in four of six
+words. A broad source-domain experiment found a concrete false-proof
+counterexample at 2×1→4×1 Bilinear (`0x517d28bd` on the device versus
+`0x517d28bc` in Pillow), caused by f32 product/accumulator rounding where the
+oracle uses f64 accumulation before the f32 store. The temporary guards and
+diagnostic worktrees were discarded; no thresholds, IDs, receipts, or source
+admission were changed. A general fix requires verified f64-equivalent device
+arithmetic or exact emulation, so the current conservative host-control route
+remains the parity-correct behavior.
+
+## 32.21 Complete all-backend rerun after scale receipt correction (2026-09-01)
+
+The complete schema-v3 envelope was regenerated at source `1dc515445` after
+the factor-one `ImageOps.scale` classifier fix. All public value lanes remain
+10,952/10,952 (CPU, SIMD, GPU, Node WASM, and browser WASM), with GPU smoke
+1/1. CPU and GPU receipt partitions are **7,084 complete + 102 partial + 0
+missing + 3,333 not applicable + 433 indeterminate**; SIMD is **7,096 + 102
+partial + 0 + 3,321 + 433**. Node and browser WASM are **6,713 complete + 586
+partial + 888 missing + 2,713 not applicable + 52 indeterminate**. The six
+factor-one scale workflows now belong to the explicit non-pipeline partition
+on every lane; no case IDs, expected values, thresholds, or denominators were
+changed. The aggregate remains `passed_with_backend_gaps` because the
+remaining partial/indeterminate receipts, WASM receipt gaps, and native
+fallback/backend-identity taxonomy are still open. The envelope is
+`/tmp/all-backends-post-scale-receipt.json` (SHA-256
+`56dcf71a65f169576a8bc077e630748bfc0415991f0d5696efea6670b4946c18`).
