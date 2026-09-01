@@ -3726,3 +3726,59 @@ IDs, denominators, or receipt taxonomy changed. Remaining P0 work is broader
 F special/overflow/cancellation/Box/chained arithmetic; P1 covers partial
 native receipts, backend/fallback identity, and WASM receipt proof; P2 is the
 zero-violation timing gate.
+
+## 32.37 Native raw-byte Draw GPU lane (2026-09-02)
+
+The next deterministic routing gap was another preflight mode guard rather
+than a shader arithmetic mismatch. Pillow 12.2.0's ImageDraw scan conversion
+already produced the exact destination canvas on the host; `draw.wgsl` only
+copies complete packed bytes. Before `7d1cc0af9`, logical `1`, `P`, `PA`,
+`RGBX`, `RGBa`, `CMYK`, `HSV`, `YCbCr`, `I`, and `F` tags were rejected before
+that copy path, so valid Draw batches unnecessarily published host receipts.
+Typed `I;16` remains on its existing typed path.
+
+Commit `7d1cc0af9` admits only batches made entirely of the existing draw
+operations for those raw transport modes. A focused native regression covers
+all ten modes and asserts byte equality, requested/actual GPU identity, one
+dispatch, and no fallback. The filtered 73-case replay is exact across CPU,
+SIMD, GPU, Node WASM, and browser WASM; 72 GPU receipts are terminal native
+receipts and the single zero-height safety case remains host-controlled. No
+fixtures, expected values, thresholds, IDs, denominators, or receipt
+taxonomy changed.
+
+## 32.38 Native nearest indexed Fit GPU lane (2026-09-02)
+
+The first divergence for indexed `ImageOps.fit` was a conservative logical
+mode guard: every `P`/`PA` Fit row was routed to host control even when
+`filter=NEAREST` performs only integer index/channel selection. Pillow's
+nearest Fit preserves P indices and PA index/alpha bytes; the Rust GPU path
+already lowers Fit to the exact host-prepared separable resize kernels, with
+no palette expansion for this subset.
+
+Commit `0797e71f5` admits only `Fit(filter=NEAREST)` for `P` and `PA`. Filtered
+and interpolating indexed Fit operations remain on exact host semantic
+control. The focused native regression covers both modes and asserts exact
+bytes plus a terminal native receipt. The fixed 15-case replay is exact on
+CPU, SIMD, GPU, Node WASM, and browser WASM; 14 GPU receipts are terminal
+native receipts and the `pa-putpalette-expansion` row intentionally remains
+host-controlled. No fixtures, expected values, thresholds, IDs, denominators,
+or receipt taxonomy changed.
+
+## 32.39 Full post-Draw/Fit envelope (2026-09-02)
+
+The schema-v3 envelope was regenerated at committed source `0797e71f5` after
+both narrow admissions. The artifact is
+`/tmp/all-backends-post-0797e71f5.json` (SHA-256
+`d95f880a7393ef078bbd09d7b0364cd0ee53836d31f232e2fa4754546369ba0f`). CPU,
+SIMD, GPU, Node WASM, and browser WASM each remain value-exact at
+**10,952/10,952**; GPU smoke is **1/1**. CPU has 7,084 complete terminal
+receipts; SIMD has 6,691 native SIMD plus 405 CPU receipts; GPU has 6,832
+native GPU plus 252 CPU receipts. Each native lane retains 15 genuine partial
+receipts, and the fixed case-ID digest remains
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+
+The aggregate correctly remains `passed_with_backend_gaps`: value parity is
+green, while broader F special/overflow/cancellation/Box/chained arithmetic,
+partial native receipts, backend/fallback identity, WASM receipt proof, and
+the zero-violation timing gate remain open. No fixture, expected value,
+threshold, ID, denominator, or receipt taxonomy changed.
