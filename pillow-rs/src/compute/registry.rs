@@ -261,7 +261,10 @@ pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     // scalar/P targets need non-byte output handling; route those cases to
     // the exact CPU implementation before device work begins.
     if let PipelineOp::Merge { logical_mode, .. } = op
-        && matches!(logical_mode.as_str(), "LAB" | "P" | "1" | "I" | "F")
+        && matches!(
+            logical_mode.as_str(),
+            "LAB" | "P" | "1" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        )
     {
         return Ok(false);
     }

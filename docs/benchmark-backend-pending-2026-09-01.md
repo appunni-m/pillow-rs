@@ -79,8 +79,10 @@ rename, relabel, or weaken a case to make a gate green.
   64-case matrix covering `1`, `I`, `F`, `P`, `La`, `PA`, `RGBX`, `RGBa`,
   `YCbCr`, `HSV`, and `LAB` went from 42 mismatches to 0; LAB A/B storage
   keeps Pillow's +128 byte bias while public reads decode it. First-band
-  palette acceptance and later-band rejection are exact. `I;16*` merge is a
-  separately tracked gap and was not broadened by this fix.
+  palette acceptance and later-band rejection are exact. `I;16`, `I;16L`,
+  `I;16B`, and `I;16N` merge now preserve typed samples, declared byte order,
+  exact mode spelling, and Pillow's single-band validation; focused core and
+  Python probes are exact for all four variants.
 - `ImageFilter.Kernel` now preserves Pillow's raw `f32` scale and offset,
   including fractional, zero, negative, and non-finite values, and the 5x5
   GPU rows use Pillow's bottom-to-top kernel layout. The CPU matrix is exact
@@ -195,6 +197,6 @@ The latest integrated parity source is `7983d9406` (GPU accumulation-order
 fix on top of the D-048 Kernel fix `2c2b2d1ba`, D-039 merge fix `5be0fd7a5`,
 and D-044 putdata fix `a900ec6f4`). The focused 69-test binding suite,
 combined full live-oracle parity gate, and
-final all-backend parity envelope are green; backend-proof completion, the
-`I;16*` merge slice, and timing acceptance remain required. The overall goal
+final all-backend parity envelope are green; backend-proof completion, broader
+`I;16*` backend receipt coverage, and timing acceptance remain required. The overall goal
 is intentionally **active**.
