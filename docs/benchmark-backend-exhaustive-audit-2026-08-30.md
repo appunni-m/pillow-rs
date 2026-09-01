@@ -3338,3 +3338,20 @@ cross-spelling mismatch, and an `L` source mismatch: outputs and
 cover byte order/scalar storage and one-band/invalid-band validation. No
 fixtures, case IDs, thresholds, or denominators changed. Broader typed-mode
 backend receipt coverage remains a separate evidence task.
+
+## 32.19 ImageOps.scale factor-one receipt classification (2026-09-01)
+
+The receipt audit found six selected `ImageOps.scale` workflows with no
+telemetry. Their public input is `factor=1.0`; Pillow returns `image.copy()`
+before inspecting `resample`, and the Rust port follows that eager identity
+path. The classifier previously treated every `ImageOps.scale` call as a
+deferred resize and reported these successful copies as missing receipts.
+The argument-sensitive classifier now removes only the exact factor-one path
+from the deferred set; non-identity scale factors remain receipt obligations.
+
+The receipt-state regression suite is 19/19, and the targeted six-case
+all-backend gate is value-green 6/6 on CPU, SIMD, GPU, Node WASM, and browser
+WASM. Its native partition is `pipeline_not_applicable=6` and
+`pipeline_missing_receipt=0`; the complete-corpus aggregate still needs a
+fresh run before its overall proof status can change. No fixture inputs,
+expected outputs, thresholds, IDs, or denominators changed.

@@ -291,6 +291,18 @@ def classification_case(
         operation_arguments = {
             "mode": {"kind": "literal", "value": "L"},
         }
+    operation_surface = "PIL.Image.Image"
+    operation_receiver: dict[str, object] | None = {
+        "kind": "binding",
+        "step_id": "new",
+    }
+    if operation == "scale":
+        operation_surface = "PIL.ImageOps"
+        operation_receiver = None
+        operation_arguments = {
+            "image": {"kind": "binding", "step_id": "new"},
+            "factor": {"kind": "literal", "value": 1.0},
+        }
     return {
         "case_id": case_id,
         "steps": [
@@ -305,9 +317,9 @@ def classification_case(
             },
             {
                 "step_id": "call",
-                "surface": "PIL.Image.Image",
+                "surface": operation_surface,
                 "operation": operation,
-                "receiver": {"kind": "binding", "step_id": "new"},
+                "receiver": operation_receiver,
                 "arguments": operation_arguments,
             },
             {
@@ -708,6 +720,12 @@ class ReceiptStateTests(unittest.TestCase):
         eager_thumbnail["steps"][1]["arguments"] = {
             "size": {"kind": "literal", "value": [2, 2]},
         }
+        eager_scale = classification_case("eager-scale", "scale")
+        deferred_scale = classification_case("deferred-scale", "scale")
+        deferred_scale["steps"][1]["arguments"]["factor"] = {
+            "kind": "literal",
+            "value": 2.0,
+        }
         eager_paste = classification_case("eager-paste", "paste")
         eager_paste["steps"][1]["arguments"] = {
             "im": {"kind": "literal", "value": 0},
@@ -728,6 +746,13 @@ class ReceiptStateTests(unittest.TestCase):
             {
                 "status": "not_applicable",
                 "reason": "workflow contains no deferred image-pipeline operation",
+            },
+        )
+        self.assertEqual(
+            classify_pipeline_case(deferred_scale, []),
+            {
+                "status": "missing_receipt",
+                "reason": "deferred image pipeline reached an observed boundary without a receipt",
             },
         )
         self.assertEqual(
@@ -768,6 +793,7 @@ class ReceiptStateTests(unittest.TestCase):
         for eager_case in (
             eager_transparency,
             eager_thumbnail,
+            eager_scale,
             eager_paste,
             eager_pixel,
             eager_exif_transpose_case(),
