@@ -3163,3 +3163,16 @@ broader source-mode probe is byte/error exact, and the maintained six-case
 I;16 paste slice passes 6/6 on CPU, SIMD, and GPU with no fallback. No case
 IDs, denominators, expected outputs, thresholds, or backend classifications
 changed.
+
+## 32.9 ImageQt zero-width row alignment parity (2026-09-01)
+
+The next narrow public-helper divergence was `ImageQt.align8to32` for a
+zero-width row. Pillow computes zero bytes per line, zero padding, and returns
+the original source buffer before entering its row slicing loop; this is valid
+for both empty and caller-provided buffers. Rust instead rejected every
+zero-width input with `ValueError("align_row_to_32: zero bytes per line")`.
+`align_row_to_32` now returns `data.to_vec()` when the computed bytes-per-line
+is zero, preserving the existing checked handling for nonzero rows. Core
+regression tests and a Python facade probe match Pillow for 1/L/P/I;16 width
+zero plus normal padded rows. No case IDs, denominators, expected outputs,
+thresholds, or backend classifications changed.
