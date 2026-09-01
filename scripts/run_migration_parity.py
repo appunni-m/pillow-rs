@@ -1480,8 +1480,9 @@ def _workflow_error_before_deferred(
     # operation itself and no earlier deferred node exists, the call cannot
     # have dispatched this workflow; requiring a receipt here was the first
     # divergence between the source validation boundary and this classifier.
-    # Keep the strict ordering for any earlier deferred node: it may already
-    # have materialized or dispatched before a later call failed.
+    # Keep the strict ordering for a dependency-only ``not_run`` boundary:
+    # without an explicit error, the adapter cannot distinguish validation
+    # fallout from a call that reached a deferred operation.
     if has_blocked_observation:
         # A not_run observation can report a dependency failure rather than
         # the observed operation's own validation error.  Without an emitted
@@ -1497,27 +1498,54 @@ def _workflow_error_before_deferred(
             key=lambda observation: step_indices[observation.get("step_id")],
         )
         if first_error_observation.get("status") == "error":
-            return all(deferred_index >= first_error for deferred_index in deferred_indices)
+            return not _workflow_materialization_boundary_before(
+                case, deferred_indices, first_error
+            )
         return all(deferred_index > first_error for deferred_index in deferred_indices)
-    return all(deferred_index >= first_error for deferred_index in deferred_indices)
+    return not _workflow_materialization_boundary_before(
+        case, deferred_indices, first_error
+    )
 
 
-def _workflow_terminal_boundary(case: dict[str, Any], deferred_indices: set[int]) -> bool:
+def _workflow_materialization_boundary_before(
+    case: dict[str, Any], deferred_indices: set[int], before_index: int
+) -> bool:
+    """Return whether an observed step materialized an earlier pipeline.
+
+    A public error can follow a queued operation without ever executing that
+    operation. Count only an observed terminal/result boundary before the
+    error; an unobserved lazy call is not evidence that its pipeline ran. The
+    receipt path remains authoritative for actual execution, so callers use
+    this only when no meaningful receipt was recorded.
+    """
+
     observations = set(case.get("observations", []))
     if not observations:
         return False
     for index, step in enumerate(case.get("steps", [])):
-        if not isinstance(step, dict) or step.get("step_id") not in observations:
+        if (
+            not isinstance(step, dict)
+            or index >= before_index
+            or step.get("step_id") not in observations
+        ):
             continue
         key = (step.get("surface"), step.get("operation"))
         operation = step.get("operation")
-        if operation in _TERMINAL_OBSERVATION_OPS:
-            if any(index > deferred_index for deferred_index in deferred_indices):
-                return True
-        if key in _PIPELINE_RESULT_OPS and key not in _PIPELINE_MUTATING_OPS:
-            if any(index >= deferred_index for deferred_index in deferred_indices):
-                return True
+        if operation in _TERMINAL_OBSERVATION_OPS and any(
+            index > deferred_index for deferred_index in deferred_indices
+        ):
+            return True
+        if key in _PIPELINE_RESULT_OPS and key not in _PIPELINE_MUTATING_OPS and any(
+            index >= deferred_index for deferred_index in deferred_indices
+        ):
+            return True
     return False
+
+
+def _workflow_terminal_boundary(case: dict[str, Any], deferred_indices: set[int]) -> bool:
+    return _workflow_materialization_boundary_before(
+        case, deferred_indices, len(case.get("steps", []))
+    )
 
 
 def classify_pipeline_case(

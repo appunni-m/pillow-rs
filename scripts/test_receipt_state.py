@@ -478,7 +478,9 @@ def crop_discard_case() -> dict[str, object]:
     }
 
 
-def error_at_deferred_call_case(*, earlier_deferred: bool = False) -> dict[str, object]:
+def error_at_deferred_call_case(
+    *, earlier_deferred: bool = False, materialized: bool = False
+) -> dict[str, object]:
     """Build a workflow whose public call fails before it can queue work."""
 
     steps: list[dict[str, object]] = [
@@ -502,6 +504,16 @@ def error_at_deferred_call_case(*, earlier_deferred: bool = False) -> dict[str, 
                 "arguments": {"size": {"kind": "literal", "value": [1, 1]}},
             }
         )
+        if materialized:
+            steps.append(
+                {
+                    "step_id": "before-error",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": {"kind": "binding", "step_id": "resize"},
+                    "arguments": {},
+                }
+            )
         receiver = "resize"
     else:
         receiver = "new"
@@ -521,7 +533,9 @@ def error_at_deferred_call_case(*, earlier_deferred: bool = False) -> dict[str, 
     return {
         "case_id": "error-at-deferred-call",
         "steps": steps,
-        "observations": ["call"],
+        "observations": ["before-error", "call"]
+        if materialized
+        else ["call"],
     }
 
 
@@ -999,7 +1013,9 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
 
-    def test_pipeline_case_classification_keeps_earlier_deferred_error_indeterminate(self) -> None:
+    def test_pipeline_case_classification_accepts_queued_work_before_unreached_error(
+        self,
+    ) -> None:
         self.assertEqual(
             classify_pipeline_case(
                 error_at_deferred_call_case(earlier_deferred=True),
@@ -1016,8 +1032,59 @@ class ReceiptStateTests(unittest.TestCase):
                 },
             ),
             {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            },
+        )
+
+    def test_pipeline_case_classification_keeps_materialized_prefix_indeterminate(
+        self,
+    ) -> None:
+        self.assertEqual(
+            classify_pipeline_case(
+                error_at_deferred_call_case(
+                    earlier_deferred=True, materialized=True
+                ),
+                [],
+                result={
+                    "status": "completed",
+                    "observations": [
+                        {"step_id": "before-error", "status": "ok"},
+                        {
+                            "step_id": "call",
+                            "status": "error",
+                            "error": {"kind": "invalid_argument"},
+                        },
+                    ],
+                },
+            ),
+            {
                 "status": "indeterminate",
                 "reason": "workflow errored after or during a potentially deferred operation",
+            },
+        )
+
+    def test_pipeline_case_classification_keeps_partial_receipt_authoritative_on_error(
+        self,
+    ) -> None:
+        self.assertEqual(
+            classify_pipeline_case(
+                error_at_deferred_call_case(earlier_deferred=True),
+                [{"status": "partial", "terminal_complete": False}],
+                result={
+                    "status": "completed",
+                    "observations": [
+                        {
+                            "step_id": "call",
+                            "status": "error",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
+                },
+            ),
+            {
+                "status": "partial_receipt",
+                "reason": "receipt recorded without a terminal-complete boundary",
             },
         )
 
