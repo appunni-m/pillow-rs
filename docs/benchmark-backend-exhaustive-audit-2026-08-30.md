@@ -3191,6 +3191,19 @@ alpha modes. Core regressions and a broad native Python matrix are exact. No
 case IDs, denominators, expected outputs, thresholds, or backend
 classifications changed.
 
+## 32.12 Image.thumbnail zero-source control-flow parity (2026-09-01)
+
+The next resize divergence was `Image.thumbnail` on zero-width or zero-height
+sources. Pillow checks the source/destination bounds and no-op predicate before
+aspect-ratio division, then lets a rounded zero dimension raise
+`ValueError("height and width must be > 0")`; Rust divided first or allowed a
+minimum-size clamp, yielding wrong errors or a blank image. The thumbnail
+normalizer now preserves Pillow's ordering and validates the final zero-source
+resize without changing ordinary positive inputs. A 5-source × 20-request
+integer degenerate probe improved from 21 mismatches to 0, while the maintained
+7-case edge slice and all 172 thumbnail parity cases remain exact. No case IDs,
+denominators, expected outputs, thresholds, or backend classifications changed.
+
 ## 32.11 ImageEnhance.Contrast zero-area CMYK parity (2026-09-01)
 
 The next public enhancement divergence was a valid empty CMYK image. Pillow's
