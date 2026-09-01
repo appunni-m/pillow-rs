@@ -391,14 +391,18 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     let row4_a = byte_row_5(a0_0, a0_1, a0_2, a0_3, a0_4, k40, k41, k42, k43, k44);
 
     // Accumulate in PIL order: bias, +row0, +row1, +row2, +row3, +row4
-    var ss_r = bias + row0_r; ss_r = ss_r + row1_r; ss_r = ss_r + row2_r;
-    ss_r = ss_r + row3_r; ss_r = ss_r + row4_r;
-    var ss_g = bias + row0_g; ss_g = ss_g + row1_g; ss_g = ss_g + row2_g;
-    ss_g = ss_g + row3_g; ss_g = ss_g + row4_g;
-    var ss_b = bias + row0_b; ss_b = ss_b + row1_b; ss_b = ss_b + row2_b;
-    ss_b = ss_b + row3_b; ss_b = ss_b + row4_b;
-    var ss_a = bias + row0_a; ss_a = ss_a + row1_a; ss_a = ss_a + row2_a;
-    ss_a = ss_a + row3_a; ss_a = ss_a + row4_a;
+    // Keep each row addition as an explicit fma dependency.  Some WGSL
+    // backends reassociate a chain of plain additions, which can move a
+    // value across Pillow's byte truncation boundary even when every row
+    // product is already contracted identically.
+    var ss_r = fma(row0_r, 1.0, bias); ss_r = fma(row1_r, 1.0, ss_r); ss_r = fma(row2_r, 1.0, ss_r);
+    ss_r = fma(row3_r, 1.0, ss_r); ss_r = fma(row4_r, 1.0, ss_r);
+    var ss_g = fma(row0_g, 1.0, bias); ss_g = fma(row1_g, 1.0, ss_g); ss_g = fma(row2_g, 1.0, ss_g);
+    ss_g = fma(row3_g, 1.0, ss_g); ss_g = fma(row4_g, 1.0, ss_g);
+    var ss_b = fma(row0_b, 1.0, bias); ss_b = fma(row1_b, 1.0, ss_b); ss_b = fma(row2_b, 1.0, ss_b);
+    ss_b = fma(row3_b, 1.0, ss_b); ss_b = fma(row4_b, 1.0, ss_b);
+    var ss_a = fma(row0_a, 1.0, bias); ss_a = fma(row1_a, 1.0, ss_a); ss_a = fma(row2_a, 1.0, ss_a);
+    ss_a = fma(row3_a, 1.0, ss_a); ss_a = fma(row4_a, 1.0, ss_a);
 
     // Mode-aware output: for L/LA modes, only R is convolved; G/B/A preserved from input
     let in_pixel = input[idx];
