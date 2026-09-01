@@ -3176,3 +3176,17 @@ is zero, preserving the existing checked handling for nonzero rows. Core
 regression tests and a Python facade probe match Pillow for 1/L/P/I;16 width
 zero plus normal padded rows. No case IDs, denominators, expected outputs,
 thresholds, or backend classifications changed.
+
+## 32.10 ImageColor mode validation parity (2026-09-01)
+
+The next public color-helper divergence was `ImageColor.getcolor` with an
+unknown destination mode. Pillow resolves every non-HSV mode through
+`ImageMode.getmode`, so names such as `"XYZ"` and `""` raise `KeyError`; Rust
+previously fell through to the RGB tuple result. The same resolver also accepts
+mapped integer descriptors (`I;16S`, `I;32BS`, and related forms) and the
+lowercase-alpha `La` descriptor, for which Pillow returns a scalar gray value.
+Rust now validates the complete Pillow descriptor set, reports `KeyError` for
+unknown names, and keeps the exact scalar/tuple result shape for all mapped and
+alpha modes. Core regressions and a broad native Python matrix are exact. No
+case IDs, denominators, expected outputs, thresholds, or backend
+classifications changed.

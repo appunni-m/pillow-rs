@@ -56,6 +56,10 @@ rename, relabel, or weaken a case to make a gate green.
   bytes, matching Pillow's already-aligned early return for empty and
   caller-provided buffers. The Rust helper regression and Python facade probe
   are exact for 1/L/P/I;16-width-zero inputs and ordinary padded rows.
+- `ImageColor.getcolor` now validates Pillow's complete mode-descriptor set,
+  raises `KeyError` for unknown mode names, and preserves mapped integer
+  storage modes plus lowercase-`La` scalar behavior. Core tests and a broad
+  native Python mode/error matrix are exact.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row

@@ -516,6 +516,45 @@ pub enum ColorValue {
     Hsv(i32, i32, i32),
 }
 
+/// Return whether `mode` is one of the descriptors accepted by Pillow's
+/// `ImageMode.getmode`. `ImageColor.getcolor` asks that resolver for every
+/// non-HSV mode, so an unknown name must raise `KeyError` instead of silently
+/// taking the RGB fallback.
+fn is_image_mode(mode: &str) -> bool {
+    matches!(
+        mode,
+        "1" | "L"
+            | "LA"
+            | "La"
+            | "P"
+            | "PA"
+            | "RGB"
+            | "RGBX"
+            | "RGBA"
+            | "RGBa"
+            | "CMYK"
+            | "YCbCr"
+            | "LAB"
+            | "HSV"
+            | "I"
+            | "F"
+            | "I;16"
+            | "I;16S"
+            | "I;16L"
+            | "I;16LS"
+            | "I;16B"
+            | "I;16BS"
+            | "I;16N"
+            | "I;16NS"
+            | "I;32"
+            | "I;32B"
+            | "I;32L"
+            | "I;32S"
+            | "I;32BS"
+            | "I;32LS"
+    )
+}
+
 /// Convert one RGB pixel to Pillow's ``colorsys.rgb_to_hsv`` 0..255 triple.
 ///
 /// Pillow calls ``colorsys.rgb_to_hsv(r/255, g/255, b/255)`` and truncates
@@ -561,6 +600,9 @@ pub fn getcolor(
     a: i32,
     mode: &str,
 ) -> Result<ColorValue, crate::error::PilError> {
+    if !is_image_mode(mode) {
+        return Err(crate::error::PilError::KeyError(mode.to_owned()));
+    }
     // Pillow's getcolor computes from the raw (unclamped) parsed components:
     // `(r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16` and colorsys HSV on
     // r/255, so out-of-range values like rgb(300,0,0) produce 90 / (0,255,300).
@@ -571,7 +613,25 @@ pub fn getcolor(
     }
     if matches!(
         mode,
-        "L" | "LA" | "1" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        "L" | "LA"
+            | "La"
+            | "1"
+            | "I"
+            | "F"
+            | "I;16"
+            | "I;16S"
+            | "I;16L"
+            | "I;16LS"
+            | "I;16B"
+            | "I;16BS"
+            | "I;16N"
+            | "I;16NS"
+            | "I;32"
+            | "I;32B"
+            | "I;32L"
+            | "I;32S"
+            | "I;32BS"
+            | "I;32LS"
     ) {
         return if mode == "LA" {
             Ok(ColorValue::GrayAlpha(luma, a))
@@ -1257,5 +1317,31 @@ pub fn palette_getcolor_validate_input(
             palette_getcolor_validate_impl(palette, &color, mode)
         }
         PaletteColorInput::Invalid(repr) => Err(format!("unknown color specifier: {repr}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ColorValue, getcolor};
+    use crate::error::PilError;
+
+    #[test]
+    fn getcolor_accepts_pillow_mapping_and_lowercase_alpha_modes() {
+        assert_eq!(
+            getcolor(255, 0, 0, 255, "La").unwrap(),
+            ColorValue::Gray(76)
+        );
+        assert_eq!(
+            getcolor(255, 0, 0, 255, "I;32BS").unwrap(),
+            ColorValue::Gray(76)
+        );
+    }
+
+    #[test]
+    fn getcolor_rejects_unknown_modes_with_key_error() {
+        assert!(matches!(
+            getcolor(255, 0, 0, 255, "XYZ"),
+            Err(PilError::KeyError(mode)) if mode == "XYZ"
+        ));
     }
 }
