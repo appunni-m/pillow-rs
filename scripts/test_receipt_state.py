@@ -1027,6 +1027,78 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
 
+    def test_pipeline_case_classification_ignores_deferred_setup_mutation_on_error(
+        self,
+    ) -> None:
+        """A queued setup mutation is not materialized before a later error."""
+
+        case = {
+            "case_id": "setup-mutation-before-error",
+            "steps": [
+                {
+                    "step_id": "new",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "arguments": {
+                        "mode": {"kind": "literal", "value": "RGB"},
+                        "size": {"kind": "literal", "value": [1, 1]},
+                    },
+                },
+                {
+                    "step_id": "pixel",
+                    "surface": "PIL.Image.Image",
+                    "operation": "putpixel",
+                    "receiver": {"kind": "binding", "step_id": "new"},
+                    "arguments": {},
+                },
+                {
+                    "step_id": "call",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": {"kind": "binding", "step_id": "new"},
+                    "arguments": {
+                        "size": {"kind": "literal", "value": [0, 1]},
+                    },
+                },
+            ],
+            "observations": ["call"],
+        }
+        result = {
+            "status": "completed",
+            "observations": [
+                {
+                    "step_id": "call",
+                    "status": "error",
+                    "error": {"kind": "invalid_argument"},
+                }
+            ],
+            "execution_errors": [
+                {"step_id": "call", "error": {"kind": "invalid_argument"}}
+            ],
+        }
+        self.assertEqual(
+            classify_pipeline_case(
+                case,
+                [
+                    {
+                        "step_id": "pixel",
+                        "status": "completed",
+                        "terminal_complete": False,
+                    },
+                    {
+                        "step_id": "call",
+                        "status": "partial",
+                        "terminal_complete": False,
+                    },
+                ],
+                result=result,
+            ),
+            {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            },
+        )
+
     def test_pipeline_case_classification_keeps_prior_deferred_receipt_on_error(
         self,
     ) -> None:

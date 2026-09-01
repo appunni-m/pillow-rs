@@ -1574,11 +1574,11 @@ def _receipts_are_pre_materialization_error(
     The target telemetry API can return a partial record while a public call
     rejects its arguments.  That record is not evidence that the failed call
     materialized a deferred operation.  Accept this exception only when the
-    explicit error is step-bound, every earlier receipt belongs to setup (not
-    a deferred operation), and any receipt on the failing step is the partial
-    record emitted for that same error.  Receipts without a step ID remain
-    authoritative so adapter-level ambiguity cannot be relabeled as a clean
-    validation path.
+    explicit error is step-bound, no observed materialization boundary occurs
+    before it, every earlier deferred receipt is a setup mutation, and any
+    receipt on the failing step is the partial record emitted for that same
+    error.  Receipts without a step ID remain authoritative so adapter-level
+    ambiguity cannot be relabeled as a clean validation path.
     """
 
     if not _workflow_error_before_deferred(case, deferred_indices, result):
@@ -1587,6 +1587,11 @@ def _receipts_are_pre_materialization_error(
     step_indices = {
         step.get("step_id"): index
         for index, step in enumerate(steps)
+        if isinstance(step.get("step_id"), str)
+    }
+    steps_by_id = {
+        step.get("step_id"): step
+        for step in steps
         if isinstance(step.get("step_id"), str)
     }
     explicit_error_steps: set[str] = set()
@@ -1630,7 +1635,15 @@ def _receipts_are_pre_materialization_error(
         if step_index > first_error:
             return False
         if step_index < first_error and step_index in deferred_indices:
-            return False
+            # Mutating setup calls such as putpixel/paste can leave a queued
+            # operation receipt behind when a later public call rejects its
+            # arguments.  With no observed result boundary, those mutations
+            # never materialized as the case's deferred image pipeline and
+            # are safe to annotate outside the backend-proof partition.
+            step = steps_by_id[step_id]
+            key = (step.get("surface"), step.get("operation"))
+            if key not in _PIPELINE_MUTATING_OPS:
+                return False
         if step_index == first_error and (
             step_id not in explicit_error_steps
             or receipt.get("status") != "partial"
