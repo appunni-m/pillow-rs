@@ -67,6 +67,14 @@ rename, relabel, or weaken a case to make a gate green.
   ordering. A 5-source × 20-request integer degenerate probe went from 21
   mismatches to 0; the maintained 7-case edge slice and all 172 thumbnail
   parity cases remain exact.
+- `ImageOps.scale` now preserves Pillow's empty-image and factor-one control
+  flow, including `inf * 0 -> NaN` validation order. The empty-image matrix is
+  exact (0/72 mismatches after the fix), and the maintained D-002 cases remain
+  3/3.
+- `Image.putdata` now keeps Pillow's per-item order for mixed exact multiband
+  values. A packed integer is committed before a later scalar float raises;
+  the focused RGB/RGBA/CMYK prefix probe is exact (3/3), with no changes to
+  the existing callback or oversized-input contracts.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
