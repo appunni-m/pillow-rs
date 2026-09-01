@@ -8704,6 +8704,10 @@ impl GpuPool {
                                 | PipelineOp::Contain { .. }
                                 | PipelineOp::Cover { .. }
                                 | PipelineOp::Pad { .. }
+                                | PipelineOp::Fit {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                }
                                 | PipelineOp::Transform { .. }
                                 | PipelineOp::Resize {
                                     ..
@@ -9688,6 +9692,51 @@ mod tests {
             assert_eq!(telemetry.0, Some(Backend::Gpu));
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn fit_nearest_native_gpu_preserves_indexed_modes() {
+        let cases = [("P", vec![17u8; 12]), ("PA", vec![17u8; 12])];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, source_bytes) in cases {
+            let source = if mode == "PA" {
+                let mut indexed = Image::frombytes("P", (4, 3), &source_bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
+                indexed.putalpha(201).expect("PA source alpha");
+                indexed
+            } else {
+                Image::frombytes(mode, (4, 3), &source_bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source image: {error}"))
+            };
+            let fitted = crate::ops::imageops::fit(&source, 3, 2, Some("NEAREST"), 0.0, (0.5, 0.5))
+                .expect("Fit operation");
+            let expected = fitted
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU Fit");
+            let actual = match fitted.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} Fit failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} Fit parity");
+            let telemetry =
+                Backend::take_pipeline_telemetry().expect("native GPU Fit must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(2));
             assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
