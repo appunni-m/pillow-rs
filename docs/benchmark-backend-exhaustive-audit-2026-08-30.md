@@ -3318,3 +3318,23 @@ smoke 1/1. The aggregate remains `passed_with_backend_gaps` because its
 receipt partitions and fallback taxonomy are still non-empty. The temporary
 envelope is `/tmp/all-backends-final-7983.json` (SHA-256
 `468a22e8a589d4a7a9dd9d7f7b53af43254ba7097d9529e85b7d9aa48b75c6ab`).
+
+## 32.18 Image.merge unsigned-16-bit mode parity (2026-09-01)
+
+The remaining public `Image.merge` mode gap was the unsigned 16-bit luma
+family. Pillow accepts exactly one source band for each of `I;16`, `I;16L`,
+`I;16B`, and `I;16N`, requires the source band to use the identical spelling,
+and returns the typed samples without narrowing them through an 8-bit image.
+Before this fix, Rust rejected these target names during merge validation;
+mapping them to the existing native `ImageLuma16` identity executor now keeps
+the requested mode tag, decoded scalar values, and `tobytes()` byte order
+intact. GPU and SIMD operation-only preflight explicitly leave these typed
+identity merges on the exact CPU path rather than passing a two-byte buffer to
+byte-only interleave kernels.
+
+Native Pillow-versus-Rust Python probes cover all four valid variants, every
+cross-spelling mismatch, and an `L` source mismatch: outputs and
+`ValueError("images do not match")` errors are exact. Two focused Rust tests
+cover byte order/scalar storage and one-band/invalid-band validation. No
+fixtures, case IDs, thresholds, or denominators changed. Broader typed-mode
+backend receipt coverage remains a separate evidence task.

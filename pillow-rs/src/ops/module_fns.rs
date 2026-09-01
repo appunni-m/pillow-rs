@@ -78,7 +78,7 @@ pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
 
 fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
     let n_expected = match mode {
-        "1" | "I" | "F" | "P" => 1,
+        "1" | "I" | "F" | "P" | "I;16" | "I;16L" | "I;16B" | "I;16N" => 1,
         "RGB" => 3,
         "RGBA" => 4,
         "RGBX" | "RGBa" => 4,
@@ -111,16 +111,21 @@ fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError
         let valid = match mode {
             // ImagingMerge requires a source core with the exact scalar mode
             // for these destinations; an L/P band is not coerced to 1/I/F.
-            "1" | "I" | "F" | "P" => band_mode == mode,
+            "1" | "I" | "F" | "P" | "I;16" | "I;16L" | "I;16B" | "I;16N" => band_mode == mode,
             "L" => band_mode == "L",
             _ => band_mode == "L" || (index == 0 && band_mode == "P"),
         };
         if !valid {
-            return Err(if matches!(mode, "L" | "1" | "I" | "F" | "P") {
-                PilError::ValueError("images do not match".into())
-            } else {
-                PilError::ValueError("mode mismatch".into())
-            });
+            return Err(
+                if matches!(
+                    mode,
+                    "L" | "1" | "I" | "F" | "P" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+                ) {
+                    PilError::ValueError("images do not match".into())
+                } else {
+                    PilError::ValueError("mode mismatch".into())
+                },
+            );
         }
     }
     Ok(())
@@ -137,6 +142,12 @@ fn parse_merge_mode(mode: &str) -> Result<crate::pipeline::ColorMode, PilError> 
         "La" | "PA" => Ok(crate::pipeline::ColorMode::LA),
         "RGBX" | "RGBa" => Ok(crate::pipeline::ColorMode::RGBA),
         "LAB" => Ok(crate::pipeline::ColorMode::RGB),
+        // DynamicImage carries all I;16* variants as native unsigned-16
+        // luma. The requested spelling remains on PipelineOp::logical_mode
+        // and the public explicit mode tag; mapping here lets the executor
+        // take its existing typed scalar identity path without narrowing to
+        // a four-byte I buffer.
+        "I;16" | "I;16L" | "I;16B" | "I;16N" => Ok(crate::pipeline::ColorMode::I),
         _ => parse_mode(mode),
     }
 }
@@ -168,7 +179,8 @@ pub enum MergeInput {
 ///
 /// `mode` determines the required band count. Pillow's byte layouts include
 /// `L`, `La`, `PA`, `RGB`, `RGBX`, `RGBA`, `RGBa`, `YCbCr`, `HSV`, `LAB`, and
-/// `CMYK`; the typed scalar layouts `1`, `I`, `F`, and `P` are also accepted.
+/// `CMYK`; the typed scalar layouts `1`, `I`, `F`, `P`, and `I;16*` are also
+/// accepted.
 ///
 /// # Errors
 ///
@@ -944,6 +956,47 @@ mod tests {
         assert_eq!(
             merge("I", &[l_band(&[1, 2])])
                 .expect_err("L cannot merge into I")
+                .to_string(),
+            "images do not match"
+        );
+    }
+
+    #[test]
+    fn merge_keeps_i16_byte_order_and_scalar_values() {
+        for (mode, bytes) in [
+            ("I;16", vec![0x01, 0x02, 0x03, 0x04]),
+            ("I;16L", vec![0x01, 0x02, 0x03, 0x04]),
+            ("I;16B", vec![0x01, 0x02, 0x03, 0x04]),
+            ("I;16N", vec![0x01, 0x02, 0x03, 0x04]),
+        ] {
+            let band = Image::frombytes(mode, (2, 1), &bytes).expect("valid I;16 band");
+            let merged = merge(mode, &[band]).expect("I;16 merge succeeds");
+            assert_eq!(merged.mode().expect("mode"), mode);
+            assert_eq!(merged.tobytes().expect("raw bytes"), bytes);
+            assert!(matches!(
+                merged.getdata_formatted(None).expect("data"),
+                FormattedImageData::IntegerScalars(values) if values.len() == 2
+            ));
+        }
+    }
+
+    #[test]
+    fn merge_rejects_i16_band_mode_and_arity_mismatches() {
+        let band = Image::frombytes("I;16", (1, 1), &[0x2a, 0x00]).expect("valid I;16 band");
+        let other = Image::frombytes("I;16L", (1, 1), &[0x2a, 0x00]).expect("valid I;16L band");
+        assert_eq!(
+            merge("I;16", &[]).expect_err("missing band").to_string(),
+            "wrong number of bands"
+        );
+        assert_eq!(
+            merge("I;16", &[band.clone(), band.clone()])
+                .expect_err("extra band")
+                .to_string(),
+            "wrong number of bands"
+        );
+        assert_eq!(
+            merge("I;16", &[other])
+                .expect_err("wrong I;16 spelling")
                 .to_string(),
             "images do not match"
         );
