@@ -207,6 +207,45 @@ def test_putdata_invalid_multiband_element_preserves_written_prefix():
 
 @pytest.mark.covers("Image.putdata")
 @pytest.mark.parametrize(
+    ("mode", "packed", "initial", "expected"),
+    [
+        (
+            "RGB",
+            0x000102,
+            bytes([9, 9, 9] * 2),
+            bytes([2, 1, 0, 9, 9, 9]),
+        ),
+        (
+            "RGBA",
+            0x00010203,
+            bytes([9, 9, 9, 9] * 2),
+            bytes([3, 2, 1, 0, 9, 9, 9, 9]),
+        ),
+        (
+            "CMYK",
+            0x00010203,
+            bytes([9, 9, 9, 9] * 2),
+            bytes([3, 2, 1, 0, 9, 9, 9, 9]),
+        ),
+    ],
+)
+def test_putdata_mixed_exact_multiband_values_preserve_written_prefix(
+    mode,
+    packed,
+    initial,
+    expected,
+):
+    def run(image_type):
+        image = image_type.frombytes(mode, (2, 1), initial)
+        with pytest.raises(TypeError, match=r"^color must be int or tuple$"):
+            image.putdata([packed, 1.5])
+        return image.tobytes()
+
+    assert run(Image) == run(PILImage) == expected
+
+
+@pytest.mark.covers("Image.putdata")
+@pytest.mark.parametrize(
     ("image_factory", "data", "message"),
     [
         (

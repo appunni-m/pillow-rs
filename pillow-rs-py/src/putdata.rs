@@ -88,6 +88,7 @@ fn putdata_bulk(
     slf: &Bound<'_, PyImage>,
     data: &Bound<'_, PyAny>,
     entry_count: usize,
+    kind: PutDataValueKind,
     scale: f64,
     offset: f64,
 ) -> PyResult<bool> {
@@ -111,7 +112,7 @@ fn putdata_bulk(
     // that item through the per-pixel path (including partial writes before a
     // later error). Let Rust normalize only the callback-free subset in one
     // operation.
-    if is_exact_builtin_numeric_sequence(data) {
+    if is_exact_builtin_numeric_sequence(data, kind) {
         if let Ok(values) = data.extract::<Vec<i64>>() {
             slf.try_borrow_mut()?
                 .inner
@@ -119,28 +120,51 @@ fn putdata_bulk(
                 .map_err(map_error)?;
             return Ok(true);
         }
-        if let Ok(values) = data.extract::<Vec<f64>>() {
-            slf.try_borrow_mut()?
-                .inner
-                .putdata_input(PutDataInput::Numbers(&values), scale, offset)
-                .map_err(map_error)?;
-            return Ok(true);
+        // In Pillow 12.2's `src/_imaging.c::_putdata`, `getink` handles each
+        // image32 item in order: a packed integer is written, then a scalar
+        // float is rejected. If one exact integer cannot fit the packed i64
+        // extraction, continue through the per-item path so conversion is
+        // reported at its position after any earlier writes; coercing the
+        // whole list as f64 would turn the first packed pixel into an invalid
+        // scalar and lose that order.
+        if matches!(kind, PutDataValueKind::Numeric) {
+            if let Ok(values) = data.extract::<Vec<f64>>() {
+                slf.try_borrow_mut()?
+                    .inner
+                    .putdata_input(PutDataInput::Numbers(&values), scale, offset)
+                    .map_err(map_error)?;
+                return Ok(true);
+            }
         }
     }
 
     Ok(false)
 }
 
-fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>) -> bool {
+fn is_exact_builtin_numeric_sequence(
+    data: &Bound<'_, PyAny>,
+    kind: PutDataValueKind,
+) -> bool {
     let is_number = |item: Bound<'_, PyAny>| {
         item.downcast_exact::<PyInt>().is_ok()
             || item.downcast_exact::<pyo3::types::PyFloat>().is_ok()
     };
+    let is_integer = |item: Bound<'_, PyAny>| item.downcast_exact::<PyInt>().is_ok();
     if let Ok(list) = data.downcast_exact::<PyList>() {
-        return list.iter().all(is_number);
+        return match kind {
+            // Multiband `putdata` treats an integer as a packed pixel but
+            // rejects a scalar float.  A mixed exact list therefore cannot
+            // be normalized as Vec<f64>: Pillow writes earlier packed ints
+            // before rejecting the later float.
+            PutDataValueKind::Components { .. } => list.iter().all(is_integer),
+            PutDataValueKind::Numeric => list.iter().all(is_number),
+        };
     }
     if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
-        return tuple.iter().all(is_number);
+        return match kind {
+            PutDataValueKind::Components { .. } => tuple.iter().all(is_integer),
+            PutDataValueKind::Numeric => tuple.iter().all(is_number),
+        };
     }
     false
 }
@@ -249,7 +273,7 @@ pub(crate) fn putdata_formatted(
         image.inner.putdata_value_kind().map_err(map_error)?
     };
 
-    if putdata_bulk(slf, data, entry_count, scale, offset)? {
+    if putdata_bulk(slf, data, entry_count, kind, scale, offset)? {
         return Ok(());
     }
     if putdata_exact_sequence(slf, data, entry_count, kind, scale, offset)? {
