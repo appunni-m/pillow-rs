@@ -8644,8 +8644,10 @@ impl GpuPool {
         // palette expansion is involved. CMYK is additionally safe for a
         // brightness/color-saturation batch because the core stores its
         // C/M/Y/K bytes in the same four-byte transport and the corresponding
-        // shaders explicitly process K. Other logical modes still use the CPU
-        // implementation until their sample semantics are encoded.
+        // shaders explicitly process K. EffectSpread is a separate raw-byte
+        // relocation: its host-generated map is gathered as complete packed
+        // words, so it is safe for every mode backed by the ordinary byte
+        // transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
                 || (matches!(logical_mode, "P" | "PA")
@@ -8670,6 +8672,7 @@ impl GpuPool {
                                 | PipelineOp::ExtractBand { .. }
                                 | PipelineOp::Eval { .. }
                                 | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::CompositeModule { .. }
                                 | PipelineOp::Filter3x3 { .. }
                                 | PipelineOp::Filter5x5 { .. }
@@ -8704,6 +8707,7 @@ impl GpuPool {
                                 op,
                                 PipelineOp::PutData { .. }
                                     | PipelineOp::PutPixel { .. }
+                                    | PipelineOp::EffectSpread { .. }
                                     | PipelineOp::CompositeModule { .. }
                                     | PipelineOp::Filter3x3 { .. }
                                 | PipelineOp::Filter5x5 { .. }
@@ -8743,6 +8747,7 @@ impl GpuPool {
                         matches!(
                             op,
                             PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::Transpose { .. }
                                 | PipelineOp::Paste { mask: None, .. }
                                 | PipelineOp::Scale { .. }
@@ -8781,6 +8786,7 @@ impl GpuPool {
                         matches!(
                             op,
                             PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::Add { .. }
                                 | PipelineOp::Subtract { .. }
                                 | PipelineOp::Multiply { .. }
@@ -8829,6 +8835,7 @@ impl GpuPool {
                                     | PipelineOp::PutData { .. }
                                     | PipelineOp::Eval { .. }
                                 | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::Paste { .. }
                                 | PipelineOp::Crop { .. }
                                 | PipelineOp::Scale { .. }
@@ -8849,7 +8856,12 @@ impl GpuPool {
                 // often write one source pixel before extracting its band.
                 || (matches!(logical_mode, "CMYK" | "HSV" | "YCbCr")
                     && ops.iter().all(|op| {
-                        matches!(op, PipelineOp::ExtractBand { .. } | PipelineOp::PutPixel { .. })
+                        matches!(
+                            op,
+                            PipelineOp::ExtractBand { .. }
+                                | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
+                        )
                     }))
                 || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
                     && ops
@@ -8874,6 +8886,7 @@ impl GpuPool {
                             op,
                             PipelineOp::PutData { .. }
                                 | PipelineOp::Offset { .. }
+                                | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::Flip
                                 | PipelineOp::Mirror
                                 | PipelineOp::Transpose { .. }
@@ -8946,6 +8959,7 @@ impl GpuPool {
                                 | PipelineOp::PutData { .. }
                                 | PipelineOp::Eval { .. }
                                 | PipelineOp::PutPixel { .. }
+                                | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::Paste { .. }
                                 | PipelineOp::Scale { .. }
                                 | PipelineOp::Contain { .. }
@@ -9517,6 +9531,73 @@ mod tests {
             assert_eq!(actual, expected, "{mode} channel extraction parity");
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("native GPU channel extraction must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn effect_spread_native_gpu_preserves_raw_byte_modes() {
+        let cases = [
+            ("1", vec![0x80, 0x40]),
+            ("L", vec![7, 8]),
+            ("LA", vec![7, 9, 8, 10]),
+            ("P", vec![17, 18]),
+            ("RGB", vec![1, 2, 3, 4, 5, 6]),
+            ("RGBa", vec![1, 2, 3, 4, 5, 6, 7, 8]),
+            ("RGBX", vec![11, 12, 13, 14, 15, 16, 17, 18]),
+            ("RGBA", vec![21, 22, 23, 24, 25, 26, 27, 28]),
+            ("CMYK", vec![31, 32, 33, 34, 35, 36, 37, 38]),
+            ("HSV", vec![41, 42, 43, 44, 45, 46]),
+            ("YCbCr", vec![51, 52, 53, 54, 55, 56]),
+            (
+                "I",
+                (-123i32)
+                    .to_le_bytes()
+                    .into_iter()
+                    .chain(456i32.to_le_bytes())
+                    .collect(),
+            ),
+            (
+                "F",
+                1.25f32
+                    .to_le_bytes()
+                    .into_iter()
+                    .chain(2.5f32.to_le_bytes())
+                    .collect(),
+            ),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, source_bytes) in cases {
+            let source = Image::frombytes(mode, (2, 1), &source_bytes).expect("source image");
+            let expected = crate::image_effect_spread(&source, 0)
+                .expect("effect_spread operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU effect_spread");
+            let actual = match crate::image_effect_spread(&source, 0)
+                .expect("effect_spread operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} effect_spread failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} effect_spread parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU effect_spread must publish a receipt");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
