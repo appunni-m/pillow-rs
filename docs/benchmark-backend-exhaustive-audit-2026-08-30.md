@@ -3782,3 +3782,43 @@ green, while broader F special/overflow/cancellation/Box/chained arithmetic,
 partial native receipts, backend/fallback identity, WASM receipt proof, and
 the zero-violation timing gate remain open. No fixture, expected value,
 threshold, ID, denominator, or receipt taxonomy changed.
+
+## 32.40 Finite subnormal F resize device reducer (2026-09-02)
+
+The first divergence was a value-domain hole in marker 9: its host decoder
+accepted only normal f32 source words, so finite subnormal F resize rows were
+sent to exact host semantic control even when their arithmetic was otherwise
+provable. Pillow 12.2.0 `Resample.c`/`ImagingResample` accumulates each row in
+f64 and stores the final value as f32. That boundary preserves finite
+subnormal words and signed nonzero bits; filtered zero results are
+canonicalized to positive zero.
+
+Commit `b1962c6dd` extends the marker-9 proof to every finite f32 source word,
+representing subnormals at the exact `2^-149` scale and retaining signed-zero
+information. Both convolution shaders now round the integer reducer directly
+to f32 with ties-to-even subnormal handling, including the smallest-normal
+crossover. The host proof still rejects nonfinite values, negative-zero final
+stores, and any ordered-f64 result that differs from the integer reducer.
+
+While validating the extension, a separate first divergence was isolated for
+horizontal upscaling followed by vertical downscaling: `(2,2) -> (4,1)`
+produced `[1.5, 1.625, 1.875, 2]` on the existing device schedule versus
+Pillow's `[2, 2, 3, 3]`. That geometry remains on exact host semantic control
+until its intermediate ordering and buffer contract are proven; the guard is
+independent of the subnormal arithmetic proof.
+
+A deterministic native Pillow-vs-Rust probe covered 1,050 finite,
+subnormal, signed-zero, and edge-word F rows across the five filtered
+resamplers: 372 rows executed on native GPU and 678 used exact host semantic
+control, with **0 mismatches**. The focused GPU module is 23/23, `make
+build-dev` and `make -C pillow-rs fmt` pass. The committed schema-v3 envelope
+at `/tmp/all-backends-post-b1962c6dd.json` (SHA-256
+`9a981a51e018cad9c65390311b6e38c58e40ee75861595c01e0c7baee48af5df`) remains
+value-exact for all **10,952/10,952** CPU, SIMD, GPU, Node WASM, and browser
+WASM cases, with GPU smoke **1/1**. Native receipt counts remain CPU 7,084;
+SIMD 6,691 plus 405 CPU; GPU 6,832 plus 252 CPU, with 15 genuine partials in
+each native lane. No fixtures, expected values, thresholds, IDs,
+denominators, or receipt taxonomy changed. The remaining P0 families are
+nonfinite and negative-zero output words, coefficient overflow/cancellation,
+Box ratios outside the proven bounds, chains outside the cumulative proof, and
+the guarded mixed up/down two-axis schedule.
