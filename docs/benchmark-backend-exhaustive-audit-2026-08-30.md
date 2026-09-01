@@ -3191,6 +3191,18 @@ alpha modes. Core regressions and a broad native Python matrix are exact. No
 case IDs, denominators, expected outputs, thresholds, or backend
 classifications changed.
 
+## 32.11 ImageEnhance.Contrast zero-area CMYK parity (2026-09-01)
+
+The next public enhancement divergence was a valid empty CMYK image. Pillow's
+`ImageEnhance.Contrast` converts CMYK to `L`, computes a zero mean for the
+empty histogram, and blends back to an empty CMYK image. Rust called the
+non-empty `CheckedDims::new` boundary in `cmyk_to_grayscale` first and raised
+instead. That conversion now uses the established empty-result allocation
+boundary, preserving dimensions, mode, and empty bytes. The focused probe is
+exact for `(0,0)`, `(0,3)`, and `(3,0)` with factors `0`, `.5`, `1`, and `2`;
+no case IDs, denominators, expected outputs, thresholds, or backend
+classifications changed.
+
 ## 32.12 Image.thumbnail zero-source control-flow parity (2026-09-01)
 
 The next resize divergence was `Image.thumbnail` on zero-width or zero-height
@@ -3204,14 +3216,27 @@ integer degenerate probe improved from 21 mismatches to 0, while the maintained
 7-case edge slice and all 172 thumbnail parity cases remain exact. No case IDs,
 denominators, expected outputs, thresholds, or backend classifications changed.
 
-## 32.11 ImageEnhance.Contrast zero-area CMYK parity (2026-09-01)
+## 32.13 ImageOps.scale empty-image validation parity (2026-09-01)
 
-The next public enhancement divergence was a valid empty CMYK image. Pillow's
-`ImageEnhance.Contrast` converts CMYK to `L`, computes a zero mean for the
-empty histogram, and blends back to an empty CMYK image. Rust called the
-non-empty `CheckedDims::new` boundary in `cmyk_to_grayscale` first and raised
-instead. That conversion now uses the established empty-result allocation
-boundary, preserving dimensions, mode, and empty bytes. The focused probe is
-exact for `(0,0)`, `(0,3)`, and `(3,0)` with factors `0`, `.5`, `1`, and `2`;
-no case IDs, denominators, expected outputs, thresholds, or backend
+The next geometry divergence was `ImageOps.scale` on empty sources and a
+factor of one. Pillow evaluates the rounded dimensions before the resize
+no-op, including Python's `inf * 0 -> NaN` conversion error; Rust previously
+clamped empty dimensions or rejected a valid identity path in the wrong order.
+The scale normalizer now follows Pillow's empty-image and factor-one control
+flow while preserving non-finite error classes. The empty-image matrix went
+from 36/72 mismatches to 0/72, and the maintained D-002 cases remain 3/3. No
+case IDs, denominators, expected outputs, thresholds, or backend
 classifications changed.
+
+## 32.14 Image.putdata mixed multiband write-order parity (2026-09-01)
+
+The next binding-level divergence was a mixed exact multiband sequence such
+as `[packed_int, 1.5]`. Pillow's `_putdata` calls `getink` per item and
+commits the packed integer before the later scalar float raises
+`TypeError("color must be int or tuple")`; Rust's exact-list bulk extractor
+previously coerced the whole list as numeric and rejected it before writing
+the prefix. Bulk extraction now requires every multiband element to be an
+exact integer, so mixed values follow the sequential callback-visible path.
+The focused RGB/RGBA/CMYK probe is exact at 3/3, while existing callback and
+oversized-input cases remain covered. No case IDs, denominators, expected
+outputs, thresholds, or backend classifications changed.
