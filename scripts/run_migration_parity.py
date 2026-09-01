@@ -1396,6 +1396,19 @@ def _workflow_has_public_error(result: dict[str, Any] | None) -> bool:
         return False
     if result.get("status") == "not_run":
         return True
+    # Normal parity serialization deliberately keeps the public result
+    # envelope small, but the target-side receipt writer also receives the
+    # internal call/observation errors collected by ``run_case``.  An error
+    # can occur in a setup step that is not listed in ``case.observations``;
+    # ignoring that record leaves a validation failure looking like a deferred
+    # backend gap.  Only a well-formed step-bound error is considered here;
+    # adapter-level metadata remains conservative below.
+    execution_errors = result.get("execution_errors")
+    if isinstance(execution_errors, list) and any(
+        isinstance(error, dict) and isinstance(error.get("step_id"), str)
+        for error in execution_errors
+    ):
+        return True
     observations = result.get("observations", [])
     if not isinstance(observations, list):
         return False
@@ -1417,19 +1430,40 @@ def _workflow_error_before_deferred(
         return False
     observations = result.get("observations", [])
     if not isinstance(observations, list):
-        return not deferred_indices
+        observations = []
     step_indices = {
         step.get("step_id"): index
         for index, step in enumerate(case.get("steps", []))
         if isinstance(step, dict)
     }
-    error_observations = [
-        observation
+    error_observations_by_step = {
+        observation.get("step_id"): observation
         for observation in observations
         if isinstance(observation, dict)
         and observation.get("status") in {"error", "not_run"}
         and observation.get("step_id") in step_indices
-    ]
+    }
+    execution_errors = result.get("execution_errors", [])
+    if isinstance(execution_errors, list):
+        # ``execution_errors`` contains failures from every workflow step,
+        # including setup/call steps that are not public observations.  Treat
+        # these as explicit errors (rather than dependency ``not_run``
+        # markers), then apply the same deferred-index ordering proof.
+        for error in execution_errors:
+            if (
+                isinstance(error, dict)
+                and isinstance(error.get("step_id"), str)
+                and error.get("step_id") in step_indices
+            ):
+                # Prefer an explicit call/setup error over a dependency
+                # ``not_run`` observation for the same step.  The distinction
+                # determines whether the first deferred operation was ever
+                # materialized.
+                error_observations_by_step[error["step_id"]] = {
+                    "step_id": error["step_id"],
+                    "status": "error",
+                }
+    error_observations = list(error_observations_by_step.values())
     error_indices = [step_indices[observation.get("step_id")] for observation in error_observations]
     if not error_indices:
         # An adapter-level not_run has no reliable step boundary. Keep the
@@ -2194,10 +2228,22 @@ def run_case(
         set_receipt_terminal_complete(
             pipeline_execution_sink[terminal_receipt_index], True
         )
+    execution_errors = [
+        {
+            "step_id": step_id,
+            "error": step_result.get("error"),
+        }
+        for step_id, step_result in step_results.items()
+        if step_result.get("status") == "error"
+    ]
     return {
         "case_id": case["case_id"],
         "status": "completed",
         "observations": observations,
+        # This field is consumed only by the target-side receipt evidence
+        # writer.  ``run_side`` strips it from the public parity envelope so
+        # the stable parity-result schema remains unchanged.
+        "execution_errors": execution_errors,
     }
 
 
@@ -2448,6 +2494,23 @@ def run_side_subprocess(
                         for case_id, receipts in child_cases.items():
                             if isinstance(receipts, list):
                                 execution[case_id] = receipts
+                    child_errors = document.get("errors", {})
+                    if isinstance(child_errors, dict):
+                        for case_id, case_errors in child_errors.items():
+                            if not isinstance(case_errors, list):
+                                continue
+                            # The child envelope intentionally strips the
+                            # internal ``execution_errors`` field before it
+                            # is returned as public parity JSON.  Preserve
+                            # those errors beside the merged receipts so the
+                            # parent classifier can still prove a setup/call
+                            # validation boundary after isolated batches are
+                            # recombined.
+                            prior = results.get(case_id)
+                            if isinstance(prior, dict):
+                                enriched = dict(prior)
+                                enriched["execution_errors"] = case_errors
+                                results[case_id] = enriched
             if child_shader is not None and child_shader.is_file():
                 document = json.loads(child_shader.read_text(encoding="utf-8"))
                 if isinstance(document, dict):
@@ -2479,7 +2542,19 @@ def run_side_subprocess(
             shader_records,
             reason=shader_reason,
         )
-    return identity, results
+    # Keep the internal error records available to the sidecar writer above,
+    # but never leak them into the canonical parity envelope returned to the
+    # orchestrator.  The public workflow schema intentionally contains only
+    # case_id/status/observations.
+    public_results = {
+        case_id: {
+            key: value
+            for key, value in result.items()
+            if key != "execution_errors"
+        }
+        for case_id, result in results.items()
+    }
+    return identity, public_results
 
 
 def comparison_policy(
@@ -2914,21 +2989,23 @@ def write_pipeline_execution_evidence(
                 )
         result = (results or {}).get(case_id)
         case_errors: list[dict[str, Any]] = []
+
+        def record_case_error(error: Any) -> None:
+            if isinstance(error, dict) and error not in case_errors:
+                case_errors.append(error)
+
         if isinstance(result, dict):
             execution_errors = result.get("execution_errors")
             if isinstance(execution_errors, list):
-                case_errors.extend(
-                    item
-                    for item in execution_errors
-                    if isinstance(item, dict)
-                )
+                for item in execution_errors:
+                    record_case_error(item)
             for observation in result.get("observations", []):
                 if (
                     isinstance(observation, dict)
                     and observation.get("status") == "error"
                     and isinstance(observation.get("error"), dict)
                 ):
-                    case_errors.append(
+                    record_case_error(
                         {
                             "step_id": observation.get("step_id"),
                             "error": observation["error"],
@@ -3169,6 +3246,7 @@ def run_side(args: argparse.Namespace) -> int:
     operation_index = build_operation_index(manifest)
     handshake = side_identity(args.side)
     results: list[dict[str, Any]] = []
+    evidence_results: dict[str, dict[str, Any]] = {}
     timings: dict[str, list[int]] = {}
     telemetry: dict[str, list[dict[str, int]]] = {}
     execution: dict[str, list[dict[str, Any]]] = {}
@@ -3268,7 +3346,10 @@ def run_side(args: argparse.Namespace) -> int:
                                 }
                             )
                 assert result is not None
-                results.append(result)
+                evidence_results[case["case_id"]] = result
+                public_result = dict(result)
+                public_result.pop("execution_errors", None)
+                results.append(public_result)
                 if execution_output or args.timings:
                     execution[case["case_id"]] = execution_sink
                 if args.timings:
@@ -3302,7 +3383,7 @@ def run_side(args: argparse.Namespace) -> int:
             cases,
             handshake,
             execution,
-            results={item["case_id"]: item for item in results},
+            results=evidence_results,
         )
     envelope: dict[str, Any] = {"identity": handshake, "results": results}
     if args.timings:

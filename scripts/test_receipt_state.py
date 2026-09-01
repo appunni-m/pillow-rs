@@ -971,6 +971,34 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
 
+    def test_pipeline_case_classification_uses_unobserved_execution_error(self) -> None:
+        """Setup failures are classified from the internal step error record."""
+
+        case = classification_case("hidden-error", "resize")
+        result = {
+            "status": "completed",
+            "observations": [
+                {
+                    "step_id": "observe",
+                    "status": "not_run",
+                    "reason": "dependency step call failed",
+                }
+            ],
+            "execution_errors": [
+                {
+                    "step_id": "call",
+                    "error": {"kind": "invalid_argument"},
+                }
+            ],
+        }
+        self.assertEqual(
+            classify_pipeline_case(case, [], result=result),
+            {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            },
+        )
+
     def test_pipeline_case_classification_keeps_earlier_deferred_error_indeterminate(self) -> None:
         self.assertEqual(
             classify_pipeline_case(
