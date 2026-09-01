@@ -41,10 +41,11 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ### P1 — complete native-backend receipt proof
 
-- [ ] Close the 102 partial native receipts in each CPU, SIMD, and GPU lane;
-  every claimed pipeline case needs a terminal-complete receipt. The current
-  all-backend artifact has no missing or indeterminate native receipts, but
-  the 102 partial cases remain proof gaps.
+- [ ] Close the 15 genuine partial native receipts in each CPU, SIMD, and GPU
+  lane; every claimed pipeline case needs a terminal-complete receipt. The
+  prior 102-count included 101 public validation failures that occur before
+  pipeline materialization; those receipts are now retained as operation
+  telemetry but explicitly marked outside the deferred pipeline partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
   counts include 405 SIMD-lane CPU receipts and 386 GPU-lane CPU receipts;
   the GPU lane has 6,698 native GPU receipts and 142 exact host semantic
@@ -68,34 +69,42 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ## Evidence recorded in the current run
 
-- [x] The schema-v3 all-backend envelope at source `4fe5535ff` is
-  `/tmp/all-backends-post-4fe5535.json` (SHA-256
-  `b915cb2f93c172241a2bbe911ba418414aa5cabbd08c39302367a9080e580946`).
+- [x] The latest schema-v3 all-backend envelope at committed source
+  `cb1813bc8` is `/tmp/all-backends-post-cb1813bc8.json` (SHA-256
+  `aca34d02ab0c31ea6d60587fbddda00edaf8090362ddef5a62412e7115fb22a3`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
   value-exact; GPU smoke is 1/1; case-ID digest is
   `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+  Native CPU/GPU partitions are 7,084 complete + 15 partial + 3,853
+  not-applicable; SIMD is 7,096 + 15 partial + 3,841 not-applicable.
 - [x] The marker-9 native probe is exact for the new heterogeneous lane:
   the `(2,2) -> (1,2)` Bilinear case is byte-for-byte equal to Pillow and
   publishes an actual-GPU receipt. The rebuilt randomized probe covers 5,000
   finite-F rows (269 actual GPU, 4,731 exact host control) with zero
   mismatches; the known `2x1 -> 4x1` false-proof counterexample remains on
   host control.
-- [x] The receipt classifier changes are committed as `40c3e9860` and
-  `635afb555`. `make migration-parity-receipt-test` passes 24/24; the full
+- [x] The receipt classifier changes are committed as `40c3e9860`,
+  `635afb555`, and `cb1813bc8`. The latest guard proves step-bound
+  pre-materialization validation errors, annotates retained setup telemetry
+  with `pipeline_relevant=false`, and keeps prior deferred receipts
+  conservative. `make migration-parity-receipt-test` passes 27/27; the full
   selected denominator remains 10,952 and public parity results retain their
   original schema without internal error fields.
 - [x] The D-049 thumbnail control-flow fix is committed as `dc6085f81`:
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 9/9, GPU-pool tests 16/16, receipt tests 24/24, evidence/schema
+  tests 9/9, GPU-pool tests 16/16, receipt tests 27/27, evidence/schema
   validation, and `make -C pillow-rs fmt`. Clippy remains blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
   3.13.2 environment requirement.
 
 ## Closeout state
 
-- [x] The source lane is committed as `4fe5535ff` and the committed-revision
-  all-backend envelope is schema-valid. No fixture, expected value, threshold,
-  denominator, or case ID was changed.
+- [x] The source lane and receipt-partition correction are committed as
+  `cb1813bc8`; its committed-revision all-backend replay is schema-valid and
+  value-exact for all 10,952 cases. Native lanes now report 15 partial
+  receipts and 101 validation-only cases outside the deferred pipeline
+  partition. No fixture, expected value, threshold, denominator, or case ID
+  was changed.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
