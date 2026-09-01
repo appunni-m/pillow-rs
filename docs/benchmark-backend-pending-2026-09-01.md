@@ -21,12 +21,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   dyadic parts, performs exact integer products/sums, and rounds once at the
   f32 store. The host proof admits only finite normal F words whose ordered
   f64 result matches the reducer; unchanged axes copy their words exactly.
-- [ ] Extend the proof to two changed axes and the remaining coefficient/value
-  domains. The open families are changed-horizontal-plus-vertical F resizes,
-  subnormal/nonfinite or negative-zero words, coefficient overflow/cancellation
-  cases, Box ratios outside the proven row limits, and chains outside the
-  cumulative intermediate proof. The current two-axis shape stays on exact
-  host semantic control until its device intermediate/storage contract is
+- [x] Extend marker 9 to a verified two-axis subset. Commit `f17e1a7da`
+  proves the rounded horizontal f32 intermediate before the vertical reducer;
+  the existing F-specific compute-pass boundary supplies the required device
+  ordering. A heterogeneous `(2,2) -> (1,5)` Bilinear case now executes on
+  native GPU with exact bytes and a terminal no-fallback receipt.
+- [ ] Extend the proof to the remaining coefficient/value domains. The open
+  families are subnormal/nonfinite or negative-zero words, coefficient
+  overflow/cancellation cases, Box ratios outside the proven row limits, and
+  chains outside the cumulative intermediate proof. Those rows remain on
+  exact host semantic control until their arithmetic and storage contracts are
   separately validated.
 - [x] Keep the newly proven signed two-axis subset integrated. Commit
   `a3d2c886b` adds host-verified two-limb signed integer accumulation, exact
@@ -37,7 +41,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   generic-shader diagnostic diverged by ULPs on heterogeneous Bilinear,
   Bicubic, Lanczos, Hamming, and non-dyadic Box; a 2x1 -> 4x1 Bilinear
   counterexample also defeats a broad dyadic-source admission. No unsafe
-  admission change was made.
+  admission change was made; `f17e1a7da` admits only the separately proven
+  two-axis rows.
 
 ### P1 — complete native-backend receipt proof
 
@@ -47,8 +52,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   pipeline materialization; those receipts are now retained as operation
   telemetry but explicitly marked outside the deferred pipeline partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts include 405 SIMD-lane CPU receipts and 386 GPU-lane CPU receipts;
-  the GPU lane has 6,698 native GPU receipts and 142 exact host semantic
+  counts include 405 SIMD-lane CPU receipts and 383 GPU-lane CPU receipts;
+  the GPU lane has 6,701 native GPU receipts and 139 exact host semantic
   control receipts, plus explicit logical-mode, dimension, Transform, and
   Contrast routes. These are visible evidence gaps, not value-parity
   exemptions.
@@ -70,19 +75,19 @@ execution is a parity-preserving fallback, not a parity completion claim.
 ## Evidence recorded in the current run
 
 - [x] The latest schema-v3 all-backend envelope at committed source
-  `cb1813bc8` is `/tmp/all-backends-post-cb1813bc8.json` (SHA-256
-  `aca34d02ab0c31ea6d60587fbddda00edaf8090362ddef5a62412e7115fb22a3`).
+  `f17e1a7da` is `/tmp/all-backends-post-f17e1a7da.json` (SHA-256
+  `ee84c4c4f94aa0c81e1deeea6d712137e1b33299370da3866cacce66fe6c5a7f`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
   value-exact; GPU smoke is 1/1; case-ID digest is
   `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
   Native CPU/GPU partitions are 7,084 complete + 15 partial + 3,853
   not-applicable; SIMD is 7,096 + 15 partial + 3,841 not-applicable.
-- [x] The marker-9 native probe is exact for the new heterogeneous lane:
-  the `(2,2) -> (1,2)` Bilinear case is byte-for-byte equal to Pillow and
-  publishes an actual-GPU receipt. The rebuilt randomized probe covers 5,000
-  finite-F rows (269 actual GPU, 4,731 exact host control) with zero
-  mismatches; the known `2x1 -> 4x1` false-proof counterexample remains on
-  host control.
+- [x] The marker-9 native probe is exact for the heterogeneous lanes: the
+  `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
+  byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
+  randomized probe covers 5,000 finite-F rows (269 actual GPU, 4,731 exact
+  host control) with zero mismatches; the known `2x1 -> 4x1` false-proof
+  counterexample remains on host control.
 - [x] The receipt classifier changes are committed as `40c3e9860`,
   `635afb555`, and `cb1813bc8`. The latest guard proves step-bound
   pre-materialization validation errors, annotates retained setup telemetry
@@ -94,7 +99,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 9/9, GPU-pool tests 16/16, receipt tests 27/27, evidence/schema
+  tests 10/10, GPU-pool tests 17/17, receipt tests 27/27, evidence/schema
   validation, and `make -C pillow-rs fmt`. Clippy remains blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
   3.13.2 environment requirement.
@@ -102,9 +107,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
 ## Closeout state
 
 - [x] The source lane and receipt-partition correction are committed as
-  `cb1813bc8`; its committed-revision all-backend replay is schema-valid and
-  value-exact for all 10,952 cases. Native lanes now report 15 partial
-  receipts and 101 validation-only cases outside the deferred pipeline
-  partition. No fixture, expected value, threshold, denominator, or case ID
-  was changed.
+  `cb1813bc8`, and the two-axis f64 GPU admission is committed as
+  `f17e1a7da`; the latter's committed-revision all-backend replay is
+  schema-valid and value-exact for all 10,952 cases. Native lanes report 15
+  genuine partial receipts and the GPU partition now has 6,701 native
+  receipts plus 383 CPU fallback receipts. No fixture, expected value,
+  threshold, denominator, or case ID was changed.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.

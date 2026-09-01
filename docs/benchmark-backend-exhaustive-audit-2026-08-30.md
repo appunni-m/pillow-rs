@@ -3635,3 +3635,33 @@ receipts, backend identity/fallback proof, WASM receipt gaps, broader F device
 arithmetic, and timing acceptance remain open. The schema-valid artifact is
 `/tmp/all-backends-post-cb1813bc8.json` (SHA-256
 `aca34d02ab0c31ea6d60587fbddda00edaf8090362ddef5a62412e7115fb22a3`).
+
+## 32.34 Verified two-axis f64 F resize reducer (2026-09-02)
+
+The remaining deterministic F arithmetic gap was the changed-horizontal plus
+changed-vertical shape. Pillow's `Resample.c`/`ImagingResample` path stores a
+rounded f32 horizontal intermediate before the vertical f64 accumulation; the
+marker-9 route previously rejected that shape and sent it to exact host
+semantic control even when both device reducers were otherwise provable. The
+existing F encoder already places its horizontal and vertical dispatches in
+separate compute passes, providing the required ordering boundary.
+
+Commit `f17e1a7da` extends the host proof to materialize exact rounded
+horizontal words, then checks the vertical f64 reducer against those words.
+Rows with nonfinite, subnormal, negative-zero, overflow, or ordered-f64 versus
+exact-reducer disagreement remain conservatively host-controlled. A
+heterogeneous `(2,2) -> (1,5)` Bilinear case has a non-dyadic vertical table,
+matches Pillow byte-for-byte, and publishes a terminal requested-GPU /
+actual-GPU receipt with no fallback. The focused F-resize suite is 10/10 and
+the GPU-pool suite is 17/17.
+
+The committed schema-v3 replay at `/tmp/all-backends-post-f17e1a7da.json`
+(SHA-256
+`ee84c4c4f94aa0c81e1deeea6d712137e1b33299370da3866cacce66fe6c5a7f`) remains
+value-exact for all 10,952 CPU, SIMD, GPU, Node WASM, and browser WASM cases;
+GPU smoke is 1/1. Native GPU terminal receipts increase from 6,698 to 6,701,
+exact-host-control fallbacks decrease from 142 to 139, and GPU CPU fallbacks
+are 383. No fixture, expected value, threshold, case ID, denominator, or
+receipt taxonomy changed. The remaining P0 families are special-value and
+overflow/cancellation rows, Box ratios outside the proven bounds, and chains
+outside the cumulative intermediate proof.
