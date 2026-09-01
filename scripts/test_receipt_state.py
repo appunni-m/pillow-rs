@@ -872,7 +872,12 @@ class ReceiptStateTests(unittest.TestCase):
                             "step_id": "call",
                             "status": "error",
                             "error": {"kind": "invalid_argument"},
-                        }
+                        },
+                        {
+                            "step_id": "observe-result",
+                            "status": "not_run",
+                            "reason": "dependency step call failed",
+                        },
                     ],
                 },
             ),
