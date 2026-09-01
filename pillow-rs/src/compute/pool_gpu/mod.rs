@@ -430,23 +430,333 @@ fn gpu_f_resize_box_average_is_exact(
     changed_axis
 }
 
-/// Return whether a filtered F-mode resize is safe for a dyadic f32 shader
-/// reduction.
+#[derive(Clone, Copy)]
+struct F32IntegerParts {
+    negative: bool,
+    mantissa: u32,
+    exponent: i32,
+}
+
+/// Decode a finite normal f32 into the integer significand/exponent form used
+/// by the exact marker-6 accumulator. Positive zero is represented by a zero
+/// mantissa; negative zero, subnormals, and non-finite words are rejected.
+fn gpu_f32_integer_parts(bits: u32) -> Option<F32IntegerParts> {
+    if bits == (-0.0f32).to_bits() {
+        return None;
+    }
+    let exponent_bits = (bits >> 23) & 0xff;
+    let fraction = bits & 0x7f_ff_ff;
+    if exponent_bits == 0xff || (exponent_bits == 0 && fraction != 0) {
+        return None;
+    }
+    if exponent_bits == 0 {
+        return Some(F32IntegerParts {
+            negative: false,
+            mantissa: 0,
+            exponent: 0,
+        });
+    }
+    Some(F32IntegerParts {
+        negative: bits & (1 << 31) != 0,
+        mantissa: fraction | 0x80_0000,
+        exponent: exponent_bits as i32 - 127,
+    })
+}
+
+/// Check one horizontal or vertical fixed-point row using the exact integer
+/// representation of the f32 inputs. A source word is `M * 2^(E-23)` and a
+/// fixed coefficient is `P / 2^22`, so the complete row is an integer sum
+/// scaled by `2^(E-45)`. Restricting the aligned integer to 53 bits proves
+/// that every f64 FMA in Pillow's path is exact before its final f32 store.
+fn gpu_f_resize_integer_row_is_exact(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffs,
+    output_index: usize,
+    horizontal: bool,
+) -> bool {
+    let (source_w, source_h) = source_dimensions;
+    let source_w = match usize::try_from(source_w) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let source_h = match usize::try_from(source_h) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let Some(&source_start) = coeffs.xmin.get(output_index) else {
+        return false;
+    };
+    let Some(&count) = coeffs.count.get(output_index) else {
+        return false;
+    };
+    let Some(&weight_start) = coeffs.offsets.get(output_index) else {
+        return false;
+    };
+    let Some(weights) = coeffs
+        .weights
+        .get(weight_start..weight_start.saturating_add(count))
+    else {
+        return false;
+    };
+    let source_start = match usize::try_from(source_start) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let line_count = if horizontal { source_h } else { source_w };
+    let word_at = |pixel: usize| -> Option<F32IntegerParts> {
+        let offset = pixel.checked_mul(4)?;
+        let end = offset.checked_add(4)?;
+        let word = bytes.get(offset..end)?;
+        gpu_f32_integer_parts(u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+    };
+    let source_pixel = |line: usize, tap: usize| -> Option<usize> {
+        let coordinate = source_start.checked_add(tap)?;
+        if horizontal {
+            (coordinate < source_w).then_some(line.checked_mul(source_w)?.checked_add(coordinate)?)
+        } else {
+            (coordinate < source_h).then_some(coordinate.checked_mul(source_w)?.checked_add(line)?)
+        }
+    };
+
+    for line in 0..line_count {
+        let mut minimum_exponent = None;
+        for (tap, &weight) in weights.iter().enumerate() {
+            if weight == 0 {
+                continue;
+            }
+            let Some(pixel) = source_pixel(line, tap).and_then(word_at) else {
+                return false;
+            };
+            if pixel.mantissa != 0 {
+                minimum_exponent = Some(
+                    minimum_exponent
+                        .map_or(pixel.exponent, |minimum: i32| minimum.min(pixel.exponent)),
+                );
+            }
+        }
+        let Some(minimum_exponent) = minimum_exponent else {
+            // A row whose selected samples are all positive zero has an exact
+            // positive-zero result. The global source scan still rejects -0.
+            continue;
+        };
+
+        let mut sum = 0u128;
+        for (tap, &weight) in weights.iter().enumerate() {
+            if weight == 0 {
+                continue;
+            }
+            let Some(pixel) = source_pixel(line, tap).and_then(word_at) else {
+                return false;
+            };
+            if pixel.mantissa == 0 {
+                continue;
+            }
+            let Ok(weight) = u128::try_from(weight) else {
+                return false;
+            };
+            let Ok(shift) = u32::try_from(pixel.exponent - minimum_exponent) else {
+                return false;
+            };
+            let Some(product) = u128::from(pixel.mantissa).checked_mul(weight) else {
+                return false;
+            };
+            let Some(term) = product.checked_shl(shift) else {
+                return false;
+            };
+            let Some(next) = sum.checked_add(term) else {
+                return false;
+            };
+            sum = next;
+            if 128 - sum.leading_zeros() > 53 {
+                return false;
+            }
+        }
+        if sum == 0 {
+            return false;
+        }
+        let bit_width = 128 - sum.leading_zeros();
+        let top_exponent = minimum_exponent - 45 + bit_width as i32 - 1;
+        // Keep the final f32 result normal and leave one exponent below the
+        // overflow boundary so the shader's round-to-nearest carry is safe.
+        if !(-126..=126).contains(&top_exponent) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Return whether one changed axis of a filtered F resize can use the
+/// integer-only marker-6 shader. This is intentionally stricter than an
+/// empirical GPU comparison: the fixed table must equal Pillow's f64 table,
+/// all coefficients must be nonnegative dyadic values, and every exact row
+/// sum must fit a 53-bit aligned integer. The other axis is admitted only as
+/// a one-tap unit copy, preserving the f32 intermediate boundary exactly.
+fn gpu_f_resize_integer_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let PipelineOp::Resize { w, h, filter } = &ops[0] else {
+        return false;
+    };
+    if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let source_dimensions = image.dimensions();
+    let expected = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
+        .ok()
+        .map(|dims| dims.total_bytes());
+    let bytes = pixels.as_raw();
+    if expected != Some(bytes.len()) {
+        return false;
+    }
+    let mut source_sign = None;
+    let mut has_nonzero = false;
+    for sample in bytes.chunks_exact(4) {
+        let bits = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+        let Some(parts) = gpu_f32_integer_parts(bits) else {
+            return false;
+        };
+        if parts.mantissa == 0 {
+            continue;
+        }
+        has_nonzero = true;
+        if source_sign.is_some_and(|expected| expected != parts.negative) {
+            return false;
+        }
+        source_sign = Some(parts.negative);
+    }
+    if !has_nonzero {
+        return false;
+    }
+
+    let horizontal_changed = *w != source_dimensions.0;
+    let vertical_changed = *h != source_dimensions.1;
+    if horizontal_changed == vertical_changed {
+        // Both axes need an intermediate f32 store, or neither axis needs
+        // arithmetic. Keep the former on the existing dyadic proof and the
+        // latter on the identity proof.
+        return false;
+    }
+
+    let (kernel, support) = filter_from_resample(*filter);
+    let horizontal = gpu_resize_coefficients(*w, source_dimensions.0, *filter);
+    let vertical = gpu_resize_coefficients(*h, source_dimensions.1, *filter);
+    let horizontal_f64 = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
+    let vertical_f64 = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
+    let rows_match = |fixed: &FilterCoeffs, exact: &FilterCoeffsF64| {
+        if fixed.xmin != exact.xmin || fixed.count != exact.count {
+            return false;
+        }
+        for (row, &count) in fixed.count.iter().enumerate() {
+            let start = fixed.offsets[row];
+            let Some(weights) = fixed.weights.get(start..start.saturating_add(count)) else {
+                return false;
+            };
+            let Some(exact_weights) = exact.weights.get(row) else {
+                return false;
+            };
+            if exact_weights.len() != count
+                || weights
+                    .iter()
+                    .zip(exact_weights)
+                    .any(|(&fixed, &exact)| exact != fixed as f64 / 4_194_304.0)
+            {
+                return false;
+            }
+        }
+        true
+    };
+    let coefficients_are_nonnegative = |fixed: &FilterCoeffs| {
+        fixed.count.iter().enumerate().all(|(row, &count)| {
+            let start = fixed.offsets[row];
+            fixed
+                .weights
+                .get(start..start.saturating_add(count))
+                .is_some_and(|weights| {
+                    weights
+                        .iter()
+                        .all(|&weight| (0..=4_194_304).contains(&weight))
+                })
+        })
+    };
+    let identity_axis = |fixed: &FilterCoeffs, size: u32| {
+        fixed.xmin.len() == size as usize
+            && fixed.count.len() == size as usize
+            && fixed.offsets.len() == size as usize
+            && fixed
+                .xmin
+                .iter()
+                .zip(&fixed.count)
+                .zip(&fixed.offsets)
+                .enumerate()
+                .all(|(index, ((&xmin, &count), &offset))| {
+                    let Some(weights) = fixed.weights.get(offset..offset.saturating_add(count))
+                    else {
+                        return false;
+                    };
+                    let unit_tap = weights
+                        .iter()
+                        .enumerate()
+                        .filter(|&(_, &weight)| weight == 4_194_304)
+                        .map(|(tap, _)| tap)
+                        .collect::<Vec<_>>();
+                    unit_tap.len() == 1
+                        && weights
+                            .iter()
+                            .all(|&weight| weight == 0 || weight == 4_194_304)
+                        && xmin
+                            .checked_add(unit_tap[0] as i64)
+                            .is_some_and(|coordinate| coordinate == index as i64)
+                })
+    };
+    if !rows_match(&horizontal, &horizontal_f64)
+        || !rows_match(&vertical, &vertical_f64)
+        || !coefficients_are_nonnegative(&horizontal)
+        || !coefficients_are_nonnegative(&vertical)
+    {
+        return false;
+    }
+
+    if horizontal_changed {
+        if !identity_axis(&vertical, source_dimensions.1) {
+            return false;
+        }
+        horizontal.count.iter().enumerate().all(|(row, _)| {
+            gpu_f_resize_integer_row_is_exact(bytes, source_dimensions, &horizontal, row, true)
+        })
+    } else {
+        if !identity_axis(&horizontal, source_dimensions.0) {
+            return false;
+        }
+        vertical.count.iter().enumerate().all(|(row, _)| {
+            gpu_f_resize_integer_row_is_exact(bytes, source_dimensions, &vertical, row, false)
+        })
+    }
+}
+
+/// Return whether a filtered F-mode resize is safe for marker-6's exact
+/// device reduction.
 ///
-/// The ordinary GPU table stores Pillow's 22-bit weights.  That table is not
-/// sufficient by itself for F-mode: Pillow accumulates the f64 coefficient
-/// table and only narrows after each separable pass.  This proof therefore
-/// requires the fixed table to be bit-for-bit equal to the f64 table first.
-/// It then admits only source words that are normal powers of two, all with
-/// one sign, so multiplying by those non-negative dyadic coefficients is
-/// exact.  Bilinear rows have at most two taps (one rounded sum), while Box
-/// downscales use at most 64 equal power-of-two taps on each changed axis.
-/// The exponent-span bound keeps every multi-tap Box partial sum representable
-/// in f32, making its sequential shader reduction equal to the exact f64 sum
-/// followed by the F-mode f32 store.  Two-tap non-ringing arithmetic filters
-/// use the same product/addition proof.  A two-axis Box resize is safe here as
-/// well: every horizontal average is exactly representable before the vertical
-/// pass consumes it.  Multiple all-Box resizes are admitted with the same
+/// The integer-emulation proof above admits one changed axis for arbitrary
+/// same-sign normal f32 significands.  This historical dyadic proof remains
+/// for two-axis, chained, and other geometry whose intermediate f32 boundary
+/// is not covered by that one-pass integer lane.  It requires the fixed table
+/// to be bit-for-bit equal to Pillow's f64 table, then proves that every
+/// f32 product and sequential reduction is exact on the native adapter.
+/// Bilinear rows have at most two taps, while Box downscales use at most 64
+/// equal power-of-two taps on each changed axis.  The exponent-span bound
+/// keeps every multi-tap Box partial sum representable in f32, making its
+/// sequential shader reduction equal to the exact f64 sum followed by the
+/// F-mode f32 store.  Multiple all-Box resizes are admitted with the same
 /// bound accumulated across their passes; scanned `PutData` words can replace
 /// an intermediate without widening the proven value domain.
 //
@@ -462,6 +772,13 @@ fn gpu_f_resize_dyadic_is_exact(
     if logical_mode != Some("F") || ops.is_empty() || !matches!(image, DynamicImage::ImageRgba8(_))
     {
         return false;
+    }
+
+    // Marker 6 also has an exact integer-emulation lane for arbitrary normal
+    // f32 significands. Keep the historical dyadic proof below for two-axis,
+    // chained, and otherwise unsupported geometry.
+    if gpu_f_resize_integer_is_exact(ops, image, logical_mode) {
+        return true;
     }
 
     // The native Metal adapter used by the GPU backend flushes some low
@@ -728,7 +1045,11 @@ fn gpu_f_resize_dyadic_is_exact(
                     coeffs
                         .weights
                         .get(start..start.saturating_add(count))
-                        .is_some_and(|weights| weights.iter().all(|&weight| weight >= 0))
+                        .is_some_and(|weights| {
+                            weights
+                                .iter()
+                                .all(|&weight| (0..=4_194_304).contains(&weight))
+                        })
                 })
             };
             two_tap_nonnegative(&horizontal) && two_tap_nonnegative(&vertical)
@@ -7510,10 +7831,10 @@ fn gpu_geometry_requires_exact_host_control(
     // resize on the exact host path until a typed convolution shader carries
     // its integer accumulator and rounding rules. F-mode filtered resize is
     // admitted only when one of the narrow F-mode proofs establishes an
-    // exact bit-pattern copy, constant, 2:1 Box average, or dyadic arithmetic
-    // reduction. Mixed F samples and unproved arithmetic filters remain on
-    // this host-controlled path because ordinary f32 convolution cannot
-    // reproduce Pillow's f64 rounding.
+    // exact bit-pattern copy, constant, 2:1 Box average, or exact integer-
+    // emulated/dyadic arithmetic reduction. Mixed F samples and unproved
+    // arithmetic filters remain on this host-controlled path because ordinary
+    // f32 convolution cannot reproduce Pillow's f64 rounding.
     let has_filtered_resize = ops.iter().any(|op| {
         matches!(
             op,
@@ -9171,6 +9492,61 @@ mod tests {
     }
 
     #[test]
+    fn f_resize_integer_lowering_requires_one_axis_and_proves_arbitrary_significands() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                2,
+                2,
+                [0.1f32, 0.3, 1.7, 2.9]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let one_axis = PipelineOp::Resize {
+            w: 1,
+            h: 2,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(gpu_f_resize_dyadic_is_exact(
+            std::slice::from_ref(&one_axis),
+            &image,
+            Some("F")
+        ));
+
+        // A second changed axis would consume an intermediate f32 result, so
+        // it remains on the existing dyadic proof until that boundary is also
+        // represented by an exact integer pass.
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            &[PipelineOp::Resize {
+                w: 1,
+                h: 1,
+                filter: ResampleFilter::Bilinear,
+            }],
+            &image,
+            Some("F")
+        ));
+
+        let mixed_sign = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                2,
+                2,
+                [0.1f32, -0.3, 1.7, 2.9]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            std::slice::from_ref(&one_axis),
+            &mixed_sign,
+            Some("F")
+        ));
+    }
+
+    #[test]
     fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
@@ -9376,6 +9752,55 @@ mod tests {
         assert_eq!(chain_telemetry.1, Backend::Gpu);
         assert_eq!(chain_telemetry.6, Some(4));
         assert_eq!(chain_telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_integer_emulation_matches_cpu_for_heterogeneous_significands() {
+        let values = [0.1f32, 0.3, 1.7, 2.9];
+        let source_bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+        let filters = ["BILINEAR", "BICUBIC"];
+        let sizes = [(1i64, 2i64), (2, 1)];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for filter in filters {
+            for size in sizes {
+                let expected = source
+                    .resize(size, Some(ResampleInput::Name(filter.into())), None)
+                    .expect("CPU resize operation")
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .expect("CPU F resize");
+                let actual = match source
+                    .resize(size, Some(ResampleInput::Name(filter.into())), None)
+                    .expect("GPU resize operation")
+                    .use_backend(Backend::Gpu)
+                    .tobytes()
+                {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => panic!("native GPU F {filter} resize failed: {error}"),
+                };
+                assert_eq!(actual, expected, "F {filter} integer emulation parity");
+                let telemetry = Backend::take_pipeline_telemetry()
+                    .expect("native GPU F resize must publish a telemetry receipt");
+                assert_eq!(telemetry.0, Some(Backend::Gpu));
+                assert_eq!(telemetry.1, Backend::Gpu);
+                assert_eq!(telemetry.6, Some(2));
+                assert_eq!(telemetry.7, None);
+            }
+        }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
