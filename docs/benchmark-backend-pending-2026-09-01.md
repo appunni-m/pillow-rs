@@ -51,10 +51,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   prior 102-count included 101 public validation failures that occur before
   pipeline materialization; those receipts are now retained as operation
   telemetry but explicitly marked outside the deferred pipeline partition.
+  The latest post-change envelope still has 15 genuine partials in each
+  native lane (CPU 7,084 complete, SIMD 7,096, GPU 7,084), so this bucket is
+  unchanged.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts include 405 SIMD-lane CPU receipts and 353 GPU-lane CPU receipts;
-  the GPU lane has 6,731 native GPU receipts and 139 exact host semantic
-  control receipts, plus explicit logical-mode, dimension, Transform, and
+  counts include 405 SIMD-lane CPU receipts and 252 GPU-lane CPU receipts;
+  the latest GPU lane has 6,832 native GPU receipts, 139 exact host semantic
+  control records, and explicit logical-mode, dimension, Transform, and
   Contrast routes. These are visible evidence gaps, not value-parity
   exemptions.
 - [x] Admit the raw-color `ExtractBand` subset on native GPU. Commit
@@ -72,6 +75,19 @@ execution is a parity-preserving fallback, not a parity completion claim.
   covers 13 byte-backed modes; a 34-case filtered all-backend replay is exact
   with 34/34 terminal GPU receipts and no fallback. The full envelope below
   records the same result at the fixed 10,952-case denominator.
+- [x] Admit raw-byte ImageDraw batches on native GPU. Commit `7d1cc0af9`
+  extends the exact host canvas plus packed-byte copy path to `1`, `P`, `PA`,
+  `RGBX`, `RGBa`, `CMYK`, `HSV`, `YCbCr`, `I`, and `F`, while retaining typed
+  `I;16` on its existing path. The focused native regression covers all ten
+  modes, and the 73-case filtered replay is byte-exact across CPU, SIMD, GPU,
+  Node WASM, and browser WASM: 72 GPU receipts are native and the single
+  zero-height safety case remains host-controlled.
+- [x] Admit nearest indexed `ImageOps.fit` batches on native GPU. Commit
+  `0797e71f5` adds only `Fit(filter=NEAREST)` to the `P`/`PA` guard; filtered
+  and interpolating indexed Fit rows remain on exact host semantic control.
+  The focused regression covers both indexed modes. The fixed 15-case replay
+  is byte-exact on every public lane with 14 terminal native GPU receipts;
+  `pa-putpalette-expansion` intentionally remains host-controlled.
 - [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
   currently reports 6,713 complete, 586 partial, 888 missing, 2,738
   not-applicable, and 27 indeterminate cases. Keep the aggregate status
@@ -113,6 +129,25 @@ execution is a parity-preserving fallback, not a parity completion claim.
   340 CPU receipts; the logical-mode preflight count is 104 (down from 117).
   Native receipt totals remain 7,084 complete + 15 partial + 3,853
   not-applicable, and the aggregate remains `passed_with_backend_gaps`.
+- [x] The post-Draw/Fit schema-v3 envelope at committed source `0797e71f5` is
+  `/tmp/all-backends-post-0797e71f5.json` (SHA-256
+  `d95f880a7393ef078bbd09d7b0364cd0ee53836d31f232e2fa4754546369ba0f`). CPU,
+  SIMD, GPU, Node WASM, and browser WASM remain value-exact for all 10,952
+  cases, with GPU smoke 1/1. Native terminal receipts are CPU 7,084,
+  SIMD 6,691 plus 405 CPU, and GPU 6,832 plus 252 CPU; each native lane still
+  has 15 genuine partial receipts. The fixed case-ID digest remains
+  `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`, and
+  the aggregate remains `passed_with_backend_gaps`.
+- [x] The Draw filtered replay at committed source `7d1cc0af9` is
+  `/tmp/draw-post-7d1cc0af9.json` (SHA-256
+  `86f4adee48bd27cf6f53056dc4bee3d84a34a0fe7e1e27eba3d63cdbc193ef58`):
+  73/73 values are exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
+  GPU receipts are 72 native and one host-controlled zero-height guard.
+- [x] The indexed nearest Fit filtered replay at committed source
+  `0797e71f5` is `/tmp/fit-indexed-nearest-0797e71f5.json` (SHA-256
+  `8b8577b060f3b22001e0069017c4cc8584c7bee0e354128cd7dd90728274d83c`):
+  15/15 values are exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
+  GPU receipts are 14 native and one host-controlled palette-expansion row.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -130,7 +165,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 10/10, GPU-pool tests 18/18, receipt tests 27/27, evidence/schema
+  tests 10/10, GPU-pool tests 21/21 (including Draw and indexed Fit), receipt tests 27/27, evidence/schema
   validation, and `make -C pillow-rs fmt`. Clippy remains blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
   3.13.2 environment requirement.
@@ -139,10 +174,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 - [x] The source lane and receipt-partition correction are committed as
   `cb1813bc8`, the two-axis f64 GPU admission as `f17e1a7da`, the raw-color
-  `ExtractBand` admission as `f55a770ad`, and the raw-byte `EffectSpread`
-  admission as `ebc7e765a`; the latest committed all-backend replay is
+  `ExtractBand` admission as `f55a770ad`, the raw-byte `EffectSpread`
+  admission as `ebc7e765a`, raw-byte Draw admission as `7d1cc0af9`, and
+  nearest indexed Fit admission as `0797e71f5`; the latest committed
+  all-backend replay is
   schema-valid and value-exact for all 10,952 cases. Native lanes report 15
-  genuine partial receipts and the GPU partition now has 6,744 native
-  receipts plus 340 CPU fallback receipts. No fixture, expected value,
+  genuine partial receipts and the GPU partition now has 6,832 native
+  receipts plus 252 CPU receipts. No fixture, expected value,
   threshold, denominator, or case ID was changed.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
