@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 from concurrent.futures import ThreadPoolExecutor
 import datetime as _dt
 import hashlib
@@ -1210,6 +1211,186 @@ def _workflow_modes(case: dict[str, Any]) -> set[str]:
     return modes
 
 
+def _workflow_asset_bytes(
+    assets_by_id: dict[str, dict[str, Any]], asset_id: str
+) -> bytes | None:
+    """Read one fixed workflow asset for a source-header proof.
+
+    The receipt classifier normally reasons from the workflow graph alone.
+    A few successful no-receipt cases intentionally start with
+    ``Image.open``; for those cases the target's eager path depends on the
+    mode/EXIF metadata that the encoded input header establishes.  Read only
+    the immutable asset named by the workflow, and fail closed when the
+    descriptor is incomplete or outside the fixture root.
+    """
+
+    asset = assets_by_id.get(asset_id)
+    if asset is None:
+        return None
+    kind = asset.get("kind")
+    if kind == "inline":
+        if asset.get("encoding") != "base64":
+            return None
+        data = asset.get("data")
+        if not isinstance(data, str):
+            return None
+        try:
+            return base64.b64decode(data, validate=True)
+        except (ValueError, binascii.Error):
+            return None
+    if kind == "builtin":
+        name = asset.get("name")
+        return ENCODED_INPUTS.get(name) if isinstance(name, str) else None
+    if kind != "ref":
+        return None
+    relative = asset.get("path")
+    if not isinstance(relative, str):
+        return None
+    fixture_assets = (FIXTURE_ROOT / "assets").resolve()
+    try:
+        path = (fixture_assets / relative).resolve()
+        path.relative_to(fixture_assets)
+        return path.read_bytes()
+    except (OSError, ValueError):
+        # Missing or malformed reference assets must not turn an evidence gap
+        # into a false non-pipeline classification.
+        return None
+
+
+def _encoded_header_mode(data: bytes) -> str | None:
+    """Return a mode proved by a supported encoded image header.
+
+    This deliberately mirrors only the header mappings used by the pinned
+    ``image-slash-star`` decoder's ``codecs/png/inspect.rs::png_mode``. A PNG
+    IHDR is enough to prove the P and unsigned-16 luma modes needed by the
+    remaining successful no-receipt cases; unknown formats remain
+    conservative.
+    """
+
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    if len(data) < 29 or data[8:12] != b"\x00\x00\x00\r" or data[12:16] != b"IHDR":
+        return None
+    bit_depth = data[24]
+    color_type = data[25]
+    if color_type == 0 and bit_depth == 16:
+        return "I;16"
+    if color_type == 3 and bit_depth in {1, 2, 4, 8}:
+        return "P"
+    return None
+
+
+def _opened_asset_descriptor(
+    source: dict[str, Any], assets_by_id: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Return the fixed asset passed as ``Image.open(fp=...)``."""
+
+    if (source.get("surface"), source.get("operation")) != (
+        "PIL.Image",
+        "open",
+    ):
+        return None
+    arguments = source.get("arguments")
+    fp = arguments.get("fp") if isinstance(arguments, dict) else None
+    if not isinstance(fp, dict) or fp.get("kind") != "asset":
+        return None
+    asset_id = fp.get("asset_id")
+    return assets_by_id.get(asset_id) if isinstance(asset_id, str) else None
+
+
+def _jpeg_exif_payload(data: bytes) -> bytes | None:
+    """Extract the first Exif APP1 payload using the target's scanner rules."""
+
+    if len(data) < 4 or data[:2] != b"\xff\xd8":
+        return None
+    offset = 2
+    while offset + 4 <= len(data):
+        if data[offset] != 0xFF:
+            offset += 1
+            continue
+        marker = data[offset + 1]
+        if marker == 0xD8 or 0xD0 <= marker <= 0xD7 or marker == 0x01:
+            offset += 2
+            continue
+        if marker in {0xD9, 0xDA}:
+            return None
+        length = int.from_bytes(data[offset + 2 : offset + 4], "big")
+        if length < 2:
+            return None
+        segment_end = offset + 2 + length
+        if segment_end > len(data):
+            return None
+        if marker == 0xE1:
+            payload = data[offset + 4 : segment_end]
+            return (
+                payload
+                if len(payload) > 6 and payload.startswith(b"Exif\x00\x00")
+                else None
+            )
+        offset = segment_end
+    return None
+
+
+def _exif_orientation(raw: bytes) -> int | None:
+    """Read IFD0 Orientation with the target's intentionally narrow parser."""
+
+    if len(raw) < 8:
+        return None
+    data = raw[6:] if raw.startswith(b"Exif\x00\x00") else raw
+    if len(data) < 8 or data[:2] not in {b"II", b"MM"}:
+        return None
+    little_endian = data[:2] == b"II"
+    byteorder = "little" if little_endian else "big"
+    if int.from_bytes(data[2:4], byteorder) != 42:
+        return None
+    ifd_offset = int.from_bytes(data[4:8], byteorder)
+    if ifd_offset > len(data) - 2:
+        return None
+    entries = int.from_bytes(data[ifd_offset : ifd_offset + 2], byteorder)
+    for index in range(entries):
+        entry_start = ifd_offset + 2 + index * 12
+        if entry_start + 12 > len(data):
+            break
+        if int.from_bytes(data[entry_start : entry_start + 2], byteorder) != 0x0112:
+            continue
+        value = int.from_bytes(data[entry_start + 8 : entry_start + 10], byteorder)
+        return value if 1 <= value <= 8 else None
+    return None
+
+
+def _opened_exif_is_known_noop(
+    source: dict[str, Any],
+    assets_by_id: dict[str, dict[str, Any]],
+    asset_cache: dict[str, bytes | None],
+) -> bool:
+    """Prove opened EXIF transpose has no valid orientation to enqueue."""
+
+    asset = _opened_asset_descriptor(source, assets_by_id)
+    if asset is None:
+        return False
+    asset_id = asset.get("id")
+    if not isinstance(asset_id, str):
+        return False
+    if asset_id not in asset_cache:
+        asset_cache[asset_id] = _workflow_asset_bytes(assets_by_id, asset_id)
+    data = asset_cache[asset_id]
+    if data is None:
+        return False
+    if data.startswith(b"\xff\xd8"):
+        raw_exif = _jpeg_exif_payload(data)
+    elif data[:4] in {b"II*\x00", b"MM\x00*"}:
+        raw_exif = data
+    else:
+        return False
+    # Pillow's ImageOps.exif_transpose and the target core queue work only for
+    # Orientation 2..8.  Orientation 1, malformed EXIF, and absent EXIF all
+    # take the eager copy/no-op branch.  The result is safe only because the
+    # fixed encoded source has been parsed above; unknown/opened sources stay
+    # conservative.
+    orientation = _exif_orientation(raw_exif) if raw_exif is not None else None
+    return orientation not in {2, 3, 4, 5, 6, 7, 8}
+
+
 def _workflow_has_public_error(result: dict[str, Any] | None) -> bool:
     if not isinstance(result, dict):
         return False
@@ -1342,6 +1523,12 @@ def classify_pipeline_case(
         for step in steps
         if isinstance(step.get("step_id"), str)
     }
+    assets_by_id = {
+        asset.get("id"): asset
+        for asset in case.get("assets", [])
+        if isinstance(asset, dict) and isinstance(asset.get("id"), str)
+    }
+    asset_cache: dict[str, bytes | None] = {}
 
     def receiver_binding(step: dict[str, Any]) -> str | None:
         receiver = step.get("receiver")
@@ -1363,7 +1550,7 @@ def classify_pipeline_case(
     def receiver_source_mode(
         step: dict[str, Any], seen: tuple[str, ...] = ()
     ) -> str | None:
-        """Resolve a literal mode through the receiver's source chain."""
+        """Resolve a literal/header-proven mode through the source chain."""
 
         source_id = receiver_binding(step)
         if source_id is None or source_id in seen:
@@ -1372,9 +1559,23 @@ def classify_pipeline_case(
         if source is None:
             return None
         key = (source.get("surface"), source.get("operation"))
+        if key == ("PIL.Image", "open"):
+            asset = _opened_asset_descriptor(source, assets_by_id)
+            asset_id = asset.get("id") if asset is not None else None
+            if isinstance(asset_id, str):
+                if asset_id not in asset_cache:
+                    asset_cache[asset_id] = _workflow_asset_bytes(
+                        assets_by_id, asset_id
+                    )
+                data = asset_cache[asset_id]
+                if data is not None:
+                    return _encoded_header_mode(data)
+            return None
         if key in _IMAGE_SOURCE_MODE_OPS:
             mode = _workflow_literal(source.get("arguments"), "mode")
-            return mode if isinstance(mode, str) else None
+            if isinstance(mode, str):
+                return mode
+            return None
         if key in {
             ("PIL.Image", "linear_gradient"),
             ("PIL.Image", "radial_gradient"),
@@ -1528,10 +1729,19 @@ def classify_pipeline_case(
         ):
             return False
         source = argument_binding(step, "image")
-        return source is not None and (source.get("surface"), source.get("operation")) == (
+        if source is None:
+            return False
+        if (source.get("surface"), source.get("operation")) == (
             "PIL.Image",
             "new",
-        )
+        ):
+            return True
+        if (source.get("surface"), source.get("operation")) != (
+            "PIL.Image",
+            "open",
+        ):
+            return False
+        return _opened_exif_is_known_noop(source, assets_by_id, asset_cache)
 
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
@@ -1595,7 +1805,8 @@ def classify_pipeline_case(
             # ``Image::convert`` then materializes all matrix, scalar I/F,
             # non-standard-source, and 1/P/PA target paths before any
             # PipelineOp::Convert is queued.  Resolve only a literal receiver
-            # source chain; opened/unknown images remain conservative.
+            # source chain; fixed PNG headers can prove the opened P/I;16
+            # cases, while other opened/unknown images remain conservative.
             arguments = step.get("arguments")
             target_mode = _workflow_literal(arguments, "mode")
             matrix = _workflow_literal(arguments, "matrix")
@@ -1635,8 +1846,10 @@ def classify_pipeline_case(
             return thumbnail_is_no_shrink(step)
         if key == ("PIL.ImageOps", "exif_transpose"):
             # ``ImageOps.exif_transpose`` copies a freshly-created image with
-            # no EXIF record (or returns None in-place); only literal ``new``
-            # sources prove that no orientation transform is queued.
+            # no EXIF record (or returns None in-place).  Fixed opened JPEG/
+            # TIFF payloads can prove the same no-orientation branch by
+            # mirroring ``Image::getexif`` and ``exif_get_orientation``;
+            # unknown opened sources remain conservative.
             return exif_transpose_is_known_noop(step)
         if key == ("PIL.Image.Image", "putpixel"):
             # A degenerate/out-of-source crop creates a new blank canvas and
