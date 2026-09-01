@@ -3477,3 +3477,102 @@ partial/indeterminate receipts, WASM receipt gaps, backend identity, and
 fallback taxonomy are still open. The schema-valid artifact is
 `/tmp/all-backends-post-f64-integer.json` (SHA-256
 `0f9136d79c501b9c953e6f78b8c984282df4fd353e38aa8b536f747a07a7c37f`).
+
+## 32.27 Retaining hidden workflow errors for receipt classification (2026-09-01)
+
+The receipt classifier had one evidence-only blind spot: `run_case` recorded
+internal setup and call failures while the public parity envelope discarded
+them. The classifier therefore could not distinguish an explicit pre-dispatch
+error from a dependency-only `not_run` observation. Commit `40c3e9860` keeps
+those errors in the execution-evidence sidecar, strips them from the public
+parity result, and carries them through stateful child-batch merging. This
+preserves the public result schema while giving classification the same
+observed error boundary as the workflow.
+
+No case IDs, values, fixtures, thresholds, or denominators changed. The
+follow-up receipt suite exercises the hidden-error path together with the
+materialization boundary and remains part of the 24/24 passing receipt tests.
+
+## 32.28 Queued prefixes before explicit public errors (2026-09-01)
+
+Commit `635afb555` completes the classifier boundary correction. A queued
+prefix followed by an explicit public-call error is classified as an eager
+pre-materialization path only when no terminal/result boundary was observed;
+materialized prefixes, partial receipts, and dependency-only `not_run` cases
+remain conservative. The public parity envelope remains unchanged, while the
+sidecar gains the retained internal execution-error evidence.
+
+On the fixed 10,952-case CPU evidence replay, the correction reclassified
+exactly 299 cases from `indeterminate` to `not_applicable`: **7,084 complete,
+102 partial, 0 missing, 3,746 not applicable, and 20 indeterminate**. The
+canonical value run remained 10,952/10,952 with zero failures, and
+`make migration-parity-receipt-test` passes 24/24. The reclassification is
+evidence-only; no public case was removed or renamed.
+
+## 32.29 Signed two-axis F resize reduction proof (2026-09-01)
+
+The one-axis integer lane in `8032f95f1` still left a deterministic gap for
+signed samples when both resize axes changed. The first divergence is the
+same as the broader F audit: Pillow's resample path uses f64 coefficients and
+accumulation before the f32 store, while an ordinary WGSL shader accumulates
+in f32. Commit `a3d2c886b` adds a host-verified signed two-limb integer lane,
+proves every sequential partial sum within the aligned 53-bit bound, and
+computes the horizontal rounded-f32 words before the vertical pass. The
+admission continues to reject nonfinite, subnormal, negative-zero,
+non-dyadic, coefficient-mismatch, overflow, and unproven chained inputs.
+
+Focused F tests pass 8/8 and the GPU-pool group passes 15/15. A fresh native
+Pillow-vs-Rust probe after the merge is byte-exact for 45/45 cases (seven
+native GPU receipts and 38 exact host semantic-control receipts), including
+mixed-sign two-axis rows and NaN, infinity, signed-zero, and subnormal edge
+probes. The forced generic shader still diverges on heterogeneous/non-dyadic
+arithmetic, so those inputs remain on the exact host route. No fixtures,
+thresholds, IDs, denominators, or receipt taxonomy changed.
+
+## 32.30 Fresh all-backend envelope after classifier and F fixes (2026-09-01)
+
+The complete schema-v3 envelope was regenerated at source `a3d2c886b` after
+the two classifier commits and the signed two-axis F proof. CPU, SIMD, GPU,
+Node WASM, and browser WASM each remain value-exact at **10,952/10,952**;
+GPU smoke is **1/1**. The fixed case-ID digest is
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+
+CPU reports **7,084 complete + 102 partial + 0 missing + 3,766 not applicable
++ 0 indeterminate**. SIMD reports **7,096 complete + 102 partial + 0 missing
++ 3,754 not applicable + 0 indeterminate**, with 405 terminal receipts
+actually executed by CPU. GPU reports **7,084 complete + 102 partial + 0
+missing + 3,766 not applicable + 0 indeterminate**, with 391 terminal CPU
+receipts and 6,693 GPU receipts. Its fallback taxonomy remains explicit:
+147 exact host semantic-control, 147 logical-mode, 60 unsafe
+primary-dimension, 35 Contrast-midpoint host-image, 3 Transform, and 1
+unsafe/incomplete-dimension records. Node and browser WASM each report
+**6,713 complete + 586 partial + 888 missing + 2,738 not applicable + 27
+indeterminate**.
+
+The aggregate correctly remains `passed_with_backend_gaps`: value parity is
+green, but partial receipts, backend identity, fallback taxonomy, and WASM
+receipt gaps are not native-backend proof. The schema-valid artifact is
+`/tmp/all-backends-post-a3d2.json` (SHA-256
+`6f7de544139c6ef047225e00537bb33def1aeaea39084b6c33c07f705d809306`).
+
+## 32.31 Historical benchmark rows and timing gate rechecked (2026-09-01)
+
+The old 70-row GPU failure list was rerun against the current source. All
+70 selected workloads completed with requested and actual GPU receipts and no
+fallback; the targeted `pipeline-matrix.expanded.rotate.1x1` row is also
+native and exact. The historical rows are therefore stale failure evidence,
+not current value mismatches. The standard 744-workload benchmark likewise
+measured all 744 selected workloads with zero budget failures; its
+`not_proven` execution statuses concern benchmark proof, not output parity.
+
+The P2 timing gate remains open. Four fresh fixed-11-ID reports retain 44/44
+comparable pairings and terminal no-fallback receipts; consecutive budget
+comparisons report 11, 7, and 6 violations. The violating rows do not form a
+stable intersection and the GPU draw/filter timing is bimodal with identical
+dispatch/copy/mode-conversion receipts, so no deterministic source regression
+was found. The factor-1.0 Brightness identity optimization remains a verified
+row-level improvement, but two consecutive zero-violation reports are still
+required.
+
+The short active queue is
+[`benchmark-backend-pending-2026-09-01.md`](benchmark-backend-pending-2026-09-01.md).
