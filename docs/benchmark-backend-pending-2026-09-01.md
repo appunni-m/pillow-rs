@@ -75,6 +75,42 @@ rename, relabel, or weaken a case to make a gate green.
   values. A packed integer is committed before a later scalar float raises;
   the focused RGB/RGBA/CMYK prefix probe is exact (3/3), with no changes to
   the existing callback or oversized-input contracts.
+- `Image.merge` now follows Pillow's typed and alias mode matrix. The native
+  64-case matrix covering `1`, `I`, `F`, `P`, `La`, `PA`, `RGBX`, `RGBa`,
+  `YCbCr`, `HSV`, and `LAB` went from 42 mismatches to 0; LAB A/B storage
+  keeps Pillow's +128 byte bias while public reads decode it. First-band
+  palette acceptance and later-band rejection are exact. `I;16*` merge is a
+  separately tracked gap and was not broadened by this fix.
+- `ImageFilter.Kernel` now preserves Pillow's raw `f32` scale and offset,
+  including fractional, zero, negative, and non-finite values, and the 5x5
+  GPU rows use Pillow's bottom-to-top kernel layout. The CPU matrix is exact
+  (1,344/1,344 after 692 mismatches), SIMD is 180/180, GPU byte cases are
+  180/180 plus 500 randomized cases, and the focused suite is 28/28. GPU
+  admits only finite nonzero scales and integer-representable offsets; other
+  values route through the exact host path. A follow-up GPU accumulation-order
+  correction keeps 5x5 row additions as dependent `fma` steps; the full GPU
+  lane is now 10,952/10,952. An arbitrary I-mode f32/i32 edge remains outside
+  the public Kernel mode manifest and is explicitly tracked.
+- The post-integration live-oracle parity gate at source `a900ec6f4` remains
+  fully exact: 10,952/10,952 selected and passed, with zero failures,
+  not-run cases, or infrastructure errors. The reproducible output is
+  `/tmp/pillow-rs-after-a900-parity.json` (SHA-256
+  `13463f29f7e8816c882f2a92e4e9735538a49061841bc65694cea7e6c99d0210`).
+- The combined post-merge/kernel live-oracle gate is also exact: 10,952/10,952
+  selected and passed, with zero failures, not-run cases, or infrastructure
+  errors. Its temporary output is `/tmp/pillow-rs-post-merge-kernel-parity.json`
+  (SHA-256 `fac150334b05965b4e662b1be4850c80509e42605b1ccfec968c4d148bb34f62`).
+- The final schema-v3 all-backend envelope at source `7983d9406` is
+  parity-green across CPU, SIMD, GPU, Node WASM, and browser WASM (each
+  10,952/10,952), with GPU smoke 1/1. Its temporary output is
+  `/tmp/all-backends-final-7983.json` (SHA-256
+  `468a22e8a589d4a7a9dd9d7f7b53af43254ba7097d9529e85b7d9aa48b75c6ab`). The
+  aggregate remains `passed_with_backend_gaps`: CPU/GPU each have 7,084
+  terminal-complete receipts, 102 partial, 6 missing, 3,327 not-applicable,
+  and 433 indeterminate cases; SIMD has 7,096 complete, 102 partial, 6
+  missing, 3,315 not-applicable, and 433 indeterminate cases. GPU has 6,693
+  device and 391 host-CPU receipts, with the recorded Transform, dimension,
+  host-semantic, Contrast-midpoint, and logical-mode fallback categories.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
@@ -153,5 +189,12 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, and format/core-lint checks. Push the corresponding
   source and checklist commits only after the final artifact is validated.
 
-Last verified source: `5cc713f99` (full all-backend run; working tree has
-pre-existing unrelated changes). The overall goal is intentionally **active**.
+Last committed all-backend artifact source: `5cc713f99` (the artifact above
+was generated there; the working tree had pre-existing unrelated changes).
+The latest integrated parity source is `7983d9406` (GPU accumulation-order
+fix on top of the D-048 Kernel fix `2c2b2d1ba`, D-039 merge fix `5be0fd7a5`,
+and D-044 putdata fix `a900ec6f4`). The focused 69-test binding suite,
+combined full live-oracle parity gate, and
+final all-backend parity envelope are green; backend-proof completion, the
+`I;16*` merge slice, and timing acceptance remain required. The overall goal
+is intentionally **active**.

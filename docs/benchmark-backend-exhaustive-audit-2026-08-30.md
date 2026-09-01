@@ -3240,3 +3240,81 @@ exact integer, so mixed values follow the sequential callback-visible path.
 The focused RGB/RGBA/CMYK probe is exact at 3/3, while existing callback and
 oversized-input cases remain covered. No case IDs, denominators, expected
 outputs, thresholds, or backend classifications changed.
+
+The post-integration full live-oracle parity gate at source `a900ec6f4` also
+remains exact: 10,952/10,952 selected and passed, with zero failures, not-run
+cases, or infrastructure errors. Its reproducible output is
+`/tmp/pillow-rs-after-a900-parity.json` (SHA-256
+`13463f29f7e8816c882f2a92e4e9735538a49061841bc65694cea7e6c99d0210`).
+
+A fresh schema-valid all-backend envelope was then run in a temporary output
+tree at docs revision `eb8eefa56` (no source or denominator changes). CPU,
+SIMD, GPU, Node WASM, and browser WASM each remain 10,952/10,952, with GPU
+smoke 1/1. CPU and GPU each report 7,084 terminal-complete receipts, 102
+partial, 6 missing, 3,327 not-applicable, and 433 indeterminate cases; SIMD
+reports 7,096 complete, 102 partial, 6 missing, 3,315 not-applicable, and 433
+indeterminate cases, with 405 host-CPU receipts. GPU reports 6,693 GPU and
+391 host-CPU receipts and retains explicit Transform, dimension,
+host-semantic, Contrast-midpoint, and logical-mode fallback categories, so
+the aggregate remains `passed_with_backend_gaps`. The temporary envelope is
+`/tmp/all-backends-a900.json` (SHA-256
+`d450b38cfdac2bfca8f3d2abd8972cdfd37035957348d3f26dd9e3a6ed401dd3`).
+
+## 32.15 Image.merge typed and alias mode parity (2026-09-01)
+
+The next public divergence was `Image.merge` mode coverage. Pillow accepts
+typed scalar targets (`1`, `I`, `F`, `P`), alpha/case aliases (`La`, `PA`,
+`RGBX`, `RGBa`), color-space targets (`YCbCr`, `HSV`, `LAB`), and its
+first-band-only palette rule; Rust previously recognized only the canonical
+`L`/`LA`/`RGB`/`RGBA`/`CMYK` set, coerced valid `I`/`F` data through bytes, and
+lost LAB's native A/B bias. The merge validator now preserves Pillow's exact
+band-mode and error rules, carries the requested logical spelling through the
+pipeline, retains typed scalar buffers, and stores LAB A/B samples with the
+oracle's +128 encoding while public reads subtract it. The native 64-case
+matrix improved from 42 mismatches to 0, and focused Rust alias, palette-order,
+and typed-storage tests pass 3/3. `I;16*` merge behavior remains a separately
+tracked slice. No case IDs, denominators, expected outputs, thresholds, or
+backend classifications changed.
+
+## 32.16 ImageFilter.Kernel float parameter and 5x5 GPU parity (2026-09-01)
+
+The next filter divergence was parameter narrowing and shader row order.
+Pillow's `_imaging.filter` parses scale and offset as C `float`, divides the
+`TYPE_FLOAT32` kernel by the raw scale, and applies the f32 offset before
+clipping; Rust previously truncated the offset to `i32` and replaced zero,
+negative, or non-finite scales with `0.0001`. In addition, the GPU 5x5 shader
+mapped the asymmetric public kernel rows upside down. The pipeline and CPU/
+SIMD paths now retain raw f32 values, the GPU admission guard keeps only
+finite nonzero scales and integer-representable offsets on the integer WGSL
+ABI, and other parameters use exact host execution. The fixed CPU matrix is
+1,344/1,344 (692 mismatches before), SIMD is 180/180, GPU byte coverage is
+180/180 plus 500 randomized cases, and the focused Python suite is 28/28.
+An arbitrary I-mode f32/i32 boundary observation remains outside the public
+Kernel mode manifest and is tracked rather than hidden. No case IDs,
+denominators, expected outputs, thresholds, or backend classifications changed.
+
+The combined post-merge/kernel live-oracle parity gate is exact at
+10,952/10,952 selected and passed, with zero failures, not-run cases, or
+infrastructure errors. Its temporary output is
+`/tmp/pillow-rs-post-merge-kernel-parity.json` (SHA-256
+`fac150334b05965b4e662b1be4850c80509e42605b1ccfec968c4d148bb34f62`).
+
+## 32.17 GPU 5x5 accumulation-order regression (2026-09-01)
+
+The first combined all-backend run exposed one deterministic byte regression
+in the active WGSL implementation: the `L` `SMOOTH_MORE` fused-row case
+returned 94 instead of Pillow's 93 at the center sample, even though CPU and
+the custom Kernel matrices were exact. The device had reassociated the plain
+row-add chain after each row's products were already contracted. Replacing
+those additions with dependent `fma(row, 1.0, accumulator)` steps preserves
+Pillow's f32 accumulation order and truncation boundary. The focused GPU case,
+the 28-case Kernel suite, and the full GPU lane are exact after the correction;
+the latter is 10,952/10,952. No fixtures, case IDs, denominators, thresholds,
+or backend classifications changed.
+
+The final schema-v3 all-backend envelope at source `7983d9406` is parity-green
+for CPU, SIMD, GPU, Node WASM, and browser WASM (10,952/10,952 each), with GPU
+smoke 1/1. The aggregate remains `passed_with_backend_gaps` because its
+receipt partitions and fallback taxonomy are still non-empty. The temporary
+envelope is `/tmp/all-backends-final-7983.json` (SHA-256
+`468a22e8a589d4a7a9dd9d7f7b53af43254ba7097d9529e85b7d9aa48b75c6ab`).
