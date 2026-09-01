@@ -65,9 +65,10 @@ fn filtered_float(output_x: u32, output_y: u32) -> f32 {
 }
 
 // Marker 6 uses this integer-only reduction after the host has proved that
-// every selected source word has one sign, every coefficient is a nonnegative
-// 22-bit dyadic, and each aligned row sum fits 53 bits. Keeping the product
-// and accumulation out of f32 avoids adapter-specific relaxed-f32 rounding.
+// every selected source word is a finite normal f32, the fixed coefficients
+// equal Pillow's f64 table, and every aligned signed partial sum fits 53 bits.
+// Keeping the product and accumulation out of f32 avoids adapter-specific
+// relaxed-f32 rounding, including ringing-filter and mixed-sign cancellation.
 struct U64 {
     lo: u32,
     hi: u32,
@@ -79,10 +80,23 @@ fn u64_add(left: U64, right: U64) -> U64 {
     return U64(lo, left.hi + right.hi + carry);
 }
 
+fn u64_less(left: U64, right: U64) -> bool {
+    if left.hi != right.hi {
+        return left.hi < right.hi;
+    }
+    return left.lo < right.lo;
+}
+
+fn u64_sub(left: U64, right: U64) -> U64 {
+    let borrow = select(0u, 1u, left.lo < right.lo);
+    return U64(left.lo - right.lo, left.hi - right.hi - borrow);
+}
+
 fn u64_mul_mantissa_weight(mantissa: u32, weight: u32) -> U64 {
     // Splitting both operands into 16-bit limbs keeps every intermediate
     // product and carry inside u32 while covering the complete 32x32-bit
-    // product. The host currently admits only nonnegative 22-bit weights.
+    // product. The signed coefficient is converted to magnitude at the
+    // callsite before entering this unsigned multiplication.
     let mantissa_lo = mantissa & 65535u;
     let mantissa_hi = mantissa >> 16u;
     let weight_lo = weight & 65535u;
@@ -150,8 +164,29 @@ fn u64_low_bits(value: U64, bits: u32) -> U64 {
     return value;
 }
 
-fn integer_sum_to_f32(sum: U64, minimum_exponent: i32, negative: bool) -> u32 {
-    let bit_length = u64_bit_length(sum);
+struct SignedU64 {
+    magnitude: U64,
+    negative: bool,
+}
+
+fn signed_u64_add(sum: SignedU64, term: U64, term_negative: bool) -> SignedU64 {
+    if term.lo == 0u && term.hi == 0u {
+        return sum;
+    }
+    if sum.magnitude.lo == 0u && sum.magnitude.hi == 0u {
+        return SignedU64(term, term_negative);
+    }
+    if sum.negative == term_negative {
+        return SignedU64(u64_add(sum.magnitude, term), sum.negative);
+    }
+    if u64_less(sum.magnitude, term) {
+        return SignedU64(u64_sub(term, sum.magnitude), term_negative);
+    }
+    return SignedU64(u64_sub(sum.magnitude, term), sum.negative);
+}
+
+fn integer_sum_to_f32(sum: SignedU64, minimum_exponent: i32) -> u32 {
+    let bit_length = u64_bit_length(sum.magnitude);
     if bit_length == 0u {
         return 0u;
     }
@@ -159,8 +194,8 @@ fn integer_sum_to_f32(sum: U64, minimum_exponent: i32, negative: bool) -> u32 {
     var mantissa: u32;
     if bit_length > 24u {
         let shift = bit_length - 24u;
-        mantissa = u64_shr(sum, shift).lo;
-        let remainder = u64_low_bits(sum, shift);
+        mantissa = u64_shr(sum.magnitude, shift).lo;
+        let remainder = u64_low_bits(sum.magnitude, shift);
         let halfway = u64_shl(U64(1u, 0u), shift - 1u);
         let greater = remainder.hi > halfway.hi
             || (remainder.hi == halfway.hi && remainder.lo > halfway.lo);
@@ -173,10 +208,10 @@ fn integer_sum_to_f32(sum: U64, minimum_exponent: i32, negative: bool) -> u32 {
             }
         }
     } else {
-        mantissa = sum.lo << (24u - bit_length);
+        mantissa = sum.magnitude.lo << (24u - bit_length);
     }
     let result = (u32(exponent + 127) << 23u) | (mantissa & 0x7fffffu);
-    if negative {
+    if sum.negative {
         return result | 0x80000000u;
     }
     return result;
@@ -188,7 +223,6 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
     var minimum_exponent: i32 = 128;
-    var negative = false;
     var found = false;
     for (var tap = 0u; tap < count; tap = tap + 1u) {
         let weight = coefficients[weight_base + tap];
@@ -202,7 +236,6 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
         let exponent = i32((bits >> 23u) & 255u) - 127;
         if !found {
             minimum_exponent = exponent;
-            negative = (bits & 0x80000000u) != 0u;
             found = true;
         } else {
             minimum_exponent = min(minimum_exponent, exponent);
@@ -211,10 +244,10 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
     if !found {
         return 0u;
     }
-    var sum = U64(0u, 0u);
+    var sum = SignedU64(U64(0u, 0u), false);
     for (var tap = 0u; tap < count; tap = tap + 1u) {
-        let weight = coefficients[weight_base + tap];
-        if weight == 0i {
+        let signed_weight = coefficients[weight_base + tap];
+        if signed_weight == 0i {
             continue;
         }
         let bits = input[(source_y + tap) * params.dst_w + output_x];
@@ -223,10 +256,15 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
         }
         let exponent = i32((bits >> 23u) & 255u) - 127;
         let mantissa = (bits & 0x7fffffu) | 0x800000u;
-        let product = u64_mul_mantissa_weight(mantissa, u32(weight));
-        sum = u64_add(sum, u64_shl(product, u32(exponent - minimum_exponent)));
+        let weight_bits = bitcast<u32>(signed_weight);
+        let weight_negative = signed_weight < 0i;
+        let weight = select(weight_bits, 0u - weight_bits, weight_negative);
+        let product = u64_mul_mantissa_weight(mantissa, weight);
+        let term = u64_shl(product, u32(exponent - minimum_exponent));
+        let sample_negative = (bits & 0x80000000u) != 0u;
+        sum = signed_u64_add(sum, term, sample_negative != weight_negative);
     }
-    return integer_sum_to_f32(sum, minimum_exponent, negative);
+    return integer_sum_to_f32(sum, minimum_exponent);
 }
 
 fn filtered_box_average(output_x: u32, output_y: u32) -> f32 {
