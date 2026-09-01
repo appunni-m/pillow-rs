@@ -3854,3 +3854,39 @@ native lane. No fixtures, expected values, thresholds, IDs, denominators, or
 receipt taxonomy changed. Remaining P0 work is nonfinite/negative-zero output,
 coefficient overflow/cancellation, Box ratios or mixed operation chains
 outside the per-stage proof, and the guarded mixed up/down schedule.
+
+## 32.42 Mixed-axis F Box scheduling guard (2026-09-02)
+
+The filtered-chain extension exposed a separate first divergence in the
+older marker-6 admission path. For a finite F source `(1,2)` resized to
+`(2,1)` with `BOX`, Pillow returned the repeated f32 word `0xbfd2b818`
+(`-1.6462430953979492`), while the device path returned `0xc11cbef1`
+(`-9.796616554260254`). Pillow's separable `Resample.c`/
+`ImagingResample` writes the horizontal f32 intermediate before the vertical
+reduction; marker 6 could admit horizontal upscaling plus vertical
+downscaling and read a stale or incorrectly ordered intermediate. Marker 9
+already rejected this schedule, but marker 6, the dyadic chain proof, and the
+central router did not.
+
+Commit `ea15ac316` rejects that geometry in all three proof functions and in
+the central F-mode routing guard. These rows now take exact host semantic
+control, preserving Pillow bytes and an explicit requested-GPU/actual-CPU
+receipt rather than claiming a native proof. The native regression test
+asserts the exact CPU bytes and fallback receipt. A 2,304-case Box geometry
+sweep now has **0 mismatches** (three deterministic mismatches before the
+guard); focused F-resize tests pass **14/14**, the GPU-pool group **25/25**,
+and `make build-dev` passes.
+
+The post-guard schema-v3 envelope at
+`/tmp/all-backends-post-ea15ac316.json` (SHA-256
+`8fef943b7e5a97188e4aa44ca4d34a54cf99acf7d9cffdf92f9506a1ade035cf`) is
+value-exact for **10,952/10,952** CPU, SIMD, GPU, Node WASM, and browser WASM
+cases, with GPU smoke **1/1**. Native terminal partitions remain CPU 7,084;
+SIMD 6,691 plus 405 CPU; GPU 6,832 plus 252 CPU, with 15 genuine partials in
+each native lane. The aggregate status remains `passed_with_backend_gaps`
+because those receipt gaps are unchanged. No fixtures, expected values,
+thresholds, IDs, denominators, or receipt taxonomy changed. Remaining P0
+work is the broader native-GPU F arithmetic domain (nonfinite and negative-
+zero outputs, coefficient overflow/cancellation, larger Box ratios, and
+chains containing non-Resize stages); the mixed-axis schedule is now
+explicitly guarded and parity-safe.

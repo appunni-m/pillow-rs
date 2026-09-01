@@ -1,4 +1,4 @@
-# Benchmark/backend pending checklist — 2026-09-01
+# Benchmark/backend pending checklist — 2026-09-02
 
 This is the short, active queue. The complete investigation log is in the
 [exhaustive audit](benchmark-backend-exhaustive-audit-2026-08-30.md); the
@@ -40,9 +40,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   families are nonfinite words, negative-zero filtered outputs, coefficient
   overflow/cancellation cases, Box ratios outside the proven row limits,
   chains containing non-Resize stages or outside the per-stage intermediate
-  proof, and the guarded geometry that combines horizontal upscaling with
-  vertical downscaling. Those rows remain on exact host semantic control until
-  their arithmetic, ordering, and storage contracts are separately validated.
+  proof, and larger native-GPU arithmetic domains. Those rows remain on exact
+  host semantic control until their arithmetic, ordering, and storage
+  contracts are separately validated.
+- [x] Guard the mixed geometry that combines horizontal upscaling with
+  vertical downscaling. Commit `ea15ac316` rejects this schedule in marker 6,
+  the dyadic chain proof, and the central router after a `(1,2) -> (2,1)` Box
+  first divergence; the native regression and a 2,304-case sweep now have
+  exact bytes with explicit host-control receipts.
 - [x] Keep the newly proven signed two-axis subset integrated. Commit
   `a3d2c886b` adds host-verified two-limb signed integer accumulation, exact
   horizontal f32 intermediate boundaries, and two-axis proof checks. Focused
@@ -175,6 +180,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
   Native receipt partitions remain CPU 7,084, SIMD 6,691 plus 405 CPU, and
   GPU 6,832 plus 252 CPU, with 15 genuine partials in each native lane.
+- [x] The post-guard schema-v3 envelope at committed source `ea15ac316` is
+  `/tmp/all-backends-post-ea15ac316.json` (SHA-256
+  `8fef943b7e5a97188e4aa44ca4d34a54cf99acf7d9cffdf92f9506a1ade035cf`). CPU,
+  SIMD, GPU, Node WASM, and browser WASM remain value-exact for all 10,952
+  cases, with GPU smoke 1/1. Native receipt partitions remain CPU 7,084,
+  SIMD 6,691 plus 405 CPU, and GPU 6,832 plus 252 CPU, with 15 genuine
+  partials in each native lane; the mixed-axis Box route is now explicitly
+  host-controlled and no longer an unguarded parity risk.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -192,7 +205,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 10/10, GPU-pool tests 24/24 (including Draw, indexed Fit, finite
+  tests 14/14, GPU-pool tests 25/25 (including Draw, indexed Fit, finite
   subnormal marker-9 rows, and filtered F chains), receipt tests 27/27,
   evidence/schema validation, and `make -C pillow-rs fmt`. Clippy remains
   blocked before
@@ -204,12 +217,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
 - [x] The source lane and receipt-partition correction are committed as
   `cb1813bc8`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
   subnormal marker-9 admission as `b1962c6dd`, pure filtered F-chain admission
-  as `33e0f11ec`, the raw-color `ExtractBand` admission as `f55a770ad`, the
+  as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
+  `ExtractBand` admission as `f55a770ad`, the
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
   `7d1cc0af9`, and nearest indexed Fit admission as `0797e71f5`; the latest
   committed all-backend replay is
   schema-valid and value-exact for all 10,952 cases. Native lanes report 15
   genuine partial receipts and the GPU partition has 6,832 native receipts
   plus 252 CPU receipts. No fixture, expected value, threshold, denominator,
-  or case ID was changed.
+  or case ID was changed. The post-guard envelope is
+  `/tmp/all-backends-post-ea15ac316.json` and remains schema-valid and
+  value-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
