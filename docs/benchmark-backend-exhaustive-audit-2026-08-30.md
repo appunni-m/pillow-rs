@@ -3695,3 +3695,34 @@ complete + 15 partial + 3,853 not-applicable. The aggregate therefore stays
 routes, genuine partial receipts, WASM receipt proof, broader F arithmetic,
 and the timing gate are still open. No fixtures, expected values, thresholds,
 IDs, denominators, or receipt taxonomy changed.
+
+## 32.36 Native raw-byte EffectSpread GPU lane (2026-09-02)
+
+The next deterministic routing gap was a preflight mode guard, not a pixel
+algorithm mismatch. The existing `effect_spread.wgsl` shader already gathers
+from a host-generated relocation map, preserving Pillow 12.2.0
+`libImaging/Effects.c` RNG/collision/scatter order. Before `ebc7e765a`, logical
+P/PA/1/RGBX/RGBa/HSV/YCbCr/CMYK/I/F tags were rejected before this path, so
+valid outputs were produced by CPU/exact-host control even though complete
+packed bytes are the storage contract. Typed I;16 remains on its separate
+path.
+
+Commit `ebc7e765a` admits EffectSpread in those raw packed-mode guards. The
+focused native GPU regression covers 13 byte-backed modes, exact bytes, one
+dispatch, requested/actual GPU identity, and no fallback. The filtered 34-case
+replay is value-exact across CPU/SIMD/GPU/Node/browser; all 34 GPU receipts are
+terminal native receipts with no fallback.
+
+The latest schema-v3 envelope is
+`/tmp/all-backends-post-ebc7e765a.json` (SHA-256
+`17326cec1fd5c70132aa21bb00af6f060b194e1d484491fbb5100f29c712beee`) at
+revision `ebc7e765a41b984e237fa5593133fbb7b56a3798`. All 10,952 selected cases
+remain value-exact on CPU, SIMD, GPU, Node WASM, and browser WASM, with GPU
+smoke 1/1. GPU now reports 6,744 native receipts and 340 CPU receipts; the
+logical-mode preflight count is 104 (down from 117). Native receipt totals
+remain 7,084 complete + 15 partial + 3,853 not-applicable, so the aggregate
+remains `passed_with_backend_gaps`. No fixtures, expected values, thresholds,
+IDs, denominators, or receipt taxonomy changed. Remaining P0 work is broader
+F special/overflow/cancellation/Box/chained arithmetic; P1 covers partial
+native receipts, backend/fallback identity, and WASM receipt proof; P2 is the
+zero-violation timing gate.
