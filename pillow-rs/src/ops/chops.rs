@@ -351,3 +351,36 @@ pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError
 pub fn constant(image: &Image, value: u8) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Constant { value }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::constant;
+    use crate::image::Image;
+
+    #[test]
+    fn constant_returns_l_mode_for_explicit_source_modes() {
+        let cases: &[(&str, &[u8])] = &[
+            ("1", &[0x80]),
+            ("CMYK", &[7, 8, 9, 10]),
+            ("YCbCr", &[7, 8, 9]),
+            ("HSV", &[7, 8, 9]),
+            ("I", &[7, 0, 0, 0]),
+            ("F", &[0, 0, 224, 64]),
+        ];
+
+        for &(mode, bytes) in cases {
+            let source = Image::frombytes(mode, (1, 1), bytes).expect("source image");
+            let result = constant(&source, 127).expect("constant image");
+            assert_eq!(
+                result.mode().expect("result mode"),
+                "L",
+                "source mode {mode}"
+            );
+            assert_eq!(
+                result.tobytes().expect("result bytes"),
+                [127],
+                "source mode {mode}"
+            );
+        }
+    }
+}
