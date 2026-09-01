@@ -947,40 +947,34 @@ fn gpu_f_resize_f64_pass_bits(
     Some(result)
 }
 
-/// Admit a filtered F resize to marker 9 when its f64 coefficient products
-/// and final f32 stores are reproduced by the exact integer reducer.  For two
-/// changed axes, the host proof materializes the rounded horizontal words
-/// before checking the vertical pass, matching Pillow's observable f32
-/// boundary.  The encoder places those two device passes in separate compute
-/// passes so the vertical reducer reads the completed intermediate.
+/// Admit one or more filtered F resizes to marker 9 when every f64 coefficient
+/// product and final f32 store is reproduced by the exact integer reducer.
+/// Each changed axis is materialized as rounded f32 words before the next
+/// resize is checked, matching Pillow's observable boundary between chained
+/// operations. The encoder places every F resize's horizontal and vertical
+/// reducers in separate compute passes so the next stage reads completed
+/// intermediates.
 fn gpu_f_resize_f64_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    if logical_mode != Some("F") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
+    if logical_mode != Some("F") || ops.is_empty() || !matches!(image, DynamicImage::ImageRgba8(_))
     {
-        return false;
-    }
-    let PipelineOp::Resize { w, h, filter } = &ops[0] else {
-        return false;
-    };
-    if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
         return false;
     }
     let DynamicImage::ImageRgba8(pixels) = image else {
         return false;
     };
-    let source_dimensions = image.dimensions();
+    let mut source_dimensions = image.dimensions();
     if source_dimensions.0 == 0 || source_dimensions.1 == 0 {
         return false;
     }
-    let bytes = pixels.as_raw();
-    if CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
+    let expected_bytes = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
         .ok()
-        .map(|dims| dims.total_bytes())
-        != Some(bytes.len())
-    {
+        .map(|dims| dims.total_bytes());
+    let mut bytes = pixels.as_raw().to_vec();
+    if expected_bytes != Some(bytes.len()) {
         return false;
     }
     if bytes.chunks_exact(4).any(|sample| {
@@ -992,73 +986,95 @@ fn gpu_f_resize_f64_is_exact(
         return false;
     }
 
-    let (kernel, support) = filter_from_resample(*filter);
-    let horizontal = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
-    let vertical = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
-    for coeffs in [&horizontal, &vertical] {
-        if coeffs.xmin.len() != coeffs.count.len()
-            || coeffs.xmin.len() != coeffs.weights.len()
-            || coeffs.weights.iter().any(|row| {
-                row.iter()
-                    .any(|&weight| gpu_f64_integer_parts(weight).is_none())
-            })
-        {
-            return false;
+    let words_to_bytes = |words: Vec<u32>| -> Option<Vec<u8>> {
+        let byte_count = words.len().checked_mul(4)?;
+        let mut result = Vec::new();
+        result.try_reserve(byte_count).ok()?;
+        for word in words {
+            result.extend_from_slice(&word.to_le_bytes());
         }
-    }
+        Some(result)
+    };
+    let mut changed_any = false;
 
-    let horizontal_changed = *w != source_dimensions.0;
-    let vertical_changed = *h != source_dimensions.1;
-    if !horizontal_changed && !vertical_changed {
-        return false;
-    }
-    // A single two-pass submission is not yet proven for a horizontal
-    // upscale followed by a vertical downscale.  On the current adapter the
-    // vertical marker can observe the wrong horizontal intermediate for this
-    // shape (the first divergence is `(2, 2) -> (4, 1)`: Pillow stores
-    // `[2, 2, 3, 3]`, while the device produced `[1.5, 1.625, 1.875, 2]`).
-    // Keep this narrow geometry on the exact host path until its command
-    // ordering/buffer contract is independently validated.
-    if horizontal_changed
-        && vertical_changed
-        && *w > source_dimensions.0
-        && *h < source_dimensions.1
-    {
-        return false;
-    }
-    if horizontal_changed && vertical_changed {
-        // The encoder inserts a compute-pass boundary between the two device
-        // reducers.  Prove the rounded horizontal words before admitting the
-        // paired path; independently proving each raw-source axis would skip
-        // Pillow's observable intermediate f32 store.
-        let horizontal_words =
-            gpu_f_resize_f64_pass_bits(bytes, source_dimensions, &horizontal, true);
-        let Some(horizontal_words) = horizontal_words else {
+    for op in ops {
+        let PipelineOp::Resize { w, h, filter } = op else {
+            // The f64 coefficient ranges and intermediate proof are scoped
+            // to pure Resize chains. A PutData, geometry relocation, or mode
+            // transition needs its own storage contract and must remain on
+            // exact host semantic control.
             return false;
         };
-        let mut horizontal_bytes = Vec::new();
-        if horizontal_bytes
-            .try_reserve(horizontal_words.len().saturating_mul(4))
-            .is_err()
+        if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
+            return false;
+        }
+        if CheckedDims::new(*w, *h, 1)
+            .ok()
+            .map(|dims| dims.total_pixels())
+            .is_none_or(|pixels| pixels > GPU_BUFFER_CAPACITY as usize)
         {
             return false;
         }
-        for word in horizontal_words {
-            horizontal_bytes.extend_from_slice(&word.to_le_bytes());
+
+        let (kernel, support) = filter_from_resample(*filter);
+        let horizontal = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
+        let vertical = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
+        for coeffs in [&horizontal, &vertical] {
+            if coeffs.xmin.len() != coeffs.count.len()
+                || coeffs.xmin.len() != coeffs.weights.len()
+                || coeffs.weights.iter().any(|row| {
+                    row.iter()
+                        .any(|&weight| gpu_f64_integer_parts(weight).is_none())
+                })
+            {
+                return false;
+            }
         }
-        return gpu_f_resize_f64_pass_bits(
-            &horizontal_bytes,
-            (*w, source_dimensions.1),
-            &vertical,
-            false,
-        )
-        .is_some();
+
+        let horizontal_changed = *w != source_dimensions.0;
+        let vertical_changed = *h != source_dimensions.1;
+        changed_any |= horizontal_changed || vertical_changed;
+        // A single two-pass submission is not yet proven for a horizontal
+        // upscale followed by a vertical downscale. On the current adapter
+        // the vertical marker can observe the wrong horizontal intermediate
+        // for this shape (the first divergence is `(2, 2) -> (4, 1)`: Pillow
+        // stores `[2, 2, 3, 3]`, while the device produced
+        // `[1.5, 1.625, 1.875, 2]`). Keep this narrow geometry on the exact
+        // host path until its command ordering/buffer contract is validated.
+        if horizontal_changed
+            && vertical_changed
+            && *w > source_dimensions.0
+            && *h < source_dimensions.1
+        {
+            return false;
+        }
+
+        if horizontal_changed {
+            let Some(words) =
+                gpu_f_resize_f64_pass_bits(&bytes, source_dimensions, &horizontal, true)
+            else {
+                return false;
+            };
+            let Some(next_bytes) = words_to_bytes(words) else {
+                return false;
+            };
+            bytes = next_bytes;
+            source_dimensions = (*w, source_dimensions.1);
+        }
+        if vertical_changed {
+            let Some(words) =
+                gpu_f_resize_f64_pass_bits(&bytes, source_dimensions, &vertical, false)
+            else {
+                return false;
+            };
+            let Some(next_bytes) = words_to_bytes(words) else {
+                return false;
+            };
+            bytes = next_bytes;
+            source_dimensions = (*w, *h);
+        }
     }
-    if horizontal_changed {
-        return gpu_f_resize_f64_pass_bits(bytes, source_dimensions, &horizontal, true).is_some();
-    }
-    vertical_changed
-        && gpu_f_resize_f64_pass_bits(bytes, source_dimensions, &vertical, false).is_some()
+    changed_any
 }
 
 /// Return whether a filtered F resize can use the integer-only marker-6
@@ -10400,6 +10416,23 @@ mod tests {
             &image,
             Some("F")
         ));
+        let filtered_chain = [
+            PipelineOp::Resize {
+                w: 3,
+                h: 3,
+                filter: ResampleFilter::Bicubic,
+            },
+            PipelineOp::Resize {
+                w: 2,
+                h: 2,
+                filter: ResampleFilter::Lanczos,
+            },
+        ];
+        assert!(gpu_f_resize_f64_is_exact(
+            &filtered_chain,
+            &image,
+            Some("F")
+        ));
         // The opposite mixed geometry is not yet safe in one device
         // submission: horizontal upscaling followed by vertical downscaling
         // can read a stale/wrong intermediate on the adapter.
@@ -10883,6 +10916,54 @@ mod tests {
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_filtered_chain_native_matches_cpu() {
+        let values = [0.1f32, -0.3, 1.7, 2.9];
+        let source_bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+        let expected = source
+            .resize((3, 3), Some(ResampleInput::Name("BICUBIC".into())), None)
+            .expect("CPU first chain resize")
+            .resize((2, 2), Some(ResampleInput::Name("LANCZOS".into())), None)
+            .expect("CPU second chain resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU filtered F chain");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((3, 3), Some(ResampleInput::Name("BICUBIC".into())), None)
+            .expect("GPU first chain resize")
+            .resize((2, 2), Some(ResampleInput::Name("LANCZOS".into())), None)
+            .expect("GPU second chain resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU filtered F chain failed: {error}"),
+        };
+        assert_eq!(actual, expected, "filtered F chain parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU filtered F chain must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.2, 2);
+        assert_eq!(telemetry.6, Some(4));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
