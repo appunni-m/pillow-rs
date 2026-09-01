@@ -148,6 +148,12 @@ impl Image {
             return Ok(());
         }
         let mut filter = parse_resample_input(filter)?;
+        if source_size.0 == 0 || source_size.1 == 0 {
+            // Pillow's aspect-preserving size can be positive even when the
+            // source has a zero dimension. Its subsequent Image.resize call
+            // then rejects the zero-sized source before any pixels are produced.
+            return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
         self.thumbnail_with_filter(dimensions, &mut filter)
     }
 
@@ -177,6 +183,14 @@ impl Image {
         size: (i64, i64),
         (source_width, source_height): (u32, u32),
     ) -> Result<(u32, u32), PilError> {
+        if source_height == 0 {
+            // Pillow evaluates the source aspect ratio before validating the
+            // requested bounds whenever the early no-op check did not fire.
+            return Err(PilError::ZeroDivisionError("division by zero".into()));
+        }
+        if source_width == 0 {
+            return Self::thumbnail_dimensions_zero_width(size);
+        }
         // Pillow evaluates x / y before it rejects a negative width. Preserve
         // its division error for requests containing a zero dimension.
         if size.0 == 0 || size.1 == 0 {
@@ -215,6 +229,24 @@ impl Image {
             requested_height.min(source_height)
         };
         Ok((width, height))
+    }
+
+    fn thumbnail_dimensions_zero_width(size: (i64, i64)) -> Result<(u32, u32), PilError> {
+        // Pillow's preserve_aspect_ratio computes an aspect of 0.0 for a
+        // zero-width, nonempty source and evaluates x / y before choosing its
+        // branch. Keep those divisions observable: the branch that can resize
+        // rounds x to one, after which Image.resize rejects the source.
+        if size.1 == 0 {
+            return Err(PilError::ZeroDivisionError("division by zero".into()));
+        }
+        let ratio = size.0 as f64 / size.1 as f64;
+        if ratio < 0.0 {
+            return Err(PilError::ZeroDivisionError("float division by zero".into()));
+        }
+        if size.1 < 0 {
+            return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
+        Ok((1, thumbnail_bound(size.1)))
     }
 
     fn thumbnail_height_for_width(
@@ -264,4 +296,57 @@ fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {
     let ceil = number.ceil();
     let best = if key(floor) <= key(ceil) { floor } else { ceil };
     best.max(1.0) as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Image, PilError};
+
+    #[test]
+    fn thumbnail_empty_source_nonnegative_bounds_is_noop() {
+        let mut image = Image::new(0, 0, "RGB", (1, 2, 3, 255)).unwrap();
+
+        image.thumbnail((0, 2), None).unwrap();
+
+        assert_eq!(image.size().unwrap(), (0, 0));
+    }
+
+    #[test]
+    fn thumbnail_zero_width_source_matches_resize_validation() {
+        let mut image = Image::new(0, 2, "RGB", (1, 2, 3, 255)).unwrap();
+
+        let error = image.thumbnail((1, 1), None).unwrap_err();
+
+        assert!(matches!(
+            error,
+            PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+        assert_eq!(image.size().unwrap(), (0, 2));
+    }
+
+    #[test]
+    fn thumbnail_zero_width_source_preserves_aspect_division_order() {
+        let mut image = Image::new(0, 2, "RGB", (1, 2, 3, 255)).unwrap();
+
+        let error = image.thumbnail((-1, 1), None).unwrap_err();
+
+        assert!(matches!(
+            error,
+            PilError::ZeroDivisionError(message) if message == "float division by zero"
+        ));
+        assert_eq!(image.size().unwrap(), (0, 2));
+    }
+
+    #[test]
+    fn thumbnail_zero_height_source_preserves_aspect_division_order() {
+        let mut image = Image::new(2, 0, "RGB", (1, 2, 3, 255)).unwrap();
+
+        let error = image.thumbnail((1, 1), None).unwrap_err();
+
+        assert!(matches!(
+            error,
+            PilError::ZeroDivisionError(message) if message == "division by zero"
+        ));
+        assert_eq!(image.size().unwrap(), (2, 0));
+    }
 }
