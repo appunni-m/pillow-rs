@@ -52,11 +52,19 @@ execution is a parity-preserving fallback, not a parity completion claim.
   pipeline materialization; those receipts are now retained as operation
   telemetry but explicitly marked outside the deferred pipeline partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts include 405 SIMD-lane CPU receipts and 383 GPU-lane CPU receipts;
-  the GPU lane has 6,701 native GPU receipts and 139 exact host semantic
+  counts include 405 SIMD-lane CPU receipts and 353 GPU-lane CPU receipts;
+  the GPU lane has 6,731 native GPU receipts and 139 exact host semantic
   control receipts, plus explicit logical-mode, dimension, Transform, and
   Contrast routes. These are visible evidence gaps, not value-parity
   exemptions.
+- [x] Admit the raw-color `ExtractBand` subset on native GPU. Commit
+  `f55a770ad` permits only `ExtractBand`/`PutPixel` batches for CMYK, HSV, and
+  YCbCr, whose packed channel order is already preserved by the existing
+  shader. The focused native regression and a 30-case filtered all-backend
+  replay are byte-exact with 30 terminal GPU receipts and no fallback. The
+  full envelope moves the GPU partition from 6,701 to 6,731 native receipts
+  and from 383 to 353 CPU receipts; the remaining logical-mode routes still
+  require separate proofs.
 - [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
   currently reports 6,713 complete, 586 partial, 888 missing, 2,738
   not-applicable, and 27 indeterminate cases. Keep the aggregate status
@@ -82,6 +90,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
   Native CPU/GPU partitions are 7,084 complete + 15 partial + 3,853
   not-applicable; SIMD is 7,096 + 15 partial + 3,841 not-applicable.
+- [x] The follow-up schema-v3 envelope at committed source `f55a770ad` is
+  `/tmp/all-backends-post-f55a770ad.json` (SHA-256
+  `7b97442f45ffe3f6db1128bd04cbc6dd438963f1aab900a374fcd2c46a943f4e`).
+  CPU, SIMD, GPU, Node WASM, and browser WASM remain value-exact for all
+  10,952 cases, with GPU smoke 1/1. The GPU lane reports 6,731 native GPU
+  and 353 CPU receipts; its logical-mode fallback count is 117. Native
+  receipt totals are 7,084 complete + 15 partial + 3,853 not-applicable;
+  the aggregate remains `passed_with_backend_gaps`.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -99,7 +115,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 10/10, GPU-pool tests 17/17, receipt tests 27/27, evidence/schema
+  tests 10/10, GPU-pool tests 18/18, receipt tests 27/27, evidence/schema
   validation, and `make -C pillow-rs fmt`. Clippy remains blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
   3.13.2 environment requirement.
@@ -107,10 +123,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
 ## Closeout state
 
 - [x] The source lane and receipt-partition correction are committed as
-  `cb1813bc8`, and the two-axis f64 GPU admission is committed as
-  `f17e1a7da`; the latter's committed-revision all-backend replay is
-  schema-valid and value-exact for all 10,952 cases. Native lanes report 15
-  genuine partial receipts and the GPU partition now has 6,701 native
-  receipts plus 383 CPU fallback receipts. No fixture, expected value,
-  threshold, denominator, or case ID was changed.
+  `cb1813bc8`, the two-axis f64 GPU admission as `f17e1a7da`, and the
+  raw-color `ExtractBand` admission as `f55a770ad`; the latest committed
+  all-backend replay is schema-valid and value-exact for all 10,952 cases.
+  Native lanes report 15 genuine partial receipts and the GPU partition now
+  has 6,731 native receipts plus 353 CPU fallback receipts. No fixture,
+  expected value, threshold, denominator, or case ID was changed.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
