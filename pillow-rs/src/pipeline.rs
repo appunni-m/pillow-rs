@@ -460,6 +460,10 @@ pub enum PipelineOp {
     Merge {
         /// Destination color mode.
         mode: ColorMode,
+        /// Original Pillow mode spelling. The raster core uses canonical
+        /// storage variants for aliases such as `LAB` and `RGBa`, while this
+        /// tag keeps target-specific encoding and backend admission exact.
+        logical_mode: String,
         /// Band images.
         bands: Arc<[Image]>,
     },

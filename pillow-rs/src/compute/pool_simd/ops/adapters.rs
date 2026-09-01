@@ -226,7 +226,14 @@ fn native_merge_contract_for_image(
     target_mode: &ColorMode,
     bands: &[Image],
     mode: Option<&str>,
+    logical_mode: &str,
 ) -> Option<(usize, usize)> {
+    // The SIMD interleave kernel only preserves canonical byte modes. Alias
+    // targets (especially LAB, whose A/B bytes need a +128 bias) must remain
+    // on the scalar path so target-specific encoding is not skipped.
+    if !matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK") {
+        return None;
+    }
     let channels = native_merge_channels(target_mode)?;
     if !matches!(img, DynamicImage::ImageLuma8(_)) || bands.len() != channels {
         return None;
@@ -252,7 +259,11 @@ fn native_merge_contract_for_shape(
     target_mode: &ColorMode,
     bands: &[Image],
     mode: Option<&str>,
+    logical_mode: &str,
 ) -> Option<(usize, usize)> {
+    if !matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK") {
+        return None;
+    }
     let channels = native_merge_channels(target_mode)?;
     if shape.layout != SimdLayout::Luma8 || bands.len() != channels {
         return None;
@@ -4761,7 +4772,8 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Merge {
             mode: target_mode,
             bands,
-        } => native_merge_contract_for_image(img, target_mode, bands, mode).is_some(),
+            logical_mode,
+        } => native_merge_contract_for_image(img, target_mode, bands, mode, logical_mode).is_some(),
         PipelineOp::BlendModule { other, alpha } => {
             simd_module_blend_supported(img, other, mode, *alpha)
         }
@@ -6283,7 +6295,10 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         PipelineOp::Merge {
             mode: target_mode,
             bands,
-        } => native_merge_contract_for_shape(shape, target_mode, bands, mode).is_some(),
+            logical_mode,
+        } => {
+            native_merge_contract_for_shape(shape, target_mode, bands, mode, logical_mode).is_some()
+        }
         PipelineOp::BlendModule { other, alpha } => {
             shape_module_blend_supported(shape, other, mode, *alpha)
         }
@@ -20519,8 +20534,10 @@ fn native_merge_bytes(
     target_mode: &ColorMode,
     bands: &[Image],
     mode: Option<&str>,
+    logical_mode: &str,
 ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
-    let Some((channels, pixels)) = native_merge_contract_for_image(img, target_mode, bands, mode)
+    let Some((channels, pixels)) =
+        native_merge_contract_for_image(img, target_mode, bands, mode, logical_mode)
     else {
         return Ok(None);
     };
@@ -20578,12 +20595,13 @@ pub fn simd_merge(
     let PipelineOp::Merge {
         mode: target_mode,
         bands,
+        logical_mode,
     } = op
     else {
         return Err(PilError::ValueError("expected Merge op".into()));
     };
     let Some((result, vector_blocks, scalar_tail)) =
-        native_merge_bytes(img, target_mode, bands, mode)?
+        native_merge_bytes(img, target_mode, bands, mode, logical_mode)?
     else {
         return Err(simd_unsupported("Merge"));
     };

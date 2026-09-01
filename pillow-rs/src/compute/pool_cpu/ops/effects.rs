@@ -493,11 +493,20 @@ pub fn op_merge(
     img: &DynamicImage,
     mode: &ColorMode,
     bands: &[Arc<Image>],
+    logical_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     // Image::merge validates the supported mode, band count, band modes, and
     // dimensions before queuing this operation. The executor therefore only
     // handles the validated mode matrix below.
-    // Get pixel data from each band
+    // A single I/F band is already the complete native destination buffer.
+    // Pillow's ImagingMerge accepts only the same typed source mode here, so
+    // retaining the first buffer preserves signed integer/IEEE-754 bytes
+    // exactly instead of reducing them through an 8-bit luma conversion.
+    if matches!(mode, ColorMode::I | ColorMode::F) {
+        return Ok(img.clone());
+    }
+
+    // Get pixel data from each byte band.
     let mut band_pixels: Vec<Vec<u8>> = Vec::new();
     // First band is the current image
     let first_gray = img.to_luma8();
@@ -510,15 +519,24 @@ pub fn op_merge(
     }
     let n = (w * h) as usize;
     match mode {
-        ColorMode::RGB => {
+        ColorMode::RGB | ColorMode::YCbCr | ColorMode::HSV => {
             let mut rgb = vec![0u8; n * 3];
+            let lab = logical_mode == Some("LAB");
             apply_effect_rows(&mut rgb, w as usize, h as usize, 3, |row_index, row| {
                 let source_start = row_index * w as usize;
                 for (pixel_index, pixel) in row.chunks_exact_mut(3).enumerate() {
                     let source_index = source_start + pixel_index;
                     pixel[0] = band_pixels[0][source_index];
-                    pixel[1] = band_pixels[1][source_index];
-                    pixel[2] = band_pixels[2][source_index];
+                    pixel[1] = if lab {
+                        band_pixels[1][source_index].wrapping_add(128)
+                    } else {
+                        band_pixels[1][source_index]
+                    };
+                    pixel[2] = if lab {
+                        band_pixels[2][source_index].wrapping_add(128)
+                    } else {
+                        band_pixels[2][source_index]
+                    };
                 }
             });
             let img = RgbImage::from_raw(w, h, rgb)
@@ -571,7 +589,7 @@ pub fn op_merge(
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageLumaA8(img))
         }
-        ColorMode::L | ColorMode::Mode1 => {
+        ColorMode::L | ColorMode::Mode1 | ColorMode::P => {
             let img = GrayImage::from_raw(w, h, band_pixels.remove(0))
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageLuma8(img))
