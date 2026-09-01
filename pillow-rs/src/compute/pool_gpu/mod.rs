@@ -1122,6 +1122,13 @@ fn gpu_f_resize_integer_is_exact(
     if !horizontal_changed && !vertical_changed {
         return false;
     }
+    if horizontal_changed
+        && vertical_changed
+        && *w > source_dimensions.0
+        && *h < source_dimensions.1
+    {
+        return false;
+    }
 
     let (kernel, support) = filter_from_resample(*filter);
     let horizontal = gpu_resize_coefficients(*w, source_dimensions.0, *filter);
@@ -1351,6 +1358,9 @@ fn gpu_f_resize_dyadic_is_exact(
             PipelineOp::Resize { w, h, filter } => {
                 resize_count = resize_count.saturating_add(1);
                 if *w == 0 || *h == 0 {
+                    return false;
+                }
+                if *w > dimensions.0 && *h < dimensions.1 {
                     return false;
                 }
                 changed_axis_count += usize::from(*w != dimensions.0);
@@ -8415,12 +8425,19 @@ fn gpu_geometry_requires_exact_host_control(
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
+        let mixed_f_resize_needs_control = mode == Some("F")
+            && matches!(
+                op,
+                PipelineOp::Resize { w, h, .. }
+                    if *w > dimensions.0 && *h < dimensions.1
+            );
         let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_typed_nearest_affine_is_exact(op, image, mode, dimensions);
-        if thumbnail_needs_control
+        if mixed_f_resize_needs_control
+            || thumbnail_needs_control
             || typed_transform_needs_control
             || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
         {
@@ -10445,6 +10462,40 @@ mod tests {
             &image,
             Some("F")
         ));
+        // Marker 6 and the broader dyadic Box proof must observe the same
+        // device-ordering guard; otherwise a 1x2 -> 2x1 Box resize can use a
+        // stale horizontal intermediate even though marker 9 rejects it.
+        let mixed_box_source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                1,
+                2,
+                [-9.7966165f32, 6.5041304]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let mixed_box = PipelineOp::Resize {
+            w: 2,
+            h: 1,
+            filter: ResampleFilter::Box,
+        };
+        assert!(!gpu_f_resize_integer_is_exact(
+            std::slice::from_ref(&mixed_box),
+            &mixed_box_source,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            std::slice::from_ref(&mixed_box),
+            &mixed_box_source,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&mixed_box),
+            &mixed_box_source,
+            Some("F")
+        ));
         assert!(!gpu_f_resize_f64_is_exact(
             std::slice::from_ref(&horizontal),
             &image,
@@ -10965,6 +11016,38 @@ mod tests {
         assert_eq!(telemetry.2, 2);
         assert_eq!(telemetry.6, Some(4));
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_mixed_upscale_downscale_remains_host_exact() {
+        let values = [-9.7966165f32, 6.5041304];
+        let source_bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::frombytes("F", (1, 2), &source_bytes).expect("F source");
+        let expected = source
+            .resize((2, 1), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("CPU mixed-geometry resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU mixed-geometry F resize");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = source
+            .resize((2, 1), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("GPU mixed-geometry resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            .expect("host-controlled mixed-geometry F resize");
+        assert_eq!(actual, expected, "mixed F resize parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("mixed-geometry F resize must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.6, None);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
