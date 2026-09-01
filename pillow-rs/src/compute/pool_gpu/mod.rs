@@ -890,11 +890,12 @@ fn gpu_f_resize_f64_pass_bits(
     Some(result)
 }
 
-/// Admit a single filtered F resize to marker 9 when its f64 coefficient
-/// products and final f32 stores are reproduced by the exact integer reducer.
-/// The current admission is limited to one changed axis; a two-axis resize
-/// needs an explicit storage barrier between the device passes before its
-/// intermediate can be admitted to this path.
+/// Admit a filtered F resize to marker 9 when its f64 coefficient products
+/// and final f32 stores are reproduced by the exact integer reducer.  For two
+/// changed axes, the host proof materializes the rounded horizontal words
+/// before checking the vertical pass, matching Pillow's observable f32
+/// boundary.  The encoder places those two device passes in separate compute
+/// passes so the vertical reducer reads the completed intermediate.
 fn gpu_f_resize_f64_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -954,11 +955,33 @@ fn gpu_f_resize_f64_is_exact(
     if !horizontal_changed && !vertical_changed {
         return false;
     }
-    // A changed horizontal pass followed by a changed vertical pass consumes
-    // a device-written intermediate.  Keep that shape on exact host control
-    // until an explicit storage barrier is part of the GPU contract.
     if horizontal_changed && vertical_changed {
-        return false;
+        // The encoder inserts a compute-pass boundary between the two device
+        // reducers.  Prove the rounded horizontal words before admitting the
+        // paired path; independently proving each raw-source axis would skip
+        // Pillow's observable intermediate f32 store.
+        let horizontal_words =
+            gpu_f_resize_f64_pass_bits(bytes, source_dimensions, &horizontal, true);
+        let Some(horizontal_words) = horizontal_words else {
+            return false;
+        };
+        let mut horizontal_bytes = Vec::new();
+        if horizontal_bytes
+            .try_reserve(horizontal_words.len().saturating_mul(4))
+            .is_err()
+        {
+            return false;
+        }
+        for word in horizontal_words {
+            horizontal_bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        return gpu_f_resize_f64_pass_bits(
+            &horizontal_bytes,
+            (*w, source_dimensions.1),
+            &vertical,
+            false,
+        )
+        .is_some();
     }
     if horizontal_changed {
         return gpu_f_resize_f64_pass_bits(bytes, source_dimensions, &horizontal, true).is_some();
@@ -9343,8 +9366,8 @@ mod tests {
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, gpu_buffer_reuse_allowed,
         gpu_byte_point_mode_allowed, gpu_f_resize_box_average_is_exact,
         gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact,
-        gpu_f_resize_f64_is_exact, gpu_f_resize_identity_is_exact, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, readback_poll_backoff,
+        gpu_f_resize_f64_is_exact, gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, readback_poll_backoff,
     };
     use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -9980,7 +10003,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_f64_lowering_requires_single_axis_and_normal_words() {
+    fn f_resize_f64_lowering_requires_normal_words_and_proves_two_axes() {
         let image = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(
                 2,
@@ -10003,15 +10026,32 @@ mod tests {
             Some("F")
         ));
 
-        // Both separable passes would consume a device-written intermediate;
-        // keep that shape on host semantic control until an explicit storage
-        // barrier is part of the GPU contract.
-        assert!(!gpu_f_resize_f64_is_exact(
+        // The encoder separates the two reducers, and the host proof checks
+        // the rounded horizontal words before proving the vertical pass.
+        assert!(gpu_f_resize_f64_is_exact(
             &[PipelineOp::Resize {
                 w: 1,
                 h: 1,
                 filter: ResampleFilter::Bilinear,
             }],
+            &image,
+            Some("F")
+        ));
+
+        // A non-dyadic vertical table keeps this case outside marker 6 while
+        // the exact f64 reducer still proves its two-axis intermediate.
+        let non_dyadic_two_axis = PipelineOp::Resize {
+            w: 1,
+            h: 5,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(!gpu_f_resize_integer_is_exact(
+            std::slice::from_ref(&non_dyadic_two_axis),
+            &image,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&non_dyadic_two_axis),
             &image,
             Some("F")
         ));
@@ -10398,6 +10438,49 @@ mod tests {
         assert_eq!(actual, expected, "signed two-axis F resize parity");
         let telemetry = Backend::take_pipeline_telemetry()
             .expect("native GPU signed two-axis F resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_two_axis_native_non_dyadic_matches_cpu() {
+        let values = [0.1f32, -0.3, 1.7, 2.9];
+        let source_bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+        let expected = source
+            .resize((1, 5), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("CPU resize operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F resize");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((1, 5), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("GPU resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F two-axis resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "non-dyadic two-axis F resize parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU F two-axis resize must publish a telemetry receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
