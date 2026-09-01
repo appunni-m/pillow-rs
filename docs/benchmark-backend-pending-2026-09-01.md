@@ -26,12 +26,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the existing F-specific compute-pass boundary supplies the required device
   ordering. A heterogeneous `(2,2) -> (1,5)` Bilinear case now executes on
   native GPU with exact bytes and a terminal no-fallback receipt.
+- [x] Extend marker 9 to finite subnormal F source/result words. Commit
+  `b1962c6dd` decodes subnormals at the exact `2^-149` scale and adds
+  integer-only ties-to-even subnormal rounding to both device reducers. A
+  deterministic 1,050-row Pillow-vs-Rust probe had 0 mismatches (372 native
+  GPU, 678 exact host semantic control); focused GPU tests are 23/23.
 - [ ] Extend the proof to the remaining coefficient/value domains. The open
-  families are subnormal/nonfinite or negative-zero words, coefficient
-  overflow/cancellation cases, Box ratios outside the proven row limits, and
-  chains outside the cumulative intermediate proof. Those rows remain on
-  exact host semantic control until their arithmetic and storage contracts are
-  separately validated.
+  families are nonfinite words, negative-zero filtered outputs, coefficient
+  overflow/cancellation cases, Box ratios outside the proven row limits,
+  chains outside the cumulative intermediate proof, and the guarded geometry
+  that combines horizontal upscaling with vertical downscaling. Those rows
+  remain on exact host semantic control until their arithmetic, ordering, and
+  storage contracts are separately validated.
 - [x] Keep the newly proven signed two-axis subset integrated. Commit
   `a3d2c886b` adds host-verified two-limb signed integer accumulation, exact
   horizontal f32 intermediate boundaries, and two-axis proof checks. Focused
@@ -148,6 +154,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `8b8577b060f3b22001e0069017c4cc8584c7bee0e354128cd7dd90728274d83c`):
   15/15 values are exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
   GPU receipts are 14 native and one host-controlled palette-expansion row.
+- [x] The finite-subnormal marker-9 replay at committed source
+  `b1962c6dd` is `/tmp/all-backends-post-b1962c6dd.json` (SHA-256
+  `9a981a51e018cad9c65390311b6e38c58e40ee75861595c01e0c7baee48af5df`).
+  CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
+  value-exact; GPU smoke is 1/1; the fixed case-ID digest remains
+  `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+  Native receipt partitions remain CPU 7,084, SIMD 6,691 plus 405 CPU, and
+  GPU 6,832 plus 252 CPU, with 15 genuine partials in each native lane.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -165,21 +179,22 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 10/10, GPU-pool tests 21/21 (including Draw and indexed Fit), receipt tests 27/27, evidence/schema
-  validation, and `make -C pillow-rs fmt`. Clippy remains blocked before
+  tests 10/10, GPU-pool tests 23/23 (including Draw, indexed Fit, and finite
+  subnormal marker-9 rows), receipt tests 27/27, evidence/schema validation,
+  and `make -C pillow-rs fmt`. Clippy remains blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
   3.13.2 environment requirement.
 
 ## Closeout state
 
 - [x] The source lane and receipt-partition correction are committed as
-  `cb1813bc8`, the two-axis f64 GPU admission as `f17e1a7da`, the raw-color
-  `ExtractBand` admission as `f55a770ad`, the raw-byte `EffectSpread`
-  admission as `ebc7e765a`, raw-byte Draw admission as `7d1cc0af9`, and
-  nearest indexed Fit admission as `0797e71f5`; the latest committed
-  all-backend replay is
+  `cb1813bc8`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
+  subnormal marker-9 admission as `b1962c6dd`, the raw-color `ExtractBand`
+  admission as `f55a770ad`, the raw-byte `EffectSpread` admission as
+  `ebc7e765a`, raw-byte Draw admission as `7d1cc0af9`, and nearest indexed Fit
+  admission as `0797e71f5`; the latest committed all-backend replay is
   schema-valid and value-exact for all 10,952 cases. Native lanes report 15
-  genuine partial receipts and the GPU partition now has 6,832 native
-  receipts plus 252 CPU receipts. No fixture, expected value,
-  threshold, denominator, or case ID was changed.
+  genuine partial receipts and the GPU partition has 6,832 native receipts
+  plus 252 CPU receipts. No fixture, expected value, threshold, denominator,
+  or case ID was changed.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
