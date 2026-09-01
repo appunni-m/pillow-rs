@@ -1007,6 +1007,21 @@ def receipt_terminal_complete(receipt: dict[str, Any]) -> bool:
     return type(value) is bool and value
 
 
+def receipt_is_meaningful(receipt: dict[str, Any]) -> bool:
+    """Return whether a receipt is evidence for the deferred pipeline.
+
+    Setup telemetry retained beside a proven pre-materialization validation
+    error is deliberately annotated ``pipeline_relevant=false`` in the
+    sidecar.  It remains useful operation telemetry, but must not force the
+    public case into the partial pipeline partition.
+    """
+
+    return (
+        receipt.get("pipeline_relevant") is not False
+        and receipt.get("status") not in {"not_recorded", "not_applicable"}
+    )
+
+
 def set_receipt_terminal_complete(
     receipt: dict[str, Any], complete: bool = False
 ) -> dict[str, Any]:
@@ -1548,6 +1563,87 @@ def _workflow_terminal_boundary(case: dict[str, Any], deferred_indices: set[int]
     )
 
 
+def _receipts_are_pre_materialization_error(
+    case: dict[str, Any],
+    deferred_indices: set[int],
+    receipts: list[dict[str, Any]],
+    result: dict[str, Any] | None,
+) -> bool:
+    """Prove that meaningful receipts precede a public validation failure.
+
+    The target telemetry API can return a partial record while a public call
+    rejects its arguments.  That record is not evidence that the failed call
+    materialized a deferred operation.  Accept this exception only when the
+    explicit error is step-bound, every earlier receipt belongs to setup (not
+    a deferred operation), and any receipt on the failing step is the partial
+    record emitted for that same error.  Receipts without a step ID remain
+    authoritative so adapter-level ambiguity cannot be relabeled as a clean
+    validation path.
+    """
+
+    if not _workflow_error_before_deferred(case, deferred_indices, result):
+        return False
+    steps = [step for step in case.get("steps", []) if isinstance(step, dict)]
+    step_indices = {
+        step.get("step_id"): index
+        for index, step in enumerate(steps)
+        if isinstance(step.get("step_id"), str)
+    }
+    explicit_error_steps: set[str] = set()
+    if isinstance(result, dict):
+        execution_errors = result.get("execution_errors", [])
+        if isinstance(execution_errors, list):
+            explicit_error_steps.update(
+                error.get("step_id")
+                for error in execution_errors
+                if isinstance(error, dict)
+                and isinstance(error.get("step_id"), str)
+            )
+        observations = result.get("observations", [])
+        if isinstance(observations, list):
+            explicit_error_steps.update(
+                observation.get("step_id")
+                for observation in observations
+                if isinstance(observation, dict)
+                and observation.get("status") == "error"
+                and isinstance(observation.get("step_id"), str)
+            )
+    if not explicit_error_steps:
+        return False
+    first_error = min(
+        (
+            step_indices[step_id]
+            for step_id in explicit_error_steps
+            if step_id in step_indices
+        ),
+        default=None,
+    )
+    if first_error is None:
+        return False
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        step_id = receipt.get("step_id")
+        if not isinstance(step_id, str) or step_id not in step_indices:
+            return False
+        step_index = step_indices[step_id]
+        if step_index > first_error:
+            return False
+        if step_index < first_error and step_index in deferred_indices:
+            return False
+        if step_index == first_error and (
+            step_id not in explicit_error_steps
+            or receipt.get("status") != "partial"
+        ):
+            return False
+    for receipt in receipts:
+        if isinstance(receipt, dict):
+            # Preserve the operation telemetry in the evidence file while
+            # making its non-pipeline scope explicit to downstream validators.
+            receipt["pipeline_relevant"] = False
+    return True
+
+
 def classify_pipeline_case(
     case: dict[str, Any],
     receipts: list[dict[str, Any]],
@@ -1568,16 +1664,8 @@ def classify_pipeline_case(
         receipt
         for receipt in receipts
         if isinstance(receipt, dict)
-        and receipt.get("status") not in {"not_recorded", "not_applicable"}
+        and receipt_is_meaningful(receipt)
     ]
-    terminal = [receipt for receipt in receipts if receipt_terminal_complete(receipt)]
-    if terminal:
-        return {"status": "complete", "reason": "terminal-complete receipt recorded"}
-    if meaningful:
-        return {
-            "status": "partial_receipt",
-            "reason": "receipt recorded without a terminal-complete boundary",
-        }
     steps = [step for step in case.get("steps", []) if isinstance(step, dict)]
     modes = _workflow_modes(case)
     steps_by_id = {
@@ -1959,6 +2047,21 @@ def classify_pipeline_case(
         if (step.get("surface"), step.get("operation")) in _PIPELINE_MAYBE_OPS
     }
     deferred_indices = always_indices | maybe_indices
+    terminal = [receipt for receipt in receipts if receipt_terminal_complete(receipt)]
+    if terminal:
+        return {"status": "complete", "reason": "terminal-complete receipt recorded"}
+    if meaningful:
+        if _receipts_are_pre_materialization_error(
+            case, deferred_indices, meaningful, result
+        ):
+            return {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            }
+        return {
+            "status": "partial_receipt",
+            "reason": "receipt recorded without a terminal-complete boundary",
+        }
     if _workflow_error_before_deferred(case, deferred_indices, result):
         return {
             "status": "not_applicable",
@@ -2981,8 +3084,6 @@ def write_pipeline_execution_evidence(
             for receipt in receipts
             if receipt_terminal_complete(receipt)
         ]
-        if has_receipt and not terminal:
-            terminal_incomplete_cases += 1
         terminal_complete_receipts += len(terminal)
         classification = classify_pipeline_case(
             cases_by_id[case_id],
@@ -2991,6 +3092,12 @@ def write_pipeline_execution_evidence(
         )
         pipeline_case_status[case_id] = classification
         pipeline_status_counts[classification["status"]] += 1
+        # Keep this aggregate aligned with the pipeline partition.  A
+        # non-terminal setup/validation receipt is intentionally outside the
+        # deferred pipeline cohort; only a case classified as partial_receipt
+        # is a terminal-incomplete backend proof gap.
+        if classification["status"] == "partial_receipt":
+            terminal_incomplete_cases += 1
         for receipt in terminal:
             backend = receipt.get("actual_backend")
             if isinstance(backend, str):

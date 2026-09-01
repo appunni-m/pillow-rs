@@ -985,6 +985,90 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
 
+    def test_pipeline_case_classification_ignores_setup_receipts_on_validation_error(
+        self,
+    ) -> None:
+        """A failed public call may carry setup and same-step partial telemetry."""
+
+        case = error_at_deferred_call_case()
+        result = {
+            "status": "completed",
+            "observations": [
+                {
+                    "step_id": "call",
+                    "status": "error",
+                    "error": {"kind": "invalid_argument"},
+                }
+            ],
+            "execution_errors": [
+                {"step_id": "call", "error": {"kind": "invalid_argument"}}
+            ],
+        }
+        self.assertEqual(
+            classify_pipeline_case(
+                case,
+                [
+                    {
+                        "step_id": "new",
+                        "status": "completed",
+                        "terminal_complete": False,
+                    },
+                    {
+                        "step_id": "call",
+                        "status": "partial",
+                        "terminal_complete": False,
+                    },
+                ],
+                result=result,
+            ),
+            {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            },
+        )
+
+    def test_pipeline_case_classification_keeps_prior_deferred_receipt_on_error(
+        self,
+    ) -> None:
+        """A receipt from an earlier deferred step remains a real gap."""
+
+        case = error_at_deferred_call_case(earlier_deferred=True)
+        result = {
+            "status": "completed",
+            "observations": [
+                {
+                    "step_id": "call",
+                    "status": "error",
+                    "error": {"kind": "invalid_argument"},
+                }
+            ],
+            "execution_errors": [
+                {"step_id": "call", "error": {"kind": "invalid_argument"}}
+            ],
+        }
+        self.assertEqual(
+            classify_pipeline_case(
+                case,
+                [
+                    {
+                        "step_id": "resize",
+                        "status": "completed",
+                        "terminal_complete": False,
+                    },
+                    {
+                        "step_id": "call",
+                        "status": "partial",
+                        "terminal_complete": False,
+                    },
+                ],
+                result=result,
+            ),
+            {
+                "status": "partial_receipt",
+                "reason": "receipt recorded without a terminal-complete boundary",
+            },
+        )
+
     def test_pipeline_case_classification_uses_unobserved_execution_error(self) -> None:
         """Setup failures are classified from the internal step error record."""
 
@@ -1328,6 +1412,71 @@ class ReceiptStateTests(unittest.TestCase):
                     "kind": "public-parity-corpus",
                     "selected": 1,
                     "case_ids_sha256": digest,
+                },
+                expected_backend="gpu",
+            )
+            self.assertEqual(evidence["status"], "measured")
+
+    def test_sidecar_marks_validation_receipts_outside_pipeline_partition(self) -> None:
+        case = error_at_deferred_call_case()
+        case_id = case["case_id"]
+        execution = {
+            case_id: [
+                {
+                    "step_id": "new",
+                    "status": "completed",
+                    "terminal_complete": False,
+                },
+                {
+                    "step_id": "call",
+                    "status": "partial",
+                    "terminal_complete": False,
+                },
+            ]
+        }
+        result = {
+            "case_id": case_id,
+            "status": "completed",
+            "observations": [
+                {
+                    "step_id": "call",
+                    "status": "error",
+                    "error": {"kind": "invalid_argument"},
+                }
+            ],
+            "execution_errors": [
+                {"step_id": "call", "error": {"kind": "invalid_argument"}}
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "execution.json"
+            write_pipeline_execution_evidence(
+                path,
+                [case],
+                {"side": "target", "backend": "gpu"},
+                execution,
+                results={case_id: result},
+            )
+            document = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                document["pipeline_case_status"][case_id]["status"],
+                "not_applicable",
+            )
+            self.assertTrue(
+                all(
+                    receipt["pipeline_relevant"] is False
+                    for receipt in document["cases"][case_id]
+                )
+            )
+            self.assertEqual(document["summary"]["terminal_incomplete_cases"], 0)
+            evidence = pipeline_execution_evidence(
+                path,
+                expected_scope={
+                    "kind": "public-parity-corpus",
+                    "selected": 1,
+                    "case_ids_sha256": hashlib.sha256(
+                        f"{case_id}\n".encode()
+                    ).hexdigest(),
                 },
                 expected_backend="gpu",
             )

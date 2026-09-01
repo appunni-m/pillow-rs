@@ -357,6 +357,15 @@ def receipt_terminal_complete(receipt: dict[str, Any]) -> bool:
     return type(value) is bool and value
 
 
+def receipt_is_meaningful(receipt: dict[str, Any]) -> bool:
+    """Return whether a receipt participates in pipeline classification."""
+
+    return (
+        receipt.get("pipeline_relevant") is not False
+        and receipt.get("status") not in {"not_recorded", "not_applicable"}
+    )
+
+
 def validate_execution_receipts(
     cases: Any, *, label: str
 ) -> str | None:
@@ -374,6 +383,10 @@ def validate_execution_receipts(
                 receipt["terminal_complete"]
             ) is not bool:
                 return f"{label} contains a non-boolean terminal_complete bit"
+            if "pipeline_relevant" in receipt and type(
+                receipt["pipeline_relevant"]
+            ) is not bool:
+                return f"{label} contains a non-boolean pipeline_relevant bit"
             if receipt_terminal_complete(receipt) and receipt.get("status") not in {
                 "completed",
                 "cached",
@@ -434,7 +447,7 @@ def validate_pipeline_case_status(
             return f"{label} contains an invalid reason for {case_id!r}"
         receipts = cases[case_id]
         meaningful = any(
-            receipt.get("status") not in {"not_recorded", "not_applicable"}
+            receipt_is_meaningful(receipt)
             for receipt in receipts
         )
         terminal = any(receipt_terminal_complete(receipt) for receipt in receipts)
