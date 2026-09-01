@@ -16,15 +16,22 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ### P0 — broader exact F-mode device arithmetic
 
-- [ ] Build a verified f64-equivalent device accumulator (or an exact
-  equivalent) for heterogeneous/non-dyadic F resize arithmetic, then admit it
-  only after native byte proofs. The open families are heterogeneous Bilinear,
-  broader Bicubic/Lanczos/Hamming, Box ratios outside the proven power-of-two
-  row limits, and chains outside the cumulative significand-span proof.
+- [x] Add the verified marker-9 f64-equivalent device reducer for a single
+  changed axis. Commit `4fe5535ff` transports the complete f64 coefficient
+  dyadic parts, performs exact integer products/sums, and rounds once at the
+  f32 store. The host proof admits only finite normal F words whose ordered
+  f64 result matches the reducer; unchanged axes copy their words exactly.
+- [ ] Extend the proof to two changed axes and the remaining coefficient/value
+  domains. The open families are changed-horizontal-plus-vertical F resizes,
+  subnormal/nonfinite or negative-zero words, coefficient overflow/cancellation
+  cases, Box ratios outside the proven row limits, and chains outside the
+  cumulative intermediate proof. The current two-axis shape stays on exact
+  host semantic control until its device intermediate/storage contract is
+  separately validated.
 - [x] Keep the newly proven signed two-axis subset integrated. Commit
   `a3d2c886b` adds host-verified two-limb signed integer accumulation, exact
   horizontal f32 intermediate boundaries, and two-axis proof checks. Focused
-  F tests are 8/8; GPU-pool tests are 15/15; the post-merge native probe is
+  F tests are 9/9; GPU-pool tests are 16/16; the post-merge native probe is
   byte-exact for 45/45 cases (7 native GPU, 38 exact host semantic control).
 - [x] Preserve the conservative route for every unproven row. The forced
   generic-shader diagnostic diverged by ULPs on heterogeneous Bilinear,
@@ -39,9 +46,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   all-backend artifact has no missing or indeterminate native receipts, but
   the 102 partial cases remain proof gaps.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts include 405 SIMD-lane CPU receipts and 391 GPU-lane CPU receipts;
-  GPU also records explicit host-control, logical-mode, dimension, Transform,
-  and Contrast fallbacks. These are visible evidence gaps, not value-parity
+  counts include 405 SIMD-lane CPU receipts and 386 GPU-lane CPU receipts;
+  the GPU lane has 6,698 native GPU receipts and 142 exact host semantic
+  control receipts, plus explicit logical-mode, dimension, Transform, and
+  Contrast routes. These are visible evidence gaps, not value-parity
   exemptions.
 - [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
   currently reports 6,713 complete, 586 partial, 888 missing, 2,738
@@ -60,12 +68,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ## Evidence recorded in the current run
 
-- [x] The schema-v3 all-backend envelope at source `a3d2c886b` is
-  `/tmp/all-backends-post-a3d2.json` (SHA-256
-  `6f7de544139c6ef047225e00537bb33def1aeaea39084b6c33c07f705d809306`).
+- [x] The schema-v3 all-backend envelope at source `4fe5535ff` is
+  `/tmp/all-backends-post-4fe5535.json` (SHA-256
+  `b915cb2f93c172241a2bbe911ba418414aa5cabbd08c39302367a9080e580946`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
   value-exact; GPU smoke is 1/1; case-ID digest is
   `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+- [x] The marker-9 native probe is exact for the new heterogeneous lane:
+  the `(2,2) -> (1,2)` Bilinear case is byte-for-byte equal to Pillow and
+  publishes an actual-GPU receipt. The rebuilt randomized probe covers 5,000
+  finite-F rows (269 actual GPU, 4,731 exact host control) with zero
+  mismatches; the known `2x1 -> 4x1` false-proof counterexample remains on
+  host control.
 - [x] The receipt classifier changes are committed as `40c3e9860` and
   `635afb555`. `make migration-parity-receipt-test` passes 24/24; the full
   selected denominator remains 10,952 and public parity results retain their
@@ -74,14 +88,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 8/8, GPU-pool tests 15/15, receipt tests 24/24, evidence/schema
+  tests 9/9, GPU-pool tests 16/16, receipt tests 24/24, evidence/schema
   validation, and `make -C pillow-rs fmt`. Clippy remains blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
   3.13.2 environment requirement.
 
 ## Closeout state
 
-- [x] Current source, evidence, and this checklist are ready to push after
-  review. No fixture, expected value, threshold, denominator, or case ID was
-  changed.
+- [x] The source lane is committed as `4fe5535ff` and the committed-revision
+  all-backend envelope is schema-valid. No fixture, expected value, threshold,
+  denominator, or case ID was changed.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.

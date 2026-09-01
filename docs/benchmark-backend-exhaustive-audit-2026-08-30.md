@@ -3576,3 +3576,37 @@ required.
 
 The short active queue is
 [`benchmark-backend-pending-2026-09-01.md`](benchmark-backend-pending-2026-09-01.md).
+
+## 32.32 Exact one-axis f64 F resize reducer (2026-09-02)
+
+The broader F arithmetic gap now has a verified one-axis device lane. The
+first divergence was the generic WGSL f32 product/accumulator: a heterogeneous
+5x4 -> 3x2 Bilinear row differed at the first output word, while Pillow's
+`Resample.c`/`ImagingResample` path retains f64 coefficients and accumulation
+until the observable f32 store. Commit `4fe5535ff` adds marker 9, transporting
+each f64 coefficient as its exact integer significand, exponent, and sign; the
+shader performs integer products and signed sums and rounds once to f32. The
+host admission proof compares every selected row with the ordered f64
+`mul_add` result and requires finite normal F words, bounded arithmetic, and
+exact final bits. An unchanged axis copies its source/intermediate word rather
+than evaluating tiny kernel tails.
+
+The proof intentionally admits only one changed axis. A changed-horizontal
+plus changed-vertical operation still consumes a device-written intermediate
+whose storage/synchronization contract has not been established on the native
+adapter, so it remains exact host semantic control. Subnormal, nonfinite,
+negative-zero, overflow/cancellation, and other unproven coefficient domains
+also remain host-controlled. The known 2x1 -> 4x1 Bilinear false-proof input
+continues to route to host control; it differs by one output ULP when forced
+through generic f32 arithmetic.
+
+Focused F tests pass 9/9 and the GPU-pool group 16/16, including a native
+`(2,2) -> (1,2)` Bilinear byte/receipt assertion. The rebuilt randomized probe
+covered 5,000 finite-F rows (269 actual GPU and 4,731 exact host-control
+receipts) with zero mismatches. The committed schema-v3 all-backend envelope
+remains value-exact for all 10,952 cases on CPU, SIMD, GPU, Node WASM, and
+browser WASM, with GPU smoke 1/1; GPU terminal receipts are 6,698 native GPU
+and 386 CPU. The artifact is `/tmp/all-backends-post-4fe5535.json` (SHA-256
+`b915cb2f93c172241a2bbe911ba418414aa5cabbd08c39302367a9080e580946`). No
+fixtures, thresholds, IDs, denominators, or receipt taxonomy changed; P0
+two-axis arithmetic, P1 receipt proof, and P2 timing acceptance remain open.
