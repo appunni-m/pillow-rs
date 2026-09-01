@@ -3190,3 +3190,15 @@ unknown names, and keeps the exact scalar/tuple result shape for all mapped and
 alpha modes. Core regressions and a broad native Python matrix are exact. No
 case IDs, denominators, expected outputs, thresholds, or backend
 classifications changed.
+
+## 32.11 ImageEnhance.Contrast zero-area CMYK parity (2026-09-01)
+
+The next public enhancement divergence was a valid empty CMYK image. Pillow's
+`ImageEnhance.Contrast` converts CMYK to `L`, computes a zero mean for the
+empty histogram, and blends back to an empty CMYK image. Rust called the
+non-empty `CheckedDims::new` boundary in `cmyk_to_grayscale` first and raised
+instead. That conversion now uses the established empty-result allocation
+boundary, preserving dimensions, mode, and empty bytes. The focused probe is
+exact for `(0,0)`, `(0,3)`, and `(3,0)` with factors `0`, `.5`, `1`, and `2`;
+no case IDs, denominators, expected outputs, thresholds, or backend
+classifications changed.

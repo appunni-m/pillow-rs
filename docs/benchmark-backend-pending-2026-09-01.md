@@ -60,6 +60,9 @@ rename, relabel, or weaken a case to make a gate green.
   raises `KeyError` for unknown mode names, and preserves mapped integer
   storage modes plus lowercase-`La` scalar behavior. Core tests and a broad
   native Python mode/error matrix are exact.
+- `ImageEnhance.Contrast` now preserves valid zero-area CMYK images through
+  the grayscale conversion and back to CMYK. The focused matrix is exact for
+  `(0,0)`, `(0,3)`, and `(3,0)` across factors `0`, `.5`, `1`, and `2`.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
