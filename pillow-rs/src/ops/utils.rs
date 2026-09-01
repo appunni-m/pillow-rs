@@ -25,10 +25,12 @@ pub fn align_row_to_32(data: &[u8], width: u32, bits_per_pixel: u8) -> Result<Ve
     let bits_per_line = bits_per_pixel as u64 * width as u64;
     let bytes_per_line = ((bits_per_line + 7) / 8) as usize;
 
+    // Pillow's ImageQt helper treats a zero-width row as already aligned: its
+    // computed padding is zero and it returns the source bytes before any
+    // row-count arithmetic.  Keep that order here so valid zero-size images
+    // (and their empty or caller-provided row buffers) do not raise.
     if bytes_per_line == 0 {
-        return Err(PilError::ValueError(
-            "align_row_to_32: zero bytes per line".into(),
-        ));
+        return Ok(data.to_vec());
     }
 
     let extra_padding = (4 - (bytes_per_line % 4)) % 4;
@@ -58,4 +60,19 @@ pub fn align_row_to_32(data: &[u8], width: u32, bits_per_pixel: u8) -> Result<Ve
     }
 
     Ok(padded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::align_row_to_32;
+
+    #[test]
+    fn zero_width_rows_are_already_aligned() {
+        assert_eq!(align_row_to_32(&[], 0, 1).unwrap(), Vec::<u8>::new());
+        assert_eq!(align_row_to_32(b"abc", 0, 8).unwrap(), b"abc".to_vec());
+        assert_eq!(
+            align_row_to_32(b"\x01\x02", 0, 16).unwrap(),
+            b"\x01\x02".to_vec()
+        );
+    }
 }
