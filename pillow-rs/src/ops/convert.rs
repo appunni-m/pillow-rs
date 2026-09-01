@@ -2,7 +2,7 @@ use crate::color;
 use crate::error::PilError;
 use crate::image::{Image, PipelineOps};
 use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, GenericImageView};
 
 /// Parses a Pillow mode string into a pipeline color mode.
 ///
@@ -25,6 +25,10 @@ pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
         "1" => Ok(ColorMode::Mode1),
         _ => Err(PilError::ValueError(format!("Unknown mode: {}", s))),
     }
+}
+
+fn is_luma16_mode(mode: &str) -> bool {
+    matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
 }
 
 /// Modes that require special handling when converting FROM them.
@@ -260,7 +264,7 @@ impl Image {
         // public Rust error path unreachable and allowed an unknown target to
         // slip through for some non-standard source modes. PA is handled by
         // the explicit palette-alpha path below but is not a ColorMode enum.
-        if mode != "PA" {
+        if mode != "PA" && !is_luma16_mode(mode) {
             parse_mode(mode).map_err(|_| PilError::ValueError("image has wrong mode".into()))?;
         }
 
@@ -293,6 +297,48 @@ impl Image {
 
         if mode == src_mode && src_mode != "P" {
             return Ok(self.copy());
+        }
+
+        // Pillow's typed I;16 converters consume an 8-bit luma sample as the
+        // same numeric unsigned word; they do not expand 17 to 0x1111 like
+        // the generic image-raster u8→u16 conversion.  Keep this destination
+        // path eager so the logical mode tag and declared byte order survive
+        // without adding a byte-oriented ColorMode variant to PipelineOp.
+        if is_luma16_mode(mode) {
+            if src_mode == "P" {
+                // Pillow's palette converter has no direct I;16 destination
+                // and reports this exact conversion error before Paste.c.
+                return Err(PilError::ValueError("conversion not supported".into()));
+            }
+            let samples = if src_mode == "I" && mode != "I;16N" {
+                // Pillow's I→I;16/I;16L/I;16B converter is the one typed
+                // scalar path: clamp the signed 32-bit sample to 0..65535.
+                // I;16N on the little-endian oracle has only the byte-domain
+                // converter, so it intentionally falls through to L below.
+                let image = self.materialize()?;
+                let (width, height) = image.dimensions();
+                let raw = image.as_bytes();
+                let samples = raw.chunks_exact(4).map(|bytes| {
+                    let value = i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                    value.clamp(0, i32::from(u16::MAX)) as u16
+                });
+                crate::raster::ImageBuffer::from_raw(width, height, samples.collect()).ok_or_else(
+                    || PilError::InternalError("I;16 conversion buffer shape mismatch".into()),
+                )?
+            } else {
+                let luma = self
+                    .convert("L", None, None, None, None)?
+                    .materialize()?
+                    .to_luma8();
+                let (width, height) = luma.dimensions();
+                crate::raster::ImageBuffer::from_fn(width, height, |x, y| {
+                    crate::raster::Luma([u16::from(luma.get_pixel(x, y)[0])])
+                })
+            };
+            return Ok(Image::from_dynamic(
+                DynamicImage::ImageLuma16(samples),
+                Some(mode.to_owned()),
+            ));
         }
         // P-mode same-mode: PIL defaults to RGB
         let mode = if mode == src_mode && src_mode == "P" {
@@ -998,5 +1044,42 @@ fn convert_with_matrix(
             "Matrix must be 4 or 12 elements, got {}",
             n
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::image::Image;
+    use crate::ops::paste::PasteSource;
+
+    #[test]
+    fn luma8_to_luma16_conversion_and_paste_preserve_numeric_sample() {
+        for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
+            let source = Image::new(1, 1, "L", (17, 17, 17, 255)).expect("source image");
+            let converted = source
+                .convert(mode, None, None, None, None)
+                .expect("I;16 conversion");
+            assert_eq!(converted.mode().expect("converted mode"), mode);
+            assert_eq!(
+                converted.tobytes().expect("converted bytes"),
+                match mode {
+                    "I;16B" => vec![0, 17],
+                    _ => vec![17, 0],
+                }
+            );
+
+            let mut destination =
+                Image::new(1, 1, mode, (0, 0, 0, 255)).expect("destination image");
+            destination
+                .paste(PasteSource::Image(source), Some((0, 0, 1, 1)), None)
+                .expect("I;16 paste");
+            assert_eq!(
+                destination.tobytes().expect("pasted bytes"),
+                match mode {
+                    "I;16B" => vec![0, 17],
+                    _ => vec![17, 0],
+                }
+            );
+        }
     }
 }

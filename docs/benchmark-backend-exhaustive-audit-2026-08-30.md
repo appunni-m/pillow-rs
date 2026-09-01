@@ -3144,3 +3144,22 @@ default 65535 ink, and all four byte-order modes now match exact Python probes;
 the core regression covers the default shape and packed point boundary. No
 case IDs, denominators, expected outputs, thresholds, or backend
 classifications changed.
+
+## 32.8 I;16 paste conversion parity (2026-09-01)
+
+The next typed-format divergence was the image-source `Image.paste` path into
+an unsigned 16-bit destination. Pillow's `Image.py`/`Paste.c` conversion keeps
+an `L` source sample numerically unchanged (`17` remains `17`), whereas Rust's
+generic `FromPrimitive<u8> for u16` expands it to `17 * 257`; before this fix,
+the public Rust conversion also rejected the `I;16*` destination outright.
+The conversion planner now has an eager typed destination path: byte/luma and
+color sources are reduced to Pillow's 8-bit luma result and copied into native
+`u16` samples, while signed `I` sources use Pillow's direct 0..65535 clamp for
+`I;16`, `I;16L`, and `I;16B`. The `I;16N` little-endian byte-domain behavior,
+palette error, and declared output byte order are preserved. This path is
+shared by direct `Image.convert` and image-source `Image.paste`, so CPU, SIMD,
+and GPU receive the same typed source buffer. The core suite passes 19/19, a
+broader source-mode probe is byte/error exact, and the maintained six-case
+I;16 paste slice passes 6/6 on CPU, SIMD, and GPU with no fallback. No case
+IDs, denominators, expected outputs, thresholds, or backend classifications
+changed.
