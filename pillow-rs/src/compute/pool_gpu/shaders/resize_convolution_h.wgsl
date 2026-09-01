@@ -496,6 +496,39 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
         return 0u;
     }
     var exponent = minimum_exponent + i32(bit_length) - 1;
+
+    // Round values below the normal range in units of 2^-149.  The host
+    // admission proof bounds the integer sum, so the same limb operations are
+    // sufficient for subnormal output without device floating-point arithmetic.
+    if exponent < -126 {
+        let target_shift = minimum_exponent + 149;
+        var subnormal: U128;
+        if target_shift >= 0 {
+            subnormal = u128_shl(sum.magnitude, u32(target_shift));
+        } else {
+            let shift = u32(-target_shift);
+            if shift >= 128u {
+                subnormal = U128(0u, 0u, 0u, 0u);
+            } else if shift == 0u {
+                subnormal = sum.magnitude;
+            } else {
+                subnormal = u128_shr(sum.magnitude, shift);
+                let remainder = u128_low_bits(sum.magnitude, shift);
+                let halfway = u128_shl(U128(1u, 0u, 0u, 0u), shift - 1u);
+                let greater = u128_less(halfway, remainder);
+                let equal = remainder.a == halfway.a && remainder.b == halfway.b
+                    && remainder.c == halfway.c && remainder.d == halfway.d;
+                if greater || (equal && (subnormal.a & 1u) != 0u) {
+                    subnormal = u128_add(subnormal, U128(1u, 0u, 0u, 0u));
+                }
+            }
+        }
+        // Rounding the largest subnormal upward produces the smallest normal.
+        if !u128_less(subnormal, U128(0x00800000u, 0u, 0u, 0u)) {
+            return select(0x00800000u, 0x80800000u, sum.negative);
+        }
+        return select(subnormal.a, subnormal.a | 0x80000000u, sum.negative);
+    }
     var mantissa: u32;
     if bit_length > 24u {
         let shift = bit_length - 24u;
@@ -539,7 +572,12 @@ fn filtered_f64_exact(source_y: u32, output_x: u32) -> u32 {
         if (bits & 0x7fffffffu) == 0u {
             continue;
         }
-        let sample_exponent = i32((bits >> 23u) & 255u) - 127 - 23;
+        let exponent_bits = (bits >> 23u) & 255u;
+        let sample_exponent = select(
+            i32(exponent_bits) - 127 - 23,
+            -149,
+            exponent_bits == 0u,
+        );
         let exponent = sample_exponent + coeff.exponent;
         if !found {
             minimum_exponent = exponent;
@@ -561,8 +599,18 @@ fn filtered_f64_exact(source_y: u32, output_x: u32) -> u32 {
         if (bits & 0x7fffffffu) == 0u {
             continue;
         }
-        let sample_exponent = i32((bits >> 23u) & 255u) - 127 - 23;
-        let product = f64_product((bits & 0x7fffffu) | 0x800000u, coeff);
+        let exponent_bits = (bits >> 23u) & 255u;
+        let sample_exponent = select(
+            i32(exponent_bits) - 127 - 23,
+            -149,
+            exponent_bits == 0u,
+        );
+        let sample_mantissa = select(
+            (bits & 0x7fffffu) | 0x800000u,
+            bits & 0x7fffffu,
+            exponent_bits == 0u,
+        );
+        let product = f64_product(sample_mantissa, coeff);
         let term = u128_shl(product, u32(sample_exponent + coeff.exponent - minimum_exponent));
         let sample_negative = (bits & 0x80000000u) != 0u;
         sum = signed_u128_add(sum, term, sample_negative != coeff.negative);
