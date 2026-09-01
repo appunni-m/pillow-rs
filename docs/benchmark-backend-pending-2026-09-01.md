@@ -71,6 +71,11 @@ rename, relabel, or weaken a case to make a gate green.
   flow, including `inf * 0 -> NaN` validation order. The empty-image matrix is
   exact (0/72 mismatches after the fix), and the maintained D-002 cases remain
   3/3.
+- `ImageChops.constant` now returns Pillow's `L` mode for every explicit
+  source mode, including `1`, `CMYK`, `YCbCr`, `HSV`, `I`, and `F`. The prior
+  Rust pipeline retained explicit source-mode metadata even though the
+  operation materializes an 8-bit luma result; the six-mode native probe and
+  focused core regression are exact.
 - `Image.putdata` now keeps Pillow's per-item order for mixed exact multiband
   values. A packed integer is committed before a later scalar float raises;
   the focused RGB/RGBA/CMYK prefix probe is exact (3/3), with no changes to
@@ -99,6 +104,11 @@ rename, relabel, or weaken a case to make a gate green.
   Earlier deferred nodes and dependency-only failures remain conservative. The
   focused receipt suite is 19/19, and the committed full rerun reclassifies 90
   exact error cases while retaining 343 indeterminate native cases.
+- The receipt classifier now proves a fixed cohort of eager opened-image paths
+  from immutable source headers (PNG `P`/`I;16` and narrow JPEG Exif cases)
+  instead of calling their successful no-receipt observations missing. The
+  focused receipt suite is 21/21; the denominator remains 10,952 and the
+  fresh full envelope records 319 indeterminate native cases.
 - `ImageFilter.Kernel` now preserves Pillow's raw `f32` scale and offset,
   including fractional, zero, negative, and non-finite values, and the 5x5
   GPU rows use Pillow's bottom-to-top kernel layout. The CPU matrix is exact
@@ -164,6 +174,16 @@ rename, relabel, or weaken a case to make a gate green.
   device arithmetic input on exact host control, including NaN, infinity,
   and negative zero.
 
+- [x] Add a source-verified integer-emulation lane for the safe one-axis
+  subset: normal same-sign F32 source words, nonnegative fixed coefficients
+  that equal Pillow's f64 table, and row sums within the 53-bit proof bound.
+  WGSL now multiplies 24-bit significands by the 22-bit weights with u64
+  limbs and performs round-to-nearest-even f32 conversion, preserving the
+  host f64-accumulate/f32-store boundary. The focused `f_resize_` tests pass
+  8/8 (all GPU-pool tests 15/15); a disposable 160-probe matrix had 38 native
+  admissions and 0 mismatches. Two-axis, chained, negative-coefficient,
+  non-dyadic, and special-value arithmetic remains on exact host control.
+
 ### P1 — honest backend-proof denominator
 
 - [x] The receipt sidecars now emit schema `pipeline-execution-evidence@2`
@@ -213,6 +233,15 @@ rename, relabel, or weaken a case to make a gate green.
   10,952/10,952 and GPU smoke is 1/1; the aggregate remains
   `passed_with_backend_gaps`. Artifact SHA-256:
   `e3edd78e6421aff1cd168fdf0931d1344c8382a1e19d3d05e73bb6043a114131`.
+- [x] Regenerate the complete schema-v3 all-backend envelope after the
+  ImageChops and opened-eager receipt fixes plus the F GPU proof at source
+  `8032f95f1`. CPU/GPU report **7,084 complete + 102 partial + 0 missing +
+  3,447 not applicable + 319 indeterminate**; SIMD reports **7,096 + 102 + 0
+  + 3,435 + 319**. Node and browser WASM report **6,713 complete + 586
+  partial + 888 missing + 2,738 not applicable + 27 indeterminate**. Every
+  value lane remains 10,952/10,952 and GPU smoke is 1/1; the aggregate remains
+  `passed_with_backend_gaps`. Artifact SHA-256:
+  `0f9136d79c501b9c953e6f78b8c984282df4fd353e38aa8b536f747a07a7c37f`.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -239,13 +268,19 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, and format/core-lint checks. Push the corresponding
   source and checklist commits only after the final artifact is validated.
 
-Last committed all-backend artifact source: `143ad86d9` (the artifact above
-was generated there; the working tree had pre-existing unrelated changes).
-The latest integrated parity source is `efc734896` (I;16 merge parity on top
-of the GPU accumulation-order fix `7983d9406`, D-048 Kernel fix `2c2b2d1ba`,
-D-039 merge fix `5be0fd7a5`, and D-044 putdata fix `a900ec6f4`). The focused
-69-test binding suite,
-combined full live-oracle parity gate, and
-final all-backend parity envelope are green; backend-proof completion, broader
-`I;16*` backend receipt coverage, and timing acceptance remain required. The
-overall goal is intentionally **active**.
+Last committed all-backend artifact source: `8032f95f1`. The fresh artifact is
+`/tmp/all-backends-post-f64-integer.json` (SHA-256
+`0f9136d79c501b9c953e6f78b8c984282df4fd353e38aa8b536f747a07a7c37f`). CPU and
+GPU report **7,084 complete + 102 partial + 0 missing + 3,447 not applicable +
+319 indeterminate**; SIMD reports **7,096 + 102 + 0 + 3,435 + 319**. Node and
+browser WASM report **6,713 complete + 586 partial + 888 missing + 2,738 not
+applicable + 27 indeterminate**. Every value lane remains 10,952/10,952 and
+GPU smoke is 1/1; the aggregate correctly remains
+`passed_with_backend_gaps`. The latest integrated parity source is
+`8032f95f1` (F integer-emulation GPU proof on top of the receipt, ImageChops,
+thumbnail, merge, Kernel, and geometry fixes). The focused receipt/evidence
+suite, full all-backend value lanes, F GPU tests, and format/build checks are
+green; `make -C pillow-rs clippy` remains blocked by the pre-existing pinned
+libavif/dav1d/libaom environment requirement. Backend-proof completion, broader
+F device arithmetic, and timing acceptance remain required. The overall goal
+is intentionally **active**.

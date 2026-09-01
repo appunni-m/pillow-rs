@@ -3420,3 +3420,60 @@ backend-identity taxonomy are still open. No fixture inputs, expected values,
 thresholds, case IDs, or denominators changed. The envelope is
 `/tmp/all-backends-post-receipt-classifier.json` (SHA-256
 `e3edd78e6421aff1cd168fdf0931d1344c8382a1e19d3d05e73bb6043a114131`).
+
+## 32.23 ImageChops.constant mode metadata parity (2026-09-01)
+
+The next deterministic public divergence was `ImageChops.constant` with an
+explicit source mode. Pillow's constant operation materializes an 8-bit `L`
+image even when the input is `1`, `CMYK`, `YCbCr`, `HSV`, `I`, or `F`; Rust's
+pipeline retained the explicit source-mode tag while carrying the same byte
+result. Commit `942542ec7` clears that metadata for `PipelineOp::Constant`,
+matching the existing materializing operations. The six-mode native probe and
+focused core regression are exact, with no fixture, case-ID, denominator,
+threshold, or backend-classification changes.
+
+## 32.24 Eager opened-image receipt classification (2026-09-01)
+
+The receipt audit still treated a fixed set of successful opened-image paths as
+missing pipeline receipts. Commit `a07994173` adds narrow, immutable-source
+proofs for PNG `P`/`I;16` headers and matching JPEG Exif cases, while leaving
+unknown opened assets conservative. The receipt-state suite passes 21/21; the
+full denominator remains 10,952. The follow-up all-backend envelope records
+319 native indeterminate cases instead of 343 and increases the native
+not-applicable partition without changing IDs, values, or backend labels.
+
+## 32.25 Exact one-axis heterogeneous F GPU reduction (2026-09-01)
+
+The prior forced-generic-shader audit established the first divergence: WGSL
+multiplied heterogeneous F samples by fixed weights and accumulated in f32,
+while Pillow's `Resample.c`/`ImagingResample` path uses the f64 coefficient
+table and f64 accumulation before the f32 store. Commit `8032f95f1` adds a
+host-verified integer lane for one changed axis of a single F resize: finite
+normal same-sign source words, nonnegative 22-bit coefficients proven equal to
+the f64 table, and aligned row sums within 53 bits. The WGSL shader multiplies
+24-bit significands by the fixed weights with two-limb u64 arithmetic and
+performs round-to-nearest-even f32 conversion, preserving the oracle's store
+boundary; the existing dyadic proof remains for two-axis/chained domains.
+
+The focused `f_resize_` tests pass 8/8 and the complete GPU-pool group passes
+15/15, including terminal native receipts. A disposable 160-probe campaign
+had 38 native admissions and zero byte mismatches after the patch. Broad
+multi-axis/non-dyadic arithmetic, negative-coefficient filters, and special
+values remain on exact host semantic control because they are not covered by
+this proof. No fixtures, thresholds, IDs, denominators, or receipt taxonomies
+were changed.
+
+## 32.26 Fresh all-backend envelope after parity and evidence fixes (2026-09-01)
+
+The complete schema-v3 envelope was regenerated at source `8032f95f1` after
+the ImageChops mode fix, eager opened-image classifier, and F GPU integer lane.
+CPU, SIMD, GPU, Node WASM, and browser WASM each remain value-exact at
+10,952/10,952, and GPU smoke is 1/1. CPU/GPU receipt partitions are **7,084
+complete + 102 partial + 0 missing + 3,447 not applicable + 319
+indeterminate**; SIMD is **7,096 + 102 + 0 + 3,435 + 319**. Node and browser
+WASM are **6,713 complete + 586 partial + 888 missing + 2,738 not applicable
++ 27 indeterminate**. The aggregate remains `passed_with_backend_gaps` because
+partial/indeterminate receipts, WASM receipt gaps, backend identity, and
+fallback taxonomy are still open. The schema-valid artifact is
+`/tmp/all-backends-post-f64-integer.json` (SHA-256
+`0f9136d79c501b9c953e6f78b8c984282df4fd353e38aa8b536f747a07a7c37f`).
