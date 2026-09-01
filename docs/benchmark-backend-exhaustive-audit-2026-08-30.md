@@ -3665,3 +3665,33 @@ are 383. No fixture, expected value, threshold, case ID, denominator, or
 receipt taxonomy changed. The remaining P0 families are special-value and
 overflow/cancellation rows, Box ratios outside the proven bounds, and chains
 outside the cumulative intermediate proof.
+
+## 32.35 Native raw-color ExtractBand GPU lane (2026-09-02)
+
+The next deterministic routing gap was not a shader arithmetic mismatch. The
+GPU preflight rejected CMYK, HSV, and YCbCr logical modes before the existing
+`extract_band.wgsl` byte-copy path, even though the packed RGBA/RGB transport
+retains their native channel order. Pillow's `getchannel` semantics for these
+modes copy the selected C/M/Y/K, H/S/V, or Y/Cb/Cr byte into an L8 result;
+`PutPixel` followed by `ExtractBand` has the same raw-byte contract.
+
+Commit `f55a770ad` admits only `ExtractBand`/`PutPixel` batches for those three
+modes. Index validation, packed channel selection, mode-transition
+segmentation, and L8 output conversion are unchanged. A focused native GPU
+regression covers all three modes and asserts exact bytes, requested/actual
+GPU identity, one dispatch, and no fallback. A filtered 30-case replay
+(direct CMYK/HSV/YCbCr cases, maintained suffix rows, and a materialized
+CMYK batch) is byte-exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
+all 30 GPU receipts are terminal native receipts with no fallback.
+
+The committed full envelope is `/tmp/all-backends-post-f55a770ad.json`
+(SHA-256 `7b97442f45ffe3f6db1128bd04cbc6dd438963f1aab900a374fcd2c46a943f4e`)
+at revision `f55a770ad8a082ac08064a4ea948c114c836ec71`. All 10,952 selected
+cases remain value-exact on every public lane, with GPU smoke 1/1. The GPU
+partition is 6,731 native GPU and 353 CPU receipts; the logical-mode fallback
+count is 117 (down from 147), while native receipt totals remain 7,084
+complete + 15 partial + 3,853 not-applicable. The aggregate therefore stays
+`passed_with_backend_gaps`: remaining Draw/Fit/EffectSpread/typed-operation
+routes, genuine partial receipts, WASM receipt proof, broader F arithmetic,
+and the timing gate are still open. No fixtures, expected values, thresholds,
+IDs, denominators, or receipt taxonomy changed.
