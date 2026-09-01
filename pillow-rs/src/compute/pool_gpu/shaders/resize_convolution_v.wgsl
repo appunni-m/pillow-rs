@@ -631,6 +631,14 @@ fn filtered_typed(output_x: u32, output_y: u32) -> u32 {
     return input[source_y * params.dst_w + output_x];
 }
 
+fn filtered_box_copy(output_x: u32, output_y: u32) -> u32 {
+    let word = filtered_typed(output_x, output_y);
+    // Pillow's f64 accumulator starts at +0.0, so a one-tap Box copy
+    // canonicalizes an input negative zero at the final f32 store. Preserve
+    // every other bit pattern, including NaN payloads and infinities.
+    return select(word, 0u, word == 0x80000000u);
+}
+
 fn unpremultiply(value: u32, alpha: u32) -> u32 {
     if alpha == 0u {
         // The scalar path leaves a premultiplied channel unchanged when the
@@ -668,9 +676,10 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
         }
         if params.premultiply == 3u {
             // F-mode Box upscales have one normalized unit-weight tap. Copy
-            // that source word so the finite f32 values admitted by the host
-            // proof retain their exact representation.
-            return filtered_typed(output_x, output_y);
+            // that source word so all special values retain their Pillow
+            // representation; the helper canonicalizes negative zero at the
+            // same final f32 store boundary as the host implementation.
+            return filtered_box_copy(output_x, output_y);
         }
         if params.premultiply == 5u {
             // A same-size filtered F resize is an identity in Pillow's
