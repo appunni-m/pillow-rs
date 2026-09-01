@@ -8650,6 +8650,18 @@ impl GpuPool {
         // transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                // ImageDraw's geometry is scan-converted by the exact host
+                // canvas before the packed draw shader copies the complete
+                // result.  The data-plane therefore preserves raw indexed,
+                // typed-word, and native color bytes just like the ordinary
+                // byte modes; no shader arithmetic interprets those samples.
+                || (matches!(
+                    logical_mode,
+                    "1" | "P" | "PA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr" | "I" | "F"
+                ) && !ops.is_empty()
+                    && ops
+                        .iter()
+                        .all(crate::compute::pool_cpu::ops::draw::is_draw_op))
                 || (matches!(logical_mode, "P" | "PA")
                     && ops.iter().all(|op| {
                         matches!(
@@ -9598,6 +9610,81 @@ mod tests {
             assert_eq!(actual, expected, "{mode} effect_spread parity");
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("native GPU effect_spread must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn draw_point_native_gpu_preserves_raw_byte_modes() {
+        let cases = [
+            ("1", vec![0x00, 0xff]),
+            ("P", vec![17, 18]),
+            ("PA", vec![17, 18]),
+            ("RGBX", vec![1, 2, 3, 4, 5, 6, 7, 8]),
+            ("RGBa", vec![11, 12, 13, 14, 15, 16, 17, 18]),
+            ("CMYK", vec![21, 22, 23, 24, 25, 26, 27, 28]),
+            ("HSV", vec![31, 32, 33, 34, 35, 36]),
+            ("YCbCr", vec![41, 42, 43, 44, 45, 46]),
+            (
+                "I",
+                (-123i32)
+                    .to_le_bytes()
+                    .into_iter()
+                    .chain(456i32.to_le_bytes())
+                    .collect(),
+            ),
+            (
+                "F",
+                1.25f32
+                    .to_le_bytes()
+                    .into_iter()
+                    .chain(2.5f32.to_le_bytes())
+                    .collect(),
+            ),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, source_bytes) in cases {
+            let source = if mode == "PA" {
+                let mut indexed = Image::frombytes("P", (2, 1), &source_bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
+                indexed.putalpha(201).expect("PA source alpha");
+                indexed
+            } else {
+                Image::frombytes(mode, (2, 1), &source_bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source image: {error}"))
+            };
+            let op = PipelineOp::DrawPoint {
+                points: Arc::from([(0, 0), (1, 0)]),
+                fill: (165, 90, 60, 195),
+                alpha_blend_rgb: false,
+            };
+            let expected = Image::push_op(&source, op.clone())
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU draw point");
+            let actual = match Image::push_op(&source, op)
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} draw point failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} draw point parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU draw point must publish a receipt");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
