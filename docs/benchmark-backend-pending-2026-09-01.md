@@ -193,10 +193,11 @@ rename, relabel, or weaken a case to make a gate green.
 
 Last committed all-backend artifact source: `5cc713f99` (the artifact above
 was generated there; the working tree had pre-existing unrelated changes).
-The latest integrated parity source is `7983d9406` (GPU accumulation-order
-fix on top of the D-048 Kernel fix `2c2b2d1ba`, D-039 merge fix `5be0fd7a5`,
-and D-044 putdata fix `a900ec6f4`). The focused 69-test binding suite,
+The latest integrated parity source is `efc734896` (I;16 merge parity on top
+of the GPU accumulation-order fix `7983d9406`, D-048 Kernel fix `2c2b2d1ba`,
+D-039 merge fix `5be0fd7a5`, and D-044 putdata fix `a900ec6f4`). The focused
+69-test binding suite,
 combined full live-oracle parity gate, and
 final all-backend parity envelope are green; backend-proof completion, broader
-`I;16*` backend receipt coverage, and timing acceptance remain required. The overall goal
-is intentionally **active**.
+`I;16*` backend receipt coverage, and timing acceptance remain required. The
+overall goal is intentionally **active**.
