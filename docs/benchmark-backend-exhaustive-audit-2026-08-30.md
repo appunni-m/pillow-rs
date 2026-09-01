@@ -3890,3 +3890,36 @@ work is the broader native-GPU F arithmetic domain (nonfinite and negative-
 zero outputs, coefficient overflow/cancellation, larger Box ratios, and
 chains containing non-Resize stages); the mixed-axis schedule is now
 explicitly guarded and parity-safe.
+
+## 32.43 Deferred setup receipts before public-call errors (2026-09-02)
+
+The post-guard envelope exposed 15 apparent partial native receipts in each
+CPU, SIMD, and GPU lane. Fourteen of those records were not incomplete image
+pipelines: twelve histogram mode-validation cases and the `ImageOps.fit` and
+`ImageOps.pad` validation cases queued a setup mutation (`putpixel`) and then
+raised a public error before any observed image materialization. The remaining
+`pipeline-composition.filter-rgba-5x5-invert` case has an observed filtered
+prefix before `invert` raises, so it is a genuine partial receipt and remains
+in the proof partition.
+
+Commit `b867867ee` narrows `_receipts_are_pre_materialization_error` to allow
+earlier deferred receipts only when they are known pipeline-mutating setup
+operations and no result boundary was observed. Earlier deferred results such
+as `resize` and `filter` remain authoritative, and step-less receipts remain
+conservative. The new regression covers the setup-mutation case while the
+existing prior-deferred-result case still reports `partial_receipt`;
+`make migration-parity-receipt-test` passes **28/28**.
+
+The fresh schema-v3 envelope at
+`/tmp/all-backends-post-b867867ee.json` (SHA-256
+`64690d9cdbf3415d69e742347a4410c523fcadc2ad4a4118d6c520a533ad754b`) is
+revision `b867867ee5b52dd7674b524380233781b39952a5`. CPU, SIMD, GPU, Node
+WASM, and browser WASM remain value-exact at **10,952/10,952**, with GPU smoke
+**1/1**. CPU and GPU now report **7,084 complete + 1 genuine partial + 3,867
+not-applicable**; SIMD reports **7,096 complete + 1 genuine partial + 3,855
+not-applicable**. The WASM lanes are unchanged at 6,713 complete, 586 partial,
+888 missing, 2,738 not-applicable, and 27 indeterminate. The aggregate remains
+`passed_with_backend_gaps` because the one observed native partial per lane,
+backend/fallback identity, WASM receipt gaps, broader F arithmetic, and the
+zero-violation timing gate remain open. No fixtures, expected values,
+thresholds, IDs, denominators, or public parity outputs changed.

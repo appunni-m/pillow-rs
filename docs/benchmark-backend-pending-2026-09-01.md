@@ -62,14 +62,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ### P1 — complete native-backend receipt proof
 
-- [ ] Close the 15 genuine partial native receipts in each CPU, SIMD, and GPU
+- [ ] Close the 1 genuine partial native receipt in each CPU, SIMD, and GPU
   lane; every claimed pipeline case needs a terminal-complete receipt. The
-  prior 102-count included 101 public validation failures that occur before
-  pipeline materialization; those receipts are now retained as operation
-  telemetry but explicitly marked outside the deferred pipeline partition.
-  The latest post-change envelope still has 15 genuine partials in each
-  native lane (CPU 7,084 complete, SIMD 7,096, GPU 7,084), so this bucket is
-  unchanged.
+  latest classifier separates fourteen setup-mutation receipts that precede
+  public validation errors before materialization from the one real observed
+  filter/invert prefix. The fresh envelope reports CPU 7,084 complete + 1
+  partial, SIMD 7,096 + 1, and GPU 7,084 + 1; the setup-only records remain
+  operation telemetry outside the deferred pipeline partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
   counts include 405 SIMD-lane CPU receipts and 252 GPU-lane CPU receipts;
   the latest GPU lane has 6,832 native GPU receipts, 139 exact host semantic
@@ -188,6 +187,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   SIMD 6,691 plus 405 CPU, and GPU 6,832 plus 252 CPU, with 15 genuine
   partials in each native lane; the mixed-axis Box route is now explicitly
   host-controlled and no longer an unguarded parity risk.
+- [x] The setup-before-error receipt classifier at committed source
+  `b867867ee` is covered by `make migration-parity-receipt-test` **28/28**.
+  The fresh schema-v3 envelope is
+  `/tmp/all-backends-post-b867867ee.json` (SHA-256
+  `64690d9cdbf3415d69e742347a4410c523fcadc2ad4a4118d6c520a533ad754b`),
+  revision `b867867ee5b52dd7674b524380233781b39952a5`. All five public lanes
+  remain **10,952/10,952** value-exact with GPU smoke **1/1**. CPU and GPU
+  report 7,084 complete + 1 genuine partial + 3,867 not-applicable; SIMD
+  reports 7,096 + 1 + 3,855. Fourteen setup-before-error records are now
+  outside the pipeline partition; the observed filter/invert prefix remains
+  the single genuine partial. WASM remains 6,713 complete + 586 partial +
+  888 missing + 2,738 not-applicable + 27 indeterminate.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -195,10 +206,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   host control) with zero mismatches; the known `2x1 -> 4x1` false-proof
   counterexample remains on host control.
 - [x] The receipt classifier changes are committed as `40c3e9860`,
-  `635afb555`, and `cb1813bc8`. The latest guard proves step-bound
+  `635afb555`, `cb1813bc8`, and `b867867ee`. The latest guard proves step-bound
   pre-materialization validation errors, annotates retained setup telemetry
   with `pipeline_relevant=false`, and keeps prior deferred receipts
-  conservative. `make migration-parity-receipt-test` passes 27/27; the full
+  conservative. `make migration-parity-receipt-test` passes 28/28; the full
   selected denominator remains 10,952 and public parity results retain their
   original schema without internal error fields.
 - [x] The D-049 thumbnail control-flow fix is committed as `dc6085f81`:
@@ -206,7 +217,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
   tests 14/14, GPU-pool tests 25/25 (including Draw, indexed Fit, finite
-  subnormal marker-9 rows, and filtered F chains), receipt tests 27/27,
+  subnormal marker-9 rows, and filtered F chains), receipt tests 28/28,
   evidence/schema validation, and `make -C pillow-rs fmt`. Clippy remains
   blocked before
   compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
@@ -215,17 +226,17 @@ execution is a parity-preserving fallback, not a parity completion claim.
 ## Closeout state
 
 - [x] The source lane and receipt-partition correction are committed as
-  `cb1813bc8`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
+  `cb1813bc8` plus setup-before-error classifier `b867867ee`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
   subnormal marker-9 admission as `b1962c6dd`, pure filtered F-chain admission
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
   `ExtractBand` admission as `f55a770ad`, the
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
   `7d1cc0af9`, and nearest indexed Fit admission as `0797e71f5`; the latest
   committed all-backend replay is
-  schema-valid and value-exact for all 10,952 cases. Native lanes report 15
-  genuine partial receipts and the GPU partition has 6,832 native receipts
+  schema-valid and value-exact for all 10,952 cases. Native lanes report one
+  genuine partial receipt each and the GPU partition has 6,832 native receipts
   plus 252 CPU receipts. No fixture, expected value, threshold, denominator,
-  or case ID was changed. The post-guard envelope is
-  `/tmp/all-backends-post-ea15ac316.json` and remains schema-valid and
+  or case ID was changed. The latest envelope is
+  `/tmp/all-backends-post-b867867ee.json` and remains schema-valid and
   value-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
