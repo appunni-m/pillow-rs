@@ -3822,3 +3822,35 @@ denominators, or receipt taxonomy changed. The remaining P0 families are
 nonfinite and negative-zero output words, coefficient overflow/cancellation,
 Box ratios outside the proven bounds, chains outside the cumulative proof, and
 the guarded mixed up/down two-axis schedule.
+
+## 32.41 Pure filtered F resize-chain proof (2026-09-02)
+
+The next deterministic gap was a routing boundary rather than a byte
+divergence: marker 9 accepted one filtered F resize, while a chain of filtered
+resizes was still sent to exact host semantic control even when every stage
+could be checked independently. Pillow materializes each `Resize` result as a
+rounded f32 image before the following operation, so a chain proof must carry
+those exact words forward instead of comparing every stage with the original
+source.
+
+Commit `33e0f11ec` limits the extension to pure finite F `Resize` chains. For
+each stage it validates Pillow's f64 coefficient table, compares ordered f64
+accumulation with the integer WGSL reducer, materializes each changed-axis
+f32 intermediate, and feeds those words into the next stage's proof. Nearest
+stages, non-Resize operations, nonfinite words, negative-zero final stores,
+overflow/cancellation disagreements, and the guarded horizontal-upscale /
+vertical-downscale schedule remain exact host semantic control.
+
+The native regression covers a two-stage Bicubic-to-Lanczos chain and matches
+CPU bytes with four device dispatches and a terminal native-GPU receipt. A
+500-case deterministic chain probe had **0 mismatches** (25 native GPU, 475
+exact host semantic control). The committed schema-v3 envelope at
+`/tmp/all-backends-post-33e0f11ec.json` (SHA-256
+`d91175eb93e4580d3a40da029cc86ea6903d6b2bebeb46aa99c6d11a7700be4f`) remains
+value-exact for **10,952/10,952** CPU, SIMD, GPU, Node WASM, and browser WASM
+cases, with GPU smoke **1/1**. Native receipt counts remain CPU 7,084; SIMD
+6,691 plus 405 CPU; GPU 6,832 plus 252 CPU, with 15 genuine partials in each
+native lane. No fixtures, expected values, thresholds, IDs, denominators, or
+receipt taxonomy changed. Remaining P0 work is nonfinite/negative-zero output,
+coefficient overflow/cancellation, Box ratios or mixed operation chains
+outside the per-stage proof, and the guarded mixed up/down schedule.
