@@ -140,6 +140,15 @@ rename, relabel, or weaken a case to make a gate green.
 - [x] Keep the finite nonconstant Box-upscale copy lane admitted for arbitrary
   non-downscaling geometry; its one-tap relocation proof is separate from
   arithmetic-filter admission.
+- [x] Re-run the broader heterogeneous/non-dyadic F arithmetic probes before
+  changing admission. Forty finite cases (eight geometries × five filters)
+  plus signed-zero/edge probes are byte-exact through the current
+  host-controlled route. A disposable forced-generic-shader run diverges by
+  ULPs on heterogeneous Bilinear/Bicubic/Lanczos/Hamming and non-dyadic Box;
+  a 2×1→4×1 Bilinear counterexample also breaks a broad dyadic-source proof.
+  Keep these inputs on exact host semantic control until a verified f64-
+  equivalent device accumulator exists; no safe source admission change was
+  found.
 - [ ] Extend native-GPU exact arithmetic coverage to heterogeneous/non-dyadic
   Bilinear, broader Bicubic/Lanczos/Hamming rows, Box downscales outside the
   proven dyadic row limits, and chains outside the cumulative
@@ -178,6 +187,15 @@ rename, relabel, or weaken a case to make a gate green.
   remains deferred and still requires a terminal receipt. The targeted six-case
   all-backend gate is parity-green on CPU, SIMD, GPU, Node WASM, and browser
   WASM; the native receipt partition has no missing cases in this slice.
+- [x] Regenerate the complete schema-v3 all-backend envelope after the
+  factor-one classifier correction at source `1dc515445`. CPU/GPU now report
+  **7,084 complete + 102 partial + 0 missing + 3,333 not applicable + 433
+  indeterminate**; SIMD reports **7,096 + 102 + 0 + 3,321 + 433**. Node and
+  browser WASM report **6,713 complete + 586 partial + 888 missing + 2,713
+  not applicable + 52 indeterminate**. Every value lane remains 10,952/10,952
+  and GPU smoke is 1/1; the aggregate correctly remains
+  `passed_with_backend_gaps`. Artifact SHA-256:
+  `56dcf71a65f169576a8bc077e630748bfc0415991f0d5696efea6670b4946c18`.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -204,7 +222,7 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, and format/core-lint checks. Push the corresponding
   source and checklist commits only after the final artifact is validated.
 
-Last committed all-backend artifact source: `5cc713f99` (the artifact above
+Last committed all-backend artifact source: `1dc515445` (the artifact above
 was generated there; the working tree had pre-existing unrelated changes).
 The latest integrated parity source is `efc734896` (I;16 merge parity on top
 of the GPU accumulation-order fix `7983d9406`, D-048 Kernel fix `2c2b2d1ba`,
@@ -212,6 +230,5 @@ D-039 merge fix `5be0fd7a5`, and D-044 putdata fix `a900ec6f4`). The focused
 69-test binding suite,
 combined full live-oracle parity gate, and
 final all-backend parity envelope are green; backend-proof completion, broader
-`I;16*` backend receipt coverage, the complete-cohort receipt regeneration
-after the factor-one classifier correction, and timing acceptance remain
-required. The overall goal is intentionally **active**.
+`I;16*` backend receipt coverage, and timing acceptance remain required. The
+overall goal is intentionally **active**.
