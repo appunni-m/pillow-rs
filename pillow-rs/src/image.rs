@@ -2402,7 +2402,12 @@ impl Image {
             }
         } else {
             match &op {
+                // Pillow's libImaging/Chops.c constant constructor always
+                // allocates an L image, even when the source has an explicit
+                // CMYK, YCbCr, HSV, I, F, or 1 mode tag. Do not carry that
+                // source tag across the mode-changing operation.
                 PipelineOp::Grayscale
+                | PipelineOp::Constant { .. }
                 | PipelineOp::Convert { .. }
                 | PipelineOp::ExtractBand { .. } => None,
                 _ => source.explicit_mode().map(str::to_owned),
