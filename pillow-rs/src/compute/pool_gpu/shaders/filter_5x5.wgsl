@@ -357,17 +357,20 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     }
 
     // ── Row accumulation in PIL order (bottom to top) ──
-    // Row +2 (bottom-most): dy=+2, kernel k40..k44
-    let row0_r = byte_row_5(r4_0, r4_1, r4_2, r4_3, r4_4, k40, k41, k42, k43, k44);
-    let row0_g = byte_row_5(g4_0, g4_1, g4_2, g4_3, g4_4, k40, k41, k42, k43, k44);
-    let row0_b = byte_row_5(b4_0, b4_1, b4_2, b4_3, b4_4, k40, k41, k42, k43, k44);
-    let row0_a = byte_row_5(a4_0, a4_1, a4_2, a4_3, a4_4, k40, k41, k42, k43, k44);
+    // Row +2 (bottom-most): dy=+2, kernel k00..k04.  ImagingFilter's
+    // public kernel layout is already bottom-to-top; do not reverse it a
+    // second time at the shader boundary (the old mapping diverged for
+    // asymmetric custom 5x5 kernels).
+    let row0_r = byte_row_5(r4_0, r4_1, r4_2, r4_3, r4_4, k00, k01, k02, k03, k04);
+    let row0_g = byte_row_5(g4_0, g4_1, g4_2, g4_3, g4_4, k00, k01, k02, k03, k04);
+    let row0_b = byte_row_5(b4_0, b4_1, b4_2, b4_3, b4_4, k00, k01, k02, k03, k04);
+    let row0_a = byte_row_5(a4_0, a4_1, a4_2, a4_3, a4_4, k00, k01, k02, k03, k04);
 
-    // Row +1: dy=+1, kernel k30..k34
-    let row1_r = byte_row_5(r3_0, r3_1, r3_2, r3_3, r3_4, k30, k31, k32, k33, k34);
-    let row1_g = byte_row_5(g3_0, g3_1, g3_2, g3_3, g3_4, k30, k31, k32, k33, k34);
-    let row1_b = byte_row_5(b3_0, b3_1, b3_2, b3_3, b3_4, k30, k31, k32, k33, k34);
-    let row1_a = byte_row_5(a3_0, a3_1, a3_2, a3_3, a3_4, k30, k31, k32, k33, k34);
+    // Row +1: dy=+1, kernel k10..k14
+    let row1_r = byte_row_5(r3_0, r3_1, r3_2, r3_3, r3_4, k10, k11, k12, k13, k14);
+    let row1_g = byte_row_5(g3_0, g3_1, g3_2, g3_3, g3_4, k10, k11, k12, k13, k14);
+    let row1_b = byte_row_5(b3_0, b3_1, b3_2, b3_3, b3_4, k10, k11, k12, k13, k14);
+    let row1_a = byte_row_5(a3_0, a3_1, a3_2, a3_3, a3_4, k10, k11, k12, k13, k14);
 
     // Row 0 (center): dy=0, kernel k20..k24
     let row2_r = byte_row_5(r2_0, r2_1, r2_2, r2_3, r2_4, k20, k21, k22, k23, k24);
@@ -375,17 +378,17 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     let row2_b = byte_row_5(b2_0, b2_1, b2_2, b2_3, b2_4, k20, k21, k22, k23, k24);
     let row2_a = byte_row_5(a2_0, a2_1, a2_2, a2_3, a2_4, k20, k21, k22, k23, k24);
 
-    // Row -1: dy=-1, kernel k10..k14
-    let row3_r = byte_row_5(r1_0, r1_1, r1_2, r1_3, r1_4, k10, k11, k12, k13, k14);
-    let row3_g = byte_row_5(g1_0, g1_1, g1_2, g1_3, g1_4, k10, k11, k12, k13, k14);
-    let row3_b = byte_row_5(b1_0, b1_1, b1_2, b1_3, b1_4, k10, k11, k12, k13, k14);
-    let row3_a = byte_row_5(a1_0, a1_1, a1_2, a1_3, a1_4, k10, k11, k12, k13, k14);
+    // Row -1: dy=-1, kernel k30..k34
+    let row3_r = byte_row_5(r1_0, r1_1, r1_2, r1_3, r1_4, k30, k31, k32, k33, k34);
+    let row3_g = byte_row_5(g1_0, g1_1, g1_2, g1_3, g1_4, k30, k31, k32, k33, k34);
+    let row3_b = byte_row_5(b1_0, b1_1, b1_2, b1_3, b1_4, k30, k31, k32, k33, k34);
+    let row3_a = byte_row_5(a1_0, a1_1, a1_2, a1_3, a1_4, k30, k31, k32, k33, k34);
 
-    // Row -2 (top-most): dy=-2, kernel k00..k04
-    let row4_r = byte_row_5(r0_0, r0_1, r0_2, r0_3, r0_4, k00, k01, k02, k03, k04);
-    let row4_g = byte_row_5(g0_0, g0_1, g0_2, g0_3, g0_4, k00, k01, k02, k03, k04);
-    let row4_b = byte_row_5(b0_0, b0_1, b0_2, b0_3, b0_4, k00, k01, k02, k03, k04);
-    let row4_a = byte_row_5(a0_0, a0_1, a0_2, a0_3, a0_4, k00, k01, k02, k03, k04);
+    // Row -2 (top-most): dy=-2, kernel k40..k44
+    let row4_r = byte_row_5(r0_0, r0_1, r0_2, r0_3, r0_4, k40, k41, k42, k43, k44);
+    let row4_g = byte_row_5(g0_0, g0_1, g0_2, g0_3, g0_4, k40, k41, k42, k43, k44);
+    let row4_b = byte_row_5(b0_0, b0_1, b0_2, b0_3, b0_4, k40, k41, k42, k43, k44);
+    let row4_a = byte_row_5(a0_0, a0_1, a0_2, a0_3, a0_4, k40, k41, k42, k43, k44);
 
     // Accumulate in PIL order: bias, +row0, +row1, +row2, +row3, +row4
     var ss_r = bias + row0_r; ss_r = ss_r + row1_r; ss_r = ss_r + row2_r;

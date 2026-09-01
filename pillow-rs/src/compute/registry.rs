@@ -439,8 +439,25 @@ pub(crate) fn gpu_contrast_factor_int(factor: f64) -> Option<u32> {
     Some(factor_int as u32)
 }
 
+/// Convert Pillow's f32 offset to the integer representation used by WGSL.
+///
+/// The shader ABI carries this value as an i32. Fractional, non-finite, and
+/// out-of-range offsets therefore stay on the host path rather than being
+/// silently truncated during parameter packing.
+#[cfg(feature = "gpu")]
+pub(crate) fn filter_offset_i32(offset: f32) -> Option<i32> {
+    if !offset.is_finite() || offset.fract() != 0.0 {
+        return None;
+    }
+    let offset_f64 = f64::from(offset);
+    if offset_f64 < f64::from(i32::MIN) || offset_f64 > f64::from(i32::MAX) {
+        return None;
+    }
+    Some(offset as i32)
+}
+
 /// Return whether the convolution WGSL path is safe for a finite normalized
-/// kernel.
+/// kernel and an integer-representable offset.
 ///
 /// Pillow evaluates the normalized coefficients and each row in `f32`, with
 /// the middle product followed by fused multiply-adds. The WGSL byte path now
@@ -451,11 +468,14 @@ pub(crate) fn gpu_contrast_factor_int(factor: f64) -> Option<u32> {
 /// channel. This admits non-dyadic public kernels without substituting a
 /// different fixed-point rounding contract.
 #[cfg(feature = "gpu")]
-pub(crate) fn gpu_filter_kernel_is_exact(kernel: &[f32], scale: f32, offset: i32) -> bool {
-    if !scale.is_finite() {
+pub(crate) fn gpu_filter_kernel_is_exact(kernel: &[f32], scale: f32, offset: f32) -> bool {
+    let Some(offset) = filter_offset_i32(offset) else {
+        return false;
+    };
+    if !scale.is_finite() || scale == 0.0 {
         return false;
     }
-    let denominator = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let denominator = scale;
     let normalized: Vec<f32> = kernel
         .iter()
         .map(|coefficient| *coefficient / denominator)
@@ -487,8 +507,9 @@ pub(crate) fn gpu_filter_kernel_is_exact(kernel: &[f32], scale: f32, offset: i32
 pub(crate) fn gpu_filter_rational_denominator(
     kernel: &[f32],
     scale: f32,
-    offset: i32,
+    offset: f32,
 ) -> Option<u32> {
+    let offset = filter_offset_i32(offset)?;
     if !scale.is_finite() || scale == 0.0 {
         return None;
     }
@@ -1233,12 +1254,12 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             scale,
             offset,
         } => {
-            let s = if scale.abs() < 1e-10 { 1.0 } else { *scale };
+            let s = *scale;
             let mut params = Vec::with_capacity(11);
             for k in kernel.iter() {
                 params.push((k / s).to_bits());
             }
-            params.push(*offset as u32);
+            params.push(filter_offset_i32(*offset).unwrap_or_default() as u32);
             // The byte kernel follows Pillow's f32/FMA contraction order.
             // Keep the optional integer mode disabled here: integer
             // rationalization can move an exact half-way value across the
@@ -1254,12 +1275,12 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             scale,
             offset,
         } => {
-            let s = if scale.abs() < 1e-10 { 1.0 } else { *scale };
+            let s = *scale;
             let mut params = Vec::with_capacity(27);
             for k in kernel.iter() {
                 params.push((k / s).to_bits());
             }
-            params.push(*offset as u32);
+            params.push(filter_offset_i32(*offset).unwrap_or_default() as u32);
             // See the 3x3 path: preserve Pillow's f32/FMA rounding rather
             // than replacing it with integer rational arithmetic.
             params.push(0);

@@ -134,8 +134,8 @@ pub enum PipelineOp {
         kernel: [f32; 9],
         /// Kernel scale divisor.
         scale: f32,
-        /// Additive output offset.
-        offset: i32,
+        /// Additive output offset, represented in Pillow's `f32` arithmetic.
+        offset: f32,
     },
     /// Apply a 5x5 convolution kernel.
     Filter5x5 {
@@ -143,8 +143,8 @@ pub enum PipelineOp {
         kernel: [f32; 25],
         /// Kernel scale divisor.
         scale: f32,
-        /// Additive output offset.
-        offset: i32,
+        /// Additive output offset, represented in Pillow's `f32` arithmetic.
+        offset: f32,
     },
     /// Apply Gaussian blur.
     GaussianBlur {
