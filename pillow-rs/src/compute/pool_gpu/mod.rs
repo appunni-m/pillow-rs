@@ -8841,6 +8841,16 @@ impl GpuPool {
                                 }
                         )
                     }))
+                // CMYK, HSV, and YCbCr retain their native channel order in
+                // the packed RGBA/RGB transport.  ExtractBand only copies
+                // one requested byte and then publishes an L8 result, so it
+                // does not reinterpret the samples as RGB or alpha.  Keep
+                // PutPixel here as well: the maintained getchannel batches
+                // often write one source pixel before extracting its band.
+                || (matches!(logical_mode, "CMYK" | "HSV" | "YCbCr")
+                    && ops.iter().all(|op| {
+                        matches!(op, PipelineOp::ExtractBand { .. } | PipelineOp::PutPixel { .. })
+                    }))
                 || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
                     && ops
                         .iter()
@@ -9467,6 +9477,52 @@ mod tests {
         assert!(gpu_byte_point_mode_allowed(&rgb, Some("RGB")));
         assert!(gpu_byte_point_mode_allowed(&rgba, Some("RGBA")));
         assert!(!gpu_byte_point_mode_allowed(&rgba, Some("RGBX")));
+    }
+
+    #[test]
+    fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
+        let cases = [
+            ("CMYK", 3, vec![1, 2, 3, 4, 11, 12, 13, 14], vec![4, 14]),
+            ("HSV", 1, vec![21, 22, 23, 31, 32, 33], vec![22, 32]),
+            ("YCbCr", 2, vec![41, 42, 43, 51, 52, 53], vec![43, 53]),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, channel, source_bytes, expected_bytes) in cases {
+            let source = Image::frombytes(mode, (2, 1), &source_bytes).expect("source image");
+            let expected = source
+                .getchannel(channel)
+                .expect("channel operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU channel extraction");
+            assert_eq!(expected, expected_bytes);
+            let actual = match source
+                .getchannel(channel)
+                .expect("channel operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} channel extraction failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} channel extraction parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU channel extraction must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
