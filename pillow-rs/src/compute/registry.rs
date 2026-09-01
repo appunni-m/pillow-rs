@@ -255,6 +255,16 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 /// Returns whether the GPU backend has an implementation for `op`.
 #[cfg(feature = "gpu")]
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    // Merge aliases share a raster storage type with canonical modes, but
+    // their target-specific tags are not all representable by the shader
+    // output contract. LAB additionally needs an A/B +128 byte encoding, and
+    // scalar/P targets need non-byte output handling; route those cases to
+    // the exact CPU implementation before device work begins.
+    if let PipelineOp::Merge { logical_mode, .. } = op
+        && matches!(logical_mode.as_str(), "LAB" | "P" | "1" | "I" | "F")
+    {
+        return Ok(false);
+    }
     // Filter exactness depends on the logical sample contract.  The GPU pool
     // performs the final image-aware check after lazy materialization, so let
     // contextual filters cross this operation-only registry gate even when
@@ -2529,14 +2539,19 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             _source_mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Merge { mode, bands } = op {
+                if let PipelineOp::Merge {
+                    mode,
+                    logical_mode: target_mode,
+                    bands,
+                } = op
+                {
                     let arc_bands: Vec<std::sync::Arc<crate::image::Image>> = bands
                         .iter()
                         .map(|im| std::sync::Arc::new(im.clone()))
                         .collect();
-                    op_merge(img, mode, &arc_bands)
+                    op_merge(img, mode, &arc_bands, Some(target_mode))
                 } else {
                     Err(PilError::ValueError("expected Merge op".into()))
                 }

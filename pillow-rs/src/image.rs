@@ -723,8 +723,8 @@ pub enum FormattedExtrema {
 fn pillow_band_count(mode: &str) -> usize {
     match mode {
         "L" | "1" | "P" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N" => 1,
-        "LA" | "PA" => 2,
-        "RGB" | "YCbCr" | "HSV" => 3,
+        "LA" | "La" | "PA" => 2,
+        "RGB" | "YCbCr" | "HSV" | "LAB" => 3,
         _ => 4,
     }
 }
@@ -2619,8 +2619,14 @@ impl Image {
         let (r, g, b, a) = self.getpixel(x, y)?;
         Ok(match mode.as_str() {
             "L" | "1" | "P" => FormattedPixelValue::Scalar(r),
-            "LA" | "PA" => FormattedPixelValue::Components(vec![r, a]),
+            "LA" | "La" | "PA" => FormattedPixelValue::Components(vec![r, a]),
             "RGB" => FormattedPixelValue::Components(vec![r, g, b]),
+            // Pillow stores LAB A/B samples in the unsigned byte image as
+            // values biased by 128. Merge applies that native C encoding;
+            // decode it again at the public pixel boundary.
+            "LAB" => {
+                FormattedPixelValue::Components(vec![r, g.wrapping_sub(128), b.wrapping_sub(128)])
+            }
             "RGBA" | "RGBa" | "RGBX" | "CMYK" => FormattedPixelValue::Components(vec![r, g, b, a]),
             _ => FormattedPixelValue::Components(vec![r, g, b]),
         })
@@ -3299,7 +3305,9 @@ impl Image {
             "CMYK" => vec!["C", "M", "Y", "K"],
             "YCbCr" => vec!["Y", "Cb", "Cr"],
             "HSV" => vec!["H", "S", "V"],
+            "LAB" => vec!["L", "A", "B"],
             "PA" => vec!["P", "A"],
+            "La" => vec!["L", "a"],
             "RGBa" => vec!["R", "G", "B", "a"],
             "RGBX" => vec!["R", "G", "B", "X"],
             "I" | "F" | "P" | "1" => {
@@ -4656,6 +4664,18 @@ impl Image {
                 return Err(PilError::ValueError("band index out of range".into()));
             }
             let band = band as usize;
+            if mode == "LAB" {
+                return Ok(img
+                    .to_rgb8()
+                    .pixels()
+                    .map(|pixel| match band {
+                        0 => pixel[0],
+                        1 => pixel[1].wrapping_sub(128),
+                        2 => pixel[2].wrapping_sub(128),
+                        _ => unreachable!("LAB has exactly three bands"),
+                    })
+                    .collect());
+            }
             // Keep ordinary byte layouts narrow for banded reads. The old
             // fallback widened the complete frame to RGBA before selecting a
             // single channel, which made a read-only terminal operation pay
@@ -4677,6 +4697,15 @@ impl Image {
             }
             let rgba = img.to_rgba8();
             return Ok(rgba.pixels().map(|p| p[band]).collect());
+        }
+        let mode = self.mode_from_materialized(&img);
+        if mode == "LAB" {
+            let mut data = img.to_rgb8().into_raw();
+            for pixel in data.chunks_exact_mut(3) {
+                pixel[1] = pixel[1].wrapping_sub(128);
+                pixel[2] = pixel[2].wrapping_sub(128);
+            }
+            return Ok(data);
         }
         match img.color() {
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {

@@ -78,10 +78,13 @@ pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
 
 fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
     let n_expected = match mode {
+        "1" | "I" | "F" | "P" => 1,
         "RGB" => 3,
         "RGBA" => 4,
+        "RGBX" | "RGBa" => 4,
         "CMYK" => 4,
-        "LA" => 2,
+        "LA" | "La" | "PA" => 2,
+        "YCbCr" | "HSV" | "LAB" => 3,
         "L" => 1,
         _ => {
             // Pillow 12.2 looks up the mode in ``ImageMode.getmode`` before
@@ -105,9 +108,15 @@ fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError
     // single-band L path has its own ``images do not match`` error.
     for (index, band) in bands.iter().enumerate() {
         let band_mode = band.mode()?;
-        let valid = band_mode == "L" || (index == 0 && mode != "L" && band_mode == "P");
+        let valid = match mode {
+            // ImagingMerge requires a source core with the exact scalar mode
+            // for these destinations; an L/P band is not coerced to 1/I/F.
+            "1" | "I" | "F" | "P" => band_mode == mode,
+            "L" => band_mode == "L",
+            _ => band_mode == "L" || (index == 0 && band_mode == "P"),
+        };
         if !valid {
-            return Err(if mode == "L" {
+            return Err(if matches!(mode, "L" | "1" | "I" | "F" | "P") {
                 PilError::ValueError("images do not match".into())
             } else {
                 PilError::ValueError("mode mismatch".into())
@@ -115,6 +124,21 @@ fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError
         }
     }
     Ok(())
+}
+
+/// Parses the mode names accepted specifically by Pillow's `Image.merge`.
+///
+/// The raster core stores `La`/`PA` as `LA`, `RGBX`/`RGBa` as `RGBA`, and
+/// `LAB` as RGB bytes. The public mode tag remains attached to the pipeline so
+/// callers still observe the requested Pillow spelling; conversion continues
+/// to use its narrower, independently validated mode parser.
+fn parse_merge_mode(mode: &str) -> Result<crate::pipeline::ColorMode, PilError> {
+    match mode {
+        "La" | "PA" => Ok(crate::pipeline::ColorMode::LA),
+        "RGBX" | "RGBa" => Ok(crate::pipeline::ColorMode::RGBA),
+        "LAB" => Ok(crate::pipeline::ColorMode::RGB),
+        _ => parse_mode(mode),
+    }
 }
 
 fn validate_merge_band_sizes(bands: &[Image]) -> Result<(), PilError> {
@@ -142,8 +166,9 @@ pub enum MergeInput {
 
 /// Merges single-band images into a multi-band image.
 ///
-/// `mode` determines the required band count: `L=1`, `LA=2`, `RGB=3`, and
-/// `RGBA=4`.
+/// `mode` determines the required band count. Pillow's byte layouts include
+/// `L`, `La`, `PA`, `RGB`, `RGBX`, `RGBA`, `RGBa`, `YCbCr`, `HSV`, `LAB`, and
+/// `CMYK`; the typed scalar layouts `1`, `I`, `F`, and `P` are also accepted.
 ///
 /// # Errors
 ///
@@ -154,11 +179,12 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_band_modes(mode, bands)?;
     validate_merge_band_sizes(bands)?;
 
-    let mode_enum = parse_mode(mode)?;
+    let mode_enum = parse_merge_mode(mode)?;
     let mut result = Image::push_op(
         &bands[0],
         PipelineOp::Merge {
             mode: mode_enum,
+            logical_mode: mode.to_owned(),
             bands: bands.to_vec().into(),
         },
     );
@@ -166,8 +192,8 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
         explicit_mode: tag, ..
     } = &mut result
     {
-        if mode == "CMYK" {
-            *tag = Some("CMYK".to_string());
+        if mode != "L" && mode != "LA" && mode != "RGB" && mode != "RGBA" {
+            *tag = Some(mode.to_owned());
         }
     }
     Ok(result)
@@ -778,4 +804,148 @@ pub fn effect_mandelbrot_with_extent(
         )));
     }
     effect_mandelbrot(size, (extent[0], extent[1], extent[2], extent[3]), quality)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge;
+    use crate::image::{FormattedImageData, FormattedPixelValue, Image};
+
+    fn l_band(bytes: &[u8]) -> Image {
+        Image::frombytes("L", (2, 1), bytes).expect("valid L band")
+    }
+
+    #[test]
+    fn merge_preserves_alias_modes_and_lab_encoding() {
+        let l0 = l_band(&[0x10, 0x11]);
+        let l1 = l_band(&[0x20, 0x21]);
+        let l2 = l_band(&[0x30, 0x31]);
+        let l3 = l_band(&[0x40, 0x41]);
+
+        let cases = [
+            (
+                "La",
+                vec![l0.clone(), l1.clone()],
+                vec![0x10, 0x20, 0x11, 0x21],
+                vec!["L", "a"],
+            ),
+            (
+                "PA",
+                vec![l0.clone(), l1.clone()],
+                vec![0x10, 0x20, 0x11, 0x21],
+                vec!["P", "A"],
+            ),
+            (
+                "RGBX",
+                vec![l0.clone(), l1.clone(), l2.clone(), l3.clone()],
+                vec![0x10, 0x20, 0x30, 0x40, 0x11, 0x21, 0x31, 0x41],
+                vec!["R", "G", "B", "X"],
+            ),
+            (
+                "RGBa",
+                vec![l0.clone(), l1.clone(), l2.clone(), l3.clone()],
+                vec![0x10, 0x20, 0x30, 0x40, 0x11, 0x21, 0x31, 0x41],
+                vec!["R", "G", "B", "a"],
+            ),
+            (
+                "YCbCr",
+                vec![l0.clone(), l1.clone(), l2.clone()],
+                vec![0x10, 0x20, 0x30, 0x11, 0x21, 0x31],
+                vec!["Y", "Cb", "Cr"],
+            ),
+            (
+                "HSV",
+                vec![l0.clone(), l1.clone(), l2.clone()],
+                vec![0x10, 0x20, 0x30, 0x11, 0x21, 0x31],
+                vec!["H", "S", "V"],
+            ),
+        ];
+        for (mode, bands, bytes, names) in cases {
+            let result = merge(mode, &bands).expect("alias merge succeeds");
+            assert_eq!(result.mode().expect("mode"), mode);
+            assert_eq!(result.tobytes().expect("bytes"), bytes);
+            assert_eq!(result.getbands().expect("bands"), names);
+        }
+
+        let lab = merge("LAB", &[l0, l1, l2]).expect("LAB merge succeeds");
+        assert_eq!(lab.mode().expect("mode"), "LAB");
+        assert_eq!(
+            lab.tobytes().expect("bytes"),
+            [0x10, 0xa0, 0xb0, 0x11, 0xa1, 0xb1]
+        );
+        assert_eq!(
+            lab.getpixel_formatted(0, 0).expect("pixel"),
+            FormattedPixelValue::Components(vec![0x10, 0x20, 0x30])
+        );
+        assert_eq!(
+            lab.getdata_formatted(None).expect("data"),
+            FormattedImageData::Components(vec![vec![0x10, 0x20, 0x30], vec![0x11, 0x21, 0x31]])
+        );
+    }
+
+    #[test]
+    fn merge_preserves_first_palette_band_and_rejects_later_palette() {
+        let palette = Image::frombytes("P", (2, 1), &[1, 2]).expect("valid P band");
+        let l0 = l_band(&[0x20, 0x21]);
+        let l1 = l_band(&[0x30, 0x31]);
+
+        let result = merge("RGB", &[palette.clone(), l0, l1.clone()]).expect("first P is accepted");
+        assert_eq!(
+            result.tobytes().expect("bytes"),
+            [1, 0x20, 0x30, 2, 0x21, 0x31]
+        );
+        assert_eq!(result.mode().expect("mode"), "RGB");
+
+        let later = merge(
+            "RGB",
+            &[Image::frombytes("L", (2, 1), &[1, 2]).unwrap(), palette, l1],
+        );
+        assert_eq!(
+            later.expect_err("later P must fail").to_string(),
+            "mode mismatch"
+        );
+    }
+
+    #[test]
+    fn merge_keeps_typed_scalar_storage() {
+        let mode1 = merge(
+            "1",
+            &[Image::frombytes("1", (2, 1), &[0xa0]).expect("valid 1 band")],
+        )
+        .expect("1 merge");
+        assert_eq!(mode1.tobytes().expect("1 bytes"), [0x80]);
+
+        let int = merge(
+            "I",
+            &[
+                Image::frombytes("I", (2, 1), &[1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff])
+                    .expect("valid I band"),
+            ],
+        )
+        .expect("I merge");
+        assert_eq!(
+            int.tobytes().expect("I bytes"),
+            [1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff]
+        );
+
+        let float = merge(
+            "F",
+            &[
+                Image::frombytes("F", (2, 1), &[0, 0, 0xc0, 0x3f, 0, 0, 0x10, 0xc0])
+                    .expect("valid F band"),
+            ],
+        )
+        .expect("F merge");
+        assert_eq!(
+            float.tobytes().expect("F bytes"),
+            [0, 0, 0xc0, 0x3f, 0, 0, 0x10, 0xc0]
+        );
+
+        assert_eq!(
+            merge("I", &[l_band(&[1, 2])])
+                .expect_err("L cannot merge into I")
+                .to_string(),
+            "images do not match"
+        );
+    }
 }
