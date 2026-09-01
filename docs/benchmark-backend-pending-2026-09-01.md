@@ -46,6 +46,12 @@ rename, relabel, or weaken a case to make a gate green.
   packed integer colors, declared byte order, and the small Pillow distinction
   between line/point and area/arc draw paths are covered by core and Python
   probes against all four modes.
+- `Image.convert` and image-source `Image.paste` now materialize an `I;16*`
+  destination through typed unsigned-16 samples. An `L` sample of 17 remains
+  17 (not 4369), the declared byte order is retained, and the broader
+  `L`/`LA`/`RGB`/`RGBA`/`CMYK`/`HSV`/`YCbCr`/`I`/`F`/`1`/`PA` source matrix
+  matches Pillow's values and errors. CPU, SIMD, and GPU paste probes are
+  exact; the maintained six-case I;16 paste slice passes on all three lanes.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
