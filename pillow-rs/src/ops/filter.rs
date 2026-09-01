@@ -18,7 +18,7 @@ pub fn prepare_kernel(
     scale: Option<f64>,
     offset: f64,
     size: (u32, u32),
-) -> Result<(Vec<f64>, f64, i32, u32), PilError> {
+) -> Result<(Vec<f64>, f64, f32, u32), PilError> {
     let (size_x, size_y) = size;
     if size_x != size_y || (size_x != 3 && size_x != 5) {
         return Err(PilError::ValueError("bad kernel size".into()));
@@ -27,7 +27,10 @@ pub fn prepare_kernel(
     let kernel = kernel.unwrap_or_else(|| vec![1.0; numel]);
     validate_kernel_coefficients(Some(&kernel), size)?;
     let scale = scale.unwrap_or_else(|| kernel.iter().sum());
-    Ok((kernel, scale, offset as i32, size_x))
+    // `_imaging.filter` parses both scale and offset with the C `float`
+    // format. Preserve that narrowing (including fractions and IEEE values)
+    // until the CPU convolution, rather than truncating offset to an integer.
+    Ok((kernel, scale, offset as f32, size_x))
 }
 
 /// Validates the coefficient count shared by `Kernel` construction and
@@ -51,11 +54,11 @@ pub fn validate_kernel_coefficients(
 struct FilterKernel {
     kernel: [f32; 9],
     scale: f32,
-    offset: i32,
+    offset: f32,
 }
 
 impl FilterKernel {
-    const fn new(kernel: [f32; 9], scale: f32, offset: i32) -> Self {
+    const fn new(kernel: [f32; 9], scale: f32, offset: f32) -> Self {
         FilterKernel {
             kernel,
             scale,
@@ -82,42 +85,42 @@ const SMOOTH_MORE_5X5_SCALE: f32 = 100.0;
 const CONTOUR: FilterKernel = FilterKernel::new(
     [-1.0, -1.0, -1.0, -1.0, 8.0, -1.0, -1.0, -1.0, -1.0],
     1.0,
-    255,
+    255.0,
 );
 
 const DETAIL: FilterKernel =
-    FilterKernel::new([0.0, -1.0, 0.0, -1.0, 10.0, -1.0, 0.0, -1.0, 0.0], 6.0, 0);
+    FilterKernel::new([0.0, -1.0, 0.0, -1.0, 10.0, -1.0, 0.0, -1.0, 0.0], 6.0, 0.0);
 
 const EDGE_ENHANCE: FilterKernel = FilterKernel::new(
     [-1.0, -1.0, -1.0, -1.0, 10.0, -1.0, -1.0, -1.0, -1.0],
     2.0,
-    0,
+    0.0,
 );
 
 const EDGE_ENHANCE_MORE: FilterKernel = FilterKernel::new(
     [-1.0, -1.0, -1.0, -1.0, 9.0, -1.0, -1.0, -1.0, -1.0],
     1.0,
-    0,
+    0.0,
 );
 
 // PIL 12.2.0 filterargs at runtime: ((-1, 0, 0), (0, 1, 0), (0, 0, 0))
 const EMBOSS: FilterKernel =
-    FilterKernel::new([-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 1.0, 128);
+    FilterKernel::new([-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 1.0, 128.0);
 
 const FIND_EDGES: FilterKernel = FilterKernel::new(
     [-1.0, -1.0, -1.0, -1.0, 8.0, -1.0, -1.0, -1.0, -1.0],
     1.0,
-    0,
+    0.0,
 );
 
 const SHARPEN: FilterKernel = FilterKernel::new(
     [-2.0, -2.0, -2.0, -2.0, 32.0, -2.0, -2.0, -2.0, -2.0],
     16.0,
-    0,
+    0.0,
 );
 
 const SMOOTH: FilterKernel =
-    FilterKernel::new([1.0, 1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0, 1.0], 13.0, 0);
+    FilterKernel::new([1.0, 1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0, 1.0], 13.0, 0.0);
 
 impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
@@ -175,7 +178,7 @@ impl Image {
                 PipelineOp::Filter5x5 {
                     kernel: BLUR_5X5,
                     scale: BLUR_5X5_SCALE,
-                    offset: 0,
+                    offset: 0.0,
                 },
             )),
             "SMOOTH_MORE" => Ok(Image::push_op(
@@ -183,7 +186,7 @@ impl Image {
                 PipelineOp::Filter5x5 {
                     kernel: SMOOTH_MORE_5X5,
                     scale: SMOOTH_MORE_5X5_SCALE,
-                    offset: 0,
+                    offset: 0.0,
                 },
             )),
             name => {
@@ -233,7 +236,11 @@ impl Image {
     ) -> Result<Image, PilError> {
         self.validate_filter("Kernel")?;
         let (kernel, scale, offset, size) = prepare_kernel(kernel, scale, offset, size)?;
-        let scale = (scale as f32).max(0.0001);
+        // Pillow passes the raw `float` divisor to the C filter. In
+        // particular, zero, negative, and non-finite scales are not replaced
+        // with a positive sentinel; retaining them lets the CPU path follow
+        // the oracle's IEEE-754 arithmetic and clip behavior.
+        let scale = scale as f32;
 
         if size == 3 {
             let mut prepared = [0.0f32; 9];

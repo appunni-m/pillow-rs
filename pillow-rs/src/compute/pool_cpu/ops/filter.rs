@@ -309,7 +309,7 @@ fn filter_3x3_i32_row(
     width: i32,
     height: i32,
     kernel: &[f32; 9],
-    offset: i32,
+    offset: f32,
 ) {
     if y < 1 || y >= height - 1 || width < 3 {
         return;
@@ -344,7 +344,7 @@ fn filter_3x3_i32_row(
             ],
             &kernel[6..9],
         );
-        let mut value = offset as f32 + 0.5;
+        let mut value = offset + 0.5;
         value += bottom;
         value += middle;
         value += top;
@@ -358,16 +358,16 @@ fn filter_3x3_i32(
     img: &DynamicImage,
     kernel: &[f32; 9],
     scale: f32,
-    offset: i32,
+    offset: f32,
 ) -> Result<DynamicImage, PilError> {
     let rgba = img.to_rgba8();
     let (w_u32, h_u32) = rgba.dimensions();
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let raw = rgba.into_raw();
 
-    // `Image::kernel_filter` clamps custom scales to a positive value and all
-    // built-in kernels have positive scales, so this execution boundary never
-    // receives zero.
+    // The C filter receives the raw f32 divisor, including zero and negative
+    // values. Rust's IEEE-754 division and saturating float-to-int cast match
+    // the corresponding clip32 behavior at this boundary.
     let s = scale;
     let kd = [
         kernel[0] / s,
@@ -440,7 +440,7 @@ fn filter_5x5_i32_row(
     width: i32,
     height: i32,
     kernel: &[f32; 25],
-    offset: i32,
+    offset: f32,
 ) {
     if y < 2 || y >= height - 2 || width < 5 {
         return;
@@ -501,7 +501,7 @@ fn filter_5x5_i32_row(
             ],
             &kernel[20..25],
         );
-        let mut value = offset as f32 + 0.5;
+        let mut value = offset + 0.5;
         value += bottom0;
         value += bottom1;
         value += middle;
@@ -517,15 +517,15 @@ fn filter_5x5_i32(
     img: &DynamicImage,
     kernel: &[f32; 25],
     scale: f32,
-    offset: i32,
+    offset: f32,
 ) -> Result<DynamicImage, PilError> {
     let rgba = img.to_rgba8();
     let (w_u32, h_u32) = rgba.dimensions();
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let raw = rgba.into_raw();
 
-    // See the 3x3 path: public kernel construction guarantees a positive
-    // scale, and built-in 5x5 filters use positive scales as well.
+    // See the 3x3 path: preserve the raw C f32 divisor, including zero,
+    // negative, and non-finite values.
     let s = scale;
     // Pre-compute normalized kernel coefficients using f32 (matching PIL C construction)
     let kd: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
@@ -1835,7 +1835,7 @@ pub fn execute_filter3x3(
     img: &DynamicImage,
     kernel: &[f32; 9],
     scale: f32,
-    offset: i32,
+    offset: f32,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     // I-mode: operate directly on int32 pixel values (no [0,255] clipping)
@@ -1846,10 +1846,10 @@ pub fn execute_filter3x3(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    // The public kernel boundary clamps scales to a positive value before a
-    // pipeline operation is created. Normalize once, outside the pixel loop.
+    // Normalize once, outside the pixel loop, with the same raw f32 divisor
+    // that Pillow passes to `ImagingFilter`.
     let normalized_kernel: [f32; 9] = std::array::from_fn(|index| kernel[index] / scale);
-    let rounding_bias = offset as f32 + 0.5;
+    let rounding_bias = offset + 0.5;
     let mut out = raw.to_vec();
     let native_byte_layout = matches!(
         img,
@@ -1891,7 +1891,7 @@ pub fn execute_filter5x5(
     img: &DynamicImage,
     kernel: &[f32; 25],
     scale: f32,
-    offset: i32,
+    offset: f32,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     // I-mode: operate directly on int32 pixel values (no [0,255] clipping)
@@ -1905,7 +1905,7 @@ pub fn execute_filter5x5(
     // Normalize once, outside the pixel loop. The row helper keeps all five
     // tap groups in the same order as the original scalar implementation.
     let normalized_kernel: [f32; 25] = std::array::from_fn(|index| kernel[index] / scale);
-    let rounding_bias = offset as f32 + 0.5;
+    let rounding_bias = offset + 0.5;
     let mut out = raw.to_vec();
     let native_byte_layout = matches!(
         img,

@@ -12640,7 +12640,7 @@ fn simd_filter_3x3_i32(
     img: &DynamicImage,
     kernel: &[f32; 9],
     scale: f32,
-    offset: i32,
+    offset: f32,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if !use_native_i32_convolution_path(img, mode, 1) {
@@ -12654,7 +12654,7 @@ fn simd_filter_3x3_i32(
         img.width() as usize,
         img.height() as usize,
         &normalized_kernel,
-        offset as f32 + 0.5,
+        offset + 0.5,
     );
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -12667,7 +12667,7 @@ fn simd_filter_5x5_i32(
     img: &DynamicImage,
     kernel: &[f32; 25],
     scale: f32,
-    offset: i32,
+    offset: f32,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if !use_native_i32_convolution_path(img, mode, 2) {
@@ -12681,7 +12681,7 @@ fn simd_filter_5x5_i32(
         img.width() as usize,
         img.height() as usize,
         &normalized_kernel,
-        offset as f32 + 0.5,
+        offset + 0.5,
     );
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -12741,7 +12741,7 @@ pub fn simd_filter_3x3(
         channels,
         &normalized_kernel,
         3,
-        *offset as f32 + 0.5,
+        *offset + 0.5,
     ) {
         return simd_filter_identity(img, mode, "Filter3x3");
     }
@@ -12754,7 +12754,7 @@ pub fn simd_filter_3x3(
         img.height() as usize,
         channels,
         &normalized_kernel,
-        *offset as f32 + 0.5,
+        *offset + 0.5,
     );
     let result =
         crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
@@ -12791,7 +12791,7 @@ pub fn simd_filter_5x5(
         channels,
         &normalized_kernel,
         5,
-        *offset as f32 + 0.5,
+        *offset + 0.5,
     ) {
         return simd_filter_identity(img, mode, "Filter5x5");
     }
@@ -12804,7 +12804,7 @@ pub fn simd_filter_5x5(
         img.height() as usize,
         channels,
         &normalized_kernel,
-        *offset as f32 + 0.5,
+        *offset + 0.5,
     );
     let result =
         crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;

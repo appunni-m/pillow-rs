@@ -6020,8 +6020,14 @@ fn gpu_int_filter_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool
     if expected != Some(pixels.as_raw().len()) || ops.is_empty() {
         return false;
     }
-    let kernel_is_safe = |kernel: &[f32], scale: f32, offset: i32| {
-        let normalized_scale = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let kernel_is_safe = |kernel: &[f32], scale: f32, offset: f32| {
+        let Some(offset) = registry::filter_offset_i32(offset) else {
+            return false;
+        };
+        if !scale.is_finite() || scale == 0.0 {
+            return false;
+        }
+        let normalized_scale = scale;
         if !normalized_scale.is_finite() || normalized_scale == 0.0 {
             return false;
         }
