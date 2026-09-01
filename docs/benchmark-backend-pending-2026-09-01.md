@@ -63,6 +63,10 @@ rename, relabel, or weaken a case to make a gate green.
 - `ImageEnhance.Contrast` now preserves valid zero-area CMYK images through
   the grayscale conversion and back to CMYK. The focused matrix is exact for
   `(0,0)`, `(0,3)`, and `(3,0)` across factors `0`, `.5`, `1`, and `2`.
+- `Image.thumbnail` now preserves Pillow's zero-source control flow and error
+  ordering. A 5-source × 20-request integer degenerate probe went from 21
+  mismatches to 0; the maintained 7-case edge slice and all 172 thumbnail
+  parity cases remain exact.
 - The proof-gated dyadic F lane is exact/native for the admitted Bilinear,
   narrow two-tap Bicubic/Lanczos/Hamming, one- or two-axis power-of-two Box,
   and chained all-Box cases; every admission is bounded by fixed/f64 row
