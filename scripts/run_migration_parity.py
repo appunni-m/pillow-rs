@@ -1242,13 +1242,14 @@ def _workflow_error_before_deferred(
         for index, step in enumerate(case.get("steps", []))
         if isinstance(step, dict)
     }
-    error_indices = [
-        step_indices[observation.get("step_id")]
+    error_observations = [
+        observation
         for observation in observations
         if isinstance(observation, dict)
         and observation.get("status") in {"error", "not_run"}
         and observation.get("step_id") in step_indices
     ]
+    error_indices = [step_indices[observation.get("step_id")] for observation in error_observations]
     if not error_indices:
         # An adapter-level not_run has no reliable step boundary. Keep the
         # evidence obligation conservative when a deferred operation exists.
@@ -1270,7 +1271,18 @@ def _workflow_error_before_deferred(
         # A not_run observation can report a dependency failure rather than
         # the observed operation's own validation error.  Without an emitted
         # step-level error boundary, retain the old strict rule instead of
-        # turning an earlier setup failure into not_applicable.
+        # turning an earlier setup failure into not_applicable.  An explicit
+        # error at the first deferred call is different: public wrappers
+        # validate that call before constructing its lazy node, and the
+        # following not_run observations are merely dependency fallout.  Keep
+        # that source-level validation proof while retaining the conservative
+        # ordering for a dependency-only not_run boundary.
+        first_error_observation = min(
+            error_observations,
+            key=lambda observation: step_indices[observation.get("step_id")],
+        )
+        if first_error_observation.get("status") == "error":
+            return all(deferred_index >= first_error for deferred_index in deferred_indices)
         return all(deferred_index > first_error for deferred_index in deferred_indices)
     return all(deferred_index >= first_error for deferred_index in deferred_indices)
 
