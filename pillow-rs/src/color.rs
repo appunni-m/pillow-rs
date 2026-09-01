@@ -333,7 +333,12 @@ fn pil_grayscale_inner(
 pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let dims = CheckedDims::new(w, h, 1)?;
+    // Pillow's ImageEnhance.Contrast.__init__ converts CMYK to L before
+    // ImageStat.Stat computes its midpoint.  That conversion preserves a
+    // valid zero-area image, so use the empty-result allocation boundary here
+    // rather than rejecting the dimensions before the enhancement can return
+    // its empty CMYK result.
+    let dims = CheckedDims::new_allow_empty(w, h, 1)?;
     let mut gray = dims.alloc_buffer();
     for (i, p) in rgba.pixels().enumerate() {
         let c = p[0] as u32;

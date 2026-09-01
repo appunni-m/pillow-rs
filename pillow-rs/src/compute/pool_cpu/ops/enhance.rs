@@ -230,6 +230,28 @@ pub fn op_enhance_contrast(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::Image;
+
+    #[test]
+    fn contrast_preserves_empty_cmyk_images() {
+        for size in [(0, 0), (0, 3), (3, 0)] {
+            for factor in [0.0, 0.5, 1.0, 2.0] {
+                let image =
+                    Image::new(size.0, size.1, "CMYK", (0, 0, 0, 0)).expect("empty CMYK image");
+                let enhanced = image
+                    .enhance_contrast(factor)
+                    .expect("Contrast queues for empty CMYK image");
+
+                assert_eq!(enhanced.size().expect("empty size"), size);
+                assert_eq!(enhanced.mode().expect("CMYK mode"), "CMYK");
+                assert!(enhanced.tobytes().expect("empty bytes").is_empty());
+            }
+        }
+    }
+}
+
 pub fn op_enhance_color_saturation(
     img: &DynamicImage,
     factor: f64,
