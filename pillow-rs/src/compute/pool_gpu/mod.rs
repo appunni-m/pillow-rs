@@ -463,6 +463,32 @@ fn gpu_f32_integer_parts(bits: u32) -> Option<F32IntegerParts> {
     })
 }
 
+/// Decode every finite f32 word into an integer significand and binary scale
+/// for the marker-9 f64 reducer.  Normal words use the implicit leading bit;
+/// subnormals use their explicit fraction at the fixed `2^-149` scale.  Keep
+/// signed zero here because Pillow's ordered f64 accumulation can observe it,
+/// while the final proof still rejects a negative-zero result.  The older
+/// marker-6 proof intentionally keeps its stricter normal-only decoder above.
+fn gpu_f32_f64_integer_parts(bits: u32) -> Option<F32IntegerParts> {
+    let exponent_bits = (bits >> 23) & 0xff;
+    let fraction = bits & 0x7f_ff_ff;
+    if exponent_bits == 0xff {
+        return None;
+    }
+    if exponent_bits == 0 {
+        return Some(F32IntegerParts {
+            negative: bits & (1 << 31) != 0,
+            mantissa: fraction,
+            exponent: -126,
+        });
+    }
+    Some(F32IntegerParts {
+        negative: bits & (1 << 31) != 0,
+        mantissa: fraction | 0x80_0000,
+        exponent: exponent_bits as i32 - 127,
+    })
+}
+
 /// Evaluate one horizontal or vertical fixed-point sample with the exact
 /// integer representation of the f32 inputs. A source word is
 /// `M * 2^(E-23)` and a fixed coefficient is `P / 2^22`, so the complete row
@@ -717,6 +743,40 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
     let magnitude = sum.checked_abs()? as u128;
     let bit_length = 128 - magnitude.leading_zeros();
     let mut exponent = scale_exp.checked_add(bit_length as i32 - 1)?;
+
+    // Values below the normal range are rounded in units of 2^-149, exactly
+    // as an f64-to-f32 cast rounds a finite result.  Keeping this conversion
+    // integer-only lets marker 9 carry source subnormals without relying on
+    // adapter floating-point denormal handling.  A rounded 2^23 fraction is
+    // the smallest normal f32 and is represented by exponent field one.
+    if exponent < -126 {
+        let target_shift = scale_exp.checked_add(149)?;
+        let subnormal = if target_shift >= 0 {
+            magnitude.checked_shl(u32::try_from(target_shift).ok()?)?
+        } else {
+            let shift = u32::try_from(target_shift.checked_neg()?).ok()?;
+            if shift >= 128 {
+                0
+            } else if shift == 0 {
+                magnitude
+            } else {
+                let mut rounded = magnitude >> shift;
+                let remainder = magnitude & ((1u128 << shift) - 1);
+                let halfway = 1u128 << (shift - 1);
+                if remainder > halfway || (remainder == halfway && rounded & 1 != 0) {
+                    rounded = rounded.checked_add(1)?;
+                }
+                rounded
+            }
+        };
+        if subnormal >= (1u128 << 23) {
+            return Some(if negative { 0x8080_0000 } else { 0x0080_0000 });
+        } else {
+            let mantissa = u32::try_from(subnormal).ok()?;
+            let bits = mantissa;
+            return Some(if negative { bits | 0x8000_0000 } else { bits });
+        }
+    }
     if !(-126..=127).contains(&exponent) {
         return None;
     }
@@ -781,7 +841,7 @@ fn gpu_f_resize_f64_sample_bits(
         let offset = pixel.checked_mul(4)?;
         let word = bytes.get(offset..offset.checked_add(4)?)?;
         let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
-        Some((bits, gpu_f32_integer_parts(bits)?))
+        Some((bits, gpu_f32_f64_integer_parts(bits)?))
     };
 
     let mut minimum_exponent = None;
@@ -832,10 +892,7 @@ fn gpu_f_resize_f64_sample_bits(
     }
 
     let expected = (f64_accumulator as f32).to_bits();
-    if !f64_accumulator.is_finite()
-        || (expected & 0x7f80_0000) == 0x7f80_0000
-        || (expected & 0x7f80_0000) == 0
-    {
+    if !f64_accumulator.is_finite() || (expected & 0x7f80_0000) == 0x7f80_0000 {
         return None;
     }
     let actual = gpu_f64_integer_to_f32(sum, minimum_exponent)?;
@@ -927,7 +984,7 @@ fn gpu_f_resize_f64_is_exact(
         return false;
     }
     if bytes.chunks_exact(4).any(|sample| {
-        gpu_f32_integer_parts(u32::from_le_bytes([
+        gpu_f32_f64_integer_parts(u32::from_le_bytes([
             sample[0], sample[1], sample[2], sample[3],
         ]))
         .is_none()
@@ -953,6 +1010,20 @@ fn gpu_f_resize_f64_is_exact(
     let horizontal_changed = *w != source_dimensions.0;
     let vertical_changed = *h != source_dimensions.1;
     if !horizontal_changed && !vertical_changed {
+        return false;
+    }
+    // A single two-pass submission is not yet proven for a horizontal
+    // upscale followed by a vertical downscale.  On the current adapter the
+    // vertical marker can observe the wrong horizontal intermediate for this
+    // shape (the first divergence is `(2, 2) -> (4, 1)`: Pillow stores
+    // `[2, 2, 3, 3]`, while the device produced `[1.5, 1.625, 1.875, 2]`).
+    // Keep this narrow geometry on the exact host path until its command
+    // ordering/buffer contract is independently validated.
+    if horizontal_changed
+        && vertical_changed
+        && *w > source_dimensions.0
+        && *h < source_dimensions.1
+    {
         return false;
     }
     if horizontal_changed && vertical_changed {
@@ -9407,7 +9478,8 @@ mod tests {
         gpu_byte_point_mode_allowed, gpu_f_resize_box_average_is_exact,
         gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact,
         gpu_f_resize_f64_is_exact, gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, readback_poll_backoff,
+        gpu_f64_integer_to_f32, gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
+        readback_poll_backoff,
     };
     use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -10276,7 +10348,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_f64_lowering_requires_normal_words_and_proves_two_axes() {
+    fn f_resize_f64_lowering_proves_finite_subnormal_words_and_two_axes() {
         let image = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(
                 2,
@@ -10328,18 +10400,25 @@ mod tests {
             &image,
             Some("F")
         ));
+        // The opposite mixed geometry is not yet safe in one device
+        // submission: horizontal upscaling followed by vertical downscaling
+        // can read a stale/wrong intermediate on the adapter.
+        assert!(!gpu_f_resize_f64_is_exact(
+            &[PipelineOp::Resize {
+                w: 4,
+                h: 1,
+                filter: ResampleFilter::Bilinear,
+            }],
+            &image,
+            Some("F")
+        ));
         assert!(!gpu_f_resize_f64_is_exact(
             std::slice::from_ref(&horizontal),
             &image,
             Some("I")
         ));
 
-        for value in [
-            (-0.0f32).to_bits(),
-            f32::NAN.to_bits(),
-            f32::INFINITY.to_bits(),
-            f32::from_bits(1).to_bits(),
-        ] {
+        for value in [f32::NAN.to_bits(), f32::INFINITY.to_bits()] {
             let rejected = DynamicImage::ImageRgba8(
                 RgbaImage::from_raw(
                     2,
@@ -10357,6 +10436,53 @@ mod tests {
                 Some("F")
             ));
         }
+
+        // Finite subnormal words use the explicit 2^-149 source scale and
+        // remain eligible for the same exact integer reducer.  Keep both
+        // signs here; the filtered path canonicalizes only an exact zero
+        // result, while nonzero negative subnormals retain their sign bit.
+        for values in [
+            [
+                f32::from_bits(1),
+                f32::from_bits(2),
+                f32::from_bits(3),
+                f32::from_bits(4),
+            ],
+            [
+                -f32::from_bits(1),
+                -f32::from_bits(2),
+                -f32::from_bits(3),
+                -f32::from_bits(4),
+            ],
+        ] {
+            let subnormal = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(
+                    2,
+                    2,
+                    values.into_iter().flat_map(f32::to_le_bytes).collect(),
+                )
+                .unwrap(),
+            );
+            assert!(gpu_f_resize_f64_is_exact(
+                std::slice::from_ref(&horizontal),
+                &subnormal,
+                Some("F")
+            ));
+        }
+    }
+
+    #[test]
+    fn f_resize_f64_subnormal_rounding_is_ties_to_even() {
+        assert_eq!(gpu_f64_integer_to_f32(1, -149), Some(0x0000_0001));
+        assert_eq!(gpu_f64_integer_to_f32(1, -150), Some(0));
+        assert_eq!(gpu_f64_integer_to_f32(3, -151), Some(0x0000_0001));
+        assert_eq!(gpu_f64_integer_to_f32(3, -150), Some(0x0000_0002));
+        assert_eq!(
+            gpu_f64_integer_to_f32((1i128 << 23) - 1, -149),
+            Some(0x007f_ffff)
+        );
+        assert_eq!(gpu_f64_integer_to_f32(1i128 << 23, -149), Some(0x0080_0000));
+        assert_eq!(gpu_f64_integer_to_f32(-1, -149), Some(0x8000_0001));
     }
 
     #[test]
@@ -10758,6 +10884,63 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_subnormal_native_matches_cpu() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let source = Image::frombytes(
+            "F",
+            (2, 2),
+            &bytes(&[0x0000_0001, 0x0000_0002, 0x0000_0003, 0x0000_0004]),
+        )
+        .expect("F subnormal source");
+        let cases = [
+            ((1i64, 2i64), ResampleInput::Name("BILINEAR".into())),
+            ((1, 5), ResampleInput::Name("BICUBIC".into())),
+            ((1, 5), ResampleInput::Name("LANCZOS".into())),
+            ((1, 5), ResampleInput::Name("HAMMING".into())),
+            ((1, 5), ResampleInput::Name("BOX".into())),
+        ];
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (size, filter) in cases {
+            let expected = source
+                .resize(size, Some(filter.clone()), None)
+                .expect("CPU subnormal resize operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU subnormal F resize");
+            let actual = match source
+                .resize(size, Some(filter), None)
+                .expect("GPU subnormal resize operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU subnormal F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "subnormal F resize parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU subnormal F resize must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(2));
+            assert_eq!(telemetry.7, None);
+        }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
