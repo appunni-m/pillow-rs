@@ -90,7 +90,15 @@ rename, relabel, or weaken a case to make a gate green.
   missing receipts. The focused receipt suite is 19/19, the targeted
   all-backend parity slice is 6/6 on every parity lane, and its partition is
   `pipeline_not_applicable=6`, `pipeline_missing_receipt=0`. The full aggregate
-  remains open until the complete cohort is regenerated.
+  was then regenerated after the follow-up classifier correction recorded
+  below.
+- The receipt classifier now distinguishes an explicit public-call error at
+  the first deferred-looking operation from a dependency-only `not_run`
+  boundary. Pillow validates these arguments before constructing a lazy node;
+  the dependent observation is therefore not evidence that pipeline work ran.
+  Earlier deferred nodes and dependency-only failures remain conservative. The
+  focused receipt suite is 19/19, and the committed full rerun reclassifies 90
+  exact error cases while retaining 343 indeterminate native cases.
 - `ImageFilter.Kernel` now preserves Pillow's raw `f32` scale and offset,
   including fractional, zero, negative, and non-finite values, and the 5x5
   GPU rows use Pillow's bottom-to-top kernel layout. The CPU matrix is exact
@@ -196,6 +204,15 @@ rename, relabel, or weaken a case to make a gate green.
   and GPU smoke is 1/1; the aggregate correctly remains
   `passed_with_backend_gaps`. Artifact SHA-256:
   `56dcf71a65f169576a8bc077e630748bfc0415991f0d5696efea6670b4946c18`.
+- [x] Regenerate the complete schema-v3 all-backend envelope after the
+  explicit-error classifier correction at source `143ad86d9`. CPU/GPU now
+  report **7,084 complete + 102 partial + 0 missing + 3,423 not applicable +
+  343 indeterminate**; SIMD reports **7,096 + 102 + 0 + 3,411 + 343**. Node
+  and browser WASM remain **6,713 complete + 586 partial + 888 missing +
+  2,713 not applicable + 52 indeterminate**. Every value lane is still
+  10,952/10,952 and GPU smoke is 1/1; the aggregate remains
+  `passed_with_backend_gaps`. Artifact SHA-256:
+  `e3edd78e6421aff1cd168fdf0931d1344c8382a1e19d3d05e73bb6043a114131`.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -222,7 +239,7 @@ rename, relabel, or weaken a case to make a gate green.
   and evidence validators, and format/core-lint checks. Push the corresponding
   source and checklist commits only after the final artifact is validated.
 
-Last committed all-backend artifact source: `1dc515445` (the artifact above
+Last committed all-backend artifact source: `143ad86d9` (the artifact above
 was generated there; the working tree had pre-existing unrelated changes).
 The latest integrated parity source is `efc734896` (I;16 merge parity on top
 of the GPU accumulation-order fix `7983d9406`, D-048 Kernel fix `2c2b2d1ba`,

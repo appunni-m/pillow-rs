@@ -3394,3 +3394,29 @@ remaining partial/indeterminate receipts, WASM receipt gaps, and native
 fallback/backend-identity taxonomy are still open. The envelope is
 `/tmp/all-backends-post-scale-receipt.json` (SHA-256
 `56dcf71a65f169576a8bc077e630748bfc0415991f0d5696efea6670b4946c18`).
+
+## 32.22 Explicit pre-pipeline errors and dependent observations (2026-09-01)
+
+The receipt classifier had one remaining boundary mismatch: when a public
+operation returned an explicit error at the first deferred-looking call, the
+following dependent observation was `not_run`, and the case was retained as
+indeterminate. Pillow validates these call arguments before constructing a
+lazy pipeline node; the dependent `not_run` is dependency fallout, not proof
+that the call dispatched. The classifier now accepts that boundary only when
+the explicit error is at the first deferred index. A dependency-only `not_run`
+and any earlier deferred operation remain conservative and stay indeterminate.
+
+The change is covered by the receipt-state regression for an explicit error
+plus dependent `not_run`; `make migration-parity-receipt-test` passes 19/19.
+The complete schema-v3 all-backend rerun at source `143ad86d9` keeps all value
+lanes at 10,952/10,952 and GPU smoke at 1/1. Native CPU/GPU partitions are
+**7,084 complete + 102 partial + 0 missing + 3,423 not applicable + 343
+indeterminate**; SIMD is **7,096 + 102 partial + 0 missing + 3,411 not
+applicable + 343 indeterminate**. Node and browser WASM remain **6,713
+complete + 586 partial + 888 missing + 2,713 not applicable + 52
+indeterminate**. The aggregate remains `passed_with_backend_gaps`; the 343
+ambiguous native cases, partial receipts, WASM receipt gaps, and fallback/
+backend-identity taxonomy are still open. No fixture inputs, expected values,
+thresholds, case IDs, or denominators changed. The envelope is
+`/tmp/all-backends-post-receipt-classifier.json` (SHA-256
+`e3edd78e6421aff1cd168fdf0931d1344c8382a1e19d3d05e73bb6043a114131`).
