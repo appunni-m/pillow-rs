@@ -3610,3 +3610,28 @@ and 386 CPU. The artifact is `/tmp/all-backends-post-4fe5535.json` (SHA-256
 `b915cb2f93c172241a2bbe911ba418414aa5cabbd08c39302367a9080e580946`). No
 fixtures, thresholds, IDs, denominators, or receipt taxonomy changed; P0
 two-axis arithmetic, P1 receipt proof, and P2 timing acceptance remain open.
+
+## 32.33 Pre-materialization validation receipts (2026-09-02)
+
+The receipt audit found a classifier/evidence mismatch rather than 102 native
+pipeline executions that had failed to reach a terminal boundary. In those
+cases Pillow rejected the public call before constructing deferred work, while
+the target telemetry API retained setup records and, on some adapters, a
+same-step `partial` record. The prior classifier treated every meaningful
+record as a partial pipeline receipt. Commit `cb1813bc8` proves the explicit
+step-bound error and rejects the exception whenever an earlier receipt belongs
+to a deferred operation; retained setup telemetry is marked
+`pipeline_relevant=false` instead of being discarded. A prior deferred receipt,
+unknown step, or dependency-only `not_run` remains conservative.
+
+The receipt regression suite passes 27/27. The committed schema-v3 replay is
+value-exact for CPU, SIMD, GPU, Node WASM, and browser WASM (10,952/10,952;
+GPU smoke 1/1). Native CPU and GPU now report 7,084 complete + 15 genuine
+partial + 3,853 not-applicable cases; SIMD reports 7,096 + 15 + 3,841. The
+101-case reduction is a classification correction only: all selected IDs,
+public errors, values, fixtures, thresholds, and denominators are unchanged.
+The aggregate remains `passed_with_backend_gaps` because the 15 partial native
+receipts, backend identity/fallback proof, WASM receipt gaps, broader F device
+arithmetic, and timing acceptance remain open. The schema-valid artifact is
+`/tmp/all-backends-post-cb1813bc8.json` (SHA-256
+`aca34d02ab0c31ea6d60587fbddda00edaf8090362ddef5a62412e7115fb22a3`).
