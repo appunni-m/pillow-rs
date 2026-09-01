@@ -16,7 +16,10 @@ from scripts.run_all_backend_tests import (
 )
 from scripts.run_migration_benchmark import execution_result
 from scripts.run_migration_parity import (
+    DEFAULT_MANIFEST,
     classify_pipeline_case,
+    load_cases,
+    load_manifest,
     run_case,
     write_pipeline_execution_evidence,
 )
@@ -39,6 +42,34 @@ RESOURCE_FIELDS = (
     "peak_live_host_bytes",
     "fused_operation_count",
 )
+
+
+OPENED_EAGER_NO_RECEIPT_CASE_IDS = {
+    "PIL.Image.Image.apply_transparency.nuanced.png-p-single-index-transparency",
+    "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-putpalette",
+    "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table-load",
+    "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table-putpalette",
+    "PIL.Image.Image.convert.nuanced.opened-p-auto",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-auto",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-table",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-table-to-la",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-table-to-rgb",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-to-l",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-to-la",
+    "PIL.Image.Image.convert.nuanced.opened-p-transparency-to-rgb",
+    "PIL.Image.Image.putpixel.nuanced.l16-png-putpixel",
+    "PIL.Image.Image.putpixel.nuanced.l16-png-singleton-tuple",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-byte-order",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-magic",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-offset",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-orientation",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-no-orientation",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-short-exif-payload",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-short-tiff",
+    "PIL.ImageOps.exif_transpose.nuanced.jpeg-truncated-entry",
+    "PIL.ImageOps.exif_transpose.nuanced.tiff-no-orientation",
+}
 
 
 def benchmark_record(*, terminal_complete: bool) -> dict[str, object]:
@@ -823,6 +854,59 @@ class ReceiptStateTests(unittest.TestCase):
                 [{"status": "completed", "terminal_complete": True}],
             )["status"],
             "complete",
+        )
+
+    def test_pipeline_case_classification_proves_opened_eager_fixture_paths(self) -> None:
+        """Header/EXIF proofs cover the fixed opened no-receipt cohort only."""
+
+        manifest = load_manifest(DEFAULT_MANIFEST)
+        cases, _ = load_cases(
+            manifest,
+            case_ids=OPENED_EAGER_NO_RECEIPT_CASE_IDS,
+            surface=None,
+        )
+        self.assertEqual(
+            {case["case_id"] for case in cases},
+            OPENED_EAGER_NO_RECEIPT_CASE_IDS,
+        )
+        for case in cases:
+            with self.subTest(case_id=case["case_id"]):
+                result = {
+                    "status": "completed",
+                    "observations": [
+                        {"step_id": step_id, "status": "completed"}
+                        for step_id in case["observations"]
+                    ],
+                }
+                self.assertEqual(
+                    classify_pipeline_case(case, [], result=result),
+                    {
+                        "status": "not_applicable",
+                        "reason": "workflow contains no deferred image-pipeline operation",
+                    },
+                )
+
+    def test_pipeline_case_classification_keeps_unknown_opened_source_conservative(
+        self,
+    ) -> None:
+        case = classification_case("opened-unknown", "convert")
+        case["steps"][0] = {
+            "step_id": "open",
+            "surface": "PIL.Image",
+            "operation": "open",
+            "receiver": None,
+            "arguments": {
+                "fp": {"kind": "asset", "asset_id": "not-provided"},
+            },
+        }
+        case["steps"][1]["receiver"]["step_id"] = "open"
+        case["assets"] = []
+        self.assertEqual(
+            classify_pipeline_case(case, []),
+            {
+                "status": "indeterminate",
+                "reason": "workflow may use an eager or deferred path; no receipt was recorded",
+            },
         )
 
     def test_pipeline_case_classification_recognizes_eager_mode_filter(self) -> None:
