@@ -843,10 +843,11 @@ pub fn scale_with_input(
             "cannot convert float NaN to integer".to_owned(),
         ));
     }
-    if factor == f64::INFINITY {
-        return Err(PilError::OverflowError(
-            "cannot convert float infinity to integer".to_owned(),
-        ));
+    // Pillow returns ``image.copy()`` before it inspects ``resample`` when
+    // the factor is exactly one. Keep this fast path ahead of filter parsing,
+    // including for empty images and invalid filter values.
+    if factor == 1.0 {
+        return Ok(image.copy());
     }
     if factor <= 0.0 {
         return Err(PilError::ValueError(
@@ -862,6 +863,19 @@ pub fn scale_with_input(
     let (width, height) = image.size()?;
     let rounded_dimension = |dimension: u32| {
         let value = f64::from(dimension) * factor;
+        // ``round(inf)`` and ``round(nan)`` fail before Pillow delegates to
+        // Image.resize. In particular, ``inf * 0`` is NaN, so an empty image
+        // receives the NaN conversion error rather than the infinity one.
+        if value.is_nan() {
+            return Err(PilError::ValueError(
+                "cannot convert float NaN to integer".to_owned(),
+            ));
+        }
+        if value.is_infinite() {
+            return Err(PilError::OverflowError(
+                "cannot convert float infinity to integer".to_owned(),
+            ));
+        }
         let lower = value.floor();
         let fraction = value - lower;
         let rounded = if fraction < 0.5 {
@@ -871,9 +885,7 @@ pub fn scale_with_input(
         } else {
             lower
         };
-        if rounded <= 0.0 {
-            Err(PilError::ValueError("height and width must be > 0".into()))
-        } else if rounded > f64::from(u32::MAX) {
+        if rounded > f64::from(u32::MAX) {
             Err(PilError::OverflowError(
                 "signed integer is greater than maximum".into(),
             ))
@@ -881,8 +893,8 @@ pub fn scale_with_input(
             Ok(rounded as u32)
         }
     };
-    rounded_dimension(width)?;
-    rounded_dimension(height)?;
+    let rounded_width = rounded_dimension(width)?;
+    let rounded_height = rounded_dimension(height)?;
 
     // The input language records Image.Resampling enum members by name. The
     // Python source side materializes that name as an IntEnum; normalize the
@@ -890,6 +902,17 @@ pub fn scale_with_input(
     // parameter only. ImageOps method parameters intentionally use the
     // stricter parser above.
     let filter = parse_resample_input(filter)?;
+
+    // Pillow's resize accepts the all-zero image/result pair. Other rounded
+    // zero dimensions still fail at the resize boundary; do not let the
+    // backend's minimum-size clamp turn them into a one-pixel image.
+    if rounded_width == 0 || rounded_height == 0 {
+        if width == 0 && height == 0 {
+            return Ok(image.copy());
+        }
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+
     Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
 }
 
@@ -1177,4 +1200,68 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
         output.extend(std::iter::repeat(0).take(4 - tail.len()));
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scale_with_input;
+    use crate::error::PilError;
+    use crate::image::Image;
+    use crate::ops::resize::ResampleInput;
+
+    fn empty_image(size: (u32, u32)) -> Image {
+        Image::new(size.0, size.1, "L", (0, 0, 0, 0)).expect("empty image dimensions are valid")
+    }
+
+    #[test]
+    fn scale_factor_one_copies_empty_shapes_before_filter_validation() {
+        for size in [(0, 0), (0, 1), (1, 0), (2, 3)] {
+            let image = empty_image(size);
+            let result = scale_with_input(&image, 1.0, Some(ResampleInput::Code(99)))
+                .expect("factor one must ignore the resample value");
+            assert_eq!(result.size().expect("copy dimensions are known"), size);
+        }
+    }
+
+    #[test]
+    fn scale_preserves_all_zero_resize_result() {
+        let image = empty_image((0, 0));
+        let result = scale_with_input(&image, 0.5, None).expect("empty resize remains empty");
+        assert_eq!(result.size().expect("copy dimensions are known"), (0, 0));
+    }
+
+    #[test]
+    fn scale_infinity_observes_first_zero_dimension() {
+        let both_zero = scale_with_input(&empty_image((0, 0)), f64::INFINITY, None)
+            .expect_err("inf times zero must fail as NaN");
+        assert!(matches!(
+            both_zero,
+            PilError::ValueError(message) if message == "cannot convert float NaN to integer"
+        ));
+
+        let zero_width = scale_with_input(&empty_image((0, 1)), f64::INFINITY, None)
+            .expect_err("inf times zero width must fail as NaN");
+        assert!(matches!(
+            zero_width,
+            PilError::ValueError(message) if message == "cannot convert float NaN to integer"
+        ));
+
+        let zero_height = scale_with_input(&empty_image((1, 0)), f64::INFINITY, None)
+            .expect_err("nonzero width must observe infinity first");
+        assert!(matches!(
+            zero_height,
+            PilError::OverflowError(message) if message == "cannot convert float infinity to integer"
+        ));
+    }
+
+    #[test]
+    fn scale_rejects_rounded_zero_for_nonempty_source() {
+        let image = empty_image((2, 3));
+        let error = scale_with_input(&image, 0.1, None)
+            .expect_err("a nonempty source cannot resize to a zero dimension");
+        assert!(matches!(
+            error,
+            PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+    }
 }

@@ -3872,7 +3872,14 @@ fn ops_scale(
     factor: f64,
     filter: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<PyImage> {
-    let filter = resample_input_from_python(filter)?;
+    // ImageOps.scale returns image.copy() for factor == 1 before touching
+    // resample. Avoid formatting an arbitrary Python filter in that branch;
+    // Pillow likewise ignores even objects whose __str__ raises.
+    let filter = if factor == 1.0 {
+        None
+    } else {
+        resample_input_from_python(filter)?
+    };
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs::imageops_scale_with_input(&inner, factor, filter))
