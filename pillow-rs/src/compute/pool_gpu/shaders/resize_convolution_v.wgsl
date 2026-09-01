@@ -267,6 +267,302 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
     return integer_sum_to_f32(sum, minimum_exponent);
 }
 
+// Marker 9 carries Pillow's f64 coefficient table as dyadic integer parts.
+// The reducer keeps the complete exact product/sum in four u32 limbs and
+// rounds only once at the observable f32 store.  The host admission proof
+// rejects rows whose ordered f64 FMA rounding would change that final word.
+struct U128 {
+    a: u32,
+    b: u32,
+    c: u32,
+    d: u32,
+}
+
+fn u128_add(left: U128, right: U128) -> U128 {
+    let a = left.a + right.a;
+    let carry_a = select(0u, 1u, a < left.a);
+    let b0 = left.b + right.b;
+    let carry_b0 = select(0u, 1u, b0 < left.b);
+    let b = b0 + carry_a;
+    let carry_b1 = select(0u, 1u, b < b0);
+    let carry_b = carry_b0 + carry_b1;
+    let c0 = left.c + right.c;
+    let carry_c0 = select(0u, 1u, c0 < left.c);
+    let c = c0 + carry_b;
+    let carry_c1 = select(0u, 1u, c < c0);
+    let carry_c = carry_c0 + carry_c1;
+    let d0 = left.d + right.d;
+    let d = d0 + carry_c;
+    return U128(a, b, c, d);
+}
+
+fn u128_sub(left: U128, right: U128) -> U128 {
+    let a = left.a - right.a;
+    let borrow_a = select(0u, 1u, left.a < right.a);
+    let b0 = left.b - right.b;
+    let borrow_b0 = select(0u, 1u, left.b < right.b);
+    let b = b0 - borrow_a;
+    let borrow_b1 = select(0u, 1u, b0 < borrow_a);
+    let borrow_b = borrow_b0 + borrow_b1;
+    let c0 = left.c - right.c;
+    let borrow_c0 = select(0u, 1u, left.c < right.c);
+    let c = c0 - borrow_b;
+    let borrow_c1 = select(0u, 1u, c0 < borrow_b);
+    let borrow_c = borrow_c0 + borrow_c1;
+    let d0 = left.d - right.d;
+    let d = d0 - borrow_c;
+    return U128(a, b, c, d);
+}
+
+fn u128_less(left: U128, right: U128) -> bool {
+    if left.d != right.d {
+        return left.d < right.d;
+    }
+    if left.c != right.c {
+        return left.c < right.c;
+    }
+    if left.b != right.b {
+        return left.b < right.b;
+    }
+    return left.a < right.a;
+}
+
+fn u128_shl(value: U128, shift: u32) -> U128 {
+    if shift == 0u {
+        return value;
+    }
+    if shift < 32u {
+        return U128(
+            value.a << shift,
+            (value.b << shift) | (value.a >> (32u - shift)),
+            (value.c << shift) | (value.b >> (32u - shift)),
+            (value.d << shift) | (value.c >> (32u - shift)),
+        );
+    }
+    if shift < 64u {
+        let small = shift - 32u;
+        if small == 0u {
+            return U128(0u, value.a, value.b, value.c);
+        }
+        return U128(0u, value.a << small, (value.b << small) | (value.a >> (32u - small)),
+            (value.c << small) | (value.b >> (32u - small)));
+    }
+    if shift < 96u {
+        let small = shift - 64u;
+        if small == 0u {
+            return U128(0u, 0u, value.a, value.b);
+        }
+        return U128(0u, 0u, value.a << small, (value.b << small) | (value.a >> (32u - small)));
+    }
+    if shift < 128u {
+        return U128(0u, 0u, 0u, value.a << (shift - 96u));
+    }
+    return U128(0u, 0u, 0u, 0u);
+}
+
+fn u128_shr(value: U128, shift: u32) -> U128 {
+    if shift == 0u {
+        return value;
+    }
+    if shift < 32u {
+        return U128(
+            (value.a >> shift) | (value.b << (32u - shift)),
+            (value.b >> shift) | (value.c << (32u - shift)),
+            (value.c >> shift) | (value.d << (32u - shift)),
+            value.d >> shift,
+        );
+    }
+    if shift < 64u {
+        let small = shift - 32u;
+        if small == 0u {
+            return U128(value.b, value.c, value.d, 0u);
+        }
+        return U128((value.b >> small) | (value.c << (32u - small)),
+            (value.c >> small) | (value.d << (32u - small)), value.d >> small, 0u);
+    }
+    if shift < 96u {
+        let small = shift - 64u;
+        if small == 0u {
+            return U128(value.c, value.d, 0u, 0u);
+        }
+        return U128((value.c >> small) | (value.d << (32u - small)), value.d >> small, 0u, 0u);
+    }
+    if shift < 128u {
+        return U128(value.d >> (shift - 96u), 0u, 0u, 0u);
+    }
+    return U128(0u, 0u, 0u, 0u);
+}
+
+fn u128_bit_length(value: U128) -> u32 {
+    if value.d != 0u {
+        return 96u + 32u - countLeadingZeros(value.d);
+    }
+    if value.c != 0u {
+        return 64u + 32u - countLeadingZeros(value.c);
+    }
+    if value.b != 0u {
+        return 32u + 32u - countLeadingZeros(value.b);
+    }
+    if value.a != 0u {
+        return 32u - countLeadingZeros(value.a);
+    }
+    return 0u;
+}
+
+fn u128_low_bits(value: U128, bits: u32) -> U128 {
+    if bits == 0u {
+        return U128(0u, 0u, 0u, 0u);
+    }
+    if bits < 32u {
+        return U128(value.a & ((1u << bits) - 1u), 0u, 0u, 0u);
+    }
+    if bits == 32u {
+        return U128(value.a, 0u, 0u, 0u);
+    }
+    if bits < 64u {
+        return U128(value.a, value.b & ((1u << (bits - 32u)) - 1u), 0u, 0u);
+    }
+    if bits == 64u {
+        return U128(value.a, value.b, 0u, 0u);
+    }
+    if bits < 96u {
+        return U128(value.a, value.b, value.c & ((1u << (bits - 64u)) - 1u), 0u);
+    }
+    if bits == 96u {
+        return U128(value.a, value.b, value.c, 0u);
+    }
+    if bits < 128u {
+        return U128(value.a, value.b, value.c, value.d & ((1u << (bits - 96u)) - 1u));
+    }
+    return value;
+}
+
+struct SignedU128 {
+    magnitude: U128,
+    negative: bool,
+}
+
+fn signed_u128_add(sum: SignedU128, term: U128, term_negative: bool) -> SignedU128 {
+    if term.a == 0u && term.b == 0u && term.c == 0u && term.d == 0u {
+        return sum;
+    }
+    if sum.magnitude.a == 0u && sum.magnitude.b == 0u && sum.magnitude.c == 0u && sum.magnitude.d == 0u {
+        return SignedU128(term, term_negative);
+    }
+    if sum.negative == term_negative {
+        return SignedU128(u128_add(sum.magnitude, term), sum.negative);
+    }
+    if u128_less(sum.magnitude, term) {
+        return SignedU128(u128_sub(term, sum.magnitude), term_negative);
+    }
+    return SignedU128(u128_sub(sum.magnitude, term), sum.negative);
+}
+
+struct F64Coeff {
+    mantissa_lo: u32,
+    mantissa_hi: u32,
+    exponent: i32,
+    negative: bool,
+}
+
+fn f64_coeff(index: u32) -> F64Coeff {
+    // Callers pass the word offset of the four-word coefficient group.
+    let base = index;
+    return F64Coeff(
+        bitcast<u32>(coefficients[base]),
+        bitcast<u32>(coefficients[base + 1u]),
+        coefficients[base + 2u],
+        coefficients[base + 3u] != 0i,
+    );
+}
+
+fn f64_product(sample_mantissa: u32, coeff: F64Coeff) -> U128 {
+    let low = u64_mul_mantissa_weight(sample_mantissa, coeff.mantissa_lo);
+    let high = u64_mul_mantissa_weight(sample_mantissa, coeff.mantissa_hi);
+    return u128_add(U128(low.lo, low.hi, 0u, 0u), U128(0u, high.lo, high.hi, 0u));
+}
+
+fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
+    let bit_length = u128_bit_length(sum.magnitude);
+    if bit_length == 0u {
+        return 0u;
+    }
+    var exponent = minimum_exponent + i32(bit_length) - 1;
+    var mantissa: u32;
+    if bit_length > 24u {
+        let shift = bit_length - 24u;
+        var rounded = u128_shr(sum.magnitude, shift).a;
+        let remainder = u128_low_bits(sum.magnitude, shift);
+        let halfway = u128_shl(U128(1u, 0u, 0u, 0u), shift - 1u);
+        let greater = u128_less(halfway, remainder);
+        let equal = remainder.a == halfway.a && remainder.b == halfway.b
+            && remainder.c == halfway.c && remainder.d == halfway.d;
+        if greater || (equal && (rounded & 1u) != 0u) {
+            rounded = rounded + 1u;
+        }
+        mantissa = rounded;
+        if mantissa == (1u << 24u) {
+            mantissa = mantissa >> 1u;
+            exponent = exponent + 1;
+        }
+    } else {
+        mantissa = u128_shl(sum.magnitude, 24u - bit_length).a;
+    }
+    let result = (u32(exponent + 127) << 23u) | (mantissa & 0x7fffffu);
+    if sum.negative {
+        return result | 0x80000000u;
+    }
+    return result;
+}
+
+fn filtered_f64_exact(output_x: u32, output_y: u32) -> u32 {
+    let metadata = output_y * 3u;
+    let source_y = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
+    var minimum_exponent: i32 = 0;
+    var found = false;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u {
+            continue;
+        }
+        let bits = input[(source_y + tap) * params.dst_w + output_x];
+        if (bits & 0x7fffffffu) == 0u {
+            continue;
+        }
+        let sample_exponent = i32((bits >> 23u) & 255u) - 127 - 23;
+        let exponent = sample_exponent + coeff.exponent;
+        if !found {
+            minimum_exponent = exponent;
+            found = true;
+        } else {
+            minimum_exponent = min(minimum_exponent, exponent);
+        }
+    }
+    if !found {
+        return 0u;
+    }
+    var sum = SignedU128(U128(0u, 0u, 0u, 0u), false);
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u {
+            continue;
+        }
+        let bits = input[(source_y + tap) * params.dst_w + output_x];
+        if (bits & 0x7fffffffu) == 0u {
+            continue;
+        }
+        let sample_exponent = i32((bits >> 23u) & 255u) - 127 - 23;
+        let product = f64_product((bits & 0x7fffffu) | 0x800000u, coeff);
+        let term = u128_shl(product, u32(sample_exponent + coeff.exponent - minimum_exponent));
+        let sample_negative = (bits & 0x80000000u) != 0u;
+        sum = signed_u128_add(sum, term, sample_negative != coeff.negative);
+    }
+    return f64_sum_to_f32(sum, minimum_exponent);
+}
+
+
 fn filtered_box_average(output_x: u32, output_y: u32) -> f32 {
     let metadata = output_y * 3u;
     let source_y = u32(coefficients[metadata]);
@@ -353,6 +649,14 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
             // The latter keeps arbitrary f32 significands out of relaxed-f32
             // arithmetic while reproducing Pillow's final RN-even f32 store.
             return filtered_integer_exact(output_x, output_y);
+        }
+        if params.premultiply == 9u {
+            // Pillow skips an unchanged vertical pass; preserve that exact
+            // intermediate word rather than evaluating same-size tails.
+            if params.height == params.dst_h {
+                return input[output_y * params.dst_w + output_x];
+            }
+            return filtered_f64_exact(output_x, output_y);
         }
         return bitcast<u32>(filtered_float(output_x, output_y));
     }
