@@ -83,6 +83,14 @@ rename, relabel, or weaken a case to make a gate green.
   `I;16B`, and `I;16N` merge now preserve typed samples, declared byte order,
   exact mode spelling, and Pillow's single-band validation; focused core and
   Python probes are exact for all four variants.
+- The backend receipt classifier now recognizes the public `ImageOps.scale`
+  factor-one copy path. Pillow and Rust both return an eager copy before
+  resample parsing, so the six factor-one scale workflows are correctly
+  outside the deferred-pipeline denominator instead of being reported as
+  missing receipts. The focused receipt suite is 19/19, the targeted
+  all-backend parity slice is 6/6 on every parity lane, and its partition is
+  `pipeline_not_applicable=6`, `pipeline_missing_receipt=0`. The full aggregate
+  remains open until the complete cohort is regenerated.
 - `ImageFilter.Kernel` now preserves Pillow's raw `f32` scale and offset,
   including fractional, zero, negative, and non-finite values, and the 5x5
   GPU rows use Pillow's bottom-to-top kernel layout. The CPU matrix is exact
@@ -165,6 +173,11 @@ rename, relabel, or weaken a case to make a gate green.
   the final run keeps CPU/GPU at 102 partial + 0 missing and SIMD at 102
   partial + 0 missing, with 433 indeterminate cases in each native lane.
   Receipt/evidence regression tests pass (19/19).
+- [x] Classify the six factor-one `ImageOps.scale` workflows as eager copies.
+  The rule is argument-sensitive (`factor == 1.0` only); a non-identity scale
+  remains deferred and still requires a terminal receipt. The targeted six-case
+  all-backend gate is parity-green on CPU, SIMD, GPU, Node WASM, and browser
+  WASM; the native receipt partition has no missing cases in this slice.
 - [ ] Keep the aggregate `passed_with_backend_gaps` until every claimed native
   cohort has complete terminal receipts, matching case-ID digests, requested
   actual backends, and an empty fallback taxonomy.
@@ -199,5 +212,6 @@ D-039 merge fix `5be0fd7a5`, and D-044 putdata fix `a900ec6f4`). The focused
 69-test binding suite,
 combined full live-oracle parity gate, and
 final all-backend parity envelope are green; backend-proof completion, broader
-`I;16*` backend receipt coverage, and timing acceptance remain required. The
-overall goal is intentionally **active**.
+`I;16*` backend receipt coverage, the complete-cohort receipt regeneration
+after the factor-one classifier correction, and timing acceptance remain
+required. The overall goal is intentionally **active**.

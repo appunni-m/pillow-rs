@@ -1527,6 +1527,13 @@ def classify_pipeline_case(
             # Filter classes construct an eager descriptor.  Only applying the
             # descriptor to an image can create a deferred pipeline node.
             return True
+        if key == ("PIL.ImageOps", "scale"):
+            # ``ImageOps.scale`` returns ``image.copy()`` before parsing the
+            # resampling argument when the factor is exactly one. That
+            # identity path never constructs a lazy resize node, so a
+            # successful observed result cannot require a backend receipt.
+            factor = _workflow_literal(step.get("arguments"), "factor")
+            return isinstance(factor, (int, float)) and factor == 1.0
         if key == ("PIL.ImageFilter", "ModeFilter"):
             # This step constructs the parameter object consumed by the
             # eager ``Image::mode_filter`` implementation in
