@@ -51,11 +51,22 @@ execution is a parity-preserving fallback, not a parity completion claim.
   families are mixed NaN/infinity ordering and cancellation cases whose
   ordered f64 result does not match the device state machine, unproven
   negative-zero/cancellation cases whose ordered f64 result does not match
-  the exact sum, Box ratios outside the proven row limits, chains containing
-  non-Resize stages or outside the per-stage intermediate proof, and larger
-  native-GPU arithmetic domains. Those rows remain on exact host semantic
-  control until their arithmetic, ordering, and storage contracts are
-  separately validated.
+  the exact sum, Box ratios outside the proven row limits, non-Resize stages
+  beyond the raw-word relocation/nearest subset, and larger native-GPU
+  arithmetic domains. Those rows remain on exact host semantic control until
+  their arithmetic, ordering, and storage contracts are separately
+  validated.
+- [x] Admit exact raw-word relocation and nearest-resize stages between
+  filtered marker-9 `F` resizes. Commit `12bea0cbf` proves complete-word
+  `Mirror`, `Flip`, `Transpose`, in-bounds `Crop`, `CropBorder`, `Offset`,
+  `Duplicate`, and one-tap `NEAREST` intermediates, preserving Pillow's
+  little-endian f32 words and dimensions at each explicit compute-pass
+  boundary. The focused native tests cover seven relocation chains plus a
+  nearest chain; the serial GPU-pool suite is **48/48**. Direct native
+  Pillow probes cover 1,500 mixed-geometry cases and 250 randomized f32
+  bit-pattern chains with 0 mismatches; only proven rows reach native GPU.
+  Arithmetic-changing stages, out-of-bounds/fill crops, mode transitions,
+  and larger unproven domains remain exact host semantic control.
 - [x] Keep older reducers conservative while admitting the proven mixed-axis
   marker-9 subset. Commit `ea15ac316` still rejects horizontal upscaling plus
   vertical downscaling in marker 6 and the dyadic chain proof after the
@@ -121,7 +132,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The current full
-  envelope at `a109e0179` has exact public parity for all 10,952 IDs and no
+  envelope at `12bea0cbf` has exact public parity for all 10,952 IDs and no
   native partial/missing/indeterminate pipeline cases. CPU reports 6,838
   terminal receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
   pipeline-complete), and GPU 6,632 native GPU plus 206 CPU receipts (6,832
@@ -197,6 +208,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `5927e9206ee895d85786ab6de345b28544f129f3f89f49f29e10b5a371fce9c4`) is
   value/error-exact with **1/1 native GPU** receipt, three dispatches, and no
   fallback.
+- [x] Admit exact raw-word relocation and nearest-resize intermediates between
+  filtered marker-9 `F` resizes. Commit `12bea0cbf` adds bounded complete-word
+  proofs for `Mirror`, `Flip`, `Transpose`, in-bounds `Crop`, `CropBorder`,
+  `Offset`, `Duplicate`, and one-tap `NEAREST`, while filtered arithmetic and
+  unproven logical stages remain exact host semantic control. The focused
+  relocation/nearest regressions are covered by the serial GPU-pool suite
+  (**48/48**); 1,500 mixed-geometry and 250 randomized f32 native Pillow
+  probes had 0 mismatches with only proven rows reaching GPU. The committed
+  source all-backend envelope below is value/error-exact at 10,952/10,952.
 - [x] Admit the exact palette-first RGB merge on native GPU. Commit
   `c68bce674` adds a single-operation guard for
   `Image.merge("RGB", [P, L, L])`, preserving the first band's raw index
@@ -509,6 +529,21 @@ execution is a parity-preserving fallback, not a parity completion claim.
   plus 206 exact host semantic-control CPU receipts; every lane has zero
   partial, missing, or indeterminate pipeline receipts. No fixtures,
   thresholds, IDs, denominators, or public errors changed.
+- [x] The F relocation/nearest chain admission at committed source
+  `12bea0cbf` is covered by the schema-v3 all-backend replay at revision
+  `12bea0cbf6e46446c0d92926c19d960cb9856e25`. The artifact
+  `build/migration-parity/all-backends-test-result.json` has SHA-256
+  `7068452e4e392dfd35bee1dc89673d2975f845c488ec4b2fe8b040b8bab6df4f`.
+  All five public lanes are value/error-exact at **10,952/10,952** with GPU
+  smoke **1/1**. CPU reports 6,838 terminal receipts and 6,832
+  pipeline-complete cases; SIMD reports 6,850 and 6,844; GPU reports 6,632
+  native GPU plus 206 CPU receipts and 6,832 pipeline-complete cases. Every
+  native lane has zero partial, missing, or indeterminate pipeline receipts.
+  The GPU execution sidecar SHA-256 is
+  `156d2d63825cad32da8a4662669c7ab2158ac5bd7e7006841f8196e05f772f4f`.
+  The aggregate is `passed_with_backend_gaps` only because backend identity /
+  fallback taxonomy and the remaining P0/P2 buckets are still open; no
+  fixtures, thresholds, IDs, denominators, or public errors changed.
 
 ## Closeout state
 
@@ -527,8 +562,9 @@ execution is a parity-preserving fallback, not a parity completion claim.
   evidence fix as `a2cf8c102`, and the zero-operation receipt corrections as
   `2164e2226` and `2835ce29a`, plus the F special-value proof as `bc8197617`,
   the F `PutData` resize-prefix proof as `35fbfbe4d`, the non-finite F
-  order-filter guard as `53d87a44c`, and the proven mixed-axis marker-9
-  admission as `a109e0179`;
+  order-filter guard as `53d87a44c`, the proven mixed-axis marker-9
+  admission as `a109e0179`, and the F relocation/nearest chain proof as
+  `12bea0cbf`;
   the preceding full all-backend replay in that sequence is
   schema-valid and value/error-exact for all 10,952 cases.
   That preceding envelope has zero native or WASM partial/missing/indeterminate
@@ -543,8 +579,9 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
-- [x] The current source parity lane is committed as `a109e0179` (following
-  `35fbfbe4d`) with the non-finite F order-filter safety guard `53d87a44c`.
+- [x] The current source parity lane is committed as `12bea0cbf` (following
+  `a109e0179`) with the F relocation/nearest chain proof and all earlier
+  non-finite F order-filter guards.
   The final fixed-denominator envelope is recorded above at 10,952/10,952 exact in all five
   public lanes with GPU smoke 1/1; CPU, SIMD, and GPU have zero partial,
   missing, or indeterminate pipeline receipts. The remaining P0 arithmetic

@@ -4585,3 +4585,44 @@ CPU reports 6,838 terminal receipts, SIMD 6,850, and GPU 6,632 native GPU
 plus 206 exact host semantic-control CPU receipts; all pipeline partitions
 have zero partial, missing, or indeterminate receipts. No fixtures,
 thresholds, IDs, denominators, public errors, or receipt rules changed.
+
+## 32.64 F marker-9 relocation/nearest chain admission (2026-09-02)
+
+The next first divergence was backend identity on a valid composed `F` image
+workflow, rather than a Pillow value mismatch. `gpu_f_resize_f64_is_exact`
+previously stopped at every non-`Resize` operation, so a filtered marker-9
+resize followed by a complete-word relocation or nearest resize was forced to
+exact host semantic control even when Pillow's preceding f64 reduction and
+the intervening GPU operation preserved the same raw little-endian f32 words.
+The GPU encoder already gives each operation and each F horizontal/vertical
+reducer its own compute-pass boundary.
+
+Commit `12bea0cbf` admits only the bounded raw-word stages whose storage and
+geometry are exact: `Mirror`, `Flip`, `Transpose`, in-bounds `Crop`,
+`CropBorder`, `Offset`, `Duplicate`, and one-tap `NEAREST`. The proof checks
+complete four-byte words, preserves the host-generated dimensions and nearest
+coefficient tables, and bounds source/output materialization before allocating
+host proof buffers. Filtered arithmetic still uses the marker-9 ordered-f64
+proof. Fill/out-of-bounds crops, mode transitions, arithmetic-changing stages,
+and larger unproven domains remain exact host semantic control.
+
+The focused native regressions cover seven relocation chains and one nearest
+intermediate chain; the serial GPU-pool suite is **48/48**. Direct native
+Pillow comparisons cover 1,500 mixed-geometry cases and 250 randomized f32
+bit-pattern chains with **0 mismatches**, and only proven rows reach native
+GPU. The committed-source schema-v3 replay at revision
+`12bea0cbf6e46446c0d92926c19d960cb9856e25` is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`7068452e4e392dfd35bee1dc89673d2975f845c488ec4b2fe8b040b8bab6df4f`). CPU,
+SIMD, GPU, Node WASM, and browser WASM are value/error-exact at
+**10,952/10,952**, with GPU smoke **1/1**. CPU has 6,838 terminal receipts
+(6,832 pipeline-complete), SIMD 6,850 (6,844), and GPU 6,632 native GPU plus
+206 CPU receipts (6,832); all native lanes have zero partial, missing, or
+indeterminate pipeline receipts. The GPU execution sidecar
+`build/migration-parity/all-backends/parity-gpu-execution.json` has SHA-256
+`156d2d63825cad32da8a4662669c7ab2158ac5bd7e7006841f8196e05f772f4f`.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. Remaining work is mixed special-value ordering and
+cancellation, unproven negative-zero and wider Box arithmetic, additional
+logical/backend identity reconciliation, and the P2 timing gate.
