@@ -2463,10 +2463,9 @@ pub fn rotate(
     // expanded outer edges independently; taking ceil(max-min) loses a pixel
     // for odd dimensions and fractional rotations.
     let rad = -angle_deg.to_radians();
-    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
-    let aff_a = round_15(rad.cos());
-    let aff_b = round_15(rad.sin());
-    let aff_d = round_15(-rad.sin());
+    let aff_a = crate::ops::rotate::round_rotate_coefficient(rad.cos());
+    let aff_b = crate::ops::rotate::round_rotate_coefficient(rad.sin());
+    let aff_d = crate::ops::rotate::round_rotate_coefficient(-rad.sin());
     let aff_e = aff_a;
     let center_x = sw / 2.0;
     let center_y = sh / 2.0;

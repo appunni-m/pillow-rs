@@ -703,10 +703,9 @@ fn rotate_arbitrary_generic(
     // source image. The inverse mapping uses the negative angle; using the
     // forward sign mirrors the exposed fill region for arbitrary angles.
     let rad = -angle.to_radians();
-    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
-    let aff_a = round_15(rad.cos());
-    let aff_b = round_15(rad.sin());
-    let aff_d = round_15(-rad.sin());
+    let aff_a = crate::ops::rotate::round_rotate_coefficient(rad.cos());
+    let aff_b = crate::ops::rotate::round_rotate_coefficient(rad.sin());
+    let aff_d = crate::ops::rotate::round_rotate_coefficient(-rad.sin());
     let aff_e = aff_a;
     // Pillow's Image.rotate composes post-translation into the reverse affine
     // matrix before calculating expand bounds; applying it after sampling
@@ -1153,7 +1152,14 @@ pub fn execute_rotate(
     // PIL 90° CCW = image crate 270° CW, PIL 270° CCW = image crate 90° CW.
     // For 90/270 with expand=False, compute the clipped result directly
     // by pasting the expanded result centered in the original-sized canvas.
-    let result = if !has_custom_transform && (deg - 90).abs() < 2 {
+    let normalized_angle = angle.rem_euclid(360.0);
+    let result = if !has_custom_transform && normalized_angle.abs() <= f64::EPSILON {
+        // Pillow's public rotate() returns an exact copy at angle 0 (and
+        // every multiple of 360) before considering the requested filter.
+        // Keep this fast path ahead of filtered affine sampling so LA/RGBA
+        // bytes and alpha channels are not rounded needlessly.
+        img.clone()
+    } else if !has_custom_transform && (deg - 90).abs() < 2 {
         if expand {
             img.rotate270() // 270° CW = 90° CCW (PIL)
         } else {
