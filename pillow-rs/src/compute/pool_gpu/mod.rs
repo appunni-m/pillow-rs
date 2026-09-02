@@ -338,6 +338,44 @@ fn gpu_f_resize_identity_is_exact(
     resize_count == 1
 }
 
+/// Return whether an `I`-mode filtered resize is an exact same-size copy.
+///
+/// Pillow's imaging core returns the source words unchanged when the target
+/// dimensions already match, regardless of the selected resampling filter.
+/// `I` stores signed samples as opaque little-endian `u32` words at this
+/// executor boundary, so lowering this one-operation geometry to `Duplicate`
+/// preserves every bit pattern (including the signed extrema) without
+/// invoking the not-yet-proven typed convolution accumulator. Keep the proof
+/// limited to a pure resize; a preceding or following operation may change
+/// the sample contract or dimensions and must remain on its existing path.
+fn gpu_i_resize_identity_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("I")
+        || ops.len() != 1
+        || !matches!(image, DynamicImage::ImageRgba8(_))
+        || image.width() == 0
+        || image.height() == 0
+    {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let expected = CheckedDims::new(image.width(), image.height(), 4)
+        .ok()
+        .map(|dims| dims.total_bytes());
+    if expected != Some(pixels.as_raw().len()) {
+        return false;
+    }
+    matches!(
+        ops[0],
+        PipelineOp::Resize { w, h, .. } if (w, h) == image.dimensions()
+    )
+}
+
 /// Return whether a one- or two-axis 2x F-mode Box downscale is safe for the
 /// shader's f32 accumulator.
 ///
@@ -8097,7 +8135,16 @@ fn expand_gpu_geometry_ops(
 ) -> Vec<PipelineOp> {
     let mut expanded = Vec::with_capacity(ops.len());
     let (mut cur_w, mut cur_h) = dimensions;
+    let i_resize_identity_is_exact = dimensions == image.dimensions()
+        && gpu_i_resize_identity_is_exact(ops, image, logical_mode);
     for op in ops {
+        if i_resize_identity_is_exact {
+            // The proof is restricted to the one pure same-size resize, so a
+            // raw-word Duplicate is equivalent to Pillow's typed identity
+            // result and avoids entering the filtered-I host-control branch.
+            expanded.push(PipelineOp::Duplicate);
+            continue;
+        }
         if gpu_fit_is_exact_identity(op, (cur_w, cur_h), image, logical_mode) {
             // The operation still needs an independent result image and a
             // terminal GPU receipt, so lower to a real copy rather than
@@ -10483,9 +10530,10 @@ mod tests {
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
-        gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian, readback_poll_backoff,
+        gpu_i_resize_identity_is_exact, gpu_int_filter_resize_chain_is_supported,
+        gpu_luma16_resize_f64_is_exact, gpu_palette_first_rgb_merge_is_supported,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian,
+        readback_poll_backoff,
     };
     use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -11241,6 +11289,93 @@ mod tests {
         assert_eq!(telemetry.6, Some(3));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn i_resize_identity_native_gpu_preserves_signed_words() {
+        let values = [
+            i32::MIN,
+            -12345,
+            -1,
+            0,
+            1,
+            12345,
+            i32::MAX,
+            -2_000_000_001,
+            2_000_000_001,
+        ];
+        let source_bytes = (0..72usize)
+            .flat_map(|index| values[index % values.len()].to_le_bytes())
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("I", (9, 8), &source_bytes).expect("I source");
+        let resized = source
+            .resize((9, 8), Some(ResampleInput::Code(3)), None)
+            .expect("I identity resize");
+        let expected = resized
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU I identity resize");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match resized.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU I identity resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU I identity resize parity");
+        assert_eq!(actual, source.tobytes().expect("I source bytes"));
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU I identity resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn i_resize_identity_proof_is_narrow() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(4, 3, i32::MIN.to_le_bytes().repeat(12)).unwrap(),
+        );
+        let same_size = PipelineOp::Resize {
+            w: 4,
+            h: 3,
+            filter: ResampleFilter::Lanczos,
+        };
+        assert!(gpu_i_resize_identity_is_exact(
+            std::slice::from_ref(&same_size),
+            &image,
+            Some("I")
+        ));
+        assert!(!gpu_i_resize_identity_is_exact(
+            std::slice::from_ref(&same_size),
+            &image,
+            Some("F")
+        ));
+        assert!(!gpu_i_resize_identity_is_exact(
+            &[same_size.clone(), PipelineOp::Mirror],
+            &image,
+            Some("I")
+        ));
+        assert!(!gpu_i_resize_identity_is_exact(
+            &[PipelineOp::Resize {
+                w: 3,
+                h: 3,
+                filter: ResampleFilter::Bilinear,
+            }],
+            &image,
+            Some("I")
+        ));
     }
 
     #[test]
