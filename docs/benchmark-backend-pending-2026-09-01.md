@@ -88,6 +88,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   (one-special and mixed-special patterns) had 0 mismatches; mixed orderings
   that do not match Pillow's ordered f64 result remain exact host semantic
   control.
+- [x] Keep deferred `F` order-statistic updates parity-safe. Commit
+  `53d87a44c` validates every raw `PutData(F)` payload for the current image's
+  exact byte length and finite little-endian words before admitting the
+  Max/Min/Median/Rank shaders. Finite updates retain the existing native path;
+  NaN, infinity, malformed-length, and wrong-mode updates stay on exact host
+  semantic control because WGSL float insertion/min comparisons do not prove
+  Pillow's special-value ordering contract. Focused admission coverage passes
+  1/1 plus the existing 25-case F GPU group.
 - [x] Align Thumbnail reduction and typed I/F resampling with Pillow's native
   contracts. Commit `0013d013e` carries the final aspect-preserving
   dimensions once (no backend double-adjustment), routes byte reduction through
@@ -108,14 +116,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The current full
-  envelope at `bc8197617` has exact public parity for all 10,952 IDs and no
-  native partial/missing/indeterminate pipeline cases, but GPU still reports
-  6,627 native GPU receipts plus 211 CPU receipts and 142 exact host-control
-  fallbacks. CPU has 6,838 terminal receipts (6,832 pipeline-complete cases)
-  and SIMD has 6,850 terminal receipts (6,844 pipeline-complete cases); the
-  remaining terminal receipts are non-pipeline observations. Explicit
-  logical-mode, dimension, Transform, and arithmetic guards remain visible
-  evidence partitions, not value-parity exemptions.
+  envelope at `35fbfbe4d` has exact public parity for all 10,952 IDs and no
+  native partial/missing/indeterminate pipeline cases. CPU reports 6,838
+  terminal receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
+  pipeline-complete), and GPU 6,632 native GPU plus 206 CPU receipts (6,832
+  pipeline-complete). GPU fallback reasons remain explicit evidence
+  partitions: 141 exact host semantic-control rows, 60 unsafe-primary-
+  dimension rows, one legacy logical-mode receipt label, and the bounded
+  Transform/dimension guards. The label is an internal taxonomy item, not a
+  claim that a public Pillow operation is unavailable; the public lane is
+  10,952/10,952 exact.
 - [x] Correct zero-operation observation accounting. Commits `2164e2226` and
   `2835ce29a` keep metadata-only empty pipelines telemetry-neutral, retain raw
   zero-operation observations with `pipeline_relevant=false`, preserve the
@@ -463,6 +473,22 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU is actual GPU with no fallback. The admission is intentionally limited
   to RGB with a P first band and L/L remaining bands; other merge contracts
   remain explicit host-controlled paths.
+- [x] The marker-9 `PutData(F)` prefix admission at committed source
+  `35fbfbe4d` is covered by the native `2x2 -> 1x5` Bilinear regression: the
+  replacement words are consumed before the resize, CPU and GPU bytes match
+  exactly, and the terminal receipt is GPU/GPU with two operations, three
+  dispatches, and no fallback. The marker-9 focused GPU group is 19/19, and
+  the full schema-v3 all-backend artifact
+  `build/migration-parity/all-backends-test-result.json` (SHA-256
+  `32be1163b06915202386985a2d6bdfda8fc497b3aea8c6dccf98692c9939b334`)
+  remains value/error-exact at 10,952/10,952 on CPU, SIMD, GPU, Node WASM, and
+  browser WASM with GPU smoke 1/1. Its GPU sidecar
+  `build/migration-parity/all-backends/parity-gpu-execution.json` has SHA-256
+  `41197a1752aa0d721fee83a2b95b605f0ff573d46e8c14e8255c22e7f48b34ff` and
+  records 6,632 native GPU plus 206 exact host-control CPU receipts, with
+  zero partial, missing, or indeterminate pipeline cases. The follow-up
+  `53d87a44c` guard keeps non-finite `PutData(F)` order-filter rows on the
+  same exact host path until their ordering contract is proven.
 
 ## Closeout state
 
@@ -479,7 +505,9 @@ execution is a parity-preserving fallback, not a parity completion claim.
   filtered-resize admission as `2ff9a6951`, the JS/WASM
   observed-boundary receipt fix as `d0ee51d9a`, the JS/WASM validation-boundary
   evidence fix as `a2cf8c102`, and the zero-operation receipt corrections as
-  `2164e2226` and `2835ce29a`, plus the F special-value proof as `bc8197617`;
+  `2164e2226` and `2835ce29a`, plus the F special-value proof as `bc8197617`,
+  the F `PutData` resize-prefix proof as `35fbfbe4d`, and the non-finite F
+  order-filter guard as `53d87a44c`;
   the preceding full all-backend replay in that sequence is
   schema-valid and value/error-exact for all 10,952 cases.
   That preceding envelope has zero native or WASM partial/missing/indeterminate
