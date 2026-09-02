@@ -173,6 +173,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/i-cover-pad-all-backends.json` are exact with **1/1 native GPU**
   receipt, five dispatches, and no fallback; filtered Pad and other typed
   arithmetic remain guarded.
+- [x] Admit the exact `I` `Filter3x3` → nearest `Resize` composition on native
+  GPU. Commit `202177a39` keeps the typed signed-i32 convolution followed by
+  host-generated one-tap complete-word relocation; 5x5 filters, filtered
+  resizes, and mixed chains remain host-controlled until separately proven.
+  The post-commit all-backend replay
+  `/tmp/i-filter-resize-all-backends-202177a39.json` (SHA-256
+  `5927e9206ee895d85786ab6de345b28544f129f3f89f49f29e10b5a371fce9c4`) is
+  value/error-exact with **1/1 native GPU** receipt, three dispatches, and no
+  fallback.
 - [x] Admit the exact current-image `PutPixel -> Contrast` prefix on native
   GPU. Commit `5ed9f152e` mirrors one non-palette byte write only to compute
   Pillow's post-write midpoint, while the complete two-operation batch stays
