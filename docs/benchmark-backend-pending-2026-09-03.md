@@ -18,10 +18,10 @@ receipt rules unchanged.
 - [x] Correct varied CPU/SIMD Perspective and Quad sampling: destination
   centers, Pillow `COORD` truncation, filter edge clipping, and ordered
   interpolation are covered by the committed L/RGB regressions.
-- [ ] Finish Mesh filtered (bilinear/bicubic) parity for L/LA/RGB/RGBA,
-  translated/clipped boxes, and explicit premultiplied modes. Mesh nearest is
-  exact; a broader filtered attempt remains uncommitted after a one-byte RGBA
-  divergence.
+- [x] Finish Mesh filtered (bilinear/bicubic) parity for L/LA/RGB/RGBA,
+  translated/clipped boxes, and explicit premultiplied modes. The final CPU
+  path is exact across the six byte layouts; SIMD nearest is proven and SIMD
+  filtered remains exact CPU semantic control.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
   signed two-axis envelope. The remaining inputs include heterogeneous and
   non-dyadic values, mixed non-finite ordering, negative-zero cancellation,
@@ -59,23 +59,35 @@ receipt rules unchanged.
 - [x] Projective/Quad sampling and conservative GPU routing (`3320e2b22`):
   varied CPU/SIMD/GPU transform corpus is 130/130 per lane; fractional GPU
   transforms retain terminal CPU receipts with `exact host semantic control`.
+- [x] Mesh filtered sampling and alpha/arithmetic ordering (`30ee05b29`,
+  `1773f60b7`): CPU L/LA/RGB/RGBA bilinear/bicubic parity is exact, explicit
+  RGBa/RGBX avoid double premultiplication, and compiled `Geometry.c` FMA/
+  Horner order is preserved. SIMD filtered and fractional GPU paths retain
+  exact host semantic control until device arithmetic is proven.
 - [x] SIMD constant allocation (`d9b5cec0a`): removed the redundant full-frame
   zero-fill/copy pass with unchanged bytes and telemetry.
 - [x] PA/F nearest relocation admissions and the bounded indexed projective
   proof remain exact within their documented envelopes.
 
-## Evidence to refresh after the active transform/mesh commits
+## Evidence refreshed at the final transform/mesh revision
 
 - [x] Focused all-backends transform replay with terminal receipts (130/130
   source corpus; fractional GPU rows are host-controlled).
-- [x] Full schema-v3 all-backends envelope and GPU SHA-256 sidecar (all five
-  lanes value/error-exact; GPU native/host partitions remain explicit).
-- [x] Standard benchmark and parity preflight after the transform fixes:
+- [x] Full schema-v3 all-backends envelope at `1773f60b7` and GPU SHA-256
+  sidecar (10,952/10,952 exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
+  GPU native/host partitions remain explicit).
+- [x] Standard benchmark and parity preflight after Mesh arithmetic fixes:
   744/744 workloads measured, 744/744 correctness gates passed, 2,232/2,232
   target subjects completed, and 202/202 parity cases exact.
 - [x] `make -C pillow-rs fmt`, `make build-dev`, focused Rust tests,
   `make migration-parity-receipt-test` (35/35), and
   `make migration-parity-evidence-check`.
+
+Current evidence hashes: all-backends envelope
+`78bb084c1a42c59f33251d3b2228567fa0801efb71e84f6a999fae709564a7fd`, GPU
+sidecar `cdec2379f0a11bd4e43958eb3e4efb48be8ff852260950df8fb2ec2f41daf1b6`,
+benchmark `0ccacb7261878e71f249890c3c5d8a4b0bfedb241e810db196c63c015041ab44`,
+and benchmark parity `af1d7feca7999767c1fb95ca27ba41bbbc6f765684855e326de30a5b14f54dd1`.
 
 Known environment blocker: `make -C pillow-rs clippy` still requires the
 pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
