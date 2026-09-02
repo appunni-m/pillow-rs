@@ -1214,7 +1214,7 @@ fn execute_automatic_simd_segments(
 
     let mut current: Option<DynamicImage> = None;
     let mut previous_backend = None;
-    let mut used_simd = false;
+    let mut last_backend = None;
     let mut fallback_reason = None;
     let mut resources = None;
     let mut index = 0usize;
@@ -1224,7 +1224,6 @@ fn execute_automatic_simd_segments(
         let input = current.as_ref().unwrap_or(img);
         let op_mode = current_mode.as_deref();
         let backend = if simd.supports_for_image(&ops[index], input, op_mode)? {
-            used_simd = true;
             Backend::Simd
         } else {
             fallback_reason.get_or_insert_with(|| {
@@ -1272,6 +1271,13 @@ fn execute_automatic_simd_segments(
         merge_pipeline_resource_telemetry(&mut resources, take_pipeline_resource_telemetry());
         current = Some(next);
         previous_backend = Some(backend);
+        // Automatic routing can mix host-resident SIMD and CPU segments. The
+        // receipt must identify the executor that produced the returned
+        // pixels, while operation telemetry preserves every segment and
+        // handoff. Pillow's sequential operation semantics expose no composite
+        // backend identity, so reporting any SIMD use would mislabel a final
+        // CPU segment as SIMD.
+        last_backend = Some(backend);
         for op in segment_ops {
             current_mode =
                 pool_simd::ops::adapters::simd_mode_after_op(op, current_mode.as_deref());
@@ -1283,11 +1289,7 @@ fn execute_automatic_simd_segments(
     if let Some(resource) = resources {
         record_pipeline_resource_telemetry(resource);
     }
-    let actual_backend = if used_simd {
-        Backend::Simd
-    } else {
-        Backend::Cpu
-    };
+    let actual_backend = last_backend.unwrap_or(Backend::Cpu);
     Ok((result, actual_backend, fallback_reason, resources))
 }
 
@@ -1477,4 +1479,43 @@ pub(crate) fn execute_prepared(
         "Backend {:?} not available",
         prepared.selected_backend
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Backend, execute_automatic_simd_segments};
+    use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+    use crate::raster::{DynamicImage, Rgb, RgbImage};
+
+    #[test]
+    fn automatic_simd_receipt_uses_final_cpu_segment() {
+        let source = DynamicImage::ImageRgb8(RgbImage::from_pixel(2, 2, Rgb([11, 22, 33])));
+        let ops = [
+            PipelineOp::PutPixel {
+                x: 0,
+                y: 0,
+                color: (101, 102, 103, 255),
+                palette_index: false,
+            },
+            PipelineOp::Transform {
+                w: 2,
+                h: 2,
+                method: TransformMethod::Perspective,
+                data: vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0].into(),
+                filter: ResampleFilter::Bilinear,
+                fill: Some((0, 0, 0, 255)),
+                palette_fill: None,
+            },
+        ];
+
+        let (_result, actual_backend, fallback_reason, _resource) =
+            execute_automatic_simd_segments(&ops, &source, Some("RGB"))
+                .expect("mixed SIMD/CPU pipeline should execute");
+
+        assert_eq!(actual_backend, Backend::Cpu);
+        assert_eq!(
+            fallback_reason.as_deref(),
+            Some("SIMD does not support Transform for the current image layout/mode")
+        );
+    }
 }
