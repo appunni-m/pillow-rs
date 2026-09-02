@@ -5688,3 +5688,67 @@ and broader arithmetic-changing filtered/projective/palette GPU domains. P1
 backend-identity reconciliation and the P2 equal-ID, equal-receipt timing gate
 remain open; these are execution/accounting and performance gates, not public
 parity exemptions.
+
+## 32.87 Combined F Pad, terminal receipts, and constant allocation (2026-09-03)
+
+Three bounded follow-up lanes are now integrated after the Mesh work. First,
+`ImageOps.pad` on heterogeneous `F` data exposed a real CPU parity defect:
+`op_pad` sent the contain resize through the byte-oriented generic
+`pil_resize`, treating IEEE words as four independent channels. Routing that
+step through the existing exact f64-coefficient/f32-store `execute_resize`
+path matches Pillow. A narrow marker-9 GPU proof then admits only changed-axis,
+non-nearest `F` Pad (with an optional `PutData(F)`-only prefix); placement is
+complete-word copy/fill and adds no arithmetic. The heterogeneous 25-row
+matrix improved from 3/25 to 25/25 exact, with 23 native GPU receipts instead
+of zero. Mixed non-finite inputs remain exact host semantic control (25/25,
+with four native Box rows), and the five-filter finite native probe is exact
+CPU/Pillow/GPU with requested=actual GPU receipts. Commit: `c5f03c6f3`.
+
+Second, mixed automatic SIMD routing had a receipt identity defect. A
+`PutPixel` SIMD prefix followed by a filtered CPU `Transform` returned pixels
+from CPU, but the aggregate receipt claimed SIMD whenever any prefix used it.
+`ddcff735c` reports the final successful segment backend while retaining the
+operation handoff history. The maintained SIMD lane remains 10,952/10,952
+exact; terminal identity changes from SIMD 6,849/CPU 1 to SIMD 6,847/CPU 3.
+
+Third, `ImageChops.constant` now constructs its final single-band L image with
+`GrayImage::from_pixel`, removing a zero-fill plus full-frame overwrite without
+changing mode, dimensions, or bytes (`2176ebfad`). Its focused native parity is
+11/11 exact, including zero-sized and materialized cases. The fixed-ID row is
+faster, but aggregate budget comparisons remain timing-noisy (6 and 7
+violations against the baseline reports and 2 between candidate reports), so
+the P2 gate stays open.
+
+The combined source revision `c5f03c6f34d44f5a359198281ad2f03d17ad6449`
+passes the full schema-v3 envelope: 10,952/10,952 exact on CPU, SIMD, GPU,
+Node WASM, and browser WASM with zero value/error failures. CPU has 6,838
+terminal receipts; SIMD has 6,850 (6,847 SIMD and 3 CPU, with three Transform
+layout guards); GPU has 6,838 (6,620 native GPU and 218 CPU host-control),
+with 158 exact host semantic-control, 62 unsafe-primary-dimension, one
+unsafe/incomplete-dimension, and one Transform capability guard. The durable
+envelope is `build/migration-parity/all-backends-test-result.json` (SHA-256
+`7e2d3b13549a10b4fb33b687e7572f844d7739a42e55076bd949495d1c0601fc`), and the
+GPU sidecar is `build/migration-parity/all-backends/parity-gpu-execution.json`
+(SHA-256
+`cfeec1a1a14c517ead579a574f8a7a5cc79e1b2f896b7eca605e29ee9dbd1be4`).
+
+The standard benchmark at the same source revision measured 744/744
+workloads, passed all 744 correctness gates, completed all 2,232 target
+subjects, and its 202-case parity preflight was 202/202 exact. Execution
+receipts were CPU 4,213, SIMD 4,325, and GPU 4,195, including 18 exact host
+semantic-control receipts. Artifacts are
+`build/migration-parity/benchmark-result-current-20260903.json` (SHA-256
+`31147c0898e7aca93bb1eb6440405eab8313eecafcd4f61992ddcafcb23a9a4a`) and
+`build/migration-parity/benchmark-parity-result-current-20260903.json`
+(SHA-256
+`68e4c45562367e3a9f5f4e505314b66df34ea3c4187c843242a5f383cf3d2572`).
+
+The F-GPU focused suite is 30/30, the mixed-receipt regression is 1/1,
+`make migration-parity-receipt-test` is 35/35, and
+`make migration-parity-evidence-check` passes. No fixtures, expected values,
+thresholds, case IDs, denominators, public errors, or receipt rules changed.
+Remaining P0 work is broader heterogeneous/non-dyadic native-GPU F Resize/Pad
+and other arithmetic-changing filtered/projective/palette domains; P1 still
+has explicit host/native reconciliation work, and P2 still needs two
+zero-violation equal-ID/equal-receipt comparisons. These are execution and
+performance gates, not public parity exemptions.
