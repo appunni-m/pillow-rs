@@ -1175,6 +1175,16 @@ fn transform_projective_generic(
             return Some((x, y));
         }
 
+        // Pillow 12.2.0's libImaging/Geometry.c `perspective_transform`
+        // evaluates the inverse map at each destination pixel center. The
+        // nearest lane is corrected here; filtered projective sampling remains
+        // a separate parity lane because its source-corner interpolation is
+        // not yet proven independently.
+        let (dx, dy) = if nearest {
+            (dx + 0.5, dy + 0.5)
+        } else {
+            (dx, dy)
+        };
         let denominator = data[6] * dx + data[7] * dy + 1.0;
         if denominator == 0.0 || !denominator.is_finite() {
             return None;
@@ -1194,6 +1204,15 @@ fn transform_projective_generic(
             };
         }
     };
+    let nearest_coordinate = |value: f64| {
+        if quad {
+            (value + 0.5).floor() as i64
+        } else if value < 0.0 {
+            -1
+        } else {
+            value as i64
+        }
+    };
 
     for dy in 0..dst_h {
         for dx in 0..dst_w {
@@ -1205,8 +1224,14 @@ fn transform_projective_generic(
             };
 
             if nearest {
-                let ix = (sx + 0.5).floor() as i64;
-                let iy = (sy + 0.5).floor() as i64;
+                // Geometry.c defines COORD(v) as -1 for negative values and
+                // a C cast otherwise, i.e. truncation toward zero rather
+                // than rounding to the nearest source pixel. This applies to
+                // the center-corrected perspective path; quad retains its
+                // existing raw-corner contract until that separate lane is
+                // proven against Pillow's coefficient conversion.
+                let ix = nearest_coordinate(sx);
+                let iy = nearest_coordinate(sy);
                 if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
                     let in_idx = (iy as usize * src_w as usize + ix as usize) * channels;
                     destination.copy_from_slice(&raw[in_idx..in_idx + channels]);
@@ -1843,4 +1868,41 @@ pub fn transform_mesh(
         .ok_or_else(|| {
             PilError::InternalError("transform_mesh RGBA buffer shape mismatch".to_string())
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transform_projective_generic;
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, GrayImage};
+
+    #[test]
+    fn perspective_nearest_matches_pillow_center_and_truncation() {
+        let width = 9;
+        let height = 8;
+        let raw: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        let image =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, raw).expect("luma source"));
+        let data = [1.0, 0.07, 0.4, -0.03, 1.0, 0.2, 0.001, -0.002];
+
+        let result = transform_projective_generic(
+            &image,
+            8,
+            7,
+            &data,
+            &ResampleFilter::Nearest,
+            Some((17, 0, 0, 255)),
+            false,
+        )
+        .expect("perspective transform");
+        let expected = [
+            3, 40, 77, 114, 151, 188, 225, 6, 51, 88, 125, 162, 162, 199, 236, 17, 62, 99, 136,
+            173, 210, 247, 28, 65, 73, 110, 147, 184, 221, 2, 39, 76, 84, 121, 158, 195, 232, 13,
+            50, 87, 95, 132, 169, 206, 243, 24, 61, 98, 106, 143, 180, 217, 254, 35, 72, 109,
+        ];
+
+        assert_eq!(result.as_bytes(), expected);
+    }
 }
