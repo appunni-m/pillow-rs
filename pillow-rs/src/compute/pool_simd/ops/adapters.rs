@@ -18095,6 +18095,22 @@ fn simd_affine_luma16_transform_bytes(
         .ok_or_else(|| PilError::InternalError("SIMD transform I;16 buffer shape mismatch".into()))
 }
 
+#[inline]
+fn mesh_source_point(coefficients: &[f64; 8], local_x: f64, local_y: f64) -> (f64, f64) {
+    // Geometry.c's quad_transform is evaluated as four terms in this order.
+    // Keep the fused operations explicit: a one-ULP map change can move a
+    // nearest sample across a source-pixel boundary.
+    let source_x = coefficients[3].mul_add(
+        local_x * local_y,
+        coefficients[2].mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0])),
+    );
+    let source_y = coefficients[7].mul_add(
+        local_x * local_y,
+        coefficients[6].mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4])),
+    );
+    (source_x, source_y)
+}
+
 fn simd_mesh_transform_bytes(
     img: &DynamicImage,
     width: u32,
@@ -18139,85 +18155,86 @@ fn simd_mesh_transform_bytes(
     for destination in output.chunks_exact_mut(channels) {
         destination.copy_from_slice(&fill[..channels]);
     }
+    let destination_width_i64 = i64::from(width);
+    let destination_height_i64 = i64::from(height);
+    let source_width_i64 = i64::from(img.width());
+    let source_height_i64 = i64::from(img.height());
     let mut vector_blocks = 0u64;
 
     for mesh in data.chunks_exact(12) {
-        let x0_d = mesh[0] as i32;
-        let y0_d = mesh[1] as i32;
-        let x1_d = mesh[2] as i32;
-        let y1_d = mesh[3] as i32;
-        let x0_s = mesh[4];
-        let y0_s = mesh[5];
-        let x1_s = mesh[6];
-        let y1_s = mesh[7];
-        let x2_s = mesh[8];
-        let y2_s = mesh[9];
-        let x3_s = mesh[10];
-        let y3_s = mesh[11];
-
-        // Pillow lowers each MESH record to QUAD using the original box
-        // width/height, then evaluates local destination pixel centers.
-        let raw_bw = x1_d - x0_d;
-        let raw_bh = y1_d - y0_d;
-        if raw_bw <= 0 || raw_bh <= 0 {
+        // These are integer box coordinates at Pillow's public boundary. The
+        // cast mirrors the C long conversion used before GenericTransform.
+        let x0_d = mesh[0] as i64;
+        let y0_d = mesh[1] as i64;
+        let x1_d = mesh[2] as i64;
+        let y1_d = mesh[3] as i64;
+        let box_width = x1_d.saturating_sub(x0_d);
+        let box_height = y1_d.saturating_sub(y0_d);
+        if box_width <= 0 || box_height <= 0 {
             continue;
         }
-        let bx0 = x0_d.max(0).min(width as i32);
-        let by0 = y0_d.max(0).min(height as i32);
-        let bx1 = x1_d.max(0).min(width as i32);
-        let by1 = y1_d.max(0).min(height as i32);
-        let bw = f64::from(raw_bw);
-        let bh = f64::from(raw_bh);
+
+        let inverse_width = 1.0 / box_width as f64;
+        let inverse_height = 1.0 / box_height as f64;
+        let coefficients = [
+            mesh[4],
+            (mesh[10] - mesh[4]) * inverse_width,
+            (mesh[6] - mesh[4]) * inverse_height,
+            (mesh[8] - mesh[6] - mesh[10] + mesh[4]) * inverse_width * inverse_height,
+            mesh[5],
+            (mesh[11] - mesh[5]) * inverse_width,
+            (mesh[7] - mesh[5]) * inverse_height,
+            (mesh[9] - mesh[7] - mesh[11] + mesh[5]) * inverse_width * inverse_height,
+        ];
+
+        // GenericTransform clips the destination box and resets the local
+        // origin to the clipped lower-left corner. The box dimensions above
+        // remain the original (unclipped) dimensions.
+        let bx0 = x0_d.max(0).min(destination_width_i64);
+        let by0 = y0_d.max(0).min(destination_height_i64);
+        let bx1 = x1_d.max(0).min(destination_width_i64);
+        let by1 = y1_d.max(0).min(destination_height_i64);
+        if bx0 >= bx1 || by0 >= by1 {
+            continue;
+        }
 
         for destination_y in by0..by1 {
-            let v = ((destination_y - y0_d) as f64 + 0.5) / bh;
-            let one_minus_v = 1.0 - v;
-            let base_x = one_minus_v * x0_s + v * x1_s;
-            let delta_x = one_minus_v * (x3_s - x0_s) + v * (x2_s - x1_s);
-            let base_y = one_minus_v * y0_s + v * y1_s;
-            let delta_y = one_minus_v * (y3_s - y0_s) + v * (y2_s - y1_s);
+            let local_y = (destination_y - by0) as f64 + 0.5;
             let mut destination_x = bx0;
             while destination_x < bx1 {
                 let count = ((bx1 - destination_x) as usize).min(SIMD_F64_LANES);
-                let u = f64x8::new(std::array::from_fn(|lane| {
-                    if lane < count {
-                        (destination_x + lane as i32 - x0_d) as f64 / bw + 0.5 / bw
-                    } else {
-                        0.0
-                    }
-                }));
-                let source_x = (f64x8::splat(base_x) + f64x8::splat(delta_x) * u).to_array();
-                let source_y = (f64x8::splat(base_y) + f64x8::splat(delta_y) * u).to_array();
+                // Coordinates are a scalar control plane; the native sample
+                // bytes are still gathered and written in complete blocks.
+                // This preserves exact COORD truncation while retaining the
+                // adapter's vector-block data path and receipts.
                 for lane in 0..count {
-                    let input_x = if source_x[lane].is_finite() {
-                        if source_x[lane] < 0.0 {
-                            -1
-                        } else {
-                            source_x[lane] as i64
-                        }
+                    let local_x = (destination_x - bx0 + lane as i64) as f64 + 0.5;
+                    let (source_x, source_y) = mesh_source_point(&coefficients, local_x, local_y);
+                    let input_x = if source_x.is_finite() && source_x >= 0.0 {
+                        source_x as i64
                     } else {
                         -1
                     };
-                    let input_y = if source_y[lane].is_finite() {
-                        if source_y[lane] < 0.0 {
-                            -1
-                        } else {
-                            source_y[lane] as i64
-                        }
+                    let input_y = if source_y.is_finite() && source_y >= 0.0 {
+                        source_y as i64
                     } else {
                         -1
                     };
-                    let output_start = ((destination_y as usize * destination_width)
-                        + destination_x as usize
-                        + lane)
+                    let output_pixel = (destination_y as usize * destination_width)
+                        .checked_add(destination_x as usize + lane)
+                        .ok_or_else(|| simd_unsupported("Transform"))?;
+                    let output_start = output_pixel
                         .checked_mul(channels)
                         .ok_or_else(|| simd_unsupported("Transform"))?;
                     if input_x >= 0
-                        && input_x < source_width as i64
+                        && input_x < source_width_i64
                         && input_y >= 0
-                        && input_y < source_height as i64
+                        && input_y < source_height_i64
                     {
-                        let source_start = (input_y as usize * source_width + input_x as usize)
+                        let source_pixel = (input_y as usize * source_width)
+                            .checked_add(input_x as usize)
+                            .ok_or_else(|| simd_unsupported("Transform"))?;
+                        let source_start = source_pixel
                             .checked_mul(channels)
                             .ok_or_else(|| simd_unsupported("Transform"))?;
                         output[output_start..output_start + channels]
@@ -18225,7 +18242,7 @@ fn simd_mesh_transform_bytes(
                     }
                 }
                 vector_blocks = vector_blocks.saturating_add(1);
-                destination_x += count as i32;
+                destination_x += count as i64;
             }
         }
     }
