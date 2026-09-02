@@ -112,6 +112,13 @@ receipt rules unchanged.
   1,175-case random finite-normal probe also had zero mismatches (428 native
   rows). These probes do not close the wider-tap, special-value, or chained
   arithmetic buckets above.
+- [x] Fresh all-backends replay at `b7f2fadc9` passed 10,952/10,952 value/error
+  comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM with zero failed
+  or not-run cases. Terminal receipts remain explicit (CPU 6,838; SIMD 6,847
+  SIMD + 3 CPU controls; GPU 6,620 native + 218 host controls; WASM 6,951
+  each); the recorded status is `passed_with_backend_gaps` because those
+  intentional host/control partitions are not relabeled as native coverage.
+  Replay hash: `49c0b07da8452284b454f23f26c43588af04e54f444308282bcd9fe4763a9f72`.
 
 ## Evidence refreshed at the final integrated revision (`ee2996057`)
 
