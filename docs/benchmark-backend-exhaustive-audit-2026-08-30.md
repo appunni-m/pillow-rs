@@ -4738,3 +4738,45 @@ receipt rules changed. This closes only the proven same-size typed-I identity
 row. The broader filtered-I arithmetic domain, mixed F special/cancellation
 rows, additional host-control identity reconciliation, and the P2 equal-receipt
 timing gate remain open.
+
+## 32.68 Indexed P/1 rotate fast-path admission (2026-09-02)
+
+The next deterministic backend-identity divergence was valid indexed rotation:
+Pillow forces nearest-neighbour sampling for `P` and `1`, preserves raw index
+bytes, and uses copy/transpose fast paths for exact angles. Rust previously
+left these rows on host control or sent them through generic affine planning;
+its lazy 90/270 shape calculation also used affine bounds, reporting `(2,3)`
+for a 2x1 expanded right-angle rotation whose materialized result is `(1,2)`.
+The shared rotation coefficient helper additionally used multiply-then-round
+arithmetic that disagreed with Pillow's decimal `round(value, 15)` at a
+45-degree boundary.
+
+Commit `f0129f2ac` carries the mode-forced nearest contract into indexed GPU
+affine transforms, lowers exact angle-0 copies and right-angle rotations to
+raw-word `Duplicate`/`Transpose` kernels, fixes lazy dimensions, and shares
+the decimal-safe coefficient rounder across CPU, SIMD, and GPU geometry. The
+focused schema-v3 replay
+`build/migration-parity/incremental/indexed-rotate-all-backends-f0129f2ac.json`
+(SHA-256
+`1ae31b4ec9351e16b399c4adcd5ee2f3e98d6dce318a356c2cd80541406d548c`) is
+value/error-exact for all six selected cases on CPU, SIMD, GPU, Node WASM, and
+browser WASM; each lane has 6/6 terminal receipts and GPU has 6/6 actual-GPU
+receipts with no fallback. Additional native probes cover 5,760 valid P/1
+cases, 108 palette-preserving cases, 1,428 ordinary/indexed fast-path cases,
+and 480 bounded custom-center/translation GPU cases with zero mismatches.
+
+The committed-source full campaign
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`c7cf559a6be5d3999bb6c92eafd382a0c7df6ad405184d9ede584e8c5df91bd9`) remains
+value/error-exact at **10,952/10,952** on all five public lanes. CPU has 6,838
+terminal receipts (6,832 pipeline-complete), SIMD 6,850 (6,844), and GPU
+6,678 native-GPU plus 160 host-controlled receipts (6,832 complete); the GPU
+sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`776694b5bf6c8bd761464e604c1a3f7d365563a6e09b6fe968a5873347b2f414`). All
+native pipeline partitions have zero partial, missing, or indeterminate
+receipts. The remaining host-control identity reconciliation, broader F
+arithmetic proof, and P2 equal-receipt timing gate stay open.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors, or
+receipt rules changed.

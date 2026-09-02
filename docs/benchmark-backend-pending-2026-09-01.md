@@ -132,15 +132,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The full campaign
-  after the exact-I admission at `e0adcd1be` has exact public parity for all
-  10,952 IDs and no native partial/missing/indeterminate pipeline cases. CPU
-  reports 6,838 terminal receipts (6,832 pipeline-complete cases), SIMD 6,850
-  (6,844 pipeline-complete), and GPU 6,634 native GPU plus 204 CPU receipts
-  (6,832 pipeline-complete). GPU fallback reasons remain explicit evidence
-  partitions: 140 exact host semantic-control rows, 60 unsafe-primary-
-  dimension rows, and the bounded Transform/dimension guards. The public
-  lane is 10,952/10,952 exact, while the remaining host-control rows and
-  native identity reconciliation stay open.
+  at `f0129f2ac` has exact public parity for all 10,952 IDs and no native
+  partial/missing/indeterminate pipeline cases. CPU reports 6,838 terminal
+  receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
+  pipeline-complete), and GPU 6,678 native GPU plus 160 CPU receipts (6,832
+  pipeline-complete). GPU fallback reasons remain explicit evidence
+  partitions: 96 exact host semantic-control rows, 62 unsafe-primary-
+  dimension rows, one unsafe/incomplete-dimension row, and one Transform
+  guard. The public lane is 10,952/10,952 exact, while the remaining
+  host-control rows and native identity reconciliation stay open.
 - [x] Normalize the legacy logical-layout fallback label. Commit `09ef0dc83`
   changes only the evidence reason from `unsupported logical mode` to
   `exact host semantic control`; the valid `PIL.ImageOps.fit.nuanced.pa-
@@ -259,6 +259,21 @@ execution is a parity-preserving fallback, not a parity completion claim.
   is byte-exact on every public lane with 2/2 terminal GPU receipts and no
   fallback. The admission is terminal-only because the result is RGBA and a
   following operation requires a segmented batch with updated mode metadata.
+- [x] Admit indexed `P`/`1` rotate fast paths on native GPU. Commit
+  `f0129f2ac` carries Pillow's mode-forced nearest contract into indexed
+  affine transforms, lowers exact angle-0 copies and right-angle rotations
+  to raw-word `Duplicate`/`Transpose` kernels, fixes lazy 90/270 dimensions,
+  and shares Pillow-compatible decimal coefficient rounding across CPU,
+  SIMD, and GPU geometry. The focused schema-v3 replay
+  `build/migration-parity/incremental/indexed-rotate-all-backends-f0129f2ac.json`
+  (SHA-256
+  `1ae31b4ec9351e16b399c4adcd5ee2f3e98d6dce318a356c2cd80541406d548c`)
+  is value/error-exact for all six selected cases on CPU, SIMD, GPU, Node
+  WASM, and browser WASM; each lane has 6/6 terminal receipts and GPU has
+  6/6 actual-GPU receipts with no fallback. The full corpus moves GPU from
+  6,634 native/204 host-controlled receipts to 6,678 native/160
+  host-controlled receipts without changing IDs, fixtures, thresholds, or
+  denominators.
 - [x] Close the WASM receipt gaps: commit `a2cf8c102` preserves JS setup/call
   errors for the evidence classifier and passes target results through the
   aggregator. The subsequent receipt-accounting commits `2164e2226` and
@@ -522,6 +537,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   receipt with no fallback. The source/shader change is intentionally scoped
   to a single non-nearest Pad on a finite constant F image; the remaining
   logical-mode and arithmetic guards are still active.
+- [x] The indexed `P`/`1` rotate admission at pushed source `f0129f2ac` is
+  covered by the focused schema-v3 replay
+  `build/migration-parity/incremental/indexed-rotate-all-backends-f0129f2ac.json`
+  (SHA-256
+  `1ae31b4ec9351e16b399c4adcd5ee2f3e98d6dce318a356c2cd80541406d548c`).
+  CPU, SIMD, GPU, Node WASM, and browser WASM are each 6/6 value/error-exact;
+  GPU has 6/6 native terminal receipts and no fallback. The full committed
+  envelope `build/migration-parity/all-backends-test-result.json` (SHA-256
+  `c7cf559a6be5d3999bb6c92eafd382a0c7df6ad405184d9ede584e8c5df91bd9`)
+  remains 10,952/10,952 exact, with GPU 6,678 native and 160
+  host-controlled terminal receipts. Its GPU sidecar SHA-256 is
+  `776694b5bf6c8bd761464e604c1a3f7d365563a6e09b6fe968a5873347b2f414`.
 - [x] The nearest F `ImageOps.fit` native admission is covered by
   `/tmp/f-fit-nearest-all-backends.json` (SHA-256
   `1bc7a9b21f08554e84762714ebfbcb4f25d4117c9c512d91aef5c6f4059412ad`): the
@@ -661,12 +688,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
-- [x] The current source parity lane is committed and pushed as `e0adcd1be`
-  (following `09ef0dc83`) with the exact same-size filtered-I admission; the F
-  relocation/nearest chain proof, logical-layout taxonomy correction, and all
-  earlier non-finite F order-filter guards remain in its history. The complete
-  campaign at this implementation is value/error-exact at 10,952/10,952 in
-  every public lane, with GPU 6,634 native and 204 host-controlled terminal
-  receipts; the post-push focused replay is recorded above. The remaining P0
-  arithmetic proof, P1 identity reconciliation, and P2 timing items stay open.
+- [x] The current source parity lane is committed and pushed as `f0129f2ac`
+  (following `e0adcd1be`) with the indexed `P`/`1` rotate fast-path admission;
+  all preceding F arithmetic proofs, logical-layout taxonomy correction, and
+  typed-I identity admission remain in its history. The complete campaign at
+  this implementation is value/error-exact at 10,952/10,952 in every public
+  lane, with GPU 6,678 native and 160 host-controlled terminal receipts; the
+  post-push focused replay is recorded above. The remaining P0 arithmetic
+  proof, P1 identity reconciliation, and P2 timing items stay open.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
