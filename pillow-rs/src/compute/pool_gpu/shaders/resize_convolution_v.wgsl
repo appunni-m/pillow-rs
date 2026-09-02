@@ -576,7 +576,7 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
 // exact integer mantissa/exponent pairs, then the accumulator is rounded to a
 // normal binary64 value after every tap to match Pillow's `f64::mul_add`
 // sequence.  The host admission proof limits this path to rows with at most
-// two taps and finite normal intermediates; all wider or exceptional rows use
+// eight taps and finite normal intermediates; all wider or exceptional rows use
 // marker 9 or exact host semantic control.
 struct F64OrderedState {
     magnitude: U128,
@@ -652,12 +652,12 @@ fn f64_ordered_add_product(
     return f64_ordered_round(sum, minimum_exponent);
 }
 
-fn filtered_f64_ordered_2tap(output_x: u32, output_y: u32) -> u32 {
+fn filtered_f64_ordered_bounded(output_x: u32, output_y: u32) -> u32 {
     let metadata = output_y * 3u;
     let source_y = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
-    if count > 2u {
+    if count > 8u {
         return 0u;
     }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
@@ -1028,7 +1028,7 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
             if params.height == params.dst_h {
                 return input[output_y * params.dst_w + output_x];
             }
-            return filtered_f64_ordered_2tap(output_x, output_y);
+            return filtered_f64_ordered_bounded(output_x, output_y);
         }
         return bitcast<u32>(filtered_float(output_x, output_y));
     }
