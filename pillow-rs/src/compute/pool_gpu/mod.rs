@@ -1213,7 +1213,8 @@ fn gpu_luma16_resize_f64_is_exact(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    if !(logical_mode.is_none() || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B")))
+    if !(logical_mode.is_none()
+        || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N")))
         || ops.len() != 1
     {
         return false;
@@ -2606,7 +2607,7 @@ impl BufferPool {
         }
         let mut packed = Vec::with_capacity(pixel_count * std::mem::size_of::<u32>());
         for &sample in image.as_raw() {
-            let sample_bytes = if mode == Some("I;16B") {
+            let sample_bytes = if matches!(mode, Some("I;16B" | "I;16N")) {
                 sample.to_be_bytes()
             } else {
                 sample.to_ne_bytes()
@@ -4926,7 +4927,8 @@ impl GpuInner {
                     && !matches!(filter, ResampleFilter::Nearest);
                 let luma16_f64_is_exact = f_resize_f64_is_exact
                     && op_mode == 5
-                    && logical_mode.is_none_or(|mode| matches!(mode, "I;16" | "I;16L" | "I;16B"))
+                    && logical_mode
+                        .is_none_or(|mode| matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N"))
                     && !matches!(filter, ResampleFilter::Nearest);
                 let coefficient_channels =
                     constant_bits.unwrap_or_else(|| gpu_resize_channel_count(op_mode));
@@ -5161,7 +5163,7 @@ impl GpuInner {
                             && (logical_mode == Some("F")
                                 || (op_mode == 5
                                     && logical_mode.is_none_or(|mode| {
-                                        matches!(mode, "I;16" | "I;16L" | "I;16B")
+                                        matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
                                     })))
                         {
                             let (kernel, support) = filter_from_resample(*filter);
@@ -5981,7 +5983,7 @@ impl GpuInner {
         let mut pixels = Vec::with_capacity(n);
         for sample in data.chunks_exact(std::mem::size_of::<u32>()) {
             let bytes = [sample[0], sample[1]];
-            pixels.push(if mode == Some("I;16B") {
+            pixels.push(if matches!(mode, Some("I;16B" | "I;16N")) {
                 u16::from_be_bytes(bytes)
             } else {
                 u16::from_ne_bytes(bytes)
@@ -14557,7 +14559,7 @@ mod tests {
             h: 2,
             filter: ResampleFilter::Bilinear,
         };
-        for mode in ["I;16", "I;16L", "I;16B"] {
+        for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
             let big_endian = mode == "I;16B";
             let bytes = values
                 .iter()
@@ -14593,7 +14595,7 @@ mod tests {
             ((6, 3), ResampleFilter::Bicubic),
         ];
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        for mode in ["I;16", "I;16L", "I;16B"] {
+        for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
             let big_endian = mode == "I;16B";
             let bytes = values
                 .iter()
