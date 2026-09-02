@@ -1167,6 +1167,8 @@ struct F64OrderedState {
     negative: bool,
 }
 
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 8;
+
 /// Round an exact signed binary integer to the finite, normal f64 state used
 /// by the ordered FMA proof.  The marker-12 shader performs this same
 /// round-to-nearest-even step after each product+accumulator operation.  The
@@ -1254,11 +1256,11 @@ fn gpu_f64_ordered_add_product(
     gpu_f64_ordered_round(sum, minimum_exponent)
 }
 
-/// Evaluate a short (at most two-tap) f64 coefficient row with Pillow's
-/// ordered f64 FMA semantics.  Marker 9 keeps the exact real sum and is
-/// necessarily conservative when an intermediate f64 rounding changes the
-/// final f32 word; marker 12 handles this bounded two-tap domain by emulating
-/// that intermediate rounding in integer arithmetic.
+/// Evaluate a bounded f64 coefficient row with Pillow's ordered f64 FMA
+/// semantics. Marker 9 keeps the exact real sum and is necessarily
+/// conservative when an intermediate f64 rounding changes the final f32 word;
+/// marker 12 handles this bounded domain by emulating that intermediate
+/// rounding in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
@@ -1271,7 +1273,9 @@ fn gpu_f_resize_f64_ordered_sample_bits(
     let source_h = usize::try_from(source_dimensions.1).ok()?;
     let source_start = usize::try_from(*coeffs.xmin.get(output_index)?).ok()?;
     let weights = coeffs.weights.get(output_index)?;
-    if *coeffs.count.get(output_index)? != weights.len() || weights.len() > 2 {
+    if *coeffs.count.get(output_index)? != weights.len()
+        || weights.len() > GPU_F_RESIZE_ORDERED_MAX_TAPS
+    {
         return None;
     }
     if line >= if horizontal { source_h } else { source_w } {
@@ -1373,7 +1377,7 @@ fn gpu_f_resize_f64_ordered_pass_bits(
     Some(result)
 }
 
-/// Prove one direct, changed-axis F resize in the bounded two-tap domain.
+/// Prove one direct, changed-axis F resize in the bounded ordered-f64 domain.
 /// Intermediate horizontal words are materialized before the vertical pass,
 /// exactly as Pillow's separable resampler does.  Chained/relocation inputs
 /// remain on marker 9 or exact host semantic control until they receive a
@@ -1420,7 +1424,10 @@ fn gpu_f_resize_f64_ordered_is_exact(
     if [&horizontal, &vertical].iter().any(|coeffs| {
         coeffs.xmin.len() != coeffs.count.len()
             || coeffs.xmin.len() != coeffs.weights.len()
-            || coeffs.count.iter().any(|&count| count > 2)
+            || coeffs
+                .count
+                .iter()
+                .any(|&count| count > GPU_F_RESIZE_ORDERED_MAX_TAPS)
     }) {
         return false;
     }
@@ -15621,7 +15628,7 @@ mod tests {
         // second product is below the first product's f64 ulp.  Pillow rounds
         // the accumulator after the first FMA, then performs the second FMA;
         // marker 12 reproduces that ordered boundary without relaxed device
-        // floats.
+        // floats, including wider rows up to the bounded tap cap.
         let source_bytes = [
             44, 149, 220, 51, // 1.0271683e-7
             155, 14, 222, 56, // 1.0588505e-4
@@ -15673,6 +15680,75 @@ mod tests {
         assert_eq!(actual, expected, "ordered f64 two-tap F resize");
         let telemetry = Backend::take_pipeline_telemetry()
             .expect("ordered-f64 F resize must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_wider_tap_native_matches_cpu() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // A three-tap Lanczos upscale is the first wider row that exposed the
+        // old marker-12 count guard. Pillow still rounds each ordered f64 FMA
+        // before the final f32 store; the bounded integer reducer now follows
+        // that sequence for this finite heterogeneous row.
+        let source = Image::frombytes(
+            "F",
+            (3, 1),
+            &bytes(&[0x3fc3_2777, 0xbeb0_5e6a, 0x44db_fac1]),
+        )
+        .expect("F source");
+        let source_dynamic = source.materialize().expect("materialize F source");
+        let op = PipelineOp::Resize {
+            w: 5,
+            h: 1,
+            filter: ResampleFilter::Lanczos,
+        };
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let filter = ResampleInput::Name("LANCZOS".into());
+        let expected = source
+            .resize((5, 1), Some(filter.clone()), None)
+            .expect("CPU wider ordered-f64 resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F resize bytes");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((5, 1), Some(filter), None)
+            .expect("GPU wider ordered-f64 resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU wider ordered-f64 resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "wider ordered f64 F resize");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("wider ordered-f64 F resize must publish a telemetry receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
