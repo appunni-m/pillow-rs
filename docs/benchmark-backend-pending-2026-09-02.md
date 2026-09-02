@@ -34,9 +34,10 @@ backend is complete.
 
 - [ ] Reconcile the explicit fallback taxonomy and native identity claims.
   The current full envelope has zero partial, missing, or indeterminate
-  pipeline receipts, but GPU still reports 6,744 native receipts and 94
-  host-controlled receipts (30 exact host semantic-control, 62 unsafe-primary-
-  dimension, one unsafe/incomplete-dimension, and one Transform guard).
+  pipeline receipts, but GPU still reports 6,745 native receipts and 93
+  host-controlled receipts (29 exact host semantic-control, 62 unsafe-primary-
+  dimension, one unsafe/incomplete-dimension, and one Transform capability
+  guard).
   CPU has 6,838 terminal receipts (6,832 pipeline-complete); SIMD has 6,850
   (6,844 pipeline-complete). The remaining host-controlled partitions need
   policy/identity reconciliation; no row may be relabeled to improve counts.
@@ -72,6 +73,12 @@ backend is complete.
   The existing mode-1 transport preserves raw index/alpha pairs, so a bounded
   nearest/fixed-point proof now keeps this case native without palette
   expansion; broader palette arithmetic remains host-controlled.
+- [x] F affine-nearest scalar-word relocation: commit `6203ec533`. A bounded
+  per-destination proof compares Pillow's f64 coordinate/truncation source
+  selection with the uploaded signed-16.16 walk before admitting the mode-8
+  raw-word shader path. The maintained F EXTENT transform is native GPU with
+  exact bytes; filtered F transforms and bilinear F rotate remain exact host
+  semantic control because they interpolate scalar values.
 
 ### Arithmetic boundary retained
 
@@ -84,19 +91,27 @@ place until ordered-`f64` behavior is reproduced on-device.
 
 ## Current evidence
 
-- Full source revision: `c7bb0a9a6`.
+- Full source revision: `6203ec533`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `df83aa837dad914ff07a46a71ffdd804a51fd1287b1f4b5527f6ce5305709e25`).
+  `313d66b10c305030b95ff90d4cd71d448accc1f0370fbf4c8cf6e78781e2ca6a`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
-  value/error exact; GPU smoke is 1/1. GPU has 6,744 native and 94
+  value/error exact; GPU smoke is 1/1. GPU has 6,745 native and 93
   host-controlled terminal receipts (6,838 complete), with zero partial,
   missing, or indeterminate pipeline receipts. Host-control partitions are
-  30 exact semantic-control, 62 unsafe-primary-dimension, one
-  unsafe/incomplete-dimension, and one Transform guard.
+  29 exact semantic-control, 62 unsafe-primary-dimension, one
+  unsafe/incomplete-dimension, and one Transform capability guard.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `520854a8b0524022edf39a86350305e10adee838e5fac368e0fe3ebff77277c6`).
+  `88876269949d882a3e053555bd3f0b181d44039a680fbb251424928a78e76f89`).
+- Focused F affine-nearest replay: `build/migration-parity/incremental/all-
+  backends-test-result.json` (SHA-256
+  `375828ecbd2dc091054ba1f691019b1983a0f052a46b6fbd9e6ff1a1c90725b5`).
+  CPU, SIMD, GPU, Node WASM, and browser WASM are each 2/2 exact. GPU is
+  native for the F EXTENT transform (one dispatch, no fallback) and remains
+  exact host semantic control for the bilinear F rotate row. The focused GPU
+  sidecar SHA-256 is
+  `9366a58403f7400d172da70a15240eeac98ec7837d1977d640824a6a1207e744`.
 - Focused indexed projective envelope (archival replay; the incremental path is
   reused by later focused runs):
   `build/migration-parity/incremental/all-backends-test-result.json`
@@ -123,7 +138,7 @@ place until ordered-`f64` behavior is reproduced on-device.
   `804c65ea3777e391986f8387a1e7ebb93df3312305ab308b8b020639c0c2bfde`.
   The incremental path is reusable and may be overwritten by a later focused
   run; these hashes are the evidence recorded for this replay.
-- Verification: GPU pool tests 63/63; receipt-state tests 34/34;
+- Verification: GPU pool tests 65/65; receipt-state tests 34/34;
   `make migration-parity-evidence-check`; the focused and full all-backend
   replays; `make build-dev`; `make -C pillow-rs fmt-fix`; and
   `make -C pillow-rs fmt`.
