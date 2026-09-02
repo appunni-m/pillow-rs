@@ -34,8 +34,8 @@ backend is complete.
 
 - [ ] Reconcile the explicit fallback taxonomy and native identity claims.
   The current full envelope has zero partial, missing, or indeterminate
-  pipeline receipts, but GPU still reports 6,743 native receipts and 95
-  host-controlled receipts (31 exact host semantic-control, 62 unsafe-primary-
+  pipeline receipts, but GPU still reports 6,744 native receipts and 94
+  host-controlled receipts (30 exact host semantic-control, 62 unsafe-primary-
   dimension, one unsafe/incomplete-dimension, and one Transform guard).
   CPU has 6,838 terminal receipts (6,832 pipeline-complete); SIMD has 6,850
   (6,844 pipeline-complete). The remaining host-controlled partitions need
@@ -68,37 +68,62 @@ backend is complete.
   commit `51b7070f7`. The bounded f32/f64 coordinate proof keeps exact
   identity/axis-swap mappings native with raw index bytes; fractional and
   arbitrary meshes remain host-controlled.
+- [x] Palette-alpha (`PA`) affine-nearest pair relocation: commit `c7bb0a9a6`.
+  The existing mode-1 transport preserves raw index/alpha pairs, so a bounded
+  nearest/fixed-point proof now keeps this case native without palette
+  expansion; broader palette arithmetic remains host-controlled.
+
+### Arithmetic boundary retained
+
+The two maintained `I;16*` filtered-resize rows remain exact host semantic
+control. Native-vs-Pillow probes found ordered host `f64` accumulation landing
+just below a half-integer while an exact integer reducer lands exactly on it;
+the resulting 16-bit write differs. This is a real ordering/rounding boundary,
+not a backend timing issue, so the current device admission guard stays in
+place until ordered-`f64` behavior is reproduced on-device.
 
 ## Current evidence
 
-- Full source revision: `51b7070f7`.
+- Full source revision: `c7bb0a9a6`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `e0c3d55e61195ae048768592caab7672ffa631c472964ed23356d9be830fdb5a`).
+  `df83aa837dad914ff07a46a71ffdd804a51fd1287b1f4b5527f6ce5305709e25`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
-  value/error exact; GPU smoke is 1/1. GPU has 6,743 native and 95
+  value/error exact; GPU smoke is 1/1. GPU has 6,744 native and 94
   host-controlled terminal receipts (6,838 complete), with zero partial,
   missing, or indeterminate pipeline receipts. Host-control partitions are
-  31 exact semantic-control, 62 unsafe-primary-dimension, one
+  30 exact semantic-control, 62 unsafe-primary-dimension, one
   unsafe/incomplete-dimension, and one Transform guard.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `9e17f3a70eaef4f2f98d858f96aa3e27302d747f2b9c9849d7c70b141e52e6a1`).
-- Focused indexed projective envelope:
+  `520854a8b0524022edf39a86350305e10adee838e5fac368e0fe3ebff77277c6`).
+- Focused indexed projective envelope (archival replay; the incremental path is
+  reused by later focused runs):
   `build/migration-parity/incremental/all-backends-test-result.json`
   (SHA-256
   `4d32646f78bbfe0c607855cd1cac9131fd08e92553303e92e717beb2eaa25d5f`).
   All five public lanes are 26/26 exact; GPU is native for all 26 with
   terminal receipts and no fallback. The focused GPU sidecar SHA-256 is
   `8043f145c5f26aee9c9c8393a6cab7a7a2c396b3156bdc22cc42a7a2bb9156e4`.
-- Focused I/luma16 resize envelope:
+- Focused I/luma16 resize envelope (archival replay; the incremental path is
+  reused by later focused runs):
   `build/migration-parity/incremental/all-backends-test-result.json`
   (SHA-256
   `55e8c825c3d78a7d020a0b25fa0c82a6e7bf0eacf9599a90893fe0e0f23e3976`).
   All five public lanes are 16/16 exact; GPU is native for 13/16, including
   all three maintained I convolution rows. The focused GPU sidecar SHA-256 is
   `658a8a75a24be13f55bd937a952162564e96baf16d4a1711500e8e2cfadbdde5`.
-- Verification: GPU pool tests 62/62; receipt-state tests 34/34;
+- Focused PA affine-nearest envelope (recorded immediately after the fix):
+  `build/migration-parity/incremental/all-backends-test-result.json`
+  (SHA-256
+  `bc9bd8ba8eb6a659e6473200749a9f39fc35f6c29873d37d1bbe3699a3e9b4cd`).
+  CPU, SIMD, GPU, Node WASM, and browser WASM are each 1/1 exact; GPU is
+  actual GPU with one dispatch, a terminal receipt, and no fallback. Its GPU
+  sidecar SHA-256 is
+  `804c65ea3777e391986f8387a1e7ebb93df3312305ab308b8b020639c0c2bfde`.
+  The incremental path is reusable and may be overwritten by a later focused
+  run; these hashes are the evidence recorded for this replay.
+- Verification: GPU pool tests 63/63; receipt-state tests 34/34;
   `make migration-parity-evidence-check`; the focused and full all-backend
   replays; `make build-dev`; `make -C pillow-rs fmt-fix`; and
   `make -C pillow-rs fmt`.
