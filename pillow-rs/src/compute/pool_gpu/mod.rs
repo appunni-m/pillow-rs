@@ -9039,6 +9039,23 @@ impl GpuPool {
                                 | PipelineOp::EffectSpread { .. }
                         )
                     }))
+                // CMYK putalpha is a terminal promotion through the exact
+                // integer CMYK->RGB conversion in put_alpha.wgsl.  Keep this
+                // whitelist terminal-only: after promotion the public mode
+                // is RGBA, and a following operation needs a segmented batch
+                // with the updated logical layout rather than CMYK metadata.
+                || (logical_mode == "CMYK"
+                    && ops.len() == 1
+                    && matches!(
+                        ops[0],
+                        PipelineOp::PutAlpha {
+                            mode: PixelMode::CMYK,
+                            ..
+                        } | PipelineOp::PutAlphaData {
+                            mode: PixelMode::CMYK,
+                            ..
+                        }
+                    ))
                 || (matches!(logical_mode, "RGB" | "RGBA" | "CMYK")
                     && ops
                         .iter()
@@ -9904,6 +9921,74 @@ mod tests {
             assert_eq!(telemetry.6, Some(2), "{mode} dispatch count");
             assert_eq!(telemetry.7, None, "{mode} fallback reason");
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn cmyk_putalpha_native_gpu_promotes_exactly() {
+        let source_bytes = vec![
+            10, 20, 30, 40, // C/M/Y/K
+            80, 90, 100, 110,
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+
+        let mut scalar = Image::frombytes("CMYK", (2, 1), &source_bytes).expect("CMYK source");
+        scalar.putalpha(173).expect("CMYK scalar PutAlpha");
+        let expected = scalar
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU CMYK scalar PutAlpha");
+        let actual = match scalar.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU CMYK scalar PutAlpha failed: {error}"),
+        };
+        assert_eq!(actual, expected, "CMYK scalar PutAlpha parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU CMYK scalar PutAlpha must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
+
+        let mask = Image::frombytes("L", (2, 1), &[7, 231]).expect("L alpha mask");
+        let mut masked = Image::frombytes("CMYK", (2, 1), &source_bytes).expect("CMYK source");
+        masked.putalpha_data(&mask).expect("CMYK image PutAlpha");
+        let expected = masked
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU CMYK image PutAlpha");
+        let actual = match masked.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU CMYK image PutAlpha failed: {error}"),
+        };
+        assert_eq!(actual, expected, "CMYK image PutAlpha parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU CMYK image PutAlpha must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
+
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 

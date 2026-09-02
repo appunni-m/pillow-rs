@@ -4030,3 +4030,32 @@ No fixtures, expected values, thresholds, IDs, denominators, or receipt
 taxonomy changed. P0 broader F arithmetic, the remaining native partial and
 WASM receipt gaps, backend/fallback reconciliation outside this proven prefix,
 and the P2 timing gate remain open.
+
+## 32.47 Native GPU CMYK PutAlpha promotion (2026-09-02)
+
+The next deterministic routing gap was a conservative logical-mode preflight,
+not a pixel mismatch. Pillow permits scalar and image-backed `PutAlpha` on a
+CMYK source by promoting CMYK through its integer `cmyk2rgb` conversion and
+replacing the resulting alpha band. The Rust GPU registry and
+`put_alpha.wgsl`/`put_alpha_data.wgsl` already implement that exact conversion,
+but the CMYK mode whitelist omitted both terminal operations, so valid cases
+were sent to exact host semantic control with an `unsupported logical mode`
+fallback.
+
+The guard now admits only a single terminal CMYK `PutAlpha` or `PutAlphaData`
+operation. The output is RGBA after promotion; a following operation still
+requires segmentation with updated logical-mode metadata and remains on the
+conservative path. No shader arithmetic or public error contract changed.
+
+The focused native regression covers scalar and L-mask inputs, compares the
+GPU bytes with the CPU result, and requires requested/actual GPU identity, one
+dispatch, and no fallback. The fixed all-backend replay is
+`/tmp/putalpha-cmyk-all-backends.json` (SHA-256
+`50995134050c39326b97158c17b8a9f358c8e6739d1667ebe1d43d1fac8055f7`): both
+cases are byte-exact on CPU, SIMD, GPU, Node WASM, and browser WASM, with 2/2
+terminal-complete receipts on every lane and 2/2 native GPU receipts. The
+focused GPU test and formatting pass; the full 10,952-case denominator was not
+regenerated in this narrow run. No fixtures, expected values, thresholds,
+IDs, denominators, or receipt taxonomy changed. Remaining work is the broader
+F arithmetic proof, the native/WASM receipt gaps, backend/fallback
+reconciliation outside proven admissions, and the P2 timing gate.

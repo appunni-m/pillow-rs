@@ -122,6 +122,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   on the GPU. The 35-case L/LA/RGB/RGBA/CMYK replay is byte-exact across all
   public lanes with 35/35 terminal GPU receipts and no fallback; longer or
   palette-sensitive prefixes remain host-controlled.
+- [x] Admit terminal CMYK `PutAlpha` and `PutAlphaData` on native GPU. The
+  existing `put_alpha.wgsl`/`put_alpha_data.wgsl` paths already implement
+  Pillow's integer CMYK-to-RGB promotion and alpha replacement exactly; the
+  preflight had omitted this valid source mode. The focused two-case replay
+  is byte-exact on every public lane with 2/2 terminal GPU receipts and no
+  fallback. The admission is terminal-only because the result is RGBA and a
+  following operation requires a segmented batch with updated mode metadata.
 - [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
   currently reports 6,713 complete, 586 partial, 888 missing, 2,738
   not-applicable, and 27 indeterminate cases. Keep the aggregate status
@@ -237,6 +244,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   WASM, and browser WASM; each lane has 35 terminal-complete receipts, and
   the GPU lane has 35 native GPU receipts with no fallback. No fixtures,
   expected values, thresholds, IDs, denominators, or receipt taxonomy changed.
+- [x] The terminal CMYK PutAlpha admission is covered by
+  `/tmp/putalpha-cmyk-all-backends.json` (SHA-256
+  `50995134050c39326b97158c17b8a9f358c8e6739d1667ebe1d43d1fac8055f7`).
+  The fixed two-case replay is schema-valid and byte-exact on CPU, SIMD, GPU,
+  Node WASM, and browser WASM; every lane has 2/2 terminal-complete receipts,
+  and both GPU cases are native with no fallback. No fixtures, expected values,
+  thresholds, IDs, denominators, or receipt taxonomy changed.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
