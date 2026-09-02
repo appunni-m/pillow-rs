@@ -10480,18 +10480,21 @@ fn gpu_transform_all_fill_is_exact(
             || outside(min_y_f32, max_y_f32, source_dimensions.1))
 }
 
-/// Lower a CMYK nearest rotate through the same fixed-point affine proof used
-/// by typed/indexed transforms. The public rotate node is expanded to an
+/// Lower a raw-word nearest rotate through the same fixed-point affine proof
+/// used by typed/indexed transforms. The public rotate node is expanded to an
 /// affine `Transform` only after Pillow's angle/center/translation geometry
 /// has been materialized, so construct that exact intermediate here for the
-/// admission check rather than widening every CMYK rotate.
+/// admission check rather than widening every scalar-word rotate. Filtered
+/// floating-point rotation is intentionally excluded: it interpolates sample
+/// values and therefore needs the ordered-f64 arithmetic proof instead of a
+/// relocation proof.
 fn gpu_rotate_nearest_affine_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
     mode: Option<&str>,
     source_dimensions: (u32, u32),
 ) -> bool {
-    if mode != Some("CMYK") {
+    if !matches!(mode, Some("CMYK" | "F")) {
         return false;
     }
     let PipelineOp::Rotate {
@@ -11967,6 +11970,59 @@ mod tests {
         assert_eq!(actual, expected, "native GPU F extent parity");
         let telemetry = Backend::take_pipeline_telemetry()
             .expect("native F extent transform must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn float_nearest_rotate_native_gpu_preserves_words() {
+        let mut values = (0..16 * 16)
+            .map(|index| (index as f32) + 0.25)
+            .collect::<Vec<_>>();
+        values[17] = f32::from_bits(0x8000_0000);
+        values[85] = f32::from_bits(0x7fc0_1234);
+        values[170] = f32::from_bits(0x7f80_0000);
+        values[221] = f32::from_bits(0x0000_0001);
+        let bytes = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("F", (16, 16), &bytes).expect("F source");
+        let rotated = source
+            .rotate_with_input(
+                13.0,
+                RotateResampleInput::Name("NEAREST".into()),
+                RotateExpandInput::Boolean(true),
+                RotatePointInput::Default,
+                RotatePointInput::Default,
+                ImageOpsColor::None,
+            )
+            .expect("F nearest rotate");
+        let expected = rotated
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F nearest rotate");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F nearest rotate failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU F nearest rotate parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU F nearest rotate must publish telemetry");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.7, None);
