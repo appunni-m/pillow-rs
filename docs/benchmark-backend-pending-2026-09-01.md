@@ -132,12 +132,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The full campaign
-  at `f0129f2ac` has exact public parity for all 10,952 IDs and no native
+  at `048955737` has exact public parity for all 10,952 IDs and no native
   partial/missing/indeterminate pipeline cases. CPU reports 6,838 terminal
   receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
-  pipeline-complete), and GPU 6,678 native GPU plus 160 CPU receipts (6,832
+  pipeline-complete), and GPU 6,686 native GPU plus 152 CPU receipts (6,832
   pipeline-complete). GPU fallback reasons remain explicit evidence
-  partitions: 96 exact host semantic-control rows, 62 unsafe-primary-
+  partitions: 88 exact host semantic-control rows, 62 unsafe-primary-
   dimension rows, one unsafe/incomplete-dimension row, and one Transform
   guard. The public lane is 10,952/10,952 exact, while the remaining
   host-control rows and native identity reconciliation stay open.
@@ -274,6 +274,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
   6,634 native/204 host-controlled receipts to 6,678 native/160
   host-controlled receipts without changing IDs, fixtures, thresholds, or
   denominators.
+- [x] Admit raw packed CMYK nearest-rotate subsets on native GPU. Commit
+  `048955737` reuses the signed-16.16 affine coordinate proof for CMYK's
+  four-byte C/M/Y/K transport, retains exact right-angle transpose, and makes
+  the default rotate fill four zero bytes. Fractional filtered CMYK rotations
+  that do not satisfy the nearest proof remain exact host semantic control.
+  Native tests cover varied fractional, custom-center/translation/fill, and
+  right-angle cases; the maintained `PIL.Image.Image.rotate.mode.cmyk` replay
+  is exact with a terminal `actual_backend=gpu` receipt, one dispatch, and no
+  fallback.
 - [x] Close the WASM receipt gaps: commit `a2cf8c102` preserves JS setup/call
   errors for the evidence classifier and passes target results through the
   aggregator. The subsequent receipt-accounting commits `2164e2226` and
@@ -549,6 +558,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   remains 10,952/10,952 exact, with GPU 6,678 native and 160
   host-controlled terminal receipts. Its GPU sidecar SHA-256 is
   `776694b5bf6c8bd761464e604c1a3f7d365563a6e09b6fe968a5873347b2f414`.
+- [x] The CMYK nearest-rotate admission at pushed source `048955737` is
+  covered by the full schema-v3 envelope
+  `build/migration-parity/all-backends-test-result.json` (SHA-256
+  `a39f7175bf4a389ef398d8483418a86bd3f2328abaddafd7bbd611237cd9b2a5`).
+  CPU, SIMD, GPU, Node WASM, and browser WASM remain value/error-exact at
+  10,952/10,952, with GPU smoke 1/1. GPU has 6,686 native and 152
+  host-control terminal receipts, 6,832 pipeline-complete cases, and zero
+  partial/missing/indeterminate pipeline receipts; its sidecar SHA-256 is
+  `db58f781ee3631d22ed61d721012db684015dd5d64b960e6db88281f73a5171f`.
+  The focused native regression covers six exact CMYK nearest/right-angle
+  operations, while filtered CMYK remains host-controlled. No fixtures,
+  thresholds, IDs, denominators, public errors, or receipt rules changed.
 - [x] The nearest F `ImageOps.fit` native admission is covered by
   `/tmp/f-fit-nearest-all-backends.json` (SHA-256
   `1bc7a9b21f08554e84762714ebfbcb4f25d4117c9c512d91aef5c6f4059412ad`): the
@@ -688,12 +709,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
-- [x] The current source parity lane is committed and pushed as `f0129f2ac`
-  (following `e0adcd1be`) with the indexed `P`/`1` rotate fast-path admission;
-  all preceding F arithmetic proofs, logical-layout taxonomy correction, and
-  typed-I identity admission remain in its history. The complete campaign at
-  this implementation is value/error-exact at 10,952/10,952 in every public
-  lane, with GPU 6,678 native and 160 host-controlled terminal receipts; the
-  post-push focused replay is recorded above. The remaining P0 arithmetic
-  proof, P1 identity reconciliation, and P2 timing items stay open.
+- [x] The current source parity lane is committed and pushed as `048955737`
+  (following `f0129f2ac`) with the CMYK nearest-rotate admission; all
+  preceding F arithmetic proofs, logical-layout taxonomy correction, typed-I
+  identity admission, and indexed `P`/`1` rotate fast paths remain in its
+  history. The complete campaign at this implementation is
+  value/error-exact at 10,952/10,952 in every public lane, with GPU 6,686
+  native and 152 host-controlled terminal receipts; the post-push full
+  envelope and focused CMYK evidence are recorded above. The remaining P0
+  arithmetic proof, P1 identity reconciliation, and P2 timing items stay
+  open.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
