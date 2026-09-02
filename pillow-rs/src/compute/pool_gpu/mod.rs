@@ -68,6 +68,11 @@ const MAX_GPU_MANDELBROT_ITERS: u32 = 10_000;
 // large windows before a single device submission can monopolize the queue.
 const MAX_GPU_SHADER_WORK_ITEMS: u64 = 2 * 1024 * 1024 * 1024;
 const GPU_BUFFER_CAPACITY: u32 = 4096 * 4096;
+// F affine admission compares the scalar source selection with the packed
+// 16.16 walk once per destination pixel. Keep that proof bounded even when a
+// caller constructs a large transform that the normal dimension checks would
+// route to host semantic control.
+const GPU_F_AFFINE_PROOF_MAX_PIXELS: usize = 1024 * 1024;
 const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 // Add/Subtract currently dispatch only the exact unit-divisor/integral-offset
 // subset. Other valid public parameters are routed to CPU until the shader
@@ -6671,7 +6676,10 @@ fn gpu_transform_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) ->
         matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
     // Pillow's default rotate fill for CMYK is the complete zero C/M/Y/K
     // sample. It is not the opaque-alpha default used by RGB-like modes.
-    let default_fill = if logical_mode == Some("CMYK") {
+    let default_fill = if matches!(logical_mode, Some("CMYK" | "F")) {
+        // F uses a zero floating-point word, even though its packed
+        // transport has four bytes and no logical alpha channel. CMYK uses
+        // the same all-zero default for its four raw channels.
         (0, 0, 0, 0)
     } else {
         (0, 0, 0, if has_alpha { 0 } else { 255 })
@@ -9646,9 +9654,11 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
 /// source dimensions must fit the shader's signed bounds checks.  The typed
 /// sample itself remains an opaque word (or an index/alpha pair for `PA`), so
 /// no integer/float conversion or approximation is introduced.  I;16* uses
-/// Pillow's separate nearest
-/// coordinate contract (rounding `a*dx+b*dy+c` with `floor(+0.5)`), so its
-/// coefficients must be exactly representable in the uploaded 16.16 plan.
+/// Pillow's separate nearest coordinate contract (rounding
+/// `a*dx+b*dy+c` with `floor(+0.5)`), so its coefficients must be exactly
+/// representable in the uploaded 16.16 plan. F uses the ordinary affine
+/// center/truncation contract; it is admitted only after every f64 source
+/// selection agrees with that uploaded fixed-point walk.
 fn gpu_nearest_affine_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -9667,6 +9677,7 @@ fn gpu_nearest_affine_is_exact(
         return false;
     };
     let typed_mode = mode == Some("I");
+    let float_mode = mode == Some("F");
     let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
     let indexed_mode = matches!(mode, Some("1" | "P"));
     let palette_alpha_mode = mode == Some("PA");
@@ -9674,8 +9685,20 @@ fn gpu_nearest_affine_is_exact(
     // RGBA, its fourth byte is K rather than alpha, and the mode-4 nearest
     // shader branch copies all four bytes without color conversion.
     let raw_packed_mode = mode == Some("CMYK");
-    if (!typed_mode && !luma16_mode && !indexed_mode && !palette_alpha_mode && !raw_packed_mode)
+    if (!typed_mode
+        && !float_mode
+        && !luma16_mode
+        && !indexed_mode
+        && !palette_alpha_mode
+        && !raw_packed_mode)
         || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        || (float_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        // The mode-8 shader's affine branch copies complete float words only
+        // for an explicit nearest request.  Pillow's filtered F transform
+        // contract interpolates scalar values; retaining those rows on the
+        // exact host path avoids silently treating a bilinear request as a
+        // nearest relocation.
+        || (float_mode && !matches!(filter, ResampleFilter::Nearest))
         || (luma16_mode && !matches!(image, DynamicImage::ImageLuma16(_)))
         || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
         || (palette_alpha_mode && !matches!(image, DynamicImage::ImageLumaA8(_)))
@@ -9690,6 +9713,9 @@ fn gpu_nearest_affine_is_exact(
         || *h > i32::MAX as u32
         || *w == 0
         || *h == 0
+        || (float_mode
+            && u64::from(*w).saturating_mul(u64::from(*h))
+                > GPU_F_AFFINE_PROOF_MAX_PIXELS as u64)
         || data.len() < 6
         || data[..6]
             .iter()
@@ -9769,7 +9795,68 @@ fn gpu_nearest_affine_is_exact(
             + i128::from(step_y).abs() * max_y
             <= i128::from(i32::MAX)
     };
-    fits_i32(origin_x, step_x_x, step_y_x) && fits_i32(origin_y, step_x_y, step_y_y)
+    if !fits_i32(origin_x, step_x_x, step_y_x) || !fits_i32(origin_y, step_x_y, step_y_y) {
+        return false;
+    }
+
+    if !float_mode {
+        return true;
+    }
+
+    // F affine nearest uses the same opaque-word sampler as I, but its CPU
+    // reference evaluates the original f64 matrix at each pixel before
+    // truncating non-negative coordinates. The GPU path instead walks the
+    // quantized signed-16.16 plan above. Compare the resulting in-bounds
+    // source selection for every output pixel; equal fill classifications are
+    // sufficient when both coordinates are outside the source rectangle.
+    let host_index = |value: f64| -> Option<i64> {
+        if !value.is_finite() || value < 0.0 {
+            return Some(-1);
+        }
+        (value <= i64::MAX as f64).then_some(value as i64)
+    };
+    let fixed_index = |value: i64| -> i64 { if value < 0 { -1 } else { value >> 16 } };
+    let source_width = i64::from(source_dimensions.0);
+    let source_height = i64::from(source_dimensions.1);
+    for dy in 0..*h {
+        for dx in 0..*w {
+            let dx_f = f64::from(dx);
+            let dy_f = f64::from(dy);
+            let host_x = a * (dx_f + 0.5) + b * (dy_f + 0.5) + c;
+            let host_y = d * (dx_f + 0.5) + e * (dy_f + 0.5) + f;
+            let Some(host_x) = host_index(host_x) else {
+                return false;
+            };
+            let Some(host_y) = host_index(host_y) else {
+                return false;
+            };
+            let fixed_x = i128::from(origin_x)
+                + i128::from(step_x_x) * i128::from(dx)
+                + i128::from(step_y_x) * i128::from(dy);
+            let fixed_y = i128::from(origin_y)
+                + i128::from(step_x_y) * i128::from(dx)
+                + i128::from(step_y_y) * i128::from(dy);
+            let fixed_x = i64::try_from(fixed_x).ok();
+            let fixed_y = i64::try_from(fixed_y).ok();
+            let (Some(fixed_x), Some(fixed_y)) = (fixed_x, fixed_y) else {
+                return false;
+            };
+            let device_x = fixed_index(fixed_x);
+            let device_y = fixed_index(fixed_y);
+            let host_sample =
+                (host_x >= 0 && host_x < source_width && host_y >= 0 && host_y < source_height)
+                    .then_some((host_x, host_y));
+            let device_sample = (device_x >= 0
+                && device_x < source_width
+                && device_y >= 0
+                && device_y < source_height)
+                .then_some((device_x, device_y));
+            if host_sample != device_sample {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// Prove a nearest projective/quad/mesh transform for indexed raw samples.
@@ -11486,7 +11573,7 @@ mod tests {
         gpu_indexed_projective_nearest_is_exact, gpu_int_filter_resize_chain_is_supported,
         gpu_luma16_resize_f64_is_exact, gpu_nearest_affine_is_exact,
         gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact,
+        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
@@ -11635,6 +11722,129 @@ mod tests {
             Some("F"),
             (16, 16),
         ));
+    }
+
+    #[test]
+    fn float_nearest_affine_proof_matches_fixed_coordinate_selection() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(16, 16, vec![0; 16 * 16 * 4]).expect("F backing image"),
+        );
+        let extent = PipelineOp::Transform {
+            w: 6,
+            h: 6,
+            method: TransformMethod::Affine,
+            data: Arc::from(vec![7.0 / 6.0, 0.0, -1.0, 0.0, 7.0 / 6.0, -1.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((76, 0, 0, 255)),
+            palette_fill: None,
+        };
+        assert!(gpu_nearest_affine_is_exact(
+            &extent,
+            &image,
+            Some("F"),
+            (16, 16)
+        ));
+
+        // A sub-16.16 boundary difference must stay host-controlled: Pillow
+        // truncates the original f64 coordinate to source pixel 0, while the
+        // uploaded fixed-point origin rounds to source pixel 1.
+        let boundary = PipelineOp::Transform {
+            w: 1,
+            h: 1,
+            method: TransformMethod::Affine,
+            data: Arc::from(vec![1.0, 0.0, 0.499999, 0.0, 1.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((76, 0, 0, 255)),
+            palette_fill: None,
+        };
+        let small_image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 2, vec![0; 2 * 2 * 4]).expect("small F backing image"),
+        );
+        assert!(!gpu_nearest_affine_is_exact(
+            &boundary,
+            &small_image,
+            Some("F"),
+            (2, 2)
+        ));
+
+        // Filtered F transforms interpolate scalar samples in Pillow; the
+        // mode-8 GPU branch is a raw-word relocation and must not be selected
+        // merely because the source coordinates happen to be safe.
+        let filtered = PipelineOp::Transform {
+            w: 1,
+            h: 1,
+            method: TransformMethod::Affine,
+            data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+            filter: ResampleFilter::Bilinear,
+            fill: Some((76, 0, 0, 255)),
+            palette_fill: None,
+        };
+        assert!(!gpu_nearest_affine_is_exact(
+            &filtered,
+            &small_image,
+            Some("F"),
+            (2, 2)
+        ));
+
+        let no_fill = PipelineOp::Transform {
+            w: 1,
+            h: 1,
+            method: TransformMethod::Affine,
+            data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: None,
+            palette_fill: None,
+        };
+        assert_eq!(gpu_transform_fill(&no_fill, Some("F"), 8), 0);
+    }
+
+    #[test]
+    fn float_nearest_affine_native_gpu_preserves_words() {
+        let words = (0..16 * 16)
+            .map(|index| (index as f32) + 0.25)
+            .collect::<Vec<_>>();
+        let bytes = words
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("F", (16, 16), &bytes).expect("F source");
+        let transformed = source
+            .transform_public(
+                (6, 6),
+                1,
+                Some(TransformData::Affine(vec![-1.0, -1.0, 6.0, 6.0])),
+                0,
+                0,
+                None,
+            )
+            .expect("F extent transform");
+        let expected = transformed
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F extent transform");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F extent transform failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU F extent parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native F extent transform must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
