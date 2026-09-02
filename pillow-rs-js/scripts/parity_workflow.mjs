@@ -2035,15 +2035,152 @@ function publicError(error) {
     return { class: className, kind, message: String(error?.message ?? error), stage: 'call', code: null };
 }
 
+// These are the operation boundaries used by the Python parity runner when
+// deciding whether an observed value has materialized a deferred image. Keep
+// the JS/WASM adapter's receipt state machine identical: a successful
+// observation can prove an earlier receipt even when a later workflow step
+// raises a public error.
+const PIPELINE_ALWAYS_OPS = new Set([
+    'PIL.Image::alpha_composite',
+    'PIL.Image::blend',
+    'PIL.Image::composite',
+    'PIL.Image::eval',
+    'PIL.Image::merge',
+    'PIL.Image.Image::crop',
+    'PIL.Image.Image::filter',
+    'PIL.Image.Image::getchannel',
+    'PIL.Image.Image::point',
+    'PIL.Image.Image::reduce',
+    'PIL.Image.Image::resize',
+    'PIL.Image.Image::rotate',
+    'PIL.Image.Image::transform',
+    'PIL.Image.Image::transpose',
+    'PIL.ImageChops::add',
+    'PIL.ImageChops::add_modulo',
+    'PIL.ImageChops::blend',
+    'PIL.ImageChops::composite',
+    'PIL.ImageChops::darker',
+    'PIL.ImageChops::difference',
+    'PIL.ImageChops::hard_light',
+    'PIL.ImageChops::invert',
+    'PIL.ImageChops::lighter',
+    'PIL.ImageChops::logical_and',
+    'PIL.ImageChops::logical_or',
+    'PIL.ImageChops::logical_xor',
+    'PIL.ImageChops::multiply',
+    'PIL.ImageChops::offset',
+    'PIL.ImageChops::overlay',
+    'PIL.ImageChops::screen',
+    'PIL.ImageChops::soft_light',
+    'PIL.ImageChops::subtract',
+    'PIL.ImageChops::subtract_modulo',
+    'PIL.ImageEnhance.Brightness::enhance',
+    'PIL.ImageEnhance.Color::enhance',
+    'PIL.ImageEnhance.Contrast::enhance',
+    'PIL.ImageEnhance.Sharpness::enhance',
+    'PIL.ImageFilter::BLUR',
+    'PIL.ImageFilter::BoxBlur',
+    'PIL.ImageFilter::CONTOUR',
+    'PIL.ImageFilter::DETAIL',
+    'PIL.ImageFilter::EDGE_ENHANCE',
+    'PIL.ImageFilter::EDGE_ENHANCE_MORE',
+    'PIL.ImageFilter::EMBOSS',
+    'PIL.ImageFilter::FIND_EDGES',
+    'PIL.ImageFilter::GaussianBlur',
+    'PIL.ImageFilter::Kernel',
+    'PIL.ImageFilter::MaxFilter',
+    'PIL.ImageFilter::MedianFilter',
+    'PIL.ImageFilter::MinFilter',
+    'PIL.ImageFilter::ModeFilter',
+    'PIL.ImageFilter::RankFilter',
+    'PIL.ImageFilter::SHARPEN',
+    'PIL.ImageFilter::SMOOTH',
+    'PIL.ImageFilter::SMOOTH_MORE',
+    'PIL.ImageFilter::UnsharpMask',
+    'PIL.ImageOps::autocontrast',
+    'PIL.ImageOps::colorize',
+    'PIL.ImageOps::contain',
+    'PIL.ImageOps::cover',
+    'PIL.ImageOps::crop',
+    'PIL.ImageOps::equalize',
+    'PIL.ImageOps::expand',
+    'PIL.ImageOps::fit',
+    'PIL.ImageOps::flip',
+    'PIL.ImageOps::grayscale',
+    'PIL.ImageOps::invert',
+    'PIL.ImageOps::mirror',
+    'PIL.ImageOps::pad',
+    'PIL.ImageOps::posterize',
+    'PIL.ImageOps::scale',
+    'PIL.ImageOps::solarize',
+]);
+const PIPELINE_FILTER_PARAMETER_OPS = new Set(
+    [...PIPELINE_ALWAYS_OPS].filter((operation) => operation.startsWith('PIL.ImageFilter::')),
+);
+const PIPELINE_MAYBE_OPS = new Set([
+    'PIL.Image.Image::apply_transparency',
+    'PIL.Image.Image::convert',
+    'PIL.Image.Image::paste',
+    'PIL.Image.Image::putalpha',
+    'PIL.Image.Image::putpixel',
+    'PIL.Image.Image::remap_palette',
+    'PIL.Image.Image::thumbnail',
+    'PIL.ImageOps::exif_transpose',
+]);
+const PIPELINE_MUTATING_OPS = new Set([
+    'PIL.Image.Image::apply_transparency',
+    'PIL.Image.Image::paste',
+    'PIL.Image.Image::putalpha',
+    'PIL.Image.Image::putpixel',
+    'PIL.Image.Image::remap_palette',
+    'PIL.Image.Image::thumbnail',
+]);
+const PIPELINE_RESULT_OPS = new Set([
+    ...PIPELINE_ALWAYS_OPS,
+    ...PIPELINE_MAYBE_OPS,
+]);
+const TERMINAL_OBSERVATION_OPS = new Set([
+    'getbands',
+    'getbbox',
+    'getcolors',
+    'getdata',
+    'getextrema',
+    'get_flattened_data',
+    'getpixel',
+    'getprojection',
+    'histogram',
+    'load',
+    'save',
+    'tobitmap',
+    'tobytes',
+    'verify',
+    'entropy',
+    'extrema',
+    'count',
+    'sum',
+    'sum2',
+    'mean',
+    'median',
+    'rms',
+    'var',
+    'stddev',
+]);
+
+function observationMaterializesPipeline(step) {
+    const operation = key(step.surface, step.operation);
+    if (PIPELINE_FILTER_PARAMETER_OPS.has(operation)) return false;
+    if (TERMINAL_OBSERVATION_OPS.has(step.operation)) return true;
+    return PIPELINE_RESULT_OPS.has(operation) && !PIPELINE_MUTATING_OPS.has(operation);
+}
+
 function takePipelineTelemetry(wasm, sink, stepId, status = 'completed') {
     if (!sink || typeof wasm.takePipelineTelemetry !== 'function') return;
     const receipt = wasm.takePipelineTelemetry();
     if (receipt == null) return;
     const completed = jsonSafe(receipt);
     completed.status = status;
-    // A per-step dispatch is only a prefix until the workflow's public
-    // observation boundary succeeds.  The Python harness applies the same
-    // state transition for its target adapter.
+    // A per-step dispatch starts as a prefix.  The observation loop applies
+    // the operation-boundary transition shared with the Python harness.
     completed.terminal_complete = false;
     if (stepId != null) completed.step_id = stepId;
     sink.push(completed);
@@ -2055,6 +2192,7 @@ function runCase(wasm, item, operations, assets, executionSink) {
     const results = {};
     let blockedReason = null;
     let terminalReceiptIndex = null;
+    const observationIds = item.observations ?? [];
     const owned = new Set();
     // A previous workflow cannot leave an unassociated receipt in a healthy
     // run, but clear it at the case boundary so a malformed host extension
@@ -2082,19 +2220,28 @@ function runCase(wasm, item, operations, assets, executionSink) {
                 step.step_id,
                 stepExecutionStatus,
             );
-            if (step === item.steps[item.steps.length - 1]) {
+            if (receiptIndex != null) {
+                // Keep the latest completed/partial receipt as the candidate
+                // for a later observation.  The previous JS adapter only
+                // retained a receipt when it belonged to the final workflow
+                // step, which lost observed intermediate boundaries.
+                terminalReceiptIndex = receiptIndex;
+            } else if (
+                step === item.steps[item.steps.length - 1]
+                && !observationIds.includes(step.step_id)
+            ) {
+                // A final unobserved operation with no receipt cannot inherit
+                // an earlier dispatch as proof for this workflow.
                 terminalReceiptIndex = receiptIndex ?? null;
             }
         }
     }
     const observations = [];
-    const observationIds = item.observations ?? [];
     // Keep the last successful pipeline receipt as a terminal candidate when
-    // observation serialization itself emits no telemetry.  The workflow
-    // result below remains the public success gate: a failed observation leaves
-    // every receipt non-terminal, while a successful observation proves that
-    // this final pipeline result was exposed to the caller.
-    for (const [observation_index, observationId] of observationIds.entries()) {
+    // observation serialization itself emits no telemetry.  Each successful
+    // observed result can mark that candidate terminal for its own deferred
+    // boundary; a later unobserved public error does not erase that evidence.
+    for (const observationId of observationIds) {
         const result = results[observationId];
         if (!result) {
             observations.push({ step_id: observationId, status: 'not_run', reason: 'observation step is not present in workflow' });
@@ -2107,8 +2254,10 @@ function runCase(wasm, item, operations, assets, executionSink) {
         const step = item.steps.find((candidate) => candidate.step_id === observationId);
         const info = operations[key(step.surface, step.operation)] ?? {};
         let observationExecutionStatus = 'completed';
+        let observationSucceeded = false;
         try {
             observations.push({ step_id: observationId, status: 'ok', value: serialize(result.value, info.shape) });
+            observationSucceeded = true;
         } catch (error) {
             observations.push({ step_id: observationId, status: 'error', error: publicError(error) });
             observationExecutionStatus = 'partial';
@@ -2119,8 +2268,24 @@ function runCase(wasm, item, operations, assets, executionSink) {
                 observationId,
                 observationExecutionStatus,
             );
-            if (observation_index === observationIds.length - 1 && receiptIndex != null) {
+            if (receiptIndex != null) {
                 terminalReceiptIndex = receiptIndex;
+            }
+            if (
+                observationSucceeded
+                && terminalReceiptIndex != null
+                && observationMaterializesPipeline(step)
+            ) {
+                executionSink[terminalReceiptIndex].terminal_complete = true;
+            }
+            if (
+                !observationSucceeded
+                && observationId === observationIds[observationIds.length - 1]
+            ) {
+                // A failed final observation cannot prove the preceding
+                // pipeline; earlier receipts must not masquerade as a
+                // terminal boundary.
+                terminalReceiptIndex = null;
             }
         }
     }
