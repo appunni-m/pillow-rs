@@ -40,8 +40,8 @@ backend is complete.
 
 - [ ] Reconcile the explicit fallback taxonomy and native identity claims.
   The current full envelope has zero partial, missing, or indeterminate
-  pipeline receipts at `3ebf2cd5c`, but GPU still reports 6,745 native
-  receipts and 93 host-controlled receipts (29 exact host semantic-control,
+  pipeline receipts at `74ceca899`, but GPU still reports 6,746 native
+  receipts and 92 host-controlled receipts (28 exact host semantic-control,
   62 unsafe-primary-dimension, one unsafe/incomplete-dimension, and one
   Transform capability guard).
   CPU has 6,838 terminal receipts (6,832 pipeline-complete); SIMD has 6,850
@@ -102,6 +102,12 @@ backend is complete.
   preserving complete f32 words, including signed zero, NaN payload, infinity,
   and subnormal values. Filtered F rotations remain exact host semantic control
   because they interpolate scalar values rather than relocating words.
+- [x] PA nearest rotate raw pair relocation: commit `74ceca899`. The bounded
+  fixed-point nearest proof now admits palette-alpha index/alpha pairs on the
+  native GPU path. The lowered rotate fill is normalized from the public
+  `(gray, gray, gray, alpha)` tuple to Transform's `(gray, alpha, 0, 0)`
+  contract, preserving custom fill alpha exactly; filtered PA chains remain
+  exact host semantic control.
 - [x] SIMD constant allocation pass: commit `d9b5cec0a`. `simd_constant`
   now allocates the final byte value directly, preserving output and vector
   telemetry while removing the redundant zero-fill and block-copy traversal.
@@ -119,26 +125,35 @@ place until ordered-`f64` behavior is reproduced on-device.
 
 ## Current evidence
 
-- Full source revision: `3ebf2cd5c321a237246ff77b8dcacdfe2a4aad72`.
+- Full source revision: `74ceca899c5b943caa6397916ce5507dcd213a0d`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `82fa75b631e8be75f7b663cf4a33ba64a53b675432c20ba968d2048486ebabad`).
+  `c693587e96149b6e09e992ad5cff666387dced986c2a7db2d195ef9aa370b350`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
-  value/error exact; GPU smoke is 1/1. GPU has 6,745 native and 93
+  value/error exact; GPU smoke is 1/1. GPU has 6,746 native and 92
   host-controlled terminal receipts (6,838 complete), with zero partial,
   missing, or indeterminate pipeline receipts. Host-control partitions are
-  29 exact semantic-control, 62 unsafe-primary-dimension, one
+  28 exact semantic-control, 62 unsafe-primary-dimension, one
   unsafe/incomplete-dimension, and one Transform capability guard.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `3fe4399658e017e057e13e7a91c2e0dfd8f6c3fae9675bec7ee217e24b150632`).
+  `404a0671115c0bc82bf8b1e45a3e07e6559305dfdefeda20f698c76d51697d19`).
 - Focused F nearest-rotate regression: `float_nearest_rotate_native_gpu_preserves_words`
-  passes in the GPU pool suite (66/66), with exact CPU/GPU bytes and requested
+  passes in the GPU pool suite (67/67), with exact CPU/GPU bytes and requested
   backend equal to actual GPU with no fallback. The regression includes signed
   zero, a NaN payload, infinity, and a subnormal word. The public full corpus
-  contains no F nearest-rotate row, so native GPU counts remain 6,745 versus 93
-  host-controlled; this is a focused identity closure, not an aggregate-count
-  claim.
+  contains no F nearest-rotate row, so this F closure does not itself change
+  aggregate counts; the PA nearest-rotate closure changes the full envelope to
+  6,746 native versus 92 host-controlled receipts.
+- Focused PA nearest-rotate replay:
+  `build/migration-parity/incremental/pa-nearest-all-backends-test-result.json`
+  (SHA-256
+  `b58d18f9919432088bd098d3f275fe95b4f32591acec089cd34d19c4ba2eb422`).
+  Both PA cases are value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+  WASM (2/2 each); GPU is native for the nearest-fill case and exact host
+  semantic control for the filtered resize/rotate chain. The focused GPU
+  execution sidecar SHA-256 is
+  `2939b6d6166b010243e86b9828124ffeb2e50170e5255c0a1e0d3d68f1ebbf91`.
 - Post-change strict SIMD constant parity: `build/migration-parity/simd-constant-
   strict-post.json` (SHA-256
   `ddb47c78ec218d35b6cc9ce83bde4091bcc6abfe16c5b816ca872ec3712235f7`),
@@ -183,7 +198,7 @@ place until ordered-`f64` behavior is reproduced on-device.
   `804c65ea3777e391986f8387a1e7ebb93df3312305ab308b8b020639c0c2bfde`.
   The incremental path is reusable and may be overwritten by a later focused
   run; these hashes are the evidence recorded for this replay.
-- Verification: GPU pool tests 66/66; receipt-state tests 35/35; the focused
+- Verification: GPU pool tests 67/67; receipt-state tests 35/35; the focused
   11-case F replay at `a83fb9244` is 11/11 exact on every public lane with
   11/11 native-GPU receipts;
   `make migration-parity-receipt-test`; `make migration-parity-evidence-check`;

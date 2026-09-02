@@ -5465,3 +5465,62 @@ arithmetic, arithmetic-changing filtered/projective/mesh/palette transforms,
 P1 fallback reconciliation, and the P2 equal-ID, equal-receipt timing gate
 remain open. No fixtures, expected values, thresholds, IDs, denominators,
 public errors, or receipt rules changed.
+
+## 32.83 PA nearest-rotate raw-pair admission (2026-09-02)
+
+The next deterministic backend-identity gap was palette-alpha (`PA`) nearest
+rotation. The fixed-point affine path already relocates an opaque two-byte
+index/alpha pair, but `gpu_rotate_nearest_affine_is_exact` admitted only `CMYK`
+and `F`; PA nearest rotations therefore remained on exact host semantic
+control. Pillow does not expand the palette or interpolate colors for nearest
+rotation: it relocates the raw index/alpha pair and applies the requested fill
+pair.
+
+The first divergence while proving this admission was at the lowered rotate
+fill boundary. `resolve_imageops_color` represents LA/PA rotate colors as the
+public RGBA-shaped tuple `(gray, gray, gray, alpha)`, while the lowered
+Transform node packs its native two-band fill as `(gray, alpha, 0, 0)`. Before
+the fix, native PA fills therefore copied gray into the alpha byte. Commit
+`74ceca899` normalizes only the rotate-lowered node, extends the bounded
+nearest/fixed-point admission to PA, and leaves filtered PA chains on exact
+host semantic control.
+
+The permanent `palette_alpha_nearest_rotate_native_gpu_preserves_pairs`
+regression covers default and custom center/translation nearest rotations,
+raw index/alpha pairs, and custom fill pairs. CPU and native GPU bytes match
+exactly; both receipts are terminal, with one requested=actual GPU dispatch and
+one exact host-control receipt for the filtered resize/rotate chain. The GPU
+pool suite passes 67/67, `make build-dev`, `make -C pillow-rs fmt-fix`, and
+`make -C pillow-rs fmt` pass; `make -C pillow-rs clippy` remains blocked by the
+pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2 environment
+requirement. A focused two-case replay at the committed
+revision is exact on CPU, SIMD, GPU, Node WASM, and browser WASM (2/2 each):
+the envelope is
+`build/migration-parity/incremental/pa-nearest-all-backends-test-result.json`
+with SHA-256
+`b58d18f9919432088bd098d3f275fe95b4f32591acec089cd34d19c4ba2eb422`, and its
+GPU execution sidecar SHA-256 is
+`2939b6d6166b010243e86b9828124ffeb2e50170e5255c0a1e0d3d68f1ebbf91`.
+
+The fresh full schema-v3 campaign at revision
+`74ceca899c5b943caa6397916ce5507dcd213a0d` remains value/error-exact for all
+10,952 selected cases on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU smoke
+is 1/1. CPU has 6,838 terminal receipts, SIMD 6,850, and GPU 6,838 terminal
+receipts (6,746 native GPU and 92 CPU host-controlled). GPU fallback partitions
+are 28 exact host semantic-control rows, 62 unsafe-primary-dimension rows, one
+unsafe/incomplete-dimension row, and one Transform capability guard. Every
+pipeline lane has zero partial, missing, or indeterminate receipts. The full
+envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`c693587e96149b6e09e992ad5cff666387dced986c2a7db2d195ef9aa370b350`), and the
+GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`404a0671115c0bc82bf8b1e45a3e07e6559305dfdefeda20f698c76d51697d19`).
+
+`make migration-parity-receipt-test` passes 35/35 and
+`make migration-parity-evidence-check` passes. No fixtures, expected values,
+thresholds, IDs, denominators, public errors, or receipt rules changed. The
+remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic and
+arithmetic-changing filtered/projective, mesh, and palette transforms. P1
+fallback reconciliation and the P2 equal-ID, equal-receipt timing gate remain
+open.
