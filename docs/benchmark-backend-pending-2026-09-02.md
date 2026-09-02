@@ -40,7 +40,7 @@ backend is complete.
 
 - [ ] Reconcile the explicit fallback taxonomy and native identity claims.
   The current full envelope has zero partial, missing, or indeterminate
-  pipeline receipts at `d9b5cec0a`, but GPU still reports 6,745 native
+  pipeline receipts at `3ebf2cd5c`, but GPU still reports 6,745 native
   receipts and 93 host-controlled receipts (29 exact host semantic-control,
   62 unsafe-primary-dimension, one unsafe/incomplete-dimension, and one
   Transform capability guard).
@@ -97,6 +97,11 @@ backend is complete.
   raw-word shader path. The maintained F EXTENT transform is native GPU with
   exact bytes; filtered F transforms and bilinear F rotate remain exact host
   semantic control because they interpolate scalar values.
+- [x] F nearest rotate scalar-word relocation: commit `3ebf2cd5c`. The same
+  fixed-point source-selection proof now admits raw F nearest rotations while
+  preserving complete f32 words, including signed zero, NaN payload, infinity,
+  and subnormal values. Filtered F rotations remain exact host semantic control
+  because they interpolate scalar values rather than relocating words.
 - [x] SIMD constant allocation pass: commit `d9b5cec0a`. `simd_constant`
   now allocates the final byte value directly, preserving output and vector
   telemetry while removing the redundant zero-fill and block-copy traversal.
@@ -114,10 +119,10 @@ place until ordered-`f64` behavior is reproduced on-device.
 
 ## Current evidence
 
-- Full source revision: `d9b5cec0a1713bf18684b0175414ddf70ede4e99`.
+- Full source revision: `3ebf2cd5c321a237246ff77b8dcacdfe2a4aad72`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `7d9e079b7a687d2dd8c2da681a54a5679fd29e6d618e2dcbec1be998a5261bce`).
+  `82fa75b631e8be75f7b663cf4a33ba64a53b675432c20ba968d2048486ebabad`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
   value/error exact; GPU smoke is 1/1. GPU has 6,745 native and 93
   host-controlled terminal receipts (6,838 complete), with zero partial,
@@ -126,7 +131,14 @@ place until ordered-`f64` behavior is reproduced on-device.
   unsafe/incomplete-dimension, and one Transform capability guard.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `ffb5646fcd3b0c9cbbd2d35ee51b86baf147559017d95103c095b4a6390160d8`).
+  `3fe4399658e017e057e13e7a91c2e0dfd8f6c3fae9675bec7ee217e24b150632`).
+- Focused F nearest-rotate regression: `float_nearest_rotate_native_gpu_preserves_words`
+  passes in the GPU pool suite (66/66), with exact CPU/GPU bytes and requested
+  backend equal to actual GPU with no fallback. The regression includes signed
+  zero, a NaN payload, infinity, and a subnormal word. The public full corpus
+  contains no F nearest-rotate row, so native GPU counts remain 6,745 versus 93
+  host-controlled; this is a focused identity closure, not an aggregate-count
+  claim.
 - Post-change strict SIMD constant parity: `build/migration-parity/simd-constant-
   strict-post.json` (SHA-256
   `ddb47c78ec218d35b6cc9ce83bde4091bcc6abfe16c5b816ca872ec3712235f7`),
@@ -171,13 +183,14 @@ place until ordered-`f64` behavior is reproduced on-device.
   `804c65ea3777e391986f8387a1e7ebb93df3312305ab308b8b020639c0c2bfde`.
   The incremental path is reusable and may be overwritten by a later focused
   run; these hashes are the evidence recorded for this replay.
-- Verification: GPU pool tests 65/65; receipt-state tests 35/35; the focused
+- Verification: GPU pool tests 66/66; receipt-state tests 35/35; the focused
   11-case F replay at `a83fb9244` is 11/11 exact on every public lane with
   11/11 native-GPU receipts;
-  `make migration-parity-evidence-check`; the focused and full all-backend
-  replays; `make build-dev`; `make -C pillow-rs fmt-fix`; and
+  `make migration-parity-receipt-test`; `make migration-parity-evidence-check`;
+  the focused and full all-backend replays; `make build-dev`;
+  `make -C pillow-rs fmt-fix`; and
   `make -C pillow-rs fmt`.
-  Clippy remains blocked by the pre-existing pinned
+  `make -C pillow-rs clippy` remains blocked by the pre-existing pinned
   libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement.
 
 No fixtures, expected values, thresholds, IDs, denominators, public errors,

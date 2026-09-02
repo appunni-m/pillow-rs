@@ -5422,3 +5422,46 @@ passes. No fixtures, expected values, thresholds, IDs, denominators, public
 errors, or receipt rules changed. P0 broader heterogeneous/non-dyadic native
 GPU arithmetic, P1 backend identity reconciliation, and P2 zero-violation
 performance acceptance remain open.
+
+## 32.82 F nearest-rotate raw-word admission (2026-09-02)
+
+The next deterministic backend-identity gap was a proven relocation path that
+was still reported as host semantic control. The fixed-point affine proof
+already compared Pillow's f64 source selection with the signed-16.16 shader
+walk for raw words, but `gpu_rotate_nearest_affine_is_exact` accepted only
+CMYK. As a result, nearest `F` rotations took the exact host path even though
+nearest rotation copies complete four-byte words and does not interpolate
+floating-point samples.
+
+Commit `3ebf2cd5c` extends that narrow admission to `F` while retaining the
+same per-destination proof. Filtered floating-point rotations stay on exact
+host semantic control because interpolation still requires Pillow's ordered-f64
+arithmetic. A permanent 16x16 GPU regression uses ordinary finite words plus
+signed zero, a NaN payload, infinity, and a subnormal; CPU and GPU bytes match
+exactly, the telemetry requested backend equals actual GPU, and the fallback is
+empty. The GPU pool suite passes 66/66, `make build-dev`, formatting, and
+`git diff --check` pass. Clippy remains blocked by the pinned libavif
+1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement.
+
+The fresh full schema-v3 campaign at revision
+`3ebf2cd5c321a237246ff77b8dcacdfe2a4aad72` remains value/error-exact for all
+10,952 selected cases on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU smoke
+is 1/1. CPU has 6,838 terminal receipts, SIMD 6,850, and GPU 6,838 terminal
+receipts (6,745 native GPU and 93 CPU host-controlled). GPU fallback partitions
+are 29 exact host semantic-control rows, 62 unsafe-primary-dimension rows, one
+unsafe/incomplete-dimension row, and one Transform capability guard. Every
+pipeline lane has zero partial, missing, or indeterminate receipts. The full
+envelope is `build/migration-parity/all-backends-test-result.json` (SHA-256
+`82fa75b631e8be75f7b663cf4a33ba64a53b675432c20ba968d2048486ebabad`), and the
+GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`3fe4399658e017e057e13e7a91c2e0dfd8f6c3fae9675bec7ee217e24b150632`).
+
+`make migration-parity-receipt-test` passes 35/35 and
+`make migration-parity-evidence-check` passes. This is a focused identity
+closure; the public corpus contains no F nearest-rotate row, so aggregate GPU
+native/host-control counts are unchanged. Broader heterogeneous/non-dyadic F
+arithmetic, arithmetic-changing filtered/projective/mesh/palette transforms,
+P1 fallback reconciliation, and the P2 equal-ID, equal-receipt timing gate
+remain open. No fixtures, expected values, thresholds, IDs, denominators,
+public errors, or receipt rules changed.
