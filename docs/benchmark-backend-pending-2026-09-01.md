@@ -85,17 +85,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   terminal even when a later, unrelated public call raises. The focused
   replay `/tmp/receipt-prefix-all-backends-70a92f4ca.json` is value-exact with
   zero partial cases in CPU, SIMD, and GPU (1/1 terminal receipt in each;
-  GPU actual backend is GPU with no fallback). The historical full envelope
-  still reports CPU/GPU 7,084 + 1 and SIMD 7,096 + 1 until it is regenerated;
-  setup-only records remain operation telemetry outside the deferred pipeline
-  partition.
+  GPU actual backend is GPU with no fallback). The regenerated full envelope
+  `/tmp/all-backends-post-2969b323.json` is value-exact at the fixed 10,952
+  denominator and now reports CPU 7,085 complete + 0 partial, SIMD 7,097
+  complete + 0 partial, and GPU 7,085 complete + 0 partial; setup-only
+  records remain operation telemetry outside the deferred pipeline partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts in the last full envelope include 405 SIMD-lane CPU receipts and 252
-  GPU-lane CPU receipts; that GPU lane has 6,832 native GPU receipts and 139
-  exact host semantic-control records, with explicit logical-mode, dimension,
-  Transform, and Contrast routes. The current 35-case Contrast replay removes
-  that route for the proven prefix, but a new full-denominator envelope is
-  still needed before changing the aggregate counts. These are visible
+  counts in the regenerated full envelope include 405 SIMD-lane CPU receipts
+  and 211 GPU-lane CPU receipts; that GPU lane has 6,880 native GPU receipts
+  and 142 exact host semantic-control records, with explicit logical-mode,
+  dimension, Transform, and other guarded routes. The 35-case Contrast replay
+  removes that route for the proven prefix, but the remaining aggregate
+  identity/fallback partition still needs reconciliation. These are visible
   evidence gaps, not value-parity exemptions.
 - [x] Admit the raw-color `ExtractBand` subset on native GPU. Commit
   `f55a770ad` permits only `ExtractBand`/`PutPixel` batches for CMYK, HSV, and
@@ -284,7 +285,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/receipt-prefix-all-backends-70a92f4ca.json` is schema-valid and
   value-exact; CPU, SIMD, and GPU each report 1/1 terminal-complete receipts
   and zero partial cases for `pipeline-composition.filter-rgba-5x5-invert`.
-  The full 10,952-case envelope remains historical until regenerated.
+  The regenerated full envelope `/tmp/all-backends-post-2969b323.json`
+  confirms zero native partial cases at the fixed denominator.
 - [x] The D-049 thumbnail control-flow fix is committed as `dc6085f81`:
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
@@ -294,6 +296,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   rows),
   receipt tests 28/28, evidence/schema validation, `make -C pillow-rs fmt`, and
   `make clippy` (which completes with the repository's existing warnings).
+
+- [x] The post-receipt-fix full envelope at committed source `2969b323c` is
+  `/tmp/all-backends-post-2969b323.json` (SHA-256
+  `50e893989476cacee452f220e6f10e32166a2e0212058e9b5926360e42551d8f`). All
+  five public lanes are value-exact at 10,952/10,952 with GPU smoke 1/1.
+  CPU reports 7,085 complete + 0 partial; SIMD reports 7,097 complete + 0
+  partial (6,698 SIMD + 405 CPU); GPU reports 7,085 complete + 0 partial
+  (6,880 GPU + 211 CPU). Node and browser WASM remain 6,713 complete + 586
+  partial + 888 missing + 2,738 not-applicable + 27 indeterminate, so the
+  aggregate remains `passed_with_backend_gaps`.
 
 ## Closeout state
 
@@ -308,12 +320,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, exact
   current-image Contrast-prefix admission as `5ed9f152e`, and typed I;16
   filtered-resize admission as `2ff9a6951`; the latest full committed
-  all-backend replay is
-  schema-valid and value-exact for all 10,952 cases. Native lanes report one
-  historical partial receipt each in that envelope; the focused replay now
-  closes the observed-prefix case in CPU, SIMD, and GPU. The GPU partition has
-  6,832 native receipts plus 252 CPU receipts in the historical envelope. No
-  fixture, expected value, threshold, denominator, or case ID was changed. The latest envelope is
-  `/tmp/all-backends-post-19acd29ab.json` and remains schema-valid and
-  value-exact at the fixed denominator.
+  all-backend replay is schema-valid and value-exact for all 10,952 cases.
+  The regenerated post-receipt envelope has zero native partial receipts:
+  CPU 7,085 complete, SIMD 7,097 complete (6,698 SIMD + 405 CPU), and GPU
+  7,085 complete (6,880 GPU + 211 CPU). The GPU partition also records 142
+  exact host semantic-control fallbacks. WASM remains 6,713 complete + 586
+  partial + 888 missing + 2,738 not-applicable + 27 indeterminate. No
+  fixture, expected value, threshold, denominator, or case ID was changed.
+  The latest envelope is `/tmp/all-backends-post-2969b323.json` and remains
+  schema-valid and value-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.

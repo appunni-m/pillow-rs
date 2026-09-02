@@ -4125,7 +4125,33 @@ schema-valid and value-exact for the fixed case. CPU, SIMD, and GPU each have
 one complete terminal receipt with zero partial cases; the GPU receipt is
 actual GPU with no fallback. Node and browser WASM still retain their known
 constructor/receipt gap for this case. The historical full-denominator
-envelope remains the denominator authority until a full replay is regenerated.
+envelope was still pending at the time of this focused replay; section 32.50
+records the regenerated fixed-denominator result.
 No fixtures, expected values, thresholds, IDs, denominators, or public error
 contracts changed. Remaining work is the broader F arithmetic domain, WASM
 receipt gaps and backend identity outside proven rows, and the P2 timing gate.
+
+## 32.50 Full-envelope receipt boundary after the observed-prefix fix (2026-09-02)
+
+The fixed all-public-cases replay was regenerated at committed revision
+`2969b323c96b7dc33b5b9c74ded75b77c4dde3c3`. Its schema-v3 artifact is
+`/tmp/all-backends-post-2969b323.json` (SHA-256
+`50e893989476cacee452f220e6f10e32166a2e0212058e9b5926360e42551d8f`), with
+the unchanged case-ID digest
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526` and
+10,952 selected cases in every lane. All five public lanes remain
+value-exact (10,952/10,952), GPU smoke is 1/1, and the aggregate status is
+`passed_with_backend_gaps`.
+
+The observed-boundary correction removes the historical native partial from
+the full envelope: CPU has 7,085 complete pipeline cases and zero partials;
+SIMD has 7,097 complete and zero partials (6,698 native SIMD plus 405 CPU
+receipts); and GPU has 7,085 complete and zero partials (6,880 native GPU
+plus 211 CPU receipts). The GPU lane records 142 exact host semantic-control
+fallbacks alongside explicit dimension, logical-mode, and Transform guards.
+Node and browser WASM remain identical at 6,713 complete, 586 partial, 888
+missing, 2,738 not-applicable, and 27 indeterminate pipeline cases; these
+are receipt/export coverage gaps, not value mismatches. No fixtures, expected
+values, thresholds, IDs, denominators, or public error contracts changed.
+Remaining work is the broader F arithmetic domain, WASM receipt/export gaps,
+backend identity outside proven admissions, and the P2 timing gate.
