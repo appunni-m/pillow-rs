@@ -4059,3 +4059,44 @@ regenerated in this narrow run. No fixtures, expected values, thresholds,
 IDs, denominators, or receipt taxonomy changed. Remaining work is the broader
 F arithmetic proof, the native/WASM receipt gaps, backend/fallback
 reconciliation outside proven admissions, and the P2 timing gate.
+
+## 32.48 Native GPU typed I;16 filtered resize (2026-09-02)
+
+The next deterministic routing gap was a valid typed resize that had no
+device-side sample contract. `I;16`, `I;16L`, and `I;16B` filtered resizes were
+therefore kept on exact host semantic control even though the CPU implementation
+already matched Pillow's byte-oriented two-pass behavior. A diagnostic first
+divergence also found that a 4x4 -> 5x3 separable resize needs a 5x4 intermediate
+buffer; endpoint-only capacity accounting reserved too little storage. On
+Lanczos/Bicubic same-size axes, evaluating tiny tails in the device integer
+reducer could overflow its alignment envelope even though Pillow's typed
+byte-level pass is an identity.
+
+Commit `2ff9a6951` adds marker 10 to the shared resize shaders. The uploader
+preserves each declared two-byte sequence, the shader decodes that sequence,
+reuses the exact integer f64-coefficient reducer, applies Pillow's per-byte
+u16 round/clip store, and copies unchanged axes. Host admission proves both
+passes, all intermediate u16 words, declared byte order, and the device
+reducer envelope before selecting native GPU. `I;16N`, chains, mixed operation
+batches, and any unproven coefficient/value domain remain exact host semantic
+control.
+
+The permanent native regression covers Bilinear, Bicubic, Lanczos, Hamming,
+and Box across all three admitted byte orders, with exact CPU/GPU bytes and
+terminal requested/actual-GPU receipts. The deterministic stress matrix covered
+1,365 cases (three modes, seven source geometries, thirteen output geometries,
+five filters): **0 mismatches**, with 926 rows admitted by the proof. Focused
+typed-resize tests pass **2/2** and the full `pillow-rs` library passes
+**57/57**. The selected all-backend replay at revision `2ff9a6951` is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`58f1e1b3fcad066b5b9e82e2d5910fd502c593e53fa15759293fd312ac3c571c`). All
+three cases are value-exact with terminal-complete receipts on CPU, SIMD, GPU,
+Node WASM, and browser WASM; the GPU partition has **2 native GPU + 1 exact
+host semantic-control** receipts because the I;16N case remains deliberately
+guarded. GPU smoke is **1/1** and the artifact status remains
+`passed_with_backend_gaps`.
+
+No fixtures, expected values, thresholds, IDs, denominators, or receipt
+taxonomy changed. Remaining work is the broader F arithmetic domain, the
+native/WASM receipt gaps, backend/fallback reconciliation outside proven
+admissions, and the P2 zero-violation timing gate.
