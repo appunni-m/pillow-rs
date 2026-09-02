@@ -17,7 +17,7 @@ use crate::error::PilError;
 use crate::ops::pil_resize::{
     FilterCoeffs, FilterCoeffsF64, filter_from_resample, luma16_resample_big_endian,
     luma16_resample_read, luma16_resample_write, precompute_coeffs,
-    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
+    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64, round_up,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
@@ -1024,6 +1024,289 @@ fn gpu_f_resize_f64_sample_bits(
     }
     let actual = gpu_f64_integer_to_f32(sum, minimum_exponent)?;
     (actual == expected).then_some(actual)
+}
+
+/// Round an exact signed binary sum to Pillow's INT32 `ROUND_UP` result.
+///
+/// `sum * 2^scale_exp` is kept as an integer/rational pair so the admission
+/// proof does not rely on a host f64 conversion at a half-integer boundary.
+/// The returned value is deliberately restricted to the signed i32 range;
+/// overflowing rows stay on exact host semantic control rather than relying
+/// on device or Rust cast saturation.
+fn gpu_i_f64_integer_to_i32(sum: i128, scale_exp: i32) -> Option<i32> {
+    if sum == 0 {
+        return Some(0);
+    }
+    let negative = sum < 0;
+    let magnitude = if negative {
+        sum.checked_neg()? as u128
+    } else {
+        sum as u128
+    };
+    let rounded = if scale_exp >= 0 {
+        magnitude.checked_shl(u32::try_from(scale_exp).ok()?)?
+    } else {
+        let shift = u32::try_from(scale_exp.checked_neg()?).ok()?;
+        if shift >= 128 {
+            0
+        } else if shift == 0 {
+            magnitude
+        } else {
+            let mut quotient = magnitude >> shift;
+            let remainder = magnitude & ((1u128 << shift) - 1);
+            let halfway = 1u128 << (shift - 1);
+            // ROUND_UP is away from zero, so exact half values increment too.
+            if remainder >= halfway {
+                quotient = quotient.checked_add(1)?;
+            }
+            quotient
+        }
+    };
+    if negative {
+        if rounded > (1u128 << 31) {
+            return None;
+        }
+        if rounded == (1u128 << 31) {
+            Some(i32::MIN)
+        } else {
+            Some(-(i32::try_from(rounded).ok()?))
+        }
+    } else {
+        Some(i32::try_from(rounded).ok()?)
+    }
+}
+
+/// Evaluate one I-mode f64-coefficient row with an exact integer reducer.
+///
+/// I samples are exact signed i32 values, while each Pillow coefficient is a
+/// finite binary f64.  Multiplying the integer sample by the coefficient's
+/// 53-bit mantissa and aligning all terms at the smallest exponent gives an
+/// exact rational sum in the same U128 representation used by the WGSL
+/// marker-9 reducer.  The host proof compares that sum's away-from-zero i32
+/// rounding with Pillow's ordered f64 FMA accumulation; rows where the two
+/// boundaries differ are rejected.
+fn gpu_i_resize_f64_sample_bits(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffsF64,
+    output_index: usize,
+    horizontal: bool,
+    line: usize,
+) -> Option<u32> {
+    let source_w = usize::try_from(source_dimensions.0).ok()?;
+    let source_h = usize::try_from(source_dimensions.1).ok()?;
+    let source_start = usize::try_from(*coeffs.xmin.get(output_index)?).ok()?;
+    let weights = coeffs.weights.get(output_index)?;
+    if *coeffs.count.get(output_index)? != weights.len()
+        || line >= if horizontal { source_h } else { source_w }
+    {
+        return None;
+    }
+    let source_pixel = |tap: usize| -> Option<usize> {
+        let coordinate = source_start.checked_add(tap)?;
+        if horizontal {
+            (coordinate < source_w).then_some(line.checked_mul(source_w)?.checked_add(coordinate)?)
+        } else {
+            (coordinate < source_h).then_some(coordinate.checked_mul(source_w)?.checked_add(line)?)
+        }
+    };
+    let sample_at = |tap: usize| -> Option<i32> {
+        let pixel = source_pixel(tap)?;
+        let offset = pixel.checked_mul(4)?;
+        let word = bytes.get(offset..offset.checked_add(4)?)?;
+        Some(i32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+    };
+
+    let mut minimum_exponent = None;
+    for (tap, &weight) in weights.iter().enumerate() {
+        let coeff = gpu_f64_integer_parts(weight)?;
+        let sample = sample_at(tap)?;
+        if coeff.mantissa != 0 && sample != 0 {
+            minimum_exponent = Some(
+                minimum_exponent.map_or(coeff.exponent, |minimum: i32| minimum.min(coeff.exponent)),
+            );
+        }
+    }
+    let Some(minimum_exponent) = minimum_exponent else {
+        return Some(0);
+    };
+
+    let mut exact_sum = 0i128;
+    let mut ordered_f64 = 0.0f64;
+    for (tap, &weight) in weights.iter().enumerate() {
+        let coeff = gpu_f64_integer_parts(weight)?;
+        let sample = sample_at(tap)?;
+        ordered_f64 = weight.mul_add(f64::from(sample), ordered_f64);
+        if coeff.mantissa == 0 || sample == 0 {
+            continue;
+        }
+        let magnitude = if sample < 0 {
+            i128::from(sample).checked_neg()?
+        } else {
+            i128::from(sample)
+        };
+        let product = magnitude.checked_mul(i128::try_from(coeff.mantissa).ok()?)?;
+        let shift = u32::try_from(coeff.exponent.checked_sub(minimum_exponent)?).ok()?;
+        let term = product.checked_shl(shift)?;
+        let term = if sample < 0 {
+            term.checked_neg()?
+        } else {
+            term
+        };
+        let term = if coeff.negative {
+            term.checked_neg()?
+        } else {
+            term
+        };
+        exact_sum = exact_sum.checked_add(term)?;
+    }
+    if !ordered_f64.is_finite() {
+        return None;
+    }
+    let expected = round_up(ordered_f64);
+    if !expected.is_finite() {
+        return None;
+    }
+    let expected = i32::try_from(expected as i64).ok()?;
+    let actual = gpu_i_f64_integer_to_i32(exact_sum, minimum_exponent)?;
+    (actual == expected).then_some(actual as u32)
+}
+
+/// Evaluate every word produced by one exact I-mode resize pass. The result
+/// order matches the packed image rows consumed by the next shader pass.
+fn gpu_i_resize_f64_pass_bits(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffsF64,
+    horizontal: bool,
+) -> Option<Vec<u32>> {
+    let output_count = coeffs.xmin.len();
+    let source_axis = if horizontal {
+        usize::try_from(source_dimensions.0).ok()?
+    } else {
+        usize::try_from(source_dimensions.1).ok()?
+    };
+    let line_count = if horizontal {
+        usize::try_from(source_dimensions.1).ok()?
+    } else {
+        usize::try_from(source_dimensions.0).ok()?
+    };
+    let word_count = output_count.checked_mul(line_count)?;
+    if word_count > GPU_BUFFER_CAPACITY as usize {
+        return None;
+    }
+    if output_count == source_axis {
+        let expected = word_count.checked_mul(4)?;
+        if bytes.len() != expected {
+            return None;
+        }
+        return Some(
+            bytes
+                .chunks_exact(4)
+                .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+                .collect(),
+        );
+    }
+    let mut result = Vec::new();
+    result.try_reserve(word_count).ok()?;
+    if horizontal {
+        for line in 0..line_count {
+            for output_index in 0..output_count {
+                result.push(gpu_i_resize_f64_sample_bits(
+                    bytes,
+                    source_dimensions,
+                    coeffs,
+                    output_index,
+                    true,
+                    line,
+                )?);
+            }
+        }
+    } else {
+        for output_index in 0..output_count {
+            for line in 0..line_count {
+                result.push(gpu_i_resize_f64_sample_bits(
+                    bytes,
+                    source_dimensions,
+                    coeffs,
+                    output_index,
+                    false,
+                    line,
+                )?);
+            }
+        }
+    }
+    Some(result)
+}
+
+/// Prove one pure filtered I resize for the typed GPU reducer. Horizontal
+/// results are rounded to INT32 before the vertical pass, matching Pillow's
+/// `ImagingResampleHorizontal_32bpc`/`Vertical_32bpc` storage boundary.
+fn gpu_i_resize_f64_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("I") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let PipelineOp::Resize { w, h, filter } = &ops[0] else {
+        return false;
+    };
+    if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
+        return false;
+    }
+    let source_dimensions = image.dimensions();
+    if source_dimensions.0 == 0 || source_dimensions.1 == 0 {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let expected = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
+        .ok()
+        .map(|dims| dims.total_bytes());
+    if expected != Some(pixels.as_raw().len())
+        || CheckedDims::new(*w, *h, 1)
+            .ok()
+            .map(|dims| dims.total_pixels())
+            .is_none_or(|count| count > GPU_BUFFER_CAPACITY as usize)
+    {
+        return false;
+    }
+
+    let (kernel, support) = filter_from_resample(*filter);
+    let horizontal = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
+    let vertical = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
+    for coeffs in [&horizontal, &vertical] {
+        if coeffs.xmin.len() != coeffs.count.len()
+            || coeffs.xmin.len() != coeffs.weights.len()
+            || coeffs.weights.iter().any(|row| {
+                row.iter()
+                    .any(|&weight| gpu_f64_integer_parts(weight).is_none())
+            })
+        {
+            return false;
+        }
+    }
+
+    let bytes = pixels.as_raw();
+    let horizontal_words = gpu_i_resize_f64_pass_bits(bytes, source_dimensions, &horizontal, true);
+    let Some(horizontal_words) = horizontal_words else {
+        return false;
+    };
+    let horizontal_bytes = horizontal_words
+        .iter()
+        .flat_map(|word| word.to_le_bytes())
+        .collect::<Vec<_>>();
+    gpu_i_resize_f64_pass_bits(
+        &horizontal_bytes,
+        (*w, source_dimensions.1),
+        &vertical,
+        false,
+    )
+    .is_some()
 }
 
 /// Evaluate one I;16 f64-coefficient row with the same f32-normalized integer
@@ -4528,7 +4811,7 @@ impl GpuInner {
         if let Some((resize_w, resize_h, filter)) = resize_coefficients {
             let (source_w, source_h) = source_dimensions;
             let (horizontal_bytes, vertical_bytes) = if f_resize_f64_is_exact
-                && matches!(mode, 5 | 8)
+                && matches!(mode, 5 | 7 | 8)
                 && !matches!(filter, ResampleFilter::Nearest)
                 && matches!(op, PipelineOp::Resize { .. })
             {
@@ -4925,6 +5208,9 @@ impl GpuInner {
                 let f64_is_exact = f_resize_f64_is_exact
                     && logical_mode == Some("F")
                     && !matches!(filter, ResampleFilter::Nearest);
+                let i_f64_is_exact = f_resize_f64_is_exact
+                    && logical_mode == Some("I")
+                    && !matches!(filter, ResampleFilter::Nearest);
                 let luma16_f64_is_exact = f_resize_f64_is_exact
                     && op_mode == 5
                     && logical_mode
@@ -4946,6 +5232,8 @@ impl GpuInner {
                         4
                     } else if f64_is_exact {
                         9
+                    } else if i_f64_is_exact {
+                        11
                     } else if luma16_f64_is_exact {
                         10
                     } else if dyadic_is_exact {
@@ -5164,7 +5452,8 @@ impl GpuInner {
                                 || (op_mode == 5
                                     && logical_mode.is_none_or(|mode| {
                                         matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
-                                    })))
+                                    }))
+                                || (op_mode == 7 && logical_mode == Some("I")))
                         {
                             let (kernel, support) = filter_from_resample(*filter);
                             let horizontal_f64 =
@@ -5569,13 +5858,7 @@ impl GpuInner {
                         )
                     )
                     || logical_mode == Some("I")
-                        && matches!(
-                            ops.get(index),
-                            Some(PipelineOp::Resize {
-                                filter: ResampleFilter::Nearest,
-                                ..
-                            })
-                        )
+                        && matches!(ops.get(index), Some(PipelineOp::Resize { .. }))
                     || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
                         && matches!(ops.get(index), Some(PipelineOp::Resize { .. })))
             {
@@ -9888,7 +10171,7 @@ fn gpu_geometry_requires_exact_host_control(
                 if !matches!(filter, ResampleFilter::Nearest)
         )
     });
-    (mode == Some("I") && has_filtered_resize)
+    (mode == Some("I") && has_filtered_resize && !f_resize_f64_is_exact)
         || (matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
             && has_filtered_resize
             && !gpu_luma16_resize_f64_is_exact(ops, image, mode))
@@ -10079,7 +10362,8 @@ impl GpuPool {
             gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
         let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
         let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
-            || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode);
+            || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
+            || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
         if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
             // A normalized blur preserves every channel of a constant image,
             // including the edge samples. Replace only the GPU lowering with
@@ -10993,11 +11277,11 @@ mod tests {
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
-        gpu_i_resize_identity_is_exact, gpu_int_filter_resize_chain_is_supported,
-        gpu_luma16_resize_f64_is_exact, gpu_nearest_affine_is_exact,
-        gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact,
-        luma16_resample_big_endian, readback_poll_backoff,
+        gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
+        gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
+        gpu_nearest_affine_is_exact, gpu_palette_first_rgb_merge_is_supported,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
+        gpu_transform_all_fill_is_exact, luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -11822,6 +12106,117 @@ mod tests {
     }
 
     #[test]
+    fn i_filtered_resize_native_gpu_preserves_int32_rounding() {
+        let mut values = vec![0i32; 9 * 8];
+        values[3 * 9 + 2] = 100_000;
+        values[6 * 9 + 7] = -100_000;
+        let source_bytes = values
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("I", (9, 8), &source_bytes).expect("I source");
+        let cases = [
+            ((9, 3), ResampleInput::Name("BILINEAR".into())),
+            ((9, 3), ResampleInput::Name("BICUBIC".into())),
+            ((9, 3), ResampleInput::Name("LANCZOS".into())),
+            ((9, 3), ResampleInput::Name("HAMMING".into())),
+            ((9, 3), ResampleInput::Name("BOX".into())),
+            ((3, 3), ResampleInput::Name("BICUBIC".into())),
+        ];
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (size, filter) in cases {
+            let resized = source
+                .resize(size, Some(filter), None)
+                .expect("I filtered resize");
+            let expected = resized
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU I filtered resize");
+            let actual = match resized.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU I filtered resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "native GPU I filtered resize parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU I filtered resize must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(2));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn i_filtered_box_resize_native_gpu_handles_extreme_words() {
+        let values = [
+            i32::MIN,
+            i32::MAX,
+            0,
+            -1,
+            i32::MAX,
+            i32::MIN,
+            1,
+            7,
+            100_000,
+            -100_000,
+            2_000_000_000,
+            -2_000_000_000,
+            17,
+            31,
+            4096,
+            -4096,
+        ];
+        let source_bytes = values
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("I", (4, 4), &source_bytes).expect("I source");
+        let resized = source
+            .resize((2, 2), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("I Box resize");
+        let expected = resized
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU I Box resize");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match resized.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU I Box resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU I Box resize parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU I Box resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
     fn i_resize_identity_native_gpu_preserves_signed_words() {
         let values = [
             i32::MIN,
@@ -11905,6 +12300,29 @@ mod tests {
             }],
             &image,
             Some("I")
+        ));
+    }
+
+    #[test]
+    fn i_filtered_resize_f64_proof_matches_bounded_samples() {
+        let mut bytes = vec![0u8; 9 * 8 * 4];
+        let index = (3 * 9 + 2) * 4;
+        bytes[index..index + 4].copy_from_slice(&100_000i32.to_le_bytes());
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_raw(9, 8, bytes).unwrap());
+        let resize = PipelineOp::Resize {
+            w: 9,
+            h: 3,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(gpu_i_resize_f64_is_exact(
+            std::slice::from_ref(&resize),
+            &image,
+            Some("I")
+        ));
+        assert!(!gpu_i_resize_f64_is_exact(
+            std::slice::from_ref(&resize),
+            &image,
+            Some("F")
         ));
     }
 
