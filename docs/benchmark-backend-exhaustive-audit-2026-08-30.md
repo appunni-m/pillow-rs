@@ -5174,3 +5174,56 @@ The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic and
 fractional or non-identity projective/mesh/palette transforms. P1 backend
 identity/fallback reconciliation and the P2 equal-ID, equal-receipt timing
 gate remain open.
+
+## 32.76 Native PA affine-nearest pair relocation (2026-09-02)
+
+The next deterministic backend-identity gap was palette-alpha (`PA`) affine
+nearest. The existing mode-1 GPU transport already carries a two-byte
+index/alpha pair as raw bytes, but `gpu_nearest_affine_is_exact` rejected every
+`PA` image and routed the operation through exact host semantic control.
+
+Pillow's affine nearest path does not expand the palette or interpolate its
+colors: it evaluates the inverse map and relocates each raw index/alpha pair.
+Before the fix Rust therefore produced the correct bytes on CPU while leaving
+the native GPU path unproved. Commit `c7bb0a9a6` adds the narrow admission
+branch: the image must be the typed `LumaA8` backing store for `PA`, the filter
+must be nearest, and the existing fixed-point coordinate/bounds proof must
+hold. With those conditions the shader's raw pair transport and Pillow's
+nearest semantics are the same operation; all broader palette arithmetic stays
+on host semantic control.
+
+The maintained case
+`PIL.Image.Image.transform.nuanced.pa-putpalette-affine-default-fill` now has
+exact value/error results on CPU, SIMD, GPU, Node WASM, and browser WASM (1/1
+each). GPU reports one native dispatch, a terminal receipt, and no fallback.
+The focused envelope hash is
+`bc9bd8ba8eb6a659e6473200749a9f39fc35f6c29873d37d1bbe3699a3e9b4cd`; its GPU
+execution sidecar hash is
+`804c65ea3777e391986f8387a1e7ebb93df3312305ab308b8b020639c0c2bfde`.
+The pool's native PA pair test is included in the 63/63 GPU unit-test run.
+
+The full schema-v3 campaign at revision `c7bb0a9a6` remains
+**10,952/10,952** value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; GPU smoke is 1/1. CPU has 6,838 terminal receipts, SIMD 6,850, and GPU
+6,838 terminal receipts (6,744 native GPU and 94 CPU host-controlled). GPU
+fallback partitions are 30 exact host semantic-control rows, 62 unsafe-primary
+image-dimension rows, one unsafe/incomplete-dimension row, and one Transform
+guard. Every pipeline lane has zero partial, missing, or indeterminate
+receipts. The full envelope hash is
+`df83aa837dad914ff07a46a71ffdd804a51fd1287b1f4b5527f6ce5305709e25`; the GPU
+execution sidecar hash is
+`520854a8b0524022edf39a86350305e10adee838e5fac368e0fe3ebff77277c6`.
+
+`cargo test -p pillow-rs compute::pool_gpu::tests:: -- --test-threads=1`
+passes 63/63, `make migration-parity-receipt-test` passes 34/34,
+`make migration-parity-evidence-check`, the focused PA replay, and the full
+replay pass. `make -C pillow-rs fmt-fix` and `make -C pillow-rs fmt` pass.
+Clippy remains blocked by the pre-existing pinned libavif
+1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement. No fixtures,
+expected values, thresholds, IDs, denominators, public errors, or receipt
+rules changed.
+
+The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic and
+fractional or non-identity projective, mesh, and palette transforms. P1 backend
+identity/fallback reconciliation and the P2 equal-ID, equal-receipt timing
+gate remain open.
