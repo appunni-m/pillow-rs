@@ -5369,10 +5369,10 @@ change the aggregate GPU identity gap.
 
 ## 32.80 Equal-ID performance gate remains noise-sensitive (2026-09-02)
 
-After the parity fixes, six fresh measurements of the fixed 11-workload cohort
+After the parity fixes, eight fresh measurements of the fixed 11-workload cohort
 were collected at `a83fb9244`. Every run had the exact same workload IDs and
 four terminal receipts per workload (44/44 comparable pairings; no fallback or
-receipt gaps). The adjacent budget checks produced 9, 4, 5, 6, and 5
+receipt gaps). The adjacent budget checks produced 9, 4, 5, 6, 5, 11, and 14
 violations. The rows move between large and small medians across otherwise
 identical receipts (notably masked RGB analysis, CMYK ImageStat, and the GPU
 draw path), so this remains timing variance rather than a reproducible source

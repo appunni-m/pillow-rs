@@ -56,8 +56,8 @@ backend is complete.
 
 - [ ] Produce two consecutive equal-ID/equal-receipt cohort comparisons with
   zero budget violations. The fixed 11-ID cohort has 44 comparable pairings;
-  six fresh runs at `a83fb9244` report 9, 4, 5, 6, and 5 violations for the
-  five adjacent comparisons. The
+  eight fresh runs at `a83fb9244` report 9, 4, 5, 6, 5, 11, and 14
+  violations for the seven adjacent comparisons. The
   factor-1.0 Brightness identity path is a deterministic row-level
   improvement (CPU medians about 0.181/0.163 ms before versus
   0.042/0.049/0.042 ms after), but aggregate acceptance is still open.
