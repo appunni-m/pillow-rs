@@ -7601,6 +7601,41 @@ fn gpu_int_filter_resize_chain_is_supported(ops: &[PipelineOp], image: &DynamicI
     .is_some_and(|(out_w, out_h)| out_w == *w && out_h == *h)
 }
 
+/// Return whether the native merge shader can consume Pillow's indexed first
+/// band without expanding its palette.
+///
+/// `ImagingMerge` accepts a `P` image only in the first position of a
+/// multi-band byte merge and treats that image as raw index bytes.  The
+/// ordinary merge shader has the same byte-interleave contract for canonical
+/// RGB, but it does not implement LAB's signed-channel bias or any typed
+/// scalar destination.  Keep this admission to one validated RGB merge so a
+/// palette lookup can never be silently replaced by an unrelated channel
+/// conversion.
+fn gpu_palette_first_rgb_merge_is_supported(ops: &[PipelineOp], mode: Option<&str>) -> bool {
+    if mode != Some("P") {
+        return false;
+    }
+    let [
+        PipelineOp::Merge {
+            mode: ColorMode::RGB,
+            logical_mode,
+            bands,
+        },
+    ] = ops
+    else {
+        return false;
+    };
+    logical_mode == "RGB"
+        && bands.len() == 3
+        && bands
+            .first()
+            .is_some_and(|band| band.mode().ok().as_deref() == Some("P"))
+        && bands
+            .iter()
+            .skip(1)
+            .all(|band| band.mode().ok().as_deref() == Some("L"))
+}
+
 /// Validate the index space assumptions made by multi-input shaders. A
 /// storage-array read is not bounds-checked by WGSL, so an image that is
 /// smaller than the coordinates used by a shader must never be uploaded for a
@@ -9434,6 +9469,7 @@ impl GpuPool {
                                 | PipelineOp::Equalize
                         )
                     }))
+                || gpu_palette_first_rgb_merge_is_supported(ops, mode)
                 || (logical_mode == "1"
                     && ops
                         .iter()
@@ -10178,10 +10214,10 @@ mod tests {
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian,
-        readback_poll_backoff,
+        gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
+        gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian, readback_poll_backoff,
     };
-    use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
+    use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
@@ -10279,6 +10315,68 @@ mod tests {
         assert!(gpu_byte_point_mode_allowed(&rgb, Some("RGB")));
         assert!(gpu_byte_point_mode_allowed(&rgba, Some("RGBA")));
         assert!(!gpu_byte_point_mode_allowed(&rgba, Some("RGBX")));
+    }
+
+    #[test]
+    fn palette_first_rgb_merge_admission_is_narrow() {
+        let mut palette = Image::frombytes("P", (2, 1), &[1, 2]).expect("P band");
+        palette
+            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
+            .expect("palette");
+        let l0 = Image::frombytes("L", (2, 1), &[32, 33]).expect("G band");
+        let l1 = Image::frombytes("L", (2, 1), &[48, 49]).expect("B band");
+        let rgb = PipelineOp::Merge {
+            mode: ColorMode::RGB,
+            logical_mode: "RGB".to_owned(),
+            bands: vec![palette.clone(), l0.clone(), l1.clone()].into(),
+        };
+        assert!(gpu_palette_first_rgb_merge_is_supported(&[rgb], Some("P")));
+
+        let lab = PipelineOp::Merge {
+            mode: ColorMode::RGB,
+            logical_mode: "LAB".to_owned(),
+            bands: vec![palette, l0, l1].into(),
+        };
+        assert!(!gpu_palette_first_rgb_merge_is_supported(&[lab], Some("P")));
+    }
+
+    #[test]
+    fn palette_first_rgb_merge_native_gpu_preserves_index_bytes() {
+        let mut palette = Image::frombytes("P", (2, 1), &[1, 2]).expect("P band");
+        palette
+            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
+            .expect("palette");
+        let green = Image::frombytes("L", (2, 1), &[32, 33]).expect("G band");
+        let blue = Image::frombytes("L", (2, 1), &[48, 49]).expect("B band");
+        let merged = crate::image_merge("RGB", &[palette, green, blue]).expect("RGB merge");
+        let expected = merged
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU merge");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match merged.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU palette-first merge failed: {error}"),
+        };
+        assert_eq!(actual, [1, 32, 48, 2, 33, 49]);
+        assert_eq!(actual, expected);
+        let telemetry =
+            Backend::take_pipeline_telemetry().expect("native GPU merge must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
