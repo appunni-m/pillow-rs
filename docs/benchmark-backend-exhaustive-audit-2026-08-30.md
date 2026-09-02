@@ -5528,8 +5528,9 @@ open.
 ## 32.84 Fresh standard benchmark recheck and PA fit admission rejection (2026-09-03)
 
 The historical standard benchmark artifact reported 746 selected workloads,
-48 all-subject not-run inputs, and 625 explicit unsupported/edge-contract or
-exactness outcomes. A fresh run of the maintained
+48 all-subject not-run inputs, and 625 explicit edge-contract or exactness
+outcomes. Those are classifications of the historical input surface, not
+parity exemptions. A fresh run of the maintained
 `make migration-parity-benchmark` target at source revision `8ac0eeb94`
 reclassified the current implementation without changing benchmark inputs or
 gates: 744/744 workloads were measured, all 744 correctness gates passed, and
@@ -5621,3 +5622,69 @@ thresholds, IDs, denominators, public errors, or receipt rules changed. P0
 heterogeneous/non-dyadic F arithmetic and filtered Mesh/projective/palette
 arithmetic, P1 backend identity reconciliation, and the P2 equal-ID timing
 gate remain open.
+
+## 32.86 Mesh filtered parity and final transform envelope (2026-09-03)
+
+The Mesh queue produced two deterministic arithmetic divergences that are now
+fixed. The original Rust implementation forced every Mesh image through a
+four-byte RGBA nearest path, used clipped dimensions for the map denominator,
+and rounded source coordinates. On the first varied RGBA BILINEAR comparison,
+Pillow returned 202 where Rust returned 201 (the focused case was 85 versus
+84). Pillow's `Geometry.c` instead keeps the original box dimensions, clips
+only the destination iteration, evaluates pixel centers, applies `COORD`
+truncation, and performs horizontal-first filtering. The corrected CPU path
+also preserves Pillow's premultiplied LA/RGBA filtering and does not
+double-premultiply explicit RGBa/RGBX modes.
+
+After that structural fix, a clipped LA/RGBA BILINEAR boundary exposed one
+more byte: Pillow's compiled map evaluation produced premultiplied 21 and
+final LA 86 while the Rust nested cross-term FMA produced 20 and 82. A
+BICUBIC boundary likewise returned native 37 versus Rust 38 when the Horner
+steps were written as plain operations. Commits `30ee05b29` and
+`1773f60b7` now match the compiled FMA/Horner operation order documented in
+Pillow's [Geometry.c](https://raw.githubusercontent.com/python-pillow/Pillow/12.2.0/src/libImaging/Geometry.c).
+
+The final bounded native-vs-Rust probes are exact: 26,352/26,352 cases across
+L, LA, RGB, RGBA, RGBa, and RGBX, eight source-size classes including zero
+dimensions, 183 translated/clipped single- and multi-record meshes, and
+NEAREST/BILINEAR/BICUBIC; an additional arbitrary-coordinate/size probe is
+4,536/4,536. The focused Rust Mesh set is 5/5, including both arithmetic
+regressions. The previously varied CPU corpus remains 84/84, explicit RGBa/
+RGBX is 12/12, and SIMD nearest is 42/42. SIMD filtered Mesh remains exact
+CPU semantic control, as do fractional/filtered GPU paths until an ordered
+device-arithmetic proof exists.
+
+The final schema-v3 all-backends replay at revision
+`1773f60b739f903884c662aa414e84efc118c5c5` passed all 10,952 selected cases
+on CPU, SIMD, GPU, Node WASM, and browser WASM with zero value/error failures.
+CPU has 6,838 terminal receipts. SIMD has 6,850 (6,849 SIMD and one CPU,
+with three Transform layout guards). GPU has 6,838 (6,620 native GPU and 218
+CPU host-control receipts), with fallback classifications of 158 exact host
+semantic-control, 62 unsafe-primary-dimension, one unsafe/incomplete-dimension,
+and one Transform capability guard. Node and browser each pass all 10,952
+comparisons. The durable envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`78bb084c1a42c59f33251d3b2228567fa0801efb71e84f6a999fae709564a7fd`), and the
+GPU sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`cdec2379f0a11bd4e43958eb3e4efb48be8ff852260950df8fb2ec2f41daf1b6`).
+
+The post-Mesh standard benchmark measured 744/744 workloads, passed all 744
+correctness gates, and completed all 2,232 target-profile subjects. Execution
+receipts were CPU 4,213, SIMD 4,325, and GPU 4,195, including 18 exact host
+semantic-control receipts; the 202-case parity preflight was 202/202 exact.
+The durable benchmark artifacts are
+`build/migration-parity/benchmark-result-current-20260903.json` (SHA-256
+`0ccacb7261878e71f249890c3c5d8a4b0bfedb241e810db196c63c015041ab44`) and
+`build/migration-parity/benchmark-parity-result-current-20260903.json`
+(SHA-256
+`af1d7feca7999767c1fb95ca27ba41bbbc6f765684855e326de30a5b14f54dd1`).
+
+`make migration-parity-receipt-test` remains 35/35 and
+`make migration-parity-evidence-check` passes. No fixtures, expected values,
+thresholds, case IDs, denominators, public errors, or receipt rules changed.
+The remaining P0 buckets are heterogeneous/non-dyadic native-GPU F arithmetic
+and broader arithmetic-changing filtered/projective/palette GPU domains. P1
+backend-identity reconciliation and the P2 equal-ID, equal-receipt timing gate
+remain open; these are execution/accounting and performance gates, not public
+parity exemptions.
