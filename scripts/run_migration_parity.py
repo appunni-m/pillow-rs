@@ -1177,6 +1177,27 @@ _TERMINAL_OBSERVATION_OPS = {
     "var",
     "stddev",
 }
+
+
+def _observation_materializes_pipeline(step: dict[str, Any]) -> bool:
+    """Return whether a successful observation proves a pipeline boundary.
+
+    A workflow may expose an intermediate image and then continue into a
+    later public error.  The observed image has already forced the preceding
+    deferred operation to execute, so its receipt is terminal for that
+    operation even though the complete workflow is not.  Filter parameter
+    constructors and mutating setup calls are deliberately excluded: merely
+    observing those values must not promote an unrelated earlier receipt.
+    """
+
+    key = (step.get("surface"), step.get("operation"))
+    if key in _PIPELINE_FILTER_PARAMETER_OPS:
+        return False
+    if key in _TERMINAL_OBSERVATION_OPS:
+        return True
+    return key in _PIPELINE_RESULT_OPS and key not in _PIPELINE_MUTATING_OPS
+
+
 _IMMEDIATE_SCALAR_MODES = {
     "F",
     "I",
@@ -2299,10 +2320,9 @@ def run_case(
     observations: list[dict[str, Any]] = []
     observation_ids = list(case.get("observations", []))
     # Keep the last successful pipeline receipt as a terminal candidate when
-    # observation serialization itself emits no telemetry.  The workflow
-    # result below is still the public success gate: a failed observation
-    # leaves every receipt non-terminal, while a successful observation proves
-    # that this final pipeline result was actually exposed to the caller.
+    # observation serialization itself emits no telemetry.  Each successful
+    # observed result can mark that candidate terminal for its own deferred
+    # boundary; a later unobserved public error does not erase that evidence.
     for observation_index, observation_id in enumerate(observation_ids):
         result = step_results.get(observation_id)
         if result is None:
@@ -2334,9 +2354,17 @@ def run_case(
                     append_execution_receipt(
                         receipt, status="completed", step_id=observation_id
                     )
-                # If the observation has no separate pipeline telemetry, keep
-                # the last operation receipt as the terminal candidate.  Its
-                # terminal bit is set only after all observations succeed.
+                # An observed image/result is a real materialization boundary
+                # even when a later, unrelated workflow step raises.  Mark
+                # the receipt for that boundary now; a later unobserved
+                # failure must not turn a completed prefix into a false gap.
+                if (
+                    terminal_receipt_index is not None
+                    and _observation_materializes_pipeline(step)
+                ):
+                    set_receipt_terminal_complete(
+                        pipeline_execution_sink[terminal_receipt_index], True
+                    )
         except BaseException as exc:  # materialization is a public observation
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()

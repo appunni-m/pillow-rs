@@ -1337,6 +1337,88 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertEqual(len(sink), 1)
         self.assertTrue(sink[0]["terminal_complete"])
 
+    def test_observed_prefix_receipt_is_terminal_before_later_public_error(self) -> None:
+        """An observed deferred result proves its own boundary before later failure."""
+
+        class Telemetry:
+            def __init__(self) -> None:
+                self.samples: list[dict[str, object] | None] = [
+                    None,
+                    {"actual_backend": "cpu"},
+                    None,
+                    None,
+                ]
+
+            def take_pipeline_telemetry(self) -> dict[str, object] | None:
+                return self.samples.pop(0)
+
+        case = {
+            "case_id": "observed-prefix-before-error",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "new",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "filtered",
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": {"kind": "binding", "step_id": "new"},
+                    "arguments": {},
+                },
+                {
+                    "step_id": "later-error",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": {"kind": "binding", "step_id": "filtered"},
+                    "arguments": {},
+                },
+            ],
+            "observations": ["filtered", "materialize"],
+        }
+        sink: list[dict[str, object]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "scalar"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=[object(), object(), ValueError("later error")],
+                ),
+                patch(
+                    "scripts.run_migration_parity.serialize_value",
+                    return_value=7,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    pipeline_execution_api=Telemetry(),
+                    pipeline_execution_sink=sink,
+                )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["observations"][1]["status"], "not_run")
+        self.assertEqual(len(sink), 1)
+        self.assertTrue(sink[0]["terminal_complete"])
+        self.assertEqual(
+            classify_pipeline_case(case, sink, result=result)["status"],
+            "complete",
+        )
+
     def test_unobserved_final_step_clears_prior_receipt_candidate(self) -> None:
         class Telemetry:
             def __init__(self) -> None:
