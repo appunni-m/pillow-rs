@@ -4981,11 +4981,72 @@ the GPU execution sidecar is
 `build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
 `22b9083c9d120865a7f4e47db957b05c51d4ccfaa139ec0559a54bae5079baf7`).
 
-A temporary attempt to widen marker-10 filtered resize admission to `I;16N`
-was discarded after the native GPU bytes diverged from Pillow despite the
-host proof precheck; the maintained `i16n-frombytes-bilinear` replay remains
-exact host semantic control. No fixtures, expected values, thresholds, IDs,
-denominators, public errors, or receipt rules changed. The remaining P0 work
-is broader heterogeneous/non-dyadic F arithmetic and unproven projective,
-mesh, and palette transform domains; P1 identity reconciliation and the P2
-equal-ID/equal-receipt timing gate remain open.
+An initial proof-only widening exposed a native-byte divergence because the
+`I;16N` transport and marker gates were incomplete; that diagnostic was
+discarded rather than weakening parity checks. The corrected transport
+admission is recorded in §32.73 below. No fixtures, expected values,
+thresholds, IDs, denominators, public errors, or receipt rules changed. The
+remaining P0 work is broader heterogeneous/non-dyadic F arithmetic and
+unproven projective, mesh, and palette transform domains; P1 identity
+reconciliation and the P2 equal-ID/equal-receipt timing gate remain open.
+
+## 32.73 Native I;16N filtered-resize admission (2026-09-02)
+
+The next deterministic backend-identity gap was the maintained
+`PIL.Image.Image.resize.nuanced.i16n-frombytes-bilinear` row. Pillow's
+`Resample.c` path treats the logical `I;16N` layout as the big-endian
+resample branch on this host, and the Rust CPU implementation already
+materialized that native-u16 contract correctly. Rust's GPU transport,
+however, byte-swapped only the explicit `I;16B` tag, while the marker-10
+f64-coefficient proof and coefficient arena used the same incomplete mode
+set. Before this change the row was exact only through exact host semantic
+control; a temporary proof-only widening produced a native-byte divergence.
+
+Commit `cdce9b98c` closes that first divergence without changing the shader's
+word arithmetic. GPU upload now stores `I;16N` samples in the same
+big-endian transport representation as `I;16B`; typed readback decodes both
+declared big-endian layouts before restoring the public bytes; and the
+marker-10 f64 coefficient/proof gates recognize `I;16N`. The existing
+little-word shader sample/store path therefore receives the same u16 values
+as the CPU native-u16 intermediate and returns Pillow's declared byte order.
+The change is limited to `pillow-rs/src/compute/pool_gpu/mod.rs` and adds no
+new fixture or threshold assumptions.
+
+The committed-source focused schema-v3 replay selected the one maintained
+I;16N case and is exact on CPU, SIMD, GPU, Node WASM, and browser WASM (1/1
+terminal-complete receipt on each lane). GPU reports
+`actual_backend=gpu` with no fallback. The envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` (SHA-256
+`e2626ad621d7b893c91761cac2dca2d1bd29d7008d5fdfc8f77ec12fdf6dd984`), and
+the GPU execution sidecar is
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`005f91deaba074c4019ad0f6cae726c6173e346de0f632bf6dc89561d0537f15`).
+
+The full committed-source schema-v3 campaign at `cdce9b98c` remains
+value/error-exact for all **10,952/10,952** IDs on CPU, SIMD, GPU, Node WASM,
+and browser WASM, with GPU smoke 1/1. CPU has 6,838 terminal receipts
+(6,832 pipeline-complete), SIMD 6,850 (6,844), and GPU 6,713 native-GPU plus
+125 CPU host-controlled receipts (6,832 pipeline-complete). GPU fallback
+partitions are 61 exact host semantic-control rows, 62 unsafe-primary-
+dimension rows, one unsafe/incomplete-dimension row, and one Transform
+guard. Every pipeline lane has zero partial, missing, or indeterminate
+receipts. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`69863881a1dbb193da6be48ea6e39c0b4b49de8a8df83ab003116251ccd251e1`), and
+the GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`56c2e16af00df0facb646156a53533e0f95a478bc44d31b02855d43d78bc1990`).
+
+`cargo test -p pillow-rs compute::pool_gpu::tests:: -- --test-threads=1`
+passes 57/57, including both luma16 proof/native tests; `make build-dev`,
+`make migration-parity-receipt-test` (34/34), `make -C pillow-rs fmt-fix`,
+and `make -C pillow-rs fmt` pass. `make -C pillow-rs clippy` remains blocked
+by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2
+environment requirement. No fixtures, expected values, thresholds, IDs,
+denominators, public errors, or receipt rules changed.
+
+The remaining P0 work is broader heterogeneous/non-dyadic F arithmetic and
+unproven projective, mesh, and palette transform domains. P1 backend
+identity/fallback reconciliation and the P2 equal-ID/equal-receipt timing
+gate remain open.
