@@ -5524,3 +5524,38 @@ remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic and
 arithmetic-changing filtered/projective, mesh, and palette transforms. P1
 fallback reconciliation and the P2 equal-ID, equal-receipt timing gate remain
 open.
+
+## 32.84 Fresh standard benchmark recheck and PA fit admission rejection (2026-09-03)
+
+The historical standard benchmark artifact reported 746 selected workloads,
+48 all-subject not-run inputs, and 625 explicit unsupported/edge-contract or
+exactness outcomes. A fresh run of the maintained
+`make migration-parity-benchmark` target at source revision `8ac0eeb94`
+reclassified the current implementation without changing benchmark inputs or
+gates: 744/744 workloads were measured, all 744 correctness gates passed, and
+all 2,232 target-profile subjects completed. Actual backend counts were CPU
+4,213, SIMD 4,325, and GPU 4,213; the 202-case parity preflight was 202/202
+passed with no failures. The two absent historical records are the Qt-only
+`toqimage` and `toqpixmap` performance entries, which the maintained input
+generator already excludes as optional-dependency workloads while retaining
+their public parity/coverage cases. The durable benchmark artifact is
+`build/migration-parity/benchmark-result-current-20260903.json` (SHA-256
+`637dbb07d08aba35929d3854ba555d1fe0ab382383cf6d0c457e460c46b2f3b8`), with
+parity artifact
+`build/migration-parity/benchmark-parity-result-current-20260903.json`
+(SHA-256
+`9deec3ee1b32b410f36e3feecb97b6fb08049724debc8834dc3376e98a644758`).
+
+While checking the remaining PA fit host-control row, a proposed GPU
+normalization to nearest sampling was rejected by a focused varied-pair
+comparison. Pillow keeps the requested filter for PA (`BICUBIC` when omitted);
+only P forces `NEAREST`. The proposed one-tap path changed the CPU bytes
+`[5, 50, 3, 69, 5, 88, 7, 130, 8, 149, 10, 168]` to
+`[5, 81, 6, 97, 8, 129, 9, 145, 10, 161, 12, 193]`. No source, fixture, or
+threshold change was kept, and
+`PIL.ImageOps.fit.nuanced.pa-putpalette-expansion` remains exact host semantic
+control until the requested PA convolution contract is proven on-device.
+
+This recheck confirms that current benchmark subjects are executable and
+parity-exact; it does not close the remaining P0 native arithmetic domains,
+P1 backend-identity reconciliation, or P2 timing gate.
