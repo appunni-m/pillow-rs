@@ -480,11 +480,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   dispatches, and no fallback. The marker-9 focused GPU group is 19/19, and
   the full schema-v3 all-backend artifact
   `build/migration-parity/all-backends-test-result.json` (SHA-256
-  `32be1163b06915202386985a2d6bdfda8fc497b3aea8c6dccf98692c9939b334`)
+  `176ea46adbb610494509f8945fcaff36cc4223cd16d9d9e7cd3d38a7862ae5f0`,
+  revision `02e63e4c2de0610d453fbe91bbb61d2259ae3610`)
   remains value/error-exact at 10,952/10,952 on CPU, SIMD, GPU, Node WASM, and
   browser WASM with GPU smoke 1/1. Its GPU sidecar
   `build/migration-parity/all-backends/parity-gpu-execution.json` has SHA-256
-  `41197a1752aa0d721fee83a2b95b605f0ff573d46e8c14e8255c22e7f48b34ff` and
+  `40b6172b7dddb4d84a355a578343bbab10de3d83592cb72a2256bd32018d9fb5` and
   records 6,632 native GPU plus 206 exact host-control CPU receipts, with
   zero partial, missing, or indeterminate pipeline cases. The follow-up
   `53d87a44c` guard keeps non-finite `PutData(F)` order-filter rows on the
