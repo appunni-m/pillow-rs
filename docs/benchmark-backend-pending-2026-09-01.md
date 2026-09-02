@@ -48,12 +48,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   subnormal Box regression is byte-exact with a terminal GPU receipt; rows
   whose ordered-f64 residual disagrees with the exact sum remain host-controlled.
 - [ ] Extend the proof to the remaining coefficient/value domains. The open
-  families are NaN/invalid special-value arithmetic, unproven negative-zero
-  and cancellation cases whose ordered f64 result does not match the exact
-  sum, Box ratios outside the proven row limits, chains containing non-Resize
-  stages or outside the per-stage intermediate proof, and larger native-GPU
-  arithmetic domains. Those rows remain on exact host semantic control until
-  their arithmetic, ordering, and storage contracts are separately validated.
+  families are mixed NaN/infinity ordering and cancellation cases whose
+  ordered f64 result does not match the device state machine, unproven
+  negative-zero/cancellation cases whose ordered f64 result does not match
+  the exact sum, Box ratios outside the proven row limits, chains containing
+  non-Resize stages or outside the per-stage intermediate proof, and larger
+  native-GPU arithmetic domains. Those rows remain on exact host semantic
+  control until their arithmetic, ordering, and storage contracts are
+  separately validated.
 - [x] Guard the mixed geometry that combines horizontal upscaling with
   vertical downscaling. Commit `ea15ac316` rejects this schedule in marker 6,
   the dyadic chain proof, and the central router after a `(1,2) -> (2,1)` Box
@@ -76,6 +78,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   boundary, and separable intermediate-capacity accounting. A deterministic
   1,365-case matrix had 0 mismatches (926 rows admitted); `I;16N`, chains,
   mixed batches, and unproven rows remain exact host semantic control.
+- [x] Admit the deterministic F special-value rows that the device can model
+  exactly. Commit `bc8197617` adds an IEEE NaN/infinity state machine to the
+  marker-9 host proof and both convolution shaders, preserves the first NaN
+  payload/sign, canonicalizes invalid zero*infinity and opposite-infinity
+  results, and quiets signaling NaNs in the Box-copy path. Native GPU tests
+  cover NaN payloads, both infinity signs, invalid products, and Box copies;
+  the focused `f_resize_f64` group is 8/8. A 2,800-row special-value probe
+  (one-special and mixed-special patterns) had 0 mismatches; mixed orderings
+  that do not match Pillow's ordered f64 result remain exact host semantic
+  control.
 
 ### P1 — complete native-backend receipt proof
 
@@ -88,7 +100,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The current full
-  envelope at `2835ce29a` has exact public parity for all 10,952 IDs and no
+  envelope at `bc8197617` has exact public parity for all 10,952 IDs and no
   native partial/missing/indeterminate pipeline cases, but GPU still reports
   6,627 native GPU receipts plus 211 CPU receipts and 142 exact host-control
   fallbacks. CPU has 6,838 terminal receipts (6,832 pipeline-complete cases)
@@ -306,8 +318,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   tests 17/17, GPU-pool tests 28/28 (including Draw, indexed Fit, finite
   subnormal marker-9 rows, filtered F chains, finite overflow and signed-zero
   rows),
-  receipt tests 29/29, evidence/schema validation, `make -C pillow-rs fmt`, and
-  `make clippy` (which completes with the repository's existing warnings).
+  receipt tests 29/29, evidence/schema validation, and `make -C pillow-rs fmt`.
+  `make -C pillow-rs clippy` remains blocked by the pre-existing pinned
+  `image-slash-star` libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2 environment
+  requirement.
 
 - [x] The post-receipt-fix full envelope at committed source `2969b323c` is
   `/tmp/all-backends-post-2969b323.json` (SHA-256
@@ -354,6 +368,17 @@ execution is a parity-preserving fallback, not a parity completion claim.
   indeterminate pipeline cases. The aggregate remains
   `passed_with_backend_gaps` because backend identity/fallback reconciliation
   and the P0/P2 buckets remain open.
+- [x] The special-value marker-9 extension at committed source `bc8197617` is
+  covered by `/tmp/all-backends-post-bc8197617.json` (SHA-256
+  `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`),
+  revision `bc8197617bc0ba880f08aa251f294a51df788d95`. The fixed 10,952-case
+  corpus remains value/error-exact in CPU, SIMD, GPU, Node WASM, and browser
+  WASM (GPU smoke 1/1). CPU reports 6,838 terminal receipts and 6,832
+  pipeline-complete cases; SIMD reports 6,850 and 6,844; GPU reports 6,627
+  native GPU plus 211 CPU receipts and 6,832 pipeline-complete cases. Every
+  lane has zero partial, missing, or indeterminate pipeline cases. The public
+  corpus does not add a new special-value receipt partition, so backend
+  identity reconciliation and the remaining arithmetic guards stay open.
 
 ## Closeout state
 
@@ -369,7 +394,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `5ed9f152e`, typed I;16 filtered-resize admission as `2ff9a6951`, the JS/WASM
   observed-boundary receipt fix as `d0ee51d9a`, the JS/WASM validation-boundary
   evidence fix as `a2cf8c102`, and the zero-operation receipt corrections as
-  `2164e2226` and `2835ce29a`; the latest full all-backend replay is
+  `2164e2226` and `2835ce29a`, plus the F special-value proof as `bc8197617`;
+  the latest full all-backend replay is
   schema-valid and value/error-exact for all 10,952 cases.
   The latest envelope has zero native or WASM partial/missing/indeterminate
   pipeline cases: CPU 6,838 terminal receipts (6,832 pipeline-complete), SIMD
@@ -380,7 +406,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   terminal receipts, 6,945 pipeline-complete cases, and 4,007 not-applicable
   boundaries. No fixture, expected value, threshold, denominator, or case ID
   was changed. The latest envelope is
-  `/tmp/all-backends-post-2835ce29.json` (SHA-256
-  `9bd4bf29816f0923a5ef4fbfaf119fbc890a975e70b5c2c7ca5e177905cffc25`) and
+  `/tmp/all-backends-post-bc8197617.json` (SHA-256
+  `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
