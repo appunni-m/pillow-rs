@@ -17346,10 +17346,9 @@ fn simd_resize_f_boxed(
                     }
                     sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
                 }
-                let values = sums.to_array().map(|value| {
-                    let value = value as f32;
-                    if value == 0.0 { 0.0 } else { value }
-                });
+                // Pillow's 32bpc path preserves the sign of zero. Do not
+                // canonicalize a negative cancellation result to +0.0.
+                let values = sums.to_array().map(|value| value as f32);
                 intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
                     .copy_from_slice(&values[..count]);
                 vector_blocks = vector_blocks.saturating_add(1);
@@ -17373,10 +17372,9 @@ fn simd_resize_f_boxed(
                     });
                     sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
                 }
-                let values = sums.to_array().map(|value| {
-                    let value = value as f32;
-                    if value == 0.0 { 0.0 } else { value }
-                });
+                // Pillow's 32bpc path preserves the sign of zero. Do not
+                // canonicalize a negative cancellation result to +0.0.
+                let values = sums.to_array().map(|value| value as f32);
                 output_floats[output_row + output_x..output_row + output_x + count]
                     .copy_from_slice(&values[..count]);
                 vector_blocks = vector_blocks.saturating_add(1);
@@ -19215,10 +19213,9 @@ fn simd_resize_f(
                             .mul_add(f64x8::new(values), f64x8::new(sums))
                             .to_array();
                     }
-                    let values = sums.map(|value| {
-                        let value = value as f32;
-                        if value == 0.0 { 0.0 } else { value }
-                    });
+                    // Pillow's 32bpc path preserves the sign of zero. Do not
+                    // canonicalize a negative cancellation result to +0.0.
+                    let values = sums.map(|value| value as f32);
                     intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
                         .copy_from_slice(&values[..count]);
                     vector_blocks = vector_blocks.saturating_add(1);
@@ -19293,10 +19290,9 @@ fn simd_resize_f(
                             .mul_add(f64x8::new(values), f64x8::new(sums))
                             .to_array();
                     }
-                    let values = sums.map(|value| {
-                        let value = value as f32;
-                        if value == 0.0 { 0.0 } else { value }
-                    });
+                    // Pillow's 32bpc path preserves the sign of zero. Do not
+                    // canonicalize a negative cancellation result to +0.0.
+                    let values = sums.map(|value| value as f32);
                     output_floats[output_row + output_x..output_row + output_x + count]
                         .copy_from_slice(&values[..count]);
                     vector_blocks = vector_blocks.saturating_add(1);
@@ -22923,4 +22919,46 @@ pub fn simd_alpha_composite(
     }
     simd_alpha_composite_native(img, source, mode)?
         .ok_or_else(|| simd_unsupported("AlphaComposite"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::simd_resize_f;
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_resize_preserves_simd_negative_zero() {
+        // Pillow's 32bpc resampler keeps the sign of a zero produced by
+        // cancellation. The SIMD adapter used to erase that sign while
+        // converting each f64 lane back to f32.
+        let source_words = [
+            0x0000_0001,
+            0x8000_0001,
+            0x0000_0002,
+            0x8000_0002,
+            0x0000_0008,
+            0x0000_0001,
+        ];
+        let source_bytes: Vec<u8> = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(3, 2, source_bytes).expect("source shape must be valid"),
+        );
+
+        let output = simd_resize_f(&source, 7, 5, &ResampleFilter::Bilinear)
+            .expect("finite F-mode SIMD resize must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode resize must retain packed float storage");
+        };
+        let word_at = |index: usize| {
+            let offset = index * 4;
+            u32::from_le_bytes(output.as_raw()[offset..offset + 4].try_into().unwrap())
+        };
+        assert_eq!(word_at(10), 0x8000_0000);
+        assert_eq!(word_at(14), 0x8000_0000);
+    }
 }
