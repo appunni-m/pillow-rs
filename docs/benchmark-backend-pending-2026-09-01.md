@@ -129,6 +129,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   receipt; the full campaign removes 23 exact-host rows (88 -> 65) without
   changing inputs, fixtures, thresholds, or denominators. Broader sampled
   transforms remain guarded.
+- [x] Admit typed right-angle rotations through the native transpose kernel.
+  Commit `63a61af97` proves complete-word relocation for `I`/`F` mode-7/8
+  samples and low-word preservation for `I;16*` mode-5 samples, while
+  retaining exact host control for fractional or filtered typed rotations.
+  The focused four-case replay is value/error exact with three native GPU
+  receipts and one intentional fractional typed host receipt. The full
+  10,952-ID campaign remains exact and reduces exact host-control rows from
+  65 to 64 (GPU native receipts 6,709 -> 6,710).
 
 ### P1 — complete native-backend receipt proof
 
@@ -141,21 +149,21 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The full campaign
-  at `3c0670555` has exact public parity for all 10,952 IDs and no native
+  at `63a61af97` has exact public parity for all 10,952 IDs and no native
   partial/missing/indeterminate pipeline cases. CPU reports 6,838 terminal
   receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
-  pipeline-complete), and GPU 6,709 native GPU plus 129 CPU receipts (6,832
+  pipeline-complete), and GPU 6,710 native GPU plus 128 CPU receipts (6,832
   pipeline-complete). GPU fallback reasons remain explicit evidence
-  partitions: 65 exact host semantic-control rows, 62 unsafe-primary-
+  partitions: 64 exact host semantic-control rows, 62 unsafe-primary-
   dimension rows, one unsafe/incomplete-dimension row, and one Transform
   guard. The public lane is 10,952/10,952 exact, while the remaining
   host-control rows and native identity reconciliation stay open. The
   committed artifact is `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `25140f569e108829f3be6c7421d2e8dd8ddf3315948fabebe159e519b5c72c16`), and
+  `4f7cdada17f5a49dbeaa0feba321790bd8376fe537e47919b885d787457830e3`), and
   the GPU execution sidecar is
   `build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
-  `bbba709e72f8a2e280813666a9f03475ffc98c77d53e9e85c5a7247cc472be66`).
+  `5717f5da103f597e91c104feedc70b1904be455ff26ef40f4aefa1c4177aff51`).
 - [x] Normalize the legacy logical-layout fallback label. Commit `09ef0dc83`
   changes only the evidence reason from `unsupported logical mode` to
   `exact host semantic control`; the valid `PIL.ImageOps.fit.nuanced.pa-
@@ -724,14 +732,20 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
-- [x] The current source parity lane is committed and pushed as `048955737`
+- [x] The preceding source parity lane was committed and pushed as `048955737`
   (following `f0129f2ac`) with the CMYK nearest-rotate admission; all
   preceding F arithmetic proofs, logical-layout taxonomy correction, typed-I
   identity admission, and indexed `P`/`1` rotate fast paths remain in its
-  history. The complete campaign at this implementation is
-  value/error-exact at 10,952/10,952 in every public lane, with GPU 6,686
-  native and 152 host-controlled terminal receipts; the post-push full
-  envelope and focused CMYK evidence are recorded above. The remaining P0
-  arithmetic proof, P1 identity reconciliation, and P2 timing items stay
+  history. Its complete campaign was value/error-exact at 10,952/10,952 in
+  every public lane, with GPU 6,686 native and 152 host-controlled terminal
+  receipts.
+- [x] The current source parity lane is committed as `63a61af97` with the
+  typed scalar right-angle transpose admission. The full campaign remains
+  value/error-exact at 10,952/10,952 in every public lane, with GPU 6,710
+  native and 128 host-controlled terminal receipts (64 exact semantic-control
+  rows plus the explicit dimension/Transform guards). The full envelope and
+  GPU sidecar hashes are recorded in the P1 checklist above; no fixture,
+  expected value, threshold, denominator, or case ID changed. The remaining
+  P0 arithmetic proof, P1 identity reconciliation, and P2 timing items stay
   open.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
