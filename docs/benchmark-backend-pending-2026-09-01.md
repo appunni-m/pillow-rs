@@ -131,17 +131,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   zero partial cases in CPU, SIMD, and GPU (1/1 terminal receipt in each;
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
-- [ ] Reconcile backend identity and fallback taxonomy. The current full
-  envelope at `09ef0dc83` has exact public parity for all 10,952 IDs and no
-  native partial/missing/indeterminate pipeline cases. CPU reports 6,838
-  terminal receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
-  pipeline-complete), and GPU 6,632 native GPU plus 206 CPU receipts (6,832
-  pipeline-complete). GPU fallback reasons remain explicit evidence
-  partitions: 142 exact host semantic-control rows (including the former
-  logical-layout row), 60 unsafe-primary-dimension rows, and the bounded
-  Transform/dimension guards. There is no
-  legacy `unsupported logical mode` bucket; the public lane is 10,952/10,952
-  exact, while native identity reconciliation remains open.
+- [ ] Reconcile backend identity and fallback taxonomy. The full campaign
+  after the exact-I admission at `e0adcd1be` has exact public parity for all
+  10,952 IDs and no native partial/missing/indeterminate pipeline cases. CPU
+  reports 6,838 terminal receipts (6,832 pipeline-complete cases), SIMD 6,850
+  (6,844 pipeline-complete), and GPU 6,634 native GPU plus 204 CPU receipts
+  (6,832 pipeline-complete). GPU fallback reasons remain explicit evidence
+  partitions: 140 exact host semantic-control rows, 60 unsafe-primary-
+  dimension rows, and the bounded Transform/dimension guards. The public
+  lane is 10,952/10,952 exact, while the remaining host-control rows and
+  native identity reconciliation stay open.
 - [x] Normalize the legacy logical-layout fallback label. Commit `09ef0dc83`
   changes only the evidence reason from `unsupported logical mode` to
   `exact host semantic control`; the valid `PIL.ImageOps.fit.nuanced.pa-
@@ -216,6 +215,19 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `5927e9206ee895d85786ab6de345b28544f129f3f89f49f29e10b5a371fce9c4`) is
   value/error-exact with **1/1 native GPU** receipt, three dispatches, and no
   fallback.
+- [x] Admit the exact same-size filtered `I` resize on native GPU. Commit
+  `e0adcd1be` proves a pure, non-empty one-operation resize whose output
+  dimensions equal the source and lowers it to the existing opaque-word
+  `Duplicate` dispatch. Pillow returns the signed source words unchanged for
+  every resampling filter at this geometry; dimensional changes, chains, and
+  other typed arithmetic remain on their existing host-controlled paths. The
+  signed-extrema native regression and the focused all-backend replay
+  `build/migration-parity/incremental/i-identity-all-backends-e0adcd1be.json`
+  (SHA-256
+  `410d2efc66d9b7b8d7a98d0eaa6cb6d4a93f1b88c3ae893d6b3214e022d182fc`)
+  are value/error-exact on every public lane; GPU is actual GPU with one
+  dispatch and no fallback. The full campaign retained 10,952/10,952 exact
+  values/errors and moved two rows from CPU host control to native GPU.
 - [x] Admit exact raw-word relocation and nearest-resize intermediates between
   filtered marker-9 `F` resizes. Commit `12bea0cbf` adds bounded complete-word
   proofs for `Mirror`, `Flip`, `Transpose`, in-bounds `Crop`, `CropBorder`,
@@ -576,6 +588,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   The aggregate is `passed_with_backend_gaps` only because backend identity /
   fallback taxonomy and the remaining P0/P2 buckets are still open; no
   fixtures, thresholds, IDs, denominators, or public errors changed.
+- [x] The same-size filtered `I` resize admission at committed source
+  `e0adcd1be` is covered by the focused schema-v3 replay
+  `build/migration-parity/incremental/i-identity-all-backends-e0adcd1be.json`
+  (SHA-256
+  `410d2efc66d9b7b8d7a98d0eaa6cb6d4a93f1b88c3ae893d6b3214e022d182fc`). CPU,
+  SIMD, GPU, Node WASM, and browser WASM are each 1/1 value/error-exact; the
+  GPU execution sidecar
+  `build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+  (SHA-256
+  `f77bd3c8442ad6c35e61c33074999106ffa7c780896185f361f37eaa1a1c35f1`)
+  records `actual_backend=gpu`, `dispatch_count=1`, and `fallback_reason=null`.
+  No fixtures, thresholds, IDs, denominators, or receipt rules changed.
 - [x] The evidence-taxonomy correction at committed source
   `09ef0dc83f09caad765ffe8113453846ee9a9b3d` is covered by the fresh
   schema-v3 all-backend replay. The artifact
@@ -610,7 +634,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the F `PutData` resize-prefix proof as `35fbfbe4d`, the non-finite F
   order-filter guard as `53d87a44c`, the proven mixed-axis marker-9
   admission as `a109e0179`, the F relocation/nearest chain proof as
-  `12bea0cbf`, and the logical-layout taxonomy correction as `09ef0dc83`;
+  `12bea0cbf`, the logical-layout taxonomy correction as `09ef0dc83`, and
+  the exact same-size filtered-I admission as `e0adcd1be`;
   the preceding full all-backend replay in that sequence is
   schema-valid and value/error-exact for all 10,952 cases.
   That preceding envelope has zero native or WASM partial/missing/indeterminate
@@ -625,12 +650,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
-- [x] The current source parity lane is committed as `09ef0dc83` (following
-  `12bea0cbf`) with the logical-layout taxonomy correction; the F
-  relocation/nearest chain proof and all earlier non-finite F order-filter
-  guards remain in its history.
-  The final fixed-denominator envelope is recorded above at 10,952/10,952 exact in all five
-  public lanes with GPU smoke 1/1; CPU, SIMD, and GPU have zero partial,
-  missing, or indeterminate pipeline receipts. The remaining P0 arithmetic
-  proof, P1 identity taxonomy, and P2 timing items stay open.
+- [x] The current source parity lane is committed and pushed as `e0adcd1be`
+  (following `09ef0dc83`) with the exact same-size filtered-I admission; the F
+  relocation/nearest chain proof, logical-layout taxonomy correction, and all
+  earlier non-finite F order-filter guards remain in its history. The complete
+  campaign at this implementation is value/error-exact at 10,952/10,952 in
+  every public lane, with GPU 6,634 native and 204 host-controlled terminal
+  receipts; the post-push focused replay is recorded above. The remaining P0
+  arithmetic proof, P1 identity reconciliation, and P2 timing items stay open.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
