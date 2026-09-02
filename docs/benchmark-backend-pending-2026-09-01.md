@@ -81,11 +81,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   partial, SIMD 7,096 + 1, and GPU 7,084 + 1; the setup-only records remain
   operation telemetry outside the deferred pipeline partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts include 405 SIMD-lane CPU receipts and 252 GPU-lane CPU receipts;
-  the latest GPU lane has 6,832 native GPU receipts, 139 exact host semantic
-  control records, and explicit logical-mode, dimension, Transform, and
-  Contrast routes. These are visible evidence gaps, not value-parity
-  exemptions.
+  counts in the last full envelope include 405 SIMD-lane CPU receipts and 252
+  GPU-lane CPU receipts; that GPU lane has 6,832 native GPU receipts and 139
+  exact host semantic-control records, with explicit logical-mode, dimension,
+  Transform, and Contrast routes. The current 35-case Contrast replay removes
+  that route for the proven prefix, but a new full-denominator envelope is
+  still needed before changing the aggregate counts. These are visible
+  evidence gaps, not value-parity exemptions.
 - [x] Admit the raw-color `ExtractBand` subset on native GPU. Commit
   `f55a770ad` permits only `ExtractBand`/`PutPixel` batches for CMYK, HSV, and
   YCbCr, whose packed channel order is already preserved by the existing
@@ -114,6 +116,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   The focused regression covers both indexed modes. The fixed 15-case replay
   is byte-exact on every public lane with 14 terminal native GPU receipts;
   `pa-putpalette-expansion` intentionally remains host-controlled.
+- [x] Admit the exact current-image `PutPixel -> Contrast` prefix on native
+  GPU. Commit `5ed9f152e` mirrors one non-palette byte write only to compute
+  Pillow's post-write midpoint, while the complete two-operation batch stays
+  on the GPU. The 35-case L/LA/RGB/RGBA/CMYK replay is byte-exact across all
+  public lanes with 35/35 terminal GPU receipts and no fallback; longer or
+  palette-sensitive prefixes remain host-controlled.
 - [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
   currently reports 6,713 complete, 586 partial, 888 missing, 2,738
   not-applicable, and 27 indeterminate cases. Keep the aggregate status
@@ -222,6 +230,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU report 7,084 complete + 1 genuine partial + 3,867 not-applicable, SIMD
   reports 7,096 + 1 + 3,855, and the WASM partitions remain 6,713 complete +
   586 partial + 888 missing + 2,738 not-applicable + 27 indeterminate.
+- [x] The current-image Contrast prefix admission at committed source
+  `5ed9f152e` is covered by `/tmp/contrast-prefix-all-backends.json` (SHA-256
+  `2db9e1f47d3e2fce94ccfcf51162cb64ad194e0ccf6a794f462c9e66d3a640ca`). The
+  fixed 35-case replay is schema-valid and byte-exact on CPU, SIMD, GPU, Node
+  WASM, and browser WASM; each lane has 35 terminal-complete receipts, and
+  the GPU lane has 35 native GPU receipts with no fallback. No fixtures,
+  expected values, thresholds, IDs, denominators, or receipt taxonomy changed.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -257,7 +272,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
   `ExtractBand` admission as `f55a770ad`, the
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
-  `7d1cc0af9`, and nearest indexed Fit admission as `0797e71f5`; the latest
+  `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, and exact
+  current-image Contrast-prefix admission as `5ed9f152e`; the latest
   committed all-backend replay is
   schema-valid and value-exact for all 10,952 cases. Native lanes report one
   genuine partial receipt each and the GPU partition has 6,832 native receipts
