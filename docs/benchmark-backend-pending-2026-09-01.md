@@ -152,6 +152,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   The focused regression covers both indexed modes. The fixed 15-case replay
   is byte-exact on every public lane with 14 terminal native GPU receipts;
   `pa-putpalette-expansion` intentionally remains host-controlled.
+- [x] Admit the proven constant `F` `ImageOps.pad` row on native GPU. The
+  source constant-resize marker now carries the scalar word through Pillow's
+  contain pass, `gpu_pad_fill` preserves named/scalar fill bits, and the pad
+  shader keeps mode-8 words opaque. The focused regression and filtered
+  all-backend replay `/tmp/f-pad-all-backends.json` are value/error-exact with
+  **1/1 native GPU** receipt and no fallback; non-constant, nearest, mixed,
+  and invalid-color `F`/typed rows remain guarded.
 - [x] Admit the exact current-image `PutPixel -> Contrast` prefix on native
   GPU. Commit `5ed9f152e` mirrors one non-palette byte write only to compute
   Pillow's post-write midpoint, while the complete two-operation batch stays
@@ -398,6 +405,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   and Node/browser WASM 6,951 terminal (6,945 complete) each. No lane has
   partial, missing, or indeterminate pipeline cases; backend identity,
   broader F arithmetic, and P2 timing remain open.
+- [x] The constant F `ImageOps.pad` native admission is covered by the
+  focused `/tmp/f-pad-all-backends.json` replay: all five public lanes are
+  value/error-exact for the selected case, and GPU has a terminal native
+  receipt with no fallback. The source/shader change is intentionally scoped
+  to a single non-nearest Pad on a finite constant F image; the remaining
+  logical-mode and arithmetic guards are still active.
 
 ## Closeout state
 
