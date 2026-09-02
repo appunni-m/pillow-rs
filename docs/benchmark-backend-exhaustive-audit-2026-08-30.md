@@ -4387,3 +4387,30 @@ environment requirement.
 No fixtures, expected values, thresholds, IDs, denominators, public errors,
 or receipt rules changed. Remaining work is the broader F arithmetic proof,
 other logical-mode/backend identity gaps, and the P2 timing gate.
+
+## 32.57 Constant and heterogeneous F-mode ImageOps.fit nearest admission (2026-09-02)
+
+The next valid logical-mode gap was `ImageOps.fit` with `F` samples and the
+`NEAREST` method. The host already builds Pillow's boxed one-tap coefficient
+tables for Fit, but the GPU preflight left every F Fit row on exact host
+semantic control; the Fit parameter path also used the ordinary byte marker,
+which would feed scalar words through the generic f32 convolution branch.
+
+The fix admits only a single nearest F Fit. Its host-generated one-tap tables
+use Pillow's f32 crop-boundary conversion and cumulative affine walk; marker 7
+copies complete four-byte words in both resize passes, and an explicit compute
+pass boundary makes the horizontal intermediate visible before the vertical
+pass on Metal. No filtered Fit or mixed F batch is widened.
+
+The permanent heterogeneous native regression
+`f_fit_nearest_native_gpu_preserves_scalar_words` is **1/1** with exact bytes
+and a terminal GPU receipt (`operation_count=2`, no fallback). The filtered
+all-backend replay `/tmp/f-fit-nearest-all-backends.json` (SHA-256
+`1bc7a9b21f08554e84762714ebfbcb4f25d4117c9c512d91aef5c6f4059412ad`) is
+schema-valid and value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; the GPU row is **1/1 native GPU**. `make -C pillow-rs fmt`, the serial
+GPU-pool suite (**38/38**), and the focused all-backend replay pass.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. Remaining work is broader F arithmetic, other
+logical-mode/backend identity gaps, and the P2 timing gate.
