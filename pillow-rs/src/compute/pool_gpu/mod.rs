@@ -202,11 +202,12 @@ fn gpu_f_resize_constant_bits(
 /// The CPU F path still travels through its scalar resampler, but no sample
 /// arithmetic is required for this geometry: the native lowering copies the
 /// selected four-byte word and canonicalizes negative zero to positive zero,
-/// matching Pillow's f64 accumulator at the final store. Every other f32 bit
-/// pattern is therefore safe here, including NaNs and infinities. PutData(F)
-/// is also allowed when its byte length matches the current image; keep this
-/// proof limited to that source update plus all-Box Resize chains so a mixed
-/// filter or any downsampling continues to use exact host control.
+/// matching Pillow's f64 accumulator at the final store. Signaling NaNs are
+/// quieted while preserving their payload/sign; quiet NaNs and infinities are
+/// otherwise copied exactly. PutData(F) is also allowed when its byte length
+/// matches the current image; keep this proof limited to that source update
+/// plus all-Box Resize chains so a mixed filter or any downsampling continues
+/// to use exact host control.
 fn gpu_f_resize_box_copy_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -809,9 +810,11 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
 /// final f32 bits with Pillow's ordered f64 `mul_add` accumulation.  The
 /// shader uses the same exact-sum representation; rows where an intermediate
 /// f64 rounding would change the final f32 value are conservatively rejected.
-/// A finite-input row may end in a signed infinity when the exact result
-/// overflows f32; NaN and any non-finite result that disagrees with the exact
-/// reducer remain outside the admission boundary.
+/// Finite rows may end in a signed infinity when the exact result overflows
+/// f32.  Special rows use an integer IEEE state machine for NaN/infinity
+/// products and are admitted only when their final bits match Pillow's
+/// ordered f64 result; all other non-finite/cancellation cases remain outside
+/// the admission boundary.
 fn gpu_f_resize_f64_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
@@ -839,13 +842,75 @@ fn gpu_f_resize_f64_sample_bits(
             (coordinate < source_h).then_some(coordinate.checked_mul(source_w)?.checked_add(line)?)
         }
     };
-    let sample_at = |tap: usize| -> Option<(u32, F32IntegerParts)> {
+    let sample_bits_at = |tap: usize| -> Option<u32> {
         let pixel = source_pixel(tap)?;
         let offset = pixel.checked_mul(4)?;
         let word = bytes.get(offset..offset.checked_add(4)?)?;
-        let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+        Some(u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+    };
+    let sample_at = |tap: usize| -> Option<(u32, F32IntegerParts)> {
+        let bits = sample_bits_at(tap)?;
         Some((bits, gpu_f32_f64_integer_parts(bits)?))
     };
+
+    // Non-finite F words do not need floating-point arithmetic on the device:
+    // a finite coefficient times NaN is NaN, a zero coefficient times an
+    // infinity is the invalid NaN operation, and opposite signed infinities
+    // cancel to NaN.  Preserve the first NaN payload in tap order (the same
+    // payload Pillow's ordered `mul_add` path exposes), while letting the
+    // host-side f64 result below reject any mixed special ordering that does
+    // not match this device state machine.
+    let mut ordered_accumulator = 0.0f64;
+    let mut first_nan = None;
+    let mut positive_infinity = false;
+    let mut negative_infinity = false;
+    let mut has_special = false;
+    for (tap, &weight) in weights.iter().enumerate() {
+        let coeff = gpu_f64_integer_parts(weight)?;
+        let bits = sample_bits_at(tap)?;
+        let sample = f32::from_bits(bits);
+        ordered_accumulator = weight.mul_add(f64::from(sample), ordered_accumulator);
+        let exponent_bits = (bits >> 23) & 0xff;
+        if exponent_bits != 0xff {
+            continue;
+        }
+        has_special = true;
+        let fraction = bits & 0x7f_ff_ff;
+        if fraction != 0 {
+            first_nan.get_or_insert(bits | 0x0040_0000);
+        } else if coeff.mantissa == 0 {
+            // 0 * infinity is an invalid operation.  Pillow stores the
+            // resulting quiet NaN with the canonical f32 payload.
+            first_nan.get_or_insert(0x7fc0_0000);
+        } else if (bits & 0x8000_0000) != 0 {
+            if coeff.negative {
+                positive_infinity = true;
+            } else {
+                negative_infinity = true;
+            }
+        } else if coeff.negative {
+            negative_infinity = true;
+        } else {
+            positive_infinity = true;
+        }
+    }
+    if has_special {
+        let actual = if let Some(bits) = first_nan {
+            bits
+        } else if positive_infinity && negative_infinity {
+            0x7fc0_0000
+        } else if positive_infinity {
+            0x7f80_0000
+        } else if negative_infinity {
+            0xff80_0000
+        } else {
+            // The special scan only reaches this branch for an impossible
+            // coefficient/source combination; keep the admission conservative.
+            return None;
+        };
+        let expected = (ordered_accumulator as f32).to_bits();
+        return (actual == expected).then_some(actual);
+    }
 
     let mut minimum_exponent = None;
     for (tap, &weight) in weights.iter().enumerate() {
@@ -1237,15 +1302,6 @@ fn gpu_f_resize_f64_is_exact(
     if expected_bytes != Some(bytes.len()) {
         return false;
     }
-    if bytes.chunks_exact(4).any(|sample| {
-        gpu_f32_f64_integer_parts(u32::from_le_bytes([
-            sample[0], sample[1], sample[2], sample[3],
-        ]))
-        .is_none()
-    }) {
-        return false;
-    }
-
     let words_to_bytes = |words: Vec<u32>| -> Option<Vec<u8>> {
         let byte_count = words.len().checked_mul(4)?;
         let mut result = Vec::new();
@@ -11075,7 +11131,7 @@ mod tests {
         ));
 
         for value in [f32::NAN.to_bits(), f32::INFINITY.to_bits()] {
-            let rejected = DynamicImage::ImageRgba8(
+            let special = DynamicImage::ImageRgba8(
                 RgbaImage::from_raw(
                     2,
                     2,
@@ -11086,11 +11142,10 @@ mod tests {
                 )
                 .unwrap(),
             );
-            assert!(!gpu_f_resize_f64_is_exact(
-                std::slice::from_ref(&horizontal),
-                &rejected,
-                Some("F")
-            ));
+            assert!(
+                gpu_f_resize_f64_is_exact(std::slice::from_ref(&horizontal), &special, Some("F")),
+                "finite-coefficient special-value rows should use the exact marker"
+            );
         }
 
         // Finite subnormal words use the explicit 2^-149 source scale and
@@ -11732,6 +11787,99 @@ mod tests {
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_native_preserves_special_value_outputs() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Marker 9 handles special values in the coefficient reducer without
+        // relaxed-f32 arithmetic.  Include a signaling NaN to verify the
+        // Pillow/C quieting rule, infinities with both signs, and an
+        // opposite-infinity pair that must become the canonical quiet NaN.
+        let cases = [
+            (
+                (2u32, 2u32),
+                (1i64, 2i64),
+                ResampleInput::Name("BILINEAR".into()),
+                vec![0x7fa0_0001, 0x3f80_0000, 0x4000_0000, 0x4040_0000],
+            ),
+            (
+                (2, 2),
+                (1, 2),
+                ResampleInput::Name("BILINEAR".into()),
+                vec![0x7f80_0000, 0x3f80_0000, 0x4000_0000, 0x4040_0000],
+            ),
+            (
+                (2, 2),
+                (1, 2),
+                ResampleInput::Name("BILINEAR".into()),
+                vec![0xff80_0000, 0x3f80_0000, 0x4000_0000, 0x4040_0000],
+            ),
+            (
+                (3, 1),
+                (2, 1),
+                ResampleInput::Name("BICUBIC".into()),
+                vec![0x7f80_0000, 0x3f80_0000, 0xff80_0000],
+            ),
+            (
+                (3, 1),
+                (2, 1),
+                ResampleInput::Name("BICUBIC".into()),
+                vec![0x7fc1_2345, 0x3f80_0000, 0x3f80_0000],
+            ),
+            (
+                (2, 1),
+                (6, 1),
+                ResampleInput::Name("BOX".into()),
+                vec![0x7fa0_0001, 0x3f80_0000],
+            ),
+            (
+                (2, 1),
+                (6, 1),
+                ResampleInput::Name("BICUBIC".into()),
+                vec![0x7f80_0000, 0x3f80_0000],
+            ),
+        ];
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (source_dimensions, destination, filter, words) in cases {
+            let source = Image::frombytes("F", source_dimensions, &bytes(&words))
+                .expect("F special-value source");
+            let expected = source
+                .resize(destination, Some(filter.clone()), None)
+                .expect("CPU special-value resize operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU special-value F resize");
+            let actual = match source
+                .resize(destination, Some(filter), None)
+                .expect("GPU special-value resize operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU special-value F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "native GPU special-value F resize");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU special-value F resize must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+        }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
