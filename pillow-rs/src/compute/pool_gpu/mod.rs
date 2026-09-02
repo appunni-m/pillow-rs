@@ -6372,10 +6372,17 @@ fn gpu_transform_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) ->
     };
     let has_alpha =
         matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
+    // Pillow's default rotate fill for CMYK is the complete zero C/M/Y/K
+    // sample. It is not the opaque-alpha default used by RGB-like modes.
+    let default_fill = if logical_mode == Some("CMYK") {
+        (0, 0, 0, 0)
+    } else {
+        (0, 0, 0, if has_alpha { 0 } else { 255 })
+    };
     let resolved = palette_fill
         .map(|index| (index, 0, 0, 255))
         .or(*fill)
-        .unwrap_or((0, 0, 0, if has_alpha { 0 } else { 255 }));
+        .unwrap_or(default_fill);
     // Core normalizes LA/PA colors as `(luma, alpha, 0, 0)` because that is
     // the native two-band representation.  The GPU transport is packed
     // RGBA, so move the logical alpha into byte three and replicate luma in
@@ -8238,7 +8245,18 @@ fn expand_gpu_geometry_ops(
             // rotations use the byte-relocation transpose kernel instead.
             PipelineOp::Rotate { .. }
                 if gpu_rotate_requires_exact_host_control(image, logical_mode)
-                    && !matches!(logical_mode, Some("1" | "P")) =>
+                    && !matches!(logical_mode, Some("1" | "P"))
+                    && !gpu_rotate_has_exact_transpose_lowering(
+                        op,
+                        logical_mode,
+                        (cur_w, cur_h),
+                    )
+                    && !gpu_rotate_nearest_affine_is_exact(
+                        op,
+                        image,
+                        logical_mode,
+                        (cur_w, cur_h),
+                    ) =>
             {
                 op.clone()
             }
@@ -9295,8 +9313,9 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
         || !gpu_image_layout_is_supported(image)
 }
 
-/// Return whether a typed or indexed nearest affine transform can use the
-/// fixed-point relocation shader without changing Pillow's source selection.
+/// Return whether a typed, indexed, or raw packed nearest affine transform can
+/// use the fixed-point relocation shader without changing Pillow's source
+/// selection.
 ///
 /// `Geometry.c` computes the six affine values as signed 16.16 integers and
 /// then walks each output row with integer additions.  The GPU shader carries
@@ -9325,9 +9344,14 @@ fn gpu_nearest_affine_is_exact(
     };
     let typed_mode = mode == Some("I");
     let indexed_mode = matches!(mode, Some("1" | "P"));
-    if (!typed_mode && !indexed_mode)
+    // CMYK is four raw channel bytes in the same Rgba8 transport. Unlike
+    // RGBA, its fourth byte is K rather than alpha, and the mode-4 nearest
+    // shader branch copies all four bytes without color conversion.
+    let raw_packed_mode = mode == Some("CMYK");
+    if (!typed_mode && !indexed_mode && !raw_packed_mode)
         || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
         || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
+        || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
         || !matches!(method, TransformMethod::Affine)
         || (!gpu_transform_uses_nearest(mode, *filter))
         || source_dimensions.0 == 0
@@ -9390,6 +9414,57 @@ fn gpu_nearest_affine_is_exact(
     fits_i32(origin_x, step_x_x, step_y_x) && fits_i32(origin_y, step_x_y, step_y_y)
 }
 
+/// Lower a CMYK nearest rotate through the same fixed-point affine proof used
+/// by typed/indexed transforms. The public rotate node is expanded to an
+/// affine `Transform` only after Pillow's angle/center/translation geometry
+/// has been materialized, so construct that exact intermediate here for the
+/// admission check rather than widening every CMYK rotate.
+fn gpu_rotate_nearest_affine_is_exact(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
+    if mode != Some("CMYK") {
+        return false;
+    }
+    let PipelineOp::Rotate {
+        nearest,
+        angle,
+        expand,
+        fill,
+        center,
+        translate,
+    } = op
+    else {
+        return false;
+    };
+    if !*nearest {
+        return false;
+    }
+    let Some((affine, (w, h))) = gpu_rotate_affine(
+        *angle,
+        *expand,
+        *fill,
+        *center,
+        *translate,
+        source_dimensions.0,
+        source_dimensions.1,
+    ) else {
+        return false;
+    };
+    let transformed = PipelineOp::Transform {
+        w,
+        h,
+        method: TransformMethod::Affine,
+        data: Arc::from(affine.to_vec()),
+        filter: ResampleFilter::Nearest,
+        fill: *fill,
+        palette_fill: None,
+    };
+    gpu_nearest_affine_is_exact(&transformed, image, mode, source_dimensions)
+}
+
 fn gpu_geometry_requires_exact_host_control(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -9401,12 +9476,11 @@ fn gpu_geometry_requires_exact_host_control(
     f_resize_dyadic_is_exact: bool,
     f_resize_f64_is_exact: bool,
 ) -> bool {
-    // The affine shader is byte-exact for the ordinary packed L/LA/RGB/RGBA
-    // layouts.  Pillow's typed, indexed, and palette-alpha modes use a
-    // different sample contract (or a palette lookup) even when their
-    // temporary storage happens to be four bytes per pixel.  Keep those
-    // rotations on the exact core implementation until a mode-aware affine
-    // shader exists; this is semantic control, not a public unsupported path.
+    // The affine shader is byte-exact for ordinary packed layouts, and its
+    // fixed-point nearest branch additionally owns raw CMYK words. Pillow's
+    // remaining typed, indexed, and palette-alpha modes use a different
+    // sample contract (or a palette lookup), so keep those rotations on the
+    // exact core implementation until a mode-aware affine shader exists.
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
@@ -11506,6 +11580,139 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
             assert_eq!(telemetry.7, None, "{mode} fallback reason");
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn cmyk_nearest_rotate_native_gpu_preserves_raw_samples() {
+        let source = Image::frombytes(
+            "CMYK",
+            (3, 2),
+            &[
+                0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187, 204, 221, 238, 255, 13, 47,
+                89, 131, 173, 215, 241, 7,
+            ],
+        )
+        .expect("CMYK source");
+        let cases = [
+            source
+                .rotate(1.0, true, None)
+                .expect("CMYK fractional rotate"),
+            source
+                .rotate_with_input(
+                    90.0,
+                    RotateResampleInput::Name("BICUBIC".to_owned()),
+                    RotateExpandInput::Boolean(true),
+                    RotatePointInput::Default,
+                    RotatePointInput::Default,
+                    ImageOpsColor::None,
+                )
+                .expect("CMYK right-angle rotate"),
+            source
+                .rotate_with_input(
+                    180.0,
+                    RotateResampleInput::Name("BICUBIC".to_owned()),
+                    RotateExpandInput::Boolean(false),
+                    RotatePointInput::Default,
+                    RotatePointInput::Default,
+                    ImageOpsColor::None,
+                )
+                .expect("CMYK 180-degree rotate"),
+            source
+                .rotate(90.0, true, None)
+                .expect("CMYK 90-degree rotate"),
+            source
+                .rotate(270.0, true, None)
+                .expect("CMYK 270-degree rotate"),
+            source
+                .rotate_with_input(
+                    17.5,
+                    RotateResampleInput::Name("NEAREST".to_owned()),
+                    RotateExpandInput::Boolean(true),
+                    RotatePointInput::Values(vec![1.25, 0.75]),
+                    RotatePointInput::Values(vec![0.25, -0.5]),
+                    ImageOpsColor::Components(vec![10, 20, 30, 40]),
+                )
+                .expect("CMYK custom nearest rotate"),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for rotated in cases {
+            let expected = rotated
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU CMYK rotate");
+            let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU CMYK rotate failed: {error}"),
+            };
+            assert_eq!(actual, expected, "CMYK rotate parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU CMYK rotate must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn cmyk_filtered_rotate_stays_on_exact_host_control() {
+        let source = Image::frombytes(
+            "CMYK",
+            (3, 2),
+            &[
+                0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187, 204, 221, 238, 255, 13, 47,
+                89, 131, 173, 215, 241, 7,
+            ],
+        )
+        .expect("CMYK source");
+        let rotated = source
+            .rotate_with_input(
+                17.5,
+                RotateResampleInput::Name("BICUBIC".to_owned()),
+                RotateExpandInput::Boolean(true),
+                RotatePointInput::Default,
+                RotatePointInput::Default,
+                ImageOpsColor::None,
+            )
+            .expect("CMYK filtered rotate");
+        let expected = rotated
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU CMYK filtered rotate");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("CMYK filtered rotate failed: {error}"),
+        };
+        assert_eq!(actual, expected, "CMYK filtered rotate parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("CMYK filtered rotate must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
