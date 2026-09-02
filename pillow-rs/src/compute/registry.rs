@@ -1997,10 +1997,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Grayscale) {
-                    op_grayscale(img)
+                    op_grayscale(img, mode)
                 } else {
                     Err(PilError::ValueError("expected Grayscale op".into()))
                 }

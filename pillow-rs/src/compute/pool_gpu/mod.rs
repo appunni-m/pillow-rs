@@ -10975,9 +10975,13 @@ impl GpuPool {
             // them before executing the suffix so the outer benchmark sample
             // can retain one terminal aggregate rather than reporting only
             // the final segment's dispatch/resource counts.
+            let prefix_override = crate::compute::take_pipeline_backend_override();
             let prefix_resource = crate::compute::take_pipeline_resource_telemetry();
             let prefix_dispatch = crate::compute::take_pipeline_dispatch_count().unwrap_or(0);
             if suffix.is_empty() {
+                if let Some(prefix_override) = prefix_override {
+                    crate::compute::restore_pipeline_backend_override(prefix_override);
+                }
                 if let Some(resource) = prefix_resource {
                     crate::compute::record_pipeline_resource_telemetry(resource);
                 }
@@ -10991,8 +10995,19 @@ impl GpuPool {
                 next_mode.as_deref(),
                 allow_cpu_fallback,
             )?;
+            let suffix_override = crate::compute::take_pipeline_backend_override();
             let suffix_resource = crate::compute::take_pipeline_resource_telemetry();
             let suffix_dispatch = crate::compute::take_pipeline_dispatch_count().unwrap_or(0);
+            // A host-controlled prefix is allowed to feed a native GPU
+            // suffix, but its CPU override must not mislabel the terminal
+            // executor. Preserve the diagnostic reason while reporting the
+            // final segment's backend identity. If the suffix itself fell
+            // back, its terminal CPU override wins unchanged.
+            if let Some(suffix_override) = suffix_override {
+                crate::compute::restore_pipeline_backend_override(suffix_override);
+            } else if let Some((_, reason)) = prefix_override {
+                crate::compute::restore_pipeline_backend_override((Backend::Gpu, reason));
+            }
             let mut resource = None;
             crate::compute::merge_pipeline_resource_telemetry(&mut resource, prefix_resource);
             crate::compute::merge_pipeline_resource_telemetry(&mut resource, suffix_resource);
@@ -11872,6 +11887,54 @@ mod tests {
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn grayscale_f_prefix_keeps_gpu_suffix_receipt_terminal() {
+        let source_bytes = [
+            1.5f32.to_le_bytes(),
+            (-2.25f32).to_le_bytes(),
+            300.0f32.to_le_bytes(),
+            0.0f32.to_le_bytes(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+        let pipeline = crate::ops::imageops::invert(
+            &crate::ops::imageops::grayscale(&source).expect("grayscale pipeline"),
+        )
+        .expect("invert pipeline");
+        let expected = pipeline
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU grayscale/invert");
+        assert_eq!(expected, vec![0xfe, 0xff, 0x00, 0xff]);
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match pipeline.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU grayscale/invert failed: {error}"),
+        };
+        assert_eq!(actual, expected);
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("segmented grayscale/invert must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.2, 2);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
 
     #[test]
     fn gpu_buffer_reuse_rejects_oversized_working_sets() {

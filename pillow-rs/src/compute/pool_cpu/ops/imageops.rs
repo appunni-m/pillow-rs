@@ -523,9 +523,44 @@ pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, Pi
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
-/// Grayscale: convert to L-mode using PIL's BT.601 formula.
-pub fn op_grayscale(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?))
+/// Grayscale: convert to L-mode using Pillow's source-mode conversion path.
+///
+/// `ImageOps.grayscale` delegates to `Image.convert("L")`, whose C dispatch
+/// does not reinterpret every source buffer as RGB. In particular, `I` and
+/// `F` contain one scalar sample in a four-byte transport, `1` treats every
+/// non-zero sample as white, and YCbCr copies its Y band directly. Keeping
+/// those source semantics here is required before a later operation receives
+/// the new L-mode segment.
+pub fn op_grayscale(img: &DynamicImage, mode: Option<&str>) -> Result<DynamicImage, PilError> {
+    let gray = match mode {
+        Some("I") => match crate::color::i_to_l(img) {
+            DynamicImage::ImageLuma8(gray) => gray,
+            _ => unreachable!("i_to_l always returns L mode"),
+        },
+        Some("F") => match crate::color::f_to_l(img) {
+            DynamicImage::ImageLuma8(gray) => gray,
+            _ => unreachable!("f_to_l always returns L mode"),
+        },
+        Some("1") => {
+            let mut gray = img.to_luma8();
+            for pixel in gray.pixels_mut() {
+                pixel[0] = if pixel[0] == 0 { 0 } else { u8::MAX };
+            }
+            gray
+        }
+        Some("CMYK") => crate::color::cmyk_to_grayscale(img)?,
+        Some("HSV") => crate::color::pil_grayscale(&crate::color::hsv_to_rgb(img))?,
+        Some("YCbCr") => {
+            // Pillow's Convert.c maps YCbCr→L through the Y band directly,
+            // not through an RGB round trip and a second luma calculation.
+            let source = img.to_rgb8();
+            crate::raster::GrayImage::from_fn(source.width(), source.height(), |x, y| {
+                crate::raster::Luma([source.get_pixel(x, y)[0]])
+            })
+        }
+        _ => pil_grayscale(img)?,
+    };
+    Ok(DynamicImage::ImageLuma8(gray))
 }
 
 /// Colorize: map grayscale values to a two-color gradient.
