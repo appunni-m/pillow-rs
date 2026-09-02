@@ -747,6 +747,12 @@ def execution_evidence_document(
                 actual_backend_counts["unattributed"] = (
                     actual_backend_counts.get("unattributed", 0) + 1
                 )
+        # A no-fallback claim applies to the complete workflow, not merely the
+        # final observation receipt.  A host-controlled prefix can be followed
+        # by a terminal receipt, so retain every fallback reason in the case
+        # history for backend-coverage gating, matching the Python evidence
+        # writer.
+        for receipt in receipts:
             reason = receipt.get("fallback_reason")
             if isinstance(reason, str) and reason:
                 fallback_reason_counts[reason] = (

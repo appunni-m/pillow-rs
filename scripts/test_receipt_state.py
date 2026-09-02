@@ -1764,6 +1764,38 @@ class ReceiptStateTests(unittest.TestCase):
             )
             self.assertEqual(evidence["status"], "measured")
 
+    def test_js_sidecar_keeps_prefix_fallbacks_out_of_no_fallback_claim(self) -> None:
+        """WASM evidence must retain fallback history before its terminal receipt."""
+
+        case = classification_case("case-prefix-js", "resize")
+        case_id = case["case_id"]
+        document = execution_evidence_document(
+            [case],
+            {"side": "target", "implementation": "pillow-rs-js"},
+            {
+                case_id: [
+                    {
+                        "status": "completed",
+                        "terminal_complete": False,
+                        "actual_backend": "cpu",
+                        "operation_count": 1,
+                        "fallback_reason": "exact host semantic control",
+                    },
+                    {
+                        "status": "completed",
+                        "terminal_complete": True,
+                        "actual_backend": "cpu",
+                        "operation_count": 1,
+                    },
+                ]
+            },
+        )
+        self.assertEqual(document["summary"]["actual_backend_counts"], {"cpu": 1})
+        self.assertEqual(
+            document["summary"]["fallback_reason_counts"],
+            {"exact host semantic control": 1},
+        )
+
     def test_sidecar_marks_validation_receipts_outside_pipeline_partition(self) -> None:
         case = error_at_deferred_call_case()
         case_id = case["case_id"]
