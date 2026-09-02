@@ -29,7 +29,7 @@ use crate::raster::{
 #[cfg(feature = "parallel")]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
-use wide::{f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x8};
+use wide::{f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8};
 
 fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
@@ -11028,10 +11028,69 @@ pub fn simd_extract_band(
     // PipelineOp callers while using the native storage stride here.
     let channel = usize::from(*index).min(channels - 1);
     let mut output = vec![0u8; pixel_count];
+    if channels == 4 {
+        // RGBA-family extraction can load four packed words at once and use
+        // a lane shift/mask; unlike a byte shuffle this keeps the hot path on
+        // the integer SIMD unit while preserving the packed byte order.
+        let shift = u32x4::splat((channel * 8) as u32);
+        let mask = u32x4::splat(0xff);
+        let mut pixel = 0usize;
+        while pixel + 4 <= pixel_count {
+            let source_start = pixel * channels;
+            let words = u32x4::new([
+                u32::from_le_bytes([
+                    source[source_start],
+                    source[source_start + 1],
+                    source[source_start + 2],
+                    source[source_start + 3],
+                ]),
+                u32::from_le_bytes([
+                    source[source_start + 4],
+                    source[source_start + 5],
+                    source[source_start + 6],
+                    source[source_start + 7],
+                ]),
+                u32::from_le_bytes([
+                    source[source_start + 8],
+                    source[source_start + 9],
+                    source[source_start + 10],
+                    source[source_start + 11],
+                ]),
+                u32::from_le_bytes([
+                    source[source_start + 12],
+                    source[source_start + 13],
+                    source[source_start + 14],
+                    source[source_start + 15],
+                ]),
+            ]);
+            let selected = ((words >> shift) & mask).to_array();
+            for (offset, value) in selected.into_iter().enumerate() {
+                output[pixel + offset] = value as u8;
+            }
+            pixel += 4;
+        }
+        for pixel in pixel..pixel_count {
+            output[pixel] = source[pixel * channels + channel];
+        }
+        let vector_blocks = pixel_count / 4;
+        let scalar_tail = pixel_count % 4;
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
+        crate::compute::record_pipeline_operation_path("vector");
+
+        return GrayImage::from_raw(width, height, output)
+            .map(DynamicImage::ImageLuma8)
+            .ok_or_else(|| {
+                PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
+            });
+    }
+
     // One shuffle consumes at most 16 source bytes.  The native layouts have
     // one to four bytes per pixel, so this processes 16, 8, 5, or 4 pixels
     // per vector respectively.
     let pixels_per_vector = 16 / channels;
+    let indices =
+        std::array::from_fn(|lane| ((lane % pixels_per_vector) * channels + channel) as u8);
     let mut pixel = 0usize;
     while pixel + pixels_per_vector <= pixel_count {
         let source_start = pixel * channels;
@@ -11039,8 +11098,6 @@ pub fn simd_extract_band(
         let mut source_block = [0u8; 16];
         source_block[..source_bytes]
             .copy_from_slice(&source[source_start..source_start + source_bytes]);
-        let indices =
-            std::array::from_fn(|lane| ((lane % pixels_per_vector) * channels + channel) as u8);
         let extracted = u8x16::new(source_block)
             .swizzle_relaxed(u8x16::new(indices))
             .to_array();
@@ -22962,9 +23019,10 @@ pub fn simd_alpha_composite(
 #[cfg(test)]
 mod tests {
     use super::{
-        rotate_discrete_fast_angle, simd_projective_nearest_transform_bytes, simd_resize_f,
+        rotate_discrete_fast_angle, simd_extract_band, simd_projective_nearest_transform_bytes,
+        simd_resize_f,
     };
-    use crate::pipeline::ResampleFilter;
+    use crate::pipeline::{PipelineOp, ResampleFilter};
     use crate::raster::{DynamicImage, GrayImage, RgbaImage};
 
     #[test]
@@ -22978,6 +23036,49 @@ mod tests {
                 None,
                 "fractional angle {angle} must retain affine sampling"
             );
+        }
+    }
+
+    #[test]
+    fn extract_band_rgba_integer_vector_matches_packed_bytes() {
+        let pixel_count = 10;
+        let raw: Vec<u8> = (0..pixel_count)
+            .flat_map(|pixel| {
+                let base = pixel * 4;
+                [
+                    (base + 3) as u8,
+                    (base + 17) as u8,
+                    (base + 31) as u8,
+                    (base + 47) as u8,
+                ]
+            })
+            .collect();
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(5, 2, raw).expect("RGBA source shape must be valid"),
+        );
+
+        for mode in ["RGBA", "CMYK", "RGBa", "RGBX"] {
+            for index in 0..4u8 {
+                let output =
+                    simd_extract_band(&image, &PipelineOp::ExtractBand { index }, Some(mode))
+                        .expect("SIMD RGBA-family ExtractBand must succeed");
+                let expected: Vec<u8> = (0..pixel_count)
+                    .map(|pixel| {
+                        let base = pixel * 4;
+                        [
+                            (base + 3) as u8,
+                            (base + 17) as u8,
+                            (base + 31) as u8,
+                            (base + 47) as u8,
+                        ][usize::from(index)]
+                    })
+                    .collect();
+                assert_eq!(
+                    output.as_bytes(),
+                    expected.as_slice(),
+                    "mode={mode} index={index}"
+                );
+            }
         }
     }
 
