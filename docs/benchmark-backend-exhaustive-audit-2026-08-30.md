@@ -4778,5 +4778,47 @@ native pipeline partitions have zero partial, missing, or indeterminate
 receipts. The remaining host-control identity reconciliation, broader F
 arithmetic proof, and P2 equal-receipt timing gate stay open.
 
+## 32.69 Native CMYK nearest rotate admission (2026-09-02)
+
+The next deterministic backend-identity divergence was
+`PIL.Image.Image.rotate.mode.cmyk`. Pillow's default rotate sampling is
+nearest-neighbour and CMYK images preserve raw C/M/Y/K bytes; Rust previously
+routed every CMYK `Rotate` through exact host semantic control because the
+generic affine guard admitted only the already-proven typed modes. The existing
+nearest `Transform` shader has a signed-16.16 coordinate walk and a four-byte
+branch that can copy CMYK words exactly, but its default fill was the opaque
+RGBA default rather than Pillow's zero C/M/Y/K sample.
+
+Commit `048955737` adds a deliberately bounded CMYK nearest-affine proof:
+the source must be Rgba8-backed CMYK, the geometry must be nearest, and all
+coordinate origins and steps must fit the shader's i32 walk. Exact right-angle
+rotations continue through raw-word `Transpose`; fractional or filtered CMYK
+rotations that do not satisfy the nearest proof remain exact host semantic
+control. The default fill is encoded as four zero bytes.
+
+Native GPU tests cover varied fractional, custom center/translation/fill, and
+right-angle cases; a filtered fractional CMYK regression remains on exact host
+semantic control. `make -C pillow-rs fmt`, `make build-dev`, and the serial GPU
+pool tests pass (54/54). The maintained
+`PIL.Image.Image.rotate.mode.cmyk` replay is byte/error-exact and has one
+terminal GPU receipt (`actual_backend=gpu`, `dispatch_count=1`, no fallback).
+
+The pushed schema-v3 full artifact
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`a39f7175bf4a389ef398d8483418a86bd3f2328abaddafd7bbd611237cd9b2a5`) remains
+10,952/10,952 exact on CPU, SIMD, GPU, Node WASM, and browser WASM, with GPU
+smoke 1/1. CPU has 6,838 terminal receipts (6,832 pipeline-complete), SIMD
+6,850 (6,844), and GPU 6,686 native-GPU plus 152 host-control receipts
+(6,832 complete). GPU fallback partitions are 88 exact host semantic-control
+rows, 62 unsafe-primary-dimension rows, one unsafe/incomplete-dimension row,
+and one Transform guard. All pipeline cases are terminal complete with zero
+partial, missing, or indeterminate receipts. No fixtures, expected values,
+thresholds, IDs, denominators, public errors, or receipt rules changed.
+
+The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic on
+native GPU (Bilinear, Bicubic, Lanczos, Hamming, and non-dyadic Box/chains);
+P1 identity/export reconciliation and the P2 equal-receipt timing gate remain
+open.
+
 No fixtures, expected values, thresholds, IDs, denominators, public errors, or
 receipt rules changed.
