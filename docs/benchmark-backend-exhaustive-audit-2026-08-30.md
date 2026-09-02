@@ -5836,3 +5836,11 @@ The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic
 (wider taps, specials, and arithmetic-changing chains), plus filtered
 projective/mesh/palette device arithmetic; P1 receipt partitioning and the P2
 equal-ID timing gate remain open.
+
+A fresh maintained all-backends replay at revision `b7f2fadc9` also passed
+10,952/10,952 value/error comparisons on CPU, SIMD, GPU, Node WASM, and
+browser WASM with zero failed or not-run cases. It intentionally reports
+`passed_with_backend_gaps`: CPU has 6,838 terminal receipts, SIMD 6,847 SIMD
+plus 3 CPU controls, GPU 6,620 native plus 218 host controls, and each WASM
+lane 6,951 CPU receipts. The transient replay artifact's SHA-256 is
+`49c0b07da8452284b454f23f26c43588af04e54f444308282bcd9fe4763a9f72`.
