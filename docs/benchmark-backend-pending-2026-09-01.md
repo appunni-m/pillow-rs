@@ -182,6 +182,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `5927e9206ee895d85786ab6de345b28544f129f3f89f49f29e10b5a371fce9c4`) is
   value/error-exact with **1/1 native GPU** receipt, three dispatches, and no
   fallback.
+- [x] Admit the exact palette-first RGB merge on native GPU. Commit
+  `c68bce674` adds a single-operation guard for
+  `Image.merge("RGB", [P, L, L])`, preserving the first band's raw index
+  bytes instead of expanding its palette; LAB, alias, typed, and mixed merge
+  contracts remain host-controlled. The focused replay
+  `/tmp/merge-palette-first-c68bce674.json` (SHA-256
+  `38a0dffc030e8e4be4cb7cb09c909a164e3aa812d9cf5498342e764fc6976630`) is
+  value/error-exact with **1/1 native GPU** receipt, one dispatch, and no
+  fallback.
 - [x] Admit the exact current-image `PutPixel -> Contrast` prefix on native
   GPU. Commit `5ed9f152e` mirrors one non-palette byte write only to compute
   Pillow's post-write midpoint, while the complete two-operation batch stays
@@ -446,6 +455,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   five public lanes are value/error-exact for the selected chain, and GPU has
   a terminal native receipt with five dispatches and no fallback. The typed
   route remains limited to nearest word-copy geometry and scalar fill.
+- [x] The palette-first RGB merge admission at committed source `c68bce674` is
+  covered by `/tmp/merge-palette-first-c68bce674.json` (SHA-256
+  `38a0dffc030e8e4be4cb7cb09c909a164e3aa812d9cf5498342e764fc6976630`). The
+  selected case is value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+  WASM; all three native target lanes have terminal-complete receipts, and
+  GPU is actual GPU with no fallback. The admission is intentionally limited
+  to RGB with a P first band and L/L remaining bands; other merge contracts
+  remain explicit host-controlled paths.
 
 ## Closeout state
 
@@ -457,8 +474,9 @@ execution is a parity-preserving fallback, not a parity completion claim.
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
   `ExtractBand` admission as `f55a770ad`, the raw-byte `EffectSpread` admission
   as `ebc7e765a`, raw-byte Draw admission as `7d1cc0af9`, nearest indexed Fit
-  admission as `0797e71f5`, exact current-image Contrast-prefix admission as
-  `5ed9f152e`, typed I;16 filtered-resize admission as `2ff9a6951`, the JS/WASM
+  admission as `0797e71f5`, palette-first RGB merge admission as `c68bce674`,
+  exact current-image Contrast-prefix admission as `5ed9f152e`, typed I;16
+  filtered-resize admission as `2ff9a6951`, the JS/WASM
   observed-boundary receipt fix as `d0ee51d9a`, the JS/WASM validation-boundary
   evidence fix as `a2cf8c102`, and the zero-operation receipt corrections as
   `2164e2226` and `2835ce29a`, plus the F special-value proof as `bc8197617`;
