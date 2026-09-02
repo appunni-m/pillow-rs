@@ -4307,3 +4307,52 @@ indeterminate pipeline cases. The aggregate remains
 remaining mixed-order/cancellation, Box-ratio, chain, and larger-domain F
 proofs are still open. No fixtures, expected values, thresholds, IDs,
 denominators, or public parity outputs changed.
+
+## 32.55 Thumbnail reduction and typed resampling parity (2026-09-02)
+
+The next deterministic parity failures were all in the reducing-gap path,
+not in the public operation set. `Image.thumbnail` computes its
+aspect-preserving dimensions before calling `resize`; the lazy operation
+carried only the rectangular request, so each backend applied the aspect
+calculation a second time (for example, an `11x7` source requested as
+`10x7` was planned as `9x6`). CPU Thumbnail also used rounded integer byte
+averages instead of Pillow's `Reduce.c` fixed-reciprocal arithmetic. Native
+Pillow reduces `RGBa` and `RGBX` as raw four-channel samples, while the
+transport had classified their fourth byte as alpha. Finally, typed `I`
+Thumbnail reduction and resize differed from `ImagingReduceNxN_32bpc` and
+`ImagingResample`: flat `i64` reduction, an `f64` horizontal intermediate,
+and non-fused accumulation changed overflow and one-ULP results.
+
+Commit `0013d013e` carries Pillow's final thumbnail dimensions once through
+the CPU, SIMD, and GPU planners; routes byte Thumbnail reduction through the
+exact `Reduce.c` implementation; keeps `RGBa`/`RGBX` raw in CPU, SIMD, and
+the mode-4 WGSL reducer; mirrors the 32bpc pair/quartet grouping for F and I;
+keeps typed I horizontal results as INT32 before the vertical pass; uses the
+fractional post-reduce box for typed F/I Thumbnail resampling; and uses
+explicit fused multiply-add ordering where the native C build does so. A
+finite zero-valued F Thumbnail may use the proven constant Resize lowering;
+nonzero reducing constants remain on exact host semantic control when the
+f32 reduction could overflow or round differently.
+
+The canonical migration parity run is **10,952/10,952** with zero failures.
+The committed-source schema-v3 all-backend envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`c1e45bd9951e7881aa4616d26c2a56984df3237ee22f49d3b9fea0e0344893fa`),
+revision `0013d013e829216e8dcaa47b6bae4469eaf71a33`, and unchanged case-ID
+digest `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`.
+CPU, SIMD, GPU, Node WASM, and browser WASM each remain
+**10,952/10,952** value/error-exact; GPU smoke is **1/1**. CPU reports 6,838
+terminal receipts (6,832 pipeline-complete), SIMD 6,850 (6,844 complete),
+and GPU 6,628 native-GPU plus 210 CPU receipts (6,832 complete, including
+141 exact host semantic-control routes). Node and browser each report 6,951
+terminal receipts (6,945 pipeline-complete), with zero partial, missing, or
+indeterminate pipeline cases. Focused CPU geometry tests are **6/6** and GPU
+pool tests are **36/36**. `make -C pillow-rs fmt` and `make build-dev` pass;
+Clippy remains blocked by the pre-existing pinned libavif
+1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. Remaining work is broader native-GPU F arithmetic
+(mixed special ordering/cancellation, unproven Box ratios and chains, and
+larger heterogeneous domains), backend identity/fallback reconciliation, and
+the P2 equal-ID/equal-receipt timing gate.

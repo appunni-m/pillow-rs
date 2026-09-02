@@ -88,6 +88,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   (one-special and mixed-special patterns) had 0 mismatches; mixed orderings
   that do not match Pillow's ordered f64 result remain exact host semantic
   control.
+- [x] Align Thumbnail reduction and typed I/F resampling with Pillow's native
+  contracts. Commit `0013d013e` carries the final aspect-preserving
+  dimensions once (no backend double-adjustment), routes byte reduction through
+  `Reduce.c`'s fixed reciprocal, keeps RGBa/RGBX raw rather than alpha-
+  premultiplied, mirrors 32bpc pair/quartet grouping, preserves INT32 typed-I
+  intermediates, and uses the fractional post-reduce box. The canonical
+  parity run and committed-source all-backend envelope are each 10,952/10,952
+  exact with zero failures; focused CPU geometry is 6/6 and GPU pool is 36/36.
 
 ### P1 — complete native-backend receipt proof
 
@@ -379,6 +387,17 @@ execution is a parity-preserving fallback, not a parity completion claim.
   lane has zero partial, missing, or indeterminate pipeline cases. The public
   corpus does not add a new special-value receipt partition, so backend
   identity reconciliation and the remaining arithmetic guards stay open.
+- [x] The Thumbnail/typed-resampling parity fix at committed source
+  `0013d013e` is covered by `build/migration-parity/all-backends-test-result.json`
+  (SHA-256 `c1e45bd9951e7881aa4616d26c2a56984df3237ee22f49d3b9fea0e0344893fa`).
+  The unchanged 10,952-case ID digest remains
+  `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`; all
+  five public lanes are value/error-exact at 10,952/10,952 and GPU smoke is
+  1/1. CPU reports 6,838 terminal receipts (6,832 pipeline-complete), SIMD
+  6,850 (6,844 complete), GPU 6,628 native plus 210 CPU (6,832 complete),
+  and Node/browser WASM 6,951 terminal (6,945 complete) each. No lane has
+  partial, missing, or indeterminate pipeline cases; backend identity,
+  broader F arithmetic, and P2 timing remain open.
 
 ## Closeout state
 
@@ -395,9 +414,9 @@ execution is a parity-preserving fallback, not a parity completion claim.
   observed-boundary receipt fix as `d0ee51d9a`, the JS/WASM validation-boundary
   evidence fix as `a2cf8c102`, and the zero-operation receipt corrections as
   `2164e2226` and `2835ce29a`, plus the F special-value proof as `bc8197617`;
-  the latest full all-backend replay is
+  the preceding full all-backend replay in that sequence is
   schema-valid and value/error-exact for all 10,952 cases.
-  The latest envelope has zero native or WASM partial/missing/indeterminate
+  That preceding envelope has zero native or WASM partial/missing/indeterminate
   pipeline cases: CPU 6,838 terminal receipts (6,832 pipeline-complete), SIMD
   6,850 (6,844 pipeline-complete), and GPU 6,627 native GPU plus 211 CPU
   receipts (6,832 pipeline-complete). The GPU partition records 142 exact
@@ -405,8 +424,19 @@ execution is a parity-preserving fallback, not a parity completion claim.
   Transform, and arithmetic guards. Node and browser WASM each report 6,951
   terminal receipts, 6,945 pipeline-complete cases, and 4,007 not-applicable
   boundaries. No fixture, expected value, threshold, denominator, or case ID
-  was changed. The latest envelope is
+  was changed. That preceding envelope is
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
+- [x] The current source parity lane is committed as `0013d013e`.
+  It aligns Thumbnail's final dimensions and reducing-gap arithmetic with
+  Pillow, preserves raw RGBa/RGBX channels, and mirrors typed F/I reduction
+  and INT32 resampling boundaries. The committed-source envelope is
+  `build/migration-parity/all-backends-test-result.json` (SHA-256
+  `c1e45bd9951e7881aa4616d26c2a56984df3237ee22f49d3b9fea0e0344893fa`),
+  value/error-exact at 10,952/10,952 in all five public lanes with GPU smoke
+  1/1. CPU/SIMD/GPU report 6,838/6,850/6,838 terminal receipts; GPU is
+  6,628 native plus 210 CPU, and no lane has a partial, missing, or
+  indeterminate pipeline receipt. The remaining P0, P1 identity, and P2
+  timing items stay open.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
