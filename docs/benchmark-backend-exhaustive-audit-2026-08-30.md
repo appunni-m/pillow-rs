@@ -4186,3 +4186,30 @@ gaps. No fixtures, expected values, thresholds, IDs, denominators, or public
 error contracts changed. Remaining work is the 888 missing/27 indeterminate
 WASM receipt/export cases, broader F arithmetic, native backend identity, and
 the P2 timing gate.
+
+## 32.52 WASM validation errors are explicit evidence boundaries (2026-09-02)
+
+The next full replay found one remaining evidence-only divergence: the shared
+JS workflow kept setup/call exceptions internally but returned only dependent
+`not_run` observations. The Python WASM aggregator also classified without the
+target result, so identical Pillow/WASM validation failures were reported as
+20 indeterminate pipeline gaps. Commit `a2cf8c102` preserves step-bound
+`execution_errors` in the internal JS result, passes target results to the
+classifier, and strips that diagnostic field from the canonical public parity
+comparison envelope. This changes no public values or errors and adds a
+regression test for the aggregator boundary.
+
+The focused former-indeterminate set is 20/20 value/error-exact on both Node
+and browser, with all 20 classified as pre-materialization validation
+boundaries. The full fixed-denominator artifacts are
+`/tmp/wasm-errorbound-full-node-a2cf8c102.json` (SHA-256
+`3998bd57b9a9ac3dd4ed679a70159957cbe855b6837ecbcdd825861a60d71780`) and
+`/tmp/wasm-errorbound-full-browser-a2cf8c102.json` (SHA-256
+`97535c5db628350aa3342ad1ee3fa44f5065019b13df7e87d6089e617876e9b7`). Both
+hosts remain value/error-exact for **10,952/10,952** cases. Their receipt
+partition is now 7,198 complete, 3,754 not-applicable validation boundaries,
+zero missing, zero partial, and zero indeterminate cases (7,204 terminal
+receipts, 15,191 completed receipts, and 3,653 not-recorded cases). The
+remaining WASM work is backend/export identity evidence rather than these
+resolved validation rows; broader F arithmetic, native backend identity, and
+the P2 timing gate remain open.
