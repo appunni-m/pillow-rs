@@ -4935,3 +4935,57 @@ native GPU (ordinary f32 shader accumulation diverges from Pillow's f64
 coefficient/product path), plus unproven projective/mesh/palette transform
 domains. P1 backend identity/fallback reconciliation and the P2 equal-ID,
 equal-receipt timing gate remain open.
+
+## 32.72 Typed I;16 affine-nearest admission (2026-09-02)
+
+The next deterministic backend-identity gap was the typed scalar affine
+transform. Pillow's `Geometry.c` path evaluates `I;16*` source coordinates at
+integer destination pixels, rounds each coordinate with `floor(value + 0.5)`,
+and relocates one complete unsigned 16-bit sample even when a non-nearest
+public filter token is supplied. Rust previously kept these valid
+`I;16`, `I;16L`, `I;16B`, and `I;16N` transforms on exact host semantic
+control because the nearest-affine proof and shader had no typed mode-5 word
+branch.
+
+Commit `614d4cd90` adds a bounded mode-5 proof for `ImageLuma16` affine-nearest
+transforms. It requires exact 16.16 coefficients, signed source and
+destination bounds, and the typed fill-only edge contract. The batch planner
+uploads `c + 0.5` and `f + 0.5` origins for the fixed coordinate walk, while
+the WGSL mode-5 branch preserves the low 16-bit word and typed readback drops
+only transport padding. Fractional coefficients and filtered arithmetic stay
+on exact host semantic control.
+
+The focused schema-v3 replay selected
+`PIL.Image.Image.transform.nuanced.i16-affine-inbounds-fill` and is
+value/error-exact on CPU, SIMD, GPU, Node WASM, and browser WASM (1/1 each).
+GPU is `actual_backend=gpu` with one terminal receipt and no fallback. The
+envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` (SHA-256
+`a73661c982b0f4bd4e13f6c9ea57d7dfd4f89f24bb4f921876ad486795014244`), and
+the GPU sidecar is
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`aee56b06d63ee3a9227c3aa82f9aa6eea130679d3d00779bd786df4a5010c2ff`).
+
+The committed-source full campaign at revision `614d4cd90` remains
+value/error-exact at **10,952/10,952** on all five public lanes. CPU has
+6,838 terminal receipts (6,832 pipeline-complete), SIMD 6,850 (6,844), and
+GPU 6,712 native-GPU plus 126 CPU receipts (6,832 pipeline-complete); all
+pipeline receipts are terminal-complete with zero partial, missing, or
+indeterminate cases. GPU fallback partitions are 62 exact host semantic
+control rows, 62 unsafe-primary-dimension rows, one unsafe/incomplete-
+dimension row, and one Transform guard. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`403684edec69106d1fc9fa2647d12b11cf3d87bef5779706940eddc6c8689a5e`), and
+the GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`22b9083c9d120865a7f4e47db957b05c51d4ccfaa139ec0559a54bae5079baf7`).
+
+A temporary attempt to widen marker-10 filtered resize admission to `I;16N`
+was discarded after the native GPU bytes diverged from Pillow despite the
+host proof precheck; the maintained `i16n-frombytes-bilinear` replay remains
+exact host semantic control. No fixtures, expected values, thresholds, IDs,
+denominators, public errors, or receipt rules changed. The remaining P0 work
+is broader heterogeneous/non-dyadic F arithmetic and unproven projective,
+mesh, and palette transform domains; P1 identity reconciliation and the P2
+equal-ID/equal-receipt timing gate remain open.
