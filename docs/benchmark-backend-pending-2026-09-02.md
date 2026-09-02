@@ -123,7 +123,34 @@ the resulting 16-bit write differs. This is a real ordering/rounding boundary,
 not a backend timing issue, so the current device admission guard stays in
 place until ordered-`f64` behavior is reproduced on-device.
 
+### Rejected admission candidate — PA `ImageOps.fit`
+
+The PA `ImageOps.fit` host-control row was probed for a nearest-only GPU
+normalization. That candidate is not parity-safe: Pillow keeps the requested
+filter for PA (the omitted method remains BICUBIC), while only P forces
+NEAREST. A focused varied-pair test changed bytes from the CPU result
+`[5, 50, 3, 69, 5, 88, 7, 130, 8, 149, 10, 168]` to the proposed GPU
+one-tap result `[5, 81, 6, 97, 8, 129, 9, 145, 10, 161, 12, 193]`.
+The candidate was discarded with no source or fixture change; the
+`pa-putpalette-expansion` row remains exact host semantic control until the
+requested PA convolution contract is proven on-device.
+
 ## Current evidence
+
+- Fresh standard benchmark recheck at source revision `8ac0eeb94` selected and
+  measured 744/744 workloads, with 744/744 correctness passes and 0 not-run
+  workloads. All 2,232 target-profile subjects completed; actual backend
+  counts were CPU 4,213, SIMD 4,325, and GPU 4,213, with no fallback reasons.
+  The 202-case parity preflight was 202/202 passed with zero failures. The
+  generated benchmark artifact is
+  `build/migration-parity/benchmark-result-current-20260903.json` (SHA-256
+  `637dbb07d08aba35929d3854ba555d1fe0ab382383cf6d0c457e460c46b2f3b8`) and
+  its parity artifact is
+  `build/migration-parity/benchmark-parity-result-current-20260903.json`
+  (SHA-256
+  `9deec3ee1b32b410f36e3feecb97b6fb08049724debc8834dc3376e98a644758`).
+  This supersedes the stale 746-workload/48-not-run benchmark snapshot for
+  current source status; no benchmark inputs, denominators, or gates changed.
 
 - Full source revision: `74ceca899c5b943caa6397916ce5507dcd213a0d`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
