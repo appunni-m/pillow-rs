@@ -721,8 +721,6 @@ def execution_evidence_document(
             if receipt_terminal_complete(receipt)
         ]
         terminal_complete_receipts += len(terminal)
-        if meaningful and not terminal:
-            terminal_incomplete_cases += 1
         classification = classify_pipeline_case(
             cases_by_id[case_id],
             receipts,
@@ -730,6 +728,12 @@ def execution_evidence_document(
         )
         pipeline_case_status[case_id] = classification
         pipeline_status_counts[classification["status"]] += 1
+        # A non-terminal receipt can belong to setup/validation telemetry
+        # outside the deferred pipeline partition.  Keep the aggregate in
+        # lockstep with the per-case classification so pre-materialization
+        # public errors do not become phantom partial pipeline gaps.
+        if classification["status"] == "partial_receipt":
+            terminal_incomplete_cases += 1
         for receipt in terminal:
             backend = receipt.get("actual_backend")
             if isinstance(backend, str):

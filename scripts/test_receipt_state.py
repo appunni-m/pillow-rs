@@ -1005,6 +1005,12 @@ class ReceiptStateTests(unittest.TestCase):
                             "error": {"kind": "invalid_argument"},
                         }
                     ],
+                    "execution_errors": [
+                        {
+                            "step_id": "call",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
                 }
             },
         )
@@ -1016,6 +1022,50 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
         self.assertEqual(document["summary"]["pipeline_indeterminate_cases"], 0)
+        self.assertEqual(document["summary"]["pipeline_not_applicable_cases"], 1)
+
+    def test_js_evidence_does_not_count_validation_receipt_as_partial_pipeline(
+        self,
+    ) -> None:
+        """A pre-materialization receipt is not a deferred partial gap."""
+
+        case = error_at_deferred_call_case()
+        case_id = case["case_id"]
+        document = execution_evidence_document(
+            [case],
+            {"side": "target", "implementation": "pillow-rs-js"},
+            {
+                case_id: [
+                    {
+                        "status": "partial",
+                        "step_id": "call",
+                        "terminal_complete": False,
+                        "operation_count": 1,
+                        "operation_telemetry": [{"operation": "Resize"}],
+                    }
+                ]
+            },
+            {
+                case_id: {
+                    "status": "completed",
+                    "observations": [
+                        {
+                            "step_id": "call",
+                            "status": "error",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
+                    "execution_errors": [
+                        {
+                            "step_id": "call",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
+                }
+            },
+        )
+        self.assertEqual(document["summary"]["terminal_incomplete_cases"], 0)
+        self.assertEqual(document["summary"]["pipeline_partial_receipt_cases"], 0)
         self.assertEqual(document["summary"]["pipeline_not_applicable_cases"], 1)
 
     def test_pipeline_case_classification_ignores_setup_receipts_on_validation_error(
