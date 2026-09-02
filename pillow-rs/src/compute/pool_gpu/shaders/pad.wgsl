@@ -12,7 +12,7 @@
 struct Params {
     width: u32,          // original source width (unused by this pass)
     height: u32,         // original source height (unused by this pass)
-    mode: u32,           // 0=L/P/1, 1=LA/PA, 2=RGB, 3=RGBA, 4=CMYK, 6=RGBX
+    mode: u32,           // 0=L/P/1, 1=LA/PA, 2=RGB, 3=RGBA, 4=CMYK, 6=RGBX, 7=I, 8=F
     _pad0: u32,
     resized_w: u32,
     resized_h: u32,
@@ -33,10 +33,10 @@ struct Params {
 @group(0) @binding(2) var<uniform> params: Params;
 
 fn normalize_pixel(pixel: u32, mode: u32) -> u32 {
-    // F stores one little-endian f32 sample per four-byte word.  Keep the
-    // scalar representation opaque through both the resized image and the
-    // pad fill; interpreting it as RGBA bytes would change the public value.
-    if mode == 8u {
+    // I/F store one little-endian scalar sample per four-byte word. Keep the
+    // representation opaque through both the resized image and the pad fill;
+    // interpreting it as RGBA bytes would change the public value.
+    if mode == 7u || mode == 8u {
         return pixel;
     }
     let r = pixel & 0xffu;
