@@ -40,6 +40,7 @@ try:
         classify_pipeline_case,
         load_cases,
         load_manifest,
+        receipt_is_meaningful,
         receipt_terminal_complete,
         run_side_subprocess,
     )
@@ -52,6 +53,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
         classify_pipeline_case,
         load_cases,
         load_manifest,
+        receipt_is_meaningful,
         receipt_terminal_complete,
         run_side_subprocess,
     )
@@ -708,13 +710,18 @@ def execution_evidence_document(
         else:
             receipt_cases += 1
             completed_receipts += len(completed)
-        terminal = [
+        meaningful = [
             receipt
             for receipt in receipts
-            if isinstance(receipt, dict) and receipt_terminal_complete(receipt)
+            if isinstance(receipt, dict) and receipt_is_meaningful(receipt)
+        ]
+        terminal = [
+            receipt
+            for receipt in meaningful
+            if receipt_terminal_complete(receipt)
         ]
         terminal_complete_receipts += len(terminal)
-        if has_receipt and not terminal:
+        if meaningful and not terminal:
             terminal_incomplete_cases += 1
         classification = classify_pipeline_case(
             cases_by_id[case_id],

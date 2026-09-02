@@ -1303,6 +1303,14 @@ pub(crate) fn execute_prepared(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    // Quantize returns a palette-index pipeline with an intentionally empty
+    // operation list so its palette metadata can remain attached to the
+    // lazy result.  There is no backend work at this boundary and therefore
+    // no receipt to publish; in particular, do not clear or overwrite a
+    // preceding deferred operation's telemetry with a zero-operation sample.
+    if ops.is_empty() {
+        return Ok(img.clone());
+    }
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_pipeline_allocation_telemetry();

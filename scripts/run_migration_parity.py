@@ -1007,6 +1007,23 @@ def receipt_terminal_complete(receipt: dict[str, Any]) -> bool:
     return type(value) is bool and value
 
 
+def receipt_has_pipeline_work(receipt: dict[str, Any]) -> bool:
+    """Return whether a receipt records an executed pipeline operation.
+
+    Successful observation calls can emit a completed telemetry record after
+    the deferred operation has already been drained.  Those records carry no
+    operation count or operation telemetry and are useful timing diagnostics,
+    but they cannot prove which backend produced the observed pixels.
+    """
+
+    operation_count = receipt.get("operation_count")
+    return not (
+        type(operation_count) is int
+        and operation_count == 0
+        and not receipt.get("operation_telemetry")
+    )
+
+
 def receipt_is_meaningful(receipt: dict[str, Any]) -> bool:
     """Return whether a receipt is evidence for the deferred pipeline.
 
@@ -1019,6 +1036,7 @@ def receipt_is_meaningful(receipt: dict[str, Any]) -> bool:
     return (
         receipt.get("pipeline_relevant") is not False
         and receipt.get("status") not in {"not_recorded", "not_applicable"}
+        and receipt_has_pipeline_work(receipt)
     )
 
 
@@ -2081,7 +2099,11 @@ def classify_pipeline_case(
         if (step.get("surface"), step.get("operation")) in _PIPELINE_MAYBE_OPS
     }
     deferred_indices = always_indices | maybe_indices
-    terminal = [receipt for receipt in receipts if receipt_terminal_complete(receipt)]
+    terminal = [
+        receipt
+        for receipt in receipts
+        if receipt_terminal_complete(receipt) and receipt_is_meaningful(receipt)
+    ]
     if terminal:
         return {"status": "complete", "reason": "terminal-complete receipt recorded"}
     if meaningful:
@@ -2190,10 +2212,16 @@ def run_case(
         nonlocal terminal_receipt_index
         receipt["status"] = status
         receipt["step_id"] = step_id
+        if not receipt_has_pipeline_work(receipt):
+            # Observation-only records describe the adapter boundary after a
+            # deferred operation was drained.  Keep them in the sidecar, but
+            # do not let them replace the real pipeline receipt candidate.
+            receipt["pipeline_relevant"] = False
         set_receipt_terminal_complete(receipt)
         assert pipeline_execution_sink is not None
         pipeline_execution_sink.append(receipt)
-        terminal_receipt_index = len(pipeline_execution_sink) - 1
+        if receipt_is_meaningful(receipt):
+            terminal_receipt_index = len(pipeline_execution_sink) - 1
 
     selected_indices = [
         index
@@ -2236,6 +2264,15 @@ def run_case(
                     append_execution_receipt(
                         receipt, status="completed", step_id=step_id
                     )
+                    if (
+                        step_index == len(case["steps"]) - 1
+                        and step_id not in case.get("observations", [])
+                        and not receipt_is_meaningful(receipt)
+                    ):
+                        # A final eager/observation-only record cannot prove
+                        # an earlier deferred operation that was never
+                        # observed at this workflow boundary.
+                        terminal_receipt_index = None
                 elif (
                     step_index == len(case["steps"]) - 1
                     and step_id not in case.get("observations", [])
@@ -3120,9 +3157,14 @@ def write_pipeline_execution_evidence(
         else:
             receipt_cases += 1
             completed_receipts += len(completed)
-        terminal = [
+        meaningful = [
             receipt
             for receipt in receipts
+            if isinstance(receipt, dict) and receipt_is_meaningful(receipt)
+        ]
+        terminal = [
+            receipt
+            for receipt in meaningful
             if receipt_terminal_complete(receipt)
         ]
         terminal_complete_receipts += len(terminal)
@@ -3312,6 +3354,8 @@ def run_resident_case(
             if receipt is not None:
                 receipt["status"] = "partial"
                 receipt["step_id"] = setup_errors[-1]["step_id"]
+                if not receipt_has_pipeline_work(receipt):
+                    receipt["pipeline_relevant"] = False
                 set_receipt_terminal_complete(receipt)
                 execution_sink.append(receipt)
         return {
@@ -3372,6 +3416,8 @@ def run_resident_case(
                     if receipt is not None:
                         receipt["status"] = "partial"
                         receipt["step_id"] = step["step_id"]
+                        if not receipt_has_pipeline_work(receipt):
+                            receipt["pipeline_relevant"] = False
                         set_receipt_terminal_complete(receipt)
                         execution_sink.append(receipt)
                 continue
@@ -3400,13 +3446,17 @@ def run_resident_case(
                     )
                 else:
                     receipt["status"] = "completed"
+                    if not receipt_has_pipeline_work(receipt):
+                        receipt["pipeline_relevant"] = False
                     set_receipt_terminal_complete(receipt)
                     execution_sink.append(receipt)
                     observed_execution = True
         if not iteration_failed:
             for receipt in execution_sink[iteration_start:]:
                 if receipt.get("status") in {"completed", "cached"}:
-                    set_receipt_terminal_complete(receipt, True)
+                    set_receipt_terminal_complete(
+                        receipt, receipt_is_meaningful(receipt)
+                    )
 
     return {
         "case_id": case["case_id"],
@@ -3505,7 +3555,12 @@ def run_side(args: argparse.Namespace) -> int:
                                 receipt["status"] = (
                                     "partial" if has_errors else "completed"
                                 )
-                                set_receipt_terminal_complete(receipt, not has_errors)
+                                if not receipt_has_pipeline_work(receipt):
+                                    receipt["pipeline_relevant"] = False
+                                set_receipt_terminal_complete(
+                                    receipt,
+                                    not has_errors and receipt_is_meaningful(receipt),
+                                )
                                 execution_sink.append(receipt)
                             elif not execution_sink:
                                 execution_sink.append(
