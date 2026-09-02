@@ -29,10 +29,13 @@ receipt rules unchanged.
   including the segmented GPU terminal receipt after an exact host-controlled
   prefix.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
-  signed two-axis envelope. The remaining inputs include heterogeneous and
-  non-dyadic values, mixed non-finite ordering, negative-zero cancellation,
-  wider Box ratios, and arithmetic-changing chains. Forced generic WGSL f32
-  convolution already differs from Pillow's ordered host arithmetic by ULPs.
+  signed two-axis envelope and the new bounded marker-12 two-tap reducer.
+  Marker 12 now covers direct Resize rows with at most two taps and finite
+  normal f32 intermediates; the remaining inputs include heterogeneous and
+  non-dyadic wider-tap values, mixed non-finite ordering, negative-zero
+  cancellation, wider Box ratios, and arithmetic-changing chains. Forced
+  generic WGSL f32 convolution already differs from Pillow's ordered host
+  arithmetic by ULPs.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Until a device proof exists, the exact host path remains the required
   behavior for fractional and filtered geometry.
@@ -83,6 +86,11 @@ receipt rules unchanged.
 - [x] Heterogeneous F `ImageOps.pad` (`c5f03c6f3`): route the contain resize
   through exact f64-coefficient/f32-store semantics and admit only the proven
   marker-9 changed-axis GPU path (25/25 matrix exact; 23 native GPU).
+- [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`): marker 12 emulates Pillow's
+  per-tap f64 FMA rounding with an integer U128 reducer for direct finite-normal
+  rows whose coefficient ranges have at most two taps. The former host-
+  controlled heterogeneous 3x1→2x1 Bilinear row is now native GPU and exact;
+  wider/special/chain domains remain explicitly host-controlled.
 - [x] Fractional Rotate routing (`7ca91ed47`): exact normalized right angles
   alone use transpose fast paths; the fixed 576-case CPU/SIMD matrix is
   576/576 exact.
@@ -91,6 +99,19 @@ receipt rules unchanged.
   requested=actual GPU after a host-controlled prefix.
 - [x] Draw wide-line bottom-edge parity (`ee2996057`): Pillow's sentinel
   scanline behavior is restored; bounded CPU/GPU Draw matrix is 240/240 exact.
+
+## Bounded marker-12 evidence
+
+- [x] The marker-12 candidate is exact on native GPU with requested=actual GPU,
+  two dispatches, and no fallback. The host admission proof compares the
+  integer ordered-FMA model with Pillow's direct f64 `mul_add` result before
+  selecting the shader path.
+- [x] A heterogeneous finite matrix of 4,270 direct F Resize cases (five
+  filters, varied source/target sizes) had zero mismatches; 3,950 rows used
+  native GPU and the remainder stayed on exact host semantic control. A
+  1,175-case random finite-normal probe also had zero mismatches (428 native
+  rows). These probes do not close the wider-tap, special-value, or chained
+  arithmetic buckets above.
 
 ## Evidence refreshed at the final integrated revision (`ee2996057`)
 

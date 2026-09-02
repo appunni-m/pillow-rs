@@ -5806,3 +5806,33 @@ heterogeneous/non-dyadic native-GPU F arithmetic, arithmetic-changing
 filtered/projective/mesh/palette GPU domains, P1 host/native reconciliation,
 and the P2 equal-ID timing gate; exact host semantic control remains a
 parity-preserving execution path rather than a public unsupported outcome.
+
+## 32.89 Bounded ordered-f64 F Resize reducer (2026-09-03)
+
+The generic WGSL f32 convolution had a deterministic one-ULP divergence from
+Pillow when a later coefficient product fell below the first accumulator's
+binary64 ulp. The existing marker-9 reducer retained the exact rational sum and
+therefore also rejected this row: Pillow's `ImagingResample` path rounds the
+accumulator after each ordered f64 `mul_add`, before the final f32 store.
+
+Commit `5cbbe7ff2` adds marker 12 for a narrower, proven domain: a direct F
+`Resize` with no chained prefix, at most two taps on both axes, and finite normal
+f32 source/intermediate values. The host proof and both convolution shaders use
+an integer four-limb state to round the accumulator to normal binary64 after
+each product, then convert once to f32. Unchanged axes copy the complete scalar
+word. Host admission compares the state machine's result with Pillow's ordered
+f64 accumulation and rejects special values, f64 subnormal/overflowing
+intermediates, signed-zero-only boundaries, wider tap rows, and chains.
+
+The former host-controlled heterogeneous 3x1→2x1 Bilinear row now executes
+with requested=actual GPU, two dispatches, and exact bytes. A 4,270-case finite
+heterogeneous matrix across five filters and varied sizes had 0 mismatches, as
+did 1,175 random finite-normal cases; the existing GPU unit suite is 72/72.
+`make -C pillow-rs fmt`, `make build-dev`,
+`make migration-parity-receipt-test` (35/35), and
+`make migration-parity-evidence-check` pass. No fixtures, expected values,
+thresholds, case IDs, denominators, public errors, or receipt rules changed.
+The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic
+(wider taps, specials, and arithmetic-changing chains), plus filtered
+projective/mesh/palette device arithmetic; P1 receipt partitioning and the P2
+equal-ID timing gate remain open.
