@@ -7313,10 +7313,9 @@ fn gpu_rotate_affine(
     let sw = f64::from(width);
     let sh = f64::from(height);
     let rad = -angle.to_radians();
-    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
-    let a = round_15(rad.cos());
-    let b = round_15(rad.sin());
-    let d = round_15(-rad.sin());
+    let a = crate::ops::rotate::round_rotate_coefficient(rad.cos());
+    let b = crate::ops::rotate::round_rotate_coefficient(rad.sin());
+    let d = crate::ops::rotate::round_rotate_coefficient(-rad.sin());
     let e = a;
     let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
     let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
@@ -8235,10 +8234,11 @@ fn expand_gpu_geometry_ops(
             },
             // Rotation is an affine mapping after Pillow's scalar geometry
             // planner has selected the expanded canvas.  Feed that mapping
-            // into the reviewed Transform shader; exact right-angle nearest
+            // into the reviewed Transform shader; exact right-angle
             // rotations use the byte-relocation transpose kernel instead.
             PipelineOp::Rotate { .. }
-                if gpu_rotate_requires_exact_host_control(image, logical_mode) =>
+                if gpu_rotate_requires_exact_host_control(image, logical_mode)
+                    && !matches!(logical_mode, Some("1" | "P")) =>
             {
                 op.clone()
             }
@@ -8250,42 +8250,52 @@ fn expand_gpu_geometry_ops(
                 translate,
                 nearest,
             } => {
-                let right_angle = if gpu_rotate_has_exact_transpose_lowering(op, logical_mode) {
-                    match angle.rem_euclid(360.0) {
-                        value if (value - 90.0).abs() < f64::EPSILON => {
-                            Some(TransposeMethod::Rotate90)
-                        }
-                        value if (value - 180.0).abs() < f64::EPSILON => {
-                            Some(TransposeMethod::Rotate180)
-                        }
-                        value if (value - 270.0).abs() < f64::EPSILON => {
-                            Some(TransposeMethod::Rotate270)
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
-                if let Some(method) = right_angle {
-                    PipelineOp::Transpose { method }
-                } else if let Some((affine, (w, h))) =
-                    gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
+                let normalized_angle = angle.rem_euclid(360.0);
+                if center.is_none() && translate.is_none() && normalized_angle.abs() <= f64::EPSILON
                 {
-                    PipelineOp::Transform {
-                        w,
-                        h,
-                        method: TransformMethod::Affine,
-                        data: Arc::from(affine.to_vec()),
-                        filter: if *nearest {
-                            ResampleFilter::Nearest
-                        } else {
-                            ResampleFilter::Bilinear
-                        },
-                        fill: *fill,
-                        palette_fill: None,
-                    }
+                    PipelineOp::Duplicate
                 } else {
-                    op.clone()
+                    let right_angle = if gpu_rotate_has_exact_transpose_lowering(
+                        op,
+                        logical_mode,
+                        (cur_w, cur_h),
+                    ) {
+                        match angle.rem_euclid(360.0) {
+                            value if (value - 90.0).abs() < f64::EPSILON => {
+                                Some(TransposeMethod::Rotate90)
+                            }
+                            value if (value - 180.0).abs() < f64::EPSILON => {
+                                Some(TransposeMethod::Rotate180)
+                            }
+                            value if (value - 270.0).abs() < f64::EPSILON => {
+                                Some(TransposeMethod::Rotate270)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    if let Some(method) = right_angle {
+                        PipelineOp::Transpose { method }
+                    } else if let Some((affine, (w, h))) =
+                        gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
+                    {
+                        PipelineOp::Transform {
+                            w,
+                            h,
+                            method: TransformMethod::Affine,
+                            data: Arc::from(affine.to_vec()),
+                            filter: if *nearest || matches!(logical_mode, Some("1" | "P")) {
+                                ResampleFilter::Nearest
+                            } else {
+                                ResampleFilter::Bilinear
+                            },
+                            fill: *fill,
+                            palette_fill: None,
+                        }
+                    } else {
+                        op.clone()
+                    }
                 }
             }
             _ => op.clone(),
@@ -9131,24 +9141,30 @@ fn gpu_operation_requires_image_context(op: &PipelineOp) -> bool {
 /// proven.
 /// Return whether a rotate node can use the exact byte-relocation lowering.
 ///
-/// Right-angle nearest rotations with the default center/translation and an
-/// expanded canvas are precisely the seven-way transpose contract.  Keeping
-/// this predicate deliberately narrow is important: the general affine
-/// shader still has different pixel-center and fill semantics for fractional
-/// angles, non-expanded rotations, and custom geometry.
-fn gpu_rotate_has_exact_transpose_lowering(op: &PipelineOp, mode: Option<&str>) -> bool {
+/// Pillow's right-angle fast paths are precisely the byte-relocation
+/// transpose contract, regardless of the requested resampling filter. A
+/// 180-degree rotation is a fast path with either expansion setting; 90/270
+/// are fast paths when expansion is requested or the source is square.
+/// Keeping this predicate deliberately narrow is important: the general
+/// affine shader still has different pixel-center and fill semantics for
+/// fractional angles, rectangular non-expanded rotations, and custom
+/// geometry.
+fn gpu_rotate_has_exact_transpose_lowering(
+    op: &PipelineOp,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
     let PipelineOp::Rotate {
         angle,
         expand,
         center,
         translate,
-        nearest,
         ..
     } = op
     else {
         return false;
     };
-    if !*expand || !*nearest || center.is_some() || translate.is_some() {
+    if center.is_some() || translate.is_some() {
         return false;
     }
     // The packed transpose shaders preserve native byte channels.  Do not
@@ -9158,9 +9174,11 @@ fn gpu_rotate_has_exact_transpose_lowering(op: &PipelineOp, mode: Option<&str>) 
         return false;
     }
     let normalized = angle.rem_euclid(360.0);
-    [90.0, 180.0, 270.0]
-        .into_iter()
-        .any(|right_angle| (normalized - right_angle).abs() <= f64::EPSILON)
+    if (normalized - 180.0).abs() <= f64::EPSILON {
+        return true;
+    }
+    ((normalized - 90.0).abs() <= f64::EPSILON || (normalized - 270.0).abs() <= f64::EPSILON)
+        && (*expand || source_dimensions.0 == source_dimensions.1)
 }
 
 fn gpu_thumbnail_output_dims(
@@ -9277,8 +9295,8 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
         || !gpu_image_layout_is_supported(image)
 }
 
-/// Return whether a typed nearest affine transform can use the fixed-point
-/// relocation shader without changing Pillow's source selection.
+/// Return whether a typed or indexed nearest affine transform can use the
+/// fixed-point relocation shader without changing Pillow's source selection.
 ///
 /// `Geometry.c` computes the six affine values as signed 16.16 integers and
 /// then walks each output row with integer additions.  The GPU shader carries
@@ -9288,7 +9306,7 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
 /// source dimensions must fit the shader's signed bounds checks.  The typed
 /// sample itself remains an opaque four-byte word, so no integer/float
 /// conversion or approximation is introduced.
-fn gpu_typed_nearest_affine_is_exact(
+fn gpu_nearest_affine_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
     mode: Option<&str>,
@@ -9305,10 +9323,13 @@ fn gpu_typed_nearest_affine_is_exact(
     else {
         return false;
     };
-    if !matches!(mode, Some("I"))
-        || !matches!(image, DynamicImage::ImageRgba8(_))
+    let typed_mode = mode == Some("I");
+    let indexed_mode = matches!(mode, Some("1" | "P"));
+    if (!typed_mode && !indexed_mode)
+        || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
         || !matches!(method, TransformMethod::Affine)
-        || !matches!(filter, ResampleFilter::Nearest)
+        || (!gpu_transform_uses_nearest(mode, *filter))
         || source_dimensions.0 == 0
         || source_dimensions.1 == 0
         || source_dimensions.0 > i32::MAX as u32
@@ -9393,7 +9414,7 @@ fn gpu_geometry_requires_exact_host_control(
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
-            && !gpu_typed_nearest_affine_is_exact(op, image, mode, dimensions);
+            && !gpu_nearest_affine_is_exact(op, image, mode, dimensions);
         if thumbnail_needs_control
             || typed_transform_needs_control
             || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
@@ -9804,6 +9825,7 @@ impl GpuPool {
                                     | PipelineOp::Offset { .. }
                                     | PipelineOp::Transpose { .. }
                                     | PipelineOp::Paste { .. }
+                                    | PipelineOp::Duplicate
                                     | PipelineOp::Contain {
                                         filter: crate::pipeline::ResampleFilter::Nearest,
                                         ..
@@ -10535,6 +10557,8 @@ mod tests {
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian,
         readback_poll_backoff,
     };
+    use crate::ops::imageops::ImageOpsColor;
+    use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
     use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
     use crate::{Backend, Image, ResampleInput};
@@ -11376,6 +11400,113 @@ mod tests {
             &image,
             Some("I")
         ));
+    }
+
+    #[test]
+    fn indexed_nearest_rotate_native_gpu_preserves_raw_samples() {
+        let cases = [
+            (
+                "P",
+                (5, 4),
+                vec![
+                    0, 17, 255, 42, 3, 99, 128, 7, 64, 201, 11, 240, 31, 88, 156, 4, 222, 13, 77,
+                    190,
+                ],
+                Some((23, 0, 0, 255)),
+            ),
+            (
+                "1",
+                (8, 4),
+                vec![0b1001_0110, 0b0110_1001, 0b1111_0000, 0b0000_1111],
+                Some((255, 255, 255, 255)),
+            ),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, size, raw, fill) in cases {
+            let source = Image::frombytes(mode, size, &raw)
+                .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
+            let rotated = source
+                .rotate(13.0, true, fill)
+                .unwrap_or_else(|error| panic!("{mode} rotate: {error}"));
+            let expected = rotated
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .unwrap_or_else(|error| panic!("{mode} CPU rotate: {error}"));
+            let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} rotate failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} rotate parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU indexed rotate must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+            assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+            assert_eq!(telemetry.7, None, "{mode} fallback reason");
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn indexed_rotate_forces_nearest_and_reports_transposed_size() {
+        let cases = [
+            ("P", (2, 1), vec![17, 203]),
+            ("1", (8, 2), vec![0b1001_0110, 0b0110_1001]),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, size, raw) in cases {
+            let source = Image::frombytes(mode, size, &raw)
+                .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
+            let rotated = source
+                .rotate_with_input(
+                    90.0,
+                    RotateResampleInput::Name("BILINEAR".to_owned()),
+                    RotateExpandInput::Boolean(true),
+                    RotatePointInput::Default,
+                    RotatePointInput::Default,
+                    ImageOpsColor::None,
+                )
+                .unwrap_or_else(|error| panic!("{mode} rotate: {error}"));
+            assert_eq!(
+                rotated.size().unwrap(),
+                (size.1, size.0),
+                "{mode} lazy size"
+            );
+            let expected = rotated
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .unwrap_or_else(|error| panic!("{mode} CPU rotate: {error}"));
+            let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} rotate failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} rotate parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU indexed right-angle rotate must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+            assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+            assert_eq!(telemetry.7, None, "{mode} fallback reason");
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]

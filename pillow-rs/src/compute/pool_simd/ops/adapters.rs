@@ -4090,10 +4090,9 @@ fn simd_rotate_geometry(
     let sw = f64::from(width);
     let sh = f64::from(height);
     let radians = -angle.to_radians();
-    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
-    let affine_a = round_15(radians.cos());
-    let affine_b = round_15(radians.sin());
-    let affine_d = round_15(-radians.sin());
+    let affine_a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
+    let affine_b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
+    let affine_d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
     let affine_e = affine_a;
     let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
     let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));

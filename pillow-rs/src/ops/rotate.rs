@@ -22,6 +22,14 @@ fn rotate_uses_nearest(input: &RotateResampleInput) -> bool {
     }
 }
 
+/// Round a rotation coefficient with the same decimal contract as Pillow's
+/// `round(value, 15)`. Formatting at fixed precision avoids the double-round
+/// error of multiplying by `1e15` before a binary floating-point round (for
+/// example, `sin(-45°)` must remain `-0.707106781186547`).
+pub(crate) fn round_rotate_coefficient(value: f64) -> f64 {
+    format!("{value:.15}").parse::<f64>().unwrap_or(value)
+}
+
 fn unknown_resample_filter(value: impl std::fmt::Display) -> PilError {
     PilError::ValueError(format!(
         "Unknown resampling filter ({value}). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
@@ -156,7 +164,7 @@ impl Image {
             ));
         }
         let normalized_angle = angle % 360.0;
-        let nearest = rotate_uses_nearest(&resample);
+        let requested_nearest = rotate_uses_nearest(&resample);
         // Pillow skips resampling-name validation only for an exact multiple of
         // 360 degrees. Route every other angle through the public normalizer;
         // its contract is specifically the non-zero-angle path.
@@ -165,7 +173,13 @@ impl Image {
         } else {
             normalize_python_rotate_at_angle(normalized_angle, resample, expand)?
         };
-        let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &self.mode()?)?;
+        // Pillow forces nearest-neighbour sampling for indexed images even
+        // when the caller supplies BILINEAR/BICUBIC. Treat that effective
+        // choice as part of the queued operation so the fast path and lazy
+        // geometry planner see the same contract as the native rotate call.
+        let source_mode = self.mode()?;
+        let nearest = requested_nearest || matches!(source_mode.as_str(), "1" | "P");
+        let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &source_mode)?;
         let center_truthy = center.is_truthy();
         let translate_truthy = translate.is_truthy();
         if center_truthy || translate_truthy {

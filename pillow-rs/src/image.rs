@@ -345,14 +345,25 @@ fn known_pipeline_op_dimensions(
             if !expand {
                 return Some((width, height));
             }
+            // Pillow takes an exact transpose fast path for right-angle
+            // rotations before constructing the affine matrix, regardless
+            // of the requested resampling filter. Reflect that public shape
+            // here so lazy `size` agrees with the materialized result.
+            let normalized = angle.rem_euclid(360.0);
+            if center.is_none()
+                && translate.is_none()
+                && [90.0, 270.0]
+                    .into_iter()
+                    .any(|right_angle| (normalized - right_angle).abs() <= f64::EPSILON)
+            {
+                return Some((height, width));
+            }
             let sw = f64::from(width);
             let sh = f64::from(height);
             let radians = -angle.to_radians();
-            let round_15 =
-                |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
-            let affine_a = round_15(radians.cos());
-            let affine_b = round_15(radians.sin());
-            let affine_d = round_15(-radians.sin());
+            let affine_a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
+            let affine_b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
+            let affine_d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
             let affine_e = affine_a;
             let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
             let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
