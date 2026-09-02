@@ -3923,3 +3923,35 @@ not-applicable**. The WASM lanes are unchanged at 6,713 complete, 586 partial,
 backend/fallback identity, WASM receipt gaps, broader F arithmetic, and the
 zero-violation timing gate remain open. No fixtures, expected values,
 thresholds, IDs, denominators, or public parity outputs changed.
+
+## 32.44 Proven finite F overflow stores (2026-09-02)
+
+The remaining marker-9 value-domain hole was a legitimate finite-input
+overflow at Pillow's final f32 store. For source words
+`[0x7f7fffff, 0x7f7fffff, 0xff7fffff]` and a 3→2 resize, Pillow's ordered
+f64 accumulation produces a positive infinity for the first Bicubic and
+Lanczos output and a negative infinity for the corresponding Hamming output;
+the other output words remain the exact finite rounded values. The prior
+integer reducer rejected every f64 accumulator with an infinite final cast,
+so these parity-safe rows stayed on exact host semantic control.
+
+Commit `51f4dec15` extends the host integer conversion and both WGSL reducers
+to encode ±infinity when the exact final magnitude overflows f32. NaN results,
+intermediate overflow followed by cancellation, and any ordered-f64 versus
+exact-integer disagreement remain rejected. The native regression covers the
+max/max/−max Bicubic, Lanczos, and Hamming rows, checks Pillow's exact output
+words, and observes terminal native-GPU receipts. Focused F-resize tests pass
+**16/16** and the serial GPU-pool group passes **27/27**; `make build-dev` and
+formatting pass.
+
+The fresh schema-v3 envelope at
+`/tmp/all-backends-post-51f4dec15.json` (SHA-256
+`83262f5504dc5da438a6902b6d30c182730317477d38383cac3e3ef0f590e1d1`) is
+revision `51f4dec15500afbd354574bbbc46611e0146cbce`. CPU, SIMD, GPU, Node
+WASM, and browser WASM remain value-exact at **10,952/10,952**, with GPU smoke
+**1/1**; the fixed full-corpus receipt partitions are unchanged because it
+contains no rows in this newly admitted overflow subset. Remaining P0 work is
+NaN/invalid special-value arithmetic, negative-zero filtered outputs,
+cancellation cases outside the ordered proof, larger Box ratios, and chains
+outside the proven per-stage contract. No fixtures, expected values,
+thresholds, IDs, denominators, or public parity outputs changed.
