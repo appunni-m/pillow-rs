@@ -5050,3 +5050,65 @@ The remaining P0 work is broader heterogeneous/non-dyadic F arithmetic and
 unproven projective, mesh, and palette transform domains. P1 backend
 identity/fallback reconciliation and the P2 equal-ID/equal-receipt timing
 gate remain open.
+
+## 32.74 Native typed I filtered-resize admission (2026-09-02)
+
+The next deterministic backend-identity gap was Pillow's typed `I` filtered
+resize. The CPU implementation already followed Pillow's two-pass
+`ImagingResample` contract: signed INT32 source words, f64 coefficient/FMA
+accumulation, away-from-zero `ROUND_UP`, and an INT32 horizontal intermediate
+before the vertical pass. The GPU planner previously sent every non-nearest
+`I` resize to exact host semantic control because its mode-7 shader only
+relocated complete words for nearest sampling.
+
+Commit `b8cd50207` adds a bounded mode-7 marker-11 reducer. The host transports
+Pillow's binary f64 coefficient mantissas, proves each row's exact signed
+integer sum agrees with the ordered f64 rounding boundary, rejects coefficient
+or output overflows, and materializes unchanged axes as raw-word copies. The
+WGSL path accumulates the signed products in the existing four-limb integer
+representation and rounds once to the signed INT32 word; no byte-channel
+reinterpretation or relaxed f32 arithmetic is involved. The proof is limited
+to one pure filtered resize, so mixed arithmetic chains and unproven domains
+remain on exact host semantic control.
+
+The focused 16-case resize replay (ordinary `I`, nearest/identity edges,
+three `I` convolution rows, typed `I;16*`, and SIMD coverage cases) is
+value/error-exact on CPU, SIMD, GPU, Node WASM, and browser WASM. GPU has
+13/16 native terminal receipts; the zero-width guard and two unrelated SIMD
+coverage rows remain host-controlled. The three maintained convolution rows
+(`i-convolution-positive`, `i-convolution-negative`, and
+`i-bicubic-wide-ratio`) are each actual GPU with two resize dispatches, no
+fallback, and exact bytes. The focused envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` and its GPU
+sidecar is `build/migration-parity/incremental/all-backends/parity-gpu-execution.json`.
+The envelope SHA-256 is
+`55e8c825c3d78a7d020a0b25fa0c82a6e7bf0eacf9599a90893fe0e0f23e3976`, and the
+GPU sidecar SHA-256 is
+`658a8a75a24be13f55bd937a952162564e96baf16d4a1711500e8e2cfadbdde5`.
+
+The full schema-v3 campaign at revision
+`b8cd50207445a5ba35e2de2f2e69c73fb4852d27` remains value/error-exact for all
+**10,952/10,952** IDs on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU
+smoke is 1/1. The GPU pipeline cohort has 6,838 terminal-complete receipts
+(6,717 native GPU and 121 CPU), with zero partial, missing, or indeterminate
+pipeline receipts. Fallback partitions are 57 exact host semantic-control
+rows, 62 unsafe-primary-dimension rows, one unsafe/incomplete-dimension row,
+and one Transform guard. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`cd5bd577ebff9d92e1babd0b11a19a38559d7f408e35c0310a35827b0ca63965`), and
+the GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`b360f2efd75346c7d66ac5e5d35158156e25d75cd68f3319353d4043856fda30`).
+
+`cargo test -p pillow-rs compute::pool_gpu::tests:: -- --test-threads=1`
+passes 62/62, the focused and full parity replays pass, and
+`make migration-parity-receipt-test` remains 34/34. `make build-dev`,
+`make -C pillow-rs fmt-fix`, and `make -C pillow-rs fmt` pass. Clippy remains
+blocked by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2
+environment requirement. No fixtures, expected values, thresholds, IDs,
+denominators, public errors, or receipt rules changed.
+
+The remaining P0 work is broader heterogeneous/non-dyadic F arithmetic and
+unproven projective, mesh, and palette transform domains. P1 backend
+identity/fallback reconciliation and the P2 equal-ID/equal-receipt timing
+gate remain open.

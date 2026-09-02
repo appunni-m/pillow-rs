@@ -31,8 +31,8 @@ backend is complete.
 
 - [ ] Reconcile the explicit fallback taxonomy and native identity claims.
   The current full envelope has zero partial, missing, or indeterminate
-  pipeline receipts, but GPU still reports 6,713 native receipts and 125
-  host-controlled receipts (61 exact host semantic-control, 62 unsafe-primary-
+  pipeline receipts, but GPU still reports 6,717 native receipts and 121
+  host-controlled receipts (57 exact host semantic-control, 62 unsafe-primary-
   dimension, one unsafe/incomplete-dimension, and one Transform guard).
   CPU has 6,838 terminal receipts (6,832 pipeline-complete); SIMD has 6,850
   (6,844 pipeline-complete). The remaining host-controlled partitions need
@@ -54,26 +54,31 @@ backend is complete.
 - [x] Typed `I;16*` affine-nearest GPU admission: commit `614d4cd90`.
 - [x] Typed `I;16N` filtered-resize GPU admission: commit `cdce9b98c`.
   Native upload/readback now follows Pillow's declared byte order.
+- [x] Typed `I` filtered-resize GPU admission: commit `b8cd50207`.
+  Marker-11 keeps signed INT32/f64 two-pass rounding exact for the proven
+  pure-resize domain; mixed and unproven arithmetic chains remain queued.
 
 ## Current evidence
 
-- Full source revision: `cdce9b98c`.
+- Full source revision: `b8cd50207`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `69863881a1dbb193da6be48ea6e39c0b4b49de8a8df83ab003116251ccd251e1`).
+  `cd5bd577ebff9d92e1babd0b11a19a38559d7f408e35c0310a35827b0ca63965`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
-  value/error exact; GPU smoke is 1/1.
+  value/error exact; GPU smoke is 1/1. GPU has 6,717 native and 121
+  host-controlled terminal receipts (6,838 complete), with zero partial,
+  missing, or indeterminate pipeline receipts.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `56c2e16af00df0facb646156a53533e0f95a478bc44d31b02855d43d78bc1990`).
-- Focused `i16n-frombytes-bilinear` envelope:
+  `b360f2efd75346c7d66ac5e5d35158156e25d75cd68f3319353d4043856fda30`).
+- Focused I/luma16 resize envelope:
   `build/migration-parity/incremental/all-backends-test-result.json`
   (SHA-256
-  `e2626ad621d7b893c91761cac2dca2d1bd29d7008d5fdfc8f77ec12fdf6dd984`).
-  All five public lanes are 1/1 exact; GPU is native with no fallback. The
-  focused GPU sidecar SHA-256 is
-  `005f91deaba074c4019ad0f6cae726c6173e346de0f632bf6dc89561d0537f15`.
-- Verification: GPU pool tests 57/57; receipt-state tests 34/34;
+  `55e8c825c3d78a7d020a0b25fa0c82a6e7bf0eacf9599a90893fe0e0f23e3976`).
+  All five public lanes are 16/16 exact; GPU is native for 13/16, including
+  all three maintained I convolution rows. The focused GPU sidecar SHA-256 is
+  `658a8a75a24be13f55bd937a952162564e96baf16d4a1711500e8e2cfadbdde5`.
+- Verification: GPU pool tests 62/62; receipt-state tests 34/34;
   `make build-dev`; `make -C pillow-rs fmt-fix`; and `make -C pillow-rs fmt`.
   Clippy remains blocked by the pre-existing pinned
   libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement.
