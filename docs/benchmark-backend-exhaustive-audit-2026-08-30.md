@@ -4155,3 +4155,34 @@ are receipt/export coverage gaps, not value mismatches. No fixtures, expected
 values, thresholds, IDs, denominators, or public error contracts changed.
 Remaining work is the broader F arithmetic domain, WASM receipt/export gaps,
 backend identity outside proven admissions, and the P2 timing gate.
+
+## 32.51 JS/WASM observed-boundary receipts (2026-09-02)
+
+The native receipt fix exposed the same candidate-state bug in the shared
+Node/browser WASM workflow: it only remembered a receipt when the final
+workflow step emitted telemetry. A successful intermediate image observation
+therefore could not terminalize the preceding receipt when a later public
+call failed. Commit `d0ee51d9a` mirrors the Python operation-boundary
+classifier, retains the latest receipt candidate across workflow steps, and
+clears it only for an unobserved final operation or a failed final
+observation. Filter parameter constructors and mutating setup observations
+remain non-materializing.
+
+The former-partial set was replayed on both hosts through `make test-wasm`:
+all **586/586** selected cases remained value/error-exact, 485 receipts became
+terminal, and the remaining 101 all fail before a successful materialization
+boundary. The full fixed-denominator replays are
+`/tmp/wasm-boundary-full-node-d0ee51d9a.json` (SHA-256
+`5d73ecbd6d6680fb65b7e0b91813ac30ac734c68a8c19522a76ffb7b7a8d0e06`) and
+`/tmp/wasm-boundary-full-browser-d0ee51d9a.json` (SHA-256
+`b2dca82a37a9332733783d8106373da82df2159c8320feb628fc8a85a8d40c9c`). Each
+host compares all **10,952/10,952** cases exactly. Node and browser each now
+report 7,198 complete, 101 partial, 888 missing, 2,738 not-applicable, and
+27 indeterminate pipeline cases (7,204 terminal receipts, 15,191 completed
+receipts, and 3,653 not-recorded cases); the two host partitions are otherwise
+identical. The 101 partial records are retained as explicit pre-materialization
+errors, while missing/indeterminate records remain binding/export evidence
+gaps. No fixtures, expected values, thresholds, IDs, denominators, or public
+error contracts changed. Remaining work is the 888 missing/27 indeterminate
+WASM receipt/export cases, broader F arithmetic, native backend identity, and
+the P2 timing gate.

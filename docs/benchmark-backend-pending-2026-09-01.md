@@ -140,8 +140,11 @@ execution is a parity-preserving fallback, not a parity completion claim.
   fallback. The admission is terminal-only because the result is RGBA and a
   following operation requires a segmented batch with updated mode metadata.
 - [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
-  currently reports 6,713 complete, 586 partial, 888 missing, 2,738
-  not-applicable, and 27 indeterminate cases. Keep the aggregate status
+  now reports 7,198 complete, 101 partial, 888 missing, 2,738
+  not-applicable, and 27 indeterminate cases after commit `d0ee51d9a`
+  terminalized observed prefixes. The 101 partial records are all public
+  calls that error before materialization; the 888 missing and 27 indeterminate
+  records still need binding/export evidence. Keep the aggregate status
   `passed_with_backend_gaps` until these receipts are resolved or explicitly
   bounded by maintained backend evidence.
 
@@ -294,7 +297,7 @@ execution is a parity-preserving fallback, not a parity completion claim.
   tests 17/17, GPU-pool tests 28/28 (including Draw, indexed Fit, finite
   subnormal marker-9 rows, filtered F chains, finite overflow and signed-zero
   rows),
-  receipt tests 28/28, evidence/schema validation, `make -C pillow-rs fmt`, and
+  receipt tests 29/29, evidence/schema validation, `make -C pillow-rs fmt`, and
   `make clippy` (which completes with the repository's existing warnings).
 
 - [x] The post-receipt-fix full envelope at committed source `2969b323c` is
@@ -306,11 +309,21 @@ execution is a parity-preserving fallback, not a parity completion claim.
   (6,880 GPU + 211 CPU). Node and browser WASM remain 6,713 complete + 586
   partial + 888 missing + 2,738 not-applicable + 27 indeterminate, so the
   aggregate remains `passed_with_backend_gaps`.
+- [x] The shared JS/WASM observed-boundary fix is committed as `d0ee51d9a`.
+  `make test-wasm` passes the former-partial set 586/586 on Node and browser;
+  485 receipts move to terminal-complete and 101 remain explicit
+  pre-materialization errors. Full fixed-denominator artifacts are
+  `/tmp/wasm-boundary-full-node-d0ee51d9a.json` (SHA-256
+  `5d73ecbd6d6680fb65b7e0b91813ac30ac734c68a8c19522a76ffb7b7a8d0e06`) and
+  `/tmp/wasm-boundary-full-browser-d0ee51d9a.json` (SHA-256
+  `b2dca82a37a9332733783d8106373da82df2159c8320feb628fc8a85a8d40c9c`).
+  Both hosts are value-exact at 10,952/10,952 and report 7,198 complete +
+  101 partial + 888 missing + 2,738 not-applicable + 27 indeterminate.
 
 ## Closeout state
 
 - [x] The source lane and receipt-partition correction are committed as
-  `cb1813bc8` plus setup-before-error classifier `b867867ee` and observed-prefix
+  `cb1813bc8` plus setup-before-error classifier `b867867ee`, observed-prefix
   boundary fix `70a92f4ca`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
   subnormal marker-9 admission as `b1962c6dd`, finite overflow and proven
   signed-zero marker-9 admission as `19acd29ab`, pure filtered F-chain admission
@@ -319,13 +332,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
   `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, exact
   current-image Contrast-prefix admission as `5ed9f152e`, and typed I;16
-  filtered-resize admission as `2ff9a6951`; the latest full committed
+  filtered-resize admission as `2ff9a6951`, and the JS/WASM observed-boundary
+  receipt fix as `d0ee51d9a`; the latest full committed
   all-backend replay is schema-valid and value-exact for all 10,952 cases.
   The regenerated post-receipt envelope has zero native partial receipts:
   CPU 7,085 complete, SIMD 7,097 complete (6,698 SIMD + 405 CPU), and GPU
   7,085 complete (6,880 GPU + 211 CPU). The GPU partition also records 142
-  exact host semantic-control fallbacks. WASM remains 6,713 complete + 586
-  partial + 888 missing + 2,738 not-applicable + 27 indeterminate. No
+  exact host semantic-control fallbacks. Node and browser WASM now each report
+  7,198 complete + 101 partial + 888 missing + 2,738 not-applicable + 27
+  indeterminate after `d0ee51d9a`; the 101 partials are pre-materialization
+  public errors. No
   fixture, expected value, threshold, denominator, or case ID was changed.
   The latest envelope is `/tmp/all-backends-post-2969b323.json` and remains
   schema-valid and value-exact at the fixed denominator.
