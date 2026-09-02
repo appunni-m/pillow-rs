@@ -580,6 +580,126 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
     return result;
 }
 
+// Marker 12 carries a bounded ordered-f64 reducer.  Products are formed as
+// exact integer mantissa/exponent pairs, then the accumulator is rounded to a
+// normal binary64 value after every tap to match Pillow's `f64::mul_add`
+// sequence.  The host admission proof limits this path to rows with at most
+// two taps and finite normal intermediates; all wider or exceptional rows use
+// marker 9 or exact host semantic control.
+struct F64OrderedState {
+    magnitude: U128,
+    exponent: i32,
+    negative: bool,
+    valid: bool,
+}
+
+fn f64_ordered_round(sum: SignedU128, scale_exp: i32) -> F64OrderedState {
+    if sum.magnitude.a == 0u && sum.magnitude.b == 0u
+        && sum.magnitude.c == 0u && sum.magnitude.d == 0u {
+        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
+    }
+    let bit_length = u128_bit_length(sum.magnitude);
+    var exponent = scale_exp + i32(bit_length) - 1;
+    if exponent < -1022 || exponent > 1023 {
+        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
+    }
+    var mantissa: U128;
+    if bit_length > 53u {
+        let shift = bit_length - 53u;
+        mantissa = u128_shr(sum.magnitude, shift);
+        let remainder = u128_low_bits(sum.magnitude, shift);
+        let halfway = u128_shl(U128(1u, 0u, 0u, 0u), shift - 1u);
+        let greater = u128_less(halfway, remainder);
+        let equal = remainder.a == halfway.a && remainder.b == halfway.b
+            && remainder.c == halfway.c && remainder.d == halfway.d;
+        if greater || (equal && (mantissa.a & 1u) != 0u) {
+            mantissa = u128_add(mantissa, U128(1u, 0u, 0u, 0u));
+        }
+    } else {
+        mantissa = u128_shl(sum.magnitude, 53u - bit_length);
+    }
+    if mantissa.a == 0u && mantissa.b == 0x00200000u
+        && mantissa.c == 0u && mantissa.d == 0u {
+        mantissa = u128_shr(mantissa, 1u);
+        exponent = exponent + 1;
+        if exponent > 1023 {
+            return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
+        }
+    }
+    return F64OrderedState(mantissa, exponent - 52, sum.negative, true);
+}
+
+fn f64_ordered_add_product(
+    state: F64OrderedState,
+    product: U128,
+    product_exp: i32,
+    product_negative: bool,
+) -> F64OrderedState {
+    if !state.valid {
+        return state;
+    }
+    if product.a == 0u && product.b == 0u && product.c == 0u && product.d == 0u {
+        return state;
+    }
+    if state.magnitude.a == 0u && state.magnitude.b == 0u
+        && state.magnitude.c == 0u && state.magnitude.d == 0u {
+        return f64_ordered_round(SignedU128(product, product_negative), product_exp);
+    }
+    let minimum_exponent = min(state.exponent, product_exp);
+    let state_shift = u32(state.exponent - minimum_exponent);
+    let product_shift = u32(product_exp - minimum_exponent);
+    if u128_bit_length(state.magnitude) + state_shift > 128u
+        || u128_bit_length(product) + product_shift > 128u {
+        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
+    }
+    var sum = SignedU128(
+        u128_shl(state.magnitude, state_shift),
+        state.negative,
+    );
+    sum = signed_u128_add(sum, u128_shl(product, product_shift), product_negative);
+    return f64_ordered_round(sum, minimum_exponent);
+}
+
+fn filtered_f64_ordered_2tap(source_y: u32, output_x: u32) -> u32 {
+    let metadata = output_x * 3u;
+    let source_x = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
+    if count > 2u {
+        return 0u;
+    }
+    var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        let bits = f64_sample_bits(input[source_y * params.width + source_x + tap]);
+        let exponent_bits = (bits >> 23u) & 255u;
+        if exponent_bits == 255u {
+            return 0u;
+        }
+        if exponent_bits == 0u {
+            if (bits & 0x7fffffu) != 0u {
+                return 0u;
+            }
+            continue;
+        }
+        let sample_mantissa = (bits & 0x7fffffu) | 0x800000u;
+        let product = f64_product(sample_mantissa, coeff);
+        let sample_exp = i32(exponent_bits) - 127 - 23;
+        let product_exp = sample_exp + coeff.exponent;
+        let sample_negative = (bits & 0x80000000u) != 0u;
+        state = f64_ordered_add_product(
+            state,
+            product,
+            product_exp,
+            sample_negative != coeff.negative,
+        );
+    }
+    if !state.valid {
+        return 0u;
+    }
+    return f64_sum_to_f32(SignedU128(state.magnitude, state.negative), state.exponent);
+}
+
 fn filtered_f64_exact(source_y: u32, output_x: u32) -> u32 {
     let metadata = output_x * 3u;
     let source_x = u32(coefficients[metadata]);
@@ -898,6 +1018,12 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
                 return input[source_y * params.width + output_x];
             }
             return filtered_f64_exact(source_y, output_x);
+        }
+        if params.premultiply == 12u {
+            if params.width == params.dst_w {
+                return input[source_y * params.width + output_x];
+            }
+            return filtered_f64_ordered_2tap(source_y, output_x);
         }
         return bitcast<u32>(filtered_float(source_y, output_x));
     }

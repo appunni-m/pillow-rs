@@ -1157,6 +1157,306 @@ fn gpu_f_resize_f64_sample_bits(
     (actual == expected).then_some(actual)
 }
 
+#[derive(Clone, Copy)]
+struct F64OrderedState {
+    /// The finite f64 value is `magnitude * 2^exponent`.  A non-zero normal
+    /// f64 has at most 53 significant bits in `magnitude`; zero is represented
+    /// by a zero magnitude and a positive sign.
+    magnitude: u128,
+    exponent: i32,
+    negative: bool,
+}
+
+/// Round an exact signed binary integer to the finite, normal f64 state used
+/// by the ordered FMA proof.  The marker-12 shader performs this same
+/// round-to-nearest-even step after each product+accumulator operation.  The
+/// proof intentionally rejects subnormal/overflowing f64 intermediates: those
+/// need a wider state machine and remain on exact host semantic control.
+fn gpu_f64_ordered_round(sum: F64SignedMagnitude, scale_exp: i32) -> Option<F64OrderedState> {
+    if sum.magnitude == 0 {
+        return Some(F64OrderedState {
+            magnitude: 0,
+            exponent: 0,
+            negative: false,
+        });
+    }
+    let bit_length = 128 - sum.magnitude.leading_zeros();
+    let mut exponent = scale_exp.checked_add(bit_length as i32 - 1)?;
+    if !(-1022..=1023).contains(&exponent) {
+        return None;
+    }
+    let mut mantissa = if bit_length > 53 {
+        let shift = bit_length - 53;
+        let mut rounded = sum.magnitude >> shift;
+        let remainder = sum.magnitude & ((1u128 << shift) - 1);
+        let halfway = 1u128 << (shift - 1);
+        if remainder > halfway || (remainder == halfway && rounded & 1 != 0) {
+            rounded = rounded.checked_add(1)?;
+        }
+        rounded
+    } else {
+        sum.magnitude.checked_shl(53 - bit_length)?
+    };
+    if mantissa >= (1u128 << 53) {
+        mantissa >>= 1;
+        exponent = exponent.checked_add(1)?;
+        if exponent > 1023 {
+            return None;
+        }
+    }
+    Some(F64OrderedState {
+        magnitude: mantissa,
+        exponent: exponent - 52,
+        negative: sum.negative,
+    })
+}
+
+/// Add one exact f64-coefficient/f32-sample product to a rounded f64 state.
+/// The product is supplied as an unsigned integer scaled by `product_exp`;
+/// aligning it with the previous 53-bit state and rounding once models
+/// `weight.mul_add(f64::from(sample), accumulator)` without device floats.
+fn gpu_f64_ordered_add_product(
+    state: F64OrderedState,
+    product: u128,
+    product_exp: i32,
+    product_negative: bool,
+) -> Option<F64OrderedState> {
+    if product == 0 {
+        return Some(state);
+    }
+    if state.magnitude == 0 {
+        return gpu_f64_ordered_round(
+            F64SignedMagnitude {
+                magnitude: product,
+                negative: product_negative,
+            },
+            product_exp,
+        );
+    }
+    let minimum_exponent = state.exponent.min(product_exp);
+    let state_shift = u32::try_from(state.exponent.checked_sub(minimum_exponent)?).ok()?;
+    let product_shift = u32::try_from(product_exp.checked_sub(minimum_exponent)?).ok()?;
+    if (128 - state.magnitude.leading_zeros()) + state_shift > 128
+        || (128 - product.leading_zeros()) + product_shift > 128
+    {
+        return None;
+    }
+    let state_term = state.magnitude.checked_shl(state_shift)?;
+    let product_term = product.checked_shl(product_shift)?;
+    let sum = gpu_f64_signed_u128_add(
+        F64SignedMagnitude {
+            magnitude: state_term,
+            negative: state.negative,
+        },
+        product_term,
+        product_negative,
+    )?;
+    gpu_f64_ordered_round(sum, minimum_exponent)
+}
+
+/// Evaluate a short (at most two-tap) f64 coefficient row with Pillow's
+/// ordered f64 FMA semantics.  Marker 9 keeps the exact real sum and is
+/// necessarily conservative when an intermediate f64 rounding changes the
+/// final f32 word; marker 12 handles this bounded two-tap domain by emulating
+/// that intermediate rounding in integer arithmetic.
+fn gpu_f_resize_f64_ordered_sample_bits(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffsF64,
+    output_index: usize,
+    horizontal: bool,
+    line: usize,
+) -> Option<u32> {
+    let source_w = usize::try_from(source_dimensions.0).ok()?;
+    let source_h = usize::try_from(source_dimensions.1).ok()?;
+    let source_start = usize::try_from(*coeffs.xmin.get(output_index)?).ok()?;
+    let weights = coeffs.weights.get(output_index)?;
+    if *coeffs.count.get(output_index)? != weights.len() || weights.len() > 2 {
+        return None;
+    }
+    if line >= if horizontal { source_h } else { source_w } {
+        return None;
+    }
+    let source_pixel = |tap: usize| -> Option<usize> {
+        let coordinate = source_start.checked_add(tap)?;
+        if horizontal {
+            (coordinate < source_w).then_some(line.checked_mul(source_w)?.checked_add(coordinate)?)
+        } else {
+            (coordinate < source_h).then_some(coordinate.checked_mul(source_w)?.checked_add(line)?)
+        }
+    };
+    let mut state = F64OrderedState {
+        magnitude: 0,
+        exponent: 0,
+        negative: false,
+    };
+    let mut ordered_accumulator = 0.0f64;
+    for (tap, &weight) in weights.iter().enumerate() {
+        let coeff = gpu_f64_integer_parts(weight)?;
+        let pixel = source_pixel(tap)?;
+        let offset = pixel.checked_mul(4)?;
+        let word = bytes.get(offset..offset.checked_add(4)?)?;
+        let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+        let sample = gpu_f32_f64_integer_parts(bits)?;
+        let exponent_bits = (bits >> 23) & 0xff;
+        // The bounded marker does not emulate f64 subnormal inputs or IEEE
+        // specials; marker 9/special handling and host control cover them.
+        if exponent_bits == 0 && sample.mantissa != 0 {
+            return None;
+        }
+        ordered_accumulator = weight.mul_add(f64::from(f32::from_bits(bits)), ordered_accumulator);
+        if coeff.mantissa == 0 || sample.mantissa == 0 {
+            continue;
+        }
+        let product = u128::from(sample.mantissa).checked_mul(u128::from(coeff.mantissa))?;
+        let product_exp = sample
+            .exponent
+            .checked_sub(23)?
+            .checked_add(coeff.exponent)?;
+        state = gpu_f64_ordered_add_product(
+            state,
+            product,
+            product_exp,
+            sample.negative != coeff.negative,
+        )?;
+    }
+    let actual = gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)?;
+    let expected = (ordered_accumulator as f32).to_bits();
+    (actual == expected).then_some(actual)
+}
+
+fn gpu_f_resize_f64_ordered_pass_bits(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffsF64,
+    horizontal: bool,
+) -> Option<Vec<u32>> {
+    let output_count = coeffs.xmin.len();
+    let line_count = if horizontal {
+        usize::try_from(source_dimensions.1).ok()?
+    } else {
+        usize::try_from(source_dimensions.0).ok()?
+    };
+    let word_count = output_count.checked_mul(line_count)?;
+    if word_count > GPU_BUFFER_CAPACITY as usize {
+        return None;
+    }
+    let mut result = Vec::new();
+    result.try_reserve(word_count).ok()?;
+    if horizontal {
+        for line in 0..line_count {
+            for output_index in 0..output_count {
+                result.push(gpu_f_resize_f64_ordered_sample_bits(
+                    bytes,
+                    source_dimensions,
+                    coeffs,
+                    output_index,
+                    true,
+                    line,
+                )?);
+            }
+        }
+    } else {
+        for output_index in 0..output_count {
+            for line in 0..line_count {
+                result.push(gpu_f_resize_f64_ordered_sample_bits(
+                    bytes,
+                    source_dimensions,
+                    coeffs,
+                    output_index,
+                    false,
+                    line,
+                )?);
+            }
+        }
+    }
+    Some(result)
+}
+
+/// Prove one direct, changed-axis F resize in the bounded two-tap domain.
+/// Intermediate horizontal words are materialized before the vertical pass,
+/// exactly as Pillow's separable resampler does.  Chained/relocation inputs
+/// remain on marker 9 or exact host semantic control until they receive a
+/// separate proof.
+fn gpu_f_resize_f64_ordered_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let PipelineOp::Resize { w, h, filter } = &ops[0] else {
+        return false;
+    };
+    if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
+        return false;
+    }
+    let source_dimensions = image.dimensions();
+    if source_dimensions.0 == 0 || source_dimensions.1 == 0 {
+        return false;
+    }
+    if CheckedDims::new(*w, *h, 1)
+        .ok()
+        .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+    {
+        return false;
+    }
+    let source_checked = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4).ok();
+    if source_checked
+        .as_ref()
+        .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+        || source_checked.map(|dims| dims.total_bytes()) != Some(pixels.as_raw().len())
+    {
+        return false;
+    }
+    let (kernel, support) = filter_from_resample(*filter);
+    let horizontal = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
+    let vertical = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
+    if [&horizontal, &vertical].iter().any(|coeffs| {
+        coeffs.xmin.len() != coeffs.count.len()
+            || coeffs.xmin.len() != coeffs.weights.len()
+            || coeffs.count.iter().any(|&count| count > 2)
+    }) {
+        return false;
+    }
+    let horizontal_changed = *w != source_dimensions.0;
+    let vertical_changed = *h != source_dimensions.1;
+    if !horizontal_changed && !vertical_changed {
+        return false;
+    }
+    let words_to_bytes = |words: Vec<u32>| -> Option<Vec<u8>> {
+        let byte_count = words.len().checked_mul(4)?;
+        let mut result = Vec::new();
+        result.try_reserve(byte_count).ok()?;
+        for word in words {
+            result.extend_from_slice(&word.to_le_bytes());
+        }
+        Some(result)
+    };
+    let mut bytes = pixels.as_raw().to_vec();
+    let mut dimensions = source_dimensions;
+    if horizontal_changed {
+        let words = gpu_f_resize_f64_ordered_pass_bits(&bytes, dimensions, &horizontal, true);
+        let Some(next_bytes) = words.and_then(words_to_bytes) else {
+            return false;
+        };
+        bytes = next_bytes;
+        dimensions.0 = *w;
+    }
+    if vertical_changed {
+        let words = gpu_f_resize_f64_ordered_pass_bits(&bytes, dimensions, &vertical, false);
+        let Some(_next_bytes) = words.and_then(words_to_bytes) else {
+            return false;
+        };
+    }
+    true
+}
+
 /// Round an exact signed binary sum to Pillow's INT32 `ROUND_UP` result.
 ///
 /// `sum * 2^scale_exp` is kept as an integer/rational pair so the admission
@@ -4910,6 +5210,7 @@ impl GpuInner {
         source_dimensions: (u32, u32),
         mode: u32,
         f_resize_f64_is_exact: bool,
+        f_resize_f64_ordered_is_exact: bool,
     ) -> Result<usize, PilError> {
         let op_param_words = if matches!(op, PipelineOp::Pad { .. }) {
             // Header + resize controls + placement controls. The final
@@ -5003,7 +5304,8 @@ impl GpuInner {
         };
         if let Some((resize_w, resize_h, filter)) = resize_coefficients {
             let (source_w, source_h) = source_dimensions;
-            let (horizontal_bytes, vertical_bytes) = if f_resize_f64_is_exact
+            let (horizontal_bytes, vertical_bytes) = if (f_resize_f64_is_exact
+                || f_resize_f64_ordered_is_exact)
                 && matches!(mode, 5 | 7 | 8)
                 && !matches!(filter, ResampleFilter::Nearest)
                 && matches!(op, PipelineOp::Resize { .. } | PipelineOp::Pad { .. })
@@ -5202,6 +5504,7 @@ impl GpuInner {
         f_resize_box_average_is_exact: bool,
         f_resize_dyadic_is_exact: bool,
         f_resize_f64_is_exact: bool,
+        f_resize_f64_ordered_is_exact: bool,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -5401,6 +5704,9 @@ impl GpuInner {
                 let f64_is_exact = f_resize_f64_is_exact
                     && logical_mode == Some("F")
                     && !matches!(filter, ResampleFilter::Nearest);
+                let f64_ordered_is_exact = f_resize_f64_ordered_is_exact
+                    && logical_mode == Some("F")
+                    && !matches!(filter, ResampleFilter::Nearest);
                 let i_f64_is_exact = f_resize_f64_is_exact
                     && logical_mode == Some("I")
                     && !matches!(filter, ResampleFilter::Nearest);
@@ -5423,6 +5729,8 @@ impl GpuInner {
                         5
                     } else if box_average_is_exact {
                         4
+                    } else if f64_ordered_is_exact {
+                        12
                     } else if f64_is_exact {
                         9
                     } else if i_f64_is_exact {
@@ -5644,7 +5952,7 @@ impl GpuInner {
                     } else {
                         let horizontal = gpu_resize_coefficients(out_w, cur_w, *filter);
                         let vertical = gpu_resize_coefficients(out_h, cur_h, *filter);
-                        if f_resize_f64_is_exact
+                        if (f_resize_f64_is_exact || f_resize_f64_ordered_is_exact)
                             && !matches!(filter, ResampleFilter::Nearest)
                             && (logical_mode == Some("F")
                                 || (op_mode == 5
@@ -6557,6 +6865,7 @@ impl GpuInner {
         f_resize_box_average_is_exact: bool,
         f_resize_dyadic_is_exact: bool,
         f_resize_f64_is_exact: bool,
+        f_resize_f64_ordered_is_exact: bool,
         buffers: &mut BufferPool,
     ) -> Result<
         (
@@ -6625,6 +6934,7 @@ impl GpuInner {
                     resource_source_dims[index],
                     op_modes[index],
                     f_resize_f64_is_exact,
+                    f_resize_f64_ordered_is_exact,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -6700,6 +7010,7 @@ impl GpuInner {
                 f_resize_box_average_is_exact,
                 f_resize_dyadic_is_exact,
                 f_resize_f64_is_exact,
+                f_resize_f64_ordered_is_exact,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -10931,10 +11242,23 @@ impl GpuPool {
             gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
         let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
         let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
+        let f_resize_f64_ordered_proof =
+            gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode);
         let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
             || f_pad_f64_is_exact
             || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
             || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
+        // Marker 12 is selected only when none of the earlier F proofs owns
+        // the operation.  In particular, Box-average/dyadic markers consume
+        // the fixed-point coefficient table, whereas marker 12 requires the
+        // four-word f64 coefficient arena.
+        let f_resize_f64_ordered_is_exact = f_resize_f64_ordered_proof
+            && !f_resize_f64_is_exact
+            && f_resize_constant_bits.is_none()
+            && !f_resize_box_copy_is_exact
+            && !f_resize_identity_is_exact
+            && !f_resize_box_average_is_exact
+            && !f_resize_dyadic_is_exact;
         if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
             // A normalized blur preserves every channel of a constant image,
             // including the edge samples. Replace only the GPU lowering with
@@ -11034,7 +11358,7 @@ impl GpuPool {
             f_resize_identity_is_exact,
             f_resize_box_average_is_exact,
             f_resize_dyadic_is_exact,
-            f_resize_f64_is_exact,
+            f_resize_f64_is_exact || f_resize_f64_ordered_is_exact,
         ) {
             return self.execute_exact_host_result(ops, img, mode);
         }
@@ -11761,6 +12085,7 @@ impl GpuPool {
             f_resize_box_average_is_exact,
             f_resize_dyadic_is_exact,
             f_resize_f64_is_exact,
+            f_resize_f64_ordered_is_exact,
             &mut buffers,
         )?;
         gpu_log!(
@@ -11868,7 +12193,8 @@ mod tests {
         gpu_byte_point_mode_allowed, gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix,
         gpu_f_pad_f64_is_exact, gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
-        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
+        gpu_f_resize_f64_ordered_is_exact, gpu_f_resize_identity_is_exact,
+        gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_indexed_projective_nearest_is_exact, gpu_int_filter_resize_chain_is_supported,
@@ -15286,6 +15612,71 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.7, None);
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_two_tap_native_matches_cpu() {
+        // The marker-9 exact-real reducer rejects this row because the tiny
+        // second product is below the first product's f64 ulp.  Pillow rounds
+        // the accumulator after the first FMA, then performs the second FMA;
+        // marker 12 reproduces that ordered boundary without relaxed device
+        // floats.
+        let source_bytes = [
+            44, 149, 220, 51, // 1.0271683e-7
+            155, 14, 222, 56, // 1.0588505e-4
+            62, 115, 42, 56, // 4.0638486e-5
+        ];
+        let source = Image::frombytes("F", (3, 1), &source_bytes).expect("F source");
+        let source_dynamic = source.materialize().expect("materialize F source");
+        let op = PipelineOp::Resize {
+            w: 2,
+            h: 1,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let expected = source
+            .resize((2, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("CPU ordered-f64 resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F resize bytes");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((2, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("GPU ordered-f64 resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU ordered-f64 resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "ordered f64 two-tap F resize");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("ordered-f64 F resize must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
