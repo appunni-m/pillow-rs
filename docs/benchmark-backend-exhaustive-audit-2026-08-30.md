@@ -4519,15 +4519,15 @@ fallback. The focused marker-9 group is **19/19**.
 
 The committed-source schema-v3 all-backend envelope
 `build/migration-parity/all-backends-test-result.json` (SHA-256
-`32be1163b06915202386985a2d6bdfda8fc497b3aea8c6dccf98692c9939b334`, revision
-`35fbfbe4dbccea1b8bb40754da34e92a684b9b2f`) is value/error-exact at
+`176ea46adbb610494509f8945fcaff36cc4223cd16d9d9e7cd3d38a7862ae5f0`, revision
+`02e63e4c2de0610d453fbe91bbb61d2259ae3610`) is value/error-exact at
 10,952/10,952 on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU smoke is
 1/1. CPU reports 6,838 terminal receipts (6,832 pipeline-complete), SIMD 6,850
 (6,844 pipeline-complete), and GPU 6,632 native GPU plus 206 exact host
 semantic-control CPU receipts (6,832 pipeline-complete). Every lane has zero
 partial, missing, or indeterminate pipeline receipts. The GPU execution
 sidecar `build/migration-parity/all-backends/parity-gpu-execution.json` has
-SHA-256 `41197a1752aa0d721fee83a2b95b605f0ff573d46e8c14e8255c22e7f48b34ff`.
+SHA-256 `40b6172b7dddb4d84a355a578343bbab10de3d83592cb72a2256bd32018d9fb5`.
 No fixtures, expected values, thresholds, IDs, denominators, public errors, or
 receipt rules changed.
 
