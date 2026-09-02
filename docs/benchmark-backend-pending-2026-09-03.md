@@ -37,6 +37,9 @@ receipt rules unchanged.
   outcomes. The last full envelope is exact on all five public lanes, but GPU
   still has a host-controlled partition alongside native receipts. Preserve
   terminal actual-backend identity and make every fallback reason actionable.
+- [x] Correct mixed SIMD/CPU terminal identity (`ddcff735c`): receipts now
+  report the final successful segment (SIMD 6,847; CPU 3) while preserving
+  per-operation handoff telemetry and exact values.
 - [x] Preserve nonterminal host-control receipt prefixes in WASM evidence
   accounting (`385eeaab1`).
 
@@ -68,12 +71,18 @@ receipt rules unchanged.
   zero-fill/copy pass with unchanged bytes and telemetry.
 - [x] PA/F nearest relocation admissions and the bounded indexed projective
   proof remain exact within their documented envelopes.
+- [x] CPU `ImageChops.constant` allocation (`2176ebfad`): construct the final
+  L pixel directly, removing the redundant zero-fill/full-frame overwrite;
+  focused parity is 11/11 exact and aggregate timing remains separately gated.
+- [x] Heterogeneous F `ImageOps.pad` (`c5f03c6f3`): route the contain resize
+  through exact f64-coefficient/f32-store semantics and admit only the proven
+  marker-9 changed-axis GPU path (25/25 matrix exact; 23 native GPU).
 
 ## Evidence refreshed at the final transform/mesh revision
 
 - [x] Focused all-backends transform replay with terminal receipts (130/130
   source corpus; fractional GPU rows are host-controlled).
-- [x] Full schema-v3 all-backends envelope at `1773f60b7` and GPU SHA-256
+- [x] Full schema-v3 all-backends envelope at `c5f03c6f3` and GPU SHA-256
   sidecar (10,952/10,952 exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
   GPU native/host partitions remain explicit).
 - [x] Standard benchmark and parity preflight after Mesh arithmetic fixes:
@@ -84,10 +93,10 @@ receipt rules unchanged.
   `make migration-parity-evidence-check`.
 
 Current evidence hashes: all-backends envelope
-`78bb084c1a42c59f33251d3b2228567fa0801efb71e84f6a999fae709564a7fd`, GPU
-sidecar `cdec2379f0a11bd4e43958eb3e4efb48be8ff852260950df8fb2ec2f41daf1b6`,
-benchmark `0ccacb7261878e71f249890c3c5d8a4b0bfedb241e810db196c63c015041ab44`,
-and benchmark parity `af1d7feca7999767c1fb95ca27ba41bbbc6f765684855e326de30a5b14f54dd1`.
+`7e2d3b13549a10b4fb33b687e7572f844d7739a42e55076bd949495d1c0601fc`, GPU
+sidecar `cfeec1a1a14c517ead579a574f8a7a5cc79e1b2f896b7eca605e29ee9dbd1be4`,
+benchmark `31147c0898e7aca93bb1eb6440405eab8313eecafcd4f61992ddcafcb23a9a4a`,
+and benchmark parity `68e4c45562367e3a9f5f4e505314b66df34ea3c4187c843242a5f383cf3d2572`.
 
 Known environment blocker: `make -C pillow-rs clippy` still requires the
 pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
