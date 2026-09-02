@@ -3992,3 +3992,41 @@ NaN/invalid special-value arithmetic, other unproven cancellation/negative-
 zero rows, broader Box ratios, and chains outside the proven per-stage
 contract. No fixtures, expected values, thresholds, IDs, denominators, or
 public parity outputs changed.
+
+## 32.46 Native GPU Contrast after an exact PutPixel prefix (2026-09-02)
+
+The first divergence in this lane was a receipt/route boundary rather than a
+pixel mismatch. A pipeline containing one exact `PutPixel` followed by
+`ImageEnhance.Contrast` was sent to host control because the GPU batch carries
+one scalar midpoint, and the old preflight computed that midpoint from the
+original source. Pillow's `ImageEnhance.Contrast` computes its rounded
+grayscale midpoint from the image after the preceding pixel write, then
+blends the current image with that midpoint.
+
+Commit `5ed9f152e` adds a deliberately narrow proof for one non-palette
+`PutPixel` immediately before a single `Contrast`. The control plane mirrors
+that byte-layout write with the existing exact Rust `PutPixel` primitive only
+to derive the post-write midpoint; the complete `PutPixel -> Contrast` batch
+still executes on the native GPU and publishes one terminal receipt. Palette
+writes, longer prefixes, multiple/later Contrast operations, and layouts
+without a proven midpoint continue to use exact host control.
+
+The focused native regression covers L, LA, RGB, RGBA, and CMYK and matches the
+CPU result with two GPU dispatches, requested/actual GPU identity, and no
+fallback. The filtered all-backend replay is
+`/tmp/contrast-prefix-all-backends.json` (SHA-256
+`2db9e1f47d3e2fce94ccfcf51162cb64ad194e0ccf6a794f462c9e66d3a640ca`): all
+**35/35** selected cases are byte-exact on CPU, SIMD, GPU, Node WASM, and
+browser WASM, with 35 terminal-complete receipts in each lane and 35 native
+GPU receipts without fallback. The serial GPU Contrast tests are 2/2, the
+full Rust library tests are 54/54, receipt-state tests are 28/28, and
+`make build-dev` plus formatting pass. The full 10,952-case artifact was not
+regenerated in this run because the existing per-lane artifacts already
+consume the host's temporary-disk budget; the prior committed envelope
+remains the denominator authority, while this fixed replay proves the changed
+rows.
+
+No fixtures, expected values, thresholds, IDs, denominators, or receipt
+taxonomy changed. P0 broader F arithmetic, the remaining native partial and
+WASM receipt gaps, backend/fallback reconciliation outside this proven prefix,
+and the P2 timing gate remain open.
