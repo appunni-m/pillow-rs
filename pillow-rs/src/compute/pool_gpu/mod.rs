@@ -9634,9 +9634,9 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
         || !gpu_image_layout_is_supported(image)
 }
 
-/// Return whether a typed, indexed, or raw packed nearest affine transform can
-/// use the fixed-point relocation shader without changing Pillow's source
-/// selection.
+/// Return whether a typed, indexed, palette-alpha, or raw packed nearest
+/// affine transform can use the fixed-point relocation shader without changing
+/// Pillow's source selection.
 ///
 /// `Geometry.c` computes the six affine values as signed 16.16 integers and
 /// then walks each output row with integer additions.  The GPU shader carries
@@ -9644,8 +9644,9 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
 /// i64.  Keep the admission proof deliberately explicit: every coefficient,
 /// row origin, and absolute output-coordinate sum must fit i32, and the
 /// source dimensions must fit the shader's signed bounds checks.  The typed
-/// sample itself remains an opaque word, so no integer/float conversion or
-/// approximation is introduced.  I;16* uses Pillow's separate nearest
+/// sample itself remains an opaque word (or an index/alpha pair for `PA`), so
+/// no integer/float conversion or approximation is introduced.  I;16* uses
+/// Pillow's separate nearest
 /// coordinate contract (rounding `a*dx+b*dy+c` with `floor(+0.5)`), so its
 /// coefficients must be exactly representable in the uploaded 16.16 plan.
 fn gpu_nearest_affine_is_exact(
@@ -9668,14 +9669,16 @@ fn gpu_nearest_affine_is_exact(
     let typed_mode = mode == Some("I");
     let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
     let indexed_mode = matches!(mode, Some("1" | "P"));
+    let palette_alpha_mode = mode == Some("PA");
     // CMYK is four raw channel bytes in the same Rgba8 transport. Unlike
     // RGBA, its fourth byte is K rather than alpha, and the mode-4 nearest
     // shader branch copies all four bytes without color conversion.
     let raw_packed_mode = mode == Some("CMYK");
-    if (!typed_mode && !luma16_mode && !indexed_mode && !raw_packed_mode)
+    if (!typed_mode && !luma16_mode && !indexed_mode && !palette_alpha_mode && !raw_packed_mode)
         || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
         || (luma16_mode && !matches!(image, DynamicImage::ImageLuma16(_)))
         || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
+        || (palette_alpha_mode && !matches!(image, DynamicImage::ImageLumaA8(_)))
         || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
         || !matches!(method, TransformMethod::Affine)
         || (!gpu_transform_uses_nearest(mode, *filter))
@@ -11753,6 +11756,56 @@ mod tests {
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn palette_alpha_nearest_affine_native_gpu_preserves_pairs() {
+        let source_bytes = [
+            1u8, 17, 2, 33, 3, 49, 4, 65, 5, 81, 6, 97, 7, 113, 8, 129, 9, 145, 10, 161, 11, 177,
+            12, 193,
+        ];
+        let mut source = Image::frombytes("LA", (4, 3), &source_bytes).expect("LA source");
+        source
+            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
+            .expect("PA palette");
+        assert_eq!(source.mode().expect("PA mode"), "PA");
+        let transformed = source
+            .transform_public(
+                (4, 3),
+                0,
+                Some(TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0])),
+                0,
+                0,
+                None,
+            )
+            .expect("PA affine transform");
+        let expected = transformed
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU PA transform");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU PA affine transform failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU PA affine parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU PA affine transform must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
