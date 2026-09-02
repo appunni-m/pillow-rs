@@ -10408,18 +10408,21 @@ fn gpu_nearest_affine_is_exact(
     true
 }
 
-/// Prove a nearest projective/quad/mesh transform for indexed raw samples.
+/// Prove a nearest projective/quad/mesh transform for raw byte samples.
 ///
-/// Pillow forces `P` and `1` transforms through the nearest sampler, so the
-/// observable value is a complete index byte (not an interpolated color). The
-/// projective shader already has the corresponding nearest branches, but its
-/// coordinates are evaluated in `f32` while Pillow's `ImagingTransform` path
-/// evaluates the inverse map in `f64`. Admit only a bounded proof where every
-/// coefficient, destination coordinate, intermediate arithmetic result, and
-/// final source coordinate are exactly representable in both domains. This
-/// keeps integer identity/axis-swap maps native without claiming parity for
-/// fractional homographies or arbitrary mesh records.
-fn gpu_indexed_projective_nearest_is_exact(
+/// Pillow's `ImagingTransform` path evaluates the inverse map in `f64`, while
+/// the projective shader evaluates destination coordinates in `f32` and then
+/// rounds its selected source coordinate. Admit only a bounded proof where
+/// every coefficient, destination coordinate, intermediate arithmetic result,
+/// and final source coordinate select the same source pixel in both domains.
+/// This covers integer identity maps for ordinary packed byte modes and raw
+/// indexed samples without claiming parity for fractional homographies or
+/// arbitrary mesh records. Filtered projective transforms remain host
+/// controlled because they change sample values rather than relocating bytes.
+// The comparison is intentional: the current shader receives raw destination
+// indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
+// pixel center before evaluating the map and then applies `COORD` truncation.
+fn gpu_projective_nearest_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
     mode: Option<&str>,
@@ -10436,8 +10439,56 @@ fn gpu_indexed_projective_nearest_is_exact(
     else {
         return false;
     };
-    if !matches!(mode, Some("P" | "1"))
-        || !matches!(image, DynamicImage::ImageLuma8(_))
+    let image_layout_is_valid = match mode {
+        Some("P" | "1" | "L") => matches!(image, DynamicImage::ImageLuma8(_)),
+        Some("LA") => matches!(image, DynamicImage::ImageLumaA8(_)),
+        Some("RGB") => matches!(image, DynamicImage::ImageRgb8(_)),
+        Some("RGBA") => matches!(image, DynamicImage::ImageRgba8(_)),
+        _ => false,
+    };
+    let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
+    if !image_layout_is_valid
+        || (ordinary_byte_mode
+            && match method {
+                TransformMethod::Perspective => {
+                    data.get(..8) != Some(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0][..])
+                }
+                TransformMethod::Quad => {
+                    data.get(..8)
+                        != Some(
+                            &[
+                                0.0,
+                                0.0,
+                                f64::from(*w),
+                                0.0,
+                                f64::from(*w),
+                                f64::from(*h),
+                                0.0,
+                                f64::from(*h),
+                            ][..],
+                        )
+                }
+                TransformMethod::Mesh => {
+                    data.get(..12)
+                        != Some(
+                            &[
+                                0.0,
+                                0.0,
+                                f64::from(*w),
+                                f64::from(*h),
+                                0.0,
+                                0.0,
+                                f64::from(*w),
+                                0.0,
+                                f64::from(*w),
+                                f64::from(*h),
+                                0.0,
+                                f64::from(*h),
+                            ][..],
+                        )
+                }
+                TransformMethod::Affine => true,
+            })
         || !matches!(
             method,
             TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
@@ -11003,8 +11054,8 @@ fn gpu_geometry_requires_exact_host_control(
     // arithmetic contract: the corrected CPU path evaluates perspective maps
     // in f64 at pixel centers, while the shader evaluates raw destination
     // coordinates in f32. Keep every non-proven projective/quad/mesh transform
-    // on exact host semantic control; the indexed helper below retains only
-    // its exhaustive integer-map proof.
+    // on exact host semantic control; the bounded projective helper below
+    // retains only its exhaustive integer-map proof for raw byte samples.
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
@@ -11019,11 +11070,11 @@ fn gpu_geometry_requires_exact_host_control(
                         | TransformMethod::Mesh,
                     ..
                 }
-            ) && !gpu_indexed_projective_nearest_is_exact(op, image, mode, dimensions);
+            ) && !gpu_projective_nearest_is_exact(op, image, mode, dimensions);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_nearest_affine_is_exact(op, image, mode, dimensions)
-            && !gpu_indexed_projective_nearest_is_exact(op, image, mode, dimensions)
+            && !gpu_projective_nearest_is_exact(op, image, mode, dimensions)
             && !gpu_transform_all_fill_is_exact(op, image, mode, dimensions);
         if thumbnail_needs_control
             || projective_transform_needs_control
@@ -12204,9 +12255,9 @@ mod tests {
         gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
-        gpu_indexed_projective_nearest_is_exact, gpu_int_filter_resize_chain_is_supported,
-        gpu_luma16_resize_f64_is_exact, gpu_nearest_affine_is_exact,
-        gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
+        gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
+        gpu_nearest_affine_is_exact, gpu_palette_first_rgb_merge_is_supported,
+        gpu_projective_nearest_is_exact, gpu_resize_coefficients,
         gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         luma16_resample_big_endian, readback_poll_backoff,
     };
@@ -12583,7 +12634,7 @@ mod tests {
     }
 
     #[test]
-    fn indexed_projective_nearest_proof_is_bounded() {
+    fn projective_nearest_proof_is_bounded() {
         let image = DynamicImage::ImageLuma8(
             GrayImage::from_raw(16, 16, vec![0; 16 * 16]).expect("indexed image"),
         );
@@ -12617,12 +12668,26 @@ mod tests {
             palette_fill: Some(7),
         };
         for op in [&perspective, &quad, &mesh] {
-            assert!(gpu_indexed_projective_nearest_is_exact(
+            assert!(gpu_projective_nearest_is_exact(
                 op,
                 &image,
                 Some("P"),
                 (16, 16)
             ));
+        }
+        let rgb = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(16, 16, vec![0; 16 * 16 * 3]).expect("RGB image"),
+        );
+        let rgba = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(16, 16, vec![0; 16 * 16 * 4]).expect("RGBA image"),
+        );
+        for (mode, image) in [("RGB", &rgb), ("RGBA", &rgba)] {
+            for op in [&perspective, &quad, &mesh] {
+                assert!(
+                    gpu_projective_nearest_is_exact(op, image, Some(mode), (16, 16)),
+                    "identity projective proof for {mode}"
+                );
+            }
         }
         let fractional = PipelineOp::Transform {
             w: 8,
@@ -12633,10 +12698,31 @@ mod tests {
             fill: Some((7, 0, 0, 255)),
             palette_fill: Some(7),
         };
-        assert!(!gpu_indexed_projective_nearest_is_exact(
+        assert!(!gpu_projective_nearest_is_exact(
             &fractional,
             &image,
             Some("P"),
+            (16, 16)
+        ));
+        assert!(!gpu_projective_nearest_is_exact(
+            &fractional,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
+        let scaled = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        assert!(!gpu_projective_nearest_is_exact(
+            &scaled,
+            &rgb,
+            Some("RGB"),
             (16, 16)
         ));
     }
@@ -12700,6 +12786,75 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_nearest_identity_native_gpu_preserves_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+        ] {
+            let bytes = (0..16 * 16 * channels)
+                .map(|index| (index * 29 + 7) as u8)
+                .collect::<Vec<_>>();
+            let source = Image::frombytes(mode, (16, 16), &bytes).expect("byte source");
+            let cases = [
+                (
+                    2,
+                    TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+                ),
+                (
+                    3,
+                    TransformData::Affine(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 8.0, 8.0],
+                        vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
+                    )]),
+                ),
+            ];
+            for (method, data) in cases {
+                let transformed = source
+                    .transform_public((8, 8), method, Some(data), 0, 0, None)
+                    .expect("identity projective transform");
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .expect("CPU identity projective transform");
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => {
+                        panic!("native GPU identity projective transform failed: {error}")
+                    }
+                };
+                assert_eq!(
+                    actual, expected,
+                    "native {mode} identity transform method {method}"
+                );
+                let telemetry = Backend::take_pipeline_telemetry()
+                    .expect("native identity projective transform must publish a receipt");
+                assert_eq!(telemetry.0, Some(Backend::Gpu));
+                assert_eq!(telemetry.1, Backend::Gpu);
+                assert_eq!(telemetry.6, Some(1));
+                assert_eq!(telemetry.7, None);
+            }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
