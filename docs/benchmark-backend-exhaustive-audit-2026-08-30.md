@@ -4626,3 +4626,37 @@ No fixtures, expected values, thresholds, IDs, denominators, public errors,
 or receipt rules changed. Remaining work is mixed special-value ordering and
 cancellation, unproven negative-zero and wider Box arithmetic, additional
 logical/backend identity reconciliation, and the P2 timing gate.
+
+## 32.65 Host-control fallback taxonomy normalization (2026-09-02)
+
+The full receipt envelope contained one valid host-controlled row labeled
+`unsupported logical mode`: `PIL.ImageOps.fit.nuanced.pa-putpalette-expansion`.
+The row is a valid Pillow operation whose exact result was already produced by
+the CPU path; the label described a GPU preflight boundary, not a missing
+public API or a parity failure. Keeping that word in the fallback partition
+made the evidence contradict the parity-first contract.
+
+Commit `09ef0dc83` changes only that internal reason to
+`exact host semantic control` and updates the guarded preflight log. Routing,
+pixels, backend selection, receipt completion, case IDs, and all validation
+gates are unchanged. The focused one-case all-backend replay is value/error-
+exact on CPU, SIMD, GPU, Node WASM, and browser WASM (1/1 each); GPU remains
+actual CPU with an explicit exact-host-control receipt.
+
+The fresh committed-source schema-v3 envelope at revision
+`09ef0dc83f09caad765ffe8113453846ee9a9b3d` is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`2d010872e4023880cbef19d9720bcbd8d88ecbc536c697890f1fc4099d551044`). All
+five public lanes are value/error-exact at **10,952/10,952**, with GPU smoke
+**1/1**. CPU reports 6,838 terminal receipts (6,832 pipeline-complete), SIMD
+6,850 (6,844), and GPU 6,632 native GPU plus 206 CPU receipts (6,832). GPU's
+fallback partition is now 142 exact host semantic-control rows plus the
+explicit dimension and Transform guards; no `unsupported logical mode` bucket
+remains. Native lanes have zero partial, missing, or indeterminate pipeline
+receipts.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. This closes the misleading label only; backend
+identity reconciliation remains open because exact host-control rows are still
+not native GPU executions. The remaining P0 arithmetic and P2 timing work is
+unchanged.
