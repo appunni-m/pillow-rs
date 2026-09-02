@@ -7476,9 +7476,10 @@ fn gpu_luma16_paste_source(op: &PipelineOp, mode: u32, image: &DynamicImage) -> 
 /// `F` stores one little-endian `f32` sample in each four-byte word. The
 /// order-statistic shaders have a separate mode-8 path that compares those
 /// samples as floats instead of independently comparing their four bytes.
-/// Require finite source values for now: this gives WGSL ordering the same
-/// total behavior as Pillow's finite-value path while NaN ordering remains an
-/// explicit future contract rather than an accidental driver-dependent result.
+/// Require finite source and raw `PutData(F)` words for now: this gives WGSL
+/// ordering the same total behavior as Pillow's finite-value path while NaN
+/// ordering remains an explicit future contract rather than an accidental
+/// driver-dependent result.
 fn gpu_float_filter_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
     let DynamicImage::ImageRgba8(pixels) = image else {
         return false;
@@ -7486,17 +7487,22 @@ fn gpu_float_filter_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bo
     let expected = (image.width() as usize)
         .checked_mul(image.height() as usize)
         .and_then(|count| count.checked_mul(4));
+    let finite_words = |bytes: &[u8]| {
+        expected == Some(bytes.len())
+            && bytes.chunks_exact(4).remainder().is_empty()
+            && bytes
+                .chunks_exact(4)
+                .all(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]).is_finite())
+    };
     expected == Some(pixels.as_raw().len())
         && !ops.is_empty()
-        && pixels
-            .as_raw()
-            .chunks_exact(4)
-            .all(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]).is_finite())
+        && finite_words(pixels.as_raw())
         && ops.iter().all(|op| match op {
             PipelineOp::Mirror => true,
             PipelineOp::PutData {
-                mode: PixelMode::F, ..
-            } => true,
+                data,
+                mode: PixelMode::F,
+            } => finite_words(data),
             PipelineOp::MaxFilter { .. }
             | PipelineOp::MinFilter { .. }
             | PipelineOp::MedianFilter { .. }
@@ -10230,7 +10236,7 @@ mod tests {
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
-        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32,
+        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
         gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian, readback_poll_backoff,
@@ -11819,6 +11825,74 @@ mod tests {
                 Some("F")
             ));
         }
+    }
+
+    #[test]
+    fn f_order_filter_putdata_requires_finite_words() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                2,
+                2,
+                [1.0f32, 2.0, 3.0, 4.0]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let rank = PipelineOp::RankFilter { size: 3, rank: 4 };
+        let words = |values: [f32; 4]| -> Arc<[u8]> {
+            Arc::from(
+                values
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            )
+        };
+
+        assert!(gpu_float_filter_is_supported(
+            &[
+                PipelineOp::PutData {
+                    data: words([4.0, 3.0, 2.0, 1.0]),
+                    mode: PixelMode::F,
+                },
+                rank.clone(),
+            ],
+            &image,
+        ));
+        for special in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert!(!gpu_float_filter_is_supported(
+                &[
+                    PipelineOp::PutData {
+                        data: words([special, 3.0, 2.0, 1.0]),
+                        mode: PixelMode::F,
+                    },
+                    rank.clone(),
+                ],
+                &image,
+            ));
+        }
+        assert!(!gpu_float_filter_is_supported(
+            &[
+                PipelineOp::PutData {
+                    data: Arc::from(vec![0u8; 4].into_boxed_slice()),
+                    mode: PixelMode::F,
+                },
+                rank.clone(),
+            ],
+            &image,
+        ));
+        assert!(!gpu_float_filter_is_supported(
+            &[
+                PipelineOp::PutData {
+                    data: words([4.0, 3.0, 2.0, 1.0]),
+                    mode: PixelMode::I,
+                },
+                rank,
+            ],
+            &image,
+        ));
     }
 
     #[test]
