@@ -4414,3 +4414,34 @@ GPU-pool suite (**38/38**), and the focused all-backend replay pass.
 No fixtures, expected values, thresholds, IDs, denominators, public errors,
 or receipt rules changed. Remaining work is broader F arithmetic, other
 logical-mode/backend identity gaps, and the P2 timing gate.
+
+## 32.58 I-mode Cover→Pad nearest chain native admission (2026-09-02)
+
+The next valid logical-mode gap was the composed `I` workflow
+`ImageOps.cover(..., method=NEAREST)` followed by
+`ImageOps.pad(..., method=NEAREST)`. The contain/cover planner already lowers
+the first operation to a nearest word-copy resize, but the second Pad was
+classified as an unsupported logical mode because its placement shader
+normalized the four-byte signed sample as an L/RGBA pixel. Pillow keeps `I`
+samples as signed little-endian int32 words and a scalar pad color such as
+`7` is the complete word `0x00000007`.
+
+Commit `544d0ebc1` admits only nearest `I` Resize/Pad batches. `gpu_pad_fill` now carries
+the complete scalar word (with omitted fill as zero), mode-7 placement keeps
+the word opaque, and the I Pad's contain horizontal pass, vertical pass, and
+placement pass each get an explicit compute-pass boundary. Filtered Pad and
+other typed arithmetic remain on exact host semantic control.
+
+The focused signed-word native regression
+`i_cover_pad_nearest_native_gpu_preserves_signed_words` is **1/1** with exact
+bytes and five dispatches. The filtered all-backend replay
+`/tmp/i-cover-pad-all-backends.json` (SHA-256
+`a12189686480ea6883e157daf5906116ca3903aae0e13dea46d0bd6942a5b27e`) is
+schema-valid and value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; its GPU materialization has a terminal native-GPU receipt with five
+dispatches and no fallback. The GPU-pool suite is **39/39**; fmt and
+build-dev pass.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. Remaining work is broader F arithmetic, other
+logical-mode/backend identity gaps, and the P2 timing gate.
