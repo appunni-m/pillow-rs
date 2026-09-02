@@ -697,6 +697,81 @@ fn filtered_f64_exact(source_y: u32, output_x: u32) -> u32 {
     return f64_sum_to_f32(sum, minimum_exponent);
 }
 
+// Marker 11 is the typed INT32 resize path. Each source word is a signed
+// i32, while the coefficient table carries exact binary f64 mantissas. Keep
+// the complete weighted sum in the existing four-limb reducer and round once
+// away from zero at Pillow's INT32 storage boundary.
+fn integer_sum_to_i32(sum: SignedU128, minimum_exponent: i32) -> u32 {
+    if sum.magnitude.a == 0u && sum.magnitude.b == 0u
+        && sum.magnitude.c == 0u && sum.magnitude.d == 0u {
+        return 0u;
+    }
+    var rounded: U128;
+    if minimum_exponent >= 0 {
+        rounded = u128_shl(sum.magnitude, u32(minimum_exponent));
+    } else {
+        let shift = u32(-minimum_exponent);
+        if shift >= 128u {
+            rounded = U128(0u, 0u, 0u, 0u);
+        } else if shift == 0u {
+            rounded = sum.magnitude;
+        } else {
+            rounded = u128_shr(sum.magnitude, shift);
+            let remainder = u128_low_bits(sum.magnitude, shift);
+            let halfway = u128_shl(U128(1u, 0u, 0u, 0u), shift - 1u);
+            // INT32 ROUND_UP is away from zero, including exact ties.
+            if !u128_less(remainder, halfway) {
+                rounded = u128_add(rounded, U128(1u, 0u, 0u, 0u));
+            }
+        }
+    }
+    // The host proof rejects rows outside the signed i32 range. A low-word
+    // conversion is therefore sufficient, including i32::MIN as 0x80000000.
+    return select(rounded.a, 0u - rounded.a, sum.negative);
+}
+
+fn filtered_i32_exact(source_y: u32, output_x: u32) -> u32 {
+    let metadata = output_x * 3u;
+    let source_x = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
+    var minimum_exponent: i32 = 0;
+    var found = false;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        let word = input[source_y * params.width + source_x + tap];
+        let negative = (word & 0x80000000u) != 0u;
+        let magnitude = select(word, 0u - word, negative);
+        if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u || magnitude == 0u {
+            continue;
+        }
+        if !found {
+            minimum_exponent = coeff.exponent;
+            found = true;
+        } else {
+            minimum_exponent = min(minimum_exponent, coeff.exponent);
+        }
+    }
+    if !found {
+        return 0u;
+    }
+    var sum = SignedU128(U128(0u, 0u, 0u, 0u), false);
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        let word = input[source_y * params.width + source_x + tap];
+        let sample_negative = (word & 0x80000000u) != 0u;
+        let sample_magnitude = select(word, 0u - word, sample_negative);
+        if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u || sample_magnitude == 0u {
+            continue;
+        }
+        let product = f64_product(sample_magnitude, coeff);
+        let shift = u32(coeff.exponent - minimum_exponent);
+        let term = u128_shl(product, shift);
+        sum = signed_u128_add(sum, term, sample_negative != coeff.negative);
+    }
+    return integer_sum_to_i32(sum, minimum_exponent);
+}
+
 fn filtered_box_average(source_y: u32, output_x: u32) -> f32 {
     let metadata = output_x * 3u;
     let source_x = u32(coefficients[metadata]);
@@ -760,6 +835,12 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
         // Pillow's cumulative f64 coordinate walk. Copy the complete signed
         // sample word; treating its bytes as independent channels changes
         // negative values and is not the I-mode contract.
+        if params.premultiply == 11u {
+            if params.width == params.dst_w {
+                return input[source_y * params.width + output_x];
+            }
+            return filtered_i32_exact(source_y, output_x);
+        }
         return filtered_typed(source_y, output_x);
     }
     if params.mode == 8u {
