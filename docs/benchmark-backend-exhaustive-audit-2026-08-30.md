@@ -4445,3 +4445,55 @@ build-dev pass.
 No fixtures, expected values, thresholds, IDs, denominators, public errors,
 or receipt rules changed. Remaining work is broader F arithmetic, other
 logical-mode/backend identity gaps, and the P2 timing gate.
+
+## 32.59 I-mode Filter3x3→nearest Resize native admission (2026-09-02)
+
+The next valid typed composition was `I` `Filter3x3` followed immediately by
+`Resize(..., method=NEAREST)`. Pillow's filter stage computes signed i32
+samples, while nearest resize only relocates complete four-byte words. Rust
+previously kept the complete chain on exact host semantic control because the
+generic filtered-resize admission did not prove that composition, even though
+the two stages preserve the same signed-word contract.
+
+Commit `202177a39` admits only this narrow `Filter3x3`→nearest chain after the
+existing image-aware I-filter safety proof. The typed filter remains arithmetic
+over signed words; the nearest coefficient path performs a one-tap word copy.
+Filtered resize, `Filter5x5`, reversed ordering, and mixed or mode-changing
+chains remain host-controlled.
+
+The focused regression
+`i_filter_nearest_resize_native_gpu_preserves_signed_words` is **1/1** with
+exact signed-word bytes and a terminal native-GPU receipt (three dispatches,
+no fallback). The all-backend replay
+`/tmp/i-filter-resize-all-backends-202177a39.json` (SHA-256
+`5927e9206ee895d85786ab6de345b28544f129f3f89f49f29e10b5a371fce9c4`) is
+schema-valid and value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; the GPU row is native GPU with no fallback. The narrow guard tests,
+`make build-dev`, and `make -C pillow-rs fmt` pass.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. Remaining work is broader F arithmetic, other
+logical-mode/backend identity gaps, and the P2 timing gate.
+
+## 32.60 Palette-first RGB merge native admission (2026-09-02)
+
+The first divergence in `Image.merge("RGB", [P, L, L])` was backend identity,
+not value semantics. Pillow's `ImagingMerge` accepts a P image only as the
+first band and consumes its raw palette indices. Rust's CPU path already did
+that, and `merge.wgsl` already interleaved raw bytes, but GPU preflight omitted
+`Merge` from the contextual P whitelist and reported an `unsupported logical
+mode` fallback.
+
+Commit `c68bce674` admits exactly one RGB merge whose bands are P, L, and L in
+that order. The native path preserves index bytes (for example
+`[1, 32, 48, 2, 33, 49]`) instead of expanding palette colors. LAB, aliases,
+typed destinations, mixed chains, and other palette compositions remain on
+exact host semantic control.
+
+The focused admission/native tests are **2/2**. The all-backend replay
+`/tmp/merge-palette-first-c68bce674.json` (SHA-256
+`38a0dffc030e8e4be4cb7cb09c909a164e3aa812d9cf5498342e764fc6976630`) is
+schema-valid and value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; the GPU row has one terminal native-GPU dispatch and no fallback. No
+fixtures, expected values, thresholds, IDs, denominators, public errors, or
+receipt rules changed.
