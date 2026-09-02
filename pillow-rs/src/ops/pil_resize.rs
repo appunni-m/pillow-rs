@@ -1631,7 +1631,7 @@ pub fn pil_resize(
     let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
         && !is_cmyk
         && !is_fi
-        && explicit_mode != Some("RGBa")
+        && !matches!(explicit_mode, Some("RGBa" | "RGBX"))
         && explicit_mode != Some("PA")
         && matches!(
             img.color(),
@@ -1953,7 +1953,7 @@ pub fn pil_resize_boxed(
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !is_cmyk
         && !is_fi
-        && explicit_mode != Some("RGBa")
+        && !matches!(explicit_mode, Some("RGBa" | "RGBX"))
         && matches!(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8

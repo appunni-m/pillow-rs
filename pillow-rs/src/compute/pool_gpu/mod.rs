@@ -175,6 +175,19 @@ fn gpu_f_resize_constant_bits(
     {
         return None;
     }
+    gpu_f_source_constant_bits(image, logical_mode)
+}
+
+/// Return the exact source word for a constant F image.
+///
+/// Pillow's scalar resamplers normalize every finite constant row, including
+/// the intermediate reducing-gap pass used by `thumbnail`.  Restrict this
+/// invariant to a non-empty, finite source with a non-negative-zero word so
+/// the final f32 store has the same bits as the native F path.
+fn gpu_f_source_constant_bits(image: &DynamicImage, logical_mode: Option<&str>) -> Option<u32> {
+    if logical_mode != Some("F") || !matches!(image, DynamicImage::ImageRgba8(_)) {
+        return None;
+    }
     let DynamicImage::ImageRgba8(pixels) = image else {
         return None;
     };
@@ -4532,7 +4545,19 @@ impl GpuInner {
             } else {
                 (cur_w, cur_h)
             };
-            let op_mode = current_mode;
+            // Reduce's mode word distinguishes ordinary four-byte samples
+            // from RGBA/LA alpha layouts. RGBa and RGBX share the physical
+            // RGBA transport, but Pillow averages all four stored channels
+            // directly; use the raw-four-channel Reduce encoding only for
+            // that operation while retaining the source mode code for the
+            // rest of the batch.
+            let op_mode = if matches!(op, PipelineOp::Reduce { .. })
+                && matches!(logical_mode, Some("RGBa" | "RGBX"))
+            {
+                4
+            } else {
+                current_mode
+            };
             let mut params = vec![shader_w, shader_h, op_mode, 0u32];
             if matches!(
                 op,
@@ -7629,10 +7654,11 @@ fn expand_gpu_geometry_ops(
             } else {
                 *filter
             };
-            let has_alpha = matches!(
-                image,
-                DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-            ) && !matches!(logical_mode, Some("F" | "I" | "CMYK"));
+            let has_alpha =
+                matches!(
+                    image,
+                    DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+                ) && !matches!(logical_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
             if !gpu_thumbnail_requires_exact_host_control(op, (cur_w, cur_h), image, logical_mode)
                 && !matches!(effective_filter, ResampleFilter::Nearest)
                 && !has_alpha
@@ -8635,35 +8661,14 @@ fn gpu_thumbnail_output_dims(
     if source_width == 0 || source_height == 0 || target_width == 0 || target_height == 0 {
         return None;
     }
-    let source_ratio = f64::from(source_width) / f64::from(source_height);
-    let target_ratio = f64::from(target_width) / f64::from(target_height);
-    let round_aspect = |number: f64, key: &dyn Fn(f64) -> f64| -> Option<u32> {
-        if !number.is_finite() || number < 0.0 {
-            return None;
-        }
-        let floor = number.trunc();
-        if number == floor {
-            return Some((floor as u32).max(1));
-        }
-        let ceil = floor + 1.0;
-        let selected = if key(floor) <= key(ceil) { floor } else { ceil };
-        Some((selected as u32).max(1))
-    };
-    if target_ratio >= source_ratio {
-        let width = round_aspect(f64::from(target_height) * source_ratio, &|candidate| {
-            (source_ratio - candidate / f64::from(target_height)).abs()
-        })?;
-        Some((width, target_height))
-    } else {
-        let height = round_aspect(f64::from(target_width) / source_ratio, &|candidate| {
-            if candidate == 0.0 {
-                0.0
-            } else {
-                (source_ratio - f64::from(target_width) / candidate).abs()
-            }
-        })?;
-        Some((target_width, height))
-    }
+    // `Image::thumbnail` computes the aspect-preserving final dimensions
+    // before queuing its lazy operation. Recomputing the ratio here would
+    // apply the adjustment twice and make backend shape planning disagree
+    // with the public image size.
+    Some((
+        target_width.min(source_width).max(1),
+        target_height.min(source_height).max(1),
+    ))
 }
 
 fn gpu_thumbnail_requires_exact_host_control(
@@ -8696,7 +8701,15 @@ fn gpu_thumbnail_requires_exact_host_control(
     let has_alpha = matches!(
         image,
         DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) && !matches!(mode, Some("F" | "I" | "CMYK"));
+    ) && !matches!(mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
+    // A finite constant F source is invariant under both Thumbnail's
+    // reducing-gap pass and its final resize. Lower this narrow case to the
+    // exact constant Resize marker instead of materializing the scalar
+    // reducing pass on the host. Typed I still needs its integer rounding
+    // contract and remains on exact host semantic control.
+    if mode == Some("F") && gpu_f_thumbnail_constant_is_exact(op, source_dimensions, image, mode) {
+        return false;
+    }
     if matches!(mode, Some("F" | "I")) {
         return true;
     }
@@ -8708,6 +8721,40 @@ fn gpu_thumbnail_requires_exact_host_control(
         ((f64::from(source_dimensions.1) / f64::from(output_height) / 2.0) as u32).max(1);
     (factor_x > 1 || factor_y > 1)
         && (source_dimensions.0 % factor_x != 0 || source_dimensions.1 % factor_y != 0)
+}
+
+/// Return whether a constant F Thumbnail can skip the scalar reducing-gap
+/// pass without changing Pillow's observable word.
+///
+/// A zero source remains zero for every finite block average. Nonzero
+/// constants are admitted only when both reducing factors are one; Pillow's
+/// f32 reduction can otherwise overflow or round the repeated sum before the
+/// final resize (even though a direct normalized resize would preserve the
+/// constant word).
+fn gpu_f_thumbnail_constant_is_exact(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> bool {
+    let Some(bits) = gpu_f_source_constant_bits(image, mode) else {
+        return false;
+    };
+    if bits == 0 {
+        return true;
+    }
+    let PipelineOp::Thumbnail { w, h, .. } = op else {
+        return false;
+    };
+    let Some((output_width, output_height)) =
+        gpu_thumbnail_output_dims(source_dimensions.0, source_dimensions.1, *w, *h)
+    else {
+        return false;
+    };
+    let factor_x = ((f64::from(source_dimensions.0) / f64::from(output_width) / 2.0) as u32).max(1);
+    let factor_y =
+        ((f64::from(source_dimensions.1) / f64::from(output_height) / 2.0) as u32).max(1);
+    factor_x == 1 && factor_y == 1
 }
 
 fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&str>) -> bool {
@@ -9925,9 +9972,10 @@ mod tests {
         gpu_byte_point_mode_allowed, gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix,
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
-        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f64_integer_to_f32,
-        gpu_luma16_resize_f64_is_exact, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian, readback_poll_backoff,
+        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
+        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_luma16_resize_f64_is_exact,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian,
+        readback_poll_backoff,
     };
     use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -11881,6 +11929,75 @@ mod tests {
             assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_thumbnail_constant_source_uses_exact_gpu_resize() {
+        let source = Image::new(16, 16, "F", (0, 0, 0, 0)).expect("constant F thumbnail source");
+        let mut expected_image = source.clone();
+        expected_image
+            .thumbnail((4, 4), None)
+            .expect("CPU constant F thumbnail operation");
+        let expected = expected_image
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU constant F thumbnail");
+
+        let mut actual_image = source;
+        actual_image
+            .thumbnail((4, 4), None)
+            .expect("GPU constant F thumbnail operation");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match actual_image.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU constant F thumbnail failed: {error}"),
+        };
+        assert_eq!(actual, expected, "constant F thumbnail parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("constant F thumbnail must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_thumbnail_constant_admission_rejects_reducing_overflow() {
+        let words = 25usize.saturating_mul(38);
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                25,
+                38,
+                (0..words)
+                    .flat_map(|_| 0x7f27_69eeu32.to_le_bytes())
+                    .collect(),
+            )
+            .expect("constant finite F source"),
+        );
+        assert_eq!(
+            gpu_f_source_constant_bits(&source, Some("F")),
+            Some(0x7f27_69ee)
+        );
+        let thumbnail = PipelineOp::Thumbnail {
+            w: 10,
+            h: 7,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(!gpu_f_thumbnail_constant_is_exact(
+            &thumbnail,
+            (25, 38),
+            &source,
+            Some("F"),
+        ));
     }
 
     #[test]

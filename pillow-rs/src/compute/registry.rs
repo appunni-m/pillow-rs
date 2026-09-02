@@ -1671,10 +1671,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Reduce { x_factor, y_factor } = op {
-                    execute_reduce(img, *x_factor, *y_factor)
+                    execute_reduce(img, *x_factor, *y_factor, mode)
                 } else {
                     Err(PilError::ValueError("expected Reduce op".into()))
                 }
