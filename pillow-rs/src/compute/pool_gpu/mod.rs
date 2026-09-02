@@ -9185,12 +9185,36 @@ fn gpu_rotate_has_exact_transpose_lowering(
     if center.is_some() || translate.is_some() {
         return false;
     }
-    // The packed transpose shaders preserve native byte channels.  Do not
-    // advertise them for typed scalar modes whose four-byte storage has a
-    // numeric rather than channel-wise contract.
-    if mode.is_some_and(|value| matches!(value, "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N")) {
+    if mode.is_some_and(|value| {
+        !matches!(
+            value,
+            "1" | "P"
+                | "PA"
+                | "L"
+                | "LA"
+                | "RGB"
+                | "RGBA"
+                | "RGBX"
+                | "RGBa"
+                | "CMYK"
+                | "HSV"
+                | "YCbCr"
+                | "I"
+                | "F"
+                | "I;16"
+                | "I;16L"
+                | "I;16B"
+                | "I;16N"
+        )
+    }) {
         return false;
     }
+    // Transpose is a complete-word relocation.  The shader's mode-7/8
+    // branches preserve all four bytes of I/F samples, while mode 5 keeps the
+    // native two-byte I;16 payload in the low word (the typed readback drops
+    // the transport padding).  These modes therefore have the same exact
+    // right-angle contract as packed byte layouts; filtered/fractional
+    // rotations remain on their typed semantic paths.
     let normalized = angle.rem_euclid(360.0);
     if (normalized - 180.0).abs() <= f64::EPSILON {
         return true;
@@ -11899,6 +11923,105 @@ mod tests {
             assert_eq!(actual, expected, "{mode} rotate parity");
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("native GPU indexed right-angle rotate must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+            assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+            assert_eq!(telemetry.7, None, "{mode} fallback reason");
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn typed_scalar_right_angle_rotate_uses_native_transpose() {
+        // A right-angle rotate is Pillow's complete-sample relocation fast
+        // path even when a non-nearest filter token was supplied.  Exercise
+        // every typed storage representation: I/F words must survive as-is,
+        // and I;16 must preserve its declared byte order in the low word.
+        let cases = [
+            (
+                "I",
+                (3, 2),
+                vec![
+                    0i32.to_le_bytes(),
+                    (-17i32).to_le_bytes(),
+                    65_535i32.to_le_bytes(),
+                    i32::MIN.to_le_bytes(),
+                    42i32.to_le_bytes(),
+                    i32::MAX.to_le_bytes(),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>(),
+            ),
+            (
+                "F",
+                (3, 2),
+                vec![
+                    0.25f32.to_le_bytes(),
+                    (-17.5f32).to_le_bytes(),
+                    f32::from_bits(0x7f7f_ffff).to_le_bytes(),
+                    (-0.0f32).to_le_bytes(),
+                    42.0f32.to_le_bytes(),
+                    f32::from_bits(0x8000_0001).to_le_bytes(),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>(),
+            ),
+            (
+                "I;16",
+                (3, 2),
+                [1u16, 258, 32_767, 65_535, 42, 54_321]
+                    .into_iter()
+                    .flat_map(u16::to_le_bytes)
+                    .collect::<Vec<_>>(),
+            ),
+            (
+                "I;16B",
+                (3, 2),
+                [1u16, 258, 32_767, 65_535, 42, 54_321]
+                    .into_iter()
+                    .flat_map(u16::to_be_bytes)
+                    .collect::<Vec<_>>(),
+            ),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, size, raw) in cases {
+            let source = Image::frombytes(mode, size, &raw)
+                .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
+            let rotated = source
+                .rotate_with_input(
+                    90.0,
+                    RotateResampleInput::Name("BICUBIC".to_owned()),
+                    RotateExpandInput::Boolean(true),
+                    RotatePointInput::Default,
+                    RotatePointInput::Default,
+                    ImageOpsColor::None,
+                )
+                .unwrap_or_else(|error| panic!("{mode} rotate: {error}"));
+            let expected = rotated
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .unwrap_or_else(|error| panic!("{mode} CPU rotate: {error}"));
+            let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} rotate failed: {error}"),
+            };
+            assert_eq!(
+                actual, expected,
+                "native GPU {mode} right-angle rotate parity"
+            );
+            let telemetry = Backend::take_pipeline_telemetry()
+                .unwrap_or_else(|| panic!("native GPU {mode} rotate missing telemetry"));
             assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
             assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
             assert_eq!(telemetry.7, None, "{mode} fallback reason");
