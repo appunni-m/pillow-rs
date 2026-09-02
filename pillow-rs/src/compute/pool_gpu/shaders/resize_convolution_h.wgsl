@@ -585,6 +585,61 @@ fn filtered_f64_exact(source_y: u32, output_x: u32) -> u32 {
     let source_x = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
+
+    // Handle IEEE special products without going through relaxed f32
+    // arithmetic.  Pillow's ordered f64 path preserves the first NaN payload,
+    // turns zero*infinity and opposite infinities into a quiet NaN, and keeps
+    // the sign of a lone infinity.  The host admission proof compares these
+    // bits with Pillow before selecting this marker.
+    var first_nan: u32 = 0u;
+    var has_nan = false;
+    var positive_infinity = false;
+    var negative_infinity = false;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        let bits = f64_sample_bits(input[source_y * params.width + source_x + tap]);
+        let exponent_bits = (bits >> 23u) & 255u;
+        if exponent_bits != 255u {
+            continue;
+        }
+        let fraction = bits & 0x7fffffu;
+        if fraction != 0u {
+            if !has_nan {
+                first_nan = bits | 0x00400000u;
+                has_nan = true;
+            }
+        } else if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u {
+            // 0 * infinity is invalid and Pillow stores the canonical quiet
+            // f32 NaN for this operation.
+            if !has_nan {
+                first_nan = 0x7fc00000u;
+                has_nan = true;
+            }
+        } else if (bits & 0x80000000u) != 0u {
+            if coeff.negative {
+                positive_infinity = true;
+            } else {
+                negative_infinity = true;
+            }
+        } else if coeff.negative {
+            negative_infinity = true;
+        } else {
+            positive_infinity = true;
+        }
+    }
+    if has_nan {
+        return first_nan;
+    }
+    if positive_infinity && negative_infinity {
+        return 0x7fc00000u;
+    }
+    if positive_infinity {
+        return 0x7f800000u;
+    }
+    if negative_infinity {
+        return 0xff800000u;
+    }
+
     var minimum_exponent: i32 = 0;
     var found = false;
     for (var tap = 0u; tap < count; tap = tap + 1u) {
@@ -673,8 +728,14 @@ fn luma16_store_from_f32(bits: u32) -> u32 {
 fn filtered_box_copy(source_y: u32, output_x: u32) -> u32 {
     let word = filtered_typed(source_y, output_x);
     // Pillow's f64 accumulator starts at +0.0, so a one-tap Box copy
-    // canonicalizes an input negative zero at the final f32 store. Preserve
-    // every other bit pattern, including NaN payloads and infinities.
+    // canonicalizes an input negative zero at the final f32 store. A
+    // signaling NaN is quieted by the f32->f64 product before the store;
+    // preserve its payload and sign while setting the quiet bit.
+    let exponent = (word >> 23u) & 255u;
+    let fraction = word & 0x7fffffu;
+    if exponent == 255u && fraction != 0u {
+        return word | 0x00400000u;
+    }
     return select(word, 0u, word == 0x80000000u);
 }
 
