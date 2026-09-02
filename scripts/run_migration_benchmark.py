@@ -81,6 +81,76 @@ def benchmark_subjects() -> list[tuple[str, str]]:
     ]
 
 
+def suite_subject_is_comparable(
+    subject: dict[str, Any], subject_id: str
+) -> bool:
+    """Return whether a subject can contribute to a paired suite ratio.
+
+    Timing completion and backend proof are intentionally separate states.  A
+    target can have a full duration vector while its pipeline receipt is
+    missing, partial, or host-controlled.  Such a row remains in the
+    independent suite coverage summary, but it must not enter a speedup
+    cohort.  The Pillow oracle has an explicit non-pipeline receipt and is
+    the only non-terminal exception.
+    """
+
+    if subject.get("status") != "completed":
+        return False
+    execution = subject.get("execution")
+    if not isinstance(execution, dict):
+        return False
+    if execution.get("errors"):
+        return False
+    if execution.get("fallback_reason_counts") != {}:
+        return False
+    measurements = subject.get("measurements")
+    if not isinstance(measurements, list) or not any(
+        isinstance(measurement, dict)
+        and isinstance(measurement.get("sample_count"), int)
+        and measurement["sample_count"] > 0
+        and isinstance(measurement.get("statistics"), dict)
+        and isinstance(measurement["statistics"].get("mean"), (int, float))
+        for measurement in measurements
+    ):
+        return False
+
+    expected_backend = (
+        "pillow" if subject_id == "pillow" else subject_id.removeprefix("python-")
+    )
+    if subject_id == "pillow":
+        return (
+            execution.get("status") == "not_applicable"
+            and execution.get("requested_backend") == "pillow"
+            and execution.get("actual_backend") == "pillow"
+        )
+
+    if execution.get("status") != "completed":
+        return False
+    if execution.get("terminal_complete") is not True:
+        return False
+    if execution.get("requested_backend") != expected_backend:
+        return False
+    if execution.get("actual_backend") != expected_backend:
+        return False
+    actual_counts = execution.get("actual_backend_counts")
+    if not isinstance(actual_counts, dict) or set(actual_counts) != {
+        expected_backend
+    }:
+        return False
+    count = actual_counts.get(expected_backend)
+    if not isinstance(count, int) or count <= 0:
+        return False
+    execution_samples = execution.get("sample_count")
+    if not isinstance(execution_samples, int) or execution_samples <= 0:
+        return False
+    return any(
+        measurement.get("metric") == "latency"
+        and measurement.get("sample_count") == execution_samples
+        for measurement in measurements
+        if isinstance(measurement, dict)
+    )
+
+
 def gpu_benchmark_timeout(requested_seconds: int) -> int:
     raw_limit = os.environ.get(
         "MIGRATION_GPU_BENCHMARK_TIMEOUT_SECONDS",
@@ -1301,9 +1371,14 @@ def run(args: argparse.Namespace) -> int:
                 }
                 baseline_subject = subjects_by_id.get("pillow", {})
                 target_member_subject = subjects_by_id.get(target_profile, {})
-                if (
-                    baseline_subject.get("status") == "completed"
-                    and target_member_subject.get("status") == "completed"
+                # Keep the timing summary independent from the performance
+                # cohort.  Only a value-complete Pillow row and a target row
+                # with a terminal requested=actual, no-fallback receipt may
+                # contribute to a paired suite ratio.
+                if suite_subject_is_comparable(
+                    baseline_subject, "pillow"
+                ) and suite_subject_is_comparable(
+                    target_member_subject, target_profile
                 ):
                     common_members.append(member)
                 else:
@@ -1319,9 +1394,10 @@ def run(args: argparse.Namespace) -> int:
                 ("\n".join(common_ids) + "\n").encode()
             ).hexdigest()
 
-            # Recompute both sides from exactly the same completed workload
-            # IDs.  The independent suite subject summaries above remain
-            # useful for coverage, but may not be used as a speed comparison.
+            # Recompute both sides from exactly the same receipt-proven
+            # workload IDs.  The independent suite subject summaries above
+            # remain useful for coverage, but may not be used as a speed
+            # comparison when backend execution was not proven.
             pair_values: dict[str, dict[str, list[tuple[float, int]]]] = {
                 "pillow": {},
                 target_profile: {},

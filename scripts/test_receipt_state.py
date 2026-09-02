@@ -14,7 +14,10 @@ from scripts.run_all_backend_tests import (
     backend_coverage_report,
     pipeline_execution_evidence,
 )
-from scripts.run_migration_benchmark import execution_result
+from scripts.run_migration_benchmark import (
+    execution_result,
+    suite_subject_is_comparable,
+)
 from scripts.run_migration_parity import (
     DEFAULT_MANIFEST,
     classify_pipeline_case,
@@ -71,6 +74,90 @@ OPENED_EAGER_NO_RECEIPT_CASE_IDS = {
     "PIL.ImageOps.exif_transpose.nuanced.jpeg-truncated-entry",
     "PIL.ImageOps.exif_transpose.nuanced.tiff-no-orientation",
 }
+
+
+class BenchmarkSuiteComparabilityTests(unittest.TestCase):
+    """Suite speed ratios require the same proven terminal backend cohort."""
+
+    @staticmethod
+    def subject(subject_id: str, execution: dict[str, object]) -> dict[str, object]:
+        return {
+            "id": subject_id,
+            "status": "completed",
+            "measurements": [
+                {
+                    "metric": "latency",
+                    "sample_count": 2,
+                    "statistics": {"mean": 1.0},
+                }
+            ],
+            "execution": execution,
+        }
+
+    def test_target_requires_terminal_actual_backend_receipt(self) -> None:
+        missing = self.subject(
+            "python-gpu",
+            {
+                "status": "not_proven",
+                "terminal_complete": False,
+                "requested_backend": "gpu",
+                "actual_backend": None,
+                "actual_backend_counts": {},
+                "fallback_reason_counts": {},
+                "sample_count": 0,
+                "errors": [],
+            },
+        )
+        self.assertFalse(suite_subject_is_comparable(missing, "python-gpu"))
+
+    def test_target_native_receipt_is_comparable(self) -> None:
+        proven = self.subject(
+            "python-cpu",
+            {
+                "status": "completed",
+                "terminal_complete": True,
+                "requested_backend": "cpu",
+                "actual_backend": "cpu",
+                "actual_backend_counts": {"cpu": 2},
+                "fallback_reason_counts": {},
+                "sample_count": 2,
+                "errors": [],
+            },
+        )
+        self.assertTrue(suite_subject_is_comparable(proven, "python-cpu"))
+
+    def test_target_host_control_is_not_comparable(self) -> None:
+        host_controlled = self.subject(
+            "python-gpu",
+            {
+                "status": "completed",
+                "terminal_complete": True,
+                "requested_backend": "gpu",
+                "actual_backend": "cpu",
+                "actual_backend_counts": {"cpu": 2},
+                "fallback_reason_counts": {"exact host semantic control": 1},
+                "sample_count": 2,
+                "errors": [],
+            },
+        )
+        self.assertFalse(
+            suite_subject_is_comparable(host_controlled, "python-gpu")
+        )
+
+    def test_pillow_oracle_uses_explicit_non_pipeline_receipt(self) -> None:
+        oracle = self.subject(
+            "pillow",
+            {
+                "status": "not_applicable",
+                "terminal_complete": False,
+                "requested_backend": "pillow",
+                "actual_backend": "pillow",
+                "actual_backend_counts": {"pillow": 1},
+                "fallback_reason_counts": {},
+                "errors": [],
+            },
+        )
+        self.assertTrue(suite_subject_is_comparable(oracle, "pillow"))
 
 
 def benchmark_record(*, terminal_complete: bool) -> dict[str, object]:
