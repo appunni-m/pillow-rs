@@ -85,19 +85,25 @@ execution is a parity-preserving fallback, not a parity completion claim.
   terminal even when a later, unrelated public call raises. The focused
   replay `/tmp/receipt-prefix-all-backends-70a92f4ca.json` is value-exact with
   zero partial cases in CPU, SIMD, and GPU (1/1 terminal receipt in each;
-  GPU actual backend is GPU with no fallback). The regenerated full envelope
-  `/tmp/all-backends-post-2969b323.json` is value-exact at the fixed 10,952
-  denominator and now reports CPU 7,085 complete + 0 partial, SIMD 7,097
-  complete + 0 partial, and GPU 7,085 complete + 0 partial; setup-only
-  records remain operation telemetry outside the deferred pipeline partition.
-- [ ] Reconcile backend identity and fallback taxonomy. Current terminal
-  counts in the regenerated full envelope include 405 SIMD-lane CPU receipts
-  and 211 GPU-lane CPU receipts; that GPU lane has 6,880 native GPU receipts
-  and 142 exact host semantic-control records, with explicit logical-mode,
-  dimension, Transform, and other guarded routes. The 35-case Contrast replay
-  removes that route for the proven prefix, but the remaining aggregate
-  identity/fallback partition still needs reconciliation. These are visible
-  evidence gaps, not value-parity exemptions.
+  GPU actual backend is GPU with no fallback). The later full-envelope
+  accounting below retains that zero-partial result at the fixed denominator.
+- [ ] Reconcile backend identity and fallback taxonomy. The current full
+  envelope at `2835ce29a` has exact public parity for all 10,952 IDs and no
+  native partial/missing/indeterminate pipeline cases, but GPU still reports
+  6,627 native GPU receipts plus 211 CPU receipts and 142 exact host-control
+  fallbacks. CPU has 6,838 terminal receipts (6,832 pipeline-complete cases)
+  and SIMD has 6,850 terminal receipts (6,844 pipeline-complete cases); the
+  remaining terminal receipts are non-pipeline observations. Explicit
+  logical-mode, dimension, Transform, and arithmetic guards remain visible
+  evidence partitions, not value-parity exemptions.
+- [x] Correct zero-operation observation accounting. Commits `2164e2226` and
+  `2835ce29a` keep metadata-only empty pipelines telemetry-neutral, retain raw
+  zero-operation observations with `pipeline_relevant=false`, preserve the
+  last meaningful receipt candidate across Python/JS boundaries, and align
+  WASM partial counts with their per-case classifier. The focused four-case
+  PA replay is exact with 4/4 terminal receipts on CPU, SIMD, GPU, Node WASM,
+  and browser WASM; the former three byte-`putpixel`→`PA` receipt gaps are
+  closed without changing public values or the denominator.
 - [x] Admit the raw-color `ExtractBand` subset on native GPU. Commit
   `f55a770ad` permits only `ExtractBand`/`PutPixel` batches for CMYK, HSV, and
   YCbCr, whose packed channel order is already preserved by the existing
@@ -141,14 +147,14 @@ execution is a parity-preserving fallback, not a parity completion claim.
   following operation requires a segmented batch with updated mode metadata.
 - [x] Close the WASM receipt gaps: commit `a2cf8c102` preserves JS setup/call
   errors for the evidence classifier and passes target results through the
-  aggregator. Node and browser remain value/error-exact at 10,952/10,952;
-  each now reports 7,198 complete and 3,754 explicit pre-materialization
-  validation boundaries, with zero missing, partial, or indeterminate
-  pipeline cases. The 3,653 not-recorded records are classified
-  not-applicable (non-pipeline or pre-materialization), not missing receipts.
-  Backend/export identity reconciliation remains tracked
-  separately below, so the aggregate status is still
-  `passed_with_backend_gaps`.
+  aggregator. The subsequent receipt-accounting commits `2164e2226` and
+  `2835ce29a` remove zero-operation observation proofs and align the partial
+  count with the classifier. The latest full envelope reports Node and
+  browser value/error parity at 10,952/10,952, each with 6,945
+  pipeline-complete cases, 4,007 explicit not-applicable boundaries, and zero
+  missing, partial, or indeterminate pipeline cases. Backend/export identity
+  reconciliation remains tracked separately below, so the aggregate status
+  is still `passed_with_backend_gaps`.
 
 ### P2 — performance acceptance
 
@@ -282,9 +288,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `635afb555`, `cb1813bc8`, and `b867867ee`. The latest guard proves step-bound
   pre-materialization validation errors, annotates retained setup telemetry
   with `pipeline_relevant=false`, and keeps prior deferred receipts
-  conservative. `make migration-parity-receipt-test` passes 28/28; the full
-  selected denominator remains 10,952 and public parity results retain their
-  original schema without internal error fields.
+  conservative. The zero-operation accounting follow-up is committed as
+  `2164e2226` and `2835ce29a`; `make migration-parity-receipt-test` passes
+  34/34, the full selected denominator remains 10,952, and public parity
+  results retain their original schema without internal error fields.
 - [x] The observed-prefix terminal-boundary fix is committed as `70a92f4ca`.
   `make migration-parity-receipt-test` passes 29/29. The focused replay
   `/tmp/receipt-prefix-all-backends-70a92f4ca.json` is schema-valid and
@@ -331,6 +338,22 @@ execution is a parity-preserving fallback, not a parity completion claim.
   Both hosts report 7,198 complete + 3,754 not-applicable, with zero
   missing/partial/indeterminate pipeline cases; the public parity envelope
   remains free of the internal `execution_errors` field.
+- [x] The post-zero-operation receipt envelope at committed source
+  `2835ce29a` is `/tmp/all-backends-post-2835ce29.json` (SHA-256
+  `9bd4bf29816f0923a5ef4fbfaf119fbc890a975e70b5c2c7ca5e177905cffc25`). The
+  fixed case-ID digest remains
+  `881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`, and
+  all CPU, SIMD, GPU, Node WASM, and browser WASM public lanes are
+  value/error-exact for 10,952/10,952 cases (GPU smoke 1/1). CPU reports
+  6,838 terminal receipts with 6,832 pipeline-complete cases; SIMD reports
+  6,850 with 6,844 pipeline-complete; GPU reports 6,627 native GPU plus 211
+  CPU receipts, with the same 6,832 pipeline-complete cases and 142
+  exact host-control fallbacks. Node and browser each report 6,951 terminal
+  receipts, 6,945 pipeline-complete cases, and 4,007 not-applicable cases;
+  all three native lanes and both WASM lanes have zero partial, missing, or
+  indeterminate pipeline cases. The aggregate remains
+  `passed_with_backend_gaps` because backend identity/fallback reconciliation
+  and the P0/P2 buckets remain open.
 
 ## Closeout state
 
@@ -340,22 +363,24 @@ execution is a parity-preserving fallback, not a parity completion claim.
   subnormal marker-9 admission as `b1962c6dd`, finite overflow and proven
   signed-zero marker-9 admission as `19acd29ab`, pure filtered F-chain admission
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
-  `ExtractBand` admission as `f55a770ad`, the
-  raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
-  `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, exact
-  current-image Contrast-prefix admission as `5ed9f152e`, and typed I;16
-  filtered-resize admission as `2ff9a6951`, the JS/WASM observed-boundary
-  receipt fix as `d0ee51d9a`, and the JS/WASM validation-boundary evidence fix
-  as `a2cf8c102`; the latest full committed
-  all-backend replay is schema-valid and value-exact for all 10,952 cases.
-  The regenerated post-receipt envelope has zero native partial receipts:
-  CPU 7,085 complete, SIMD 7,097 complete (6,698 SIMD + 405 CPU), and GPU
-  7,085 complete (6,880 GPU + 211 CPU). The GPU partition also records 142
-  exact host semantic-control fallbacks. Node and browser WASM now each report
-  7,198 complete + 3,754 not-applicable, with zero missing/partial/indeterminate
-  pipeline cases after `a2cf8c102`; the not-applicable rows are explicit
-  pre-materialization public errors or other proven non-pipeline workflows. No
-  fixture, expected value, threshold, denominator, or case ID was changed.
-  The latest envelope is `/tmp/all-backends-post-2969b323.json` and remains
-  schema-valid and value-exact at the fixed denominator.
+  `ExtractBand` admission as `f55a770ad`, the raw-byte `EffectSpread` admission
+  as `ebc7e765a`, raw-byte Draw admission as `7d1cc0af9`, nearest indexed Fit
+  admission as `0797e71f5`, exact current-image Contrast-prefix admission as
+  `5ed9f152e`, typed I;16 filtered-resize admission as `2ff9a6951`, the JS/WASM
+  observed-boundary receipt fix as `d0ee51d9a`, the JS/WASM validation-boundary
+  evidence fix as `a2cf8c102`, and the zero-operation receipt corrections as
+  `2164e2226` and `2835ce29a`; the latest full all-backend replay is
+  schema-valid and value/error-exact for all 10,952 cases.
+  The latest envelope has zero native or WASM partial/missing/indeterminate
+  pipeline cases: CPU 6,838 terminal receipts (6,832 pipeline-complete), SIMD
+  6,850 (6,844 pipeline-complete), and GPU 6,627 native GPU plus 211 CPU
+  receipts (6,832 pipeline-complete). The GPU partition records 142 exact
+  host semantic-control fallbacks plus explicit logical-mode, dimension,
+  Transform, and arithmetic guards. Node and browser WASM each report 6,951
+  terminal receipts, 6,945 pipeline-complete cases, and 4,007 not-applicable
+  boundaries. No fixture, expected value, threshold, denominator, or case ID
+  was changed. The latest envelope is
+  `/tmp/all-backends-post-2835ce29.json` (SHA-256
+  `9bd4bf29816f0923a5ef4fbfaf119fbc890a975e70b5c2c7ca5e177905cffc25`) and
+  remains schema-valid and value/error-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.

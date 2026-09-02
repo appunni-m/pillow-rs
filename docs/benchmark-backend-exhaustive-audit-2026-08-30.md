@@ -4213,3 +4213,51 @@ receipts, 15,191 completed receipts, and 3,653 not-recorded cases). The
 remaining WASM work is backend/export identity evidence rather than these
 resolved validation rows; broader F arithmetic, native backend identity, and
 the P2 timing gate remain open.
+
+## 32.53 Zero-operation observations no longer prove backend execution (2026-09-02)
+
+The next first divergence was in receipt identity, not public image behavior.
+The post-`2969b323c` native sidecars contained terminal observation records with
+`operation_count=0` and empty `operation_telemetry`. These records were emitted
+after a deferred operation had already drained, but the runner treated them as
+backend proofs and allowed them to replace the preceding real receipt. The
+same boundary appeared in the JS/WASM evidence path. In the three affected
+RGBA→PA workflows, Pillow's eager `convert("PA")` correctly materialized the
+queued byte `putpixel`; Rust produced exact PA bytes, but `quantize()` returned
+a metadata-bearing empty pipeline whose materialization overwrote that
+`PutPixel` receipt with a zero-operation sample.
+
+Commit `2164e2226` fixes the source and receipt boundary. Empty
+`execute_prepared` batches now return their input without clearing or
+publishing telemetry. The Python and JS runners retain raw zero-operation
+records for diagnostics, mark them `pipeline_relevant=false`, require actual
+pipeline work before terminal/backend accounting, and preserve the latest
+meaningful receipt candidate across observed boundaries. Commit `2835ce29a`
+aligns the JS/WASM `terminal_incomplete_cases` aggregate with the per-case
+classifier, so validation-boundary receipts are not counted as deferred
+partial gaps. No public result/error contract changed.
+
+The focused four-case replay (the PA nonstandard-P case and the three
+RGBA→PA cases) is schema-valid and value/error-exact on CPU, SIMD, GPU, Node
+WASM, and browser WASM, with 4/4 terminal receipts in every lane and no
+fallback. The fixed-denominator replay at `2835ce29` is
+`/tmp/all-backends-post-2835ce29.json` (SHA-256
+`9bd4bf29816f0923a5ef4fbfaf119fbc890a975e70b5c2c7ca5e177905cffc25`), with
+the unchanged case-ID digest
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526` and
+10,952/10,952 exact public comparisons in all five lanes. CPU reports 6,838
+terminal receipts and 6,832 pipeline-complete cases; SIMD reports 6,850 and
+6,844; GPU reports 6,627 native GPU plus 211 CPU receipts and 6,832
+pipeline-complete cases. Node and browser each report 6,951 terminal receipts
+and 6,945 pipeline-complete cases. All lanes have zero partial, missing, or
+indeterminate pipeline cases; the remaining 4,007/4,120 not-applicable rows
+are explicit non-pipeline or pre-materialization boundaries, and raw
+zero-operation observations remain available in the sidecars for diagnosis.
+
+`make migration-parity-receipt-test` passes **34/34**; `make build-dev`,
+`make -C pillow-rs fmt`, Python compilation, and the focused all-backend
+replay pass. The aggregate remains `passed_with_backend_gaps` because GPU
+identity/fallback reconciliation (including 211 CPU receipts and 142 exact
+host-control routes), the broader F arithmetic domain, and the P2 timing gate
+are still open. No fixtures, expected values, thresholds, IDs, denominators,
+or public parity outputs were changed.
