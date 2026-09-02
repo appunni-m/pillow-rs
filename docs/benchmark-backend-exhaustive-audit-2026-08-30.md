@@ -5108,7 +5108,69 @@ blocked by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2
 environment requirement. No fixtures, expected values, thresholds, IDs,
 denominators, public errors, or receipt rules changed.
 
-The remaining P0 work is broader heterogeneous/non-dyadic F arithmetic and
-unproven projective, mesh, and palette transform domains. P1 backend
+After this typed-I lane, the remaining P0 work is broader
+heterogeneous/non-dyadic F arithmetic and unproven projective, mesh, and
+palette transform domains. P1 backend
 identity/fallback reconciliation and the P2 equal-ID/equal-receipt timing
+gate remain open.
+
+## 32.75 Native indexed projective nearest transforms (2026-09-02)
+
+The next deterministic backend-identity gap was the indexed `P`/`1`
+Perspective, Quad, and one-record Mesh nearest family. The WGSL transform
+shader already had nearest projective branches, and Pillow's
+`ImagingTransform` path forces indexed modes to nearest sampling, but the
+Rust admission guard treated every non-affine indexed transform as exact host
+semantic control. Pillow relocates raw index bytes after evaluating the
+inverse map in `f64`; the shader evaluates the same map in `f32`, so a broad
+admission would have claimed parity without proving coordinate agreement.
+
+Commit `51b7070f7` adds a bounded indexed proof. It mirrors the host and
+shader Perspective/Quad/Mesh expressions, rejects any coefficient that is not
+exact through the transform-uniform `f32` ABI, requires finite integer source
+coordinates that are identical in both domains at every output pixel, and
+limits Mesh to one complete-output record. Identity and axis-swap mappings
+therefore use the existing native nearest branch and preserve the complete
+index byte; fractional homographies, arbitrary mesh records, palette-alpha,
+and other non-identity arithmetic remain on exact host semantic control.
+
+The focused schema-v3 replay selected 26 maintained indexed rows (the
+perspective/quad extra and too-many batches, v2 perspective/quad rows, and
+v2 mesh rows). CPU, SIMD, GPU, Node WASM, and browser WASM were each
+value/error-exact for all 26/26 cases. GPU reported 26 terminal native-GPU
+receipts, one dispatch for pure transforms or two when the fixture's PutPixel
+prefix materialized first, with no fallback. The focused envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` (SHA-256
+`4d32646f78bbfe0c607855cd1cac9131fd08e92553303e92e717beb2eaa25d5f`), and
+the GPU sidecar is
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`8043f145c5f26aee9c9c8393a6cab7a7a2c396b3156bdc22cc42a7a2bb9156e4`).
+
+The full committed-source schema-v3 campaign at revision `51b7070f7` remains
+value/error-exact at **10,952/10,952** on CPU, SIMD, GPU, Node WASM, and
+browser WASM; GPU smoke is 1/1. CPU has 6,838 terminal receipts, SIMD 6,850,
+and GPU 6,838 terminal receipts (6,743 native GPU and 95 CPU host-controlled).
+GPU fallback partitions are 31 exact host semantic-control rows, 62
+unsafe-primary-dimension rows, one unsafe/incomplete-dimension row, and one
+Transform guard. Every pipeline lane has zero partial, missing, or
+indeterminate receipts. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`e0c3d55e61195ae048768592caab7672ffa631c472964ed23356d9be830fdb5a`), and
+the GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`9e17f3a70eaef4f2f98d858f96aa3e27302d747f2b9c9849d7c70b141e52e6a1`).
+
+`cargo test -p pillow-rs compute::pool_gpu::tests:: -- --test-threads=1`
+passes 62/62, including the indexed proof and native-receipt tests;
+`make migration-parity-receipt-test` passes 34/34;
+`make migration-parity-evidence-check`, `make build-dev`, `make -C pillow-rs
+fmt`, the focused replay, and the full replay pass. Clippy remains blocked
+by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2
+environment requirement. No fixtures, expected values, thresholds, IDs,
+denominators, public errors, or receipt rules changed.
+
+The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic and
+fractional or non-identity projective/mesh/palette transforms. P1 backend
+identity/fallback reconciliation and the P2 equal-ID, equal-receipt timing
 gate remain open.
