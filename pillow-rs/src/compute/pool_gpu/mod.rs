@@ -10415,8 +10415,8 @@ fn gpu_nearest_affine_is_exact(
 /// rounds its selected source coordinate. Admit only a bounded proof where
 /// every coefficient, destination coordinate, intermediate arithmetic result,
 /// and final source coordinate select the same source pixel in both domains.
-/// This covers integer identity maps for ordinary packed byte modes and raw
-/// indexed samples without claiming parity for fractional homographies or
+/// This covers proof-certified integer maps for ordinary packed byte modes and
+/// raw indexed samples without claiming parity for fractional homographies or
 /// arbitrary mesh records. Filtered projective transforms remain host
 /// controlled because they change sample values rather than relocating bytes.
 // The comparison is intentional: the current shader receives raw destination
@@ -10447,48 +10447,52 @@ fn gpu_projective_nearest_is_exact(
         _ => false,
     };
     let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
+    // The projective shader's raw-gid arithmetic is safe for the affine
+    // subfamily of Perspective maps only when the denominator is constant.
+    // The exhaustive source-selection proof below then decides whether its
+    // f32 map and Pillow's centered f64 map select the same complete byte
+    // sample. Keep Quad/Mesh ordinary bytes at their established identity
+    // envelope until their non-identity corner arithmetic has its own proof.
+    let ordinary_projective_geometry_is_admitted = match method {
+        TransformMethod::Perspective => data.get(6) == Some(&0.0) && data.get(7) == Some(&0.0),
+        TransformMethod::Quad => {
+            data.get(..8)
+                == Some(
+                    &[
+                        0.0,
+                        0.0,
+                        f64::from(*w),
+                        0.0,
+                        f64::from(*w),
+                        f64::from(*h),
+                        0.0,
+                        f64::from(*h),
+                    ][..],
+                )
+        }
+        TransformMethod::Mesh => {
+            data.get(..12)
+                == Some(
+                    &[
+                        0.0,
+                        0.0,
+                        f64::from(*w),
+                        f64::from(*h),
+                        0.0,
+                        0.0,
+                        f64::from(*w),
+                        0.0,
+                        f64::from(*w),
+                        f64::from(*h),
+                        0.0,
+                        f64::from(*h),
+                    ][..],
+                )
+        }
+        TransformMethod::Affine => false,
+    };
     if !image_layout_is_valid
-        || (ordinary_byte_mode
-            && match method {
-                TransformMethod::Perspective => {
-                    data.get(..8) != Some(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0][..])
-                }
-                TransformMethod::Quad => {
-                    data.get(..8)
-                        != Some(
-                            &[
-                                0.0,
-                                0.0,
-                                f64::from(*w),
-                                0.0,
-                                f64::from(*w),
-                                f64::from(*h),
-                                0.0,
-                                f64::from(*h),
-                            ][..],
-                        )
-                }
-                TransformMethod::Mesh => {
-                    data.get(..12)
-                        != Some(
-                            &[
-                                0.0,
-                                0.0,
-                                f64::from(*w),
-                                f64::from(*h),
-                                0.0,
-                                0.0,
-                                f64::from(*w),
-                                0.0,
-                                f64::from(*w),
-                                f64::from(*h),
-                                0.0,
-                                f64::from(*h),
-                            ][..],
-                        )
-                }
-                TransformMethod::Affine => true,
-            })
+        || (ordinary_byte_mode && !ordinary_projective_geometry_is_admitted)
         || !matches!(
             method,
             TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
@@ -12689,6 +12693,50 @@ mod tests {
                 );
             }
         }
+        let perspective_translate = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        let perspective_axis_swap = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        for (name, op) in [
+            ("integer translation", &perspective_translate),
+            ("integer axis swap", &perspective_axis_swap),
+        ] {
+            for (mode, image) in [("RGB", &rgb), ("RGBA", &rgba)] {
+                assert!(
+                    gpu_projective_nearest_is_exact(op, image, Some(mode), (16, 16)),
+                    "{name} proof for {mode}"
+                );
+            }
+        }
+        let perspective_translate_negative = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        assert!(gpu_projective_nearest_is_exact(
+            &perspective_translate_negative,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
         let fractional = PipelineOp::Transform {
             w: 8,
             h: 8,
@@ -12791,7 +12839,7 @@ mod tests {
     }
 
     #[test]
-    fn byte_projective_nearest_identity_native_gpu_preserves_pixels() {
+    fn byte_projective_nearest_proven_native_gpu_preserves_pixels() {
         let previous = Backend::set_pipeline_telemetry_enabled(true);
         for (mode, channels) in [
             ("L", 1usize),
@@ -12809,6 +12857,18 @@ mod tests {
                     TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
                 ),
                 (
+                    2,
+                    TransformData::Affine(vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0]),
+                ),
+                (
                     3,
                     TransformData::Affine(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
                 ),
@@ -12823,12 +12883,12 @@ mod tests {
             for (method, data) in cases {
                 let transformed = source
                     .transform_public((8, 8), method, Some(data), 0, 0, None)
-                    .expect("identity projective transform");
+                    .expect("proven projective transform");
                 let expected = transformed
                     .clone()
                     .use_backend(Backend::Cpu)
                     .tobytes()
-                    .expect("CPU identity projective transform");
+                    .expect("CPU proven projective transform");
                 let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
                     Ok(actual) => actual,
                     Err(error)
@@ -12841,15 +12901,15 @@ mod tests {
                         return;
                     }
                     Err(error) => {
-                        panic!("native GPU identity projective transform failed: {error}")
+                        panic!("native GPU proven projective transform failed: {error}")
                     }
                 };
                 assert_eq!(
                     actual, expected,
-                    "native {mode} identity transform method {method}"
+                    "native {mode} proven transform method {method}"
                 );
                 let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("native identity projective transform must publish a receipt");
+                    .expect("native proven projective transform must publish a receipt");
                 assert_eq!(telemetry.0, Some(Backend::Gpu));
                 assert_eq!(telemetry.1, Backend::Gpu);
                 assert_eq!(telemetry.6, Some(1));
