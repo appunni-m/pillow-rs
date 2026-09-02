@@ -4497,3 +4497,58 @@ schema-valid and value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
 WASM; the GPU row has one terminal native-GPU dispatch and no fallback. No
 fixtures, expected values, thresholds, IDs, denominators, public errors, or
 receipt rules changed.
+
+## 32.61 F-mode PutData prefix before filtered Resize (2026-09-02)
+
+The next backend gap was a valid deferred `PutData(F)` prefix followed by a
+non-dyadic filtered resize. Marker 9 originally accepted only a pure
+`Resize` chain, so the source replacement remained on exact host semantic
+control even when the replacement words and the f64 coefficient proof were
+valid. Pillow applies the raw little-endian replacement before evaluating the
+resize; proving the stale upload would be a semantic error.
+
+Commit `35fbfbe4d` admits only this prefix shape. The marker-9 proof validates
+the replacement byte length against the current dimensions, requires complete
+four-byte words, substitutes those words before each subsequent `Resize`, and
+continues to reject geometry, mode-changing, arithmetic, and mixed-axis
+prefixes without their own storage proof. The native regression uses an
+initial `2x2` F image, replaces all four words with `[0.1, -0.3, 1.7, 2.9]`,
+then applies `BILINEAR` `Resize(1,5)`: CPU and GPU bytes are exact, the
+terminal receipt is GPU/GPU, `operation_count=2`, `dispatch_count=3`, and no
+fallback. The focused marker-9 group is **19/19**.
+
+The committed-source schema-v3 all-backend envelope
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`32be1163b06915202386985a2d6bdfda8fc497b3aea8c6dccf98692c9939b334`, revision
+`35fbfbe4dbccea1b8bb40754da34e92a684b9b2f`) is value/error-exact at
+10,952/10,952 on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU smoke is
+1/1. CPU reports 6,838 terminal receipts (6,832 pipeline-complete), SIMD 6,850
+(6,844 pipeline-complete), and GPU 6,632 native GPU plus 206 exact host
+semantic-control CPU receipts (6,832 pipeline-complete). Every lane has zero
+partial, missing, or indeterminate pipeline receipts. The GPU execution
+sidecar `build/migration-parity/all-backends/parity-gpu-execution.json` has
+SHA-256 `41197a1752aa0d721fee83a2b95b605f0ff573d46e8c14e8255c22e7f48b34ff`.
+No fixtures, expected values, thresholds, IDs, denominators, public errors, or
+receipt rules changed.
+
+## 32.62 Non-finite F PutData before order-statistic filters (2026-09-02)
+
+The F order-statistic preflight already checked that the initial source words
+were finite, but it treated every deferred `PutData(F)` payload as safe. A
+payload containing NaN or either infinity could therefore reach the WGSL
+float insertion/min comparison path. Pillow's C order-statistic implementation
+has a defined scalar special-value behavior; WGSL's partial comparisons do
+not establish that same total order, and the result can depend on the device
+comparison semantics.
+
+Commit `53d87a44c` closes that false admission. `gpu_float_filter_is_supported`
+now checks every F `PutData` payload for the exact current image byte length,
+four-byte alignment, and finite little-endian f32 words before allowing
+`MaxFilter`, `MinFilter`, `MedianFilter`, or `RankFilter`. Finite raw updates
+retain the existing native shader contract; non-finite, malformed, and
+wrong-mode updates use exact host semantic control. Focused admission coverage
+is **1/1** for the finite case and rejection cases for NaN, positive/negative
+infinity, wrong length, and wrong mode; the existing F GPU group remains
+**25/25**. This is a parity guard, not a public-operation limitation, and no
+fixtures, expected values, thresholds, IDs, denominators, public errors, or
+receipt rules changed.
