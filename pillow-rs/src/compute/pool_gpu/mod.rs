@@ -9769,6 +9769,207 @@ fn gpu_nearest_affine_is_exact(
     fits_i32(origin_x, step_x_x, step_y_x) && fits_i32(origin_y, step_x_y, step_y_y)
 }
 
+/// Prove a nearest projective/quad/mesh transform for indexed raw samples.
+///
+/// Pillow forces `P` and `1` transforms through the nearest sampler, so the
+/// observable value is a complete index byte (not an interpolated color). The
+/// projective shader already has the corresponding nearest branches, but its
+/// coordinates are evaluated in `f32` while Pillow's `ImagingTransform` path
+/// evaluates the inverse map in `f64`. Admit only a bounded proof where every
+/// coefficient, destination coordinate, intermediate arithmetic result, and
+/// final source coordinate are exactly representable in both domains. This
+/// keeps integer identity/axis-swap maps native without claiming parity for
+/// fractional homographies or arbitrary mesh records.
+fn gpu_indexed_projective_nearest_is_exact(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
+    let PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data,
+        filter,
+        ..
+    } = op
+    else {
+        return false;
+    };
+    if !matches!(mode, Some("P" | "1"))
+        || !matches!(image, DynamicImage::ImageLuma8(_))
+        || !matches!(
+            method,
+            TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
+        )
+        || !gpu_transform_uses_nearest(mode, *filter)
+        || source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || *w == 0
+        || *h == 0
+        || source_dimensions.0 > (1 << 24)
+        || source_dimensions.1 > (1 << 24)
+        || *w > (1 << 24)
+        || *h > (1 << 24)
+        || u64::from(*w).saturating_mul(u64::from(*h)) > 1_048_576
+    {
+        return false;
+    }
+
+    let required_data = match method {
+        TransformMethod::Perspective | TransformMethod::Quad => 8,
+        TransformMethod::Mesh => 12,
+        TransformMethod::Affine => return false,
+    };
+    if data.len() < required_data {
+        return false;
+    }
+    // The transform uniform stores all coefficients as f32 bit patterns. Do
+    // not admit a value that changes when it crosses that ABI boundary.
+    let f32_exact = |value: f64| {
+        let narrowed = value as f32;
+        narrowed.is_finite() && f64::from(narrowed) == value
+    };
+    if data[..required_data]
+        .iter()
+        .copied()
+        .any(|value| !f32_exact(value))
+    {
+        return false;
+    }
+
+    let integer_coordinate = |value: f64| {
+        value.is_finite()
+            && value.fract() == 0.0
+            && value.abs() <= f64::from(1 << 24)
+            && f32_exact(value)
+    };
+    let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
+        match method {
+            TransformMethod::Perspective => {
+                let denominator = data[6] * dx + data[7] * dy + 1.0;
+                if denominator == 0.0 || !denominator.is_finite() {
+                    return None;
+                }
+                let sx = (data[0] * dx + data[1] * dy + data[2]) / denominator;
+                let sy = (data[3] * dx + data[4] * dy + data[5]) / denominator;
+                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+            }
+            TransformMethod::Quad => {
+                let sw = f64::from(*w);
+                let sh = f64::from(*h);
+                let u = dx / sw;
+                let v = dy / sh;
+                let x0 = data[0];
+                let y0 = data[1];
+                let sx = x0
+                    + (data[6] - x0) * u
+                    + (data[2] - x0) * v
+                    + (data[4] - data[2] - data[6] + x0) * u * v;
+                let sy = y0
+                    + (data[7] - y0) * u
+                    + (data[3] - y0) * v
+                    + (data[5] - data[3] - data[7] + y0) * u * v;
+                Some((sx, sy))
+            }
+            TransformMethod::Mesh => {
+                // A single record covering the complete output is the only
+                // mesh shape whose clamping and shader bbox tests are the
+                // same without a second auxiliary dispatch.
+                if data[0] != 0.0
+                    || data[1] != 0.0
+                    || data[2] != f64::from(*w)
+                    || data[3] != f64::from(*h)
+                {
+                    return None;
+                }
+                let u = dx / f64::from(*w);
+                let v = dy / f64::from(*h);
+                let x0 = data[4];
+                let y0 = data[5];
+                let sx = (1.0 - u) * (1.0 - v) * x0
+                    + u * (1.0 - v) * data[10]
+                    + u * v * data[8]
+                    + (1.0 - u) * v * data[6];
+                let sy = (1.0 - u) * (1.0 - v) * y0
+                    + u * (1.0 - v) * data[11]
+                    + u * v * data[9]
+                    + (1.0 - u) * v * data[7];
+                Some((sx, sy))
+            }
+            TransformMethod::Affine => None,
+        }
+    };
+    let shader_source_at = |dx: f32, dy: f32| -> Option<(f32, f32)> {
+        let f = |index: usize| data[index] as f32;
+        match method {
+            TransformMethod::Perspective => {
+                let denominator = f(6) * dx + f(7) * dy + 1.0;
+                if denominator == 0.0 || !denominator.is_finite() {
+                    return None;
+                }
+                let sx = (f(0) * dx + f(1) * dy + f(2)) / denominator;
+                let sy = (f(3) * dx + f(4) * dy + f(5)) / denominator;
+                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+            }
+            TransformMethod::Quad => {
+                let width = *w as f32;
+                let height = *h as f32;
+                let u = dx / width;
+                let v = dy / height;
+                let x0 = f(0);
+                let y0 = f(1);
+                let sx = x0 + (f(6) - x0) * u + (f(2) - x0) * v + (f(4) - f(2) - f(6) + x0) * u * v;
+                let sy = y0 + (f(7) - y0) * u + (f(3) - y0) * v + (f(5) - f(3) - f(7) + y0) * u * v;
+                Some((sx, sy))
+            }
+            TransformMethod::Mesh => {
+                let bx0 = f(0);
+                let by0 = f(1);
+                let bx1 = f(2);
+                let by1 = f(3);
+                if dx < bx0 || dx >= bx1 || dy < by0 || dy >= by1 {
+                    return None;
+                }
+                let bw = (bx1 - bx0).max(1.0);
+                let bh = (by1 - by0).max(1.0);
+                let u = (dx - bx0) / bw;
+                let v = (dy - by0) / bh;
+                let x0 = f(4);
+                let y0 = f(5);
+                let sx = (1.0 - u) * (1.0 - v) * x0
+                    + u * (1.0 - v) * f(10)
+                    + u * v * f(8)
+                    + (1.0 - u) * v * f(6);
+                let sy = (1.0 - u) * (1.0 - v) * y0
+                    + u * (1.0 - v) * f(11)
+                    + u * v * f(9)
+                    + (1.0 - u) * v * f(7);
+                Some((sx, sy))
+            }
+            TransformMethod::Affine => None,
+        }
+    };
+
+    for dy in 0..*h {
+        for dx in 0..*w {
+            let host = source_at(f64::from(dx), f64::from(dy));
+            let device = shader_source_at(dx as f32, dy as f32);
+            match (host, device) {
+                (None, None) => {}
+                (Some((host_x, host_y)), Some((device_x, device_y)))
+                    if integer_coordinate(host_x)
+                        && integer_coordinate(host_y)
+                        && f64::from(device_x) == host_x
+                        && f64::from(device_y) == host_y => {}
+                _ => return false,
+            }
+        }
+    }
+    true
+}
+
 /// Return whether every destination pixel of an affine transform is outside
 /// the source rectangle, so the device can emit the already-resolved fill word
 /// without sampling or interpolating any source value.
@@ -10138,6 +10339,7 @@ fn gpu_geometry_requires_exact_host_control(
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_nearest_affine_is_exact(op, image, mode, dimensions)
+            && !gpu_indexed_projective_nearest_is_exact(op, image, mode, dimensions)
             && !gpu_transform_all_fill_is_exact(op, image, mode, dimensions);
         if thumbnail_needs_control
             || typed_transform_needs_control
@@ -11278,10 +11480,11 @@ mod tests {
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
-        gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_nearest_affine_is_exact, gpu_palette_first_rgb_merge_is_supported,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
-        gpu_transform_all_fill_is_exact, luma16_resample_big_endian, readback_poll_backoff,
+        gpu_indexed_projective_nearest_is_exact, gpu_int_filter_resize_chain_is_supported,
+        gpu_luma16_resize_f64_is_exact, gpu_nearest_affine_is_exact,
+        gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
+        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact,
+        luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -11429,6 +11632,128 @@ mod tests {
             Some("F"),
             (16, 16),
         ));
+    }
+
+    #[test]
+    fn indexed_projective_nearest_proof_is_bounded() {
+        let image = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(16, 16, vec![0; 16 * 16]).expect("indexed image"),
+        );
+        let perspective = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: Some(7),
+        };
+        let quad = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Quad,
+            data: Arc::from(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: Some(7),
+        };
+        let mesh = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: Some(7),
+        };
+        for op in [&perspective, &quad, &mesh] {
+            assert!(gpu_indexed_projective_nearest_is_exact(
+                op,
+                &image,
+                Some("P"),
+                (16, 16)
+            ));
+        }
+        let fractional = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: Some(7),
+        };
+        assert!(!gpu_indexed_projective_nearest_is_exact(
+            &fractional,
+            &image,
+            Some("P"),
+            (16, 16)
+        ));
+    }
+
+    #[test]
+    fn indexed_projective_nearest_native_gpu_preserves_index_bytes() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let mut bytes = vec![0u8; 16 * 16];
+        bytes[3 * 16 + 2] = 23;
+        let source = Image::frombytes("P", (16, 16), &bytes).expect("indexed source");
+        let cases = [
+            (
+                2,
+                TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+            ),
+            (
+                3,
+                TransformData::Affine(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 8.0, 8.0],
+                    vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
+                )]),
+            ),
+        ];
+        for (method, data) in cases {
+            let transformed = source
+                .transform_public(
+                    (8, 8),
+                    method,
+                    Some(data),
+                    0,
+                    0,
+                    Some(TransformFill::Scalar(7)),
+                )
+                .expect("indexed projective transform");
+            let expected = transformed
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU indexed transform");
+            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU indexed transform failed: {error}"),
+            };
+            assert_eq!(actual, expected, "indexed transform method {method}");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native indexed transform must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
