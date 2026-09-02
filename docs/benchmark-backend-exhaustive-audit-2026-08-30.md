@@ -5844,3 +5844,40 @@ browser WASM with zero failed or not-run cases. It intentionally reports
 plus 3 CPU controls, GPU 6,620 native plus 218 host controls, and each WASM
 lane 6,951 CPU receipts. The transient replay artifact's SHA-256 is
 `49c0b07da8452284b454f23f26c43588af04e54f444308282bcd9fe4763a9f72`.
+
+## 32.90 Wider ordered-f64 F Resize rows (2026-09-03)
+
+The initial marker-12 admission was intentionally capped at two taps, leaving
+valid heterogeneous three-or-more-tap F rows on exact host semantic control
+even though the ordered reducer could represent more rounded products. A
+generic WGSL f32 convolution is not a substitute: Pillow's
+`ImagingResample` path performs an ordered f64 `mul_add` after every tap and
+stores f32 only at the end.
+
+Commit `9762c2af5` extends marker 12 to an explicit eight-tap bound. Host
+admission and both horizontal/vertical shaders use the same bound; the proof
+still rejects non-finite inputs, f64-subnormal or overflowing intermediates,
+signed-zero-only boundaries, rows over eight taps, and chained inputs. The
+first newly admitted regression is a heterogeneous three-tap Lanczos
+3x1→5x1 row. Its CPU and native GPU bytes match exactly, with requested and
+actual backend both GPU and no fallback.
+
+A 2,000-case native-GPU probe across Bilinear, Bicubic, Lanczos, Hamming, and
+Box rows (including wider taps up to the bound) had zero mismatches. The
+focused GPU unit suite is 73/73; `make -C pillow-rs fmt` and `make build-dev`
+pass. No fixtures, expected values, thresholds, case IDs, denominators, public
+errors, or receipt rules changed. Rows outside the bound and arithmetic-
+changing chains remain exact host semantic control; the broader special-value
+and device-arithmetic P0 buckets, P1 receipt partition, and P2 equal-ID timing
+gate remain open.
+
+The fresh schema-v3 all-backends replay at revision `9762c2af5` passed
+10,952/10,952 value/error comparisons on CPU, SIMD, GPU, Node WASM, and
+browser WASM with zero failed or not-run cases. It intentionally remains
+`passed_with_backend_gaps`: CPU has 6,838 terminal receipts, SIMD 6,847 SIMD
+plus 3 CPU controls, GPU 6,620 native plus 218 host controls, and each WASM
+lane 6,951 CPU receipts. `make migration-parity-receipt-test` passes 35/35
+and `make migration-parity-evidence-check` passes. The replay artifact
+SHA-256 is `3515a246cc14e6cd2a271d611dc7f53133de852ae40b2b0b5525d44340cd727c`,
+with GPU execution sidecar SHA-256
+`7ab888e2d5dd9c5f2ff9119d07668ae84fdce7e9e5d2899c2dd67733396fdf62`.

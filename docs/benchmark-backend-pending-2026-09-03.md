@@ -29,13 +29,13 @@ receipt rules unchanged.
   including the segmented GPU terminal receipt after an exact host-controlled
   prefix.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
-  signed two-axis envelope and the new bounded marker-12 two-tap reducer.
-  Marker 12 now covers direct Resize rows with at most two taps and finite
-  normal f32 intermediates; the remaining inputs include heterogeneous and
-  non-dyadic wider-tap values, mixed non-finite ordering, negative-zero
-  cancellation, wider Box ratios, and arithmetic-changing chains. Forced
-  generic WGSL f32 convolution already differs from Pillow's ordered host
-  arithmetic by ULPs.
+  signed two-axis envelope and the bounded marker-12 reducer. Marker 12 now
+  covers direct Resize rows with at most eight taps and finite normal f32
+  intermediates; the remaining inputs include rows over the eight-tap bound,
+  mixed non-finite ordering, negative-zero cancellation, f64 subnormal or
+  overflowing intermediates, and arithmetic-changing chains. Forced generic
+  WGSL f32 convolution already differs from Pillow's ordered host arithmetic
+  by ULPs.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Until a device proof exists, the exact host path remains the required
   behavior for fractional and filtered geometry.
@@ -86,11 +86,12 @@ receipt rules unchanged.
 - [x] Heterogeneous F `ImageOps.pad` (`c5f03c6f3`): route the contain resize
   through exact f64-coefficient/f32-store semantics and admit only the proven
   marker-9 changed-axis GPU path (25/25 matrix exact; 23 native GPU).
-- [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`): marker 12 emulates Pillow's
-  per-tap f64 FMA rounding with an integer U128 reducer for direct finite-normal
-  rows whose coefficient ranges have at most two taps. The former host-
-  controlled heterogeneous 3x1→2x1 Bilinear row is now native GPU and exact;
-  wider/special/chain domains remain explicitly host-controlled.
+- [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`, `9762c2af5`): marker 12
+  emulates Pillow's per-tap f64 FMA rounding with an integer U128 reducer for
+  direct finite-normal rows whose coefficient ranges have at most eight taps.
+  The former host-controlled heterogeneous 3x1→2x1 Bilinear row and a native
+  three-tap Lanczos row are exact; rows over the bound, special values, and
+  chains remain explicitly host-controlled.
 - [x] Fractional Rotate routing (`7ca91ed47`): exact normalized right angles
   alone use transpose fast paths; the fixed 576-case CPU/SIMD matrix is
   576/576 exact.
@@ -110,15 +111,21 @@ receipt rules unchanged.
   filters, varied source/target sizes) had zero mismatches; 3,950 rows used
   native GPU and the remainder stayed on exact host semantic control. A
   1,175-case random finite-normal probe also had zero mismatches (428 native
-  rows). These probes do not close the wider-tap, special-value, or chained
-  arithmetic buckets above.
-- [x] Fresh all-backends replay at `b7f2fadc9` passed 10,952/10,952 value/error
-  comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM with zero failed
-  or not-run cases. Terminal receipts remain explicit (CPU 6,838; SIMD 6,847
-  SIMD + 3 CPU controls; GPU 6,620 native + 218 host controls; WASM 6,951
-  each); the recorded status is `passed_with_backend_gaps` because those
-  intentional host/control partitions are not relabeled as native coverage.
-  Replay hash: `49c0b07da8452284b454f23f26c43588af04e54f444308282bcd9fe4763a9f72`.
+  rows) on the two-tap implementation. After the eight-tap extension,
+  a 2,000-case native GPU probe spanning Bilinear, Bicubic, Lanczos, Hamming,
+  and Box rows had zero mismatches, including wider-tap rows. These probes do
+  not close rows over the eight-tap bound, special-value, or chained arithmetic
+  buckets above.
+- [x] Fresh all-backends replay at `9762c2af5` passed 10,952/10,952
+  value/error comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM with
+  zero failed or not-run cases. Terminal receipts remain explicit (CPU 6,838;
+  SIMD 6,847 SIMD + 3 CPU controls; GPU 6,620 native + 218 host controls;
+  WASM 6,951 each); the recorded status is `passed_with_backend_gaps` because
+  those intentional host/control partitions are not relabeled as native
+  coverage. Replay hash:
+  `3515a246cc14e6cd2a271d611dc7f53133de852ae40b2b0b5525d44340cd727c`; GPU
+  execution sidecar hash:
+  `7ab888e2d5dd9c5f2ff9119d07668ae84fdce7e9e5d2899c2dd67733396fdf62`.
 
 ## Evidence refreshed at the final integrated revision (`ee2996057`)
 
