@@ -16224,8 +16224,11 @@ fn native_projective_nearest_transform_supported_for_image(
     filter: ResampleFilter,
     mode: Option<&str>,
 ) -> bool {
+    // The SIMD bilinear kernel does not yet reproduce Geometry.c's
+    // center-minus-half, FLOOR, edge-clipped sampling contract. Let the
+    // corrected CPU implementation own filtered projective transforms.
     matches!(method, TransformMethod::Perspective | TransformMethod::Quad)
-        && matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
+        && matches!(filter, ResampleFilter::Nearest)
         && width != 0
         && height != 0
         && data.len() == 8
@@ -16247,7 +16250,7 @@ fn native_projective_nearest_transform_supported_for_shape(
     mode: Option<&str>,
 ) -> bool {
     matches!(method, TransformMethod::Perspective | TransformMethod::Quad)
-        && matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
+        && matches!(filter, ResampleFilter::Nearest)
         && width != 0
         && height != 0
         && data.len() == 8
@@ -18152,17 +18155,22 @@ fn simd_mesh_transform_bytes(
         let x3_s = mesh[10];
         let y3_s = mesh[11];
 
-        // Match the core mesh implementation's clipping and inclusive lower
-        // bound rules before entering the vectorized span loop.
+        // Pillow lowers each MESH record to QUAD using the original box
+        // width/height, then evaluates local destination pixel centers.
+        let raw_bw = x1_d - x0_d;
+        let raw_bh = y1_d - y0_d;
+        if raw_bw <= 0 || raw_bh <= 0 {
+            continue;
+        }
         let bx0 = x0_d.max(0).min(width as i32);
         let by0 = y0_d.max(0).min(height as i32);
-        let bx1 = x1_d.max(1).min(width as i32);
-        let by1 = y1_d.max(1).min(height as i32);
-        let bw = (bx1 - bx0).max(1) as f64;
-        let bh = (by1 - by0).max(1) as f64;
+        let bx1 = x1_d.max(0).min(width as i32);
+        let by1 = y1_d.max(0).min(height as i32);
+        let bw = f64::from(raw_bw);
+        let bh = f64::from(raw_bh);
 
         for destination_y in by0..by1 {
-            let v = (destination_y - y0_d) as f64 / bh;
+            let v = ((destination_y - y0_d) as f64 + 0.5) / bh;
             let one_minus_v = 1.0 - v;
             let base_x = one_minus_v * x0_s + v * x1_s;
             let delta_x = one_minus_v * (x3_s - x0_s) + v * (x2_s - x1_s);
@@ -18173,7 +18181,7 @@ fn simd_mesh_transform_bytes(
                 let count = ((bx1 - destination_x) as usize).min(SIMD_F64_LANES);
                 let u = f64x8::new(std::array::from_fn(|lane| {
                     if lane < count {
-                        (destination_x + lane as i32 - x0_d) as f64 / bw
+                        (destination_x + lane as i32 - x0_d) as f64 / bw + 0.5 / bw
                     } else {
                         0.0
                     }
@@ -18182,12 +18190,20 @@ fn simd_mesh_transform_bytes(
                 let source_y = (f64x8::splat(base_y) + f64x8::splat(delta_y) * u).to_array();
                 for lane in 0..count {
                     let input_x = if source_x[lane].is_finite() {
-                        (source_x[lane] + 0.5).floor() as i64
+                        if source_x[lane] < 0.0 {
+                            -1
+                        } else {
+                            source_x[lane] as i64
+                        }
                     } else {
                         -1
                     };
                     let input_y = if source_y[lane].is_finite() {
-                        (source_y[lane] + 0.5).floor() as i64
+                        if source_y[lane] < 0.0 {
+                            -1
+                        } else {
+                            source_y[lane] as i64
+                        }
                     } else {
                         -1
                     };
@@ -18386,6 +18402,18 @@ fn simd_projective_nearest_transform_bytes(
     let mut vector_blocks = 0u64;
     let destination_width_f = destination_width as f64;
     let destination_height_f = destination_height as f64;
+    // Pillow 12.2.0's Geometry.c evaluates projective and quad maps at
+    // destination pixel centers and its COORD macro truncates nonnegative
+    // coordinates toward zero, returning -1 for any negative coordinate.
+    let nearest_coordinate = |value: f64| {
+        if !value.is_finite() {
+            -1
+        } else if value < 0.0 {
+            -1
+        } else {
+            value as i64
+        }
+    };
 
     for destination_y in 0..destination_height {
         let mut destination_x = 0usize;
@@ -18402,26 +18430,30 @@ fn simd_projective_nearest_transform_bytes(
             let x = f64x8::new(x_values);
             let y = f64x8::new(y_values);
             let (source_x, source_y) = if quad {
+                let x = x + f64x8::splat(0.5);
+                let y = y + f64x8::splat(0.5);
                 let x0 = *a;
                 let y0 = *b;
                 let inv_width = 1.0 / destination_width_f;
                 let inv_height = 1.0 / destination_height_f;
+                let x1 = (*g - x0) * inv_width;
+                let x2 = (*c - x0) * inv_height;
+                let x3 = (*e - *c - *g + x0) * inv_width * inv_height;
+                let y1 = (*h - y0) * inv_width;
+                let y2 = (*d - y0) * inv_height;
+                let y3 = (*f - *d - *h + y0) * inv_width * inv_height;
                 let sx = f64x8::splat(x0)
-                    + f64x8::splat(*g - x0) * x * f64x8::splat(inv_width)
-                    + f64x8::splat(*c - x0) * y * f64x8::splat(inv_height)
-                    + f64x8::splat(*e - *c - *g + x0)
-                        * x
-                        * y
-                        * f64x8::splat(inv_width * inv_height);
+                    + f64x8::splat(x1) * x
+                    + f64x8::splat(x2) * y
+                    + f64x8::splat(x3) * x * y;
                 let sy = f64x8::splat(y0)
-                    + f64x8::splat(*h - y0) * x * f64x8::splat(inv_width)
-                    + f64x8::splat(*d - y0) * y * f64x8::splat(inv_height)
-                    + f64x8::splat(*f - *d - *h + y0)
-                        * x
-                        * y
-                        * f64x8::splat(inv_width * inv_height);
+                    + f64x8::splat(y1) * x
+                    + f64x8::splat(y2) * y
+                    + f64x8::splat(y3) * x * y;
                 (sx.to_array(), sy.to_array())
             } else {
+                let x = x + f64x8::splat(0.5);
+                let y = y + f64x8::splat(0.5);
                 let denominator = f64x8::splat(*g) * x + f64x8::splat(*h) * y + f64x8::splat(1.0);
                 let sx =
                     (f64x8::splat(*a) * x + f64x8::splat(*b) * y + f64x8::splat(*c)) / denominator;
@@ -18436,16 +18468,8 @@ fn simd_projective_nearest_transform_bytes(
                     .ok_or_else(|| simd_unsupported("Transform"))?;
                 let sx = source_x[lane];
                 let sy = source_y[lane];
-                let input_x = if sx.is_finite() {
-                    (sx + 0.5).floor() as i64
-                } else {
-                    -1
-                };
-                let input_y = if sy.is_finite() {
-                    (sy + 0.5).floor() as i64
-                } else {
-                    -1
-                };
+                let input_x = nearest_coordinate(sx);
+                let input_y = nearest_coordinate(sy);
                 if input_x >= 0
                     && input_x < source_width as i64
                     && input_y >= 0
@@ -22920,9 +22944,72 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
-    use super::simd_resize_f;
+    use super::{simd_projective_nearest_transform_bytes, simd_resize_f};
     use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, RgbaImage};
+    use crate::raster::{DynamicImage, GrayImage, RgbaImage};
+
+    #[test]
+    fn perspective_nearest_matches_pillow_center_and_truncation() {
+        let width = 9;
+        let height = 8;
+        let raw: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        let image =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, raw).expect("luma source"));
+        let data = [1.0, 0.07, 0.4, -0.03, 1.0, 0.2, 0.001, -0.002];
+
+        let result = simd_projective_nearest_transform_bytes(
+            &image,
+            8,
+            7,
+            &data,
+            Some((17, 0, 0, 255)),
+            Some("L"),
+            false,
+        )
+        .expect("SIMD perspective transform")
+        .expect("SIMD luma layout");
+        let expected = [
+            3, 40, 77, 114, 151, 188, 225, 6, 51, 88, 125, 162, 162, 199, 236, 17, 62, 99, 136,
+            173, 210, 247, 28, 65, 73, 110, 147, 184, 221, 2, 39, 76, 84, 121, 158, 195, 232, 13,
+            50, 87, 95, 132, 169, 206, 243, 24, 61, 98, 106, 143, 180, 217, 254, 35, 72, 109,
+        ];
+
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn quad_nearest_matches_pillow_center_and_truncation() {
+        let width = 9;
+        let height = 8;
+        let raw: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        let image =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, raw).expect("luma source"));
+        // Pillow's QUAD input order is NW, SW, SE, NE.
+        let data = [0.2, 0.1, 8.7, 0.2, 9.1, 7.8, -0.4, 8.3];
+
+        let result = simd_projective_nearest_transform_bytes(
+            &image,
+            8,
+            7,
+            &data,
+            Some((17, 0, 0, 255)),
+            Some("L"),
+            true,
+        )
+        .expect("SIMD quad transform")
+        .expect("SIMD luma layout");
+        let expected = [
+            3, 14, 25, 36, 47, 58, 69, 80, 40, 51, 62, 73, 84, 95, 106, 117, 114, 125, 136, 147,
+            158, 169, 180, 191, 151, 162, 173, 184, 195, 206, 217, 228, 188, 199, 210, 221, 232,
+            243, 254, 9, 225, 236, 247, 2, 13, 61, 72, 83, 43, 54, 65, 76, 87, 98, 109, 120,
+        ];
+
+        assert_eq!(result.as_bytes(), expected);
+    }
 
     #[cfg(target_endian = "little")]
     #[test]
