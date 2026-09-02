@@ -77,7 +77,11 @@ fn f_kernel_hamming(x: f64) -> f64 {
         // Keep the numeric F/I paths aligned with Pillow's Hamming
         // windowed-sinc resampler (Resample.c), including its sinc factor.
         let pix = std::f64::consts::PI * x;
-        (pix.sin() / pix) * ((0.54_f32 as f64) + (0.46_f32 as f64) * pix.cos())
+        // Resample.c uses sincos and contracts the `0.46f * cos + 0.54f`
+        // window expression; preserving those operations matters for exact
+        // f32 cancellation residuals.
+        let (sin, cos) = pix.sin_cos();
+        (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
     }
 }
 
@@ -1976,5 +1980,43 @@ mod tests {
         // Reduce.c forms the interior quartet while still INT32: four
         // INT32_MAX values wrap to -4 before promotion and averaging.
         assert_eq!(output.as_raw(), &(-1i32).to_le_bytes());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_hamming_matches_pillow_fma_window_on_cancellation() {
+        let source_words = [
+            1.0f32.to_bits(),
+            (-1.0f32).to_bits(),
+            3.0f32.to_bits(),
+            (-3.0f32).to_bits(),
+            1.0f32.to_bits(),
+            (-1.0f32).to_bits(),
+            3.0f32.to_bits(),
+            (-3.0f32).to_bits(),
+        ];
+        let source_bytes: Vec<u8> = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(8, 1, source_bytes).expect("source shape must be valid"),
+        );
+
+        let output = resize_f(&source, 4, 1, &ResampleFilter::Hamming)
+            .expect("finite F-mode Hamming resize must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode resize must retain packed float storage");
+        };
+        // Pillow's Resample.c Hamming window contracts its `0.46f * cos +
+        // 0.54f` expression before the sinc product.  The exact cancellation
+        // residuals here catch either a separated window expression or a
+        // changed accumulation order.
+        let expected_words = [0x3df4_077e, 0xa3c0_0000, 0xa300_0000, 0xbd22_afaa];
+        let expected_bytes: Vec<u8> = expected_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        assert_eq!(output.as_raw(), &expected_bytes);
     }
 }

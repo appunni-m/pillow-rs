@@ -70,10 +70,12 @@ fn kernel_hamming(x: f64) -> f64 {
         // cosine window. This mirrors the Hamming branch in Pillow's
         // Resample.c and is observable on downsampled impulses.
         let pix = std::f64::consts::PI * x;
-        // Resample.c declares the window constants with an `f` suffix.
-        // Preserve that float-to-double promotion: using f64 literals moves
-        // the final F-mode sample by one ULP.
-        (pix.sin() / pix) * ((0.54_f32 as f64) + (0.46_f32 as f64) * pix.cos())
+        // Resample.c evaluates sin/cos together and contracts the Hamming
+        // window's `0.46f * cos + 0.54f` expression.  Preserve both the
+        // float-to-double constants and the fused operation; separating the
+        // window terms changes cancellation rows by one f32 ULP.
+        let (sin, cos) = pix.sin_cos();
+        (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
     }
 }
 

@@ -867,6 +867,125 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
     Some(if negative { bits | 0x8000_0000 } else { bits })
 }
 
+/// Round the shader's unsigned 128-bit magnitude plus sign to an f32 word.
+///
+/// Marker 9 uses four 32-bit limbs on the device, so its exact reducer can
+/// retain one more magnitude bit than a signed host `i128`.  The older helper
+/// above remains for the typed luma16 proof; this variant mirrors
+/// `f64_sum_to_f32`'s U128 conversion and lets the F proof model the same
+/// bounded truncation at the device boundary.
+fn gpu_f64_u128_integer_to_f32(magnitude: u128, negative: bool, scale_exp: i32) -> Option<u32> {
+    if magnitude == 0 {
+        return Some(0);
+    }
+    let bit_length = 128 - magnitude.leading_zeros();
+    let mut exponent = scale_exp.checked_add(bit_length as i32 - 1)?;
+
+    if exponent < -126 {
+        let target_shift = scale_exp.checked_add(149)?;
+        let subnormal = if target_shift >= 0 {
+            magnitude.checked_shl(u32::try_from(target_shift).ok()?)?
+        } else {
+            let shift = u32::try_from(target_shift.checked_neg()?).ok()?;
+            if shift >= 128 {
+                0
+            } else if shift == 0 {
+                magnitude
+            } else {
+                let mut rounded = magnitude >> shift;
+                let remainder = magnitude & ((1u128 << shift) - 1);
+                let halfway = 1u128 << (shift - 1);
+                if remainder > halfway || (remainder == halfway && rounded & 1 != 0) {
+                    rounded = rounded.checked_add(1)?;
+                }
+                rounded
+            }
+        };
+        if subnormal >= (1u128 << 23) {
+            return Some(if negative { 0x8080_0000 } else { 0x0080_0000 });
+        }
+        let mantissa = u32::try_from(subnormal).ok()?;
+        return Some(if negative {
+            mantissa | 0x8000_0000
+        } else {
+            mantissa
+        });
+    }
+    if exponent > 127 {
+        return Some(if negative { 0xff80_0000 } else { 0x7f80_0000 });
+    }
+    if !(-126..=127).contains(&exponent) {
+        return None;
+    }
+
+    let mut mantissa = if bit_length > 24 {
+        let shift = bit_length - 24;
+        let mut rounded = magnitude >> shift;
+        let remainder = magnitude & ((1u128 << shift) - 1);
+        let halfway = 1u128 << (shift - 1);
+        if remainder > halfway || (remainder == halfway && rounded & 1 != 0) {
+            rounded = rounded.checked_add(1)?;
+        }
+        rounded
+    } else {
+        magnitude.checked_shl(24 - bit_length)?
+    };
+    if mantissa >= (1u128 << 24) {
+        mantissa >>= 1;
+        exponent = exponent.checked_add(1)?;
+        if exponent > 127 {
+            return Some(if negative { 0xff80_0000 } else { 0x7f80_0000 });
+        }
+    }
+    let mantissa = u32::try_from(mantissa & 0x7f_ff_ff).ok()?;
+    let exponent_bits = u32::try_from(exponent + 127).ok()?;
+    let bits = (exponent_bits << 23) | mantissa;
+    Some(if negative { bits | 0x8000_0000 } else { bits })
+}
+
+#[derive(Clone, Copy)]
+struct F64SignedMagnitude {
+    magnitude: u128,
+    negative: bool,
+}
+
+/// Add one bounded U128 term with the same signed-magnitude ordering used by
+/// the marker-9 WGSL reducer.  A same-sign overflow is rejected because the
+/// shader wraps its four limbs there; only the representable exact domain is
+/// safe to admit.
+fn gpu_f64_signed_u128_add(
+    sum: F64SignedMagnitude,
+    term: u128,
+    term_negative: bool,
+) -> Option<F64SignedMagnitude> {
+    if term == 0 {
+        return Some(sum);
+    }
+    if sum.magnitude == 0 {
+        return Some(F64SignedMagnitude {
+            magnitude: term,
+            negative: term_negative,
+        });
+    }
+    if sum.negative == term_negative {
+        return Some(F64SignedMagnitude {
+            magnitude: sum.magnitude.checked_add(term)?,
+            negative: sum.negative,
+        });
+    }
+    if sum.magnitude < term {
+        Some(F64SignedMagnitude {
+            magnitude: term - sum.magnitude,
+            negative: term_negative,
+        })
+    } else {
+        Some(F64SignedMagnitude {
+            magnitude: sum.magnitude - term,
+            negative: sum.negative,
+        })
+    }
+}
+
 /// Evaluate one f64-coefficient row as an exact integer sum, then compare its
 /// final f32 bits with Pillow's ordered f64 `mul_add` accumulation.  The
 /// shader uses the same exact-sum representation; rows where an intermediate
@@ -994,7 +1113,14 @@ fn gpu_f_resize_f64_sample_bits(
         return Some(0);
     };
 
-    let mut sum = 0i128;
+    // Keep the host model in the same unsigned-magnitude domain as the
+    // shader's four-limb reducer.  Terms shifted beyond 128 bits are dropped
+    // by WGSL's bounded `u128_shl`; compare the resulting word with Pillow's
+    // f64 result below before admitting such a row.
+    let mut sum = F64SignedMagnitude {
+        magnitude: 0,
+        negative: false,
+    };
     let mut f64_accumulator = 0.0f64;
     for (tap, &weight) in weights.iter().enumerate() {
         let coeff = gpu_f64_integer_parts(weight)?;
@@ -1010,14 +1136,14 @@ fn gpu_f_resize_f64_sample_bits(
             .checked_add(coeff.exponent)?;
         let shift = u32::try_from(exponent.checked_sub(minimum_exponent)?).ok()?;
         let product = u128::from(sample.mantissa).checked_mul(u128::from(coeff.mantissa))?;
-        let term = product.checked_shl(shift)?;
-        let term = i128::try_from(term).ok()?;
-        let term = if sample.negative != coeff.negative {
-            term.checked_neg()?
+        let term = if shift < 128 {
+            product.checked_shl(shift)?
         } else {
-            term
+            // `u128_shl` in both resize shaders returns an all-zero limb
+            // value once the shift reaches the width of the reducer.
+            0
         };
-        sum = sum.checked_add(term)?;
+        sum = gpu_f64_signed_u128_add(sum, term, sample.negative != coeff.negative)?;
     }
 
     let expected = (f64_accumulator as f32).to_bits();
@@ -1027,7 +1153,7 @@ fn gpu_f_resize_f64_sample_bits(
     {
         return None;
     }
-    let actual = gpu_f64_integer_to_f32(sum, minimum_exponent)?;
+    let actual = gpu_f64_u128_integer_to_f32(sum.magnitude, sum.negative, minimum_exponent)?;
     (actual == expected).then_some(actual)
 }
 
