@@ -5881,3 +5881,87 @@ and `make migration-parity-evidence-check` passes. The replay artifact
 SHA-256 is `3515a246cc14e6cd2a271d611dc7f53133de852ae40b2b0b5525d44340cd727c`,
 with GPU execution sidecar SHA-256
 `7ab888e2d5dd9c5f2ff9119d07668ae84fdce7e9e5d2899c2dd67733396fdf62`.
+
+## 32.91 Identity nearest projective byte routing (2026-09-03)
+
+The next deterministic backend divergence was found by forcing a fractional
+Perspective nearest transform through the device path. At output byte 8,
+Pillow and the corrected CPU path selected source byte 51 while the shader
+selected byte 14. Pillow's `Geometry.c`/`ImagingTransform` evaluates the
+inverse map at the destination pixel center and applies truncating `COORD`;
+the shader was receiving the raw destination index and applying
+`floor(source + 0.5)`.
+
+The integrated commit `1c34fddd0` (source change `d2690bf62`) generalizes the
+existing bounded projective source-selection proof to ordinary packed
+L/LA/RGB/RGBA bytes, but admits only exact-identity nearest Perspective, Quad,
+and complete one-record Mesh maps. The existing integer indexed P/1 proof
+remains intact. Fractional, scaled, filtered, and broader Mesh/projective maps
+continue through exact host semantic control; the change does not relabel
+those rows as a backend capability failure.
+
+The focused native matrix is 12/12 exact (four byte modes by three methods),
+with requested=actual GPU receipts and exact CPU/GPU bytes. The projective
+focused tests are 4/4 and the complete GPU pool suite is 74/74; `make -C
+pillow-rs fmt`, `make -C pillow-rs build`, `make build-dev`, and the receipt
+suite pass. A complete all-backends replay was not used for this lane because
+the local disposable environment had Pillow 11.3.0 rather than the pinned
+12.2.0 oracle and the existing macOS WASM limitation. No fixtures, expected
+values, thresholds, IDs, denominators, or receipt rules changed.
+
+## 32.92 Receipt-proven suite speed cohorts (2026-09-03)
+
+The benchmark runner had already made suite ratios use one sorted common ID
+set, but its membership predicate checked only `subject.status ==
+"completed"`. A target could therefore contribute a timing vector while its
+execution receipt was `not_proven`, had no actual backend, or represented an
+exact host-controlled path. That violated the audit's equal-ID/equal-receipt
+acceptance rule even though the independent timing summary was useful.
+
+Commit `1f49b7890` adds a receipt-aware membership predicate. Pillow's explicit
+non-pipeline oracle receipt is accepted; each target must have a terminal
+completed receipt, requested=actual backend identity, one actual backend in
+the count, matching latency sample count, no fallback reasons, and no execution
+errors. Timing-complete rows that fail this proof remain in coverage summaries
+but are excluded from speed ratios as explicit `not_comparable` members.
+
+A fresh standard run at the same 744-workload denominator remains 744/744
+measured and schema-valid. Across its 54 suites and three targets, the old
+status-only result would have marked 276/324 cells comparable; the receipt
+gate marks 180/324 comparable and 144/324 `not_comparable` (60 comparable and
+48 not-comparable per target). The result is
+`/tmp/pillow-rs-suite-receipt-current.json` (SHA-256
+`b4b2438cfc19b48b740d676483bcd1f053f300f9bf324c1bd3d8073bb3dbffd4`). The
+receipt-state regression suite is 39/39, the benchmark validator passes, and
+no fixtures, thresholds, IDs, denominators, or receipt policies changed.
+
+## 32.93 Packed SIMD ExtractBand performance (2026-09-03)
+
+The next deterministic opportunity was not a value divergence: the RGBA-family
+SIMD `ExtractBand` adapter performed a per-block `u8x16` shuffle and rebuilt
+generic byte indices while selecting one channel. That path already matched
+Pillow's byte-copy `getchannel` semantics, but paid an avoidable shuffle and
+index setup cost on every block.
+
+Commit `f35002e1c` loads four little-endian pixels as `u32x4` values and selects
+the requested byte with a shift/mask; the generic shuffle indices are hoisted
+outside the loop. Scalar tails, vector telemetry, and output layout are
+unchanged. This is a performance-only optimization and does not widen backend
+admission or alter receipt classification.
+
+The adapter tests pass 5/5, strict selected SIMD parity passes 8/8, and the
+automatic getchannel corpus passes 128/128. In the fixed 11-workload,
+equal-receipt benchmark all 33 target receipts are terminal with
+requested=actual and empty fallback reasons; ExtractBand whole-workflow median
+improves from 0.166375 ms to 0.089396 ms (−46.3%), and backend median from
+137084 ns to 60084 ns (−56.2%). The budget checker still reports two unrelated
+timing-noise violations, so the aggregate P2 gate remains open. No fixtures,
+thresholds, IDs, denominators, or receipt policies changed.
+
+The combined full replay at revision `f35002e1c` also passes 10,952/10,952
+value/error comparisons with zero failed or not-run cases. Terminal receipts
+remain explicit: CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,707 GPU
+plus 131 CPU controls; Node/browser WASM 6,951 each. The all-backends result
+SHA-256 is `3db4e5c3543816325ab9ac3bea0e5d821c0cc23a25716386b78d3bafb6beb336`
+and the GPU execution sidecar is
+`6d639b0ed60e191212f1975352231f9911880bd932ff1f8a0c2d489a445efbbe`.
