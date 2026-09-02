@@ -22,6 +22,8 @@ fn bankers_round(x: f64) -> f64 {
         (x + 0.5).floor()
     }
 }
+
+use super::geometry::execute_resize;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
@@ -772,7 +774,15 @@ pub fn op_pad(
     } else {
         filter
     };
-    let resized = pil_resize(img, nw.max(1), nh.max(1), resize_filter, explicit_mode);
+    // F-mode samples are four-byte IEEE words, not four independent byte
+    // channels.  Image.resize already owns the exact f64 coefficient/f32
+    // store path for this representation; reuse it for Pad's contain step
+    // instead of routing through pil_resize's byte-oriented generic loop.
+    let resized = if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
+        execute_resize(img, nw.max(1), nh.max(1), &resize_filter, explicit_mode)?
+    } else {
+        pil_resize(img, nw.max(1), nh.max(1), resize_filter, explicit_mode)
+    };
     if nw == w && nh == h {
         return Ok(preserve_mode(img, resized));
     }

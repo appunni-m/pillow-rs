@@ -2130,6 +2130,68 @@ fn gpu_f_resize_f64_is_exact(
     changed_any
 }
 
+/// Admit a heterogeneous F-mode Pad whose contain resize is already covered
+/// by marker 9.  Pad adds no sample arithmetic after that resize: its final
+/// pass only copies complete four-byte words into the host-chosen canvas and
+/// writes the resolved scalar fill word elsewhere.  Keep this proof narrow
+/// to one non-nearest Pad with a changed contain axis.  A prefix made only of
+/// PutData(F) replacements is allowed because marker 9 already proves those
+/// raw word uploads; other prefixes retain their existing host paths.
+fn gpu_f_pad_f64_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") || ops.is_empty() || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let (op, prefix) = ops.split_last().expect("non-empty Pad proof ops");
+    let PipelineOp::Pad { w, h, filter, .. } = op else {
+        return false;
+    };
+    if prefix.iter().any(|op| {
+        !matches!(
+            op,
+            PipelineOp::PutData {
+                mode: PixelMode::F,
+                ..
+            }
+        )
+    }) {
+        return false;
+    }
+    if matches!(filter, ResampleFilter::Nearest) {
+        return false;
+    }
+    let source_dimensions = image.dimensions();
+    let Some(((resize_w, resize_h), _)) =
+        gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)
+    else {
+        return false;
+    };
+    if (resize_w, resize_h) == source_dimensions
+        || CheckedDims::new(resize_w, resize_h, 1)
+            .ok()
+            .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+        || CheckedDims::new(*w, *h, 1)
+            .ok()
+            .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+    {
+        return false;
+    }
+    // Reuse the complete marker-9 proof for the contain resize.  The Pad
+    // placement shader is word-copy/fill only, so no second arithmetic proof
+    // is necessary here.
+    let mut resize_ops = prefix.to_vec();
+    resize_ops.push(PipelineOp::Resize {
+        w: resize_w,
+        h: resize_h,
+        filter: *filter,
+    });
+    gpu_f_resize_f64_is_exact(&resize_ops, image, logical_mode)
+}
+
 /// Return whether a filtered F resize can use the integer-only marker-6
 /// shader. This is intentionally stricter than an empirical GPU comparison:
 /// the fixed table must equal Pillow's f64 table, every source word must be a
@@ -4944,7 +5006,7 @@ impl GpuInner {
             let (horizontal_bytes, vertical_bytes) = if f_resize_f64_is_exact
                 && matches!(mode, 5 | 7 | 8)
                 && !matches!(filter, ResampleFilter::Nearest)
-                && matches!(op, PipelineOp::Resize { .. })
+                && matches!(op, PipelineOp::Resize { .. } | PipelineOp::Pad { .. })
             {
                 let (kernel, support) = filter_from_resample(filter);
                 let horizontal = precompute_coeffs_f64(resize_w, source_w, kernel, support);
@@ -5391,12 +5453,17 @@ impl GpuInner {
                 let constant_bits = f_resize_constant_bits.filter(|_| {
                     logical_mode == Some("F") && !matches!(resize_filter, ResampleFilter::Nearest)
                 });
+                let f64_is_exact = f_resize_f64_is_exact
+                    && logical_mode == Some("F")
+                    && !matches!(resize_filter, ResampleFilter::Nearest);
                 params.extend([
                     resize_w,
                     resize_h,
                     constant_bits.unwrap_or_else(|| gpu_resize_channel_count(op_mode)),
                     if constant_bits.is_some() {
                         2
+                    } else if f64_is_exact {
+                        9
                     } else {
                         u32::from(gpu_resize_should_premultiply(
                             op_mode,
@@ -5618,15 +5685,31 @@ impl GpuInner {
                     } else {
                         *filter
                     };
-                    let horizontal = gpu_resize_coefficients(resize_w, cur_w, resize_filter);
-                    let vertical = gpu_resize_coefficients(resize_h, cur_h, resize_filter);
-                    Some(self.append_resize_coeff_ranges(
-                        &mut img2_arena,
-                        auxiliary_cache,
-                        &horizontal,
-                        &vertical,
-                        storage_alignment,
-                    )?)
+                    if f_resize_f64_is_exact
+                        && logical_mode == Some("F")
+                        && !matches!(resize_filter, ResampleFilter::Nearest)
+                    {
+                        let (kernel, support) = filter_from_resample(resize_filter);
+                        let horizontal = precompute_coeffs_f64(resize_w, cur_w, kernel, support);
+                        let vertical = precompute_coeffs_f64(resize_h, cur_h, kernel, support);
+                        Some(self.append_resize_f64_coeff_ranges(
+                            &mut img2_arena,
+                            auxiliary_cache,
+                            &horizontal,
+                            &vertical,
+                            storage_alignment,
+                        )?)
+                    } else {
+                        let horizontal = gpu_resize_coefficients(resize_w, cur_w, resize_filter);
+                        let vertical = gpu_resize_coefficients(resize_h, cur_h, resize_filter);
+                        Some(self.append_resize_coeff_ranges(
+                            &mut img2_arena,
+                            auxiliary_cache,
+                            &horizontal,
+                            &vertical,
+                            storage_alignment,
+                        )?)
+                    }
                 }
                 PipelineOp::Fit {
                     bleed,
@@ -6034,18 +6117,21 @@ impl GpuInner {
                 }
                 continue;
             }
-            // I-mode nearest Pad has the same typed-word dependency as a
-            // nearest Resize, but also appends a placement dispatch. Keep
-            // each stage in its own compute pass so Metal cannot expose a
-            // stale horizontal/vertical intermediate to the next stage.
-            if logical_mode == Some("I")
+            // Typed F/I Pad has the same intermediate dependency as a
+            // Resize, but also appends a placement dispatch. Keep each stage
+            // in its own compute pass so Metal cannot expose a stale
+            // horizontal/vertical intermediate to the next stage.
+            if matches!(logical_mode, Some("F" | "I"))
                 && matches!(pipeline, ResolvedPipeline::Pad { .. })
                 && matches!(
                     ops.get(index),
                     Some(PipelineOp::Pad {
-                        filter: ResampleFilter::Nearest,
+                        filter,
                         ..
-                    })
+                    }) if (logical_mode == Some("I")
+                        && matches!(filter, ResampleFilter::Nearest))
+                        || (logical_mode == Some("F")
+                            && !matches!(filter, ResampleFilter::Nearest))
                 )
             {
                 let ResolvedPipeline::Pad {
@@ -6063,7 +6149,7 @@ impl GpuInner {
                     {
                         let mut resize_pass =
                             encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                                label: Some("gpu_batch_compute_i_pad_resize_h"),
+                                label: Some("gpu_batch_compute_typed_pad_resize_h"),
                                 timestamp_writes: None,
                             });
                         current_is_a = self.encode_dispatch(
@@ -6079,7 +6165,7 @@ impl GpuInner {
                     {
                         let mut resize_pass =
                             encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                                label: Some("gpu_batch_compute_i_pad_resize_v"),
+                                label: Some("gpu_batch_compute_typed_pad_resize_v"),
                                 timestamp_writes: None,
                             });
                         current_is_a = self.encode_dispatch(
@@ -6095,7 +6181,7 @@ impl GpuInner {
                 }
                 {
                     let mut place_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                        label: Some("gpu_batch_compute_i_pad_place"),
+                        label: Some("gpu_batch_compute_typed_pad_place"),
                         timestamp_writes: None,
                     });
                     current_is_a = self.encode_dispatch(
@@ -10844,7 +10930,9 @@ impl GpuPool {
         let f_resize_box_average_is_exact =
             gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
         let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
+        let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
         let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
+            || f_pad_f64_is_exact
             || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
             || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
         if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
@@ -11216,6 +11304,13 @@ impl GpuPool {
                     && f_resize_constant_bits.is_some()
                     && ops.len() == 1
                     && matches!(ops[0], PipelineOp::Pad { .. }))
+                // A heterogeneous F Pad uses marker 9 for its contain
+                // resize and then copies complete words through placement.
+                // The admission proof is limited to one changed-axis Pad
+                // with an optional PutData(F)-only prefix; nearest, same-size,
+                // and unrelated prefixes retain their existing paths.
+                || (logical_mode == "F"
+                    && f_pad_f64_is_exact)
                 // A nearest F Fit is a two-axis one-tap word relocation. Its
                 // boxed coefficients are generated on the host after the
                 // same f32 crop-boundary conversion as Pillow's affine
@@ -11756,7 +11851,7 @@ mod tests {
     use super::{
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, gpu_buffer_reuse_allowed,
         gpu_byte_point_mode_allowed, gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix,
-        gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
+        gpu_f_pad_f64_is_exact, gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
@@ -15340,6 +15435,106 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(3));
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_pad_f64_native_preserves_heterogeneous_words() {
+        let values = [
+            0.1f32, -0.3, 1.7, 2.9, 3.5, -4.25, 9.0, 0.0, 8.0, 1.0, 5.0, 7.0,
+        ];
+        let source_bytes = values
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let source = Image::new(4, 3, "F", (0, 0, 0, 0)).expect("initial F source");
+        let source_dynamic = source.materialize().expect("materialize initial F source");
+        let putdata: Arc<[u8]> = Arc::from(source_bytes.clone().into_boxed_slice());
+        let filters = [
+            (ResampleFilter::Bilinear, 2i64),
+            (ResampleFilter::Bicubic, 3),
+            (ResampleFilter::Lanczos, 1),
+            (ResampleFilter::Hamming, 5),
+            (ResampleFilter::Box, 4),
+        ];
+        for (filter, _) in filters {
+            let pad = PipelineOp::Pad {
+                w: 5,
+                h: 5,
+                filter,
+                color: None,
+                centering: (0.5, 0.5),
+            };
+            assert!(gpu_f_pad_f64_is_exact(
+                std::slice::from_ref(&pad),
+                &source_dynamic,
+                Some("F")
+            ));
+            assert!(gpu_f_pad_f64_is_exact(
+                &[
+                    PipelineOp::PutData {
+                        data: putdata.clone(),
+                        mode: PixelMode::F,
+                    },
+                    pad,
+                ],
+                &source_dynamic,
+                Some("F")
+            ));
+        }
+
+        let mut expected_source = source.clone();
+        expected_source
+            .putdata(&source_bytes)
+            .expect("CPU F PutData");
+        let mut actual_source = source;
+        actual_source.putdata(&source_bytes).expect("GPU F PutData");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (filter, code) in filters {
+            let expected = crate::ops::imageops::pad_with_input(
+                &expected_source,
+                5,
+                5,
+                Some(ResampleInput::Code(code)),
+                ImageOpsColor::Scalar(0),
+                crate::ops::imageops::CenteringInput::Default,
+            )
+            .expect("CPU F Pad operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F Pad");
+            let actual = match crate::ops::imageops::pad_with_input(
+                &actual_source,
+                5,
+                5,
+                Some(ResampleInput::Code(code)),
+                ImageOpsColor::Scalar(0),
+                crate::ops::imageops::CenteringInput::Default,
+            )
+            .expect("GPU F Pad operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU F Pad {filter:?} failed: {error}"),
+            };
+            assert_eq!(actual, expected, "native GPU F Pad {filter:?}");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU F Pad must publish a telemetry receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(4));
+            assert_eq!(telemetry.7, None);
+        }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
