@@ -497,6 +497,10 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
     }
     var exponent = minimum_exponent + i32(bit_length) - 1;
 
+    if exponent > 127 {
+        return select(0x7f800000u, 0xff800000u, sum.negative);
+    }
+
     // Round values below the normal range in units of 2^-149.  The host
     // admission proof bounds the integer sum, so the same limb operations are
     // sufficient for subnormal output without device floating-point arithmetic.
@@ -548,6 +552,9 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
         }
     } else {
         mantissa = u128_shl(sum.magnitude, 24u - bit_length).a;
+    }
+    if exponent > 127 {
+        return select(0x7f800000u, 0xff800000u, sum.negative);
     }
     let result = (u32(exponent + 127) << 23u) | (mantissa & 0x7fffffu);
     if sum.negative {

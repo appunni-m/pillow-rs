@@ -461,9 +461,10 @@ fn gpu_f32_integer_parts(bits: u32) -> Option<F32IntegerParts> {
 /// Decode every finite f32 word into an integer significand and binary scale
 /// for the marker-9 f64 reducer.  Normal words use the implicit leading bit;
 /// subnormals use their explicit fraction at the fixed `2^-149` scale.  Keep
-/// signed zero here because Pillow's ordered f64 accumulation can observe it,
-/// while the final proof still rejects a negative-zero result.  The older
-/// marker-6 proof intentionally keeps its stricter normal-only decoder above.
+/// signed zero here because Pillow's ordered f64 accumulation can observe it;
+/// the final proof preserves a signed-zero result when the exact reducer
+/// agrees.  The older marker-6 proof intentionally keeps its stricter
+/// normal-only decoder above.
 fn gpu_f32_f64_integer_parts(bits: u32) -> Option<F32IntegerParts> {
     let exponent_bits = (bits >> 23) & 0xff;
     let fraction = bits & 0x7f_ff_ff;
@@ -772,6 +773,9 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
             return Some(if negative { bits | 0x8000_0000 } else { bits });
         }
     }
+    if exponent > 127 {
+        return Some(if negative { 0xff80_0000 } else { 0x7f80_0000 });
+    }
     if !(-126..=127).contains(&exponent) {
         return None;
     }
@@ -791,7 +795,7 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
         mantissa >>= 1;
         exponent = exponent.checked_add(1)?;
         if exponent > 127 {
-            return None;
+            return Some(if negative { 0xff80_0000 } else { 0x7f80_0000 });
         }
     }
     let mantissa = u32::try_from(mantissa & 0x7f_ff_ff).ok()?;
@@ -804,6 +808,9 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
 /// final f32 bits with Pillow's ordered f64 `mul_add` accumulation.  The
 /// shader uses the same exact-sum representation; rows where an intermediate
 /// f64 rounding would change the final f32 value are conservatively rejected.
+/// A finite-input row may end in a signed infinity when the exact result
+/// overflows f32; NaN and any non-finite result that disagrees with the exact
+/// reducer remain outside the admission boundary.
 fn gpu_f_resize_f64_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
@@ -887,11 +894,14 @@ fn gpu_f_resize_f64_sample_bits(
     }
 
     let expected = (f64_accumulator as f32).to_bits();
-    if !f64_accumulator.is_finite() || (expected & 0x7f80_0000) == 0x7f80_0000 {
+    let expected_exponent = expected & 0x7f80_0000;
+    if (expected_exponent == 0x7f80_0000 && (expected & 0x007f_ffff) != 0)
+        || (expected_exponent != 0x7f80_0000 && !f64_accumulator.is_finite())
+    {
         return None;
     }
     let actual = gpu_f64_integer_to_f32(sum, minimum_exponent)?;
-    (actual == expected && actual != (-0.0f32).to_bits()).then_some(actual)
+    (actual == expected).then_some(actual)
 }
 
 fn gpu_f_resize_f64_pass_bits(
@@ -10570,6 +10580,9 @@ mod tests {
         );
         assert_eq!(gpu_f64_integer_to_f32(1i128 << 23, -149), Some(0x0080_0000));
         assert_eq!(gpu_f64_integer_to_f32(-1, -149), Some(0x8000_0001));
+        assert_eq!(gpu_f64_integer_to_f32(-1, -200), Some(0x8000_0000));
+        assert_eq!(gpu_f64_integer_to_f32(1, 128), Some(0x7f80_0000));
+        assert_eq!(gpu_f64_integer_to_f32(-1, 128), Some(0xff80_0000));
     }
 
     #[test]
@@ -11035,6 +11048,130 @@ mod tests {
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_native_preserves_proven_overflow_outputs() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let source_words = [0x7f7f_ffff, 0x7f7f_ffff, 0xff7f_ffff];
+        let source = Image::frombytes("F", (3, 1), &bytes(&source_words)).expect("F source");
+        let cases = [
+            (
+                ResampleInput::Name("BICUBIC".into()),
+                [0x7f80_0000, 0xfe99_aea3],
+            ),
+            (
+                ResampleInput::Name("LANCZOS".into()),
+                [0x7f80_0000, 0xfe9d_8858],
+            ),
+            (
+                ResampleInput::Name("HAMMING".into()),
+                [0x7f7f_ffff, 0xfee4_133b],
+            ),
+        ];
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (filter, expected_words) in cases {
+            let expected = source
+                .resize((2, 1), Some(filter.clone()), None)
+                .expect("CPU overflow resize operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU overflow F resize");
+            assert_eq!(expected, bytes(&expected_words));
+
+            let actual = match source
+                .resize((2, 1), Some(filter), None)
+                .expect("GPU overflow resize operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU overflow F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "native GPU overflow F resize");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU overflow F resize must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_native_preserves_proven_negative_zero_output() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Pillow's ordered f64 Box accumulation leaves a tiny negative
+        // residual here; the final f32 store underflows it to signed zero.
+        // The exact marker-9 reducer must preserve that sign instead of
+        // routing the row back to host control.
+        let source_words = [
+            f32::from_bits(0x8000_0001).to_bits(),
+            0.0f32.to_bits(),
+            0.0f32.to_bits(),
+        ];
+        let source = Image::frombytes("F", (1, 3), &bytes(&source_words)).expect("F source");
+        let filter = ResampleInput::Name("BOX".into());
+        let source_dynamic = source.materialize().expect("materialize F source");
+        assert!(gpu_f_resize_f64_is_exact(
+            &[PipelineOp::Resize {
+                w: 1,
+                h: 1,
+                filter: ResampleFilter::Box,
+            }],
+            &source_dynamic,
+            Some("F")
+        ));
+        let expected = source
+            .resize((1, 1), Some(filter.clone()), None)
+            .expect("CPU signed-zero resize operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU signed-zero F resize");
+        assert_eq!(expected, bytes(&[0x8000_0000]));
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((1, 1), Some(filter), None)
+            .expect("GPU signed-zero resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU signed-zero F resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU signed-zero F resize");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU signed-zero F resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
