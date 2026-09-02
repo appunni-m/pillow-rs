@@ -1386,21 +1386,6 @@ fn gpu_f_resize_f64_is_exact(
         let horizontal_changed = *w != source_dimensions.0;
         let vertical_changed = *h != source_dimensions.1;
         changed_any |= horizontal_changed || vertical_changed;
-        // A single two-pass submission is not yet proven for a horizontal
-        // upscale followed by a vertical downscale. On the current adapter
-        // the vertical marker can observe the wrong horizontal intermediate
-        // for this shape (the first divergence is `(2, 2) -> (4, 1)`: Pillow
-        // stores `[2, 2, 3, 3]`, while the device produced
-        // `[1.5, 1.625, 1.875, 2]`). Keep this narrow geometry on the exact
-        // host path until its command ordering/buffer contract is validated.
-        if horizontal_changed
-            && vertical_changed
-            && *w > source_dimensions.0
-            && *h < source_dimensions.1
-        {
-            return false;
-        }
-
         if horizontal_changed {
             let Some(words) =
                 gpu_f_resize_f64_pass_bits(&bytes, source_dimensions, &horizontal, true)
@@ -9094,19 +9079,12 @@ fn gpu_geometry_requires_exact_host_control(
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
-        let mixed_f_resize_needs_control = mode == Some("F")
-            && matches!(
-                op,
-                PipelineOp::Resize { w, h, .. }
-                    if *w > dimensions.0 && *h < dimensions.1
-            );
         let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_typed_nearest_affine_is_exact(op, image, mode, dimensions);
-        if mixed_f_resize_needs_control
-            || thumbnail_needs_control
+        if thumbnail_needs_control
             || typed_transform_needs_control
             || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
         {
@@ -10881,6 +10859,7 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
         assert_eq!(telemetry.7, None);
+
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -11723,10 +11702,10 @@ mod tests {
             &image,
             Some("F")
         ));
-        // The opposite mixed geometry is not yet safe in one device
-        // submission: horizontal upscaling followed by vertical downscaling
-        // can read a stale/wrong intermediate on the adapter.
-        assert!(!gpu_f_resize_f64_is_exact(
+        // The explicit horizontal/vertical compute-pass boundary also makes
+        // the opposite mixed geometry safe: horizontal upscaling is fully
+        // materialized before the vertical downscale consumes it.
+        assert!(gpu_f_resize_f64_is_exact(
             &[PipelineOp::Resize {
                 w: 4,
                 h: 1,
@@ -11735,9 +11714,9 @@ mod tests {
             &image,
             Some("F")
         ));
-        // Marker 6 and the broader dyadic Box proof must observe the same
-        // device-ordering guard; otherwise a 1x2 -> 2x1 Box resize can use a
-        // stale horizontal intermediate even though marker 9 rejects it.
+        // Marker 6 and the broader dyadic Box proof retain their own
+        // conservative mixed-geometry guard; marker 9's explicit pass
+        // boundary is not a proof for those older reducers.
         let mixed_box_source = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(
                 1,
@@ -11764,7 +11743,7 @@ mod tests {
             &mixed_box_source,
             Some("F")
         ));
-        assert!(!gpu_f_resize_f64_is_exact(
+        assert!(gpu_f_resize_f64_is_exact(
             std::slice::from_ref(&mixed_box),
             &mixed_box_source,
             Some("F")
@@ -12244,6 +12223,7 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
         assert_eq!(telemetry.7, None);
+
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -12376,6 +12356,73 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_native_mixed_upscale_downscale_matches_cpu() {
+        let values = [1.0f32, 2.0, 4.0, 8.0];
+        let source_bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+        let expected = source
+            .resize((4, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("CPU mixed-geometry resize operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU mixed-geometry F resize");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((4, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("GPU mixed-geometry resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU mixed-geometry F resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "mixed-axis F resize parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU mixed-axis F resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+
+        for filter in ["BICUBIC", "LANCZOS", "HAMMING"] {
+            let expected = source
+                .resize((4, 1), Some(ResampleInput::Name(filter.into())), None)
+                .expect("CPU mixed-geometry filtered resize operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU mixed-geometry filtered F resize");
+            let actual = source
+                .resize((4, 1), Some(ResampleInput::Name(filter.into())), None)
+                .expect("GPU mixed-geometry filtered resize operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+                .expect("native GPU mixed-geometry filtered F resize");
+            assert_eq!(actual, expected, "mixed-axis {filter} F resize parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU mixed-axis filtered F resize must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(2));
+            assert_eq!(telemetry.7, None);
+        }
+
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -12825,7 +12872,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_mixed_upscale_downscale_remains_host_exact() {
+    fn f_resize_mixed_upscale_downscale_native_matches_cpu() {
         let values = [-9.7966165f32, 6.5041304];
         let source_bytes: Vec<u8> = values
             .iter()
@@ -12845,14 +12892,14 @@ mod tests {
             .expect("GPU mixed-geometry resize operation")
             .use_backend(Backend::Gpu)
             .tobytes()
-            .expect("host-controlled mixed-geometry F resize");
+            .expect("native GPU mixed-geometry F resize");
         assert_eq!(actual, expected, "mixed F resize parity");
         let telemetry = Backend::take_pipeline_telemetry()
-            .expect("mixed-geometry F resize must publish a telemetry receipt");
+            .expect("native mixed-geometry F resize must publish a telemetry receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.6, None);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
