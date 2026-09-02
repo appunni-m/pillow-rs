@@ -7559,6 +7559,48 @@ fn gpu_int_filter_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool
     has_filter
 }
 
+/// Return whether an I-mode convolution followed by a nearest resize can
+/// remain in one device batch.
+///
+/// The 3x3 filter shader is the typed I32 path described by
+/// `pool_cpu/ops/filter.rs`; the following nearest resize only relocates the
+/// resulting four-byte signed words through host-generated one-tap tables.
+/// Keep the composition deliberately narrow: a 5x5 filter, filtered resize,
+/// another arithmetic operation, or a mode-changing node would consume the
+/// words with a different contract and must retain exact host semantic
+/// control until its own composition proof is recorded.
+fn gpu_int_filter_resize_chain_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+    let [
+        filter,
+        PipelineOp::Resize {
+            w,
+            h,
+            filter: resize_filter,
+        },
+    ] = ops
+    else {
+        return false;
+    };
+    if !matches!(resize_filter, ResampleFilter::Nearest)
+        || *w == 0
+        || *h == 0
+        || !matches!(filter, PipelineOp::Filter3x3 { .. })
+        || !gpu_int_filter_is_supported(std::slice::from_ref(filter), image)
+    {
+        return false;
+    }
+    op_output_dims(
+        &PipelineOp::Resize {
+            w: *w,
+            h: *h,
+            filter: *resize_filter,
+        },
+        image.width(),
+        image.height(),
+    )
+    .is_some_and(|(out_w, out_h)| out_w == *w && out_h == *h)
+}
+
 /// Validate the index space assumptions made by multi-input shaders. A
 /// storage-array read is not bounds-checked by WGSL, so an image that is
 /// smaller than the coordinates used by a shader must never be uploaded for a
@@ -9059,7 +9101,8 @@ fn validate_gpu_operations(
                 op,
                 PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
             )
-            && gpu_int_filter_is_supported(ops, image);
+            && (gpu_int_filter_is_supported(ops, image)
+                || gpu_int_filter_resize_chain_is_supported(ops, image));
         if !gpu_operation_is_safe(op) && !i_mode_filter {
             return Err(PilError::ValueError(format!(
                 "GPU operation '{}' exceeds the bounded shader safety limits",
@@ -9624,7 +9667,9 @@ impl GpuPool {
                                 }
                         )
                     }))
-                || (logical_mode == "I" && gpu_int_filter_is_supported(ops, img))
+                || (logical_mode == "I"
+                    && (gpu_int_filter_is_supported(ops, img)
+                        || gpu_int_filter_resize_chain_is_supported(ops, img)))
                 // I/F samples are four raw bytes per pixel at this executor
                 // boundary.  These operations only relocate or duplicate
                 // the complete sample and therefore do not need to decode it
@@ -9800,7 +9845,8 @@ impl GpuPool {
                     op,
                     PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
                 )
-                && gpu_int_filter_is_supported(ops, img);
+                && (gpu_int_filter_is_supported(ops, img)
+                    || gpu_int_filter_resize_chain_is_supported(ops, img));
             if !registry::gpu_supports(op)? && !i_mode_filter {
                 return self.preflight_failure(
                     ops,
@@ -10130,7 +10176,8 @@ mod tests {
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
-        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_luma16_resize_f64_is_exact,
+        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32,
+        gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian,
         readback_poll_backoff,
     };
@@ -10776,6 +10823,115 @@ mod tests {
         assert_eq!(telemetry.6, Some(5));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn i_filter_nearest_resize_native_gpu_preserves_signed_words() {
+        let values = (0..99i32)
+            .map(|index| index.saturating_mul(257).saturating_sub(20_000))
+            .collect::<Vec<_>>();
+        let source_bytes = values
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("I", (11, 9), &source_bytes).expect("I source");
+        let filter = PipelineOp::Filter3x3 {
+            kernel: [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0],
+            scale: 1.0,
+            offset: 0.0,
+        };
+        let filtered = Image::push_op(&source, filter);
+        let resized = filtered
+            .resize((8, 6), Some(ResampleInput::Code(0)), None)
+            .expect("I nearest resize");
+        let expected = resized
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU I filter/resize");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match resized.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU I filter/resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU I filter/resize parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU I filter/resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(3));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn i_filter_nearest_resize_chain_guard_is_narrow() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(4, 4, (-12345i32).to_le_bytes().repeat(16)).unwrap(),
+        );
+        let filter = PipelineOp::Filter3x3 {
+            kernel: [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0],
+            scale: 1.0,
+            offset: 0.0,
+        };
+        assert!(gpu_int_filter_resize_chain_is_supported(
+            &[
+                filter.clone(),
+                PipelineOp::Resize {
+                    w: 3,
+                    h: 2,
+                    filter: ResampleFilter::Nearest,
+                },
+            ],
+            &image,
+        ));
+        assert!(!gpu_int_filter_resize_chain_is_supported(
+            &[
+                filter.clone(),
+                PipelineOp::Resize {
+                    w: 3,
+                    h: 2,
+                    filter: ResampleFilter::Bilinear,
+                },
+            ],
+            &image,
+        ));
+        assert!(!gpu_int_filter_resize_chain_is_supported(
+            &[
+                PipelineOp::Resize {
+                    w: 3,
+                    h: 2,
+                    filter: ResampleFilter::Nearest,
+                },
+                filter,
+            ],
+            &image,
+        ));
+        assert!(!gpu_int_filter_resize_chain_is_supported(
+            &[
+                PipelineOp::Filter5x5 {
+                    kernel: [0.0; 25],
+                    scale: 1.0,
+                    offset: 0.0,
+                },
+                PipelineOp::Resize {
+                    w: 3,
+                    h: 2,
+                    filter: ResampleFilter::Nearest,
+                },
+            ],
+            &image,
+        ));
     }
 
     #[test]
