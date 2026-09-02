@@ -523,15 +523,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/all-backends-post-bc8197617.json` (SHA-256
   `0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`) and
   remains schema-valid and value/error-exact at the fixed denominator.
-- [x] The current source parity lane is committed as `0013d013e`.
-  It aligns Thumbnail's final dimensions and reducing-gap arithmetic with
-  Pillow, preserves raw RGBa/RGBX channels, and mirrors typed F/I reduction
-  and INT32 resampling boundaries. The committed-source envelope is
-  `build/migration-parity/all-backends-test-result.json` (SHA-256
-  `c1e45bd9951e7881aa4616d26c2a56984df3237ee22f49d3b9fea0e0344893fa`),
-  value/error-exact at 10,952/10,952 in all five public lanes with GPU smoke
-  1/1. CPU/SIMD/GPU report 6,838/6,850/6,838 terminal receipts; GPU is
-  6,628 native plus 210 CPU, and no lane has a partial, missing, or
-  indeterminate pipeline receipt. The remaining P0, P1 identity, and P2
-  timing items stay open.
+- [x] The current source parity lane is committed as `35fbfbe4d` with the
+  non-finite F order-filter safety guard `53d87a44c`. The final fixed-
+  denominator envelope is recorded above at 10,952/10,952 exact in all five
+  public lanes with GPU smoke 1/1; CPU, SIMD, and GPU have zero partial,
+  missing, or indeterminate pipeline receipts. The remaining P0 arithmetic
+  proof, P1 identity taxonomy, and P2 timing items stay open.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
