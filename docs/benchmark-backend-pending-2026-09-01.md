@@ -70,6 +70,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   counterexample also defeats a broad dyadic-source admission. No unsafe
   admission change was made; `f17e1a7da` admits only the separately proven
   two-axis rows.
+- [x] Admit the proven typed `I;16`, `I;16L`, and `I;16B` filtered-resize
+  subset. Commit `2ff9a6951` adds a marker-10 exact f64-coefficient reducer,
+  declared-byte-order decoding, Pillow's native-u16 intermediate/store
+  boundary, and separable intermediate-capacity accounting. A deterministic
+  1,365-case matrix had 0 mismatches (926 rows admitted); `I;16N`, chains,
+  mixed batches, and unproven rows remain exact host semantic control.
 
 ### P1 — complete native-backend receipt proof
 
@@ -251,6 +257,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   Node WASM, and browser WASM; every lane has 2/2 terminal-complete receipts,
   and both GPU cases are native with no fallback. No fixtures, expected values,
   thresholds, IDs, denominators, or receipt taxonomy changed.
+- [x] The typed I;16 filtered-resize replay at revision `2ff9a6951` is
+  `build/migration-parity/all-backends-test-result.json` (SHA-256
+  `58f1e1b3fcad066b5b9e82e2d5910fd502c593e53fa15759293fd312ac3c571c`). The
+  three selected cases are value-exact with terminal-complete receipts on all
+  five public lanes; GPU has 2 native receipts and 1 exact host semantic-control
+  receipt for the intentionally guarded I;16N case, and GPU smoke is 1/1.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -271,11 +283,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
   tests 17/17, GPU-pool tests 28/28 (including Draw, indexed Fit, finite
   subnormal marker-9 rows, filtered F chains, finite overflow and signed-zero
   rows),
-  receipt tests 28/28,
-  evidence/schema validation, and `make -C pillow-rs fmt`. Clippy remains
-  blocked before
-  compilation by the pre-existing pinned libavif 1.4.1/dav1d 1.5.3/libaom
-  3.13.2 environment requirement.
+  receipt tests 28/28, evidence/schema validation, `make -C pillow-rs fmt`, and
+  `make clippy` (which completes with the repository's existing warnings).
 
 ## Closeout state
 
@@ -286,9 +295,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
   `ExtractBand` admission as `f55a770ad`, the
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
-  `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, and exact
-  current-image Contrast-prefix admission as `5ed9f152e`; the latest
-  committed all-backend replay is
+  `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, exact
+  current-image Contrast-prefix admission as `5ed9f152e`, and typed I;16
+  filtered-resize admission as `2ff9a6951`; the latest full committed
+  all-backend replay is
   schema-valid and value-exact for all 10,952 cases. Native lanes report one
   genuine partial receipt each and the GPU partition has 6,832 native receipts
   plus 252 CPU receipts. No fixture, expected value, threshold, denominator,
