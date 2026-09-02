@@ -10073,13 +10073,15 @@ impl GpuPool {
                         }))
         });
         if !logical_mode_supported {
-            gpu_log!("[GPU] dispatch preflight routed batch to CPU: unsupported logical mode");
+            gpu_log!(
+                "[GPU] dispatch preflight routed batch to exact host semantic control: logical layout"
+            );
             return self.preflight_failure(
                 ops,
                 img,
                 mode,
                 allow_cpu_fallback,
-                "unsupported logical mode",
+                "exact host semantic control",
             );
         }
 
