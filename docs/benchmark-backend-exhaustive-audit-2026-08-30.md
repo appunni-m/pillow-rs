@@ -4100,3 +4100,32 @@ No fixtures, expected values, thresholds, IDs, denominators, or receipt
 taxonomy changed. Remaining work is the broader F arithmetic domain, the
 native/WASM receipt gaps, backend/fallback reconciliation outside proven
 admissions, and the P2 zero-violation timing gate.
+
+## 32.49 Observed pipeline prefixes are terminal at their own boundary (2026-09-02)
+
+The remaining native partial was not a pixel or public-error mismatch. The
+`pipeline-composition.filter-rgba-5x5-invert` workflow successfully exposed
+the filtered RGBA image, then Pillow correctly raised its `ImageOps.invert`
+mode-validation error. The runner waited until the entire workflow succeeded
+before setting `terminal_complete`, so the already observed `Filter5x5`
+receipt was incorrectly retained as a partial prefix in the CPU, SIMD, and
+GPU sidecars.
+
+Commit `70a92f4ca` marks a receipt terminal as soon as a successful observed
+pipeline/result or terminal observation proves that operation's materialized
+boundary. Deferred receipts with no observed boundary remain conservative
+partial records; filter constructors and mutating setup observations cannot
+promote an unrelated receipt. Public parity output and the later RGBA error
+remain unchanged, and the receipt-state regression suite passes **29/29**.
+
+The focused all-backend replay at
+`/tmp/receipt-prefix-all-backends-70a92f4ca.json` (SHA-256
+`093f18d3ade437eef91ce70053a76a37b14d629883869d06084f4ff84dd1e992`) is
+schema-valid and value-exact for the fixed case. CPU, SIMD, and GPU each have
+one complete terminal receipt with zero partial cases; the GPU receipt is
+actual GPU with no fallback. Node and browser WASM still retain their known
+constructor/receipt gap for this case. The historical full-denominator
+envelope remains the denominator authority until a full replay is regenerated.
+No fixtures, expected values, thresholds, IDs, denominators, or public error
+contracts changed. Remaining work is the broader F arithmetic domain, WASM
+receipt gaps and backend identity outside proven rows, and the P2 timing gate.

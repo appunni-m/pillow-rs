@@ -79,13 +79,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ### P1 — complete native-backend receipt proof
 
-- [ ] Close the 1 genuine partial native receipt in each CPU, SIMD, and GPU
-  lane; every claimed pipeline case needs a terminal-complete receipt. The
-  latest classifier separates fourteen setup-mutation receipts that precede
-  public validation errors before materialization from the one real observed
-  filter/invert prefix. The fresh envelope reports CPU 7,084 complete + 1
-  partial, SIMD 7,096 + 1, and GPU 7,084 + 1; the setup-only records remain
-  operation telemetry outside the deferred pipeline partition.
+- [x] Close the 1 genuine partial native receipt in each CPU, SIMD, and GPU
+  lane; every observed pipeline boundary now has a terminal-complete receipt.
+  Commit `70a92f4ca` marks the successfully observed `Filter5x5` result
+  terminal even when a later, unrelated public call raises. The focused
+  replay `/tmp/receipt-prefix-all-backends-70a92f4ca.json` is value-exact with
+  zero partial cases in CPU, SIMD, and GPU (1/1 terminal receipt in each;
+  GPU actual backend is GPU with no fallback). The historical full envelope
+  still reports CPU/GPU 7,084 + 1 and SIMD 7,096 + 1 until it is regenerated;
+  setup-only records remain operation telemetry outside the deferred pipeline
+  partition.
 - [ ] Reconcile backend identity and fallback taxonomy. Current terminal
   counts in the last full envelope include 405 SIMD-lane CPU receipts and 252
   GPU-lane CPU receipts; that GPU lane has 6,832 native GPU receipts and 139
@@ -276,6 +279,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   conservative. `make migration-parity-receipt-test` passes 28/28; the full
   selected denominator remains 10,952 and public parity results retain their
   original schema without internal error fields.
+- [x] The observed-prefix terminal-boundary fix is committed as `70a92f4ca`.
+  `make migration-parity-receipt-test` passes 29/29. The focused replay
+  `/tmp/receipt-prefix-all-backends-70a92f4ca.json` is schema-valid and
+  value-exact; CPU, SIMD, and GPU each report 1/1 terminal-complete receipts
+  and zero partial cases for `pipeline-composition.filter-rgba-5x5-invert`.
+  The full 10,952-case envelope remains historical until regenerated.
 - [x] The D-049 thumbnail control-flow fix is committed as `dc6085f81`:
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
@@ -289,7 +298,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
 ## Closeout state
 
 - [x] The source lane and receipt-partition correction are committed as
-  `cb1813bc8` plus setup-before-error classifier `b867867ee`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
+  `cb1813bc8` plus setup-before-error classifier `b867867ee` and observed-prefix
+  boundary fix `70a92f4ca`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
   subnormal marker-9 admission as `b1962c6dd`, finite overflow and proven
   signed-zero marker-9 admission as `19acd29ab`, pure filtered F-chain admission
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
@@ -300,9 +310,10 @@ execution is a parity-preserving fallback, not a parity completion claim.
   filtered-resize admission as `2ff9a6951`; the latest full committed
   all-backend replay is
   schema-valid and value-exact for all 10,952 cases. Native lanes report one
-  genuine partial receipt each and the GPU partition has 6,832 native receipts
-  plus 252 CPU receipts. No fixture, expected value, threshold, denominator,
-  or case ID was changed. The latest envelope is
+  historical partial receipt each in that envelope; the focused replay now
+  closes the observed-prefix case in CPU, SIMD, and GPU. The GPU partition has
+  6,832 native receipts plus 252 CPU receipts in the historical envelope. No
+  fixture, expected value, threshold, denominator, or case ID was changed. The latest envelope is
   `/tmp/all-backends-post-19acd29ab.json` and remains schema-valid and
   value-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.
