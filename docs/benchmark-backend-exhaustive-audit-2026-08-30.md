@@ -5227,3 +5227,66 @@ The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic and
 fractional or non-identity projective, mesh, and palette transforms. P1 backend
 identity/fallback reconciliation and the P2 equal-ID, equal-receipt timing
 gate remain open.
+
+## 32.77 Native F affine-nearest word relocation (2026-09-02)
+
+The next deterministic backend-identity gap was the floating-point (`F`)
+affine-nearest transform. The mode-8 shader already copies one complete
+four-byte scalar word, but the planner kept every F affine transform on exact
+host semantic control because the uploaded signed-16.16 coordinate walk can
+disagree with Pillow's scalar coordinate at an integer boundary.
+
+The first divergence is the bounded boundary case `a=1/65536` and
+`c=65535/65536`: Pillow's `ImagingTransformAffine` evaluates the destination
+center in `f64` and truncates `0.999992...` to source index `0`, while the old
+fixed origin rounds to `65536` and selects source index `1`. Commit
+`6203ec533` adds a per-destination proof that compares Pillow's f64
+source-selection and fill classification with the exact signed-16.16 shader
+walk before admitting the mode-8 raw-word branch. It also corrects the default
+F fill to the zero floating-point word. The proof is bounded to one million
+destination pixels; filtered F transforms remain host-controlled because
+Pillow interpolates scalar values, and the relocation shader does not.
+
+The focused two-case F replay is exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM (2/2). Its maintained case
+`PIL.Image.Image.transform.nuanced.coverage-batch-transform-fill-methods-098`
+now reports one native GPU dispatch with no fallback. The companion
+`PIL.Image.Image.rotate.nuanced.f-explicit-bilinear-nearest` row remains exact
+host semantic control: Pillow's bilinear F rotate produces four interpolated
+words, so it is not a nearest relocation. The focused envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` (SHA-256
+`375828ecbd2dc091054ba1f691019b1983a0f052a46b6fbd9e6ff1a1c90725b5`), and the
+GPU execution sidecar is
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`9366a58403f7400d172da70a15240eeac98ec7837d1977d640824a6a1207e744`).
+
+The full schema-v3 campaign at revision `6203ec533` remains
+**10,952/10,952** value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; GPU smoke is 1/1. CPU has 6,838 terminal receipts, SIMD 6,850, and GPU
+6,838 terminal receipts (6,745 native GPU and 93 CPU host-controlled). GPU
+fallback partitions are 29 exact host semantic-control rows, 62 unsafe-primary
+image-dimension rows, one unsafe/incomplete-dimension row, and one Transform
+capability guard. Every pipeline lane has zero partial, missing, or
+indeterminate receipts. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`313d66b10c305030b95ff90d4cd71d448accc1f0370fbf4c8cf6e78781e2ca6a`), and the
+GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`88876269949d882a3e053555bd3f0b181d44039a680fbb251424928a78e76f89`).
+
+`cargo test -p pillow-rs compute::pool_gpu::tests:: -- --test-threads=1`
+passes 65/65, including the coordinate-boundary, filtered-contract,
+default-fill, and native-word regressions. `make migration-parity-receipt-test`
+passes 34/34; `make migration-parity-evidence-check`, `make build-dev`,
+`make -C pillow-rs fmt-fix`, `make -C pillow-rs fmt`, the focused replay, and
+the full replay pass. Clippy remains blocked by the pre-existing pinned
+libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement. No fixtures,
+expected values, thresholds, IDs, denominators, public errors, or receipt
+rules changed.
+
+The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic,
+filtered/projective/mesh/palette transform arithmetic, and other domains that
+cannot yet reproduce Pillow's ordered f64 behavior on-device. P1 backend
+identity/fallback reconciliation and the P2 equal-ID, equal-receipt timing
+gate remain open.
