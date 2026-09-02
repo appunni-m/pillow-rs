@@ -39,7 +39,13 @@ receipt rules unchanged.
   mixed non-finite ordering, negative-zero cancellation, f64 subnormal or
   overflowing intermediates, and arithmetic-changing chains. Forced generic
   WGSL f32 convolution already differs from Pillow's ordered host arithmetic
-  by ULPs.
+  by ULPs. A fresh 20-row probe is exact on 18/20 CPU and GPU rows, but the
+  deterministic failures are `F(16,1) -> (1,1)` and `F(32,1) -> (1,1)`
+  Bilinear (Pillow words `c8be3d3d`/`baafc8bb`, Rust words
+  `c9be3d3d`/`b9afc8bb`). Local arm64 Pillow disassembly confirms the source
+  behavior changes at horizontal tap counts over 15 from scalar FMA to vector
+  multiply followed by ordered adds; the current reducer models only the FMA
+  envelope, so widening it without a separate >15-tap proof is unsafe.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Until a device proof exists, the exact host path remains the required
   behavior for fractional and filtered geometry.
