@@ -693,14 +693,29 @@ pub(crate) fn record_pipeline_backend_fallback(reason: impl Into<String>) {
     if !pipeline_telemetry_enabled() {
         return;
     }
-    LAST_PIPELINE_BACKEND_OVERRIDE.with(|last| {
-        *last.borrow_mut() = Some((Backend::Cpu, reason.into()));
-    });
+    restore_pipeline_backend_override((Backend::Cpu, reason.into()));
     record_pipeline_operation_handoff(1);
 }
 
 fn take_pipeline_backend_override() -> Option<(Backend, String)> {
     LAST_PIPELINE_BACKEND_OVERRIDE.with(|last| last.borrow_mut().take())
+}
+
+/// Preserve a terminal backend identity while a segmented executor unwinds.
+///
+/// A GPU pipeline may execute an exact host-controlled prefix and then copy
+/// or transform that result in a final GPU segment. The prefix must not leave
+/// its CPU override attached to the outer receipt, but its fallback reason is
+/// still useful evidence. Segmentation uses this setter after it has observed
+/// the suffix executor; unlike [`record_pipeline_backend_fallback`], it does
+/// not count another backend handoff.
+fn restore_pipeline_backend_override(override_value: (Backend, String)) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    LAST_PIPELINE_BACKEND_OVERRIDE.with(|last| {
+        *last.borrow_mut() = Some(override_value);
+    });
 }
 
 fn record_pipeline_telemetry(sample: PipelineTelemetry) {
