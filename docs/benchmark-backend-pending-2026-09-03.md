@@ -1,4 +1,4 @@
-# Active parity/backend checklist — 2026-09-03
+# Active parity/backend checklist — 2026-09-03 (focused)
 
 This is the short, actionable queue. Historical probes and superseded runs
 remain in the [exhaustive audit](benchmark-backend-exhaustive-audit-2026-08-30.md).
@@ -28,6 +28,10 @@ receipt rules unchanged.
 - [x] Preserve source-aware Grayscale conversion for scalar and packed modes,
   including the segmented GPU terminal receipt after an exact host-controlled
   prefix.
+- [x] Admit exact-identity nearest Perspective, Quad, and complete one-record
+  Mesh transforms for L/LA/RGB/RGBA (`1c34fddd0`, source `d2690bf62`).
+  Fractional, scaled, filtered, and broader projective/mesh maps remain on
+  exact host semantic control pending a device arithmetic proof.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
   signed two-axis envelope and the bounded marker-12 reducer. Marker 12 now
   covers direct Resize rows with at most eight taps and finite normal f32
@@ -51,21 +55,27 @@ receipt rules unchanged.
   per-operation handoff telemetry and exact values.
 - [x] Preserve nonterminal host-control receipt prefixes in WASM evidence
   accounting (`385eeaab1`).
+- [x] Gate suite speed ratios on terminal requested=actual target receipts,
+  matching latency samples, and empty fallback/error state (`1f49b7890`).
+  Timing-complete rows without backend proof remain visible in independent
+  coverage summaries but are explicitly `not_comparable` for speed claims.
 
 ### P2 — performance acceptance
 
 - [ ] Obtain two consecutive fixed-ID, equal-receipt comparisons with zero
   budget violations. The Brightness factor-1 identity path and SIMD constant
-  allocation are deterministic row-level wins, but aggregate comparisons are
-  still timing-noisy and do not close this gate.
+  allocation plus the packed ExtractBand path are deterministic row-level
+  wins, but aggregate comparisons are still timing-noisy and do not close this
+  gate.
 
 ## Verified changes already integrated
 
-- [x] Degenerate thumbnail control flow (`dc6085f81`): expanded native probe
-  reduced 21 mismatches to 0; all 172 thumbnail cases are exact.
-- [x] F thumbnail no-reduction GPU admission (`b9a2d70e1`): focused
-  heterogeneous five-filter case is exact and native on GPU; reducing F
-  thumbnails remain host-controlled.
+- [x] Degenerate thumbnail control flow (`b0c154b33`, source `dc6085f81`):
+  expanded native probe reduced 21 mismatches to 0; all 172 thumbnail cases
+  are exact.
+- [x] F thumbnail no-reduction GPU admission (`96aeeb2be`, source
+  `b9a2d70e1`): focused heterogeneous five-filter case is exact and native on
+  GPU; reducing F thumbnails remain host-controlled.
 - [x] Perspective nearest CPU sampling (`ec546bc2a`): varied homography now
   matches Pillow's center evaluation and truncating `COORD` behavior.
 - [x] Projective/Quad sampling and conservative GPU routing (`3320e2b22`):
@@ -100,6 +110,22 @@ receipt rules unchanged.
   requested=actual GPU after a host-controlled prefix.
 - [x] Draw wide-line bottom-edge parity (`ee2996057`): Pillow's sentinel
   scanline behavior is restored; bounded CPU/GPU Draw matrix is 240/240 exact.
+- [x] Identity projective nearest GPU routing (`1c34fddd0`, source
+  `d2690bf62`): 12/12 native L/LA/RGB/RGBA Perspective/Quad/Mesh cases match
+  CPU bytes and publish requested=actual GPU receipts; non-identity and
+  filtered geometry remains exact host semantic control.
+- [x] Receipt-aware suite aggregation (`1f49b7890`): a fresh 744-workload
+  benchmark remains 744/744 measured, while suite comparisons move from
+  276/324 status-only comparable cells to 180/324 receipt-proven cells;
+  144 cells are explicit `not_comparable`. Artifact SHA-256:
+  `b4b2438cfc19b48b740d676483bcd1f053f300f9bf324c1bd3d8073bb3dbffd4`.
+- [x] Packed RGBA-family SIMD ExtractBand (`f35002e1c`): replace the
+  per-block byte shuffle with explicit little-endian `u32x4` shift/mask while
+  preserving exact bytes and vector/tail telemetry. Automatic getchannel
+  parity is 128/128; the fixed equal-receipt row improved whole median
+  0.166375→0.089396 ms and backend median 137084→60084 ns. Aggregate budget
+  acceptance remains open because unrelated timing noise produced two
+  violations.
 
 ## Bounded marker-12 evidence
 
@@ -127,7 +153,7 @@ receipt rules unchanged.
   execution sidecar hash:
   `7ab888e2d5dd9c5f2ff9119d07668ae84fdce7e9e5d2899c2dd67733396fdf62`.
 
-## Evidence refreshed at the final integrated revision (`ee2996057`)
+## Historical full-envelope evidence (`ee2996057`)
 
 - [x] Focused all-backends transform replay with terminal receipts (130/130
   source corpus; fractional GPU rows are host-controlled).
@@ -151,3 +177,18 @@ and benchmark parity `1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c
 
 Known environment blocker: `make -C pillow-rs clippy` still requires the
 pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
+
+## Current integration state
+
+`main` includes the parity fixes through `f35002e1c` (identity projective
+nearest routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
+The fresh combined replay at this revision is 10,952/10,952 value/error exact
+with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
+because the explicit host-controlled partitions are still reported honestly:
+CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,707 GPU plus 131 CPU
+controls; Node/browser WASM 6,951 each. Result SHA-256 is
+`3db4e5c3543816325ab9ac3bea0e5d821c0cc23a25716386b78d3bafb6beb336`; the GPU
+execution sidecar is `6d639b0ed60e191212f1975352231f9911880bd932ff1f8a0c2d489a445efbbe`.
+The only open acceptance item in this focused list is the two-consecutive-run
+zero-budget performance gate, plus the explicitly bounded F device arithmetic
+and broader projective admission work above.
