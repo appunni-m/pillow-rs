@@ -4356,3 +4356,34 @@ or receipt rules changed. Remaining work is broader native-GPU F arithmetic
 (mixed special ordering/cancellation, unproven Box ratios and chains, and
 larger heterogeneous domains), backend identity/fallback reconciliation, and
 the P2 equal-ID/equal-receipt timing gate.
+
+## 32.56 Constant F-mode ImageOps.pad native admission (2026-09-02)
+
+The next backend gap was a valid value-parity row that the GPU preflight
+classified as an unsupported logical mode: `ImageOps.pad` on a constant `F`
+source with a named fill. Pillow's contain resize leaves the scalar sample
+unchanged and its named `"red"` fill resolves to the `F` value `76.0`. Before
+the fix, Rust kept the row on the CPU semantic path; the pad shader's packed
+byte normalizer also treated an admitted `F` word as RGBA, which would corrupt
+the scalar bits.
+
+The fix admits only a single non-nearest `F` Pad whose source words are proven
+constant and finite. The existing exact constant-resize marker carries the
+source word through the contain pass, `gpu_pad_fill` transports the complete
+little-endian scalar word (including the zero-fill default), and the pad WGSL
+placement keeps mode-8 words opaque instead of normalizing them as color
+channels. No mixed batch or non-constant `F` row is widened.
+
+The focused native regression
+`f_pad_constant_source_preserves_scalar_fill_on_gpu` is **1/1** with exact
+bytes and a terminal GPU receipt (`operation_count=3`, no fallback). The
+filtered all-backend replay `/tmp/f-pad-all-backends.json` is schema-valid and
+value/error-exact on CPU, SIMD, GPU, Node WASM, and browser WASM; the GPU row
+is **1/1 native GPU**. `make -C pillow-rs fmt`, `make build-dev`, and the
+serial GPU-pool suite (**37/37**) pass. Clippy remains blocked by the
+pre-existing pinned `image-slash-star` libavif 1.4.1/dav1d 1.5.3/libaom 3.13.2
+environment requirement.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors,
+or receipt rules changed. Remaining work is the broader F arithmetic proof,
+other logical-mode/backend identity gaps, and the P2 timing gate.

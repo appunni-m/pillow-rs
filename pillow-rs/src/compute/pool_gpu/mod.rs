@@ -165,13 +165,18 @@ fn gpu_f_resize_constant_bits(
 ) -> Option<u32> {
     if logical_mode != Some("F")
         || ops.is_empty()
-        || !ops.iter().all(|op| {
+        || !(ops.iter().all(|op| {
             matches!(
                 op,
                 PipelineOp::Resize { filter, .. }
                     if !matches!(filter, ResampleFilter::Nearest)
             )
-        })
+        }) || (ops.len() == 1
+            && matches!(
+                ops[0],
+                PipelineOp::Pad { filter, .. }
+                    if !matches!(filter, ResampleFilter::Nearest)
+            )))
     {
         return None;
     }
@@ -4658,15 +4663,22 @@ impl GpuInner {
                     *filter
                 };
                 let fill = gpu_pad_fill(op, logical_mode, op_mode);
+                let constant_bits = f_resize_constant_bits.filter(|_| {
+                    logical_mode == Some("F") && !matches!(resize_filter, ResampleFilter::Nearest)
+                });
                 params.extend([
                     resize_w,
                     resize_h,
-                    gpu_resize_channel_count(op_mode),
-                    u32::from(gpu_resize_should_premultiply(
-                        op_mode,
-                        logical_mode,
-                        resize_filter,
-                    )),
+                    constant_bits.unwrap_or_else(|| gpu_resize_channel_count(op_mode)),
+                    if constant_bits.is_some() {
+                        2
+                    } else {
+                        u32::from(gpu_resize_should_premultiply(
+                            op_mode,
+                            logical_mode,
+                            resize_filter,
+                        ))
+                    },
                     out_w,
                     out_h,
                     fill,
@@ -7186,6 +7198,15 @@ fn gpu_pad_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) -> u32 {
     let PipelineOp::Pad { color, .. } = op else {
         return 0;
     };
+    // F stores one little-endian f32 sample in the packed transport.  The
+    // public color resolver has already converted scalar/named colors to
+    // that four-byte representation; preserve the complete word instead of
+    // interpreting the bytes as RGB channels.  An omitted fill is Pillow's
+    // scalar +0.0, not an opaque RGBA black.
+    if logical_mode == Some("F") {
+        let (a, b, c, d) = color.unwrap_or((0, 0, 0, 0));
+        return u32::from(a) | (u32::from(b) << 8) | (u32::from(c) << 16) | (u32::from(d) << 24);
+    }
     let has_alpha =
         matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
     let (r, g, b, a) = color.unwrap_or((0, 0, 0, if has_alpha { 0 } else { 255 }));
@@ -9467,6 +9488,16 @@ impl GpuPool {
                 // produce a numerically unrelated result. Mirror remains in
                 // this clause because it only relocates complete words.
                 || (logical_mode == "F" && gpu_float_filter_is_supported(ops, img))
+                // A constant F Pad uses the exact scalar resize marker for
+                // its contain step and a raw-word placement shader for the
+                // final canvas. The source proof is deliberately limited to
+                // a single non-nearest Pad; mixed batches still need the
+                // host semantic path until their intermediate contract is
+                // proven.
+                || (logical_mode == "F"
+                    && f_resize_constant_bits.is_some()
+                    && ops.len() == 1
+                    && matches!(ops[0], PipelineOp::Pad { .. }))
                 || (logical_mode == "I" && gpu_int_filter_is_supported(ops, img))
                 // I/F samples are four raw bytes per pixel at this executor
                 // boundary.  These operations only relocate or duplicate
@@ -11928,6 +11959,62 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.7, None);
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_pad_constant_source_preserves_scalar_fill_on_gpu() {
+        // `ImageOps.pad` keeps F samples as opaque four-byte words through
+        // the contain resize and final placement.  This constant source is
+        // eligible for the exact scalar resize marker; the named fill is
+        // resolved to Pillow's F luma value (76.0) before it reaches the
+        // raw-word placement shader.
+        let source = Image::new(16, 16, "F", (0, 0, 0, 0)).expect("F source");
+        let expected = crate::ops::imageops::pad_with_input(
+            &source,
+            20,
+            12,
+            None,
+            crate::ops::imageops::ImageOpsColor::Name("red".into()),
+            crate::ops::imageops::CenteringInput::Default,
+        )
+        .expect("CPU pad operation")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU F pad");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match crate::ops::imageops::pad_with_input(
+            &source,
+            20,
+            12,
+            None,
+            crate::ops::imageops::ImageOpsColor::Name("red".into()),
+            crate::ops::imageops::CenteringInput::Default,
+        )
+        .expect("GPU pad operation")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F pad failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU F pad scalar fill");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU F pad must publish a telemetry receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(3));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
