@@ -159,6 +159,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   all-backend replay `/tmp/f-pad-all-backends.json` are value/error-exact with
   **1/1 native GPU** receipt and no fallback; non-constant, nearest, mixed,
   and invalid-color `F`/typed rows remain guarded.
+- [x] Admit the proven nearest `F` `ImageOps.fit` row on native GPU. Commit
+  `67f60f9b5` uses Pillow's boxed one-tap crop tables, marker 7 complete-word
+  copies, and an explicit horizontal/vertical compute-pass boundary. The
+  heterogeneous native regression and filtered replay
+  `/tmp/f-fit-nearest-all-backends.json` are exact with **1/1 native GPU**
+  receipt and no fallback; filtered Fit, mixed batches, and other logical
+  modes remain guarded.
 - [x] Admit the exact current-image `PutPixel -> Contrast` prefix on native
   GPU. Commit `5ed9f152e` mirrors one non-palette byte write only to compute
   Pillow's post-write midpoint, while the complete two-operation batch stays
@@ -411,6 +418,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   receipt with no fallback. The source/shader change is intentionally scoped
   to a single non-nearest Pad on a finite constant F image; the remaining
   logical-mode and arithmetic guards are still active.
+- [x] The nearest F `ImageOps.fit` native admission is covered by
+  `/tmp/f-fit-nearest-all-backends.json` (SHA-256
+  `1bc7a9b21f08554e84762714ebfbcb4f25d4117c9c512d91aef5c6f4059412ad`): the
+  selected case is value/error-exact on all five public lanes and GPU has a
+  terminal native receipt with no fallback. The admission remains limited to
+  one nearest Fit with host-generated one-tap coefficients.
 
 ## Closeout state
 

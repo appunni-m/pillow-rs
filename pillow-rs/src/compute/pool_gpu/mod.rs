@@ -4795,15 +4795,24 @@ impl GpuInner {
                 // consume the same control words as Resize; no source pixels
                 // are materialized on the host and no f32 crop mapping is
                 // performed by a shader.
+                let nearest_mode =
+                    if logical_mode == Some("F") && matches!(filter, ResampleFilter::Nearest) {
+                        // F-mode nearest Fit uses the host-generated one-tap
+                        // table for the boxed affine mapping. Copy complete
+                        // words so NaN, infinity, and signed zero survive.
+                        7
+                    } else {
+                        u32::from(gpu_resize_should_premultiply(
+                            op_mode,
+                            logical_mode,
+                            *filter,
+                        ))
+                    };
                 params.extend([
                     out_w,
                     out_h,
                     gpu_resize_channel_count(op_mode),
-                    u32::from(gpu_resize_should_premultiply(
-                        op_mode,
-                        logical_mode,
-                        *filter,
-                    )),
+                    nearest_mode,
                 ]);
             } else {
                 params.extend(registry::extract_params(op));
@@ -5231,7 +5240,16 @@ impl GpuInner {
             // existing throughput contract.
             if matches!(pipeline, ResolvedPipeline::Resize { .. })
                 && (logical_mode == Some("F")
-                    && matches!(ops.get(index), Some(PipelineOp::Resize { .. }))
+                    && matches!(
+                        ops.get(index),
+                        Some(
+                            PipelineOp::Resize { .. }
+                                | PipelineOp::Fit {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                }
+                        )
+                    )
                     || logical_mode == Some("I")
                         && matches!(
                             ops.get(index),
@@ -9498,6 +9516,20 @@ impl GpuPool {
                     && f_resize_constant_bits.is_some()
                     && ops.len() == 1
                     && matches!(ops[0], PipelineOp::Pad { .. }))
+                // A nearest F Fit is a two-axis one-tap word relocation. Its
+                // boxed coefficients are generated on the host after the
+                // same f32 crop-boundary conversion as Pillow's affine
+                // nearest path; keep it separate from the vertical pass so
+                // Metal cannot observe a stale horizontal intermediate.
+                || (logical_mode == "F"
+                    && ops.len() == 1
+                    && matches!(
+                        ops[0],
+                        PipelineOp::Fit {
+                            filter: ResampleFilter::Nearest,
+                            ..
+                        }
+                    ))
                 || (logical_mode == "I" && gpu_int_filter_is_supported(ops, img))
                 // I/F samples are four raw bytes per pixel at this executor
                 // boundary.  These operations only relocate or duplicate
@@ -10543,6 +10575,49 @@ mod tests {
             assert_eq!(telemetry.6, Some(2));
             assert_eq!(telemetry.7, None);
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_fit_nearest_native_gpu_preserves_scalar_words() {
+        let values = [
+            0.25f32, -1.5, 3.0, 7.25, 11.0, 13.5, 17.75, 19.0, 23.25, 29.5, 31.0, 37.75, 41.0,
+            43.5, 47.25, 53.0, 59.5, 61.25, 67.0, 71.75,
+        ];
+        let source_bytes = values
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("F", (5, 4), &source_bytes).expect("F source");
+        let fitted = crate::ops::imageops::fit(&source, 3, 2, Some("NEAREST"), 0.0, (0.5, 0.5))
+            .expect("F Fit operation");
+        let expected = fitted
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F Fit");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match fitted.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F Fit failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU F nearest Fit parity");
+        let telemetry =
+            Backend::take_pipeline_telemetry().expect("native GPU F Fit must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
