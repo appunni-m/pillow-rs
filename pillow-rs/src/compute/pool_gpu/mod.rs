@@ -5029,13 +5029,25 @@ impl GpuInner {
                     let d = data.get(3).copied().unwrap_or(0.0);
                     let e = data.get(4).copied().unwrap_or(0.0);
                     let f = data.get(5).copied().unwrap_or(0.0);
+                    let (origin_x, origin_y) = if logical_mode
+                        .is_some_and(|mode| matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N"))
+                    {
+                        // Geometry.c's native I;16 affine path evaluates the
+                        // source coordinate at the integer destination pixel
+                        // and then applies floor(value + 0.5).  Unlike the
+                        // byte/I/F affine path it does not add half of each
+                        // affine step before the fixed-point walk.
+                        (fixed(c + 0.5), fixed(f + 0.5))
+                    } else {
+                        (fixed(c + a * 0.5 + b * 0.5), fixed(f + d * 0.5 + e * 0.5))
+                    };
                     transform_params[2..8].copy_from_slice(&[
                         fixed(a),
                         fixed(b),
-                        fixed(c + a * 0.5 + b * 0.5),
+                        origin_x,
                         fixed(d),
                         fixed(e),
-                        fixed(f + d * 0.5 + e * 0.5),
+                        origin_y,
                     ]);
                 }
                 // `extract_params` deliberately contains only the public
@@ -9347,8 +9359,10 @@ fn gpu_rotate_requires_exact_host_control(image: &DynamicImage, mode: Option<&st
 /// i64.  Keep the admission proof deliberately explicit: every coefficient,
 /// row origin, and absolute output-coordinate sum must fit i32, and the
 /// source dimensions must fit the shader's signed bounds checks.  The typed
-/// sample itself remains an opaque four-byte word, so no integer/float
-/// conversion or approximation is introduced.
+/// sample itself remains an opaque word, so no integer/float conversion or
+/// approximation is introduced.  I;16* uses Pillow's separate nearest
+/// coordinate contract (rounding `a*dx+b*dy+c` with `floor(+0.5)`), so its
+/// coefficients must be exactly representable in the uploaded 16.16 plan.
 fn gpu_nearest_affine_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -9367,13 +9381,15 @@ fn gpu_nearest_affine_is_exact(
         return false;
     };
     let typed_mode = mode == Some("I");
+    let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
     let indexed_mode = matches!(mode, Some("1" | "P"));
     // CMYK is four raw channel bytes in the same Rgba8 transport. Unlike
     // RGBA, its fourth byte is K rather than alpha, and the mode-4 nearest
     // shader branch copies all four bytes without color conversion.
     let raw_packed_mode = mode == Some("CMYK");
-    if (!typed_mode && !indexed_mode && !raw_packed_mode)
+    if (!typed_mode && !luma16_mode && !indexed_mode && !raw_packed_mode)
         || (typed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
+        || (luma16_mode && !matches!(image, DynamicImage::ImageLuma16(_)))
         || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
         || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
         || !matches!(method, TransformMethod::Affine)
@@ -9382,6 +9398,8 @@ fn gpu_nearest_affine_is_exact(
         || source_dimensions.1 == 0
         || source_dimensions.0 > i32::MAX as u32
         || source_dimensions.1 > i32::MAX as u32
+        || *w > i32::MAX as u32
+        || *h > i32::MAX as u32
         || *w == 0
         || *h == 0
         || data.len() < 6
@@ -9405,7 +9423,12 @@ fn gpu_nearest_affine_is_exact(
     let Some(step_y_x) = fixed(b) else {
         return false;
     };
-    let Some(origin_x) = fixed(c + a * 0.5 + b * 0.5) else {
+    let origin_x_value = if luma16_mode {
+        c + 0.5
+    } else {
+        c + a * 0.5 + b * 0.5
+    };
+    let Some(origin_x) = fixed(origin_x_value) else {
         return false;
     };
     let Some(step_x_y) = fixed(d) else {
@@ -9414,9 +9437,32 @@ fn gpu_nearest_affine_is_exact(
     let Some(step_y_y) = fixed(e) else {
         return false;
     };
-    let Some(origin_y) = fixed(f + d * 0.5 + e * 0.5) else {
+    let origin_y_value = if luma16_mode {
+        f + 0.5
+    } else {
+        f + d * 0.5 + e * 0.5
+    };
+    let Some(origin_y) = fixed(origin_y_value) else {
         return false;
     };
+    if luma16_mode {
+        // The I;16 CPU path evaluates its f64 affine expression directly and
+        // rounds the resulting source coordinate with `floor(value + 0.5)`.
+        // Admit only coefficients already exact in the shader's 16.16 plan;
+        // otherwise quantizing a fractional coefficient can change the
+        // selected source word at a boundary even when no i32 overflow is
+        // possible.
+        let exactly_fixed = |value: f64| {
+            let scaled = value * 65_536.0;
+            scaled.is_finite()
+                && scaled.fract() == 0.0
+                && scaled >= i32::MIN as f64
+                && scaled <= i32::MAX as f64
+        };
+        if ![a, b, c, d, e, f].into_iter().all(exactly_fixed) {
+            return false;
+        }
+    }
     if [step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y]
         .into_iter()
         .any(|value| i32::try_from(value).is_err())
@@ -9571,7 +9617,30 @@ fn gpu_transform_all_fill_is_exact(
         let Some(step_y_x) = fixed(*b) else {
             return false;
         };
-        let Some(origin_x) = fixed(*c + *a * 0.5 + *b * 0.5) else {
+        let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
+        if luma16_mode {
+            // Keep the fill-only proof on the same exact coordinate plan as
+            // the in-bounds mode-5 admission.  A fractional coefficient that
+            // rounds differently in 16.16 could move one edge sample across
+            // the nearest fill boundary even though the bulk of the canvas
+            // is outside the source.
+            let exactly_fixed = |value: f64| {
+                let scaled = value * 65_536.0;
+                scaled.is_finite()
+                    && scaled.fract() == 0.0
+                    && scaled >= i32::MIN as f64
+                    && scaled <= i32::MAX as f64
+            };
+            if ![*a, *b, *c, *d, *e, *f].into_iter().all(exactly_fixed) {
+                return false;
+            }
+        }
+        let origin_x_value = if luma16_mode {
+            *c + 0.5
+        } else {
+            *c + *a * 0.5 + *b * 0.5
+        };
+        let Some(origin_x) = fixed(origin_x_value) else {
             return false;
         };
         let Some(step_x_y) = fixed(*d) else {
@@ -9580,7 +9649,12 @@ fn gpu_transform_all_fill_is_exact(
         let Some(step_y_y) = fixed(*e) else {
             return false;
         };
-        let Some(origin_y) = fixed(*f + *d * 0.5 + *e * 0.5) else {
+        let origin_y_value = if luma16_mode {
+            *f + 0.5
+        } else {
+            *f + *d * 0.5 + *e * 0.5
+        };
+        let Some(origin_y) = fixed(origin_y_value) else {
             return false;
         };
         if [step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y]
@@ -9621,6 +9695,13 @@ fn gpu_transform_all_fill_is_exact(
         };
         let source_w = i128::from(source_dimensions.0) * 65_536;
         let source_h = i128::from(source_dimensions.1) * 65_536;
+        if luma16_mode {
+            // The native I;16 nearest sampler maps a fixed coordinate to
+            // floor(source + 0.5), and the shader rejects negative fixed
+            // coordinates before shifting.  These are the exact fill-only
+            // boundaries for the mode-5 word path.
+            return max_x < 0 || min_x >= source_w || max_y < 0 || min_y >= source_h;
+        }
         return max_x <= -65_536
             || min_x >= source_w + 65_536
             || max_y <= -65_536
@@ -10911,12 +10992,14 @@ mod tests {
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_identity_is_exact, gpu_int_filter_resize_chain_is_supported,
-        gpu_luma16_resize_f64_is_exact, gpu_palette_first_rgb_merge_is_supported,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
-        gpu_transform_all_fill_is_exact, luma16_resample_big_endian, readback_poll_backoff,
+        gpu_luma16_resize_f64_is_exact, gpu_nearest_affine_is_exact,
+        gpu_palette_first_rgb_merge_is_supported, gpu_resize_coefficients,
+        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact,
+        luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
+    use crate::ops::transform::{TransformData, TransformFill};
     use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod};
     use crate::raster::{
         DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, RgbImage, RgbaImage,
@@ -14314,6 +14397,85 @@ mod tests {
     }
 
     #[test]
+    fn typed_luma16_nearest_affine_transform_uses_native_word_path() {
+        // I;16 affine transforms use Pillow's native nearest sampler even
+        // when a non-nearest filter token is supplied.  The mode-5 shader
+        // must therefore relocate the complete low 16-bit word, while its
+        // affine plan uses the typed `floor(source + 0.5)` coordinate
+        // contract rather than the byte path's destination-center offset.
+        let values = [
+            0x0102u16, 0x1122, 0x2233, 0x3344, 0x4455, 0x5566, 0x6677, 0x7788, 0x8899, 0x99aa,
+            0xaabb, 0xbbcc,
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
+            let bytes = values
+                .iter()
+                .flat_map(|value| {
+                    if mode == "I;16B" {
+                        value.to_be_bytes()
+                    } else {
+                        value.to_le_bytes()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let source = Image::frombytes(mode, (4, 3), &bytes)
+                .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+            let data = TransformData::Affine(vec![0.5, 0.0, 0.0, 0.0, 0.5, 0.0]);
+            let transformed = source
+                .transform_public(
+                    (3, 2),
+                    0,
+                    Some(data),
+                    3,
+                    0,
+                    Some(TransformFill::Scalar(258)),
+                )
+                .unwrap_or_else(|error| panic!("{mode} transform: {error}"));
+            let expected = transformed
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .unwrap_or_else(|error| panic!("{mode} CPU transform: {error}"));
+            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} transform failed: {error}"),
+            };
+            assert_eq!(actual, expected, "native GPU {mode} affine parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .unwrap_or_else(|| panic!("native GPU {mode} transform missing telemetry"));
+            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+            assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+            assert_eq!(telemetry.7, None, "{mode} fallback reason");
+
+            let op = PipelineOp::Transform {
+                w: 3,
+                h: 2,
+                method: TransformMethod::Affine,
+                data: Arc::from(vec![0.5, 0.0, 0.0, 0.0, 0.5, 0.0]),
+                filter: ResampleFilter::Bicubic,
+                fill: Some((2, 1, 0, 0)),
+                palette_fill: None,
+            };
+            let image = source.materialize().expect("materialize typed source");
+            assert!(
+                gpu_nearest_affine_is_exact(&op, &image, Some(mode), (4, 3)),
+                "{mode} nearest-affine proof"
+            );
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
     fn f_resize_identity_lowering_copies_nonfinite_words() {
         let image = DynamicImage::ImageRgba8(
             RgbaImage::from_raw(
@@ -14445,7 +14607,10 @@ mod tests {
                 .collect::<Vec<_>>();
             let source = Image::frombytes(mode, (4, 4), &bytes).expect("I;16 source");
             assert_eq!(source.mode().expect("I;16 mode"), mode);
-            assert_eq!(luma16_resample_big_endian(Some(mode)), mode == "I;16B");
+            assert_eq!(
+                luma16_resample_big_endian(Some(mode)),
+                matches!(mode, "I;16B" | "I;16N")
+            );
             for &((width, height), filter) in &cases {
                 let filter_name = ResampleInput::Name(format!("{filter:?}").to_uppercase());
                 let expected = source

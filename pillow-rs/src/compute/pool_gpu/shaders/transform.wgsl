@@ -167,6 +167,13 @@ fn sample_nearest_fixed(sx_fixed: i32, sy_fixed: i32) -> u32 {
         return get_fill_pixel();
     }
     let pixel = input[u32(iy) * params.width + u32(ix)];
+    if params.mode == 5u {
+        // Native I;16 affine-nearest samples are one unsigned 16-bit word
+        // in the low bytes of the packed storage word.  Keep the high bytes
+        // clear so typed readback cannot expose transport padding as part of
+        // the public sample.
+        return pixel & 0xffffu;
+    }
     if params.mode == 7u || params.mode == 8u {
         return pixel;
     }
