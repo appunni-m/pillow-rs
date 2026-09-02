@@ -5020,7 +5020,7 @@ impl GpuInner {
                 // transforms, so this is an ABI-preserving mode-specific
                 // encoding.
                 if matches!(method, TransformMethod::Affine)
-                    && matches!(filter, ResampleFilter::Nearest)
+                    && gpu_transform_uses_nearest(logical_mode, *filter)
                 {
                     let fixed = |value: f64| (value.mul_add(65_536.0, 0.5).floor() as i64) as u32;
                     let a = data.first().copied().unwrap_or(0.0);
@@ -9414,6 +9414,265 @@ fn gpu_nearest_affine_is_exact(
     fits_i32(origin_x, step_x_x, step_y_x) && fits_i32(origin_y, step_x_y, step_y_y)
 }
 
+/// Return whether every destination pixel of an affine transform is outside
+/// the source rectangle, so the device can emit the already-resolved fill word
+/// without sampling or interpolating any source value.
+///
+/// This is a deliberately narrow identity proof for typed/raw packed modes.
+/// For ordinary floating-point affine transforms, prove both the host f64
+/// coordinates and the shader's f32 coordinates are outside by at least one
+/// source pixel. Typed nearest modes use the signed-16.16 coordinate walk, so
+/// their integer bounds are checked against the exact values uploaded to the
+/// shader instead. No source bytes are inspected because the result is wholly
+/// determined by Pillow's validated fill contract.
+fn gpu_transform_all_fill_is_exact(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
+    let PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data,
+        filter,
+        palette_fill,
+        ..
+    } = op
+    else {
+        return false;
+    };
+    if !matches!(method, TransformMethod::Affine)
+        || *w == 0
+        || *h == 0
+        || source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || data.len() < 6
+        || palette_fill.is_some()
+        || !matches!(
+            mode,
+            Some(
+                "L" | "LA"
+                    | "RGB"
+                    | "RGBA"
+                    | "RGBX"
+                    | "RGBa"
+                    | "CMYK"
+                    | "HSV"
+                    | "YCbCr"
+                    | "I"
+                    | "F"
+                    | "I;16"
+                    | "I;16L"
+                    | "I;16B"
+                    | "I;16N"
+            )
+        )
+    {
+        return false;
+    }
+
+    let source_layout_is_valid = match mode {
+        Some("I" | "F") => matches!(image, DynamicImage::ImageRgba8(_)),
+        Some("I;16" | "I;16L" | "I;16B" | "I;16N") => {
+            matches!(image, DynamicImage::ImageLuma16(_))
+        }
+        _ => gpu_image_layout_is_supported(image),
+    };
+    if !source_layout_is_valid {
+        return false;
+    }
+
+    let coefficients = &data[..6];
+    if coefficients
+        .iter()
+        .any(|value| !value.is_finite() || (*value as f32).is_infinite())
+    {
+        return false;
+    }
+    // Keep destination and source extents exactly representable in the
+    // shader's f32 coordinate and dimension expressions. The actual buffer
+    // limits are much smaller, but making the mathematical bound explicit
+    // prevents a rounded endpoint from weakening the interval proof.
+    const MAX_F32_EXACT_INTEGER: u32 = 1 << 24;
+    if *w > MAX_F32_EXACT_INTEGER
+        || *h > MAX_F32_EXACT_INTEGER
+        || source_dimensions.0 > MAX_F32_EXACT_INTEGER
+        || source_dimensions.1 > MAX_F32_EXACT_INTEGER
+    {
+        return false;
+    }
+
+    let outside = |minimum: f64, maximum: f64, extent: u32| {
+        maximum <= -1.0 || minimum >= f64::from(extent) + 1.0
+    };
+    let bounds_f64 = |a: f64, b: f64, c: f64, center: f64| -> Option<(f64, f64)> {
+        let mut minimum = f64::INFINITY;
+        let mut maximum = f64::NEG_INFINITY;
+        for dx in [0.0, f64::from(w.saturating_sub(1))] {
+            for dy in [0.0, f64::from(h.saturating_sub(1))] {
+                let value = a * (dx + center) + b * (dy + center) + c;
+                if !value.is_finite() {
+                    return None;
+                }
+                minimum = minimum.min(value);
+                maximum = maximum.max(value);
+            }
+        }
+        Some((minimum, maximum))
+    };
+
+    let [a, b, c, d, e, f] = coefficients else {
+        return false;
+    };
+    let center = if matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N")) {
+        0.0
+    } else {
+        0.5
+    };
+
+    if gpu_transform_uses_nearest(mode, *filter) {
+        // Keep this encoding byte-for-byte identical to `prepare_batch` and
+        // `sample_nearest_fixed`; the integer bounds cover all four corners
+        // and therefore every affine destination coordinate.
+        let fixed = |value: f64| {
+            let rounded = value.mul_add(65_536.0, 0.5);
+            (rounded.is_finite() && rounded >= i64::MIN as f64 && rounded <= i64::MAX as f64)
+                .then_some(rounded as i64)
+        };
+        let Some(step_x_x) = fixed(*a) else {
+            return false;
+        };
+        let Some(step_y_x) = fixed(*b) else {
+            return false;
+        };
+        let Some(origin_x) = fixed(*c + *a * 0.5 + *b * 0.5) else {
+            return false;
+        };
+        let Some(step_x_y) = fixed(*d) else {
+            return false;
+        };
+        let Some(step_y_y) = fixed(*e) else {
+            return false;
+        };
+        let Some(origin_y) = fixed(*f + *d * 0.5 + *e * 0.5) else {
+            return false;
+        };
+        if [step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y]
+            .into_iter()
+            .any(|value| i32::try_from(value).is_err())
+        {
+            return false;
+        }
+        let max_x = i128::from(w.saturating_sub(1));
+        let max_y = i128::from(h.saturating_sub(1));
+        let fits_i32 = |origin: i64, step_x: i64, step_y: i64| {
+            i128::from(origin).abs()
+                + i128::from(step_x).abs() * max_x
+                + i128::from(step_y).abs() * max_y
+                <= i128::from(i32::MAX)
+        };
+        if !fits_i32(origin_x, step_x_x, step_y_x) || !fits_i32(origin_y, step_x_y, step_y_y) {
+            return false;
+        }
+        let bounds_i128 = |origin: i64, step_x: i64, step_y: i64| {
+            let x = i128::from(step_x) * i128::from(w.saturating_sub(1));
+            let y = i128::from(step_y) * i128::from(h.saturating_sub(1));
+            let values = [
+                i128::from(origin),
+                i128::from(origin) + x,
+                i128::from(origin) + y,
+                i128::from(origin) + x + y,
+            ];
+            let minimum = *values.iter().min()?;
+            let maximum = *values.iter().max()?;
+            Some((minimum, maximum))
+        };
+        let Some((min_x, max_x)) = bounds_i128(origin_x, step_x_x, step_y_x) else {
+            return false;
+        };
+        let Some((min_y, max_y)) = bounds_i128(origin_y, step_x_y, step_y_y) else {
+            return false;
+        };
+        let source_w = i128::from(source_dimensions.0) * 65_536;
+        let source_h = i128::from(source_dimensions.1) * 65_536;
+        return max_x <= -65_536
+            || min_x >= source_w + 65_536
+            || max_y <= -65_536
+            || min_y >= source_h + 65_536;
+    }
+
+    let Some((min_x, max_x)) = bounds_f64(*a, *b, *c, center) else {
+        return false;
+    };
+    let Some((min_y, max_y)) = bounds_f64(*d, *e, *f, center) else {
+        return false;
+    };
+    let f32_coefficients = [
+        *a as f32, *b as f32, *c as f32, *d as f32, *e as f32, *f as f32,
+    ];
+    // Evaluate the shader's actual f32 operation order at each affine
+    // corner. Relying on the exact f64 polynomial here would miss a rounded
+    // multiply/add that moves a coordinate back across the source edge.
+    // Every individual term and the final sum must remain finite; otherwise
+    // an intermediate infinity/NaN could defeat the shader's bounds check.
+    let bounds_f32_shader = |a: f32, b: f32, c: f32, center: f32| -> Option<(f64, f64)> {
+        let mut minimum = f32::INFINITY;
+        let mut maximum = f32::NEG_INFINITY;
+        for dx in [0.0f32, (w.saturating_sub(1)) as f32] {
+            for dy in [0.0f32, (h.saturating_sub(1)) as f32] {
+                let ax = dx + center;
+                let ay = dy + center;
+                let x_term = a * ax;
+                let y_term = b * ay;
+                // Check the unfused WGSL expression plus the possible
+                // multiply-add contractions permitted by device compilers.
+                // Requiring every form to stay on the same out-of-bounds
+                // side keeps this proof independent of contraction choice.
+                let values = [
+                    (x_term + y_term) + c,
+                    a.mul_add(ax, y_term) + c,
+                    x_term + b.mul_add(ay, c),
+                    a.mul_add(ax, b.mul_add(ay, c)),
+                ];
+                if !ax.is_finite()
+                    || !ay.is_finite()
+                    || !x_term.is_finite()
+                    || !y_term.is_finite()
+                    || values.iter().any(|value| !value.is_finite())
+                {
+                    return None;
+                }
+                for value in values {
+                    minimum = minimum.min(value);
+                    maximum = maximum.max(value);
+                }
+            }
+        }
+        Some((f64::from(minimum), f64::from(maximum)))
+    };
+    let Some((min_x_f32, max_x_f32)) = bounds_f32_shader(
+        f32_coefficients[0],
+        f32_coefficients[1],
+        f32_coefficients[2],
+        center as f32,
+    ) else {
+        return false;
+    };
+    let Some((min_y_f32, max_y_f32)) = bounds_f32_shader(
+        f32_coefficients[3],
+        f32_coefficients[4],
+        f32_coefficients[5],
+        center as f32,
+    ) else {
+        return false;
+    };
+    (outside(min_x, max_x, source_dimensions.0) || outside(min_y, max_y, source_dimensions.1))
+        && (outside(min_x_f32, max_x_f32, source_dimensions.0)
+            || outside(min_y_f32, max_y_f32, source_dimensions.1))
+}
+
 /// Lower a CMYK nearest rotate through the same fixed-point affine proof used
 /// by typed/indexed transforms. The public rotate node is expanded to an
 /// affine `Transform` only after Pillow's angle/center/translation geometry
@@ -9488,7 +9747,8 @@ fn gpu_geometry_requires_exact_host_control(
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
-            && !gpu_nearest_affine_is_exact(op, image, mode, dimensions);
+            && !gpu_nearest_affine_is_exact(op, image, mode, dimensions)
+            && !gpu_transform_all_fill_is_exact(op, image, mode, dimensions);
         if thumbnail_needs_control
             || typed_transform_needs_control
             || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
@@ -10628,13 +10888,15 @@ mod tests {
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_identity_is_exact, gpu_int_filter_resize_chain_is_supported,
         gpu_luma16_resize_f64_is_exact, gpu_palette_first_rgb_merge_is_supported,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, luma16_resample_big_endian,
-        readback_poll_backoff,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
+        gpu_transform_all_fill_is_exact, luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
-    use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter};
-    use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+    use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod};
+    use crate::raster::{
+        DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, RgbImage, RgbaImage,
+    };
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
@@ -10713,6 +10975,67 @@ mod tests {
             readback_poll_backoff(true, 1, now + Duration::from_nanos(1), now),
             None
         );
+    }
+
+    #[test]
+    fn transform_all_fill_proof_tracks_float_and_typed_bounds() {
+        let transform = |data: [f64; 6], filter| PipelineOp::Transform {
+            w: 6,
+            h: 6,
+            method: TransformMethod::Affine,
+            data: Arc::from(data.to_vec()),
+            filter,
+            fill: Some((7, 8, 9, 10)),
+            palette_fill: None,
+        };
+        let outside = [1.0, 0.0, 100.0, 0.0, 1.0, 100.0];
+        let in_bounds = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+        let rgba =
+            DynamicImage::ImageRgba8(RgbaImage::from_raw(16, 16, vec![0; 16 * 16 * 4]).unwrap());
+        let rgb =
+            DynamicImage::ImageRgb8(RgbImage::from_raw(16, 16, vec![0; 16 * 16 * 3]).unwrap());
+        let luma16 = DynamicImage::ImageLuma16(
+            ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(16, 16, vec![0; 16 * 16]).unwrap(),
+        );
+
+        assert!(gpu_transform_all_fill_is_exact(
+            &transform(outside, ResampleFilter::Bicubic),
+            &rgba,
+            Some("F"),
+            (16, 16),
+        ));
+        assert!(gpu_transform_all_fill_is_exact(
+            &transform(outside, ResampleFilter::Bicubic),
+            &rgb,
+            Some("HSV"),
+            (16, 16),
+        ));
+        assert!(gpu_transform_all_fill_is_exact(
+            &transform(outside, ResampleFilter::Bicubic),
+            &luma16,
+            Some("I;16"),
+            (16, 16),
+        ));
+        assert!(!gpu_transform_all_fill_is_exact(
+            &transform(in_bounds, ResampleFilter::Bicubic),
+            &rgba,
+            Some("F"),
+            (16, 16),
+        ));
+        assert!(!gpu_transform_all_fill_is_exact(
+            &PipelineOp::Transform {
+                w: 6,
+                h: 6,
+                method: TransformMethod::Perspective,
+                data: Arc::from(vec![1.0; 8]),
+                filter: ResampleFilter::Bicubic,
+                fill: Some((7, 8, 9, 10)),
+                palette_fill: None,
+            },
+            &rgba,
+            Some("F"),
+            (16, 16),
+        ));
     }
 
     #[test]
