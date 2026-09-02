@@ -1397,8 +1397,28 @@ pub fn op_transform(
             // this operation. The old public raw-data wrapper was removed, so
             // malformed mesh descriptors are outside the supported input
             // boundary.
-            let result = transform_mesh(img, w, h, data, fill);
-            Ok(preserve_mode(img, result?))
+            // Pillow's non-nearest Image.transform path premultiplies LA/RGBA
+            // before invoking the mesh filter and unpremultiplies afterward.
+            // Mesh records otherwise operate on the same native byte layout
+            // as the scalar transform implementation.
+            let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
+                && !matches!(explicit_mode, Some("PA" | "RGBa" | "RGBX"))
+                && matches!(
+                    img.color(),
+                    crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+                );
+            let work = if needs_alpha_roundtrip {
+                premultiply_alpha(img)
+            } else {
+                img.clone()
+            };
+            let result = transform_mesh(&work, w, h, data, fill, *filter)?;
+            let result = if needs_alpha_roundtrip {
+                unpremultiply_alpha(&result)
+            } else {
+                result
+            };
+            Ok(preserve_mode(img, result))
         }
         &TransformMethod::Perspective => {
             // `Image::transform_public` and the maintained perspective
@@ -1780,111 +1800,367 @@ pub fn op_color3dlut(
 
 // ── MESH transform — piecewise bilinear quad mapping ──
 
-pub fn transform_mesh(
+fn transform_mesh(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
     mesh_data: &[f64],
     fill: Option<(u8, u8, u8, u8)>,
+    filter: ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    transform_mesh_with_filter(img, dst_w, dst_h, mesh_data, fill, filter)
+}
+
+/// Apply Pillow's piecewise quadrilateral mesh transform using the exact
+/// destination-box and source-filter contracts of `Geometry.c`.
+///
+/// `Image.transform(..., Transform.MESH, ...)` lowers each `(box, quad)`
+/// record to a local QUAD transform. The C implementation clips the output
+/// box, evaluates each local pixel at its center, uses `COORD` (truncate
+/// toward zero, with negative values outside) for nearest sampling, and uses
+/// horizontal-first filtered interpolation after subtracting `0.5` from the
+/// source coordinate. Keep those details here instead of treating a mesh as
+/// a global normalized bilinear map: clipping changes the local origin while
+/// the coefficients still use the original box dimensions.
+fn transform_mesh_with_filter(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    mesh_data: &[f64],
+    fill: Option<(u8, u8, u8, u8)>,
+    filter: ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (sw, sh) = img.dimensions();
+    let sw_f = sw as f64;
+    let sh_f = sh as f64;
     let fill_color = fill.unwrap_or((0, 0, 0, 255));
 
-    let mut out = vec![0u8; (dst_w * dst_h) as usize * 4];
-    // Initialize output with fill color
-    for y in 0..dst_h as usize {
-        for x in 0..dst_w as usize {
-            let idx = (y * dst_w as usize + x) * 4;
-            out[idx] = fill_color.0;
-            out[idx + 1] = fill_color.1;
-            out[idx + 2] = fill_color.2;
-            out[idx + 3] = fill_color.3;
-        }
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let fill_bytes = [fill_color.0, fill_color.1, fill_color.2, fill_color.3];
+    let mut out = vec![0u8; output_len];
+    for destination in out.chunks_exact_mut(channels) {
+        destination.copy_from_slice(&fill_bytes[..channels]);
     }
 
     // Process each mesh element
-    let num_elements = mesh_data.len() / 12;
-    for elem in 0..num_elements {
-        let base = elem * 12;
-        let x0_d = mesh_data[base] as i32;
-        let y0_d = mesh_data[base + 1] as i32;
-        let x1_d = mesh_data[base + 2] as i32;
-        let y1_d = mesh_data[base + 3] as i32;
-        let x0_s = mesh_data[base + 4];
-        let y0_s = mesh_data[base + 5];
-        let x1_s = mesh_data[base + 6];
-        let y1_s = mesh_data[base + 7];
-        let x2_s = mesh_data[base + 8];
-        let y2_s = mesh_data[base + 9];
-        let x3_s = mesh_data[base + 10];
-        let y3_s = mesh_data[base + 11];
-
-        // Clamp the iteration rectangle, but keep the original dimensions for
-        // the map. Pillow lowers each MESH record to QUAD with this box's
-        // width/height before Geometry.c evaluates local pixel centers.
-        let raw_bw = x1_d - x0_d;
-        let raw_bh = y1_d - y0_d;
-        if raw_bw <= 0 || raw_bh <= 0 {
+    for mesh in mesh_data.chunks_exact(12) {
+        let x0_d = mesh[0] as i64;
+        let y0_d = mesh[1] as i64;
+        let x1_d = mesh[2] as i64;
+        let y1_d = mesh[3] as i64;
+        let width = x1_d.saturating_sub(x0_d);
+        let height = y1_d.saturating_sub(y0_d);
+        // Python computes these divisors before entering the C transform.
+        // Valid mesh boxes are positive; an empty/inverted box contributes no
+        // pixels here and, importantly, cannot create an unbounded loop.
+        if width <= 0 || height <= 0 {
             continue;
         }
-        let bx0 = x0_d.max(0).min(dst_w as i32);
-        let by0 = y0_d.max(0).min(dst_h as i32);
-        let bx1 = x1_d.max(0).min(dst_w as i32);
-        let by1 = y1_d.max(0).min(dst_h as i32);
-        let bw = f64::from(raw_bw);
-        let bh = f64::from(raw_bh);
 
-        for dy in by0..by1 {
-            let v = ((dy - y0_d) as f64 + 0.5) / bh;
-            for dx in bx0..bx1 {
-                let u = ((dx - x0_d) as f64 + 0.5) / bw;
+        let x0_s = mesh[4];
+        let y0_s = mesh[5];
+        let x1_s = mesh[6];
+        let y1_s = mesh[7];
+        let x2_s = mesh[8];
+        let y2_s = mesh[9];
+        let x3_s = mesh[10];
+        let y3_s = mesh[11];
+        let width_f = width as f64;
+        let height_f = height as f64;
+        let inverse_width = 1.0 / width_f;
+        let inverse_height = 1.0 / height_f;
+        let coefficients = [
+            x0_s,
+            (x3_s - x0_s) * inverse_width,
+            (x1_s - x0_s) * inverse_height,
+            (x2_s - x1_s - x3_s + x0_s) * inverse_width * inverse_height,
+            y0_s,
+            (y3_s - y0_s) * inverse_width,
+            (y1_s - y0_s) * inverse_height,
+            (y2_s - y1_s - y3_s + y0_s) * inverse_width * inverse_height,
+        ];
 
-                // PIL bilinear mapping: quad[0]=top-left, quad[1]=bottom-left,
-                // quad[2]=bottom-right, quad[3]=top-right (counter-clockwise)
-                let sx = (1.0 - u) * (1.0 - v) * x0_s
-                    + u * (1.0 - v) * x3_s
-                    + u * v * x2_s
-                    + (1.0 - u) * v * x1_s;
-                let sy = (1.0 - u) * (1.0 - v) * y0_s
-                    + u * (1.0 - v) * y3_s
-                    + u * v * y2_s
-                    + (1.0 - u) * v * y1_s;
+        // ImagingGenericTransform clips the box, then passes coordinates
+        // relative to that clipped lower-left corner to the map function.
+        let bx0 = x0_d.max(0).min(i64::from(dst_w));
+        let by0 = y0_d.max(0).min(i64::from(dst_h));
+        let bx1 = x1_d.max(0).min(i64::from(dst_w));
+        let by1 = y1_d.max(0).min(i64::from(dst_h));
+        if bx0 >= bx1 || by0 >= by1 {
+            continue;
+        }
 
-                if sx.is_finite() && sy.is_finite() {
-                    // Geometry.c's COORD truncates nonnegative coordinates
-                    // toward zero and rejects all negative coordinates.
-                    let ix = if sx < 0.0 { -1 } else { sx as i64 };
-                    let iy = if sy < 0.0 { -1 } else { sy as i64 };
-                    if ix < 0 || ix >= i64::from(sw) || iy < 0 || iy >= i64::from(sh) {
-                        continue;
+        for destination_y in by0..by1 {
+            let local_y = (destination_y - by0) as f64 + 0.5;
+            for destination_x in bx0..bx1 {
+                let local_x = (destination_x - bx0) as f64 + 0.5;
+                // Keep the map evaluation in the same fused multiply-add
+                // order as the native quad_transform build. The coefficient
+                // products are otherwise one-ULP sensitive at clipped box
+                // edges, where a source sample can cross a filter tap.
+                let sx = coefficients[3].mul_add(
+                    local_x * local_y,
+                    coefficients[2]
+                        .mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0])),
+                );
+                let sy = coefficients[7].mul_add(
+                    local_x * local_y,
+                    coefficients[6]
+                        .mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4])),
+                );
+                let out_idx =
+                    ((destination_y as usize * dst_w as usize) + destination_x as usize) * channels;
+
+                if matches!(filter, ResampleFilter::Nearest) {
+                    // Geometry.c `COORD`: negative values are outside and
+                    // nonnegative values are truncated toward zero.
+                    let ix = if sx.is_finite() && sx >= 0.0 {
+                        sx as i64
+                    } else {
+                        -1
+                    };
+                    let iy = if sy.is_finite() && sy >= 0.0 {
+                        sy as i64
+                    } else {
+                        -1
+                    };
+                    if ix >= 0 && ix < i64::from(sw) && iy >= 0 && iy < i64::from(sh) {
+                        let source_idx = ((iy as usize * sw as usize) + ix as usize) * channels;
+                        out[out_idx..out_idx + channels]
+                            .copy_from_slice(&raw[source_idx..source_idx + channels]);
                     }
-                    let src_idx = ((iy as usize * sw as usize + ix as usize) * channels) as usize;
-                    let out_idx = ((dy as u32 * dst_w + dx as u32) as usize) * 4;
-                    for c in 0..channels {
-                        out[out_idx + c] = raw[src_idx + c];
+                    continue;
+                }
+
+                if !sx.is_finite()
+                    || !sy.is_finite()
+                    || sx < 0.0
+                    || sx >= sw_f
+                    || sy < 0.0
+                    || sy >= sh_f
+                {
+                    continue;
+                }
+
+                let (x, y, dx, dy) = match filter {
+                    ResampleFilter::Bilinear => {
+                        let x = (sx - 0.5).floor() as i64;
+                        let y = (sy - 0.5).floor() as i64;
+                        (x, y, sx - 0.5 - x as f64, sy - 0.5 - y as f64)
                     }
-                    if channels < 4 {
-                        out[out_idx + 3] = 255;
+                    ResampleFilter::Bicubic => {
+                        let x = (sx - 0.5).floor() as i64 - 1;
+                        let y = (sy - 0.5).floor() as i64 - 1;
+                        (x, y, sx - 0.5 - (x + 1) as f64, sy - 0.5 - (y + 1) as f64)
                     }
+                    _ => continue,
+                };
+
+                for channel in 0..channels {
+                    let value = match filter {
+                        ResampleFilter::Bilinear => {
+                            let x0 = x.clamp(0, i64::from(sw - 1)) as usize;
+                            let x1 = (x + 1).clamp(0, i64::from(sw - 1)) as usize;
+                            let y0 = y.clamp(0, i64::from(sh - 1)) as usize;
+                            let y1 = (y + 1).clamp(0, i64::from(sh - 1)) as usize;
+                            let p00 = raw[(y0 * sw as usize + x0) * channels + channel] as f64;
+                            let p10 = raw[(y0 * sw as usize + x1) * channels + channel] as f64;
+                            let p01 = raw[(y1 * sw as usize + x0) * channels + channel] as f64;
+                            let p11 = raw[(y1 * sw as usize + x1) * channels + channel] as f64;
+                            let top = (p10 - p00).mul_add(dx, p00);
+                            let bottom = (p11 - p01).mul_add(dx, p01);
+                            (bottom - top).mul_add(dy, top)
+                        }
+                        ResampleFilter::Bicubic => {
+                            let mut rows = [0.0; 4];
+                            for (row, output) in rows.iter_mut().enumerate() {
+                                let yy = y + row as i64;
+                                let cy = yy.clamp(0, i64::from(sh - 1)) as usize;
+                                let samples = [
+                                    raw[(cy * sw as usize
+                                        + (x).clamp(0, i64::from(sw - 1)) as usize)
+                                        * channels
+                                        + channel] as f64,
+                                    raw[(cy * sw as usize
+                                        + (x + 1).clamp(0, i64::from(sw - 1)) as usize)
+                                        * channels
+                                        + channel] as f64,
+                                    raw[(cy * sw as usize
+                                        + (x + 2).clamp(0, i64::from(sw - 1)) as usize)
+                                        * channels
+                                        + channel] as f64,
+                                    raw[(cy * sw as usize
+                                        + (x + 3).clamp(0, i64::from(sw - 1)) as usize)
+                                        * channels
+                                        + channel] as f64,
+                                ];
+                                *output = cubic_sample(samples, dx);
+                            }
+                            cubic_sample(rows, dy)
+                        }
+                        _ => unreachable!(),
+                    };
+                    out[out_idx + channel] = match filter {
+                        ResampleFilter::Bicubic => value.clamp(0.0, 255.0) as u8,
+                        _ => value as u8,
+                    };
                 }
             }
         }
     }
 
-    RgbaImage::from_raw(dst_w, dst_h, out)
-        .map(DynamicImage::ImageRgba8)
-        .ok_or_else(|| {
-            PilError::InternalError("transform_mesh RGBA buffer shape mismatch".to_string())
-        })
+    crate::image_utils::raw_bytes_to_image(dst_w, dst_h, out, channels)
+}
+
+#[inline]
+fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
+    let p1 = samples[1];
+    let p2 = -samples[0] + samples[2];
+    let p3 = 2.0 * (samples[0] - samples[1]) + samples[2] - samples[3];
+    let p4 = -samples[0] + samples[1] - samples[2] + samples[3];
+    p1 + distance * (p2 + distance * (p3 + distance * p4))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::transform_projective_generic;
-    use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, GrayImage};
+    use super::{op_transform, transform_mesh, transform_projective_generic};
+    use crate::pipeline::{ResampleFilter, TransformMethod};
+    use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
+
+    fn varied_luma_source() -> DynamicImage {
+        let raw: Vec<u8> = (0..4)
+            .flat_map(|y| (0..5).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        DynamicImage::ImageLuma8(GrayImage::from_raw(5, 4, raw).expect("luma source"))
+    }
+
+    fn varied_rgb_source() -> DynamicImage {
+        let raw: Vec<u8> = (0..4)
+            .flat_map(|y| {
+                (0..5).flat_map(move |x| {
+                    let value = (x * 37 + y * 11 + 3) as u8;
+                    [value, value.wrapping_add(37), value.wrapping_add(74)]
+                })
+            })
+            .collect();
+        DynamicImage::ImageRgb8(RgbImage::from_raw(5, 4, raw).expect("rgb source"))
+    }
+
+    fn varied_rgba_source() -> DynamicImage {
+        let raw: Vec<u8> = (0..8)
+            .flat_map(|y| {
+                (0..9).flat_map(move |x| {
+                    let index = (y * 9 + x) * 4;
+                    [
+                        (index * 37 + (index / 4) * 11 + 3) as u8,
+                        ((index + 1) * 37 + ((index + 1) / 4) * 11 + 3) as u8,
+                        ((index + 2) * 37 + ((index + 2) / 4) * 11 + 3) as u8,
+                        ((index + 3) * 37 + ((index + 3) / 4) * 11 + 3) as u8,
+                    ]
+                })
+            })
+            .collect();
+        DynamicImage::ImageRgba8(RgbaImage::from_raw(9, 8, raw).expect("rgba source"))
+    }
+
+    const VARIED_MESH: [f64; 12] = [
+        -1.0, -1.0, 6.0, 5.0, -0.4, 0.2, 4.6, 3.4, 4.1, -0.3, 0.3, 3.7,
+    ];
+
+    #[test]
+    fn mesh_nearest_matches_pillow_centers_and_truncation() {
+        let result = transform_mesh(
+            &varied_luma_source(),
+            6,
+            5,
+            &VARIED_MESH,
+            Some((7, 0, 0, 0)),
+            ResampleFilter::Nearest,
+        )
+        .expect("mesh transform");
+        let expected = [
+            3, 14, 14, 14, 25, 25, 14, 14, 14, 51, 62, 62, 51, 51, 51, 51, 51, 51, 99, 88, 88, 88,
+            88, 88, 136, 136, 125, 125, 125, 125,
+        ];
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn mesh_bilinear_matches_pillow_horizontal_first_filter() {
+        let result = transform_mesh(
+            &varied_rgb_source(),
+            6,
+            5,
+            &VARIED_MESH,
+            Some((7, 9, 11, 13)),
+            ResampleFilter::Bilinear,
+        )
+        .expect("mesh transform");
+        let expected = [
+            4, 41, 78, 9, 46, 83, 14, 51, 88, 18, 55, 92, 23, 60, 97, 27, 64, 101, 23, 60, 97, 28,
+            65, 102, 33, 70, 107, 38, 75, 112, 42, 79, 116, 47, 84, 121, 59, 96, 133, 60, 97, 134,
+            62, 99, 136, 64, 101, 138, 66, 103, 140, 68, 105, 142, 94, 131, 168, 93, 130, 167, 92,
+            129, 166, 90, 127, 164, 89, 126, 163, 88, 125, 162, 129, 166, 203, 125, 162, 199, 121,
+            158, 195, 117, 154, 191, 113, 150, 187, 109, 146, 183,
+        ];
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn mesh_rgba_bilinear_matches_pillow_alpha_roundtrip() {
+        let result = op_transform(
+            &varied_rgba_source(),
+            9,
+            8,
+            &TransformMethod::Mesh,
+            &[2.0, 0.0, 9.0, 7.0, 7.1, -0.5, 1.2, 3.7, 4.8, 8.3, -1.2, 6.9],
+            &ResampleFilter::Bilinear,
+            Some((7, 9, 11, 13)),
+            Some("RGBA"),
+        )
+        .expect("mesh transform");
+        assert!(matches!(result, DynamicImage::ImageRgba8(_)));
+        assert_eq!(result.dimensions(), (9, 8));
+        let bytes = result.as_bytes();
+        assert_eq!(&bytes[0..4], &[137, 176, 215, 13]);
+        assert_eq!(
+            &bytes[(3 * 9 + 4) * 4..(3 * 9 + 5) * 4],
+            &[64, 101, 141, 63]
+        );
+        assert_eq!(&bytes[(5 * 9 + 8) * 4..(5 * 9 + 9) * 4], &[8, 47, 85, 117]);
+        assert_eq!(
+            &bytes[(6 * 9 + 7) * 4..(6 * 9 + 8) * 4],
+            &[49, 87, 124, 119]
+        );
+    }
+
+    #[test]
+    fn mesh_bicubic_matches_pillow_clamped_filter() {
+        let result = transform_mesh(
+            &varied_luma_source(),
+            6,
+            5,
+            &VARIED_MESH,
+            Some((7, 0, 0, 0)),
+            ResampleFilter::Bicubic,
+        )
+        .expect("mesh transform");
+        let expected = [
+            0, 2, 8, 14, 19, 28, 18, 23, 29, 33, 37, 41, 63, 65, 67, 68, 70, 71, 94, 94, 93, 92,
+            91, 89, 125, 121, 118, 114, 109, 104,
+        ];
+        assert_eq!(result.as_bytes(), expected);
+    }
 
     #[test]
     fn perspective_nearest_matches_pillow_center_and_truncation() {

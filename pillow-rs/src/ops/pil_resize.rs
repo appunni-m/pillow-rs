@@ -975,14 +975,15 @@ pub(crate) fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
         DynamicImage::ImageRgba8(rgba) => {
             let mut out = rgba.clone();
             for p in out.pixels_mut() {
-                let a = p[3] as f64;
-                if a > 0.0 {
-                    let inv = 255.0 / a;
-                    // Pillow's RGBa -> RGBA conversion truncates the
-                    // unpremultiplied channel; it does not round to nearest.
-                    p[0] = (p[0] as f64 * inv) as u8;
-                    p[1] = (p[1] as f64 * inv) as u8;
-                    p[2] = (p[2] as f64 * inv) as u8;
+                let alpha = u32::from(p[3]);
+                if alpha > 0 {
+                    // Pillow's RGBa -> RGBA conversion uses integer
+                    // `(255 * value) / alpha` truncation. Keep the multiply
+                    // before division: using `255.0 / alpha` and a floating
+                    // multiply can land one ULP below an exact integer.
+                    p[0] = (u32::from(p[0]) * 255 / alpha).min(255) as u8;
+                    p[1] = (u32::from(p[1]) * 255 / alpha).min(255) as u8;
+                    p[2] = (u32::from(p[2]) * 255 / alpha).min(255) as u8;
                 }
             }
             DynamicImage::ImageRgba8(out)
@@ -990,10 +991,11 @@ pub(crate) fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
         DynamicImage::ImageLumaA8(la) => {
             let mut out = la.clone();
             for p in out.pixels_mut() {
-                let a = p[1] as f64;
-                if a > 0.0 {
-                    // Match Pillow's La -> LA conversion truncation.
-                    p[0] = (p[0] as f64 * 255.0 / a) as u8;
+                let alpha = u32::from(p[1]);
+                if alpha > 0 {
+                    // Match Pillow's La -> LA integer truncation and avoid
+                    // reciprocal floating-point rounding at exact results.
+                    p[0] = (u32::from(p[0]) * 255 / alpha).min(255) as u8;
                 }
             }
             DynamicImage::ImageLumaA8(out)
