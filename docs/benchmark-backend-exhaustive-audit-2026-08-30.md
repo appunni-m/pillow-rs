@@ -5965,3 +5965,22 @@ plus 131 CPU controls; Node/browser WASM 6,951 each. The all-backends result
 SHA-256 is `3db4e5c3543816325ab9ac3bea0e5d821c0cc23a25716386b78d3bafb6beb336`
 and the GPU execution sidecar is
 `6d639b0ed60e191212f1975352231f9911880bd932ff1f8a0c2d489a445efbbe`.
+
+## 32.94 F resize tap-count arithmetic boundary (2026-09-03)
+
+A fresh isolated probe from `8e150bed0` compared 20 direct heterogeneous F
+Resize rows against the pinned Pillow 12.2.0 oracle. CPU and GPU each matched
+18/20 rows; the two deterministic Bilinear failures were `F(16,1) -> (1,1)`
+(`c8be3d3d` Pillow versus `c9be3d3d` Rust) and `F(32,1) -> (1,1)`
+(`baafc8bb` Pillow versus `b9afc8bb` Rust). The GPU rows published actual GPU
+receipts (two dispatches, no fallback), so these are arithmetic mismatches,
+not receipt or routing gaps.
+
+Pillow's `Resample.c` accumulates `sample * coefficient`. Local arm64
+disassembly of Pillow 12.2.0 shows horizontal rows with at most 15 taps use
+scalar fused multiply-add, while rows over 15 taps use vector multiply and
+ordered additions; vertical rows retain the scalar FMA loop. The current
+marker-12 device reducer intentionally models the bounded FMA order. Extending
+the tap bound without modeling this platform-specific >15-tap split would
+admit a known one-ULP divergence, so these rows remain exact host semantic
+control pending a separately verified reducer.
