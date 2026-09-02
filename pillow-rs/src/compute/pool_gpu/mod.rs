@@ -5302,6 +5302,82 @@ impl GpuInner {
                 }
                 continue;
             }
+            // I-mode nearest Pad has the same typed-word dependency as a
+            // nearest Resize, but also appends a placement dispatch. Keep
+            // each stage in its own compute pass so Metal cannot expose a
+            // stale horizontal/vertical intermediate to the next stage.
+            if logical_mode == Some("I")
+                && matches!(pipeline, ResolvedPipeline::Pad { .. })
+                && matches!(
+                    ops.get(index),
+                    Some(PipelineOp::Pad {
+                        filter: ResampleFilter::Nearest,
+                        ..
+                    })
+                )
+            {
+                let ResolvedPipeline::Pad {
+                    horizontal,
+                    vertical,
+                    place,
+                } = pipeline
+                else {
+                    unreachable!("typed I Pad pipeline shape changed")
+                };
+                let resize_dims = prepared.pad_resize_dims[index].ok_or_else(|| {
+                    PilError::InternalError("GPU I Pad is missing its contain dimensions".into())
+                })?;
+                if resize_dims != prepared.input_dims[index] {
+                    {
+                        let mut resize_pass =
+                            encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                                label: Some("gpu_batch_compute_i_pad_resize_h"),
+                                timestamp_writes: None,
+                            });
+                        current_is_a = self.encode_dispatch(
+                            &mut resize_pass,
+                            horizontal,
+                            index,
+                            current_is_a,
+                            &prepared.resources,
+                            prepared.input_dims[index],
+                            resize_dims,
+                        )?;
+                    }
+                    {
+                        let mut resize_pass =
+                            encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                                label: Some("gpu_batch_compute_i_pad_resize_v"),
+                                timestamp_writes: None,
+                            });
+                        current_is_a = self.encode_dispatch(
+                            &mut resize_pass,
+                            vertical,
+                            index,
+                            current_is_a,
+                            &prepared.resources,
+                            prepared.input_dims[index],
+                            resize_dims,
+                        )?;
+                    }
+                }
+                {
+                    let mut place_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some("gpu_batch_compute_i_pad_place"),
+                        timestamp_writes: None,
+                    });
+                    current_is_a = self.encode_dispatch(
+                        &mut place_pass,
+                        place,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        resize_dims,
+                        prepared.output_dims[index],
+                    )?;
+                }
+                continue;
+            }
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("gpu_batch_compute"),
                 timestamp_writes: None,
@@ -7216,12 +7292,12 @@ fn gpu_pad_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) -> u32 {
     let PipelineOp::Pad { color, .. } = op else {
         return 0;
     };
-    // F stores one little-endian f32 sample in the packed transport.  The
+    // I and F store one scalar sample in the packed four-byte transport. The
     // public color resolver has already converted scalar/named colors to
-    // that four-byte representation; preserve the complete word instead of
-    // interpreting the bytes as RGB channels.  An omitted fill is Pillow's
-    // scalar +0.0, not an opaque RGBA black.
-    if logical_mode == Some("F") {
+    // that representation; preserve the complete word instead of
+    // interpreting the bytes as RGB channels. An omitted fill is scalar
+    // +0.0/+0, not an opaque RGBA black.
+    if matches!(logical_mode, Some("I" | "F")) {
         let (a, b, c, d) = color.unwrap_or((0, 0, 0, 0));
         return u32::from(a) | (u32::from(b) << 8) | (u32::from(c) << 16) | (u32::from(d) << 24);
     }
@@ -9530,6 +9606,24 @@ impl GpuPool {
                             ..
                         }
                     ))
+                // I-mode nearest Pad carries signed int32 words through a
+                // nearest contain resize and a raw-word placement pass. A
+                // filtered Pad would need the typed INT32 accumulator and is
+                // intentionally kept on exact host semantic control.
+                || (logical_mode == "I"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::Pad {
+                                filter: ResampleFilter::Nearest,
+                                ..
+                            }
+                                | PipelineOp::Resize {
+                                    filter: ResampleFilter::Nearest,
+                                    ..
+                                }
+                        )
+                    }))
                 || (logical_mode == "I" && gpu_int_filter_is_supported(ops, img))
                 // I/F samples are four raw bytes per pixel at this executor
                 // boundary.  These operations only relocate or duplicate
@@ -10617,6 +10711,69 @@ mod tests {
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn i_cover_pad_nearest_native_gpu_preserves_signed_words() {
+        let values = [
+            -12345i32,
+            -7,
+            0,
+            206,
+            17,
+            31,
+            4096,
+            i32::MAX,
+            -1,
+            73,
+            91,
+            127,
+        ];
+        let source_bytes = values
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("I", (12, 1), &source_bytes).expect("I source");
+        let covered =
+            crate::ops::imageops::cover_with_input(&source, 8, 1, Some(ResampleInput::Code(0)))
+                .expect("I Cover operation");
+        let padded = crate::ops::imageops::pad_with_input(
+            &covered,
+            10,
+            2,
+            Some(ResampleInput::Code(0)),
+            crate::ops::imageops::ImageOpsColor::Scalar(7),
+            crate::ops::imageops::CenteringInput::Default,
+        )
+        .expect("I Pad operation");
+        let expected = padded
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU I Cover/Pad");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match padded.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU I Cover/Pad failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU I Cover/Pad parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU I Cover/Pad must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(5));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
