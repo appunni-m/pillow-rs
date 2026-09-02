@@ -5752,3 +5752,57 @@ and other arithmetic-changing filtered/projective/palette domains; P1 still
 has explicit host/native reconciliation work, and P2 still needs two
 zero-violation equal-ID/equal-receipt comparisons. These are execution and
 performance gates, not public parity exemptions.
+
+## 32.88 Rotate, source-aware Grayscale, and Draw sentinel parity (2026-09-03)
+
+Three additional deterministic parity divergences are now fixed. Rotate's
+CPU/SIMD planners previously rounded angles within two degrees of a right-angle
+multiple into transpose fast paths; Pillow keeps those fractional angles on the
+affine path and only fast-paths exact normalized multiples. Commit `7ca91ed47`
+restores that comparison. A clipped wide line touching the final image row
+also diverged because Rust stopped polygon scan conversion at `ysize - 1`.
+Pillow `src/libImaging/Draw.c::polygon_generic` processes a sentinel scanline at
+`y == ysize` before discarding out-of-image spans; commit `ee2996057` restores
+that behavior. Finally, `ImageOps.grayscale` treated deferred `F` words as
+four byte channels and did not preserve the terminal GPU identity after a
+host-controlled prefix. Commit `932ac964e` dispatches conversion by source mode
+(`F`, `I`, `1`, `CMYK`, `HSV`, and `YCbCr`) and restores the final GPU receipt
+while retaining its exact host-control reason.
+
+The fixed native matrices are exact: Rotate CPU/SIMD 576/576 across RGB/RGBA
+sizes, angles, centers, translations, fills, and expansion; Draw CPU/GPU
+240/240 across clipped wide lines, rectangles, and points; and the source-mode
+Grayscale matrix 6/6. `Grayscale(F) -> Invert` is byte-exact with
+`requested_backend=gpu`, `actual_backend=gpu`, two dispatches, and an explicit
+`exact host semantic control` prefix. The integrated GPU unit suite is 71/71;
+the Rotate, SIMD-angle, Draw, and Grayscale regressions each pass.
+
+At final revision `ee2996057f98c136eb5fe351d51a52de8fdfd3fd`, the schema-v3
+all-backends envelope remains value/error-exact for all 10,952 selected cases
+on CPU, SIMD, GPU, Node WASM, and browser WASM, with GPU smoke 1/1. Terminal
+receipts are CPU 6,838; SIMD 6,850 (6,847 SIMD and 3 CPU Transform host
+controls); GPU 6,838 (6,620 native GPU and 218 CPU host controls); and Node and
+browser WASM 6,951 each. GPU fallback reasons remain explicit: 158 exact host
+semantic-control, 62 unsafe-primary-dimension, one unsafe/incomplete-dimension,
+and one Transform capability guard. The durable envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`2354185a8b4d2dbf12045a11d5904974c87e0d3d06868ecc85d3e2dea9a0abe7`), with GPU
+sidecar SHA-256
+`3a1aad720667834e23980cab0e2f4da389333d17833f3c67da75287cbf08ecb0`.
+
+The final standard benchmark measured 744/744 workloads, completed all 2,232
+target subjects, and had zero not-run workloads or budget comparison failures;
+the 202-case parity preflight was 202/202 exact. Durable artifacts are
+`build/migration-parity/benchmark-result-current-20260903.json` (SHA-256
+`180f1d80bf1d0d197ce4a76c02c490dbcfbc5570a6d78a4afe318bddcfc211b3`) and
+`build/migration-parity/benchmark-parity-result-current-20260903.json`
+(SHA-256
+`1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c63d965`).
+`make migration-parity-receipt-test` passes 35/35,
+`make migration-parity-evidence-check` passes, formatting and `make build-dev`
+pass, and no fixtures, expected values, thresholds, case IDs, denominators,
+public errors, or receipt rules changed. The remaining queue is still broader
+heterogeneous/non-dyadic native-GPU F arithmetic, arithmetic-changing
+filtered/projective/mesh/palette GPU domains, P1 host/native reconciliation,
+and the P2 equal-ID timing gate; exact host semantic control remains a
+parity-preserving execution path rather than a public unsupported outcome.

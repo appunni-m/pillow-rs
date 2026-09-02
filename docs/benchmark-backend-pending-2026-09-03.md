@@ -22,6 +22,12 @@ receipt rules unchanged.
   translated/clipped boxes, and explicit premultiplied modes. The final CPU
   path is exact across the six byte layouts; SIMD nearest is proven and SIMD
   filtered remains exact CPU semantic control.
+- [x] Keep fractional Rotate angles on Pillow's affine path and reproduce the
+  clipped wide-line bottom sentinel in Draw. CPU/SIMD Rotate and CPU/GPU Draw
+  now match the bounded native matrices exactly.
+- [x] Preserve source-aware Grayscale conversion for scalar and packed modes,
+  including the segmented GPU terminal receipt after an exact host-controlled
+  prefix.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
   signed two-axis envelope. The remaining inputs include heterogeneous and
   non-dyadic values, mixed non-finite ordering, negative-zero cancellation,
@@ -77,26 +83,36 @@ receipt rules unchanged.
 - [x] Heterogeneous F `ImageOps.pad` (`c5f03c6f3`): route the contain resize
   through exact f64-coefficient/f32-store semantics and admit only the proven
   marker-9 changed-axis GPU path (25/25 matrix exact; 23 native GPU).
+- [x] Fractional Rotate routing (`7ca91ed47`): exact normalized right angles
+  alone use transpose fast paths; the fixed 576-case CPU/SIMD matrix is
+  576/576 exact.
+- [x] Source-aware Grayscale and terminal GPU identity (`932ac964e`): native
+  mode matrix is 6/6 exact and `Grayscale(F) -> Invert` is byte-exact with
+  requested=actual GPU after a host-controlled prefix.
+- [x] Draw wide-line bottom-edge parity (`ee2996057`): Pillow's sentinel
+  scanline behavior is restored; bounded CPU/GPU Draw matrix is 240/240 exact.
 
-## Evidence refreshed at the final transform/mesh revision
+## Evidence refreshed at the final integrated revision (`ee2996057`)
 
 - [x] Focused all-backends transform replay with terminal receipts (130/130
   source corpus; fractional GPU rows are host-controlled).
-- [x] Full schema-v3 all-backends envelope at `c5f03c6f3` and GPU SHA-256
+- [x] Full schema-v3 all-backends envelope at `ee2996057` and GPU SHA-256
   sidecar (10,952/10,952 exact on CPU, SIMD, GPU, Node WASM, and browser WASM;
-  GPU native/host partitions remain explicit).
-- [x] Standard benchmark and parity preflight after Mesh arithmetic fixes:
-  744/744 workloads measured, 744/744 correctness gates passed, 2,232/2,232
-  target subjects completed, and 202/202 parity cases exact.
+  GPU native/host partitions remain explicit). Terminal receipts are CPU 6,838;
+  SIMD 6,847 plus 3 exact Transform host controls; GPU 6,620 plus 218 explicit
+  host controls; Node/browser WASM 6,951 each.
+- [x] Standard benchmark and parity preflight at `ee2996057`: 744/744
+  workloads measured, 0 not-run, 2,232/2,232 target subjects completed,
+  202/202 parity cases exact, and zero budget comparison failures.
 - [x] `make -C pillow-rs fmt`, `make build-dev`, focused Rust tests,
   `make migration-parity-receipt-test` (35/35), and
   `make migration-parity-evidence-check`.
 
 Current evidence hashes: all-backends envelope
-`7e2d3b13549a10b4fb33b687e7572f844d7739a42e55076bd949495d1c0601fc`, GPU
-sidecar `cfeec1a1a14c517ead579a574f8a7a5cc79e1b2f896b7eca605e29ee9dbd1be4`,
-benchmark `31147c0898e7aca93bb1eb6440405eab8313eecafcd4f61992ddcafcb23a9a4a`,
-and benchmark parity `68e4c45562367e3a9f5f4e505314b66df34ea3c4187c843242a5f383cf3d2572`.
+`2354185a8b4d2dbf12045a11d5904974c87e0d3d06868ecc85d3e2dea9a0abe7`, GPU
+sidecar `3a1aad720667834e23980cab0e2f4da389333d17833f3c67da75287cbf08ecb0`,
+benchmark `180f1d80bf1d0d197ce4a76c02c490dbcfbc5570a6d78a4afe318bddcfc211b3`,
+and benchmark parity `1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c63d965`.
 
 Known environment blocker: `make -C pillow-rs clippy` still requires the
 pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
