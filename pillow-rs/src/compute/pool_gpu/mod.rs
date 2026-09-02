@@ -5750,6 +5750,57 @@ fn gpu_contrast_mean(img: &DynamicImage, logical_mode: Option<&str>) -> Option<u
     Some(((sum as f64 / pixels as f64) + 0.5) as u8)
 }
 
+/// Compute Contrast's midpoint after a narrowly provable host prefix.
+///
+/// `Image.putpixel` is an exact byte-layout update, while Contrast's midpoint
+/// belongs to the image produced by that update rather than to the original
+/// source.  The GPU batch already executes both operations in order; this
+/// helper mirrors only the one exact prefix needed to supply the scalar
+/// midpoint.  Keep the proof deliberately small: palette writes, additional
+/// operations, and a later Contrast still require the ordinary host-control
+/// path because their current-image semantics are not represented by one
+/// static uniform.
+fn gpu_contrast_mean_after_exact_prefix(
+    img: &DynamicImage,
+    ops: &[PipelineOp],
+    logical_mode: Option<&str>,
+) -> Option<u8> {
+    let first_contrast = ops
+        .iter()
+        .position(|op| matches!(op, PipelineOp::Contrast { .. }))?;
+    if ops
+        .iter()
+        .skip(first_contrast.saturating_add(1))
+        .any(|op| matches!(op, PipelineOp::Contrast { .. }))
+    {
+        return None;
+    }
+
+    if first_contrast == 0 {
+        return gpu_contrast_mean(img, logical_mode);
+    }
+
+    // A single PutPixel is the only prefix whose exact result can be formed
+    // without invoking the CPU batch executor (which would publish a second
+    // backend/operation receipt).  Palette-index writes need palette state and
+    // therefore remain on the existing exact host-control path.
+    if first_contrast != 1 {
+        return None;
+    }
+    let PipelineOp::PutPixel {
+        x,
+        y,
+        color,
+        palette_index: false,
+    } = &ops[0]
+    else {
+        return None;
+    };
+    let prefixed =
+        crate::compute::pool_cpu::ops::effects::op_put_pixel(img, *x, *y, *color).ok()?;
+    gpu_contrast_mean(&prefixed, logical_mode)
+}
+
 /// Return the concrete byte-buffer color type produced by a supported GPU
 /// mode-changing operation. The shader always writes packed RGBA8, but the
 /// public result must expose the requested number of bands rather than the
@@ -9282,40 +9333,27 @@ impl GpuPool {
         }
 
         // Contrast's midpoint belongs to the current source image. The
-        // batch uniform block carries one midpoint, so do the scalar control
-        // scan before upload and reject a later Contrast rather than silently
-        // reusing the first image's value after an earlier GPU operation.
+        // batch uniform block carries one midpoint, so compute it before
+        // upload. A single exact PutPixel prefix can be mirrored without
+        // publishing a second backend receipt; all other current-image
+        // sequences retain the exact host-control path.
         let contrast_mean = if ops
             .iter()
             .any(|op| matches!(op, PipelineOp::Contrast { .. }))
         {
-            let first_contrast = ops
-                .iter()
-                .position(|op| matches!(op, PipelineOp::Contrast { .. }));
-            if first_contrast != Some(0)
-                || ops
-                    .iter()
-                    .skip(1)
-                    .any(|op| matches!(op, PipelineOp::Contrast { .. }))
-            {
-                return self.preflight_failure(
-                    ops,
-                    img,
-                    mode,
-                    allow_cpu_fallback,
-                    "Contrast midpoint requires the current host image",
-                );
-            }
-            match gpu_contrast_mean(img, mode) {
+            match gpu_contrast_mean_after_exact_prefix(img, ops, mode) {
                 Some(mean) => Some(mean),
                 None => {
-                    return self.preflight_failure(
-                        ops,
-                        img,
-                        mode,
-                        allow_cpu_fallback,
-                        "Contrast midpoint is unavailable for this image layout",
-                    );
+                    let reason = if ops
+                        .iter()
+                        .position(|op| matches!(op, PipelineOp::Contrast { .. }))
+                        == Some(0)
+                    {
+                        "Contrast midpoint is unavailable for this image layout"
+                    } else {
+                        "Contrast midpoint requires the current host image"
+                    };
+                    return self.preflight_failure(ops, img, mode, allow_cpu_fallback, reason);
                 }
             }
         } else {
@@ -9513,11 +9551,11 @@ mod tests {
     use super::expand_rgb_into_rgba;
     use super::{
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, gpu_buffer_reuse_allowed,
-        gpu_byte_point_mode_allowed, gpu_f_resize_box_average_is_exact,
-        gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact,
-        gpu_f_resize_f64_is_exact, gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact,
-        gpu_f64_integer_to_f32, gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
-        readback_poll_backoff,
+        gpu_byte_point_mode_allowed, gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix,
+        gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
+        gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
+        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f64_integer_to_f32,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, readback_poll_backoff,
     };
     use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -9617,6 +9655,79 @@ mod tests {
         assert!(gpu_byte_point_mode_allowed(&rgb, Some("RGB")));
         assert!(gpu_byte_point_mode_allowed(&rgba, Some("RGBA")));
         assert!(!gpu_byte_point_mode_allowed(&rgba, Some("RGBX")));
+    }
+
+    #[test]
+    fn contrast_mean_after_exact_putpixel_prefix_matches_materialized_prefix() {
+        let cases = [
+            (
+                DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![10, 20]).unwrap()),
+                Some("L"),
+                (1, 0, (80, 0, 0, 255)),
+            ),
+            (
+                DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(2, 1, vec![10, 200, 20, 100]).unwrap(),
+                ),
+                Some("LA"),
+                (1, 0, (80, 0, 0, 220)),
+            ),
+            (
+                DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60]).unwrap(),
+                ),
+                Some("RGB"),
+                (1, 0, (80, 90, 100, 255)),
+            ),
+            (
+                DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80]).unwrap(),
+                ),
+                Some("RGBA"),
+                (1, 0, (80, 90, 100, 220)),
+            ),
+            (
+                DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80]).unwrap(),
+                ),
+                Some("CMYK"),
+                (1, 0, (80, 90, 100, 220)),
+            ),
+        ];
+        for (image, mode, (x, y, color)) in cases {
+            let ops = [
+                PipelineOp::PutPixel {
+                    x,
+                    y,
+                    color,
+                    palette_index: false,
+                },
+                PipelineOp::Contrast { factor: 0.5 },
+            ];
+            let prefixed =
+                crate::compute::pool_cpu::ops::effects::op_put_pixel(&image, x, y, color)
+                    .expect("exact PutPixel prefix");
+            assert_eq!(
+                gpu_contrast_mean_after_exact_prefix(&image, &ops, mode),
+                gpu_contrast_mean(&prefixed, mode),
+                "mode {mode:?}"
+            );
+        }
+
+        let indexed = [
+            PipelineOp::PutPixel {
+                x: 0,
+                y: 0,
+                color: (1, 2, 3, 255),
+                palette_index: true,
+            },
+            PipelineOp::Contrast { factor: 0.5 },
+        ];
+        let image = DynamicImage::ImageLuma8(GrayImage::from_raw(1, 1, vec![7]).unwrap());
+        assert_eq!(
+            gpu_contrast_mean_after_exact_prefix(&image, &indexed, Some("P")),
+            None
+        );
     }
 
     #[test]
@@ -9728,6 +9839,70 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn contrast_after_putpixel_native_gpu_uses_current_image_midpoint() {
+        let cases = [
+            ("L", vec![10, 20, 30, 40]),
+            ("LA", vec![10, 200, 20, 180, 30, 160, 40, 140]),
+            (
+                "RGB",
+                vec![10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+            ),
+            (
+                "RGBA",
+                vec![
+                    10, 20, 30, 200, 40, 50, 60, 180, 70, 80, 90, 160, 100, 110, 120, 140,
+                ],
+            ),
+            (
+                "CMYK",
+                vec![
+                    10, 20, 30, 40, 40, 50, 60, 80, 70, 80, 90, 160, 100, 110, 120, 140,
+                ],
+            ),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, bytes) in cases {
+            let mut source = Image::frombytes(mode, (2, 2), &bytes)
+                .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
+            source
+                .putpixel(1, 0, 180, 90, 60, 220)
+                .unwrap_or_else(|error| panic!("{mode} PutPixel: {error}"));
+            let expected = source
+                .enhance_contrast(0.5)
+                .expect("Contrast operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .unwrap_or_else(|error| panic!("{mode} CPU Contrast: {error}"));
+            let actual = match source
+                .enhance_contrast(0.5)
+                .expect("Contrast operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {mode} Contrast failed: {error}"),
+            };
+            assert_eq!(actual, expected, "{mode} Contrast parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU Contrast must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+            assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+            assert_eq!(telemetry.6, Some(2), "{mode} dispatch count");
+            assert_eq!(telemetry.7, None, "{mode} fallback reason");
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
