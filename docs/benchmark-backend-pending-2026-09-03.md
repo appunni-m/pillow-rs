@@ -1,0 +1,81 @@
+# Active parity/backend checklist — 2026-09-03
+
+This is the short, actionable queue. Historical probes and superseded runs
+remain in the [exhaustive audit](benchmark-backend-exhaustive-audit-2026-08-30.md).
+
+## Goal
+
+Fix Pillow value and error parity first. Every public case remains executable
+and exact; backend claims are accepted only when the receipt proves the backend
+that ran. Exact host semantic control is a parity-preserving execution path,
+not a closure claim. Keep fixtures, case IDs, thresholds, denominators, and
+receipt rules unchanged.
+
+## Pending work
+
+### P0 — deterministic parity and native arithmetic
+
+- [x] Correct varied CPU/SIMD Perspective and Quad sampling: destination
+  centers, Pillow `COORD` truncation, filter edge clipping, and ordered
+  interpolation are covered by the committed L/RGB regressions.
+- [ ] Finish Mesh filtered (bilinear/bicubic) parity for L/LA/RGB/RGBA,
+  translated/clipped boxes, and explicit premultiplied modes. Mesh nearest is
+  exact; a broader filtered attempt remains uncommitted after a one-byte RGBA
+  divergence.
+- [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
+  signed two-axis envelope. The remaining inputs include heterogeneous and
+  non-dyadic values, mixed non-finite ordering, negative-zero cancellation,
+  wider Box ratios, and arithmetic-changing chains. Forced generic WGSL f32
+  convolution already differs from Pillow's ordered host arithmetic by ULPs.
+- [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
+  Until a device proof exists, the exact host path remains the required
+  behavior for fractional and filtered geometry.
+
+### P1 — backend identity and receipts
+
+- [ ] Reconcile native versus host-controlled partitions without relabeling
+  outcomes. The last full envelope is exact on all five public lanes, but GPU
+  still has a host-controlled partition alongside native receipts. Preserve
+  terminal actual-backend identity and make every fallback reason actionable.
+- [x] Preserve nonterminal host-control receipt prefixes in WASM evidence
+  accounting (`385eeaab1`).
+
+### P2 — performance acceptance
+
+- [ ] Obtain two consecutive fixed-ID, equal-receipt comparisons with zero
+  budget violations. The Brightness factor-1 identity path and SIMD constant
+  allocation are deterministic row-level wins, but aggregate comparisons are
+  still timing-noisy and do not close this gate.
+
+## Verified changes already integrated
+
+- [x] Degenerate thumbnail control flow (`dc6085f81`): expanded native probe
+  reduced 21 mismatches to 0; all 172 thumbnail cases are exact.
+- [x] F thumbnail no-reduction GPU admission (`b9a2d70e1`): focused
+  heterogeneous five-filter case is exact and native on GPU; reducing F
+  thumbnails remain host-controlled.
+- [x] Perspective nearest CPU sampling (`ec546bc2a`): varied homography now
+  matches Pillow's center evaluation and truncating `COORD` behavior.
+- [x] Projective/Quad sampling and conservative GPU routing (`3320e2b22`):
+  varied CPU/SIMD/GPU transform corpus is 130/130 per lane; fractional GPU
+  transforms retain terminal CPU receipts with `exact host semantic control`.
+- [x] SIMD constant allocation (`d9b5cec0a`): removed the redundant full-frame
+  zero-fill/copy pass with unchanged bytes and telemetry.
+- [x] PA/F nearest relocation admissions and the bounded indexed projective
+  proof remain exact within their documented envelopes.
+
+## Evidence to refresh after the active transform/mesh commits
+
+- [x] Focused all-backends transform replay with terminal receipts (130/130
+  source corpus; fractional GPU rows are host-controlled).
+- [x] Full schema-v3 all-backends envelope and GPU SHA-256 sidecar (all five
+  lanes value/error-exact; GPU native/host partitions remain explicit).
+- [x] Standard benchmark and parity preflight after the transform fixes:
+  744/744 workloads measured, 744/744 correctness gates passed, 2,232/2,232
+  target subjects completed, and 202/202 parity cases exact.
+- [x] `make -C pillow-rs fmt`, `make build-dev`, focused Rust tests,
+  `make migration-parity-receipt-test` (35/35), and
+  `make migration-parity-evidence-check`.
+
+Known environment blocker: `make -C pillow-rs clippy` still requires the
+pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.

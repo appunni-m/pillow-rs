@@ -5559,3 +5559,65 @@ control until the requested PA convolution contract is proven on-device.
 This recheck confirms that current benchmark subjects are executable and
 parity-exact; it does not close the remaining P0 native arithmetic domains,
 P1 backend-identity reconciliation, or P2 timing gate.
+
+## 32.85 Projective sampling parity and post-transform evidence (2026-09-03)
+
+The next deterministic parity divergence was in CPU/SIMD Perspective and Quad
+sampling. On the first varied nearest probe, Pillow's `Geometry.c` evaluated
+the inverse map at destination pixel centers and applied `COORD` truncation;
+the Rust path used the raw destination coordinate and rounded the source
+coordinate with `(source + 0.5).floor()`. The first differing byte was output
+byte 8 (Pillow 51, Rust 14). Pillow's filtered path also subtracts `0.5`,
+clips filter taps at the source edge, interpolates horizontally before
+vertically, and truncates the final byte. Commit `3320e2b22` aligns CPU and
+SIMD Perspective/Quad evaluation with that contract, corrects Mesh nearest's
+local box centers and original box divisors, and keeps ordinary fractional
+projective GPU transforms on exact host semantic control because the WGSL f32
+arithmetic is not an ordered-f64 proof. The implementation source behavior is
+anchored by [Pillow's Geometry.c](https://raw.githubusercontent.com/python-pillow/Pillow/12.2.0/src/libImaging/Geometry.c).
+
+The selected varied transform corpus is now 130/130 exact on CPU, SIMD, and
+GPU. The focused all-backends replay is
+`build/migration-parity/incremental/perspective-all-backends-after-3320e2b22.json`
+(SHA-256 `7c0db644678511c7f569ebd85f6a44ed10ca02c641266264855e1900fe5821b6`),
+with GPU execution sidecar SHA-256
+`291a4692459990549f77e25b96ef7e7b2e0d87363a429319d57c8ae8ed536ba1`.
+Both selected rows are exact on every lane; GPU receipts are terminal and
+report `actual_backend=cpu` with fallback `exact host semantic control` for
+the fractional mappings. The bounded indexed projective GPU proof remains
+native and exact.
+
+A fresh schema-v3 all-backends replay at revision
+`3320e2b22d936241ccf502933cda185de1ae9276` is value/error-exact for all
+10,952 selected cases on CPU, SIMD, GPU, Node WASM, and browser WASM. CPU has
+6,838 terminal receipts; SIMD has 6,850 (6,849 SIMD and one CPU receipt, with
+three Transform layout fallbacks); GPU has 6,838 (6,620 native GPU and 218
+CPU host-controlled). GPU fallback reasons remain explicit: 158 exact host
+semantic-control rows, 62 unsafe-primary-dimension rows, one unsafe or
+incomplete-dimension row, and one Transform capability guard. Node and browser
+WASM each pass all 10,952 selected comparisons. The durable envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`b9622078cc2a8c15eaee13d40e6cfdeb0017de996aa2922e4c10df48184e6406`), with GPU
+execution sidecar SHA-256
+`8a2c0a48f43dc5d20507c9cb4fc3598037d530c79f262e15f096da5f95d88e40`.
+
+The post-transform standard benchmark measured 744/744 workloads, passed all
+744 correctness gates, and completed all 2,232 target-profile subjects. The
+aggregate execution receipts are CPU 4,231, SIMD 4,325, and GPU 4,195, with
+18 exact host semantic-control fallbacks; the 202-case parity preflight is
+202/202 exact. Durable artifact hashes are
+`benchmark-result-current-20260903.json` SHA-256
+`b0b1e5bb87ee5e6179c4877ac435084b727180e3a7f04e7bffe6a8ba961900f8` and
+`benchmark-parity-result-current-20260903.json` SHA-256
+`899d67052fb2fc309dcdbd78fbeeada04259f675870b6fc05686aaf4e80f41bb`.
+
+An exploratory Mesh bilinear/bicubic implementation was not committed: a
+varied RGBA bilinear probe still differed by one output byte after map/FMA and
+premultiplication experiments, and explicit premultiplied modes require a
+separate proof. Mesh nearest remains exact; filtered Mesh stays in the P0
+parity queue. The short actionable queue is maintained in
+`docs/benchmark-backend-pending-2026-09-03.md`. No fixtures, expected values,
+thresholds, IDs, denominators, public errors, or receipt rules changed. P0
+heterogeneous/non-dyadic F arithmetic and filtered Mesh/projective/palette
+arithmetic, P1 backend identity reconciliation, and the P2 equal-ID timing
+gate remain open.
