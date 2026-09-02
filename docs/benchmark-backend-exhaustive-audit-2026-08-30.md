@@ -5380,3 +5380,45 @@ regression. The 5% budget, sample policy, IDs, and denominators were not
 changed. The deterministic CPU Brightness identity optimization remains a
 separate row-level improvement, but the required two consecutive zero-violation
 comparisons have not yet been observed.
+
+## 32.81 Post-change full envelope and SIMD constant allocation (2026-09-02)
+
+The verified SIMD performance change is commit `d9b5cec0a`: `simd_constant`
+now allocates the final byte value directly instead of zero-filling the full
+frame and then copying the same block over it. Pillow's `ImageChops.constant`
+output and the existing vector-block telemetry are unchanged; only the
+redundant allocation/copy traversal was removed. The fixed 11-ID cohort stayed
+11/11 correctness-gated with 44/44 requested=actual terminal receipts and no
+fallbacks. The paired SIMD `pipeline-chain.simd-constant.1024x768` median moved
+from 0.418604 ms to 0.3965205 ms, and a maintained 40-sample source-pipeline
+profile moved from 4,979.5 ns to 4,312.5 ns. The aggregate P2 budget remains
+noise-sensitive and is not claimed closed.
+
+A fresh full schema-v3 campaign at `d9b5cec0a1713bf18684b0175414ddf70ede4e99`
+is value/error-exact for all 10,952 selected cases on CPU, SIMD, GPU, Node
+WASM, and browser WASM (10,952/10,952 in each lane); the GPU smoke case is
+1/1. CPU has 6,838 terminal receipts (6,832 pipeline-complete), SIMD 6,850
+(6,844 pipeline-complete), and GPU 6,838 (6,745 native GPU plus 93 CPU
+host-controlled). GPU fallback partitions are 29 exact host semantic-control,
+62 unsafe-primary-dimension, one unsafe/incomplete-dimension, and one
+Transform capability guard. Every lane has zero partial, missing, or
+indeterminate pipeline receipts. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`7d9e079b7a687d2dd8c2da681a54a5679fd29e6d618e2dcbec1be998a5261bce`), with GPU
+execution sidecar SHA-256
+`ffb5646fcd3b0c9cbbd2d35ee51b86baf147559017d95103c095b4a6390160d8`.
+
+Post-change strict SIMD parity for `PIL.ImageChops.constant.behavior.default`
+passes 1/1 (`build/migration-parity/simd-constant-strict-post.json`, SHA-256
+`ddb47c78ec218d35b6cc9ce83bde4091bcc6abfe16c5b816ca872ec3712235f7`). The
+maintained typed `I;16B` and `I;16N` filtered-resize rows also replay exactly,
+but remain CPU host-semantic control because the ordered-f64 versus
+device-integer boundary proof rejects native admission; this is an explicit
+parity-preserving execution choice, not an unsupported public operation.
+
+`make migration-parity-receipt-test` passes 35/35,
+`make migration-parity-evidence-check` passes, and `make -C pillow-rs fmt`
+passes. No fixtures, expected values, thresholds, IDs, denominators, public
+errors, or receipt rules changed. P0 broader heterogeneous/non-dyadic native
+GPU arithmetic, P1 backend identity reconciliation, and P2 zero-violation
+performance acceptance remain open.

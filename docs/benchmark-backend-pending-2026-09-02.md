@@ -40,13 +40,16 @@ backend is complete.
 
 - [ ] Reconcile the explicit fallback taxonomy and native identity claims.
   The current full envelope has zero partial, missing, or indeterminate
-  pipeline receipts, but GPU still reports 6,745 native receipts and 93
-  host-controlled receipts (29 exact host semantic-control, 62 unsafe-primary-
-  dimension, one unsafe/incomplete-dimension, and one Transform capability
-  guard).
+  pipeline receipts at `d9b5cec0a`, but GPU still reports 6,745 native
+  receipts and 93 host-controlled receipts (29 exact host semantic-control,
+  62 unsafe-primary-dimension, one unsafe/incomplete-dimension, and one
+  Transform capability guard).
   CPU has 6,838 terminal receipts (6,832 pipeline-complete); SIMD has 6,850
-  (6,844 pipeline-complete). The remaining host-controlled partitions need
-  policy/identity reconciliation; no row may be relabeled to improve counts.
+  (6,844 pipeline-complete). The maintained typed `I;16B` and `I;16N`
+  filtered-resize rows replay exactly but remain host-controlled because the
+  ordered-f64 versus device-integer boundary proof rejects native admission.
+  The remaining host-controlled partitions need policy/identity reconciliation;
+  no row may be relabeled to improve counts.
 - [x] Receipt-history accounting now retains nonterminal host-control prefixes
   when building the WASM fallback taxonomy (commit `385eeaab1`). This closes
   the evidence-writer discrepancy without changing terminal backend identity;
@@ -60,7 +63,11 @@ backend is complete.
   violations for the seven adjacent comparisons. The
   factor-1.0 Brightness identity path is a deterministic row-level
   improvement (CPU medians about 0.181/0.163 ms before versus
-  0.042/0.049/0.042 ms after), but aggregate acceptance is still open.
+  0.042/0.049/0.042 ms after). Commit `d9b5cec0a` also removes the redundant
+  zero-fill/full-frame copy in `simd_constant`; the fixed-11 strict cohort
+  stayed 11/11 exact with 44/44 requested=actual terminal receipts, and the
+  paired SIMD row median improved from 0.418604 ms to 0.3965205 ms. Aggregate
+  acceptance is still open.
 
 ## Recently closed in this queue
 
@@ -90,6 +97,11 @@ backend is complete.
   raw-word shader path. The maintained F EXTENT transform is native GPU with
   exact bytes; filtered F transforms and bilinear F rotate remain exact host
   semantic control because they interpolate scalar values.
+- [x] SIMD constant allocation pass: commit `d9b5cec0a`. `simd_constant`
+  now allocates the final byte value directly, preserving output and vector
+  telemetry while removing the redundant zero-fill and block-copy traversal.
+  Strict SIMD parity is 1/1; this is a safe row-level improvement, not closure
+  of the aggregate P2 timing gate.
 
 ### Arithmetic boundary retained
 
@@ -102,10 +114,10 @@ place until ordered-`f64` behavior is reproduced on-device.
 
 ## Current evidence
 
-- Full source revision: `a83fb9244`.
+- Full source revision: `d9b5cec0a1713bf18684b0175414ddf70ede4e99`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `34a22cb9c6cafd820be3abbdcfef94556ef796fff03cb6bd24ed62ae53ec2247`).
+  `7d9e079b7a687d2dd8c2da681a54a5679fd29e6d618e2dcbec1be998a5261bce`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
   value/error exact; GPU smoke is 1/1. GPU has 6,745 native and 93
   host-controlled terminal receipts (6,838 complete), with zero partial,
@@ -114,7 +126,11 @@ place until ordered-`f64` behavior is reproduced on-device.
   unsafe/incomplete-dimension, and one Transform capability guard.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `bb830ea8f6ad4995977acc765281f212225c64974883813c5077400607340ba7`).
+  `ffb5646fcd3b0c9cbbd2d35ee51b86baf147559017d95103c095b4a6390160d8`).
+- Post-change strict SIMD constant parity: `build/migration-parity/simd-constant-
+  strict-post.json` (SHA-256
+  `ddb47c78ec218d35b6cc9ce83bde4091bcc6abfe16c5b816ca872ec3712235f7`),
+  selected/executed/passed `1/1`.
 - Focused F affine-nearest replay: `build/migration-parity/incremental/all-
   backends-test-result.json` (SHA-256
   `375828ecbd2dc091054ba1f691019b1983a0f052a46b6fbd9e6ff1a1c90725b5`).
