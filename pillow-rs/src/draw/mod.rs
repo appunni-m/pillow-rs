@@ -2683,7 +2683,13 @@ pub(crate) fn for_each_polygon_fill_span<F>(
         global_ymax = global_ymax.max(e.ymax);
     }
     global_ymin = global_ymin.max(0);
-    global_ymax = global_ymax.min(ih - 1);
+    // Pillow src/libImaging/Draw.c::polygon_generic clamps the upper scanline
+    // to `im->ysize`, not the last drawable row. It intentionally visits that
+    // one out-of-image row so a corner on the final drawable row still takes the
+    // `y == edge.ymax && y < ymax` duplicate-intersection path.  The C hline
+    // callbacks then discard the out-of-image row.  Keeping that sentinel
+    // scanline is observable for clipped wide lines at the bottom edge.
+    global_ymax = global_ymax.min(ih);
     if global_ymin > global_ymax {
         return;
     }
@@ -2747,6 +2753,12 @@ pub(crate) fn for_each_polygon_fill_span<F>(
             continue;
         }
 
+        // The sentinel scanline above is part of Pillow's edge processing but
+        // never reaches a drawable canvas row (hline rejects y == ysize).
+        if y >= ih {
+            continue;
+        }
+
         xx.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Fill pairs (0-1, 2-3, ...) matching PIL's pair fill
@@ -2786,7 +2798,7 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
 
 #[cfg(test)]
 mod tests {
-    use super::Draw;
+    use super::{Draw, for_each_polygon_fill_span, wide_line_polygon_points};
     use crate::image::{FormattedPixelValue, Image};
 
     #[test]
@@ -2833,5 +2845,16 @@ mod tests {
                 FormattedPixelValue::Integer(expected)
             );
         }
+    }
+
+    #[test]
+    fn wide_line_bottom_edge_keeps_pillow_corner_intersection() {
+        let points = wide_line_polygon_points(0, 5, 7, 0, 2).expect("non-zero line");
+        let mut spans = Vec::new();
+        for_each_polygon_fill_span(&points, 8, 6, |x_start, x_end, y| {
+            spans.push((x_start, x_end, y));
+        });
+
+        assert!(spans.contains(&(0, 1, 5)));
     }
 }
