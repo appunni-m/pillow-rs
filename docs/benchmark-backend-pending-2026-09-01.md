@@ -166,6 +166,13 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `/tmp/f-fit-nearest-all-backends.json` are exact with **1/1 native GPU**
   receipt and no fallback; filtered Fit, mixed batches, and other logical
   modes remain guarded.
+- [x] Admit the proven nearest `I` Cover→Pad chain on native GPU. Commit
+  `544d0ebc1` carries signed int32 words through the nearest contain resize
+  and raw Pad placement, uses scalar zero for omitted fills, and separates
+  horizontal, vertical, and placement passes. The signed-word regression and
+  `/tmp/i-cover-pad-all-backends.json` are exact with **1/1 native GPU**
+  receipt, five dispatches, and no fallback; filtered Pad and other typed
+  arithmetic remain guarded.
 - [x] Admit the exact current-image `PutPixel -> Contrast` prefix on native
   GPU. Commit `5ed9f152e` mirrors one non-palette byte write only to compute
   Pillow's post-write midpoint, while the complete two-operation batch stays
@@ -424,6 +431,12 @@ execution is a parity-preserving fallback, not a parity completion claim.
   selected case is value/error-exact on all five public lanes and GPU has a
   terminal native receipt with no fallback. The admission remains limited to
   one nearest Fit with host-generated one-tap coefficients.
+- [x] The nearest I Cover→Pad native admission is covered by
+  `/tmp/i-cover-pad-all-backends.json` (SHA-256
+  `a12189686480ea6883e157daf5906116ca3903aae0e13dea46d0bd6942a5b27e`): all
+  five public lanes are value/error-exact for the selected chain, and GPU has
+  a terminal native receipt with five dispatches and no fallback. The typed
+  route remains limited to nearest word-copy geometry and scalar fill.
 
 ## Closeout state
 
