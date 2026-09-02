@@ -1138,7 +1138,6 @@ pub fn execute_rotate(
     requested_nearest: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let deg = (angle.round() as i32).rem_euclid(360);
     let has_custom_transform = center.is_some() || translate.is_some();
     let nearest = requested_nearest || explicit_mode == Some("P") || explicit_mode == Some("1");
     // Pillow's PA transform path samples the raw index/alpha bands directly;
@@ -1163,15 +1162,15 @@ pub fn execute_rotate(
         // Keep this fast path ahead of filtered affine sampling so LA/RGBA
         // bytes and alpha channels are not rounded needlessly.
         img.clone()
-    } else if !has_custom_transform && (deg - 90).abs() < 2 {
+    } else if !has_custom_transform && normalized_angle == 90.0 {
         if expand {
             img.rotate270() // 270° CW = 90° CCW (PIL)
         } else {
             rotate_90_non_expand(img, false, fill)?
         }
-    } else if !has_custom_transform && (deg - 180).abs() < 2 {
+    } else if !has_custom_transform && normalized_angle == 180.0 {
         img.rotate180()
-    } else if !has_custom_transform && (deg - 270).abs() < 2 {
+    } else if !has_custom_transform && normalized_angle == 270.0 {
         if expand {
             img.rotate90() // 90° CW = 270° CCW (PIL)
         } else {
@@ -1811,7 +1810,35 @@ pub fn execute_reduce(
 mod tests {
     use super::{reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
     use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, RgbaImage};
+    use crate::raster::{DynamicImage, GenericImageView, RgbImage, RgbaImage};
+
+    #[test]
+    fn rotate_near_right_angle_uses_affine_sampling() {
+        let rgb = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60])
+                .expect("RGB source shape must be valid"),
+        );
+        let rgba = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80])
+                .expect("RGBA source shape must be valid"),
+        );
+
+        // Pillow only selects its transpose fast path for an exact 90°
+        // multiple.  Rounding 89.9° or 90.1° into that path moves the source
+        // pixel selected at the edge and diverges from Geometry.c's affine
+        // nearest sampler.
+        let rgb_output =
+            super::execute_rotate(&rgb, 89.9, false, None, None, None, true, Some("RGB"))
+                .expect("near-right RGB rotation");
+        assert_eq!(rgb_output.dimensions(), (2, 1));
+        assert_eq!(rgb_output.as_bytes(), &[10, 20, 30, 0, 0, 0]);
+
+        let rgba_output =
+            super::execute_rotate(&rgba, 90.1, false, None, None, None, true, Some("RGBA"))
+                .expect("near-right RGBA rotation");
+        assert_eq!(rgba_output.dimensions(), (2, 1));
+        assert_eq!(rgba_output.as_bytes(), &[50, 60, 70, 80, 0, 0, 0, 0]);
+    }
 
     #[cfg(target_endian = "little")]
     #[test]

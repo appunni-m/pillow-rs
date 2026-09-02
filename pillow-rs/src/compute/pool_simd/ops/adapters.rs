@@ -4144,10 +4144,10 @@ fn simd_rotate_geometry(
     })
 }
 
-/// `execute_rotate` has exact right-angle fast paths. Leave those operations
-/// on their established implementation until a native transpose kernel is
-/// selected explicitly; otherwise an affine sampler could be admitted for an
-/// angle that Pillow intentionally snaps to a discrete rotation.
+/// `execute_rotate` has exact right-angle fast paths. Leave only those exact
+/// angles on the established implementation until a native transpose kernel
+/// is selected explicitly; nearby fractional angles must use Pillow's affine
+/// sampler rather than being rounded into a discrete rotation.
 fn rotate_uses_discrete_fast_path(
     angle: f64,
     center: Option<(f64, f64)>,
@@ -4164,10 +4164,10 @@ fn rotate_discrete_fast_angle(
     if center.is_some() || translate.is_some() || !angle.is_finite() {
         return None;
     }
-    let degree = angle.round().rem_euclid(360.0);
+    let degree = angle.rem_euclid(360.0);
     [90.0, 180.0, 270.0]
         .into_iter()
-        .find(|fast_angle| (degree - fast_angle).abs() < 2.0)
+        .find(|fast_angle| degree == *fast_angle)
         .map(|fast_angle| fast_angle as u32)
 }
 
@@ -22961,9 +22961,25 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
-    use super::{simd_projective_nearest_transform_bytes, simd_resize_f};
+    use super::{
+        rotate_discrete_fast_angle, simd_projective_nearest_transform_bytes, simd_resize_f,
+    };
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, GrayImage, RgbaImage};
+
+    #[test]
+    fn rotate_discrete_fast_path_requires_exact_angle() {
+        assert_eq!(rotate_discrete_fast_angle(90.0, None, None), Some(90));
+        assert_eq!(rotate_discrete_fast_angle(-90.0, None, None), Some(270));
+        assert_eq!(rotate_discrete_fast_angle(450.0, None, None), Some(90));
+        for angle in [88.9, 89.9, 90.1, 91.1, 179.9, 180.1, 269.9, 270.1] {
+            assert_eq!(
+                rotate_discrete_fast_angle(angle, None, None),
+                None,
+                "fractional angle {angle} must retain affine sampling"
+            );
+        }
+    }
 
     #[test]
     fn perspective_nearest_matches_pillow_center_and_truncation() {
