@@ -24,6 +24,12 @@ backend is complete.
   f32-convolution diagnostic diverges from Pillow's ordered f64 path by ULPs;
   the current host-control guard is therefore required until a device-side
   f64-equivalent proof exists.
+- [x] Align F resampling arithmetic in commit `a83fb9244`. Pillow's Hamming
+  cancellation row now uses the native `sincos`/fused-window ordering, SIMD
+  F resize preserves observable negative-zero words, and the marker-9 host
+  proof models the shader's unsigned four-limb reducer without admitting
+  same-sign overflow. The focused 11-case F cohort is exact on CPU, SIMD,
+  GPU, Node WASM, and browser WASM, with 11 terminal native-GPU receipts.
 - [ ] Prove additional arithmetic-changing transform domains (fractional or
   non-identity projective/mesh geometry, palette transforms, and
   mixed-operation batches) before native admission. The bounded indexed
@@ -41,6 +47,10 @@ backend is complete.
   CPU has 6,838 terminal receipts (6,832 pipeline-complete); SIMD has 6,850
   (6,844 pipeline-complete). The remaining host-controlled partitions need
   policy/identity reconciliation; no row may be relabeled to improve counts.
+- [x] Receipt-history accounting now retains nonterminal host-control prefixes
+  when building the WASM fallback taxonomy (commit `385eeaab1`). This closes
+  the evidence-writer discrepancy without changing terminal backend identity;
+  the aggregate GPU identity gap above remains open.
 
 ### P2 — performance acceptance
 
@@ -91,10 +101,10 @@ place until ordered-`f64` behavior is reproduced on-device.
 
 ## Current evidence
 
-- Full source revision: `6203ec533`.
+- Full source revision: `a83fb9244`.
 - Full envelope: `build/migration-parity/all-backends-test-result.json`
   (SHA-256
-  `313d66b10c305030b95ff90d4cd71d448accc1f0370fbf4c8cf6e78781e2ca6a`).
+  `34a22cb9c6cafd820be3abbdcfef94556ef796fff03cb6bd24ed62ae53ec2247`).
   CPU, SIMD, GPU, Node WASM, and browser WASM are each 10,952/10,952
   value/error exact; GPU smoke is 1/1. GPU has 6,745 native and 93
   host-controlled terminal receipts (6,838 complete), with zero partial,
@@ -103,7 +113,7 @@ place until ordered-`f64` behavior is reproduced on-device.
   unsafe/incomplete-dimension, and one Transform capability guard.
 - GPU sidecar: `build/migration-parity/all-backends/parity-gpu-execution.json`
   (SHA-256
-  `88876269949d882a3e053555bd3f0b181d44039a680fbb251424928a78e76f89`).
+  `bb830ea8f6ad4995977acc765281f212225c64974883813c5077400607340ba7`).
 - Focused F affine-nearest replay: `build/migration-parity/incremental/all-
   backends-test-result.json` (SHA-256
   `375828ecbd2dc091054ba1f691019b1983a0f052a46b6fbd9e6ff1a1c90725b5`).
@@ -112,6 +122,12 @@ place until ordered-`f64` behavior is reproduced on-device.
   exact host semantic control for the bilinear F rotate row. The focused GPU
   sidecar SHA-256 is
   `9366a58403f7400d172da70a15240eeac98ec7837d1977d640824a6a1207e744`.
+- Focused F arithmetic replay after `a83fb9244`: the selected 11-case cohort
+  is exact on CPU, SIMD, GPU, Node WASM, and browser WASM (11/11 each), with
+  11/11 terminal native-GPU receipts and no fallback. The envelope SHA-256 is
+  `c003d02c3b7e09624ed1840fa5ce59abe954ed6edc7a20d486854d0fe7f71c05`, and
+  the GPU execution sidecar SHA-256 is
+  `b2197b9afec17e9d32f19b4842a5ed8110052f53ef2e64119fea31f9f2b9b19f`.
 - Focused indexed projective envelope (archival replay; the incremental path is
   reused by later focused runs):
   `build/migration-parity/incremental/all-backends-test-result.json`
@@ -138,7 +154,9 @@ place until ordered-`f64` behavior is reproduced on-device.
   `804c65ea3777e391986f8387a1e7ebb93df3312305ab308b8b020639c0c2bfde`.
   The incremental path is reusable and may be overwritten by a later focused
   run; these hashes are the evidence recorded for this replay.
-- Verification: GPU pool tests 65/65; receipt-state tests 34/34;
+- Verification: GPU pool tests 65/65; receipt-state tests 35/35; the focused
+  11-case F replay at `a83fb9244` is 11/11 exact on every public lane with
+  11/11 native-GPU receipts;
   `make migration-parity-evidence-check`; the focused and full all-backend
   replays; `make build-dev`; `make -C pillow-rs fmt-fix`; and
   `make -C pillow-rs fmt`.
