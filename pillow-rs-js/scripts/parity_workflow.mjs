@@ -2294,10 +2294,22 @@ function runCase(wasm, item, operations, assets, executionSink) {
     if (workflowComplete && terminalReceiptIndex != null && executionSink?.[terminalReceiptIndex]) {
         executionSink[terminalReceiptIndex].terminal_complete = true;
     }
+    const executionErrors = Object.values(results)
+        .filter((result) => result.status === 'error')
+        .map((result) => ({ step_id: result.step_id, error: result.error }));
     for (const value of owned) {
         try { value.free(); } catch (_) { /* best-effort wasm handle cleanup */ }
     }
-    return { case_id: item.case_id, status: 'completed', observations };
+    return {
+        case_id: item.case_id,
+        status: 'completed',
+        observations,
+        // The Python evidence aggregator uses setup/call errors to distinguish
+        // a validation boundary from a deferred pipeline that never emitted a
+        // receipt.  Keep this diagnostic field beside the public observations;
+        // the parity driver strips it from the canonical comparison envelope.
+        execution_errors: executionErrors,
+    };
 }
 
 export function runWorkflow(wasm, input, runtime) {

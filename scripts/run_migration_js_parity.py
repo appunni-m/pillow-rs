@@ -670,6 +670,7 @@ def execution_evidence_document(
     cases: list[dict[str, Any]],
     identity: dict[str, Any] | None,
     execution: dict[str, list[dict[str, Any]]],
+    results: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Summarize WASM receipts collected beside the public parity results."""
 
@@ -718,6 +719,7 @@ def execution_evidence_document(
         classification = classify_pipeline_case(
             cases_by_id[case_id],
             receipts,
+            result=(results or {}).get(case_id),
         )
         pipeline_case_status[case_id] = classification
         pipeline_status_counts[classification["status"]] += 1
@@ -825,6 +827,7 @@ def run(args: argparse.Namespace) -> int:
     js_identity: dict[str, Any] | None = None
     host_capabilities: dict[str, Any] | None = None
     target_execution: dict[str, list[dict[str, Any]]] = {}
+    target_results: dict[str, dict[str, Any]] = {}
     execution_identity: dict[str, Any] | None = None
     target_profile = (
         "browser-wasm-core" if args.host == "browser" else "javascript-wasm-core"
@@ -901,11 +904,18 @@ def run(args: argparse.Namespace) -> int:
                 receipts = batch_execution.get(case_id)
                 if isinstance(receipts, list):
                     target_execution[case_id] = receipts
+        for case_id in case_ids:
+            target_results[case_id] = js_results[case_id]
         for case in batch:
+            public_target = {
+                key: value
+                for key, value in js_results[case["case_id"]].items()
+                if key != "execution_errors"
+            }
             outcome, diffs = compare_case(
                 case,
                 source_results[case["case_id"]],
-                js_results[case["case_id"]],
+                public_target,
                 operation_index,
             )
             comparisons.append(
@@ -914,7 +924,7 @@ def run(args: argparse.Namespace) -> int:
                     "target_profile": target_profile,
                     "requirements": case.get("covers", []),
                     "source": source_results[case["case_id"]],
-                    "target": js_results[case["case_id"]],
+                    "target": public_target,
                     "outcome": outcome,
                     "diffs": diffs,
                 }
@@ -1015,6 +1025,7 @@ def run(args: argparse.Namespace) -> int:
         cases,
         execution_identity,
         target_execution,
+        target_results,
     )
     write_result(output.resolve(), result)
     print(json.dumps(summary, sort_keys=True))

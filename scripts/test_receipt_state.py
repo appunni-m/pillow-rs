@@ -23,6 +23,7 @@ from scripts.run_migration_parity import (
     run_case,
     write_pipeline_execution_evidence,
 )
+from scripts.run_migration_js_parity import execution_evidence_document
 from scripts.validate_migration_parity_result import (
     all_backends as validate_all_backends,
     execution_receipt,
@@ -984,6 +985,38 @@ class ReceiptStateTests(unittest.TestCase):
                 "reason": "workflow ended in a public error before pipeline materialization",
             },
         )
+
+    def test_js_evidence_document_passes_public_errors_to_classifier(self) -> None:
+        """JS setup errors must classify at their validation boundary."""
+
+        case = error_at_deferred_call_case()
+        case_id = case["case_id"]
+        document = execution_evidence_document(
+            [case],
+            {"side": "target", "implementation": "pillow-rs-js"},
+            {case_id: []},
+            {
+                case_id: {
+                    "status": "completed",
+                    "observations": [
+                        {
+                            "step_id": "call",
+                            "status": "error",
+                            "error": {"kind": "invalid_argument"},
+                        }
+                    ],
+                }
+            },
+        )
+        self.assertEqual(
+            document["pipeline_case_status"][case_id],
+            {
+                "status": "not_applicable",
+                "reason": "workflow ended in a public error before pipeline materialization",
+            },
+        )
+        self.assertEqual(document["summary"]["pipeline_indeterminate_cases"], 0)
+        self.assertEqual(document["summary"]["pipeline_not_applicable_cases"], 1)
 
     def test_pipeline_case_classification_ignores_setup_receipts_on_validation_error(
         self,
