@@ -4684,3 +4684,45 @@ rows, and the historical GPU rows. These are stale execution failures, not
 current value/error mismatches. Target execution proof still has explicit
 `not_proven` profiles for non-pipeline or non-terminal benchmark subjects, so
 the native backend identity and equal-receipt timing gates remain open.
+
+## 32.67 Exact same-size filtered I resize admission (2026-09-02)
+
+The next deterministic divergence was a backend-identity gap, not a Pillow
+value mismatch: `PIL.Image.Image.resize.nuanced.i-identity-size` was routed to
+exact host semantic control even though its `I` source and target dimensions
+are both `9x8`. Pillow's imaging core returns the signed source words unchanged
+for a same-size resize under every resampling filter, so no typed convolution
+is needed for this geometry. A native Pillow probe over `1x1`, `2x3`, and
+`9x8` images, all six resampling filters, and signed-extrema words confirmed
+byte identity.
+
+Commit `e0adcd1be` adds a deliberately narrow proof: one non-empty
+`I`-mode operation, backed by a four-byte-per-pixel packed transport, with
+equal source and target dimensions. The GPU geometry expander lowers only that
+case to the existing opaque-word `Duplicate` dispatch. Chains, dimensional
+changes, and all other typed arithmetic continue through their existing exact
+host-controlled or separately proven paths. The focused signed-extrema native
+regression passes with requested and actual backend both GPU, one dispatch, and
+no fallback.
+
+The post-push schema-v3 replay
+`build/migration-parity/incremental/i-identity-all-backends-e0adcd1be.json`
+(SHA-256
+`410d2efc66d9b7b8d7a98d0eaa6cb6d4a93f1b88c3ae893d6b3214e022d182fc`) is
+value/error-exact on CPU, SIMD, GPU, Node WASM, and browser WASM (1/1 in each
+lane). Its GPU sidecar
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`f77bd3c8442ad6c35e61c33074999106ffa7c780896185f361f37eaa1a1c35f1`)
+records `actual_backend=gpu`, `dispatch_count=1`, and
+`fallback_reason=null`. The complete all-backends campaign at this
+implementation also remained value/error-exact for 10,952/10,952 public IDs;
+GPU native terminal receipts moved from 6,632 to 6,634, host-controlled
+receipts from 206 to 204, and the 6,832 GPU pipeline cases remained terminal
+complete.
+
+No fixtures, expected values, thresholds, IDs, denominators, public errors, or
+receipt rules changed. This closes only the proven same-size typed-I identity
+row. The broader filtered-I arithmetic domain, mixed F special/cancellation
+rows, additional host-control identity reconciliation, and the P2 equal-receipt
+timing gate remain open.
