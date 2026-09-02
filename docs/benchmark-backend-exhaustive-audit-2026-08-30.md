@@ -4552,3 +4552,36 @@ infinity, wrong length, and wrong mode; the existing F GPU group remains
 **25/25**. This is a parity guard, not a public-operation limitation, and no
 fixtures, expected values, thresholds, IDs, denominators, public errors, or
 receipt rules changed.
+
+## 32.63 Mixed-axis marker-9 F resize admission (2026-09-02)
+
+The remaining mixed-axis scheduling guard was stale for marker 9. The F
+encoder already puts its horizontal and vertical reducers in separate compute
+passes, so a proven f64-equivalent row does not observe the old Metal race that
+required host control for earlier marker-6 and dyadic reducers. Pillow's
+`Resample.c`/`ImagingResample` path stores the horizontal f32 intermediate before
+the vertical pass; marker 9's host proof materializes and validates the same
+intermediate before admitting the device path.
+
+Commit `a109e0179` removes only the marker-9 and central-router mixed-axis
+guard. Marker 6 and the generalized dyadic reducer retain their conservative
+guard, and rows that fail the marker-9 f64 proof still use exact host semantic
+control. Native regressions cover heterogeneous `2x2 -> 4x1`
+Bilinear/Bicubic/Lanczos/Hamming and the prior signed `1x2 -> 2x1` Box
+divergence; every case matches CPU byte-for-byte with requested=actual GPU,
+two dispatches, and no fallback. A 120-case mixed-axis probe across three
+finite source patterns, eight geometries, and five filters has 0 mismatches
+(98 native GPU, 22 exact host semantic control).
+
+The canonical schema-v3 all-backend replay at revision
+`a109e0179d795d46f0dadf4e30cc395e175af6a9` remains value/error-exact at
+10,952/10,952 for CPU, SIMD, GPU, Node WASM, and browser WASM; GPU smoke is
+1/1. The artifact
+`build/migration-parity/all-backends-test-result.json` has SHA-256
+`6da966a869678a49b7e9a5016e79e5f9e01b198fcb99a11181da1dfd29a1c70a`, and its
+GPU execution sidecar has SHA-256
+`0c918a1be9418fcf55e440eb3633d5f2005b8e2821b3d10680a7d0beedc70951`.
+CPU reports 6,838 terminal receipts, SIMD 6,850, and GPU 6,632 native GPU
+plus 206 exact host semantic-control CPU receipts; all pipeline partitions
+have zero partial, missing, or indeterminate receipts. No fixtures,
+thresholds, IDs, denominators, public errors, or receipt rules changed.
