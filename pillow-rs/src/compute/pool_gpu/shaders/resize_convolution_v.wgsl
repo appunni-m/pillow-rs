@@ -33,6 +33,23 @@ fn pixel_channel(pixel: u32, channel: u32) -> u32 {
     return (pixel >> (channel * 8u)) & 255u;
 }
 
+fn luma16_sample(word: u32) -> u32 {
+    let low = word & 255u;
+    let high = (word >> 8u) & 255u;
+    // The uploader stores the declared byte sequence in the low two bytes of
+    // each word. It is already the sequence consumed by Pillow's byte-aware
+    // I;16 resampler, so decode those bytes directly. The final store always
+    // packs the result as the little-endian transport word.
+    return low | (high << 8u);
+}
+
+fn f64_sample_bits(word: u32) -> u32 {
+    if params.mode == 5u {
+        return bitcast<u32>(f32(luma16_sample(word)));
+    }
+    return word;
+}
+
 fn fixed_to_byte(sum: i32) -> u32 {
     let value = (sum + FIXED_BIAS) >> 22;
     return u32(clamp(value, 0, 255));
@@ -229,7 +246,7 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
         if weight == 0i {
             continue;
         }
-        let bits = input[(source_y + tap) * params.dst_w + output_x];
+        let bits = f64_sample_bits(input[(source_y + tap) * params.dst_w + output_x]);
         if ((bits & 0x7fffffffu) == 0u) {
             continue;
         }
@@ -250,7 +267,7 @@ fn filtered_integer_exact(output_x: u32, output_y: u32) -> u32 {
         if signed_weight == 0i {
             continue;
         }
-        let bits = input[(source_y + tap) * params.dst_w + output_x];
+        let bits = f64_sample_bits(input[(source_y + tap) * params.dst_w + output_x]);
         if (bits & 0x7fffffffu) == 0u {
             continue;
         }
@@ -567,7 +584,7 @@ fn filtered_f64_exact(output_x: u32, output_y: u32) -> u32 {
         if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u {
             continue;
         }
-        let bits = input[(source_y + tap) * params.dst_w + output_x];
+        let bits = f64_sample_bits(input[(source_y + tap) * params.dst_w + output_x]);
         if (bits & 0x7fffffffu) == 0u {
             continue;
         }
@@ -594,7 +611,7 @@ fn filtered_f64_exact(output_x: u32, output_y: u32) -> u32 {
         if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u {
             continue;
         }
-        let bits = input[(source_y + tap) * params.dst_w + output_x];
+        let bits = f64_sample_bits(input[(source_y + tap) * params.dst_w + output_x]);
         if (bits & 0x7fffffffu) == 0u {
             continue;
         }
@@ -638,6 +655,14 @@ fn filtered_typed(output_x: u32, output_y: u32) -> u32 {
     return input[source_y * params.dst_w + output_x];
 }
 
+fn luma16_store_from_f32(bits: u32) -> u32 {
+    let value = bitcast<f32>(bits);
+    let rounded = i32(trunc(select(value - 0.5, value + 0.5, value >= 0.0)));
+    let low = u32(clamp(rounded % 256, 0, 255));
+    let high = u32(clamp(rounded / 256, 0, 255));
+    return low | (high << 8u);
+}
+
 fn filtered_box_copy(output_x: u32, output_y: u32) -> u32 {
     let word = filtered_typed(output_x, output_y);
     // Pillow's f64 accumulator starts at +0.0, so a one-tap Box copy
@@ -661,6 +686,21 @@ fn unpremultiply(value: u32, alpha: u32) -> u32 {
 }
 
 fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
+    if params.mode == 5u {
+        if params.premultiply == 10u {
+            // Marker 10 reuses the exact f64 coefficient reducer, but rounds
+            // its f32 result at Pillow's native I;16 byte-level boundary.
+            // A same-size vertical pass is an identity after Pillow's
+            // byte-level round/clip. Copying the packed word also avoids
+            // evaluating the tiny Lanczos/Bicubic tail coefficients that
+            // exist at an unchanged boundary.
+            if params.height == params.dst_h {
+                return input[output_y * params.dst_w + output_x];
+            }
+            return luma16_store_from_f32(filtered_f64_exact(output_x, output_y));
+        }
+        return filtered_typed(output_x, output_y);
+    }
     if params.mode == 7u {
         // I-mode nearest resize uses the host-generated one-tap table for
         // Pillow's cumulative f64 coordinate walk. Copy the complete signed
