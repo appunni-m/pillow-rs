@@ -1904,7 +1904,8 @@ fn transform_mesh_with_filter(
             let local_y = (destination_y - by0) as f64 + 0.5;
             for destination_x in bx0..bx1 {
                 let local_x = (destination_x - bx0) as f64 + 0.5;
-                // Geometry.c's quad_transform is compiled into two linear
+                // Pillow src/libImaging/Geometry.c quad_transform is compiled
+                // into two linear
                 // fused additions followed by a rounded x-product and a
                 // final fused y-product on this target. Keep the cross-term
                 // multiplication separate from the final `mul_add`; folding
@@ -2023,14 +2024,16 @@ fn transform_mesh_with_filter(
 fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
     let p1 = samples[1];
     let p2 = -samples[0] + samples[2];
-    let p3 = 2.0 * (samples[0] - samples[1]) + samples[2] - samples[3];
+    let p3 = (samples[0] - samples[1]).mul_add(2.0, samples[2]) - samples[3];
     let p4 = -samples[0] + samples[1] - samples[2] + samples[3];
-    p1 + distance * (p2 + distance * (p3 + distance * p4))
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{op_transform, transform_mesh, transform_projective_generic};
+    use super::{cubic_sample, op_transform, transform_mesh, transform_projective_generic};
     use crate::pipeline::{ResampleFilter, TransformMethod};
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
@@ -2182,6 +2185,15 @@ mod tests {
             91, 89, 125, 121, 118, 114, 109, 104,
         ];
         assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn cubic_sample_preserves_native_horner_fma_order() {
+        // This tap sequence occurs at the top edge of a one-column RGBX
+        // source. Pillow src/libImaging/Geometry.c BICUBIC uses fused Horner
+        // steps and returns 37; separate multiply/add operations return 38.
+        let value = cubic_sample([174.0, 36.0, 38.0, 84.0], 0.9999999999999996);
+        assert_eq!(value as u8, 37);
     }
 
     #[test]
