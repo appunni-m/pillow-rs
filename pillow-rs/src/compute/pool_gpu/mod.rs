@@ -1332,11 +1332,29 @@ fn gpu_f_resize_f64_is_exact(
     let mut changed_any = false;
 
     for op in ops {
+        if let PipelineOp::PutData {
+            data,
+            mode: PixelMode::F,
+        } = op
+        {
+            // PutData(F) is a raw little-endian word replacement in the GPU
+            // shader. Replace the proof source with those exact words before
+            // checking the following resize, just as Pillow's deferred
+            // pipeline does at its materialization boundary.
+            let expected_bytes = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
+                .ok()
+                .map(|dims| dims.total_bytes());
+            if expected_bytes != Some(data.len()) || !data.chunks_exact(4).remainder().is_empty() {
+                return false;
+            }
+            bytes = data.to_vec();
+            continue;
+        }
         let PipelineOp::Resize { w, h, filter } = op else {
             // The f64 coefficient ranges and intermediate proof are scoped
-            // to pure Resize chains. A PutData, geometry relocation, or mode
-            // transition needs its own storage contract and must remain on
-            // exact host semantic control.
+            // to raw PutData updates plus pure Resize chains. Geometry
+            // relocation, mode transitions, and arithmetic nodes need their
+            // own storage contract and remain on exact host semantic control.
             return false;
         };
         if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
@@ -11643,6 +11661,62 @@ mod tests {
             &image,
             Some("F")
         ));
+
+        // PutData(F) replaces the deferred source words before the resize;
+        // the marker-9 proof must validate and consume that replacement rather
+        // than conservatively routing an otherwise exact non-dyadic resize.
+        let putdata: Arc<[u8]> = Arc::from(
+            [0.1f32, -0.3, 1.7, 2.9]
+                .into_iter()
+                .flat_map(f32::to_le_bytes)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        );
+        assert!(gpu_f_resize_f64_is_exact(
+            &[
+                PipelineOp::PutData {
+                    data: putdata.clone(),
+                    mode: PixelMode::F,
+                },
+                PipelineOp::Resize {
+                    w: 1,
+                    h: 5,
+                    filter: ResampleFilter::Bilinear,
+                },
+            ],
+            &image,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_is_exact(
+            &[
+                PipelineOp::PutData {
+                    data: Arc::from(vec![0u8; 4].into_boxed_slice()),
+                    mode: PixelMode::F,
+                },
+                PipelineOp::Resize {
+                    w: 1,
+                    h: 5,
+                    filter: ResampleFilter::Bilinear,
+                },
+            ],
+            &image,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_is_exact(
+            &[
+                PipelineOp::PutData {
+                    data: putdata,
+                    mode: PixelMode::I,
+                },
+                PipelineOp::Resize {
+                    w: 1,
+                    h: 5,
+                    filter: ResampleFilter::Bilinear,
+                },
+            ],
+            &image,
+            Some("F")
+        ));
         // The opposite mixed geometry is not yet safe in one device
         // submission: horizontal upscaling followed by vertical downscaling
         // can read a stale/wrong intermediate on the adapter.
@@ -12617,6 +12691,61 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.2, 2);
         assert_eq!(telemetry.6, Some(4));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_putdata_prefix_native_matches_cpu() {
+        fn bytes(words: &[f32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // The deferred PutData is deliberately different from the initial
+        // image. Pillow replaces the source words before evaluating the
+        // non-dyadic resize; the GPU must prove and consume that same update
+        // instead of applying the coefficients to stale upload bytes.
+        let initial =
+            Image::frombytes("F", (2, 2), &bytes(&[9.0, 8.0, 7.0, 6.0])).expect("initial F source");
+        let replacement = bytes(&[0.1, -0.3, 1.7, 2.9]);
+
+        let mut expected_image = initial.clone();
+        expected_image.putdata(&replacement).expect("CPU F PutData");
+        let expected = expected_image
+            .resize((1, 5), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("CPU F PutData resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F PutData resize bytes");
+
+        let mut actual_image = initial;
+        actual_image.putdata(&replacement).expect("GPU F PutData");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match actual_image
+            .resize((1, 5), Some(ResampleInput::Name("BILINEAR".into())), None)
+            .expect("GPU F PutData resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F PutData resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native GPU F PutData resize parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU F PutData resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.2, 2);
+        assert_eq!(telemetry.6, Some(3));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
