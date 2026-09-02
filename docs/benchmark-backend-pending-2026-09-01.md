@@ -36,16 +36,21 @@ execution is a parity-preserving fallback, not a parity completion claim.
   next stage's proof. The native Bicubic-to-Lanczos regression uses four
   dispatches; a 500-case deterministic chain probe had 0 mismatches (25 native
   GPU, 475 exact host semantic control).
-- [x] Admit bounded finite-input overflow outputs. Commit `51f4dec15` extends
+- [x] Admit bounded finite-input overflow outputs. Commit `19acd29ab` extends
   the marker-9 integer reducer and both WGSL stores to encode a proven final
   ±infinity when Pillow's ordered f64 accumulation overflows the f32 store;
   NaN and ambiguous cancellation remain rejected. A native max/max/−max
   ringing-filter matrix is byte-exact for Bicubic, Lanczos, and Hamming with
   terminal GPU receipts.
+- [x] Preserve proven signed-zero filtered outputs. Commit `19acd29ab` removes
+  the blanket marker-9 rejection of `0x80000000` when the exact integer
+  reducer agrees with Pillow's ordered f64 result. The native minimum-negative-
+  subnormal Box regression is byte-exact with a terminal GPU receipt; rows
+  whose ordered-f64 residual disagrees with the exact sum remain host-controlled.
 - [ ] Extend the proof to the remaining coefficient/value domains. The open
-  families are NaN/invalid special-value arithmetic, negative-zero filtered
-  outputs, cancellation cases that do not prove the ordered f64 result,
-  Box ratios outside the proven row limits, chains containing non-Resize
+  families are NaN/invalid special-value arithmetic, unproven negative-zero
+  and cancellation cases whose ordered f64 result does not match the exact
+  sum, Box ratios outside the proven row limits, chains containing non-Resize
   stages or outside the per-stage intermediate proof, and larger native-GPU
   arithmetic domains. Those rows remain on exact host semantic control until
   their arithmetic, ordering, and storage contracts are separately validated.
@@ -205,15 +210,18 @@ execution is a parity-preserving fallback, not a parity completion claim.
   outside the pipeline partition; the observed filter/invert prefix remains
   the single genuine partial. WASM remains 6,713 complete + 586 partial +
   888 missing + 2,738 not-applicable + 27 indeterminate.
-- [x] The finite-overflow marker-9 extension at committed source
-  `51f4dec15` is covered by the native max/max/−max Bicubic, Lanczos, and
-  Hamming matrix; focused F-resize tests are **16/16** and the serial
-  GPU-pool group is **27/27**. The fresh schema-v3 envelope is
-  `/tmp/all-backends-post-51f4dec15.json` (SHA-256
-  `83262f5504dc5da438a6902b6d30c182730317477d38383cac3e3ef0f590e1d1`).
-  All five public lanes remain **10,952/10,952** value-exact with GPU smoke
-  **1/1**; native receipt partitions and the fixed case-ID digest are
-  unchanged from the prior envelope.
+- [x] The finite-overflow and proven signed-zero marker-9 extensions at
+  committed source `19acd29ab` are covered by the native max/max/−max
+  Bicubic, Lanczos, and Hamming matrix plus the minimum-negative-subnormal
+  Box regression; focused F-resize tests are **17/17** and the serial
+  GPU-pool group is **28/28**. The fresh schema-v3 envelope is
+  `/tmp/all-backends-post-19acd29ab.json` (SHA-256
+  `3e2f0c5bac51737de40e202ad993de64f28673379dc8bda4ada216631089c6ce`).
+  Revision is `19acd29abdef41da22c3f3875c553e00c3d3c3be`. All five public
+  lanes remain **10,952/10,952** value-exact with GPU smoke **1/1**; CPU and
+  GPU report 7,084 complete + 1 genuine partial + 3,867 not-applicable, SIMD
+  reports 7,096 + 1 + 3,855, and the WASM partitions remain 6,713 complete +
+  586 partial + 888 missing + 2,738 not-applicable + 27 indeterminate.
 - [x] The marker-9 native probe is exact for the heterogeneous lanes: the
   `(2,2) -> (1,2)` one-axis and `(2,2) -> (1,5)` two-axis Bilinear cases are
   byte-for-byte equal to Pillow and publish actual-GPU receipts. The rebuilt
@@ -231,8 +239,9 @@ execution is a parity-preserving fallback, not a parity completion claim.
   the expanded degenerate probe is 0 mismatches and all 172 thumbnail parity
   cases remain exact.
 - [x] The focused post-merge checks pass: `make build-dev`, Rust F-resize
-  tests 16/16, GPU-pool tests 27/27 (including Draw, indexed Fit, finite
-  subnormal marker-9 rows, filtered F chains, and finite overflow rows),
+  tests 17/17, GPU-pool tests 28/28 (including Draw, indexed Fit, finite
+  subnormal marker-9 rows, filtered F chains, finite overflow and signed-zero
+  rows),
   receipt tests 28/28,
   evidence/schema validation, and `make -C pillow-rs fmt`. Clippy remains
   blocked before
@@ -243,8 +252,8 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 - [x] The source lane and receipt-partition correction are committed as
   `cb1813bc8` plus setup-before-error classifier `b867867ee`, the two-axis f64 GPU admission as `f17e1a7da`, the finite
-  subnormal marker-9 admission as `b1962c6dd`, finite overflow marker-9
-  admission as `51f4dec15`, pure filtered F-chain admission
+  subnormal marker-9 admission as `b1962c6dd`, finite overflow and proven
+  signed-zero marker-9 admission as `19acd29ab`, pure filtered F-chain admission
   as `33e0f11ec`, mixed-axis F scheduling guard as `ea15ac316`, the raw-color
   `ExtractBand` admission as `f55a770ad`, the
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
@@ -254,6 +263,6 @@ execution is a parity-preserving fallback, not a parity completion claim.
   genuine partial receipt each and the GPU partition has 6,832 native receipts
   plus 252 CPU receipts. No fixture, expected value, threshold, denominator,
   or case ID was changed. The latest envelope is
-  `/tmp/all-backends-post-51f4dec15.json` and remains schema-valid and
+  `/tmp/all-backends-post-19acd29ab.json` and remains schema-valid and
   value-exact at the fixed denominator.
 - [ ] Do not mark the overall goal complete while P0, P1, or P2 remains open.

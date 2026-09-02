@@ -3935,23 +3935,60 @@ the other output words remain the exact finite rounded values. The prior
 integer reducer rejected every f64 accumulator with an infinite final cast,
 so these parity-safe rows stayed on exact host semantic control.
 
-Commit `51f4dec15` extends the host integer conversion and both WGSL reducers
+Commit `19acd29ab` extends the host integer conversion and both WGSL reducers
 to encode ±infinity when the exact final magnitude overflows f32. NaN results,
 intermediate overflow followed by cancellation, and any ordered-f64 versus
 exact-integer disagreement remain rejected. The native regression covers the
 max/max/−max Bicubic, Lanczos, and Hamming rows, checks Pillow's exact output
 words, and observes terminal native-GPU receipts. Focused F-resize tests pass
-**16/16** and the serial GPU-pool group passes **27/27**; `make build-dev` and
+**17/17** and the serial GPU-pool group passes **28/28**; `make build-dev` and
 formatting pass.
 
 The fresh schema-v3 envelope at
-`/tmp/all-backends-post-51f4dec15.json` (SHA-256
-`83262f5504dc5da438a6902b6d30c182730317477d38383cac3e3ef0f590e1d1`) is
-revision `51f4dec15500afbd354574bbbc46611e0146cbce`. CPU, SIMD, GPU, Node
+`/tmp/all-backends-post-19acd29ab.json` (SHA-256
+`3e2f0c5bac51737de40e202ad993de64f28673379dc8bda4ada216631089c6ce`) is
+revision `19acd29abdef41da22c3f3875c553e00c3d3c3be`. CPU, SIMD, GPU, Node
 WASM, and browser WASM remain value-exact at **10,952/10,952**, with GPU smoke
-**1/1**; the fixed full-corpus receipt partitions are unchanged because it
-contains no rows in this newly admitted overflow subset. Remaining P0 work is
-NaN/invalid special-value arithmetic, negative-zero filtered outputs,
-cancellation cases outside the ordered proof, larger Box ratios, and chains
-outside the proven per-stage contract. No fixtures, expected values,
-thresholds, IDs, denominators, or public parity outputs changed.
+**1/1**; CPU and GPU report 7,084 complete + 1 genuine partial + 3,867
+not-applicable, SIMD reports 7,096 + 1 + 3,855, and the WASM partitions remain
+6,713 complete + 586 partial + 888 missing + 2,738 not-applicable + 27
+indeterminate. Remaining P0 work is NaN/invalid special-value arithmetic,
+unproven negative-zero/cancellation rows whose ordered f64 result disagrees
+with the exact reducer, larger Box ratios, and chains outside the proven
+per-stage contract. No fixtures, expected values, thresholds, IDs,
+denominators, or public parity outputs changed.
+
+## 32.45 Proven signed negative-zero filtered stores (2026-09-02)
+
+Pillow's F-mode Box reducer can intentionally store a signed zero. With source
+words `[0x80000001, 0x00000000, 0x00000000]` (the minimum negative f32
+subnormal followed by two positive zeros), a 1×3 → 1×1 Box resize accumulates
+a negative f64 value whose final f32 store underflows to `0x80000000`. The
+previous marker-9 admission check rejected every negative-zero result even
+when the exact integer reducer produced the same bit pattern, so this row was
+kept on exact host semantic control.
+
+Commit `19acd29ab` removes that blanket sign-bit rejection while retaining the
+ordered-f64-versus-exact-sum equality check. The native regression verifies the
+Pillow/CPU/GPU bytes and a terminal native-GPU receipt; the integer conversion
+unit test also covers a negative value below the f32 subnormal range. A nearby
+counterexample, `[-1e-40, +1e-40, +0]`, remains correctly rejected: Pillow's
+ordered f64 multiply/add sequence leaves a tiny negative residual that rounds
+to `-0`, while the exact integer products cancel to `+0`. This preserves the
+conservative boundary for cancellation rows whose ordered result is not
+mathematically identical to the exact reducer.
+
+Focused F-resize tests pass **17/17**, the serial GPU-pool group passes
+**28/28**, `make migration-parity-receipt-test` passes **28/28**, and
+`make build-dev` plus formatting pass. The schema-v3 envelope at
+`/tmp/all-backends-post-19acd29ab.json` (SHA-256
+`3e2f0c5bac51737de40e202ad993de64f28673379dc8bda4ada216631089c6ce`) is
+revision `19acd29abdef41da22c3f3875c553e00c3d3c3be`; all five public lanes
+remain **10,952/10,952** value-exact with GPU smoke **1/1**. Native receipt
+partitions are unchanged (CPU/GPU 7,084 complete + 1 genuine partial + 3,867
+not-applicable; SIMD 7,096 + 1 + 3,855; WASM 6,713 complete + 586 partial +
+888 missing + 2,738 not-applicable + 27 indeterminate). Remaining P0 work is
+NaN/invalid special-value arithmetic, other unproven cancellation/negative-
+zero rows, broader Box ratios, and chains outside the proven per-stage
+contract. No fixtures, expected values, thresholds, IDs, denominators, or
+public parity outputs changed.
