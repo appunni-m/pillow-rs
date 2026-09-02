@@ -4261,3 +4261,49 @@ identity/fallback reconciliation (including 211 CPU receipts and 142 exact
 host-control routes), the broader F arithmetic domain, and the P2 timing gate
 are still open. No fixtures, expected values, thresholds, IDs, denominators,
 or public parity outputs were changed.
+
+## 32.54 Marker-9 F special-value arithmetic (2026-09-02)
+
+The next deterministic P0 divergence was the marker-9 F admission boundary,
+not a public byte mismatch. The proof intentionally rejected every non-finite
+source word even when Pillow's ordered f64 resampler had a deterministic
+result. A native diagnostic also found a separate Box-copy error: a signaling
+NaN was copied as `0x7fa00001`, while Pillow's f32-to-f64 product and final
+store quieted it to `0x7fe00001`.
+
+Commit `bc8197617` adds a narrowly bounded IEEE special-value state machine to
+the host proof and both convolution shaders. The reducer preserves the first
+NaN payload/sign in tap order, canonicalizes invalid zero*infinity and
+opposite-infinity results, and preserves the sign of a lone infinity. The Box
+copy path quiets signaling NaNs while preserving payload/sign and keeps the
+existing positive-zero canonicalization. A row is admitted only when this
+device model equals Pillow's ordered f64-to-f32 result; mixed special ordering
+or cancellation that does not match remains exact host semantic control.
+
+The permanent native GPU regression covers signaling/quiet NaN payloads,
+positive and negative infinity, invalid products, opposite-infinity
+cancellation, and Box copies. The focused `f_resize_f64` group is **8/8**.
+Two deterministic diagnostic probes (1,000 one-special rows and 1,800
+two/three-special rows across heterogeneous geometries and filters) found
+**0 mismatches** against native Pillow; rows outside the proof continue to
+publish an explicit host-control receipt. `make -C pillow-rs fmt`,
+`make build-dev`, and the serial focused tests pass. `make -C pillow-rs clippy`
+remains blocked by the pre-existing pinned `image-slash-star` libavif
+1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement.
+
+The fixed all-public-cases replay at committed revision
+`bc8197617bc0ba880f08aa251f294a51df788d95` is
+`/tmp/all-backends-post-bc8197617.json` (SHA-256
+`0b75a5cdce922104f6d69b585ca5e0188c1d336c8d6029bf41378a4b755ab7fd`). The
+unchanged 10,952-case ID digest remains
+`881ae8494848c4528b57f43d38ab6b46935a12e743a8967edb263731d064c526`; CPU,
+SIMD, GPU, Node WASM, and browser WASM are each **10,952/10,952**
+value/error-exact and GPU smoke is **1/1**. CPU has 6,838 terminal receipts
+(6,832 pipeline-complete), SIMD 6,850 (6,844 pipeline-complete), and GPU
+6,627 native-GPU plus 211 CPU receipts (6,832 pipeline-complete, 142 exact
+host-control fallbacks). Every lane has zero partial, missing, or
+indeterminate pipeline cases. The aggregate remains
+`passed_with_backend_gaps` because backend identity reconciliation and the
+remaining mixed-order/cancellation, Box-ratio, chain, and larger-domain F
+proofs are still open. No fixtures, expected values, thresholds, IDs,
+denominators, or public parity outputs changed.
