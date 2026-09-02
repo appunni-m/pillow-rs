@@ -5366,3 +5366,17 @@ the prefix-plus-terminal sequence; `make migration-parity-receipt-test` passes
 35/35 and `make migration-parity-evidence-check` passes. This is an evidence
 correctness fix only; it does not relabel any backend, alter denominators, or
 change the aggregate GPU identity gap.
+
+## 32.80 Equal-ID performance gate remains noise-sensitive (2026-09-02)
+
+After the parity fixes, six fresh measurements of the fixed 11-workload cohort
+were collected at `a83fb9244`. Every run had the exact same workload IDs and
+four terminal receipts per workload (44/44 comparable pairings; no fallback or
+receipt gaps). The adjacent budget checks produced 9, 4, 5, 6, and 5
+violations. The rows move between large and small medians across otherwise
+identical receipts (notably masked RGB analysis, CMYK ImageStat, and the GPU
+draw path), so this remains timing variance rather than a reproducible source
+regression. The 5% budget, sample policy, IDs, and denominators were not
+changed. The deterministic CPU Brightness identity optimization remains a
+separate row-level improvement, but the required two consecutive zero-violation
+comparisons have not yet been observed.
