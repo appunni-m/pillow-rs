@@ -357,12 +357,24 @@ def receipt_terminal_complete(receipt: dict[str, Any]) -> bool:
     return type(value) is bool and value
 
 
+def receipt_has_pipeline_work(receipt: dict[str, Any]) -> bool:
+    """Return whether a receipt records an executed pipeline operation."""
+
+    operation_count = receipt.get("operation_count")
+    return not (
+        type(operation_count) is int
+        and operation_count == 0
+        and not receipt.get("operation_telemetry")
+    )
+
+
 def receipt_is_meaningful(receipt: dict[str, Any]) -> bool:
     """Return whether a receipt participates in pipeline classification."""
 
     return (
         receipt.get("pipeline_relevant") is not False
         and receipt.get("status") not in {"not_recorded", "not_applicable"}
+        and receipt_has_pipeline_work(receipt)
     )
 
 
@@ -446,11 +458,11 @@ def validate_pipeline_case_status(
         if not isinstance(reason, str) or not reason:
             return f"{label} contains an invalid reason for {case_id!r}"
         receipts = cases[case_id]
-        meaningful = any(
-            receipt_is_meaningful(receipt)
+        meaningful = any(receipt_is_meaningful(receipt) for receipt in receipts)
+        terminal = any(
+            receipt_terminal_complete(receipt) and receipt_is_meaningful(receipt)
             for receipt in receipts
         )
-        terminal = any(receipt_terminal_complete(receipt) for receipt in receipts)
         if terminal and status != "complete":
             return f"{label} hides a terminal receipt for {case_id!r}"
         if meaningful and not terminal and status != "partial_receipt":

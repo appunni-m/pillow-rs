@@ -1277,6 +1277,31 @@ class ReceiptStateTests(unittest.TestCase):
             },
         )
 
+    def test_pipeline_case_classification_ignores_zero_operation_terminal_receipt(
+        self,
+    ) -> None:
+        """An observation-only record cannot prove deferred pipeline work."""
+
+        case = classification_case("zero-operation-terminal", "resize")
+        self.assertEqual(
+            classify_pipeline_case(
+                case,
+                [
+                    {
+                        "status": "completed",
+                        "terminal_complete": True,
+                        "actual_backend": "simd",
+                        "operation_count": 0,
+                        "operation_telemetry": [],
+                    }
+                ],
+            ),
+            {
+                "status": "missing_receipt",
+                "reason": "deferred image pipeline reached an observed boundary without a receipt",
+            },
+        )
+
     def test_pipeline_case_classification_keeps_blocked_dependency_conservative(self) -> None:
         self.assertEqual(
             classify_pipeline_case(
@@ -1369,6 +1394,91 @@ class ReceiptStateTests(unittest.TestCase):
         self.assertEqual(result["observations"], [{"step_id": "bytes", "status": "ok", "value": 7}])
         self.assertEqual(len(sink), 1)
         self.assertTrue(sink[0]["terminal_complete"])
+
+    def test_zero_operation_observation_keeps_prior_receipt_terminal(self) -> None:
+        """A zero-operation observation must not replace its real prefix."""
+
+        class Telemetry:
+            def __init__(self) -> None:
+                self.samples: list[dict[str, object] | None] = [
+                    None,
+                    {
+                        "actual_backend": "simd",
+                        "operation_count": 1,
+                        "operation_telemetry": [{"operation": "Resize"}],
+                    },
+                    {
+                        "actual_backend": "simd",
+                        "operation_count": 0,
+                        "operation_telemetry": [],
+                    },
+                    None,
+                ]
+
+            def take_pipeline_telemetry(self) -> dict[str, object] | None:
+                return self.samples.pop(0)
+
+        case = {
+            "case_id": "zero-operation-observation",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "new",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "resize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": {"kind": "binding", "step_id": "new"},
+                    "arguments": {},
+                },
+                {
+                    "step_id": "bytes",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": {"kind": "binding", "step_id": "resize"},
+                    "arguments": {},
+                },
+            ],
+            "observations": ["bytes"],
+        }
+        sink: list[dict[str, object]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "scalar"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=[object(), object(), object()],
+                ),
+                patch(
+                    "scripts.run_migration_parity.serialize_value",
+                    return_value=7,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    pipeline_execution_api=Telemetry(),
+                    pipeline_execution_sink=sink,
+                )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(sink), 2)
+        self.assertTrue(sink[0]["terminal_complete"])
+        self.assertIsNone(sink[0].get("pipeline_relevant"))
+        self.assertFalse(sink[1]["terminal_complete"])
+        self.assertFalse(sink[1]["pipeline_relevant"])
+        self.assertEqual(
+            classify_pipeline_case(case, sink, result=result)["status"],
+            "complete",
+        )
 
     def test_observed_prefix_receipt_is_terminal_before_later_public_error(self) -> None:
         """An observed deferred result proves its own boundary before later failure."""
@@ -1666,6 +1776,49 @@ class ReceiptStateTests(unittest.TestCase):
                     ).hexdigest(),
                 },
                 expected_backend="gpu",
+            )
+            self.assertEqual(evidence["status"], "measured")
+
+    def test_sidecar_excludes_zero_operation_terminal_from_backend_proof(self) -> None:
+        case = classification_case("zero-operation-sidecar", "resize")
+        case_id = case["case_id"]
+        execution = {
+            case_id: [
+                {
+                    "status": "completed",
+                    "terminal_complete": True,
+                    "actual_backend": "simd",
+                    "operation_count": 0,
+                    "operation_telemetry": [],
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "execution.json"
+            write_pipeline_execution_evidence(
+                path,
+                [case],
+                {"side": "target", "backend": "simd"},
+                execution,
+            )
+            document = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(document["summary"]["receipt_cases"], 1)
+            self.assertEqual(document["summary"]["completed_receipts"], 1)
+            self.assertEqual(document["summary"]["terminal_complete_receipts"], 0)
+            self.assertEqual(document["summary"]["actual_backend_counts"], {})
+            self.assertEqual(
+                document["pipeline_case_status"][case_id]["status"],
+                "missing_receipt",
+            )
+            digest = hashlib.sha256(f"{case_id}\n".encode()).hexdigest()
+            evidence = pipeline_execution_evidence(
+                path,
+                expected_scope={
+                    "kind": "public-parity-corpus",
+                    "selected": 1,
+                    "case_ids_sha256": digest,
+                },
+                expected_backend="simd",
             )
             self.assertEqual(evidence["status"], "measured")
 

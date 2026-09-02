@@ -2173,6 +2173,14 @@ function observationMaterializesPipeline(step) {
     return PIPELINE_RESULT_OPS.has(operation) && !PIPELINE_MUTATING_OPS.has(operation);
 }
 
+function receiptHasPipelineWork(receipt) {
+    return !(
+        receipt?.operation_count === 0
+        && (!Array.isArray(receipt?.operation_telemetry)
+            || receipt.operation_telemetry.length === 0)
+    );
+}
+
 function takePipelineTelemetry(wasm, sink, stepId, status = 'completed') {
     if (!sink || typeof wasm.takePipelineTelemetry !== 'function') return;
     const receipt = wasm.takePipelineTelemetry();
@@ -2182,9 +2190,14 @@ function takePipelineTelemetry(wasm, sink, stepId, status = 'completed') {
     // A per-step dispatch starts as a prefix.  The observation loop applies
     // the operation-boundary transition shared with the Python harness.
     completed.terminal_complete = false;
+    const pipelineRelevant = receiptHasPipelineWork(completed)
+        && completed.pipeline_relevant !== false;
+    if (!receiptHasPipelineWork(completed)) completed.pipeline_relevant = false;
     if (stepId != null) completed.step_id = stepId;
     sink.push(completed);
-    return sink.length - 1;
+    // Keep observation-only records for diagnostics, but do not let one
+    // replace the preceding receipt that proves deferred pipeline work.
+    return pipelineRelevant ? sink.length - 1 : null;
 }
 
 function runCase(wasm, item, operations, assets, executionSink) {
