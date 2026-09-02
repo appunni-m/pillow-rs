@@ -1290,6 +1290,219 @@ fn gpu_f_resize_f64_pass_bits(
     Some(result)
 }
 
+/// Relocate complete four-byte F words through an operation that does not
+/// interpret the scalar as color or perform arithmetic.  Marker 9 uses this
+/// between filtered resize stages so the next f64 reducer sees the exact
+/// words Pillow materialized at the preceding geometry boundary.
+fn gpu_f_resize_relocate_words(
+    bytes: &[u8],
+    dimensions: (u32, u32),
+    op: &PipelineOp,
+) -> Option<(Vec<u8>, (u32, u32))> {
+    let (width, height) = dimensions;
+    let checked = CheckedDims::new(width, height, 4).ok()?;
+    if checked.total_pixels() > GPU_BUFFER_CAPACITY as usize {
+        return None;
+    }
+    let expected = checked.total_bytes();
+    if bytes.len() != expected {
+        return None;
+    }
+    let copy_word = |output: &mut [u8], destination: usize, source: usize| -> Option<()> {
+        let source_offset = source.checked_mul(4)?;
+        let destination_offset = destination.checked_mul(4)?;
+        let source_word = bytes.get(source_offset..source_offset.checked_add(4)?)?;
+        output
+            .get_mut(destination_offset..destination_offset.checked_add(4)?)?
+            .copy_from_slice(source_word);
+        Some(())
+    };
+
+    match op {
+        PipelineOp::Duplicate => Some((bytes.to_vec(), dimensions)),
+        PipelineOp::Mirror | PipelineOp::Flip => {
+            if width == 0 || height == 0 {
+                return None;
+            }
+            let mut output = vec![0u8; expected];
+            for y in 0..height as usize {
+                for x in 0..width as usize {
+                    let source_x = if matches!(op, PipelineOp::Mirror) {
+                        width as usize - 1 - x
+                    } else {
+                        x
+                    };
+                    let source_y = if matches!(op, PipelineOp::Flip) {
+                        height as usize - 1 - y
+                    } else {
+                        y
+                    };
+                    let destination = y.checked_mul(width as usize)?.checked_add(x)?;
+                    let source = source_y
+                        .checked_mul(width as usize)?
+                        .checked_add(source_x)?;
+                    copy_word(&mut output, destination, source)?;
+                }
+            }
+            Some((output, dimensions))
+        }
+        PipelineOp::Transpose { method } => {
+            if width == 0 || height == 0 {
+                return None;
+            }
+            let output_dimensions = transpose_output_dimensions(method, width, height);
+            let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+                .ok()?
+                .total_bytes();
+            let mut output = vec![0u8; output_bytes];
+            for y in 0..height as usize {
+                for x in 0..width as usize {
+                    let (output_x, output_y) =
+                        transpose_forward(method, width, height, x as u32, y as u32);
+                    let destination = usize::try_from(output_y)
+                        .ok()?
+                        .checked_mul(usize::try_from(output_dimensions.0).ok()?)?
+                        .checked_add(usize::try_from(output_x).ok()?)?;
+                    let source = y.checked_mul(width as usize)?.checked_add(x)?;
+                    copy_word(&mut output, destination, source)?;
+                }
+            }
+            Some((output, output_dimensions))
+        }
+        PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } => {
+            if width == 0
+                || height == 0
+                || *left >= *right
+                || *top >= *bottom
+                || *right > width
+                || *bottom > height
+            {
+                return None;
+            }
+            let output_dimensions = (right - left, bottom - top);
+            let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+                .ok()?
+                .total_bytes();
+            let mut output = vec![0u8; output_bytes];
+            for y in 0..output_dimensions.1 as usize {
+                for x in 0..output_dimensions.0 as usize {
+                    let source = usize::try_from(*top)
+                        .ok()?
+                        .checked_add(y)?
+                        .checked_mul(width as usize)?
+                        .checked_add(usize::try_from(*left).ok()?.checked_add(x)?)?;
+                    let destination = y
+                        .checked_mul(output_dimensions.0 as usize)?
+                        .checked_add(x)?;
+                    copy_word(&mut output, destination, source)?;
+                }
+            }
+            Some((output, output_dimensions))
+        }
+        PipelineOp::CropBorder { border } => {
+            let border = border.checked_mul(2)?;
+            if width == 0 || height == 0 || border >= width || border >= height {
+                return None;
+            }
+            let output_dimensions = (width - border, height - border);
+            let output_bytes = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+                .ok()?
+                .total_bytes();
+            let mut output = vec![0u8; output_bytes];
+            let border = usize::try_from(border).ok()?;
+            for y in 0..output_dimensions.1 as usize {
+                for x in 0..output_dimensions.0 as usize {
+                    let source = (y + border)
+                        .checked_mul(width as usize)?
+                        .checked_add(x + border)?;
+                    let destination = y
+                        .checked_mul(output_dimensions.0 as usize)?
+                        .checked_add(x)?;
+                    copy_word(&mut output, destination, source)?;
+                }
+            }
+            Some((output, output_dimensions))
+        }
+        PipelineOp::Offset { x, y } => {
+            if width == 0 || height == 0 {
+                return None;
+            }
+            let source_x = (-(i64::from(*x))).rem_euclid(i64::from(width)) as usize;
+            let source_y = (-(i64::from(*y))).rem_euclid(i64::from(height)) as usize;
+            let mut output = vec![0u8; expected];
+            for destination_y in 0..height as usize {
+                for destination_x in 0..width as usize {
+                    let source = ((destination_y + source_y) % height as usize)
+                        .checked_mul(width as usize)?
+                        .checked_add((destination_x + source_x) % width as usize)?;
+                    let destination = destination_y
+                        .checked_mul(width as usize)?
+                        .checked_add(destination_x)?;
+                    copy_word(&mut output, destination, source)?;
+                }
+            }
+            Some((output, dimensions))
+        }
+        _ => None,
+    }
+}
+
+/// Materialize one exact nearest F resize pass for marker 9's subsequent
+/// filtered stage.  The nearest table contains one unit-weight source word
+/// per output coordinate; no scalar arithmetic is performed.
+fn gpu_f_resize_nearest_pass_words(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    coeffs: &FilterCoeffs,
+    horizontal: bool,
+) -> Option<Vec<u32>> {
+    let source_width = usize::try_from(source_dimensions.0).ok()?;
+    let source_height = usize::try_from(source_dimensions.1).ok()?;
+    let output_count = coeffs.xmin.len();
+    let line_count = if horizontal {
+        source_height
+    } else {
+        source_width
+    };
+    let word_count = output_count.checked_mul(line_count)?;
+    if word_count > GPU_BUFFER_CAPACITY as usize {
+        return None;
+    }
+    let mut result = Vec::new();
+    result.try_reserve(word_count).ok()?;
+    for line in 0..line_count {
+        for output_index in 0..output_count {
+            let source_start = usize::try_from(*coeffs.xmin.get(output_index)?).ok()?;
+            if *coeffs.count.get(output_index)? != 1
+                || *coeffs.weights.get(*coeffs.offsets.get(output_index)?)? != 1 << 22
+            {
+                return None;
+            }
+            let coordinate = source_start;
+            let source_pixel = if horizontal {
+                if coordinate >= source_width {
+                    return None;
+                }
+                line.checked_mul(source_width)?.checked_add(coordinate)?
+            } else {
+                if coordinate >= source_height {
+                    return None;
+                }
+                coordinate.checked_mul(source_width)?.checked_add(line)?
+            };
+            let offset = source_pixel.checked_mul(4)?;
+            let word = bytes.get(offset..offset.checked_add(4)?)?;
+            result.push(u32::from_le_bytes([word[0], word[1], word[2], word[3]]));
+        }
+    }
+    Some(result)
+}
+
 /// Admit one or more filtered F resizes to marker 9 when every f64 coefficient
 /// product and final f32 store is reproduced by the exact integer reducer.
 /// Each changed axis is materialized as rounded f32 words before the next
@@ -1310,12 +1523,16 @@ fn gpu_f_resize_f64_is_exact(
         return false;
     };
     let mut source_dimensions = image.dimensions();
-    if source_dimensions.0 == 0 || source_dimensions.1 == 0 {
+    let source_checked = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4).ok();
+    if source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || source_checked
+            .as_ref()
+            .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+    {
         return false;
     }
-    let expected_bytes = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
-        .ok()
-        .map(|dims| dims.total_bytes());
+    let expected_bytes = source_checked.map(|dims| dims.total_bytes());
     let mut bytes = pixels.as_raw().to_vec();
     if expected_bytes != Some(bytes.len()) {
         return false;
@@ -1351,13 +1568,22 @@ fn gpu_f_resize_f64_is_exact(
             continue;
         }
         let PipelineOp::Resize { w, h, filter } = op else {
-            // The f64 coefficient ranges and intermediate proof are scoped
-            // to raw PutData updates plus pure Resize chains. Geometry
-            // relocation, mode transitions, and arithmetic nodes need their
-            // own storage contract and remain on exact host semantic control.
-            return false;
+            // Complete-word relocation operations preserve the scalar F
+            // representation exactly. Materialize those words in the proof
+            // so a following filtered resize is checked against the same
+            // intermediate that the GPU dispatch will consume.
+            let Some((next_bytes, next_dimensions)) =
+                gpu_f_resize_relocate_words(&bytes, source_dimensions, op)
+            else {
+                // Arithmetic, mode transitions, and geometry that changes a
+                // sample value still need their own typed contract.
+                return false;
+            };
+            bytes = next_bytes;
+            source_dimensions = next_dimensions;
+            continue;
         };
-        if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
+        if *w == 0 || *h == 0 {
             return false;
         }
         if CheckedDims::new(*w, *h, 1)
@@ -1366,6 +1592,43 @@ fn gpu_f_resize_f64_is_exact(
             .is_none_or(|pixels| pixels > GPU_BUFFER_CAPACITY as usize)
         {
             return false;
+        }
+
+        if matches!(filter, ResampleFilter::Nearest) {
+            let horizontal_changed = *w != source_dimensions.0;
+            let vertical_changed = *h != source_dimensions.1;
+            if horizontal_changed {
+                let coefficients =
+                    gpu_resize_coefficients(*w, source_dimensions.0, ResampleFilter::Nearest);
+                let Some(words) =
+                    gpu_f_resize_nearest_pass_words(&bytes, source_dimensions, &coefficients, true)
+                else {
+                    return false;
+                };
+                let Some(next_bytes) = words_to_bytes(words) else {
+                    return false;
+                };
+                bytes = next_bytes;
+                source_dimensions.0 = *w;
+            }
+            if vertical_changed {
+                let coefficients =
+                    gpu_resize_coefficients(*h, source_dimensions.1, ResampleFilter::Nearest);
+                let Some(words) = gpu_f_resize_nearest_pass_words(
+                    &bytes,
+                    source_dimensions,
+                    &coefficients,
+                    false,
+                ) else {
+                    return false;
+                };
+                let Some(next_bytes) = words_to_bytes(words) else {
+                    return false;
+                };
+                bytes = next_bytes;
+                source_dimensions = (*w, *h);
+            }
+            continue;
         }
 
         let (kernel, support) = filter_from_resample(*filter);
@@ -9102,8 +9365,11 @@ fn gpu_geometry_requires_exact_host_control(
     // resize on the exact host path until a typed convolution shader carries
     // its integer accumulator and rounding rules. F-mode filtered resize is
     // admitted only when one of the narrow F-mode proofs establishes an
-    // exact bit-pattern copy, constant, 2:1 Box average, or exact integer-
-    // emulated/dyadic arithmetic reduction. Mixed F samples and unproved
+    // exact bit-pattern copy, constant, 2:1 Box average, exact integer-
+    // emulated/dyadic arithmetic reduction, or the marker-9 f64 reducer. The
+    // marker-9 proof may carry complete-word relocation and nearest stages
+    // between filtered resizes; every such intermediate is materialized in
+    // the proof before the next reducer. Mixed F samples and unproved
     // arithmetic filters remain on this host-controlled path because ordinary
     // f32 convolution cannot reproduce Pillow's f64 rounding.
     let has_filtered_resize = ops.iter().any(|op| {
@@ -12812,6 +13078,172 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.2, 2);
         assert_eq!(telemetry.6, Some(4));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_relocation_chain_native_matches_cpu() {
+        fn source() -> Image {
+            Image::frombytes(
+                "F",
+                (2, 2),
+                &[0.1f32, -0.3, 1.7, 2.9]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect::<Vec<_>>(),
+            )
+            .expect("F relocation-chain source")
+        }
+
+        let cases = [
+            ((3, 2), PipelineOp::Mirror, (2, 2), "mirror"),
+            ((3, 2), PipelineOp::Flip, (2, 2), "flip"),
+            (
+                (3, 2),
+                PipelineOp::Transpose {
+                    method: crate::pipeline::TransposeMethod::Rotate90,
+                },
+                (2, 2),
+                "transpose",
+            ),
+            ((3, 2), PipelineOp::Offset { x: 1, y: -1 }, (2, 2), "offset"),
+            ((3, 2), PipelineOp::Duplicate, (2, 2), "duplicate"),
+            (
+                (3, 2),
+                PipelineOp::Crop {
+                    left: 0,
+                    top: 0,
+                    right: 3,
+                    bottom: 2,
+                },
+                (2, 2),
+                "crop",
+            ),
+            (
+                (4, 4),
+                PipelineOp::CropBorder { border: 1 },
+                (3, 3),
+                "crop-border",
+            ),
+        ];
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (first_dimensions, relocation, final_dimensions, name) in cases {
+            let first = source()
+                .resize(
+                    (i64::from(first_dimensions.0), i64::from(first_dimensions.1)),
+                    Some(ResampleInput::Name("BICUBIC".into())),
+                    None,
+                )
+                .expect("CPU first relocation-chain resize");
+            let expected = Image::push_op(&first, relocation.clone())
+                .resize(
+                    (i64::from(final_dimensions.0), i64::from(final_dimensions.1)),
+                    Some(ResampleInput::Name("LANCZOS".into())),
+                    None,
+                )
+                .expect("CPU second relocation-chain resize")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .unwrap_or_else(|error| panic!("CPU {name} relocation chain failed: {error}"));
+
+            let first = source()
+                .resize(
+                    (i64::from(first_dimensions.0), i64::from(first_dimensions.1)),
+                    Some(ResampleInput::Name("BICUBIC".into())),
+                    None,
+                )
+                .expect("GPU first relocation-chain resize");
+            let actual = match Image::push_op(&first, relocation)
+                .resize(
+                    (i64::from(final_dimensions.0), i64::from(final_dimensions.1)),
+                    Some(ResampleInput::Name("LANCZOS".into())),
+                    None,
+                )
+                .expect("GPU second relocation-chain resize")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU {name} relocation chain failed: {error}"),
+            };
+            assert_eq!(
+                actual, expected,
+                "native GPU F {name} relocation chain parity"
+            );
+            let telemetry = Backend::take_pipeline_telemetry()
+                .unwrap_or_else(|| panic!("native GPU F {name} chain missing telemetry"));
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.2, 3);
+            assert_eq!(telemetry.6, Some(5));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_nearest_relocation_chain_native_matches_cpu() {
+        fn source() -> Image {
+            Image::frombytes(
+                "F",
+                (2, 2),
+                &[0.1f32, -0.3, 1.7, 2.9]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect::<Vec<_>>(),
+            )
+            .expect("F nearest-chain source")
+        }
+
+        let pipeline = |image: Image| {
+            image
+                .resize((3, 3), Some(ResampleInput::Name("BICUBIC".into())), None)
+                .expect("first nearest-chain resize")
+                .resize((2, 2), Some(ResampleInput::Name("NEAREST".into())), None)
+                .expect("nearest-chain copy resize")
+                .resize((1, 3), Some(ResampleInput::Name("LANCZOS".into())), None)
+                .expect("last nearest-chain resize")
+        };
+        let expected = pipeline(source())
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU F nearest relocation chain");
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match pipeline(source()).use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU F nearest relocation chain failed: {error}"),
+        };
+        assert_eq!(
+            actual, expected,
+            "native GPU F nearest relocation chain parity"
+        );
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native GPU F nearest relocation chain must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.2, 3);
+        assert_eq!(telemetry.6, Some(6));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
