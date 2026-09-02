@@ -4822,3 +4822,52 @@ open.
 
 No fixtures, expected values, thresholds, IDs, denominators, public errors, or
 receipt rules changed.
+
+## 32.70 Bounded affine fill-only admission (2026-09-02)
+
+The next backend-identity reduction targeted typed/raw affine `Transform`
+rows that Pillow resolves entirely from the fill color: every destination
+pixel lies outside the source rectangle. Before this change, the GPU geometry
+guard sent those rows to exact host semantic control because sampled typed
+transforms were not yet proven. A second latent issue affected typed modes
+whose public filter token was non-nearest: `gpu_transform_uses_nearest` already
+forced the shader's nearest branch, but `prepare_batch` only transported the
+signed-16.16 affine plan when the public filter itself was `Nearest`.
+
+Commit `3c0670555` aligns the transport with the logical-mode nearest
+decision. It adds a deliberately bounded fill-only proof for affine transforms
+with no palette fill: host f64 affine bounds, the shader's f32 operation order
+and possible multiply-add contraction forms, and the signed-16.16 nearest
+walk are all checked before native admission. Destination/source extents are
+kept exactly representable, fixed coordinates and row accumulations must fit
+the shader's i32 arithmetic, and any in-bounds or non-affine/sample-dependent
+case remains exact host semantic control. The proof never inspects source
+bytes because the output is wholly determined by Pillow's validated fill
+record.
+
+The focused affine-fill replay selected 12 exact IDs. CPU, SIMD, GPU, Node
+WASM, and browser WASM each passed 12/12 value/error comparisons with terminal
+receipts; GPU had 11 native receipts and one intentional host receipt for the
+in-bounds `I;16` case. The full maintained campaign at this commit passed all
+10,952/10,952 public IDs on every lane. CPU has 6,838 terminal receipts (6,832
+pipeline-complete), SIMD 6,850 (6,844), and GPU 6,709 native-GPU plus 129
+host-controlled receipts (6,832 complete). The GPU fallback partition is 65
+exact host semantic-control rows, 62 unsafe-primary-dimension rows, one
+unsafe/incomplete-dimension row, and one Transform guard; all pipeline cases
+are terminal complete with zero partial, missing, or indeterminate receipts.
+
+The full all-backends artifact is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`25140f569e108829f3be6c7421d2e8dd8ddf3315948fabebe159e519b5c72c16`); the GPU
+execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`bbba709e72f8a2e280813666a9f03475ffc98c77d53e9e85c5a7247cc472be66`).
+`make migration-parity-receipt-test` passes 34/34, the serial GPU-pool suite
+passes 55/55, `make build-dev` and `make -C pillow-rs fmt` pass, and the
+pre-existing pinned libavif environment still blocks clippy. No fixtures,
+expected values, thresholds, IDs, denominators, public errors, or receipt
+rules changed.
+
+The remaining P0 work is broader sampled F/non-dyadic device arithmetic and
+other unproven transform domains. P1 backend identity/fallback reconciliation
+and P2 equal-ID/equal-receipt timing acceptance remain open.

@@ -120,6 +120,15 @@ execution is a parity-preserving fallback, not a parity completion claim.
   intermediates, and uses the fractional post-reduce box. The canonical
   parity run and committed-source all-backend envelope are each 10,952/10,952
   exact with zero failures; focused CPU geometry is 6/6 and GPU pool is 36/36.
+- [x] Admit bounded affine transforms whose complete destination is outside
+  the source rectangle. Commit `3c0670555` uses the logical-mode nearest
+  decision for the signed-16.16 transport and proves host f64 bounds, shader
+  f32 operation/contraction bounds, and fixed i32 arithmetic before allowing
+  the native fill-only path. The selected 12-case affine-fill replay is exact
+  with 11 native GPU receipts and one intentional in-bounds host-control
+  receipt; the full campaign removes 23 exact-host rows (88 -> 65) without
+  changing inputs, fixtures, thresholds, or denominators. Broader sampled
+  transforms remain guarded.
 
 ### P1 — complete native-backend receipt proof
 
@@ -132,15 +141,21 @@ execution is a parity-preserving fallback, not a parity completion claim.
   GPU actual backend is GPU with no fallback). The later full-envelope
   accounting below retains that zero-partial result at the fixed denominator.
 - [ ] Reconcile backend identity and fallback taxonomy. The full campaign
-  at `048955737` has exact public parity for all 10,952 IDs and no native
+  at `3c0670555` has exact public parity for all 10,952 IDs and no native
   partial/missing/indeterminate pipeline cases. CPU reports 6,838 terminal
   receipts (6,832 pipeline-complete cases), SIMD 6,850 (6,844
-  pipeline-complete), and GPU 6,686 native GPU plus 152 CPU receipts (6,832
+  pipeline-complete), and GPU 6,709 native GPU plus 129 CPU receipts (6,832
   pipeline-complete). GPU fallback reasons remain explicit evidence
-  partitions: 88 exact host semantic-control rows, 62 unsafe-primary-
+  partitions: 65 exact host semantic-control rows, 62 unsafe-primary-
   dimension rows, one unsafe/incomplete-dimension row, and one Transform
   guard. The public lane is 10,952/10,952 exact, while the remaining
-  host-control rows and native identity reconciliation stay open.
+  host-control rows and native identity reconciliation stay open. The
+  committed artifact is `build/migration-parity/all-backends-test-result.json`
+  (SHA-256
+  `25140f569e108829f3be6c7421d2e8dd8ddf3315948fabebe159e519b5c72c16`), and
+  the GPU execution sidecar is
+  `build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+  `bbba709e72f8a2e280813666a9f03475ffc98c77d53e9e85c5a7247cc472be66`).
 - [x] Normalize the legacy logical-layout fallback label. Commit `09ef0dc83`
   changes only the evidence reason from `unsupported logical mode` to
   `exact host semantic control`; the valid `PIL.ImageOps.fit.nuanced.pa-
