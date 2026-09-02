@@ -5290,3 +5290,79 @@ filtered/projective/mesh/palette transform arithmetic, and other domains that
 cannot yet reproduce Pillow's ordered f64 behavior on-device. P1 backend
 identity/fallback reconciliation and the P2 equal-ID, equal-receipt timing
 gate remain open.
+
+## 32.78 F resampling arithmetic and signed-zero parity (2026-09-02)
+
+The next value-parity divergences were deterministic F resampling boundaries,
+not backend timing. Pillow 12.2.0's Hamming path evaluates the trigonometric
+pair together and contracts the float-promoted `0.46f * cos + 0.54f` window
+before the sinc product. Rust evaluated the window terms separately, producing
+different cancellation words in an 8x1-to-4x1 F row. Commit `49986de47`
+(integrated as `a83fb9244`) preserves the `sincos` and fused-window ordering in
+both CPU F kernels and adds exact native-word regression coverage.
+
+The same focused comparison exposed a SIMD-only contract difference: the F
+adapter converted a negative f32 zero to positive zero after each horizontal,
+vertical, and boxed-fit pass. Pillow preserves the sign of a zero produced by
+cancellation. The SIMD adapter now stores the cast result directly, with a
+3x2-to-7x5 Bilinear regression covering the signed-zero words.
+
+The marker-9 host admission proof also previously converted exact sums through
+signed `i128`, rejecting the high magnitude bit even though the WGSL reducer
+uses an unsigned four-limb value. The proof now mirrors that signed-magnitude
+U128 state, follows the shader's zero result for shifts at or above 128 bits,
+rejects same-sign overflow, and still compares every final word with Pillow's
+ordered f64 result before native admission. This broadens only the proven
+envelope; arbitrary heterogeneous/non-dyadic rows remain exact host semantic
+control because forced generic WGSL f32 convolution still differs by ULPs.
+
+The focused F arithmetic cohort selected 11 maintained cases (specialized
+Nearest, Bilinear, Bicubic, Lanczos, Box, Hamming, identity, wide-ratio, and
+SIMD transpose rows). CPU, SIMD, GPU, Node WASM, and browser WASM are each
+value/error-exact for 11/11; GPU reports 11 terminal native-GPU receipts with
+no fallback. The envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` (SHA-256
+`c003d02c3b7e09624ed1840fa5ce59abe954ed6edc7a20d486854d0fe7f71c05`), and
+the GPU execution sidecar is
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`b2197b9afec17e9d32f19b4842a5ed8110052f53ef2e64119fea31f9f2b9b19f`).
+
+The serial `pillow-rs` library suite passes 94/94, the GPU pool suite passes
+65/65, and `make build-dev`, `make -C pillow-rs fmt`, and the focused replay
+pass. Clippy remains blocked by the pre-existing pinned libavif
+1.4.1/dav1d 1.5.3/libaom 3.13.2 environment requirement. No fixtures,
+expected values, thresholds, IDs, denominators, public errors, or receipt
+rules changed.
+
+The full schema-v3 campaign at revision `a83fb9244` remains
+**10,952/10,952** value/error-exact on CPU, SIMD, GPU, Node WASM, and browser
+WASM; GPU smoke is 1/1. CPU has 6,838 terminal receipts, SIMD 6,850, and GPU
+6,838 terminal receipts (6,745 native GPU and 93 CPU host-controlled). GPU
+fallback partitions remain 29 exact host semantic-control rows, 62 unsafe
+primary-dimension rows, one unsafe/incomplete-dimension row, and one Transform
+capability guard. Every pipeline lane has zero partial, missing, or
+indeterminate receipts. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`34a22cb9c6cafd820be3abbdcfef94556ef796fff03cb6bd24ed62ae53ec2247`), and
+the GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`bb830ea8f6ad4995977acc765281f212225c64974883813c5077400607340ba7`).
+
+The remaining P0 bucket is arbitrary heterogeneous/non-dyadic F shader
+arithmetic and arithmetic-changing filtered/projective/mesh/palette transforms.
+P1 backend identity/fallback reconciliation and the P2 equal-ID, equal-receipt
+timing gate remain open.
+
+## 32.79 Receipt-history fallback taxonomy reconciliation (2026-09-02)
+
+The backend evidence writer had a state-accounting defect: it counted fallback
+reasons only on terminal receipts. A host semantic-control prefix followed by
+a terminal CPU receipt therefore disappeared from the WASM fallback taxonomy,
+even though the execution history contained the control decision. Commit
+`385eeaab1` scans the complete receipt history for fallback reasons while
+retaining terminal-only actual-backend counts. A regression fixture now covers
+the prefix-plus-terminal sequence; `make migration-parity-receipt-test` passes
+35/35 and `make migration-parity-evidence-check` passes. This is an evidence
+correctness fix only; it does not relabel any backend, alter denominators, or
+change the aggregate GPU identity gap.
