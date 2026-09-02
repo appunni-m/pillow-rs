@@ -8729,6 +8729,18 @@ fn expand_gpu_geometry_ops(
                     } else if let Some((affine, (w, h))) =
                         gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
                     {
+                        // `resolve_imageops_color` keeps LA/PA rotate colors
+                        // in the public RGBA-shaped tuple `(gray, gray,
+                        // gray, alpha)`, while Transform's native two-band
+                        // fill contract is `(gray, alpha, 0, 0)`. Normalize
+                        // only this lowered rotate node so the shader packs
+                        // the logical alpha into byte three; direct
+                        // Transform fills already use the latter layout.
+                        let transform_fill = if matches!(logical_mode, Some("LA" | "PA")) {
+                            (*fill).map(|(gray, _, _, alpha)| (gray, alpha, 0, 0))
+                        } else {
+                            *fill
+                        };
                         PipelineOp::Transform {
                             w,
                             h,
@@ -8739,7 +8751,7 @@ fn expand_gpu_geometry_ops(
                             } else {
                                 ResampleFilter::Bilinear
                             },
-                            fill: *fill,
+                            fill: transform_fill,
                             palette_fill: None,
                         }
                     } else {
@@ -10484,17 +10496,18 @@ fn gpu_transform_all_fill_is_exact(
 /// used by typed/indexed transforms. The public rotate node is expanded to an
 /// affine `Transform` only after Pillow's angle/center/translation geometry
 /// has been materialized, so construct that exact intermediate here for the
-/// admission check rather than widening every scalar-word rotate. Filtered
-/// floating-point rotation is intentionally excluded: it interpolates sample
-/// values and therefore needs the ordered-f64 arithmetic proof instead of a
-/// relocation proof.
+/// admission check rather than widening every scalar-word rotate. PA carries
+/// an opaque index/alpha pair just like its already-admitted affine path;
+/// filtered floating-point rotation is intentionally excluded because it
+/// interpolates sample values and therefore needs the ordered-f64 arithmetic
+/// proof instead of a relocation proof.
 fn gpu_rotate_nearest_affine_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
     mode: Option<&str>,
     source_dimensions: (u32, u32),
 ) -> bool {
-    if !matches!(mode, Some("CMYK" | "F")) {
+    if !matches!(mode, Some("CMYK" | "F" | "PA")) {
         return false;
     }
     let PipelineOp::Rotate {
@@ -10546,10 +10559,11 @@ fn gpu_geometry_requires_exact_host_control(
     f_resize_f64_is_exact: bool,
 ) -> bool {
     // The affine shader is byte-exact for ordinary packed layouts, and its
-    // fixed-point nearest branch additionally owns raw CMYK words. Pillow's
-    // remaining typed, indexed, and palette-alpha modes use a different
-    // sample contract (or a palette lookup), so keep those rotations on the
-    // exact core implementation until a mode-aware affine shader exists.
+    // fixed-point nearest branch additionally owns opaque raw words (CMYK/F)
+    // and PA index/alpha pairs. Pillow's remaining typed and indexed modes use
+    // a different sample contract (or a palette lookup), so keep those
+    // rotations on the exact core implementation until a mode-aware affine
+    // shader exists.
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
@@ -12198,6 +12212,70 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(1));
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn palette_alpha_nearest_rotate_native_gpu_preserves_pairs() {
+        let source_bytes = [
+            1u8, 17, 2, 33, 3, 49, 4, 65, 5, 81, 6, 97, 7, 113, 8, 129, 9, 145, 10, 161, 11, 177,
+            12, 193,
+        ];
+        let mut source = Image::frombytes("LA", (4, 3), &source_bytes).expect("LA source");
+        source
+            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
+            .expect("PA palette");
+        assert_eq!(source.mode().expect("PA mode"), "PA");
+        let cases = [
+            source
+                .rotate_with_input(
+                    37.5,
+                    RotateResampleInput::Name("NEAREST".into()),
+                    RotateExpandInput::Boolean(true),
+                    RotatePointInput::Default,
+                    RotatePointInput::Default,
+                    ImageOpsColor::Components(vec![1, 128]),
+                )
+                .expect("PA nearest rotate"),
+            source
+                .rotate_with_input(
+                    17.5,
+                    RotateResampleInput::Code(0),
+                    RotateExpandInput::Boolean(true),
+                    RotatePointInput::Values(vec![1.25, 0.75]),
+                    RotatePointInput::Values(vec![0.25, -0.5]),
+                    ImageOpsColor::Components(vec![7, 201]),
+                )
+                .expect("PA custom nearest rotate"),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for rotated in cases {
+            let expected = rotated
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU PA rotate");
+            let actual = match rotated.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU PA rotate failed: {error}"),
+            };
+            assert_eq!(actual, expected, "PA rotate parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native GPU PA rotate must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
