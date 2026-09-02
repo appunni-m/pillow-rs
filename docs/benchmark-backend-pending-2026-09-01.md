@@ -139,14 +139,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   is byte-exact on every public lane with 2/2 terminal GPU receipts and no
   fallback. The admission is terminal-only because the result is RGBA and a
   following operation requires a segmented batch with updated mode metadata.
-- [ ] Close the WASM receipt gaps: each Node/browser lane is value-exact but
-  now reports 7,198 complete, 101 partial, 888 missing, 2,738
-  not-applicable, and 27 indeterminate cases after commit `d0ee51d9a`
-  terminalized observed prefixes. The 101 partial records are all public
-  calls that error before materialization; the 888 missing and 27 indeterminate
-  records still need binding/export evidence. Keep the aggregate status
-  `passed_with_backend_gaps` until these receipts are resolved or explicitly
-  bounded by maintained backend evidence.
+- [x] Close the WASM receipt gaps: commit `a2cf8c102` preserves JS setup/call
+  errors for the evidence classifier and passes target results through the
+  aggregator. Node and browser remain value/error-exact at 10,952/10,952;
+  each now reports 7,198 complete and 3,754 explicit pre-materialization
+  validation boundaries, with zero missing, partial, or indeterminate
+  pipeline cases. The 3,653 not-recorded records are classified
+  not-applicable (non-pipeline or pre-materialization), not missing receipts.
+  Backend/export identity reconciliation remains tracked
+  separately below, so the aggregate status is still
+  `passed_with_backend_gaps`.
 
 ### P2 — performance acceptance
 
@@ -319,6 +321,16 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `b2dca82a37a9332733783d8106373da82df2159c8320feb628fc8a85a8d40c9c`).
   Both hosts are value-exact at 10,952/10,952 and report 7,198 complete +
   101 partial + 888 missing + 2,738 not-applicable + 27 indeterminate.
+- [x] The JS/WASM validation-boundary fix is committed as `a2cf8c102`.
+  `make test-wasm` passes the former 20 indeterminate cases 20/20 on both
+  Node and browser, and the 30-case receipt regression suite passes 30/30.
+  Full artifacts are `/tmp/wasm-errorbound-full-node-a2cf8c102.json` (SHA-256
+  `3998bd57b9a9ac3dd4ed679a70159957cbe855b6837ecbcdd825861a60d71780`) and
+  `/tmp/wasm-errorbound-full-browser-a2cf8c102.json` (SHA-256
+  `97535c5db628350aa3342ad1ee3fa44f5065019b13df7e87d6089e617876e9b7`).
+  Both hosts report 7,198 complete + 3,754 not-applicable, with zero
+  missing/partial/indeterminate pipeline cases; the public parity envelope
+  remains free of the internal `execution_errors` field.
 
 ## Closeout state
 
@@ -332,16 +344,17 @@ execution is a parity-preserving fallback, not a parity completion claim.
   raw-byte `EffectSpread` admission as `ebc7e765a`, raw-byte Draw admission as
   `7d1cc0af9`, nearest indexed Fit admission as `0797e71f5`, exact
   current-image Contrast-prefix admission as `5ed9f152e`, and typed I;16
-  filtered-resize admission as `2ff9a6951`, and the JS/WASM observed-boundary
-  receipt fix as `d0ee51d9a`; the latest full committed
+  filtered-resize admission as `2ff9a6951`, the JS/WASM observed-boundary
+  receipt fix as `d0ee51d9a`, and the JS/WASM validation-boundary evidence fix
+  as `a2cf8c102`; the latest full committed
   all-backend replay is schema-valid and value-exact for all 10,952 cases.
   The regenerated post-receipt envelope has zero native partial receipts:
   CPU 7,085 complete, SIMD 7,097 complete (6,698 SIMD + 405 CPU), and GPU
   7,085 complete (6,880 GPU + 211 CPU). The GPU partition also records 142
   exact host semantic-control fallbacks. Node and browser WASM now each report
-  7,198 complete + 101 partial + 888 missing + 2,738 not-applicable + 27
-  indeterminate after `d0ee51d9a`; the 101 partials are pre-materialization
-  public errors. No
+  7,198 complete + 3,754 not-applicable, with zero missing/partial/indeterminate
+  pipeline cases after `a2cf8c102`; the not-applicable rows are explicit
+  pre-materialization public errors or other proven non-pipeline workflows. No
   fixture, expected value, threshold, denominator, or case ID was changed.
   The latest envelope is `/tmp/all-backends-post-2969b323.json` and remains
   schema-valid and value-exact at the fixed denominator.
