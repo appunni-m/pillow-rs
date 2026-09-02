@@ -1904,20 +1904,17 @@ fn transform_mesh_with_filter(
             let local_y = (destination_y - by0) as f64 + 0.5;
             for destination_x in bx0..bx1 {
                 let local_x = (destination_x - bx0) as f64 + 0.5;
-                // Keep the map evaluation in the same fused multiply-add
-                // order as the native quad_transform build. The coefficient
-                // products are otherwise one-ULP sensitive at clipped box
-                // edges, where a source sample can cross a filter tap.
-                let sx = coefficients[3].mul_add(
-                    local_x * local_y,
-                    coefficients[2]
-                        .mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0])),
-                );
-                let sy = coefficients[7].mul_add(
-                    local_x * local_y,
-                    coefficients[6]
-                        .mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4])),
-                );
+                // Geometry.c's quad_transform is compiled into two linear
+                // fused additions followed by a rounded x-product and a
+                // final fused y-product on this target. Keep the cross-term
+                // multiplication separate from the final `mul_add`; folding
+                // it into `local_x * local_y` changes boundary truncation.
+                let sx_linear = coefficients[2]
+                    .mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
+                let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
+                let sy_linear = coefficients[6]
+                    .mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
+                let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
                 let out_idx =
                     ((destination_y as usize * dst_w as usize) + destination_x as usize) * channels;
 
@@ -2114,6 +2111,31 @@ mod tests {
             158, 195, 117, 154, 191, 113, 150, 187, 109, 146, 183,
         ];
         assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn mesh_bilinear_preserves_native_quad_fma_order() {
+        let image = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(3, 2, vec![1, 5, 13, 14, 28, 45]).expect("luma source"),
+        );
+        let mesh = [
+            1.0, -5.0, 5.0, 6.0, -0.25, -2.125, 3.375, 4.375, -0.875, -2.875, 10.5, 3.125,
+        ];
+
+        let result = transform_mesh(
+            &image,
+            8,
+            7,
+            &mesh,
+            Some((0, 0, 0, 255)),
+            ResampleFilter::Bilinear,
+        )
+        .expect("mesh transform");
+
+        // At (2, 5), Pillow's compiled quad_transform maps to y=0.75 and
+        // bilinear filtering returns 21. Keeping the cross-term multiply
+        // separate from the final fused y-product preserves that boundary.
+        assert_eq!(result.as_bytes()[5 * 8 + 2], 21);
     }
 
     #[test]
