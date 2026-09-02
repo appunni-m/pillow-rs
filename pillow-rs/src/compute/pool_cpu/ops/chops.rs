@@ -404,10 +404,10 @@ pub fn op_chops_logical_xor(
 
 pub fn op_chops_constant(img: &DynamicImage, value: u8) -> DynamicImage {
     let (w, h) = (img.width(), img.height());
-    let mut out = GrayImage::new(w, h);
-    for p in out.pixels_mut() {
-        p[0] = value;
-    }
+    // The output is independent of the source pixels. Constructing it with
+    // the final pixel removes the zero-fill allocation followed by a second
+    // full-frame write while preserving the new single-band L result.
+    let out = GrayImage::from_pixel(w, h, crate::raster::Luma([value]));
     DynamicImage::ImageLuma8(out)
 }
 
