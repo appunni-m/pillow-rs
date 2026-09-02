@@ -9716,6 +9716,16 @@ fn gpu_thumbnail_requires_exact_host_control(
         image,
         DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
     ) && !matches!(mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
+    let factor_x = ((f64::from(source_dimensions.0) / f64::from(output_width) / 2.0) as u32).max(1);
+    let factor_y =
+        ((f64::from(source_dimensions.1) / f64::from(output_height) / 2.0) as u32).max(1);
+    // When both reducing-gap factors are one, Pillow's F thumbnail is exactly
+    // the ordinary filtered Resize. Let the geometry expander lower it to
+    // that path so marker-9 can prove heterogeneous/non-dyadic words instead
+    // of needlessly publishing an exact-host receipt.
+    if mode == Some("F") && factor_x == 1 && factor_y == 1 {
+        return false;
+    }
     // A finite constant F source is invariant under both Thumbnail's
     // reducing-gap pass and its final resize. Lower this narrow case to the
     // exact constant Resize marker instead of materializing the scalar
@@ -9730,9 +9740,6 @@ fn gpu_thumbnail_requires_exact_host_control(
     if has_alpha {
         return false;
     }
-    let factor_x = ((f64::from(source_dimensions.0) / f64::from(output_width) / 2.0) as u32).max(1);
-    let factor_y =
-        ((f64::from(source_dimensions.1) / f64::from(output_height) / 2.0) as u32).max(1);
     (factor_x > 1 || factor_y > 1)
         && (source_dimensions.0 % factor_x != 0 || source_dimensions.1 % factor_y != 0)
 }
@@ -15304,6 +15311,61 @@ mod tests {
             &source,
             Some("F"),
         ));
+    }
+
+    #[test]
+    fn f_thumbnail_without_reducing_gap_uses_exact_f64_resize() {
+        // Pillow skips the reducing-gap pass when both factors are one, then
+        // runs the same filtered F resize used by Image.resize. The planner
+        // previously kept every non-nearest F Thumbnail on host control even
+        // in this no-reduce case, so marker 9 could not carry heterogeneous
+        // non-dyadic words through the native path.
+        let values = [0.1f32, -0.3, 1.7, 2.9];
+        let source_bytes = values
+            .iter()
+            .cycle()
+            .take(8 * 4)
+            .flat_map(|value| value.to_le_bytes())
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("F", (8, 4), &source_bytes).expect("F thumbnail source");
+        let filters = ["BOX", "BILINEAR", "BICUBIC", "LANCZOS", "HAMMING"];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for filter in filters {
+            let mut expected_image = source.clone();
+            expected_image
+                .thumbnail((6, 3), Some(ResampleInput::Name(filter.into())))
+                .expect("CPU no-reduce F thumbnail");
+            let expected = expected_image
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU no-reduce F thumbnail bytes");
+
+            let mut actual_image = source.clone();
+            actual_image
+                .thumbnail((6, 3), Some(ResampleInput::Name(filter.into())))
+                .expect("GPU no-reduce F thumbnail");
+            let actual = match actual_image.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native no-reduce F thumbnail failed ({filter}): {error}"),
+            };
+            assert_eq!(actual, expected, "no-reduce F thumbnail parity ({filter})");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native no-reduce F thumbnail must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(2));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
