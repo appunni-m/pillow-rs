@@ -113,12 +113,12 @@ fn reduce_pixel(dx: u32, dy: u32) -> u32 {
     );
     let out_g = select(
         0u,
-        unpremultiply(average_g, average_a),
+        select(average_g, unpremultiply(average_g, average_a), mode_has_a(params.mode)),
         mode_has_g(params.mode),
     );
     let out_b = select(
         0u,
-        unpremultiply(average_b, average_a),
+        select(average_b, unpremultiply(average_b, average_a), mode_has_a(params.mode)),
         mode_has_b(params.mode),
     );
     let out_a = select(255u, average_a, mode_has_fourth(params.mode));

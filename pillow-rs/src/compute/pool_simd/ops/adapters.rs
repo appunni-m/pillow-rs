@@ -14913,6 +14913,68 @@ fn native_reduce_bytes(
 /// their four-byte storage as RGBA. The source gathers and block geometry are
 /// scalar control work; each eight-lane block performs the average in the
 /// scalar sample domain and writes only its valid prefix.
+#[inline]
+fn thumbnail_f_reduce_value(
+    source: &[f32],
+    source_width: usize,
+    source_height: usize,
+    factor_x: usize,
+    factor_y: usize,
+    output_x: usize,
+    output_y: usize,
+) -> f32 {
+    let source_x = output_x * factor_x;
+    let source_y = output_y * factor_y;
+    let block_width = factor_x.min(source_width - source_x);
+    let block_height = factor_y.min(source_height - source_y);
+    let main_width = source_width / factor_x;
+    let main_height = source_height / factor_y;
+    let mut sum = 0.0f64;
+
+    // Match Pillow's ImagingReduceNxN_32bpc ordering. Interior blocks add
+    // float 2x2 groups before promoting each group to the double accumulator;
+    // partial right/bottom blocks use the scalar corner helper instead.
+    if output_x < main_width && output_y < main_height {
+        let mut dy = 0;
+        while dy + 1 < block_height {
+            let mut dx = 0;
+            while dx + 1 < block_width {
+                let row0 = (source_y + dy) * source_width + source_x + dx;
+                let row1 = (source_y + dy + 1) * source_width + source_x + dx;
+                let quartet = ((source[row0] + source[row0 + 1]) + source[row1]) + source[row1 + 1];
+                sum += f64::from(quartet);
+                dx += 2;
+            }
+            if dx < block_width {
+                let row0 = (source_y + dy) * source_width + source_x + dx;
+                let row1 = (source_y + dy + 1) * source_width + source_x + dx;
+                sum += f64::from(source[row0] + source[row1]);
+            }
+            dy += 2;
+        }
+        if dy < block_height {
+            let row = (source_y + dy) * source_width + source_x;
+            let mut dx = 0;
+            while dx + 1 < block_width {
+                sum += f64::from(source[row + dx] + source[row + dx + 1]);
+                dx += 2;
+            }
+            if dx < block_width {
+                sum += f64::from(source[row + dx]);
+            }
+        }
+    } else {
+        for dy in 0..block_height {
+            let row = (source_y + dy) * source_width + source_x;
+            for dx in 0..block_width {
+                sum += f64::from(source[row + dx]);
+            }
+        }
+    }
+
+    (sum * (1.0 / (block_width * block_height) as f64)) as f32
+}
+
 fn simd_thumbnail_reduce_f(
     img: &DynamicImage,
     factor_x: u32,
@@ -14947,25 +15009,22 @@ fn simd_thumbnail_reduce_f(
     let mut vector_blocks = 0u64;
     for start in (0..output_pixels).step_by(SIMD_RESIZE_LANES) {
         let count = (output_pixels - start).min(SIMD_RESIZE_LANES);
-        let mut sums = [0.0f32; SIMD_RESIZE_LANES];
-        let mut counts = [1.0f32; SIMD_RESIZE_LANES];
+        let mut values = [0.0f32; SIMD_RESIZE_LANES];
         for lane in 0..count {
             let index = start + lane;
             let output_y = index / output_width;
             let output_x = index % output_width;
-            let source_x = output_x * factor_x;
-            let source_y = output_y * factor_y;
-            let block_width = factor_x.min(source_width - source_x);
-            let block_height = factor_y.min(source_height - source_y);
-            counts[lane] = (block_width * block_height) as f32;
-            for dy in 0..block_height {
-                for dx in 0..block_width {
-                    sums[lane] += source[(source_y + dy) * source_width + source_x + dx];
-                }
-            }
+            values[lane] = thumbnail_f_reduce_value(
+                &source,
+                source_width,
+                source_height,
+                factor_x,
+                factor_y,
+                output_x,
+                output_y,
+            );
         }
-        let values = (f32x8::new(sums) / f32x8::new(counts)).to_array();
-        for value in values.into_iter().take(count) {
+        for value in f32x8::new(values).to_array().into_iter().take(count) {
             output.extend_from_slice(&value.to_le_bytes());
         }
         vector_blocks = vector_blocks.saturating_add(1);
@@ -15013,8 +15072,7 @@ fn simd_thumbnail_reduce_i(
     let mut vector_blocks = 0u64;
     for start in (0..output_pixels).step_by(SIMD_RESIZE_LANES) {
         let count = (output_pixels - start).min(SIMD_RESIZE_LANES);
-        let mut sums = [0i64; SIMD_RESIZE_LANES];
-        let mut counts = [1.0f64; SIMD_RESIZE_LANES];
+        let mut values = [0i32; SIMD_RESIZE_LANES];
         for lane in 0..count {
             let index = start + lane;
             let output_y = index / output_width;
@@ -15023,17 +15081,58 @@ fn simd_thumbnail_reduce_i(
             let source_y = output_y * factor_y;
             let block_width = factor_x.min(source_width - source_x);
             let block_height = factor_y.min(source_height - source_y);
-            counts[lane] = (block_width * block_height) as f64;
-            for dy in 0..block_height {
-                for dx in 0..block_width {
-                    sums[lane] += i64::from(source[(source_y + dy) * source_width + source_x + dx]);
+            let main_width = source_width / factor_x;
+            let main_height = source_height / factor_y;
+            let mut sum = 0.0f64;
+            let value = |offset_x: usize, offset_y: usize| {
+                source[(source_y + offset_y) * source_width + source_x + offset_x]
+            };
+
+            // ImagingReduceNxN_32bpc keeps interior pair/quartet additions
+            // in INT32 before promoting each group to the double accumulator.
+            // Partial right/bottom blocks use the scalar corner helper, which
+            // promotes each source sample directly.  A flat i64 sum changes
+            // the result when the source words overflow signed 32-bit bounds.
+            if output_x < main_width && output_y < main_height {
+                let mut dy = 0;
+                while dy + 1 < block_height {
+                    let mut dx = 0;
+                    while dx + 1 < block_width {
+                        let quartet = value(dx, dy)
+                            .wrapping_add(value(dx + 1, dy))
+                            .wrapping_add(value(dx, dy + 1))
+                            .wrapping_add(value(dx + 1, dy + 1));
+                        sum += f64::from(quartet);
+                        dx += 2;
+                    }
+                    if dx < block_width {
+                        let pair = value(dx, dy).wrapping_add(value(dx, dy + 1));
+                        sum += f64::from(pair);
+                    }
+                    dy += 2;
+                }
+                if dy < block_height {
+                    let mut dx = 0;
+                    while dx + 1 < block_width {
+                        let pair = value(dx, dy).wrapping_add(value(dx + 1, dy));
+                        sum += f64::from(pair);
+                        dx += 2;
+                    }
+                    if dx < block_width {
+                        sum += f64::from(value(dx, dy));
+                    }
+                }
+            } else {
+                for dy in 0..block_height {
+                    for dx in 0..block_width {
+                        sum += f64::from(value(dx, dy));
+                    }
                 }
             }
+            values[lane] = round_up(sum / (block_width * block_height) as f64) as i32;
         }
-        let averages = (f64x8::new(sums.map(|sum| sum as f64)) / f64x8::new(counts)).to_array();
-        let rounded = averages.map(|value| round_up(value) as i32);
-        let values = i32x8::new(rounded).to_array();
-        for value in values.into_iter().take(count) {
+        let packed = i32x8::new(values).to_array();
+        for value in packed.into_iter().take(count) {
             output.extend_from_slice(&value.to_le_bytes());
         }
         vector_blocks = vector_blocks.saturating_add(1);
@@ -15474,14 +15573,12 @@ fn native_fit_supported_for_shape(
             ))
 }
 
-/// Compute the aspect-preserving dimensions used by `Image.thumbnail`.
+/// Validate the final dimensions carried by `Image.thumbnail`.
 ///
-/// `Image.thumbnail` clamps each requested bound to the current image before
-/// queuing the operation. The remaining calculation is Pillow's
-/// `round_aspect` rule: choose the floor or ceiling that minimizes the aspect
-/// ratio error, preferring the floor on a tie. This is scalar control-plane
-/// work; the returned dimensions are consumed by the native nearest resize
-/// kernel below.
+/// The public operation computes Pillow's aspect-preserving `round_aspect`
+/// result before queuing the lazy node. Repeating that calculation here would
+/// shrink an already-adjusted request a second time (for example `(10, 6)`
+/// would become `(9, 6)` for an `11x7` source).
 fn native_thumbnail_dimensions(
     source_width: u32,
     source_height: u32,
@@ -15491,46 +15588,10 @@ fn native_thumbnail_dimensions(
     if source_width == 0 || source_height == 0 || target_width == 0 || target_height == 0 {
         return None;
     }
-    let bound_width = target_width.min(source_width);
-    let bound_height = target_height.min(source_height);
-    if bound_width == 0 || bound_height == 0 {
-        return None;
-    }
-    let aspect = f64::from(source_width) / f64::from(source_height);
-    let (width, height) = if f64::from(bound_width) / f64::from(bound_height) >= aspect {
-        let adjusted =
-            native_thumbnail_round_aspect(f64::from(bound_height) * aspect, |candidate| {
-                (aspect - candidate / f64::from(bound_height)).abs()
-            })?;
-        (adjusted, bound_height)
-    } else {
-        let adjusted =
-            native_thumbnail_round_aspect(f64::from(bound_width) / aspect, |candidate| {
-                if candidate == 0.0 {
-                    0.0
-                } else {
-                    (aspect - f64::from(bound_width) / candidate).abs()
-                }
-            })?;
-        (bound_width, adjusted)
-    };
     Some((
-        width.min(source_width).max(1),
-        height.min(source_height).max(1),
+        target_width.min(source_width).max(1),
+        target_height.min(source_height).max(1),
     ))
-}
-
-fn native_thumbnail_round_aspect(number: f64, key: impl Fn(f64) -> f64) -> Option<u32> {
-    if !number.is_finite() || number < 0.0 {
-        return None;
-    }
-    let floor = number.trunc();
-    if number == floor {
-        return (floor <= f64::from(u32::MAX)).then_some(floor as u32);
-    }
-    let ceil = floor + 1.0;
-    let best = if key(floor) <= key(ceil) { floor } else { ceil };
-    (best >= 0.0 && best <= f64::from(u32::MAX)).then_some(best as u32)
 }
 
 #[inline]
@@ -15547,7 +15608,7 @@ fn native_thumbnail_has_alpha(img: &DynamicImage, mode: Option<&str>) -> bool {
     matches!(
         img,
         DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) && !matches!(mode, Some("F" | "I" | "CMYK"))
+    ) && !matches!(mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"))
 }
 
 #[inline]
@@ -15687,7 +15748,7 @@ fn native_thumbnail_supported_for_shape(
         output_height,
         filter,
         matches!(shape.layout, SimdLayout::LumaA8 | SimdLayout::Rgba8)
-            && !matches!(mode, Some("F" | "I" | "CMYK")),
+            && !matches!(mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX")),
     ) else {
         return false;
     };
@@ -17284,7 +17345,7 @@ fn simd_resize_f_boxed(
                             weights[lane] = horizontal.weights[output_index][tap];
                         }
                     }
-                    sums += f64x8::new(values) * f64x8::new(weights);
+                    sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
                 }
                 let values = sums.to_array().map(|value| {
                     let value = value as f32;
@@ -17311,7 +17372,7 @@ fn simd_resize_f_boxed(
                             0.0
                         }
                     });
-                    sums += f64x8::new(values) * f64x8::splat(weight);
+                    sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
                 }
                 let values = sums.to_array().map(|value| {
                     let value = value as f32;
@@ -18944,7 +19005,7 @@ fn simd_resize_luma16(
                         ));
                         weights[lane] = weight;
                     }
-                    sums += f64x8::new(values) * f64x8::new(weights);
+                    sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
                 }
                 let rounded = sums
                     .to_array()
@@ -18996,7 +19057,7 @@ fn simd_resize_luma16(
                             0.0
                         }
                     });
-                    sums += f64x8::new(values) * f64x8::splat(weight);
+                    sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
                 }
                 let rounded = sums
                     .to_array()
@@ -19151,10 +19212,9 @@ fn simd_resize_f(
                             );
                             weights[lane] = weight;
                         }
-                        let products = (f64x8::new(values) * f64x8::new(weights)).to_array();
-                        for lane in 0..count {
-                            sums[lane] += products[lane];
-                        }
+                        sums = f64x8::new(weights)
+                            .mul_add(f64x8::new(values), f64x8::new(sums))
+                            .to_array();
                     }
                     let values = sums.map(|value| {
                         let value = value as f32;
@@ -19230,10 +19290,9 @@ fn simd_resize_f(
                                 0.0
                             }
                         });
-                        let products = (f64x8::new(values) * f64x8::splat(weight)).to_array();
-                        for lane in 0..count {
-                            sums[lane] += products[lane];
-                        }
+                        sums = f64x8::splat(weight)
+                            .mul_add(f64x8::new(values), f64x8::new(sums))
+                            .to_array();
                     }
                     let values = sums.map(|value| {
                         let value = value as f32;
@@ -19397,7 +19456,10 @@ fn simd_resize_i32(
         let intermediate_len = source_height
             .checked_mul(output_width)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        let mut intermediate = vec![0.0f64; intermediate_len];
+        // Pillow's horizontal INT32 pass is materialized as INT32 before the
+        // vertical pass. A f64 intermediate loses the native overflow/cast
+        // behavior for large signed samples.
+        let mut intermediate = vec![0i32; intermediate_len];
 
         for source_y in 0..source_height {
             let source_row = source_y
@@ -19444,7 +19506,7 @@ fn simd_resize_i32(
                         );
                         weights[lane] = weight;
                     }
-                    sums += f64x8::new(values) * f64x8::new(weights);
+                    sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
                 }
                 let values = sums.to_array();
                 for lane in 0..count {
@@ -19453,7 +19515,7 @@ fn simd_resize_i32(
                         .ok_or_else(|| simd_unsupported("Resize"))?;
                     *intermediate
                         .get_mut(index)
-                        .ok_or_else(|| simd_unsupported("Resize"))? = round_up(values[lane]);
+                        .ok_or_else(|| simd_unsupported("Resize"))? = round_up(values[lane]) as i32;
                 }
                 vector_blocks = vector_blocks.saturating_add(1);
             }
@@ -19486,12 +19548,12 @@ fn simd_resize_i32(
                         .ok_or_else(|| simd_unsupported("Resize"))?;
                     let values = std::array::from_fn(|lane| {
                         if lane < count {
-                            intermediate[source_row + output_x + lane]
+                            f64::from(intermediate[source_row + output_x + lane])
                         } else {
                             0.0
                         }
                     });
-                    sums += f64x8::new(values) * f64x8::splat(weight);
+                    sums = f64x8::splat(weight).mul_add(f64x8::new(values), sums);
                 }
                 let rounded = sums.to_array().map(|value| round_up(value) as i32);
                 let packed = i32x8::new(rounded).to_array();
@@ -19520,6 +19582,108 @@ fn simd_resize_i32(
         output_width as u32,
         output_height as u32,
         output,
+        4,
+    )?;
+    Ok(preserve_mode(img, result))
+}
+
+/// Resize an `I` image through the fractional source box used by
+/// `Image.thumbnail` after an integer reducing-gap pass. Keep the INT32
+/// intermediate and round each horizontal/vertical f64 sum exactly as the
+/// scalar `ImagingResample` path does; the surrounding loops still publish
+/// SIMD adapter telemetry and pack complete four-byte samples.
+fn simd_resize_i32_boxed(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
+    let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
+    let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
+    let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Resize"))?;
+    let source_len = source_width
+        .checked_mul(source_height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| simd_unsupported("Resize"))?;
+    if img.as_bytes().len() != source_len {
+        return Err(PilError::InternalError(
+            "SIMD boxed I resize source buffer shape mismatch".into(),
+        ));
+    }
+    if source_width == 0 || source_height == 0 {
+        return simd_resize_zero_source(img, output_width as u32, output_height as u32, 4);
+    }
+    let output_len = output_width
+        .checked_mul(output_height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| simd_unsupported("Resize"))?;
+    let source: Vec<i32> = img
+        .as_bytes()
+        .chunks_exact(4)
+        .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+        .collect();
+    let horizontal = precompute_coeffs_f64_boxed(
+        output_width as u32,
+        source_width as u32,
+        box_left,
+        box_right,
+        filter,
+    );
+    let vertical = precompute_coeffs_f64_boxed(
+        output_height as u32,
+        source_height as u32,
+        box_top,
+        box_bottom,
+        filter,
+    );
+    let mut intermediate = vec![0i32; source_height * output_width];
+    for source_y in 0..source_height {
+        let source_row = source_y * source_width;
+        let intermediate_row = source_y * output_width;
+        for output_x in 0..output_width {
+            let x0 = horizontal.xmin[output_x];
+            let mut sum = 0.0f64;
+            for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
+                let source_x = (x0 + tap as i64) as usize;
+                sum = weight.mul_add(f64::from(source[source_row + source_x]), sum);
+            }
+            intermediate[intermediate_row + output_x] = round_up(sum) as i32;
+        }
+    }
+    let mut output = vec![0i32; output_width * output_height];
+    for output_y in 0..output_height {
+        let y0 = vertical.xmin[output_y];
+        let output_row = output_y * output_width;
+        for output_x in 0..output_width {
+            let mut sum = 0.0f64;
+            for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
+                let source_y = (y0 + tap as i64) as usize;
+                sum = weight.mul_add(
+                    f64::from(intermediate[source_y * output_width + output_x]),
+                    sum,
+                );
+            }
+            output[output_row + output_x] = round_up(sum) as i32;
+        }
+    }
+    let bytes: Vec<u8> = output
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    debug_assert_eq!(bytes.len(), output_len);
+    let vector_blocks = output_width.div_ceil(SIMD_RESIZE_LANES) as u64 * output_height as u64;
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    let result = crate::image_utils::raw_bytes_to_image(
+        output_width as u32,
+        output_height as u32,
+        bytes,
         4,
     )?;
     Ok(preserve_mode(img, result))
@@ -19693,9 +19857,37 @@ pub fn simd_thumbnail(
         work_img = reduced;
     }
     if typed_scalar && mode == Some("F") {
+        if factor_x != 1 || factor_y != 1 {
+            let box_right = f64::from(img.width()) / f64::from(factor_x);
+            let box_bottom = f64::from(img.height()) / f64::from(factor_y);
+            return simd_resize_f_boxed(
+                &work_img,
+                output_width,
+                output_height,
+                0.0,
+                0.0,
+                box_right,
+                box_bottom,
+                effective_filter,
+            );
+        }
         return simd_resize_f(&work_img, output_width, output_height, &effective_filter);
     }
     if typed_scalar && mode == Some("I") {
+        if factor_x != 1 || factor_y != 1 {
+            let box_right = f64::from(img.width()) / f64::from(factor_x);
+            let box_bottom = f64::from(img.height()) / f64::from(factor_y);
+            return simd_resize_i32_boxed(
+                &work_img,
+                output_width,
+                output_height,
+                0.0,
+                0.0,
+                box_right,
+                box_bottom,
+                effective_filter,
+            );
+        }
         return simd_resize_i32(&work_img, output_width, output_height, &effective_filter);
     }
     let (channels, premultiplied_alpha) = native_resize_byte_layout_for_image(&work_img, mode)

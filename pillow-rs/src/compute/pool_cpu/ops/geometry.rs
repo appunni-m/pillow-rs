@@ -12,8 +12,8 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::ops::pil_resize::{
-    pil_resize, pil_resize_boxed, precompute_coeffs_f64, premultiply_alpha, round_up,
-    unpremultiply_alpha,
+    pil_resize, pil_resize_boxed, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
+    premultiply_alpha, round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
@@ -434,8 +434,10 @@ fn resize_i(
     let h_coeffs_f64 = precompute_coeffs_f64(dst_w, sw, kernel, support);
     let v_coeffs_f64 = precompute_coeffs_f64(dst_h, sh, kernel, support);
 
-    // Allocate intermediate buffer (sh rows x dw cols) as f64
-    let mut intermediate: Vec<f64> = vec![0.0f64; (sh * dst_w) as usize];
+    // ImagingResample stores the horizontal INT32 pass in an INT32 image
+    // before the vertical pass. Keeping this buffer as f64 changes overflow
+    // cases (the C cast saturates to INT32_MIN on the supported platforms).
+    let mut intermediate: Vec<i32> = vec![0; (sh * dst_w) as usize];
 
     // Horizontal pass: f64 accumulation, matching PIL's double-precision path
     #[cfg(feature = "parallel")]
@@ -450,9 +452,9 @@ fn resize_i(
                 let mut acc: f64 = 0.0;
                 for (cix, &weight) in h_coeffs_f64.weights[dx].iter().enumerate() {
                     let sx = (x0 + cix as i64) as usize;
-                    acc += weight * src_ints[src_row_base + sx] as f64;
+                    acc = weight.mul_add(f64::from(src_ints[src_row_base + sx]), acc);
                 }
-                *output = round_up(acc);
+                *output = round_up(acc) as i32;
             }
         }
     );
@@ -464,9 +466,9 @@ fn resize_i(
             let mut acc: f64 = 0.0;
             for (cix, &weight) in h_coeffs_f64.weights[dx].iter().enumerate() {
                 let sx = (x0 + cix as i64) as usize;
-                acc += weight * src_ints[src_row_base + sx] as f64;
+                acc = weight.mul_add(f64::from(src_ints[src_row_base + sx]), acc);
             }
-            *output = round_up(acc);
+            *output = round_up(acc) as i32;
         }
     }
 
@@ -483,7 +485,7 @@ fn resize_i(
                 let mut acc: f64 = 0.0;
                 for (cix, &weight) in v_coeffs_f64.weights[dy as usize].iter().enumerate() {
                     let sy = (y0 + cix as i64) as usize;
-                    acc += weight * intermediate[(sy * dst_w as usize) + dx];
+                    acc = weight.mul_add(f64::from(intermediate[(sy * dst_w as usize) + dx]), acc);
                 }
                 *output = round_up(acc) as i32;
             }
@@ -496,7 +498,7 @@ fn resize_i(
             let mut acc: f64 = 0.0;
             for (cix, &weight) in v_coeffs_f64.weights[dy].iter().enumerate() {
                 let sy = (y0 + cix as i64) as usize;
-                acc += weight * intermediate[(sy * dst_w as usize) + dx];
+                acc = weight.mul_add(f64::from(intermediate[(sy * dst_w as usize) + dx]), acc);
             }
             *output = round_up(acc) as i32;
         }
@@ -506,6 +508,74 @@ fn resize_i(
     let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
     let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
+    Ok(DynamicImage::ImageRgba8(out))
+}
+
+/// Resize an `I` image through a fractional source box.
+///
+/// Pillow's reducing-gap thumbnail path passes the original source box after
+/// the integer reduction. The intermediate image is still an INT32 image, so
+/// both separable passes round their f64 sums to i32 before the next pass.
+fn resize_i_boxed(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    let rgba = img.to_rgba8();
+    let (source_width, source_height) = rgba.dimensions();
+    if dst_w == 0 || dst_h == 0 || source_width == 0 || source_height == 0 {
+        return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
+    }
+    let source: Vec<i32> = rgba
+        .pixels()
+        .map(|pixel| i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]))
+        .collect();
+    let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
+    let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
+
+    let mut intermediate = vec![0i32; (source_height * dst_w) as usize];
+    for source_y in 0..source_height as usize {
+        let source_row = source_y * source_width as usize;
+        let intermediate_row = source_y * dst_w as usize;
+        for output_x in 0..dst_w as usize {
+            let x0 = horizontal.xmin[output_x];
+            let mut sum = 0.0f64;
+            for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
+                let source_x = (x0 + tap as i64) as usize;
+                sum = weight.mul_add(f64::from(source[source_row + source_x]), sum);
+            }
+            intermediate[intermediate_row + output_x] = round_up(sum) as i32;
+        }
+    }
+
+    let mut output = vec![0i32; (dst_w * dst_h) as usize];
+    for output_y in 0..dst_h as usize {
+        let y0 = vertical.xmin[output_y];
+        let output_row = output_y * dst_w as usize;
+        for output_x in 0..dst_w as usize {
+            let mut sum = 0.0f64;
+            for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
+                let source_y = (y0 + tap as i64) as usize;
+                sum = weight.mul_add(
+                    f64::from(intermediate[source_y * dst_w as usize + output_x]),
+                    sum,
+                );
+            }
+            output[output_row + output_x] = round_up(sum) as i32;
+        }
+    }
+    let bytes: Vec<u8> = output
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, bytes).ok_or_else(|| {
+        PilError::ValueError("resize_i boxed: failed to create output buffer".into())
+    })?;
     Ok(DynamicImage::ImageRgba8(out))
 }
 
@@ -1295,21 +1365,6 @@ pub fn execute_transpose(
     }
 }
 
-/// PIL's round_aspect: picks floor or ceil of `number` based on `key` function.
-/// Returns max(min(floor, ceil, key=key), 1). When floor == ceil (integer),
-/// returns that integer.
-fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {
-    let floor = number.trunc();
-    if number == floor {
-        return floor as u32;
-    }
-    let ceil = floor + 1.0;
-    let floor_key = key(floor);
-    let ceil_key = key(ceil);
-    let best = if floor_key <= ceil_key { floor } else { ceil };
-    (best as u32).max(1)
-}
-
 /// Execute a Thumbnail operation.
 /// Computes the scale factor to fit within the given box, preserving aspect ratio.
 /// Matches PIL's thumbnail behavior including the reducing_gap optimization
@@ -1325,32 +1380,12 @@ pub fn execute_thumbnail(
     if w == 0 || h == 0 {
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));
     }
-    // PIL's thumbnail uses round_aspect(): picks floor or ceil based on
-    // which better preserves the aspect ratio. This differs from simple
-    // rounding — e.g. round(12.5)=12 but if ceil=13 gives better aspect
-    // ratio preservation, PIL picks 13.
-    // Exact PIL formula:
-    //   if x / y >= aspect:
-    //       x = round_aspect(y * aspect, key=lambda n: abs(aspect - n / y))
-    //   else:
-    //       y = round_aspect(x / aspect, key=lambda n: 0 if n == 0 else abs(aspect - x / n))
-    let (new_w, new_h) = if w as f64 / h as f64 >= cur_w as f64 / cur_h as f64 {
-        let adjusted = round_aspect(h as f64 * (cur_w as f64 / cur_h as f64), |n| {
-            (cur_w as f64 / cur_h as f64 - n / h as f64).abs()
-        });
-        (adjusted, h)
-    } else {
-        let adjusted = round_aspect(w as f64 / (cur_w as f64 / cur_h as f64), |n| {
-            if n == 0.0 {
-                0.0
-            } else {
-                (cur_w as f64 / cur_h as f64 - w as f64 / n).abs()
-            }
-        });
-        (w, adjusted)
-    };
-    let new_w = new_w.max(1);
-    let new_h = new_h.max(1);
+    // `Image::thumbnail` performs Pillow's aspect-preserving `round_aspect`
+    // calculation before queuing this operation so lazy shape metadata and
+    // the eventual pixels agree. The operation therefore carries the final
+    // dimensions; do not apply the aspect calculation a second time here.
+    let new_w = w.max(1).min(cur_w);
+    let new_h = h.max(1).min(cur_h);
     // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
     let effective_filter = match explicit_mode {
         Some("1") | Some("P") => ResampleFilter::Nearest,
@@ -1365,7 +1400,7 @@ pub fn execute_thumbnail(
     let has_alpha = matches!(
         img.color(),
         crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-    ) && !matches!(explicit_mode, Some("F") | Some("I") | Some("CMYK"));
+    ) && !matches!(explicit_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
     let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest) && !has_alpha;
     let mut work_img = img.clone();
     let mut resize_box = None;
@@ -1399,40 +1434,7 @@ pub fn execute_thumbnail(
                 Some("I") if matches!(work_img, DynamicImage::ImageRgba8(_)) => {
                     reduce_i_thumbnail(&work_img, rw, rh, factor_x, factor_y)?
                 }
-                _ => {
-                    // Average each factor_x×factor_y block per-channel,
-                    // matching Pillow's ImagingReduce partial edge blocks.
-                    let channels = work_img.color().channel_count() as usize;
-                    let raw = work_img.as_bytes();
-                    let mut out = CheckedDims::new(rw, rh, channels as u8)?.alloc_buffer();
-                    for y in 0..rh {
-                        for x in 0..rw {
-                            for c in 0..channels {
-                                let mut sum = 0u64;
-                                for dy in 0..factor_y {
-                                    let sy = y * factor_y + dy;
-                                    if sy >= cur_h {
-                                        continue;
-                                    }
-                                    for dx in 0..factor_x {
-                                        let sx = x * factor_x + dx;
-                                        if sx >= cur_w {
-                                            continue;
-                                        }
-                                        let idx = (sy * cur_w + sx) as usize * channels + c;
-                                        sum += raw[idx] as u64;
-                                    }
-                                }
-                                let block_pixels = (factor_y.min(cur_h - y * factor_y)
-                                    * factor_x.min(cur_w - x * factor_x))
-                                    as u64;
-                                let val = ((sum + block_pixels / 2) / block_pixels) as u8;
-                                out[(y * rw + x) as usize * channels + c] = val;
-                            }
-                        }
-                    }
-                    raw_bytes_to_image(rw, rh, out, channels)?
-                }
+                _ => execute_reduce(&work_img, factor_x, factor_y, explicit_mode)?,
             };
         }
     }
@@ -1441,10 +1443,39 @@ pub fn execute_thumbnail(
     // If the image is still RGB or other format, use normal thumbnail regardless
     // of explicit_mode, because the F/I convert hasn't happened yet in the pipeline.
     let result = match (explicit_mode, &work_img, resize_box) {
-        (Some("F"), DynamicImage::ImageRgba8(_), _) => {
+        (Some("F"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
+            // Image.resize adjusts the source box after its reducing-gap pass.
+            // Keep that fractional box for F as well; resizing the complete
+            // ceil-sized reduction includes partial edge samples that Pillow
+            // deliberately excludes from the final convolution.
+            pil_resize_boxed(
+                &work_img,
+                new_w,
+                new_h,
+                left,
+                top,
+                right,
+                bottom,
+                effective_filter,
+                explicit_mode,
+            )
+        }
+        (Some("F"), DynamicImage::ImageRgba8(_), None) => {
             resize_f(&work_img, new_w, new_h, &effective_filter)?
         }
-        (Some("I"), DynamicImage::ImageRgba8(_), _) => {
+        (Some("I"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
+            resize_i_boxed(
+                &work_img,
+                new_w,
+                new_h,
+                left,
+                top,
+                right,
+                bottom,
+                effective_filter,
+            )?
+        }
+        (Some("I"), DynamicImage::ImageRgba8(_), None) => {
             resize_i(&work_img, new_w, new_h, &effective_filter)?
         }
         (_, _, Some((left, top, right, bottom))) => pil_resize_boxed(
@@ -1473,20 +1504,73 @@ fn reduce_f_thumbnail(
     let rgba = img.to_rgba8();
     let (src_w, src_h) = rgba.dimensions();
     let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
+    let main_width = src_w / factor_x;
+    let main_height = src_h / factor_y;
     for y in 0..dst_h {
         let source_y = y * factor_y;
         let block_h = factor_y.min(src_h - source_y);
         for x in 0..dst_w {
             let source_x = x * factor_x;
             let block_w = factor_x.min(src_w - source_x);
-            let mut sum = 0.0f32;
-            for dy in 0..block_h {
-                for dx in 0..block_w {
-                    let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
-                    sum += f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]);
+            // `ImagingReduceNxN_32bpc` uses a double accumulator, but its
+            // interior 2x2 groups are formed by float additions before being
+            // promoted to double. The corner helper handles partial right,
+            // bottom, and bottom-right blocks as scalar float values. Keep
+            // those two paths distinct: a flat f32 sum drifts on constants,
+            // while a flat f64 sum differs on heterogeneous blocks.
+            let mut sum = 0.0f64;
+            if x < main_width && y < main_height {
+                let mut dy = 0;
+                while dy + 1 < block_h {
+                    let mut dx = 0;
+                    while dx + 1 < block_w {
+                        let value = |offset_x: u32, offset_y: u32| {
+                            let pixel = rgba.get_pixel(source_x + offset_x, source_y + offset_y);
+                            f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
+                        };
+                        let top_left = value(dx, dy);
+                        let top_right = value(dx + 1, dy);
+                        let bottom_left = value(dx, dy + 1);
+                        let bottom_right = value(dx + 1, dy + 1);
+                        let quartet = ((top_left + top_right) + bottom_left) + bottom_right;
+                        sum += f64::from(quartet);
+                        dx += 2;
+                    }
+                    if dx < block_w {
+                        let value = |offset_y: u32| {
+                            let pixel = rgba.get_pixel(source_x + dx, source_y + offset_y);
+                            f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
+                        };
+                        sum += f64::from(value(dy) + value(dy + 1));
+                    }
+                    dy += 2;
+                }
+                if dy < block_h {
+                    let mut dx = 0;
+                    while dx + 1 < block_w {
+                        let value = |offset_x: u32| {
+                            let pixel = rgba.get_pixel(source_x + offset_x, source_y + dy);
+                            f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
+                        };
+                        sum += f64::from(value(dx) + value(dx + 1));
+                        dx += 2;
+                    }
+                    if dx < block_w {
+                        let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
+                        sum +=
+                            f64::from(f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]));
+                    }
+                }
+            } else {
+                for dy in 0..block_h {
+                    for dx in 0..block_w {
+                        let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
+                        sum +=
+                            f64::from(f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]));
+                    }
                 }
             }
-            let value = sum / (block_w * block_h) as f32;
+            let value = (sum * (1.0 / f64::from(block_w * block_h))) as f32;
             out.extend_from_slice(&value.to_le_bytes());
         }
     }
@@ -1503,20 +1587,64 @@ fn reduce_i_thumbnail(
     let rgba = img.to_rgba8();
     let (src_w, src_h) = rgba.dimensions();
     let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
+    let main_width = src_w / factor_x;
+    let main_height = src_h / factor_y;
     for y in 0..dst_h {
         let source_y = y * factor_y;
         let block_h = factor_y.min(src_h - source_y);
         for x in 0..dst_w {
             let source_x = x * factor_x;
             let block_w = factor_x.min(src_w - source_x);
-            let mut sum = 0i64;
-            for dy in 0..block_h {
-                for dx in 0..block_w {
-                    let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
-                    sum += i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]) as i64;
+            // ImagingReduceNxN_32bpc adds pairs/quartets while the samples
+            // are still INT32, so each intermediate addition wraps at 32
+            // bits before the result is promoted to the double accumulator.
+            // Its corner helper instead adds each partial-edge sample
+            // directly to the double accumulator. Preserve those two paths
+            // separately; summing every sample as i64 changes overflow cases.
+            let mut sum = 0.0f64;
+            if x < main_width && y < main_height {
+                let value = |offset_x: u32, offset_y: u32| {
+                    let pixel = rgba.get_pixel(source_x + offset_x, source_y + offset_y);
+                    i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
+                };
+                let mut dy = 0;
+                while dy + 1 < block_h {
+                    let mut dx = 0;
+                    while dx + 1 < block_w {
+                        let quartet = value(dx, dy)
+                            .wrapping_add(value(dx + 1, dy))
+                            .wrapping_add(value(dx, dy + 1))
+                            .wrapping_add(value(dx + 1, dy + 1));
+                        sum += f64::from(quartet);
+                        dx += 2;
+                    }
+                    if dx < block_w {
+                        let pair = value(dx, dy).wrapping_add(value(dx, dy + 1));
+                        sum += f64::from(pair);
+                    }
+                    dy += 2;
+                }
+                if dy < block_h {
+                    let mut dx = 0;
+                    while dx + 1 < block_w {
+                        let pair = value(dx, dy).wrapping_add(value(dx + 1, dy));
+                        sum += f64::from(pair);
+                        dx += 2;
+                    }
+                    if dx < block_w {
+                        sum += f64::from(value(dx, dy));
+                    }
+                }
+            } else {
+                for dy in 0..block_h {
+                    for dx in 0..block_w {
+                        let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
+                        let value = i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]);
+                        sum += f64::from(value);
+                    }
                 }
             }
-            let value = round_up(sum as f64 / f64::from(block_w * block_h)) as i32;
+            let value = round_up(sum / f64::from(block_w * block_h)) as i32;
             out.extend_from_slice(&value.to_le_bytes());
         }
     }
@@ -1533,21 +1661,29 @@ pub fn execute_reduce(
     img: &DynamicImage,
     x_factor: u32,
     y_factor: u32,
+    explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if x_factor < 2 && y_factor < 2 {
         return Ok(img.clone());
     }
     let fx = x_factor.max(1);
     let fy = y_factor.max(1);
-    let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
+    if matches!(img, DynamicImage::ImageRgba8(_)) && explicit_mode == Some("I") {
+        return reduce_i_thumbnail(img, w.div_ceil(fx), h.div_ceil(fy), fx, fy);
+    }
+    if matches!(img, DynamicImage::ImageRgba8(_)) && explicit_mode == Some("F") {
+        return reduce_f_thumbnail(img, w.div_ceil(fx), h.div_ceil(fy), fx, fy);
+    }
+    let channels = img.color().channel_count() as usize;
     let new_w = w.div_ceil(fx);
     let new_h = h.div_ceil(fy);
     let raw = img.as_bytes();
-    let premultiplied_alpha = matches!(
-        img.color(),
-        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-    );
+    let premultiplied_alpha =
+        matches!(
+            img.color(),
+            crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+        ) && !matches!(explicit_mode, Some("CMYK" | "RGBa" | "RGBX" | "F" | "I"));
     let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
     if new_w == 0 || new_h == 0 {
         return raw_bytes_to_image(new_w, new_h, out, channels);
@@ -1663,7 +1799,7 @@ pub fn execute_reduce(
 
 #[cfg(test)]
 mod tests {
-    use super::resize_f;
+    use super::{reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, RgbaImage};
 
@@ -1751,5 +1887,88 @@ mod tests {
             .flat_map(u32::to_le_bytes)
             .collect();
         assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_thumbnail_reduce_matches_pillow_32bpc_grouping() {
+        let source_words = [
+            0x0e65_a54au32,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+            0x0e65_a54a,
+        ];
+        let source_bytes = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(4, 4, source_bytes).expect("source shape must be valid"),
+        );
+        let output = reduce_f_thumbnail(&source, 1, 1, 4, 4)
+            .expect("finite F-mode thumbnail reduction must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode thumbnail reduction must retain packed float storage");
+        };
+        assert_eq!(output.as_raw(), &0x0e65_a54au32.to_le_bytes());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_thumbnail_reduce_matches_pillow_float_group_order() {
+        let source_words = [
+            0xc42a_2b37,
+            0xc3a2_c889,
+            0xc3a6_341f,
+            0xc432_e997,
+            0x4411_0932,
+            0xc46f_61cc,
+        ];
+        let source_bytes = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(3, 2, source_bytes).expect("source shape must be valid"),
+        );
+        let output = reduce_f_thumbnail(&source, 1, 1, 3, 2)
+            .expect("finite F-mode thumbnail reduction must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode thumbnail reduction must retain packed float storage");
+        };
+        assert_eq!(output.as_raw(), &0xc3ca_a3eau32.to_le_bytes());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn i_thumbnail_reduce_matches_pillow_int32_grouping() {
+        let source_words = [i32::MAX; 4];
+        let source_bytes: Vec<u8> = source_words
+            .into_iter()
+            .flat_map(i32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 2, source_bytes).expect("source shape must be valid"),
+        );
+        let output = reduce_i_thumbnail(&source, 1, 1, 2, 2)
+            .expect("I-mode thumbnail reduction must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("I-mode thumbnail reduction must retain packed integer storage");
+        };
+        // Reduce.c forms the interior quartet while still INT32: four
+        // INT32_MAX values wrap to -4 before promotion and averaging.
+        assert_eq!(output.as_raw(), &(-1i32).to_le_bytes());
     }
 }

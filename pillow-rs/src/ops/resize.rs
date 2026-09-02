@@ -228,7 +228,27 @@ impl Image {
         } else {
             requested_height.min(source_height)
         };
-        Ok((width, height))
+        // Pillow stores the aspect-preserving dimensions in the thumbnail
+        // operation itself. Keeping the caller's rectangular bounds here
+        // makes `size` report the request rather than the eventual image, and
+        // also causes deferred backends to plan the wrong geometry. Match
+        // `Image.thumbnail`'s round_aspect floor/ceil choice before queuing.
+        let aspect = source_width as f64 / source_height as f64;
+        if width as f64 / height as f64 >= aspect {
+            let adjusted = round_aspect(height as f64 * aspect, |candidate| {
+                (aspect - candidate / height as f64).abs()
+            });
+            Ok((adjusted, height))
+        } else {
+            let adjusted = round_aspect(width as f64 / aspect, |candidate| {
+                if candidate == 0.0 {
+                    0.0
+                } else {
+                    (aspect - width as f64 / candidate).abs()
+                }
+            });
+            Ok((width, adjusted))
+        }
     }
 
     fn thumbnail_dimensions_zero_width(size: (i64, i64)) -> Result<(u32, u32), PilError> {
