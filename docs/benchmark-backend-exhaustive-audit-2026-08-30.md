@@ -4719,7 +4719,19 @@ records `actual_backend=gpu`, `dispatch_count=1`, and
 implementation also remained value/error-exact for 10,952/10,952 public IDs;
 GPU native terminal receipts moved from 6,632 to 6,634, host-controlled
 receipts from 206 to 204, and the 6,832 GPU pipeline cases remained terminal
-complete.
+complete. A post-push GPU-only full-corpus replay is recorded in
+`build/migration-parity/incremental/full-gpu-e0adcd1be.json` (SHA-256
+`2de2c528cfdd2dd9088f5d632a88b0fa6b42d33e0f93ff321e1c4d7cb065b84c`):
+10,952/10,952 comparisons passed with zero infrastructure errors. Its receipt
+sidecar
+`build/migration-parity/incremental/full-gpu-e0adcd1be-execution.json`
+(SHA-256
+`080c457bfa932d036473a64bbdc3819138bf37bdcb71c6d32fadc5008ee79bed`)
+records the same 6,634 native-GPU and 204 host-controlled terminal receipts,
+6,832 complete pipeline cases, and no partial, missing, or indeterminate
+pipeline receipts. The code revision is `e0adcd1be`; the runner's later
+workspace revision contains only the documentation commit and the pre-existing
+workspace files remain outside the source change.
 
 No fixtures, expected values, thresholds, IDs, denominators, public errors, or
 receipt rules changed. This closes only the proven same-size typed-I identity

@@ -600,6 +600,17 @@ execution is a parity-preserving fallback, not a parity completion claim.
   `f77bd3c8442ad6c35e61c33074999106ffa7c780896185f361f37eaa1a1c35f1`)
   records `actual_backend=gpu`, `dispatch_count=1`, and `fallback_reason=null`.
   No fixtures, thresholds, IDs, denominators, or receipt rules changed.
+- [x] The post-push GPU-only full-corpus replay at source `e0adcd1be` is
+  `build/migration-parity/incremental/full-gpu-e0adcd1be.json` (SHA-256
+  `2de2c528cfdd2dd9088f5d632a88b0fa6b42d33e0f93ff321e1c4d7cb065b84c`): all
+  **10,952/10,952** comparisons passed with zero infrastructure errors. The
+  receipt sidecar
+  `build/migration-parity/incremental/full-gpu-e0adcd1be-execution.json`
+  (SHA-256
+  `080c457bfa932d036473a64bbdc3819138bf37bdcb71c6d32fadc5008ee79bed`)
+  records 6,634 native-GPU and 204 host-controlled terminal receipts, 6,832
+  complete pipeline cases, and zero partial/missing/indeterminate pipeline
+  receipts.
 - [x] The evidence-taxonomy correction at committed source
   `09ef0dc83f09caad765ffe8113453846ee9a9b3d` is covered by the fresh
   schema-v3 all-backend replay. The artifact
