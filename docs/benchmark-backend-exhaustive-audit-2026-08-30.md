@@ -4871,3 +4871,67 @@ rules changed.
 The remaining P0 work is broader sampled F/non-dyadic device arithmetic and
 other unproven transform domains. P1 backend identity/fallback reconciliation
 and P2 equal-ID/equal-receipt timing acceptance remain open.
+
+## 32.71 Typed right-angle transpose admission (2026-09-02)
+
+The next deterministic backend-identity divergence was the typed scalar
+right-angle rotate path. Pillow's `Image.rotate` takes its exact 90/180/270
+degree fast path before sampling: each complete native sample is relocated,
+even when a non-nearest filter token such as `BICUBIC` was supplied. Rust's
+GPU planner had excluded `I`, `F`, and `I;16*` from the transpose lowering on
+the assumption that their four-byte storage was numeric rather than
+channel-wise, so those valid rotations were sent to exact host semantic
+control.
+
+Commit `63a61af97` makes the proof explicit. Mode-7/8 transpose dispatches
+relocate all four bytes of `I`/`F` words unchanged; mode-5 dispatches retain
+the native two-byte `I;16*` payload in the low word, and typed readback drops
+only the transport padding while restoring the declared byte order. The
+planner accepts only the declared native modes and exact right-angle geometry
+(no custom center/translation); fractional or genuinely sampled typed
+rotations remain on the exact host implementation. The added native test
+covers `I`, `F`, `I;16`, and `I;16B` sources with a `BICUBIC` token, including
+signed words, signed zero/subnormal float words, and both 16-bit byte orders.
+
+The focused four-case schema-v3 replay selected
+`PIL.Image.Image.rotate.nuanced.f-explicit-bilinear-nearest`,
+`...i-explicit-bilinear-nearest`, `...l16-png-opened`, and
+`...rgba-premultiplied-bilinear`. CPU, SIMD, GPU, Node WASM, and browser WASM
+were each value/error-exact for all 4/4 cases with terminal receipts; GPU used
+native execution for the typed right-angle `l16-png-opened` row and retained
+exact host control for the three fractional/premultiplied rows. The focused
+GPU sidecar is
+`build/migration-parity/incremental/all-backends/parity-gpu-execution.json`
+(SHA-256
+`53af018cea3ab171f3ccc9913c6f2e4ed2af8dc3b20b5b1cf2f3179fd1a7cfcf`), and
+the focused all-backend envelope is
+`build/migration-parity/incremental/all-backends-test-result.json` (SHA-256
+`1d1bce25692dd887a7587ad4dcbf93121d85990d6edab1736aa85f64d285e645`).
+
+The post-change full schema-v3 campaign at revision
+`63a61af97442f01ec9fda6afa5282e6cee1e4327` remains value/error-exact at
+10,952/10,952 on CPU, SIMD, GPU, Node WASM, and browser WASM. CPU has 6,838
+terminal receipts (6,832 pipeline-complete), SIMD 6,850 (6,844), and GPU
+6,710 native-GPU plus 128 host-controlled receipts (6,832 complete). GPU
+fallback partitions are 64 exact host semantic-control rows, 62 unsafe
+primary-dimension rows, one unsafe/incomplete-dimension row, and one
+Transform guard. Every pipeline lane has zero partial, missing, or
+indeterminate receipts. The full envelope is
+`build/migration-parity/all-backends-test-result.json` (SHA-256
+`4f7cdada17f5a49dbeaa0feba321790bd8376fe537e47919b885d787457830e3`), and
+the GPU execution sidecar is
+`build/migration-parity/all-backends/parity-gpu-execution.json` (SHA-256
+`5717f5da103f597e91c104feedc70b1904be455ff26ef40f4aefa1c4177aff51`).
+
+`make -C pillow-rs fmt`, the serial GPU-pool suite (56/56),
+`make build-dev`, the focused four-case all-backend replay, the full
+all-backend replay, and `make migration-parity-receipt-test` (34/34) pass.
+`make -C pillow-rs clippy` remains blocked by the pre-existing pinned
+libavif/dav1d/libaom environment requirement. No fixtures, expected values,
+thresholds, IDs, denominators, public errors, or receipt rules changed.
+
+The remaining P0 bucket is broader heterogeneous/non-dyadic F arithmetic on
+native GPU (ordinary f32 shader accumulation diverges from Pillow's f64
+coefficient/product path), plus unproven projective/mesh/palette transform
+domains. P1 backend identity/fallback reconciliation and the P2 equal-ID,
+equal-receipt timing gate remain open.
