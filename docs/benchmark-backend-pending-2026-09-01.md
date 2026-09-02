@@ -269,6 +269,30 @@ execution is a parity-preserving fallback, not a parity completion claim.
 
 ## Evidence recorded in the current run
 
+- [x] The refreshed standard benchmark at the current pushed source
+  `770bff27f` is `build/migration-parity/benchmark-result-current-20260902.json`
+  (SHA-256
+  `1962f75335ba111fb76daf31591e195095aefe6307bd5f1fa6bafeafc707595a`).
+  It selected and measured all **744/744** workloads; Pillow, CPU, SIMD, and
+  GPU each completed **744/744** subject runs, correctness passed **744/744**,
+  and there were zero not-run or infrastructure-error records. The matching
+  parity preflight is
+  `build/migration-parity/benchmark-parity-result-current-20260902.json`
+  (SHA-256
+  `5495cf18b26a81d79d1c8afa57d0da4935d91ba229caa916cc434d228b623317`).
+  Target execution proof remains a separate receipt/identity measure: CPU and
+  GPU each report 251 `not_proven` profiles and SIMD 248 for non-pipeline or
+  otherwise non-terminal benchmark subjects, without affecting the 744/744
+  value/error correctness result.
+
+- [x] The 71 non-empty historical failure workloads from the original 746-row
+  artifact were replayed through the maintained benchmark runner at `770bff27f`
+  (`build/migration-parity/incremental/historical-failures-current.json`).
+  All **71/71** workloads and **284/284** subject runs completed with zero
+  failures, including the former CPU `loaded-10` row, both former SIMD
+  `expanded` rows, and the historical GPU set. This closes the stale execution
+  failure list without changing fixtures, thresholds, IDs, or denominators.
+
 - [x] The latest schema-v3 all-backend envelope at committed source
   `f17e1a7da` is `/tmp/all-backends-post-f17e1a7da.json` (SHA-256
   `ee84c4c4f94aa0c81e1deeea6d712137e1b33299370da3866cacce66fe6c5a7f`).

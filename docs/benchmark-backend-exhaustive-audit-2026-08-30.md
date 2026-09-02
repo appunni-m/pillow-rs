@@ -4660,3 +4660,27 @@ or receipt rules changed. This closes the misleading label only; backend
 identity reconciliation remains open because exact host-control rows are still
 not native GPU executions. The remaining P0 arithmetic and P2 timing work is
 unchanged.
+
+## 32.66 Current standard benchmark refresh (2026-09-02)
+
+The complete standard benchmark was rerun through the maintained runner at
+the pushed source `770bff27f`, rather than reading the pre-fix artifact. It
+selected and measured **744/744** workloads. Pillow, CPU, SIMD, and GPU each
+completed **744/744** subject runs; correctness passed **744/744**, with zero
+not-run and zero infrastructure-error records. The schema-valid result is
+`build/migration-parity/benchmark-result-current-20260902.json` (SHA-256
+`1962f75335ba111fb76daf31591e195095aefe6307bd5f1fa6bafeafc707595a`), and
+its parity preflight is
+`build/migration-parity/benchmark-parity-result-current-20260902.json`
+(SHA-256
+`5495cf18b26a81d79d1c8afa57d0da4935d91ba229caa916cc434d228b623317`).
+
+The 71 non-empty historical failure workloads from the original raw artifact
+were also replayed through the same maintained runner. All **71/71** workloads
+and **284/284** subject runs completed with zero failures, including the former
+CPU `pipeline-chain.loaded-10.rgba-png-512x384` row, the former SIMD
+`pipeline-matrix.expanded.rotate.1x1` and `pipeline-matrix.expanded.add.1x1`
+rows, and the historical GPU rows. These are stale execution failures, not
+current value/error mismatches. Target execution proof still has explicit
+`not_proven` profiles for non-pipeline or non-terminal benchmark subjects, so
+the native backend identity and equal-receipt timing gates remain open.
