@@ -10069,20 +10069,16 @@ fn gpu_indexed_projective_nearest_is_exact(
     if data[..required_data]
         .iter()
         .copied()
-        .any(|value| !f32_exact(value))
+        .any(|value| !f32_exact(value) || value.fract() != 0.0)
     {
         return false;
     }
 
-    let integer_coordinate = |value: f64| {
-        value.is_finite()
-            && value.fract() == 0.0
-            && value.abs() <= f64::from(1 << 24)
-            && f32_exact(value)
-    };
     let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
         match method {
             TransformMethod::Perspective => {
+                let dx = dx + 0.5;
+                let dy = dy + 0.5;
                 let denominator = data[6] * dx + data[7] * dy + 1.0;
                 if denominator == 0.0 || !denominator.is_finite() {
                     return None;
@@ -10092,6 +10088,8 @@ fn gpu_indexed_projective_nearest_is_exact(
                 (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Quad => {
+                let dx = dx + 0.5;
+                let dy = dy + 0.5;
                 let sw = f64::from(*w);
                 let sh = f64::from(*h);
                 let u = dx / sw;
@@ -10106,7 +10104,7 @@ fn gpu_indexed_projective_nearest_is_exact(
                     + (data[7] - y0) * u
                     + (data[3] - y0) * v
                     + (data[5] - data[3] - data[7] + y0) * u * v;
-                Some((sx, sy))
+                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Mesh => {
                 // A single record covering the complete output is the only
@@ -10119,8 +10117,8 @@ fn gpu_indexed_projective_nearest_is_exact(
                 {
                     return None;
                 }
-                let u = dx / f64::from(*w);
-                let v = dy / f64::from(*h);
+                let u = (dx + 0.5) / f64::from(*w);
+                let v = (dy + 0.5) / f64::from(*h);
                 let x0 = data[4];
                 let y0 = data[5];
                 let sx = (1.0 - u) * (1.0 - v) * x0
@@ -10131,7 +10129,7 @@ fn gpu_indexed_projective_nearest_is_exact(
                     + u * (1.0 - v) * data[11]
                     + u * v * data[9]
                     + (1.0 - u) * v * data[7];
-                Some((sx, sy))
+                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Affine => None,
         }
@@ -10157,7 +10155,7 @@ fn gpu_indexed_projective_nearest_is_exact(
                 let y0 = f(1);
                 let sx = x0 + (f(6) - x0) * u + (f(2) - x0) * v + (f(4) - f(2) - f(6) + x0) * u * v;
                 let sy = y0 + (f(7) - y0) * u + (f(3) - y0) * v + (f(5) - f(3) - f(7) + y0) * u * v;
-                Some((sx, sy))
+                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Mesh => {
                 let bx0 = f(0);
@@ -10181,24 +10179,54 @@ fn gpu_indexed_projective_nearest_is_exact(
                     + u * (1.0 - v) * f(11)
                     + u * v * f(9)
                     + (1.0 - u) * v * f(7);
-                Some((sx, sy))
+                (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Affine => None,
         }
     };
 
+    let host_coordinate = |value: f64| -> Option<i64> {
+        if !value.is_finite() {
+            return None;
+        }
+        Some(
+            if matches!(
+                method,
+                TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
+            ) {
+                if value < 0.0 { -1 } else { value as i64 }
+            } else {
+                (value + 0.5).floor() as i64
+            },
+        )
+    };
+    let device_coordinate =
+        |value: f32| -> Option<i64> { value.is_finite().then(|| (value + 0.5).floor() as i64) };
+
     for dy in 0..*h {
         for dx in 0..*w {
             let host = source_at(f64::from(dx), f64::from(dy));
             let device = shader_source_at(dx as f32, dy as f32);
-            match (host, device) {
-                (None, None) => {}
-                (Some((host_x, host_y)), Some((device_x, device_y)))
-                    if integer_coordinate(host_x)
-                        && integer_coordinate(host_y)
-                        && f64::from(device_x) == host_x
-                        && f64::from(device_y) == host_y => {}
-                _ => return false,
+            let host_sample = host.and_then(|(x, y)| {
+                let x = host_coordinate(x)?;
+                let y = host_coordinate(y)?;
+                (x >= 0
+                    && x < i64::from(source_dimensions.0)
+                    && y >= 0
+                    && y < i64::from(source_dimensions.1))
+                .then_some((x, y))
+            });
+            let device_sample = device.and_then(|(x, y)| {
+                let x = device_coordinate(x)?;
+                let y = device_coordinate(y)?;
+                (x >= 0
+                    && x < i64::from(source_dimensions.0)
+                    && y >= 0
+                    && y < i64::from(source_dimensions.1))
+                .then_some((x, y))
+            });
+            if host_sample != device_sample {
+                return false;
             }
         }
     }
@@ -10567,21 +10595,34 @@ fn gpu_geometry_requires_exact_host_control(
 ) -> bool {
     // The affine shader is byte-exact for ordinary packed layouts, and its
     // fixed-point nearest branch additionally owns opaque raw words (CMYK/F)
-    // and PA index/alpha pairs. Pillow's remaining typed and indexed modes use
-    // a different sample contract (or a palette lookup), so keep those
-    // rotations on the exact core implementation until a mode-aware affine
-    // shader exists.
+    // and PA index/alpha pairs. Non-affine coordinates use a different
+    // arithmetic contract: the corrected CPU path evaluates perspective maps
+    // in f64 at pixel centers, while the shader evaluates raw destination
+    // coordinates in f32. Keep every non-proven projective/quad/mesh transform
+    // on exact host semantic control; the indexed helper below retains only
+    // its exhaustive integer-map proof.
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
         let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
+        let projective_transform_needs_control =
+            matches!(
+                op,
+                PipelineOp::Transform {
+                    method: TransformMethod::Perspective
+                        | TransformMethod::Quad
+                        | TransformMethod::Mesh,
+                    ..
+                }
+            ) && !gpu_indexed_projective_nearest_is_exact(op, image, mode, dimensions);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_nearest_affine_is_exact(op, image, mode, dimensions)
             && !gpu_indexed_projective_nearest_is_exact(op, image, mode, dimensions)
             && !gpu_transform_all_fill_is_exact(op, image, mode, dimensions);
         if thumbnail_needs_control
+            || projective_transform_needs_control
             || typed_transform_needs_control
             || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
         {
@@ -12168,6 +12209,64 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn fractional_projective_nearest_host_controls_corrected_cpu() {
+        let width = 9;
+        let height = 8;
+        let source_bytes: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        let source = Image::frombytes("L", (width, height), &source_bytes).expect("luma source");
+        let transformed = source
+            .transform_public(
+                (8, 7),
+                2,
+                Some(TransformData::Affine(vec![
+                    1.0, 0.07, 0.4, -0.03, 1.0, 0.2, 0.001, -0.002,
+                ])),
+                0,
+                0,
+                Some(TransformFill::Scalar(17)),
+            )
+            .expect("perspective transform");
+        let expected = transformed
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU perspective transform");
+        let expected_oracle = [
+            3, 40, 77, 114, 151, 188, 225, 6, 51, 88, 125, 162, 162, 199, 236, 17, 62, 99, 136,
+            173, 210, 247, 28, 65, 73, 110, 147, 184, 221, 2, 39, 76, 84, 121, 158, 195, 232, 13,
+            50, 87, 95, 132, 169, 206, 243, 24, 61, 98, 106, 143, 180, 217, 254, 35, 72, 109,
+        ];
+        assert_eq!(expected, expected_oracle);
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("fractional GPU perspective transform failed: {error}"),
+        };
+        assert_eq!(actual, expected_oracle);
+        if let Some(telemetry) = Backend::take_pipeline_telemetry() {
+            // The selected backend is the semantic fact this regression
+            // protects. Other tests may toggle the process-wide telemetry
+            // switch while the harness is running, so tolerate a missing or
+            // replaced sample in parallel test execution.
+            assert_eq!(telemetry.1, Backend::Cpu);
+            assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }

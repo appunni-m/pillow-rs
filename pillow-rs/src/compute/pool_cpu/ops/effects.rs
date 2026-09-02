@@ -1160,31 +1160,32 @@ fn transform_projective_generic(
             if dst_w == 0 || dst_h == 0 {
                 return None;
             }
+            // Pillow's Image.__transformer first converts QUAD's raw
+            // NW/SW/SE/NE corners to these bilinear coefficients, then
+            // Geometry.c evaluates them at destination pixel centers.
+            let dx = dx + 0.5;
+            let dy = dy + 0.5;
             let x0 = data[0];
             let y0 = data[1];
             let sw = f64::from(dst_w);
             let sh = f64::from(dst_h);
-            let x = x0
-                + (data[6] - x0) * dx / sw
-                + (data[2] - x0) * dy / sh
-                + (data[4] - data[2] - data[6] + x0) * dx * dy / (sw * sh);
-            let y = y0
-                + (data[7] - y0) * dx / sw
-                + (data[3] - y0) * dy / sh
-                + (data[5] - data[3] - data[7] + y0) * dx * dy / (sw * sh);
+            let inverse_width = 1.0 / sw;
+            let inverse_height = 1.0 / sh;
+            let x1 = (data[6] - x0) * inverse_width;
+            let x2 = (data[2] - x0) * inverse_height;
+            let x3 = (data[4] - data[2] - data[6] + x0) * inverse_width * inverse_height;
+            let y1 = (data[7] - y0) * inverse_width;
+            let y2 = (data[3] - y0) * inverse_height;
+            let y3 = (data[5] - data[3] - data[7] + y0) * inverse_width * inverse_height;
+            let x = x0 + x1 * dx + x2 * dy + x3 * dx * dy;
+            let y = y0 + y1 * dx + y2 * dy + y3 * dx * dy;
             return Some((x, y));
         }
 
         // Pillow 12.2.0's libImaging/Geometry.c `perspective_transform`
-        // evaluates the inverse map at each destination pixel center. The
-        // nearest lane is corrected here; filtered projective sampling remains
-        // a separate parity lane because its source-corner interpolation is
-        // not yet proven independently.
-        let (dx, dy) = if nearest {
-            (dx + 0.5, dy + 0.5)
-        } else {
-            (dx, dy)
-        };
+        // evaluates the inverse map at each destination pixel center.
+        let dx = dx + 0.5;
+        let dy = dy + 0.5;
         let denominator = data[6] * dx + data[7] * dy + 1.0;
         if denominator == 0.0 || !denominator.is_finite() {
             return None;
@@ -1205,13 +1206,7 @@ fn transform_projective_generic(
         }
     };
     let nearest_coordinate = |value: f64| {
-        if quad {
-            (value + 0.5).floor() as i64
-        } else if value < 0.0 {
-            -1
-        } else {
-            value as i64
-        }
+        if value < 0.0 { -1 } else { value as i64 }
     };
 
     for dy in 0..dst_h {
@@ -1226,10 +1221,9 @@ fn transform_projective_generic(
             if nearest {
                 // Geometry.c defines COORD(v) as -1 for negative values and
                 // a C cast otherwise, i.e. truncation toward zero rather
-                // than rounding to the nearest source pixel. This applies to
-                // the center-corrected perspective path; quad retains its
-                // existing raw-corner contract until that separate lane is
-                // proven against Pillow's coefficient conversion.
+                // than rounding to the nearest source pixel. Both
+                // perspective and quad maps have already been evaluated at
+                // destination pixel centers above.
                 let ix = nearest_coordinate(sx);
                 let iy = nearest_coordinate(sy);
                 if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
@@ -1251,22 +1245,30 @@ fn transform_projective_generic(
                 fill_sample(destination);
                 continue;
             }
-            let x0 = sx.floor() as usize;
-            let y0 = sy.floor() as usize;
-            let x1 = (x0 + 1).min(src_w as usize - 1);
-            let y1 = (y0 + 1).min(src_h as usize - 1);
-            let fx = sx - x0 as f64;
-            let fy = sy - y0 as f64;
+            // Geometry.c's bilinear filter checks the unshifted source
+            // coordinate, subtracts 0.5, then uses FLOOR and edge clipping.
+            // Its horizontal interpolation is performed before the vertical
+            // interpolation, and the final UINT8 cast truncates toward zero.
+            let sample_x = sx - 0.5;
+            let sample_y = sy - 0.5;
+            let floor_x = sample_x.floor() as i64;
+            let floor_y = sample_y.floor() as i64;
+            let x0 = floor_x.clamp(0, i64::from(src_w - 1)) as usize;
+            let x1 = (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize;
+            let y0 = floor_y.clamp(0, i64::from(src_h - 1)) as usize;
+            let y1 = (floor_y + 1).clamp(0, i64::from(src_h - 1)) as usize;
+            let fx = sample_x - floor_x as f64;
+            let fy = sample_y - floor_y as f64;
             for channel in 0..channels {
                 let p00 = raw[(y0 * src_w as usize + x0) * channels + channel] as f64;
                 let p10 = raw[(y0 * src_w as usize + x1) * channels + channel] as f64;
                 let p01 = raw[(y1 * src_w as usize + x0) * channels + channel] as f64;
                 let p11 = raw[(y1 * src_w as usize + x1) * channels + channel] as f64;
-                destination[channel] = ((1.0 - fx) * (1.0 - fy) * p00
-                    + fx * (1.0 - fy) * p10
-                    + (1.0 - fx) * fy * p01
-                    + fx * fy * p11)
-                    .round() as u8;
+                let horizontal_top = (p10 - p00).mul_add(fx, p00);
+                let horizontal_bottom = (p11 - p01).mul_add(fx, p01);
+                destination[channel] = (horizontal_bottom - horizontal_top)
+                    .mul_add(fy, horizontal_top)
+                    .clamp(0.0, 255.0) as u8;
             }
         }
     }
@@ -1788,8 +1790,6 @@ pub fn transform_mesh(
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (sw, sh) = img.dimensions();
-    let sw_f = sw as f64;
-    let sh_f = sh as f64;
     let fill_color = fill.unwrap_or((0, 0, 0, 255));
 
     let mut out = vec![0u8; (dst_w * dst_h) as usize * 4];
@@ -1821,19 +1821,25 @@ pub fn transform_mesh(
         let x3_s = mesh_data[base + 10];
         let y3_s = mesh_data[base + 11];
 
-        // Clamp bounding box to output image dimensions to prevent CPU DoS
-        // from attacker-controlled mesh data with extreme bx/bw values.
+        // Clamp the iteration rectangle, but keep the original dimensions for
+        // the map. Pillow lowers each MESH record to QUAD with this box's
+        // width/height before Geometry.c evaluates local pixel centers.
+        let raw_bw = x1_d - x0_d;
+        let raw_bh = y1_d - y0_d;
+        if raw_bw <= 0 || raw_bh <= 0 {
+            continue;
+        }
         let bx0 = x0_d.max(0).min(dst_w as i32);
         let by0 = y0_d.max(0).min(dst_h as i32);
-        let bx1 = x1_d.max(1).min(dst_w as i32);
-        let by1 = y1_d.max(1).min(dst_h as i32);
-        let bw = (bx1 - bx0).max(1) as f64;
-        let bh = (by1 - by0).max(1) as f64;
+        let bx1 = x1_d.max(0).min(dst_w as i32);
+        let by1 = y1_d.max(0).min(dst_h as i32);
+        let bw = f64::from(raw_bw);
+        let bh = f64::from(raw_bh);
 
         for dy in by0..by1 {
-            let v = (dy - y0_d) as f64 / bh;
+            let v = ((dy - y0_d) as f64 + 0.5) / bh;
             for dx in bx0..bx1 {
-                let u = (dx - x0_d) as f64 / bw;
+                let u = ((dx - x0_d) as f64 + 0.5) / bw;
 
                 // PIL bilinear mapping: quad[0]=top-left, quad[1]=bottom-left,
                 // quad[2]=bottom-right, quad[3]=top-right (counter-clockwise)
@@ -1846,11 +1852,15 @@ pub fn transform_mesh(
                     + u * v * y2_s
                     + (1.0 - u) * v * y1_s;
 
-                if sx >= 0.0 && sx < sw_f && sy >= 0.0 && sy < sh_f {
-                    // NEAREST sampling for identity mesh parity
-                    let ix = (sx + 0.5).floor() as u32;
-                    let iy = (sy + 0.5).floor() as u32;
-                    let src_idx = ((iy * sw + ix) as usize) * channels;
+                if sx.is_finite() && sy.is_finite() {
+                    // Geometry.c's COORD truncates nonnegative coordinates
+                    // toward zero and rejects all negative coordinates.
+                    let ix = if sx < 0.0 { -1 } else { sx as i64 };
+                    let iy = if sy < 0.0 { -1 } else { sy as i64 };
+                    if ix < 0 || ix >= i64::from(sw) || iy < 0 || iy >= i64::from(sh) {
+                        continue;
+                    }
+                    let src_idx = ((iy as usize * sw as usize + ix as usize) * channels) as usize;
                     let out_idx = ((dy as u32 * dst_w + dx as u32) as usize) * 4;
                     for c in 0..channels {
                         out[out_idx + c] = raw[src_idx + c];
@@ -1904,5 +1914,83 @@ mod tests {
         ];
 
         assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn quad_nearest_matches_pillow_center_and_truncation() {
+        let width = 9;
+        let height = 8;
+        let raw: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        let image =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, raw).expect("luma source"));
+        // Pillow's QUAD input order is NW, SW, SE, NE.
+        let data = [0.2, 0.1, 8.7, 0.2, 9.1, 7.8, -0.4, 8.3];
+
+        let result = transform_projective_generic(
+            &image,
+            8,
+            7,
+            &data,
+            &ResampleFilter::Nearest,
+            Some((17, 0, 0, 255)),
+            true,
+        )
+        .expect("quad transform");
+        let expected = [
+            3, 14, 25, 36, 47, 58, 69, 80, 40, 51, 62, 73, 84, 95, 106, 117, 114, 125, 136, 147,
+            158, 169, 180, 191, 151, 162, 173, 184, 195, 206, 217, 228, 188, 199, 210, 221, 232,
+            243, 254, 9, 225, 236, 247, 2, 13, 61, 72, 83, 43, 54, 65, 76, 87, 98, 109, 120,
+        ];
+
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn projective_bilinear_matches_pillow_center_and_edge_sampling() {
+        let width = 9;
+        let height = 8;
+        let raw: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
+            .collect();
+        let image =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, raw).expect("luma source"));
+        let cases = [
+            (
+                false,
+                [1.0, 0.07, 0.4, -0.03, 1.0, 0.2, 0.001, -0.002],
+                [
+                    21, 57, 94, 130, 167, 203, 138, 20, 34, 71, 108, 144, 181, 217, 130, 34, 48,
+                    85, 122, 158, 195, 226, 123, 48, 62, 99, 135, 172, 209, 78, 26, 62, 76, 113,
+                    149, 186, 223, 71, 40, 76, 90, 127, 163, 200, 237, 64, 54, 91, 104, 141, 178,
+                    214, 223, 55, 68, 105,
+                ],
+            ),
+            (
+                true,
+                [0.2, 0.1, 8.7, 0.2, 9.1, 7.8, -0.4, 8.3],
+                [
+                    14, 23, 31, 40, 49, 60, 71, 80, 59, 69, 78, 87, 97, 106, 115, 122, 105, 115,
+                    124, 134, 144, 154, 164, 172, 150, 160, 171, 181, 192, 202, 212, 222, 195, 206,
+                    212, 181, 191, 200, 207, 18, 141, 146, 138, 19, 31, 42, 54, 65, 30, 42, 54, 66,
+                    78, 90, 102, 114,
+                ],
+            ),
+        ];
+
+        for (quad, data, expected) in cases {
+            let result = transform_projective_generic(
+                &image,
+                8,
+                7,
+                &data,
+                &ResampleFilter::Bilinear,
+                Some((17, 0, 0, 255)),
+                quad,
+            )
+            .expect("bilinear projective transform");
+            assert_eq!(result.as_bytes(), expected, "quad={quad}");
+        }
     }
 }
