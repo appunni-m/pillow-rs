@@ -166,6 +166,12 @@ receipt rules unchanged.
   machine for compact rows. Tall vertical geometries outside the one-pixel Box
   proof, non-Box filters, and arithmetic-changing chains remain exact host
   semantic control; the broader reducer bucket stays open.
+  Commit `42795f04f` extends the finite proof when a compact horizontal
+  one-pixel Box row is followed by a changed small vertical axis, validating
+  the materialized intermediate with the ordered f64 reducer. Four native
+  Pillow 12.2.0 probes are exact with terminal GPU receipts; special-value
+  chaining and the necessarily tall compact-vertical orientation remain exact
+  host semantic control.
 - [x] Extend the filtered Quad/Mesh relocation proof (`cfa3b2690`, source
   `206bff9dfe82ab9eab5346931db2ddd0b11f4388`): correct non-square Quad
   axis-swap source extents, reject extra Mesh records, and admit only the
