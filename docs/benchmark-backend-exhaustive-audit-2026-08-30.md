@@ -7907,3 +7907,51 @@ after removing phase timing summaries (structural fingerprint
 `4a874a7b8558491909ad3d91c195715da5a644b18b31679cb443aad3d3aeab19`), and
 the differing rows were timing-only. The required zero-violation P2 gate
 therefore remains open; no source or receipt defect is indicated.
+
+## 32.181 Compact over-limit vertical F Box rows (2026-09-04)
+
+The horizontal-only marker-13 proof left a deterministic geometry gap: a
+finite mode-F Box resize from `(1, 8388608)` to `(1, 1)` was exact on the CPU
+but stopped at the GPU preflight's adapter workgroup-limit guard. Pillow's
+`src/libImaging/Resample.c` gives this one-pixel reduction one repeated
+`1/source_height` coefficient, so the full vertical coefficient table and
+the unchanged horizontal identity pass are unnecessary. Commit
+`f5f3c1271` (source `4c00216c0`) extends marker 13 to this vertical-only
+geometry, validates the unchanged horizontal one-tap table before the full
+table guard, skips the horizontal dispatch, and reports one native dispatch.
+
+Native Pillow 12.2.0 versus RSPIL GPU probes are exact for 5/5 finite direct
+rows, including heterogeneous, subnormal, largest-finite, width-2
+capacity-bound vertical input, and the existing over-limit horizontal row;
+all vertical rows have `actual_backend=gpu` with no fallback and one dispatch.
+Inf/NaN probes remain exact host semantic control (2/2). Focused compact tests
+are 2/2, the full pool-GPU group is 110/110, and the schema-v3 all-backends
+replay at revision `f5f3c12712676823b76847b213ace51af04dfa4a` is 10,952/10,952
+exact with zero failed or not-run cases. Terminal counts are unchanged from
+the conservative partition: CPU 6,838; SIMD 6,847 plus three CPU controls;
+GPU 6,744 plus 94 CPU controls; and Node/browser WASM 6,951 each. The replay
+summary SHA-256 is
+`30f53d32fadb13a8b9e9519bdae54b7d116ca04e50ba5815c383e30419042bb1`, the GPU
+execution sidecar is
+`b4321131697906789688360e8d20f812e985a77a6a704d7ffc0f09dea4fdb592`, and
+WGSL coverage remains
+`421d0643bc819e3641391b44cf22cf88b51eb34c9207b22cd32d8670bd0033bf`.
+Receipt-state is 40/40 and the evidence contract remains 25/24/24. Non-Box,
+non-finite native arithmetic, tall geometries outside the one-pixel Box
+proof, and arithmetic-changing chains remain exact host semantic control; no
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.182 Fixed-ID timing pair before vertical compact admission remains noisy (2026-09-04)
+
+At source revision `622dfe3308ca52ea4dc55c78ee42770ede70a0d9`, next27 repeated
+the maintained fixed 11-ID cohort. Both runs selected and measured 11/11
+workloads, retained 44/44 comparable records, and had 33/33 terminal target
+receipts with requested=actual and empty fallback/error state. Run SHA-256
+values were `6e616b7f3684612da838ba0ae27698f0dd50ed6509e8cf30ea27f614760d0502`
+and `b6eb6a9f28ee2ecc79543f1919f762608027fa516878d95aab7feda16e69cd15`;
+the budget artifact SHA-256 was
+`348c0b4f961f0f00d63538ee462470214d816af01140b3e415fd097dd6f6a0af` and
+reported seven timing violations. Receipt and operation structure were
+unchanged across the pair; the differences were timing-only, so the required
+zero-violation P2 gate remains open and no benchmark scripts, fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
