@@ -6871,3 +6871,67 @@ f64-intermediate subnormal/overflow boundaries, arithmetic-changing chains,
 and broader fractional/scaled/non-dyadic projective, mesh, and palette
 arithmetic remain open. No fixtures, thresholds, IDs, denominators, policy, or
 receipt taxonomy changed.
+
+## 32.133 Constant integer projective nearest maps (2026-09-03)
+
+The existing nearest Perspective proof did not cover Quad or complete one-record
+Mesh maps whose four source corners all resolve to one integer coordinate. A
+forced generic path could still perform unnecessary f32 interpolation, so the
+admission stayed on exact host semantic control even though nearest sampling
+only needs one source pair. Commit `8b13f0c9b` (source `bff7976fa`) adds a
+constant-map proof for packed L/LA/RGB/RGBA and palette-alpha pairs, validates
+the source selection at every output boundary, and bypasses interpolation in
+WGSL only after that proof. Extra Mesh records, fractional coordinates,
+filtered maps, and all nonconstant arithmetic remain host-controlled.
+
+Native Pillow 12.2.0 versus RSPIL probes are 180/180 exact with terminal
+requested=actual GPU receipts, including 90/90 fill-boundary cases. The full
+pool-GPU unit group remains 94/94, and no fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.134 Ordered F Resize reducer through 16384 taps and tall-image ordering (2026-09-03)
+
+The marker-12 ordered-F proof and both convolution shaders previously stopped at
+8192 taps. In addition, Pillow 12.2.0 takes a vertical-first `Resample.c` pass
+with a FLOAT32 intermediate for F images whose source is more than 100 times
+taller than it is wide; the Rust CPU path had reduced those rows horizontally
+first, producing a one-ULP BICUBIC/BOX divergence on heterogeneous 2x16384 to
+1x1 inputs. Commit `e59307a96` (source `a944bad36`) raises the device proof and
+guards to 16384, mirrors the tall-image CPU pass order, and keeps GPU tall
+geometry on exact host semantic control until an alternate device pass plan is
+proven. Rows over the bound and unrepresentable intermediate states remain
+host-controlled.
+
+Native Pillow 12.2.0 versus RSPIL finite tall/threshold probes are 280/280
+exact on CPU and 560/560 exact on the GPU/host partition (80 native GPU, 200
+exact host semantic control); special/non-finite probes are 210/210 exact.
+Direct 16384-tap probes are 150/150 exact on CPU and 150/150 exact on GPU,
+covering finite, signed-zero, subnormal, largest-finite, and special words.
+The focused ordered-F group is 10/10, CPU geometry tests are 12/12, and the
+full pool-GPU group is 94/94. The 16385-tap boundary remains explicitly
+host-controlled. No fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
+
+## 32.135 Full backend replay after constant projective and 16384-tap F fixes (2026-09-03)
+
+The maintained schema-v3 replay at source revision
+`e59307a961a2c6b244acaa72a41babe8addad118` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every lane
+reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate was
+1/1. The aggregate remains `passed_with_backend_gaps` because backend identity
+is explicit: CPU has 6,838 terminal CPU receipts; SIMD has 6,847 native SIMD
+plus three CPU layout controls; GPU has 6,743 native GPU plus 95 exact
+host/dimension controls; and Node/browser WASM each have 6,951 CPU receipts.
+Every terminal receipt is complete.
+
+Artifact SHA-256 values are result
+`4b20ad3c4d6a0bf88bd5de7c5b7782764dd482c51c8188ff6e2c661859313c35`, GPU
+execution `2436fdf1180cb81342cd7add1758016cc499b6f4f9c41c0c5cdd0046654bc6db`,
+and WGSL coverage
+`60990b9d5d6bdedf538dca8b1f3082baa2c8dc811759a9fa7beea96a8033609b`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The timing zero-violation gate, F reducer work beyond 16384 taps,
+f64-intermediate subnormal/overflow boundaries, arithmetic-changing chains,
+and broader fractional/scaled/non-dyadic projective, mesh, and palette
+arithmetic remain open. No fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
