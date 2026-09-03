@@ -163,7 +163,10 @@ receipt rules unchanged.
   coefficient arenas reject aligned tables above the 128-MiB storage-binding
   limit, preserving terminal host control instead of issuing an oversized
   bind-group. Native over-cap qNaN and 8388607-to-2x1 probes are exact
-  host-control rows; no reducer bound was widened.
+  host-control rows; no reducer bound was widened. A fresh next23 audit
+  confirms the boundary is ABI-hard: 8388607 encodes to exactly 128 MiB after
+  alignment, while 8388608 exceeds it by 256 bytes; native finite and qNaN
+  rows remain exact on their respective native/host-control paths.
 - [x] Extend the filtered Quad/Mesh relocation proof (`cfa3b2690`, source
   `206bff9dfe82ab9eab5346931db2ddd0b11f4388`): correct non-square Quad
   axis-swap source extents, reject extra Mesh records, and admit only the
@@ -351,6 +354,15 @@ receipt rules unchanged.
   The budget artifact
   `3735f15f0f1ecab2f36f4bdc14a3d7fb5e76db74e15d732628c274772cef28b0`
   reported 11 timing-only violations; P2 remains open.
+  A fresh next21 pair at pushed revision `27d7bda79ad08a3254a7276df2c9b400563dec9d`
+  again measured 11/11 workloads with 44/44 comparable records and 33/33
+  terminal requested=actual target receipts per run. Run SHAs were
+  `e5c9f26a079aae3e306f118146910504efb58ecc8017170b379a40446e2c52ac` and
+  `74246220d8ee446c3dbf8fbf1486c998de9dcd8fa20d8300ed2eb2edede9749f`; the
+  budget artifact SHA was
+  `c3d54d53cb18c22d88094e0e3e12de8cd6e61eb4cfefa4e337ea12351239037a` and it
+  reported 11 timing-only violations. The normalized execution fingerprint
+  remained unchanged, so the zero-violation gate is still open.
 
 ## Verified changes already integrated
 
