@@ -7459,6 +7459,28 @@ Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
 
+## 32.171 Interior-integer Bilinear projective proof (2026-09-04)
+
+The generic filtered projective shader had a deterministic byte-ordering
+divergence even for constant integer source maps. In a 2x2 L Bilinear case
+with constant source `(1,1)` and source bytes `fd e6 f1 c2`, WGSL's
+`round(lerp(...))` produced `e6` while Pillow's `Geometry.c` filtered path
+produced `e5`; an edge `(0,0)` map also exposed the shader's shifted-bounds
+fill (`00` versus Pillow's `fd`). Pillow validates the original coordinate,
+then subtracts 0.5 for the filter window, evaluates the four terms, and
+casts the result toward zero. Commit `30e5aed11` (source
+`bd4bad16ce130661a6f4ef84e4faa44301ed8a31`) mirrors that operation order and
+admits only f32-exact integer coordinates strictly inside the source bounds,
+for Bilinear L/RGB/PA Perspective, Quad, and complete one-record Mesh. Edges,
+LA/RGBA premultiplied paths, Bicubic, fractional/scaled maps, and partial or
+multi-record geometry remain exact host semantic control.
+
+Native Pillow 12.2.0 differentials are 1,620/1,620 exact across ordinary
+matrices and 7,203/7,203 exhaustive seven-value 2x2 cases independently for
+L, RGB, and PA; every admitted row has a terminal native GPU receipt. Focused
+projective tests are 3/3 and the integrated pool-GPU group is 108/108. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
 ## 32.161 Additional fixed-ID timing pairs remain receipt-stable (2026-09-04)
 
 A fresh next18b campaign at source revision
@@ -7647,3 +7669,51 @@ budget artifact SHA-256 was
 reported 11 timing-only violations. Receipt-state tests remain 40/40 and the
 evidence contract remains 25/24/24. The required zero-violation P2 gate
 therefore remains open.
+
+## 32.169 F coefficient binding guard preserves over-limit host control (2026-09-04)
+
+The 8,388,607-tap reducer proof exposed a separate resource edge in the
+marker-9 special-value path. A qNaN row at 8,388,608 taps bypassed the finite
+tap guard and encoded a 134,217,984-byte horizontal table, exceeding the
+adapter's 128-MiB storage-binding limit. An 8,388,607-to-2x1 row likewise
+passed the per-row bound while its aggregate horizontal arena reached
+201,326,592 bytes. Commit `8c92e95d8` (source
+`e37364e8d9fdb7fb2d2a217582cfc5553eb5351e`) adds the per-row 8,388,607 cap and
+an aligned 128-MiB coefficient-binding proof to both marker-9 and marker-12
+admission paths. Over-limit rows now remain terminal exact host semantic
+control instead of reaching an oversized bind-group; the reducer bound itself
+was not widened.
+
+Native Pillow 12.2.0 probes are exact for five over-cap qNaN filters and five
+aggregate-over-limit 8,388,607-to-2x1 filters on host control, while direct
+8,388,607-to-1x1 rows remain 5/5 native GPU. Focused F tests are 39/39 and the
+integrated pool-GPU group is 106/106; release/build-dev, format, receipt-state
+40/40, and evidence 25/24/24 pass. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.170 Full backend replay after binding guard and Bilinear projective proof (2026-09-04)
+
+The schema-v3 replay at source revision
+`30e5aed113cff3dd96f297c21054a172064003bc` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847
+native plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls;
+and Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero; aggregate status is
+`passed_with_backend_gaps` solely because intentional host controls are not
+relabeled as native coverage.
+
+The replay summary SHA-256 is
+`185b875971e164795ba5153f9c49a96612ad751bf76c8665ef9f9260cc9efe81`, the GPU
+parity artifact SHA-256 is
+`827b342c03d8d136c1cee3a71545127fe848ca24d3773343e9136808ed0894b7`, the GPU
+execution sidecar SHA-256 is
+`e90e233b27a0131e582bcc8e36a6c2031f8f3dac1cb2afb7529e062394e3e33a`, and
+WGSL coverage is
+`cf932bea42db4673f4b990b4d4a1c730ed18d4b7030cd369d94aa784825cf0f6`.
+Receipt-state tests remain 40/40 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
