@@ -480,6 +480,13 @@ fn transform_fill_from_python(
     if let Ok(value) = value.extract::<i64>() {
         return Ok(Some(pillow_rs::TransformFill::Scalar(value)));
     }
+    // Pillow's mode-F transform accepts a scalar real fill. Keep scalar floats
+    // distinct from float tuples so the core can enforce the mode-specific
+    // scalar-versus-sequence contract; byte and integer modes still report
+    // their native type error.
+    if let Ok(value) = value.extract::<f64>() {
+        return Ok(Some(pillow_rs::TransformFill::FloatingScalar(value)));
+    }
     if let Ok(value) = value.extract::<String>() {
         return Ok(Some(pillow_rs::TransformFill::Name(value)));
     }

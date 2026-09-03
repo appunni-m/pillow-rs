@@ -20184,6 +20184,7 @@ pub fn simd_transform(
         filter,
         fill,
         palette_fill: _,
+        ..
     } = op
     else {
         return Err(PilError::ValueError("expected Transform op".into()));
