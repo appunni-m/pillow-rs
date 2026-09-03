@@ -116,11 +116,19 @@ receipt rules unchanged.
   Constant-denominator integer Perspective nearest maps and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
   direct/axis-swapped Quad and Mesh nearest pair relocations for PA, plus the
-  narrow L/RGB/PA filtered Perspective relocation envelope, are now admitted
-  by exhaustive or bounded native proofs. Fractional, scaled,
-  nonconstant-denominator, partial/multi-record, and filtered projective maps,
-  alpha/other-mode filtered rows, and palette arithmetic remain on exact host
+  narrow L/LA/RGB/RGBA/PA filtered direct/axis relocation envelope, are now
+  admitted by exhaustive or bounded native proofs. Fractional, scaled,
+  nonconstant-denominator, partial/multi-record, filtered projective maps with
+  nonzero weights, other modes, and palette arithmetic remain on exact host
   semantic control until their device arithmetic is proven.
+
+- [x] Extend filtered projective relocation to LA/RGBA and Quad/Mesh
+  (`a0fb33394`): the WGSL path now mirrors Pillow's premultiplied La/RGBa
+  round trip for integral source samples and lowers non-square direct/axis
+  Quad relocations to exact integer coordinates. Native Pillow 12.2.0 versus
+  RSPIL probes are 224/224 exact across LA/RGBA Perspective, Quad, and Mesh
+  cases with varied alpha/fill values; the focused pool-GPU group is 93/93,
+  and fractional/scaled/non-dyadic maps remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
