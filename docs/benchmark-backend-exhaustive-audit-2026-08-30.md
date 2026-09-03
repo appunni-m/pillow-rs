@@ -7799,3 +7799,20 @@ WGSL coverage is
 Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
+
+## 32.176 Fixed-ID timing pair at pushed raw-mode HEAD remains noisy (2026-09-04)
+
+At pushed revision `d8cd0420483c7f73a2e359a8e4660820acfbd47e`, next22 repeated
+the maintained fixed 11-ID cohort. Both runs selected and measured 11/11
+workloads, retained 44/44 comparable records, and had 33/33 terminal target
+receipts with `requested_backend=actual_backend` and empty fallback/error
+state (11 CPU, 11 SIMD, 11 GPU). The normalized receipt fingerprint remained
+`7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32` in both.
+
+Run SHA-256 values were
+`be787c6518a62b9e7b28a27fe12119376220256532c35a990eec192a35231f9c` and
+`1e506e9d3362eb488ff2a405090a0ba5bfc112ef62d7114e2b069e091f21a8b9`; the
+budget artifact SHA-256 was
+`07bfafa84b4ddd10ef40ce3e9db1b5db4e0d8a46adac51ffbd388b01d28e9f0a` and
+reported 19 violations. All differences were timing-only with no receipt or
+identity divergence, so the required zero-violation P2 gate remains open.

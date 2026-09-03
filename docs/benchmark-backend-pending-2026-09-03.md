@@ -372,6 +372,15 @@ receipt rules unchanged.
   `c3d54d53cb18c22d88094e0e3e12de8cd6e61eb4cfefa4e337ea12351239037a` and it
   reported 11 timing-only violations. The normalized execution fingerprint
   remained unchanged, so the zero-violation gate is still open.
+  A fresh next22 pair at pushed revision `d8cd0420483c7f73a2e359a8e4660820acfbd47e`
+  again selected and measured 11/11 workloads with 44/44 comparable records
+  and 33/33 terminal requested=actual target receipts in each run. Run SHAs
+  were `be787c6518a62b9e7b28a27fe12119376220256532c35a990eec192a35231f9c` and
+  `1e506e9d3362eb488ff2a405090a0ba5bfc112ef62d7114e2b069e091f21a8b9`; the
+  budget artifact SHA was
+  `07bfafa84b4ddd10ef40ce3e9db1b5db4e0d8a46adac51ffbd388b01d28e9f0a` and it
+  reported 19 timing-only violations. The normalized fingerprint stayed
+  unchanged; P2 remains open.
 
 ## Verified changes already integrated
 
