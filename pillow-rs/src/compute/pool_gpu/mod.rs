@@ -10560,20 +10560,22 @@ fn gpu_nearest_affine_is_exact(
 
 /// Prove a nearest projective/quad/mesh transform for raw byte samples.
 ///
-/// Pillow's `ImagingTransform` path evaluates the inverse map in `f64`, while
-/// the projective shader evaluates destination coordinates in `f32` and then
-/// rounds its selected source coordinate. Admit only a bounded proof where
-/// every coefficient, destination coordinate, intermediate arithmetic result,
-/// and final source coordinate select the same source pixel in both domains.
+/// Pillow's `src/libImaging/Geometry.c` `quad_transform` and mesh path evaluate
+/// the inverse map in `f64`, while the projective shader evaluates destination
+/// coordinates in `f32` and then rounds its selected source coordinate. Admit
+/// only a bounded proof where every coefficient, destination coordinate,
+/// intermediate arithmetic result, and final source coordinate select the
+/// same source pixel in both domains.
 /// This covers proof-certified f32-representable maps for ordinary packed byte
 /// modes and raw indexed samples without claiming parity for arbitrary
-/// homographies or mesh records. Ordinary nearest Quad and Mesh maps
-/// additionally admit a constant f32 source coordinate. Filtered projective transforms
-/// remain host controlled unless an L/LA/RGB/RGBA/PA Perspective, Quad, or
-/// complete one-record Mesh map is a unit-scale integer relocation. In that envelope
-/// the filtered sample lands exactly on one source pixel, so the shader's
-/// bilinear lowering preserves the byte or palette-alpha pair; LA/RGBA also
-/// mirror Pillow's premultiplied round trip.
+/// homographies or mesh records. Nearest Quad and Mesh maps use the same
+/// exhaustive source-selection proof, with explicit finite-intermediate
+/// guards for their generic f32 bilinear arithmetic. Filtered projective
+/// transforms remain host controlled unless an L/LA/RGB/RGBA/PA Perspective,
+/// Quad, or complete one-record Mesh map is a unit-scale integer relocation.
+/// In that envelope the filtered sample lands exactly on one source pixel, so
+/// the shader's bilinear lowering preserves the byte or palette-alpha pair;
+/// LA/RGBA also mirror Pillow's premultiplied round trip.
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
@@ -10703,6 +10705,155 @@ fn gpu_quad_constant_map_is_admitted(data: &[f64]) -> bool {
         && f64::from(x as f32) == x
         && f64::from(y as f32) == y
         && data[2..8].chunks_exact(2).all(|pair| pair == [x, y])
+}
+
+/// Check that the generic Quad WGSL bilinear expression has no non-finite
+/// f32 intermediate for one output pixel.  A finite f64 map can still
+/// overflow in the device arithmetic; a resulting NaN would bypass the
+/// shader sampler's unordered bounds comparisons.  The exhaustive source
+/// proof calls this only for nonconstant maps, while relocation/constant
+/// branches avoid the generic expression entirely.
+fn gpu_quad_shader_arithmetic_is_finite(data: &[f64], w: u32, h: u32, dx: f32, dy: f32) -> bool {
+    if data.len() < 8 {
+        return false;
+    }
+    let f = |index: usize| data[index] as f32;
+    let x0 = f(0);
+    let y0 = f(1);
+    let x1 = f(2);
+    let y1 = f(3);
+    let x2 = f(4);
+    let y2 = f(5);
+    let x3 = f(6);
+    let y3 = f(7);
+    let width = w as f32;
+    let height = h as f32;
+    let u = dx / width;
+    let v = dy / height;
+    let one_minus_u = 1.0 - u;
+    let one_minus_v = 1.0 - v;
+    let x3_minus_x0 = x3 - x0;
+    let x1_minus_x0 = x1 - x0;
+    let x2_minus_x1 = x2 - x1;
+    let x2_minus_x1_minus_x3 = x2_minus_x1 - x3;
+    let x_cross = x2_minus_x1_minus_x3 + x0;
+    let y3_minus_y0 = y3 - y0;
+    let y1_minus_y0 = y1 - y0;
+    let y2_minus_y1 = y2 - y1;
+    let y2_minus_y1_minus_y3 = y2_minus_y1 - y3;
+    let y_cross = y2_minus_y1_minus_y3 + y0;
+    let x_term0 = x3_minus_x0 * u;
+    let x_term1 = x1_minus_x0 * v;
+    let x_term2 = x_cross * u * v;
+    let y_term0 = y3_minus_y0 * u;
+    let y_term1 = y1_minus_y0 * v;
+    let y_term2 = y_cross * u * v;
+    let sx = x0 + x_term0 + x_term1 + x_term2;
+    let sy = y0 + y_term0 + y_term1 + y_term2;
+    [
+        width,
+        height,
+        u,
+        v,
+        one_minus_u,
+        one_minus_v,
+        x3_minus_x0,
+        x1_minus_x0,
+        x2_minus_x1,
+        x2_minus_x1_minus_x3,
+        x_cross,
+        y3_minus_y0,
+        y1_minus_y0,
+        y2_minus_y1,
+        y2_minus_y1_minus_y3,
+        y_cross,
+        x_term0,
+        x_term1,
+        x_term2,
+        y_term0,
+        y_term1,
+        y_term2,
+        sx,
+        sy,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+}
+
+/// Check that the generic one-record Mesh WGSL bilinear expression has no
+/// non-finite f32 intermediate for one output pixel.  The bbox is complete
+/// before this helper is called, but its arithmetic is retained here so the
+/// check mirrors the shader even if callers are later reused for another
+/// bounded record shape.
+fn gpu_mesh_shader_arithmetic_is_finite(data: &[f64], w: u32, h: u32, dx: f32, dy: f32) -> bool {
+    if data.len() < 12 {
+        return false;
+    }
+    let f = |index: usize| data[index] as f32;
+    let bx0 = f(0);
+    let by0 = f(1);
+    let bx1 = f(2);
+    let by1 = f(3);
+    let width = w as f32;
+    let height = h as f32;
+    let bw = (bx1 - bx0).max(1.0);
+    let bh = (by1 - by0).max(1.0);
+    let u = (dx - bx0) / bw;
+    let v = (dy - by0) / bh;
+    let one_minus_u = 1.0 - u;
+    let one_minus_v = 1.0 - v;
+    let x0 = f(4);
+    let y0 = f(5);
+    let x1 = f(6);
+    let y1 = f(7);
+    let x2 = f(8);
+    let y2 = f(9);
+    let x3 = f(10);
+    let y3 = f(11);
+    let x_term0 = one_minus_u * one_minus_v * x0;
+    let x_term1 = u * one_minus_v * x3;
+    let x_term2 = u * v * x2;
+    let x_term3 = one_minus_u * v * x1;
+    let y_term0 = one_minus_u * one_minus_v * y0;
+    let y_term1 = u * one_minus_v * y3;
+    let y_term2 = u * v * y2;
+    let y_term3 = one_minus_u * v * y1;
+    let sx = x_term0 + x_term1 + x_term2 + x_term3;
+    let sy = y_term0 + y_term1 + y_term2 + y_term3;
+    [
+        width,
+        height,
+        bw,
+        bh,
+        u,
+        v,
+        one_minus_u,
+        one_minus_v,
+        x_term0,
+        x_term1,
+        x_term2,
+        x_term3,
+        y_term0,
+        y_term1,
+        y_term2,
+        y_term3,
+        sx,
+        sy,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+}
+
+/// Return whether a finite projective coordinate can be safely rounded and
+/// converted by the WGSL nearest sampler.  Negative values are checked before
+/// the shader's `u32` conversion and are therefore valid fill coordinates;
+/// positive values must remain below the first unrepresentable `u32` value.
+fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
+    if !value.is_finite() {
+        return false;
+    }
+    let rounded = value + 0.5;
+    rounded.is_finite() && (value < 0.0 || rounded.floor() < 4_294_967_296.0)
 }
 
 fn gpu_projective_filtered_relocation_is_admitted(
@@ -10851,24 +11002,15 @@ fn gpu_projective_nearest_is_exact(
             *filter,
             (*w, *h),
         ) || filtered_relocation);
-    // Perspective maps use the shader's raw-gid f32 arithmetic, while the
-    // exhaustive source-selection proof below compares it with Pillow's
-    // centered f64/COORD result for every output pixel. Keep that proof as
-    // the only geometry gate for nearest Perspective maps, including
-    // nonconstant denominators; ordinary Quad and Mesh bytes still use their
-    // narrower unit-relocation or constant-map proofs. Filtered transforms
-    // intentionally remain relocation-only.
+    // Perspective, Quad, and Mesh maps use the shader's raw-gid f32
+    // arithmetic, while the exhaustive source-selection proof below compares
+    // it with Pillow's centered f64/COORD result for every output pixel.
+    // Finite-intermediate guards in the proof keep generic Quad/Mesh
+    // bilinear overflow from bypassing the shader sampler's bounds checks.
+    // Filtered transforms intentionally remain relocation-only.
     let ordinary_projective_geometry_is_admitted = match method {
         TransformMethod::Perspective => true,
-        TransformMethod::Quad => {
-            gpu_quad_unit_relocation_is_admitted(data, *w, *h)
-                || gpu_quad_constant_map_is_admitted(data)
-        }
-        TransformMethod::Mesh => {
-            !ordinary_byte_mode
-                || gpu_mesh_unit_relocation_is_admitted(data, *w, *h)
-                || gpu_mesh_constant_map_is_admitted(data, *w, *h)
-        }
+        TransformMethod::Quad | TransformMethod::Mesh => true,
         TransformMethod::Affine => false,
     };
     if !image_layout_is_valid
@@ -10897,7 +11039,7 @@ fn gpu_projective_nearest_is_exact(
         TransformMethod::Mesh => 12,
         TransformMethod::Affine => return false,
     };
-    if data.len() < required_data {
+    if data.len() < required_data || (matches!(method, TransformMethod::Mesh) && data.len() != 12) {
         return false;
     }
     // The transform uniform stores all coefficients as f32 bit patterns. Do
@@ -11166,8 +11308,29 @@ fn gpu_projective_nearest_is_exact(
                     return false;
                 }
             }
+            if matches!(method, TransformMethod::Quad)
+                && !gpu_quad_constant_map_is_admitted(data)
+                && !gpu_quad_shader_arithmetic_is_finite(data, *w, *h, dx as f32, dy as f32)
+            {
+                return false;
+            }
+            if matches!(method, TransformMethod::Mesh)
+                && !gpu_mesh_constant_map_is_admitted(data, *w, *h)
+                && !gpu_mesh_unit_relocation_is_admitted(data, *w, *h)
+                && !gpu_mesh_shader_arithmetic_is_finite(data, *w, *h, dx as f32, dy as f32)
+            {
+                return false;
+            }
             let host = source_at(f64::from(dx), f64::from(dy));
             let device = shader_source_at(dx as f32, dy as f32);
+            if matches!(method, TransformMethod::Quad | TransformMethod::Mesh)
+                && device.is_some_and(|(x, y)| {
+                    !gpu_projective_shader_coordinate_is_safe(x)
+                        || !gpu_projective_shader_coordinate_is_safe(y)
+                })
+            {
+                return false;
+            }
             let host_sample = host.and_then(|(x, y)| {
                 let x = host_coordinate(x)?;
                 let y = host_coordinate(y)?;
@@ -13495,8 +13658,49 @@ mod tests {
             fill_is_none: false,
             palette_fill: None,
         };
-        assert!(!gpu_projective_nearest_is_exact(
+        assert!(gpu_projective_nearest_is_exact(
             &scaled_quad_axis,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
+        let f32_max = f64::from(f32::MAX);
+        let overflowing_quad = PipelineOp::Transform {
+            w: 3,
+            h: 2,
+            method: TransformMethod::Quad,
+            data: Arc::from(vec![
+                f32_max, 0.0, f32_max, 2.0, f32_max, 2.0, -f32_max, 0.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+        // The f64 map is wholly outside the source, but the generic f32
+        // Quad expression overflows and can produce NaN.  Keep this case on
+        // exact host semantic control rather than trusting equal fill
+        // classifications from a non-finite source-selection result.
+        assert!(!gpu_projective_nearest_is_exact(
+            &overflowing_quad,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
+        let overflowing_mesh = PipelineOp::Transform {
+            w: 3,
+            h: 2,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 3.0, 2.0, f32_max, 0.0, -f32_max, 0.0, -f32_max, 2.0, f32_max, 2.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+        assert!(!gpu_projective_nearest_is_exact(
+            &overflowing_mesh,
             &rgb,
             Some("RGB"),
             (16, 16)
@@ -14125,6 +14329,113 @@ mod tests {
                 );
                 assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
                 assert_eq!(telemetry.7, None, "{mode} fallback reason");
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                3,
+                TransformData::Affine(vec![0.0, 0.0, 9.0, 0.0, 9.0, 6.0, 0.0, 6.0]),
+                (9, 6),
+            ),
+            (
+                3,
+                TransformData::Affine(vec![1.25, 1.0, 1.25, 7.0, 10.25, 7.0, 10.0, 1.0]),
+                (9, 6),
+            ),
+            (
+                3,
+                TransformData::Affine(vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0]),
+                (9, 6),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![0.0, 0.0, 0.0, 6.0, 9.0, 6.0, 9.0, 0.0],
+                )]),
+                (9, 6),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![1.25, 1.0, 1.25, 7.0, 10.25, 7.0, 10.0, 1.0],
+                )]),
+                (9, 6),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0],
+                )]),
+                (9, 6),
+            ),
+        ];
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+        ] {
+            let source_size = (16u32, 16u32);
+            let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                .map(|index| (index * 29 + 7 + channels) as u8)
+                .collect::<Vec<_>>();
+            let source = Image::frombytes(mode, source_size, &source_bytes)
+                .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+            let fill = match mode {
+                "LA" => Some(TransformFill::Components(vec![199, 71])),
+                "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
+                "RGB" => Some(TransformFill::Components(vec![199, 71, 17])),
+                _ => Some(TransformFill::Scalar(199)),
+            };
+            for (method, data, output_size) in &cases {
+                let transformed = source
+                    .transform_public(
+                        *output_size,
+                        *method,
+                        Some(data.clone()),
+                        0,
+                        0,
+                        fill.clone(),
+                    )
+                    .unwrap_or_else(|error| panic!("{mode} projective transform: {error}"));
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .unwrap_or_else(|error| panic!("{mode} CPU projective transform: {error}"));
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => panic!("native GPU {mode} projective transform failed: {error}"),
+                };
+                assert_eq!(
+                    actual, expected,
+                    "native {mode} method={method} data={data:?}"
+                );
+                let telemetry = Backend::take_pipeline_telemetry().unwrap_or_else(|| {
+                    panic!("native GPU {mode} projective transform missing telemetry")
+                });
+                assert_eq!(telemetry.0, Some(Backend::Gpu));
+                assert_eq!(telemetry.1, Backend::Gpu);
+                assert_eq!(telemetry.6, Some(1));
+                assert_eq!(telemetry.7, None);
             }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
