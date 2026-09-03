@@ -24,6 +24,17 @@ receipt rules unchanged.
   maps. Native Pillow 12.2.0 versus Rust is 45/45 exact across L/RGB/PA;
   GPU admission remains restricted to the separately proven zero-weight
   relocation envelope.
+- [x] Mirror Pillow's filtered CPU affine/projective byte semantics
+  (`f08673da5`): LA/RGBA Perspective and Quad now use the native La/RGBa
+  premultiplied round trip; affine coordinates and bilinear rows keep
+  Geometry.c's fused and horizontal-first ordering; affine BICUBIC now has
+  the four-tap clipped Horner path, including RGBX's non-alpha padding byte.
+  Image.transform also preserves Pillow's exact errors for the known
+  resize-only filters (LANCZOS, BOX, HAMMING) and unknown codes. Native
+  Pillow 12.2.0 versus RSPIL probes are 2,400/2,400 affine and 1,920/1,920
+  projective/Quad cases exact across L/LA/RGB/RGBA/RGBX/CMYK; the maintained
+  migration parity replay is 10,952/10,952 exact. Filtered GPU alpha and
+  broader arithmetic admissions remain on exact host semantic control.
 - [x] Finish Mesh filtered (bilinear/bicubic) parity for L/LA/RGB/RGBA,
   translated/clipped boxes, and explicit premultiplied modes. The final CPU
   path is exact across the six byte layouts; SIMD nearest is proven and SIMD
