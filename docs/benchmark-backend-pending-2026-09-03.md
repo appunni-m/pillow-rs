@@ -94,13 +94,13 @@ receipt rules unchanged.
   Pillow's scalar-FMA and arm64 vector product/add ordering. Native Pillow
   12.2.0 matrices at 384, 512, 768, and 1024 taps are exact with terminal GPU
   receipts; the 1025-tap finite boundary remains exact host semantic control.
-- [x] Extend the ordered F reducer through the proven 2048-tap marker-12
-  envelope (`a16349c7e`, source `f97e51dc1`) and admit finite f32 subnormal
-  inputs in both convolution shaders. Native Pillow 12.2.0 versus RSPIL is
-  175/175 exact across five filters, horizontal/vertical/two-axis reductions,
-  normal/subnormal/largest-finite inputs, and random finite mixtures; 85 rows
-  use native GPU receipts and 90 remain exact host semantic control.
-- [ ] Extend the exact F reducer beyond 2048 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 4096-tap marker-12
+  envelope (`52de70c2f`) and admit finite f32 subnormal inputs in both
+  convolution shaders. Native Pillow 12.2.0 versus RSPIL focused rows at
+  3072 and 4096 taps, plus horizontal/vertical subnormal and largest-finite
+  cases, are exact; focused ordered-F tests are 9/9 and the full pool-GPU
+  group is 93/93. The 4097-tap boundary remains exact host semantic control.
+- [ ] Extend the exact F reducer beyond 4096 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -365,10 +365,10 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `cfa3b2690` (typed-F filtered
+`main` includes the parity fixes through `52de70c2f` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 2048 taps, filtered Perspective/Quad/Mesh relocation, arm64
+reducer through 4096 taps, filtered Perspective/Quad/Mesh relocation, arm64
 wide-row F accumulation, unit-scale Mesh relocation, integer Perspective
 nearest routing, identity projective routing, receipt-proven suite cohorts,
 and packed SIMD ExtractBand).
@@ -378,9 +378,9 @@ with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,743 GPU plus 95 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`d550013664ce92e73e25aaa2c3ea5b59b9ace720d851c41148618d9d0515ff05`; the GPU
-execution sidecar is `258f5186e40d546dc01d4350b690a4a972cded33d83f071c0b6eb4759e6b7b3b`,
+`a0452467c6e7cf5a85a6325a1dd352b4057386d26168df63e15d277c8209905c`; the GPU
+execution sidecar is `0fd5f97b5000045dd081e3f1de0c856797c679f34ae85d84d936c99d7b4d8306`,
 with WGSL coverage `39a4b4828935cf25d81e95c78d86cc08db297ba47a785ebe61cf62b429eab0de`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
-and broader projective admission work above.
+beyond 4096 taps and broader projective admission work above.
