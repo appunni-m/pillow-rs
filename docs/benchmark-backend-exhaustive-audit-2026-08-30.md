@@ -6428,6 +6428,28 @@ fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
 changed. Filtered GPU alpha and broader non-dyadic transform arithmetic remain
 explicit exact host semantic control pending independent device proofs.
 
+## 32.117 Full backend replay after filtered CPU transform parity (2026-09-03)
+
+The repository `make test` target completed its schema-v3 all-backends replay
+after `f08673da5` (the target metadata records tree revision `703930be6` and
+the pre-existing user-owned working-tree artifacts). CPU, SIMD, GPU, Node WASM,
+and browser WASM each compared all 10,952 selected public cases with
+10,952/10,952 passed, zero failed, and zero not-run; the GPU smoke gate was
+1/1. The result remains `passed_with_backend_gaps` by policy: CPU has 6,838
+terminal receipts; SIMD has 6,847 native receipts plus three CPU layout
+controls; GPU has 6,742 native receipts plus 96 exact host semantic controls;
+and each WASM lane has 6,951 CPU receipts. All terminal receipts are complete.
+
+The all-backends result SHA-256 is
+`321cd5ae8a815b37f7543fb8593c120e814404eb95282b1028095dd035775634`; the GPU
+execution sidecar is
+`f87cac33b4644522553b617da6b9845a98fad30dcb82a742543d8c5cddc7c927`; and WGSL
+coverage is `fefe96b841e686b0e0c08474456b4e6c2c8756a4258a0c6e98dc9da54665b9c0`.
+Receipt-state remains 39/39 and the evidence contract remains benchmark /
+coverage / parity 25/24/24. This replay does not close the P2 timing gate or
+the broader non-dyadic device-arithmetic domains; no fixtures, thresholds,
+IDs, denominators, policy, or receipt taxonomy changed.
+
 ## 32.113 CPU projective BICUBIC parity (2026-09-03)
 
 The generic CPU projective path treated every non-nearest request as
