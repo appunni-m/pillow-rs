@@ -335,6 +335,13 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         let y2 = params.f;
         let x3 = params.g;
         let y3 = params.h;
+        // A constant-coordinate Quad has no interpolation to perform. Return
+        // its source coordinate directly so non-dyadic output dimensions cannot
+        // perturb an otherwise integral nearest selection through the generic
+        // f32 bilinear expression.
+        if x0 == x1 && x1 == x2 && x2 == x3 && y0 == y1 && y1 == y2 && y2 == y3 {
+            return vec2<f32>(x0, y0);
+        }
         // Unit-scale direct and axis-swapped Quad relocations are admitted
         // only after the host proof below. Avoid reconstructing their integer
         // source coordinates through f32 division/multiplication: values such
@@ -374,6 +381,13 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
     let height = f32(params.dst_h);
     let x0 = params.e;
     let y0 = params.f;
+    // A constant-coordinate one-record Mesh is likewise a raw nearest sample;
+    // bypass weighted f32 accumulation so its integer source coordinate is
+    // identical for every output shape.
+    if x0 == params.g && params.g == params.mesh0 && params.mesh0 == params.mesh2
+        && y0 == params.h && params.h == params.mesh1 && params.mesh1 == params.mesh3 {
+        return vec2<f32>(x0, y0);
+    }
     let direct_relocation =
         bx0 == 0.0 && by0 == 0.0 && bx1 == width && by1 == height
         && params.g == x0 && params.h == y0 + height
