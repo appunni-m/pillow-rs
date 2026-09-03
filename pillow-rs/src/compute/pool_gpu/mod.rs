@@ -645,6 +645,15 @@ fn gpu_f_resize_integer_sample_bits(
         } else {
             product
         };
+        // `checked_shl` only validates the shift count; it intentionally
+        // permits high bits to be truncated. That is not an exact integer
+        // reduction, so reject a term whose aligned magnitude would exceed
+        // the signed accumulator before shifting it.
+        let product_magnitude = product.checked_abs()?;
+        let product_bits = 128 - product_magnitude.leading_zeros();
+        if product_bits.saturating_add(shift) > 127 {
+            return None;
+        }
         let term = product.checked_shl(shift)?;
         let next = sum.checked_add(term)?;
         let magnitude = if next < 0 { next.checked_neg()? } else { next };
@@ -949,6 +958,48 @@ struct F64SignedMagnitude {
     negative: bool,
 }
 
+// Pillow 12.2.0's arm64 FLOAT32 horizontal resampler uses scalar FMA for
+// rows with at most 15 taps, then switches to a vector path that materializes
+// each complete 16-tap block before the ordered additions; any tail remains
+// on the scalar FMA loop. Its vertical FLOAT32 path stays on the scalar FMA
+// loop. Keep this boundary explicit in every host/shader admission model; a
+// single arithmetic model falsely admits some wide rows whose final f32 word
+// differs by one ULP.
+const GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS: usize = 15;
+const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 32;
+
+fn gpu_f_resize_uses_separate_horizontal_product_add(
+    horizontal: bool,
+    tap_count: usize,
+    tap: usize,
+) -> bool {
+    if !horizontal || tap_count <= GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS {
+        return false;
+    }
+    // The arm64 vector loop consumes complete 16-tap blocks. Its scalar tail
+    // remains an FMA loop, even when the row as a whole is wider than 15.
+    tap < (tap_count / GPU_F_RESIZE_VECTOR_WIDTH) * GPU_F_RESIZE_VECTOR_WIDTH
+}
+
+fn gpu_f_resize_accumulate_f64(
+    accumulator: &mut f64,
+    weight: f64,
+    sample: f32,
+    separate_product_add: bool,
+) {
+    let sample = f64::from(sample);
+    if separate_product_add {
+        // Keep the product out of the following add. LLVM may otherwise
+        // contract this expression back into an FMA, defeating the arm64
+        // wide-row contract that Pillow uses after 15 taps.
+        let product = std::hint::black_box(weight * sample);
+        *accumulator += product;
+    } else {
+        *accumulator = weight.mul_add(sample, *accumulator);
+    }
+}
+
 /// Add one bounded U128 term with the same signed-magnitude ordering used by
 /// the marker-9 WGSL reducer.  A same-sign overflow is rejected because the
 /// shader wraps its four limbs there; only the representable exact domain is
@@ -987,9 +1038,11 @@ fn gpu_f64_signed_u128_add(
 }
 
 /// Evaluate one f64-coefficient row as an exact integer sum, then compare its
-/// final f32 bits with Pillow's ordered f64 `mul_add` accumulation.  The
-/// shader uses the same exact-sum representation; rows where an intermediate
-/// f64 rounding would change the final f32 value are conservatively rejected.
+/// final f32 bits with Pillow's ordered arm64 FLOAT32 accumulation. Horizontal
+/// rows use scalar FMA through 15 taps, complete 16-tap vector product/add
+/// blocks after that, and scalar FMA for any tail; vertical rows use scalar FMA
+/// throughout. The shader uses the same exact-sum representation; rows where
+/// an intermediate rounding would change the final f32 value are rejected.
 /// Finite rows may end in a signed infinity when the exact result overflows
 /// f32.  Special rows use an integer IEEE state machine for NaN/infinity
 /// products and are admitted only when their final bits match Pillow's
@@ -1041,6 +1094,8 @@ fn gpu_f_resize_f64_sample_bits(
     // host-side f64 result below reject any mixed special ordering that does
     // not match this device state machine.
     let mut ordered_accumulator = 0.0f64;
+    let has_separate_product_add =
+        gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), 0);
     let mut first_nan = None;
     let mut positive_infinity = false;
     let mut negative_infinity = false;
@@ -1049,7 +1104,14 @@ fn gpu_f_resize_f64_sample_bits(
         let coeff = gpu_f64_integer_parts(weight)?;
         let bits = sample_bits_at(tap)?;
         let sample = f32::from_bits(bits);
-        ordered_accumulator = weight.mul_add(f64::from(sample), ordered_accumulator);
+        let separate_product_add =
+            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
+        gpu_f_resize_accumulate_f64(
+            &mut ordered_accumulator,
+            weight,
+            sample,
+            separate_product_add,
+        );
         let exponent_bits = (bits >> 23) & 0xff;
         if exponent_bits != 0xff {
             continue;
@@ -1075,6 +1137,12 @@ fn gpu_f_resize_f64_sample_bits(
         }
     }
     if has_special {
+        if has_separate_product_add {
+            // The arm64 vector loop's special-value event ordering is not
+            // represented by the integer special reducer. Keep it on exact
+            // host semantic control until that device state machine is proven.
+            return None;
+        }
         let actual = if let Some(bits) = first_nan {
             bits
         } else if positive_infinity && negative_infinity {
@@ -1126,7 +1194,14 @@ fn gpu_f_resize_f64_sample_bits(
         let coeff = gpu_f64_integer_parts(weight)?;
         let (bits, sample) = sample_at(tap)?;
         let sample_value = f32::from_bits(bits);
-        f64_accumulator = weight.mul_add(f64::from(sample_value), f64_accumulator);
+        let separate_product_add =
+            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
+        gpu_f_resize_accumulate_f64(
+            &mut f64_accumulator,
+            weight,
+            sample_value,
+            separate_product_add,
+        );
         if coeff.mantissa == 0 || sample.mantissa == 0 {
             continue;
         }
@@ -1166,8 +1241,6 @@ struct F64OrderedState {
     exponent: i32,
     negative: bool,
 }
-
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 8;
 
 /// Round an exact signed binary integer to the finite, normal f64 state used
 /// by the ordered FMA proof.  The marker-12 shader performs this same
@@ -1217,24 +1290,44 @@ fn gpu_f64_ordered_round(sum: F64SignedMagnitude, scale_exp: i32) -> Option<F64O
 /// The product is supplied as an unsigned integer scaled by `product_exp`;
 /// aligning it with the previous 53-bit state and rounding once models
 /// `weight.mul_add(f64::from(sample), accumulator)` without device floats.
+/// The horizontal arm64 vector path instead rounds the product first and then
+/// adds it in tap order; `separate_product_add` selects that model.
 fn gpu_f64_ordered_add_product(
     state: F64OrderedState,
     product: u128,
     product_exp: i32,
     product_negative: bool,
+    separate_product_add: bool,
 ) -> Option<F64OrderedState> {
     if product == 0 {
         return Some(state);
     }
-    if state.magnitude == 0 {
-        return gpu_f64_ordered_round(
+    let rounded_product = if separate_product_add {
+        Some(gpu_f64_ordered_round(
             F64SignedMagnitude {
                 magnitude: product,
                 negative: product_negative,
             },
             product_exp,
-        );
+        )?)
+    } else {
+        None
+    };
+    if state.magnitude == 0 {
+        return rounded_product.or_else(|| {
+            gpu_f64_ordered_round(
+                F64SignedMagnitude {
+                    magnitude: product,
+                    negative: product_negative,
+                },
+                product_exp,
+            )
+        });
     }
+    let (product, product_exp, product_negative) = rounded_product
+        .map_or((product, product_exp, product_negative), |rounded| {
+            (rounded.magnitude, rounded.exponent, rounded.negative)
+        });
     let minimum_exponent = state.exponent.min(product_exp);
     let state_shift = u32::try_from(state.exponent.checked_sub(minimum_exponent)?).ok()?;
     let product_shift = u32::try_from(product_exp.checked_sub(minimum_exponent)?).ok()?;
@@ -1256,11 +1349,11 @@ fn gpu_f64_ordered_add_product(
     gpu_f64_ordered_round(sum, minimum_exponent)
 }
 
-/// Evaluate a bounded f64 coefficient row with Pillow's ordered f64 FMA
+/// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles this bounded domain by emulating that intermediate
-/// rounding in integer arithmetic.
+/// marker 12 handles this bounded domain by emulating the scalar FMA path and
+/// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
@@ -1302,13 +1395,20 @@ fn gpu_f_resize_f64_ordered_sample_bits(
         let word = bytes.get(offset..offset.checked_add(4)?)?;
         let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
         let sample = gpu_f32_f64_integer_parts(bits)?;
+        let separate_product_add =
+            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
         let exponent_bits = (bits >> 23) & 0xff;
         // The bounded marker does not emulate f64 subnormal inputs or IEEE
         // specials; marker 9/special handling and host control cover them.
         if exponent_bits == 0 && sample.mantissa != 0 {
             return None;
         }
-        ordered_accumulator = weight.mul_add(f64::from(f32::from_bits(bits)), ordered_accumulator);
+        gpu_f_resize_accumulate_f64(
+            &mut ordered_accumulator,
+            weight,
+            f32::from_bits(bits),
+            separate_product_add,
+        );
         if coeff.mantissa == 0 || sample.mantissa == 0 {
             continue;
         }
@@ -1322,6 +1422,7 @@ fn gpu_f_resize_f64_ordered_sample_bits(
             product,
             product_exp,
             sample.negative != coeff.negative,
+            separate_product_add,
         )?;
     }
     let actual = gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)?;
@@ -16075,6 +16176,164 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(2));
         assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_arm64_wide_horizontal_vector_native_matches_pillow() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Pillow 12.2.0's arm64 FLOAT32 horizontal kernel changes from the
+        // scalar FMA loop to separate product/ordered-add accumulation after
+        // 15 taps. These rows were the first deterministic divergences when
+        // the host and shader admitted every finite row through the FMA model:
+        // Pillow produced c8be3d3d and bbc8afba, while that model produced
+        // c9be3d3d and b9afc8bb respectively.
+        let cases = [(16usize, 91u32, 0x3d3d_bec8), (32, 275, 0xbbc8_afba)];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (width, trial, expected_word) in cases {
+            let mut seed = trial.wrapping_mul(0x9e37_79b9).wrapping_add(width as u32);
+            let words: Vec<u32> = (0..width)
+                .map(|_| {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    (125 << 23) | (seed & 0x8000_0000) | (seed & 0x007f_ffff)
+                })
+                .collect();
+            let source_bytes = bytes(&words);
+            let source =
+                Image::frombytes("F", (width as u32, 1), &source_bytes).expect("wide F source");
+            let source_dynamic = source.materialize().expect("materialize wide F source");
+            let op = PipelineOp::Resize {
+                w: 1,
+                h: 1,
+                filter: ResampleFilter::Bilinear,
+            };
+            assert!(!gpu_f_resize_f64_is_exact(
+                std::slice::from_ref(&op),
+                &source_dynamic,
+                Some("F")
+            ));
+            assert!(gpu_f_resize_f64_ordered_is_exact(
+                std::slice::from_ref(&op),
+                &source_dynamic,
+                Some("F")
+            ));
+            let expected = bytes(&[expected_word]);
+            let cpu = source
+                .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+                .expect("CPU wide F resize operation")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU wide F resize");
+            assert_eq!(cpu, expected, "CPU wide F resize at width {width}");
+
+            let actual = match source
+                .resize((1, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
+                .expect("GPU wide F resize operation")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU wide F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "GPU wide F resize at width {width}");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("wide F resize must publish a telemetry receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(2));
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_wide_box_overflow_stays_host_controlled() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // A 16-tap Box row has a max-normal word followed by ordinary values.
+        // Its exact average is 0x7d7fffff; any proof that drops the high
+        // exponent term can incorrectly produce the small-value average.
+        let source = Image::frombytes(
+            "F",
+            (16, 1),
+            &bytes(
+                &[0x7f7f_ffff]
+                    .into_iter()
+                    .chain([0x3f80_0000; 15])
+                    .collect::<Vec<_>>(),
+            ),
+        )
+        .expect("wide Box F source");
+        let source_dynamic = source.materialize().expect("materialize wide Box F source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Box,
+        };
+        assert!(!gpu_f_resize_integer_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+
+        let expected = bytes(&[0x7d7f_ffff]);
+        let cpu = source
+            .resize((1, 1), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("CPU wide Box resize operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU wide Box resize");
+        assert_eq!(cpu, expected);
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((1, 1), Some(ResampleInput::Name("BOX".into())), None)
+            .expect("GPU wide Box resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU wide Box resize failed: {error}"),
+        };
+        assert_eq!(actual, expected);
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("wide Box host-control resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
