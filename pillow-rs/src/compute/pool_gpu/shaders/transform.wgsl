@@ -243,9 +243,14 @@ fn bilinear_channel(
     let c10 = f32((p10 >> shift) & 0xffu);
     let c01 = f32((p01 >> shift) & 0xffu);
     let c11 = f32((p11 >> shift) & 0xffu);
-    let top = lerp(c00, c10, fx);
-    let bottom = lerp(c01, c11, fx);
-    return u32(clamp(round(lerp(top, bottom, fy)), 0.0, 255.0));
+    // Keep the operation order and conversion used by Pillow's
+    // `BILINEAR_BODY`/`bilinear_filter8` in `src/libImaging/Geometry.c`:
+    // horizontal a + (b-a)*d, vertical interpolation, then UINT8's
+    // truncation toward zero. This matters for admitted nonzero weights;
+    // `lerp` plus round() differs at half-byte ties.
+    let top = c00 + (c10 - c00) * fx;
+    let bottom = c01 + (c11 - c01) * fx;
+    return u32(clamp(top + (bottom - top) * fy, 0.0, 255.0));
 }
 
 fn sample_projective_bilinear(sx: f32, sy: f32) -> u32 {
