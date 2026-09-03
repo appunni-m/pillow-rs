@@ -7982,3 +7982,25 @@ bounded at the pre-existing WASM `num-traits` compilation stall; no fixtures,
 thresholds, IDs, denominators, policy, or receipt taxonomy changed. Special
 rows outside the compact one-pixel Box proof, non-Box filters, and
 arithmetic-changing chains remain exact host semantic control.
+
+## 32.184 Compact F Box chain through a changed small axis (2026-09-04)
+
+The marker-13 compact Box proof previously admitted only a terminal one-pixel
+reduction or a one-axis reduction with the other axis unchanged. That left a
+finite wide, non-tall case such as `(8,388,608, 2) -> (1, 3)` on exact host
+semantic control even though Pillow's `src/libImaging/Resample.c` runs the
+horizontal compact average first and then a two-tap ordinary Box pass. Commit
+`42795f04f` materializes and rechecks that intermediate with the ordered f64
+reducer. It admits only the finite horizontal-compact orientation; special
+values are rejected for the chained proof, and the compact-vertical orientation
+remains host-controlled because a capacity-fitting image is necessarily in
+Pillow's vertical-first tall-image regime.
+
+Native Pillow 12.2.0 versus RSPIL direct probes are 4/4 exact for finite
+`(8,388,608, 2) -> (1, 1)`, `(8,388,608, 2) -> (1, 3)`,
+`(8,388,608, 1) -> (1, 2)`, and `(8,388,609, 1) -> (1, 2)` rows. Each has a
+terminal `actual_backend=gpu` receipt, two dispatches, and no fallback. A
+NaN row in the changed-axis geometry remains exact host semantic control.
+The focused compact-chain test and serial pool-GPU suite pass 112/112;
+format/build-dev and the receipt/evidence contracts remain unchanged. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
