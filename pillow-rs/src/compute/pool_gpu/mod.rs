@@ -1047,8 +1047,9 @@ fn gpu_f64_signed_u128_add(
 /// Finite rows may end in a signed infinity when the exact result overflows
 /// f32.  Special rows use an integer IEEE state machine for NaN/infinity
 /// products and are admitted only when their final bits match Pillow's
-/// ordered f64 result; all other non-finite/cancellation cases remain outside
-/// the admission boundary.
+/// ordered f64 result.  That prepass remains valid for rows wider than the
+/// marker-9 finite bound; finite rows above the bound stay with marker 12 or
+/// exact host semantic control.
 fn gpu_f_resize_f64_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
@@ -1091,12 +1092,10 @@ fn gpu_f_resize_f64_sample_bits(
     // a finite coefficient times NaN is NaN, a zero coefficient times an
     // infinity is the invalid NaN operation, and opposite signed infinities
     // cancel to NaN.  Preserve the first NaN payload in tap order (the same
-    // payload Pillow's ordered `mul_add` path exposes), while letting the
-    // host-side f64 result below reject any mixed special ordering that does
-    // not match this device state machine.
+    // payload Pillow's ordered `mul_add` path exposes). The host-side f64
+    // result below still has to agree with this device state machine before
+    // the row is admitted.
     let mut ordered_accumulator = 0.0f64;
-    let has_separate_product_add =
-        gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), 0);
     let mut first_nan = None;
     let mut positive_infinity = false;
     let mut negative_infinity = false;
@@ -1138,12 +1137,6 @@ fn gpu_f_resize_f64_sample_bits(
         }
     }
     if has_special {
-        if has_separate_product_add {
-            // The arm64 vector loop's special-value event ordering is not
-            // represented by the integer special reducer. Keep it on exact
-            // host semantic control until that device state machine is proven.
-            return None;
-        }
         let actual = if let Some(bits) = first_nan {
             bits
         } else if positive_infinity && negative_infinity {
@@ -1159,6 +1152,15 @@ fn gpu_f_resize_f64_sample_bits(
         };
         let expected = (ordered_accumulator as f32).to_bits();
         return (actual == expected).then_some(actual);
+    }
+
+    // Finite rows wider than marker 9's historical domain must use the
+    // bounded ordered reducer (marker 12), whose device state models Pillow's
+    // arm64 product/add split. Only rows with an IEEE special value can use
+    // marker 9 beyond this bound because its special prepass resolves the
+    // result before any vector arithmetic is observed.
+    if weights.len() > GPU_F_RESIZE_MARKER9_MAX_TAPS {
+        return None;
     }
 
     let mut minimum_exponent = None;
@@ -2500,13 +2502,9 @@ fn gpu_f_resize_f64_is_exact(
             if coeffs.xmin.len() != coeffs.count.len()
                 || coeffs.xmin.len() != coeffs.weights.len()
                 // Marker 9's exact-real reducer is not a proof of Pillow's
-                // arm64 wide-row contract. Above 32 taps, use marker 12's
-                // ordered reducer; rows beyond its 256-tap bounded domain stay
-                // on exact host control.
-                || coeffs
-                    .weights
-                    .iter()
-                    .any(|weights| weights.len() > GPU_F_RESIZE_MARKER9_MAX_TAPS)
+                // arm64 wide-row contract. Finite rows above 32 taps use
+                // marker 12's ordered reducer; only rows containing a special
+                // value can use marker 9's prepass beyond this bound.
                 || coeffs.weights.iter().any(|row| {
                     row.iter()
                         .any(|&weight| gpu_f64_integer_parts(weight).is_none())
@@ -17149,6 +17147,86 @@ mod tests {
     }
 
     #[test]
+    fn f_resize_f64_wide_special_value_outputs_native() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Marker 12 deliberately stops at 256 taps. Marker 9's special
+        // prepass is independent of the arm64 vector product/add split, so a
+        // 257-tap row can still be native when the host proof agrees on the
+        // exact NaN or infinity bits. Finite 257-tap rows remain host control.
+        let cases = [
+            (
+                ResampleFilter::Bilinear,
+                0x7fa1_2345u32,
+                257u32,
+                1u32,
+                0usize,
+            ),
+            (ResampleFilter::Bicubic, 0x7fc2_3456, 257, 1, 0),
+            (ResampleFilter::Lanczos, 0x7f80_0000, 257, 1, 0),
+            (ResampleFilter::Hamming, 0xff80_0000, 257, 1, 0),
+            (ResampleFilter::Box, 0x7f80_0000, 1, 257, 128),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (filter, special, source_w, source_h, special_index) in cases {
+            let mut words = vec![0x3f80_0000; (source_w * source_h) as usize];
+            words[special_index] = special;
+            let source = Image::frombytes("F", (source_w, source_h), &bytes(&words))
+                .expect("wide special F source");
+            let source_dynamic = source
+                .materialize()
+                .expect("materialize wide special F source");
+            let op = PipelineOp::Resize { w: 1, h: 1, filter };
+            assert!(gpu_f_resize_f64_is_exact(
+                std::slice::from_ref(&op),
+                &source_dynamic,
+                Some("F")
+            ));
+            let filter_name = match filter {
+                ResampleFilter::Bilinear => "BILINEAR",
+                ResampleFilter::Bicubic => "BICUBIC",
+                ResampleFilter::Lanczos => "LANCZOS",
+                ResampleFilter::Hamming => "HAMMING",
+                ResampleFilter::Box => "BOX",
+                _ => unreachable!(),
+            };
+            let expected = source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("CPU wide special F resize")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU wide special F bytes");
+            let actual = match source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("GPU wide special F resize")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU wide special F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "wide special {filter_name} F resize");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("wide special F resize must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
     fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
@@ -17385,6 +17463,11 @@ mod tests {
             filter: ResampleFilter::Bilinear,
         };
         assert!(!gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_is_exact(
             std::slice::from_ref(&op),
             &source_dynamic,
             Some("F")
