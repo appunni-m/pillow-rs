@@ -968,7 +968,7 @@ struct F64SignedMagnitude {
 const GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS: usize = 15;
 const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
 const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 128;
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 256;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1353,7 +1353,7 @@ fn gpu_f64_ordered_add_product(
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles rows through 128 taps by emulating the scalar FMA path and
+/// marker 12 handles rows through 256 taps by emulating the scalar FMA path and
 /// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
@@ -2501,7 +2501,7 @@ fn gpu_f_resize_f64_is_exact(
                 || coeffs.xmin.len() != coeffs.weights.len()
                 // Marker 9's exact-real reducer is not a proof of Pillow's
                 // arm64 wide-row contract. Above 32 taps, use marker 12's
-                // ordered reducer; rows beyond its 128-tap bounded domain stay
+                // ordered reducer; rows beyond its 256-tap bounded domain stay
                 // on exact host control.
                 || coeffs
                     .weights
@@ -17291,18 +17291,94 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_over_128_taps_stays_host_controlled() {
+    fn f_resize_ordered_f64_through_256_taps_native_matches_cpu() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        let width = 129usize;
+        for (width, filter) in [
+            (129usize, ResampleFilter::Bilinear),
+            (192usize, ResampleFilter::Bicubic),
+            (256usize, ResampleFilter::Lanczos),
+            (192usize, ResampleFilter::Hamming),
+            (256usize, ResampleFilter::Box),
+        ] {
+            let words: Vec<u32> = (0..width)
+                .map(|index| {
+                    let value = 0.25f32 + ((index * 29 % 120) as f32) * 0.01f32;
+                    value.to_bits()
+                })
+                .collect();
+            let source =
+                Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("256-tap F source");
+            let source_dynamic = source.materialize().expect("materialize 256-tap source");
+            let op = PipelineOp::Resize { w: 1, h: 1, filter };
+            assert!(
+                gpu_f_resize_f64_ordered_is_exact(
+                    std::slice::from_ref(&op),
+                    &source_dynamic,
+                    Some("F")
+                ),
+                "ordered proof should cover {width}-tap {filter:?} row"
+            );
+            let filter_name = match filter {
+                ResampleFilter::Bilinear => "BILINEAR",
+                ResampleFilter::Bicubic => "BICUBIC",
+                ResampleFilter::Lanczos => "LANCZOS",
+                ResampleFilter::Hamming => "HAMMING",
+                ResampleFilter::Box => "BOX",
+                _ => unreachable!(),
+            };
+            let expected = source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("CPU 256-tap F resize")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU 256-tap F bytes");
+            let previous = Backend::set_pipeline_telemetry_enabled(true);
+            let actual = match source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("GPU 256-tap F resize")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU 256-tap F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "256-tap {filter_name} F resize");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("256-tap F resize must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+            Backend::set_pipeline_telemetry_enabled(previous);
+        }
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_over_256_taps_stays_host_controlled() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let width = 257usize;
         let words: Vec<u32> = (0..width)
             .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
             .collect();
         let source =
-            Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("over-cap F source");
-        let source_dynamic = source.materialize().expect("materialize over-cap F source");
+            Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("over-bound F source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize over-bound F source");
         let op = PipelineOp::Resize {
             w: 1,
             h: 1,
@@ -17316,20 +17392,20 @@ mod tests {
         let filter = ResampleInput::Name("BILINEAR".into());
         let expected = source
             .resize((1, 1), Some(filter.clone()), None)
-            .expect("CPU over-cap F resize")
+            .expect("CPU over-bound F resize")
             .use_backend(Backend::Cpu)
             .tobytes()
-            .expect("CPU over-cap F bytes");
+            .expect("CPU over-bound F bytes");
         let previous = Backend::set_pipeline_telemetry_enabled(true);
         let actual = source
             .resize((1, 1), Some(filter), None)
-            .expect("GPU over-cap F resize")
+            .expect("GPU over-bound F resize")
             .use_backend(Backend::Gpu)
             .tobytes()
-            .expect("host-controlled over-cap F resize");
+            .expect("host-controlled over-bound F resize");
         assert_eq!(actual, expected);
         let telemetry =
-            Backend::take_pipeline_telemetry().expect("over-cap F resize must publish telemetry");
+            Backend::take_pipeline_telemetry().expect("over-bound F resize must publish telemetry");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
         assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
