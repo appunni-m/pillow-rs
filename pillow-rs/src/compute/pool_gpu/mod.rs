@@ -1673,8 +1673,9 @@ fn gpu_f_resize_compact_box_vertical_only_geometry(
 /// coefficient table.  A one-pixel Box downscale has one normalized weight
 /// per source tap, so a single repeated coefficient is enough on the device.
 /// At most one axis can exceed the full-table bound for an image that fits the
-/// device buffer budget. The other axis must therefore be unchanged and keeps
-/// its ordinary tiny coefficient table.
+/// device buffer budget. The other axis keeps its ordinary coefficient table;
+/// when that table is also proven exact, the second axis may change and the
+/// host proof below validates the materialized intermediate between passes.
 fn gpu_f_resize_compact_box_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -1706,40 +1707,107 @@ fn gpu_f_resize_compact_box_is_exact(
     }
     let horizontal_compact = gpu_f_resize_compact_box_axis(source_dimensions.0, *w);
     let vertical_compact = gpu_f_resize_compact_box_axis(source_dimensions.1, *h);
-    if (horizontal_compact && vertical_compact)
-        || (!horizontal_compact && !vertical_compact)
-        || (!horizontal_compact && *w != source_dimensions.0)
-        || (!vertical_compact && *h != source_dimensions.1)
+    if (horizontal_compact && vertical_compact) || (!horizontal_compact && !vertical_compact) {
+        return false;
+    }
+
+    // Pillow's `src/libImaging/Resample.c` keeps a wide, non-tall Box resize
+    // horizontal-first, so a compact horizontal row may be followed by an
+    // ordinary small-axis Box pass. Keep this extension finite-only: the
+    // compact shader's special-state machine is exact for a terminal row, but
+    // a second pass would require proving NaN payload propagation through the
+    // materialized intermediate.
+    let second_axis_changes = (!horizontal_compact && *w != source_dimensions.0)
+        || (!vertical_compact && *h != source_dimensions.1);
+    if vertical_compact && *w != source_dimensions.0 {
+        // This orientation is always a Pillow tall-image resize for an
+        // image that fits the pixel-capacity budget; its native order is
+        // vertical-first, while the GPU plan is horizontal-first.
+        return false;
+    }
+    if second_axis_changes
+        && pixels.as_raw().chunks_exact(4).any(|word| {
+            let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+            ((bits >> 23) & 0xff) == 0xff
+        })
     {
         return false;
     }
+
+    let ordered_pass =
+        |bytes: &[u8], dimensions: (u32, u32), coeffs: &FilterCoeffsF64, horizontal| {
+            let safe = coeffs.xmin.len() == coeffs.count.len()
+                && coeffs.xmin.len() == coeffs.weights.len()
+                && gpu_f_resize_f64_coefficients_fit_binding(coeffs)
+                && coeffs
+                    .count
+                    .iter()
+                    .all(|&count| count <= GPU_F_RESIZE_ORDERED_MAX_TAPS);
+            if !safe {
+                return None;
+            }
+            gpu_f_resize_f64_ordered_pass_bits(bytes, dimensions, coeffs, horizontal)
+        };
+    let words_to_bytes = |words: Vec<u32>| -> Option<Vec<u8>> {
+        let byte_count = words.len().checked_mul(4)?;
+        let mut result = Vec::new();
+        result.try_reserve(byte_count).ok()?;
+        for word in words {
+            result.extend_from_slice(&word.to_le_bytes());
+        }
+        Some(result)
+    };
+    let (kernel, support) = filter_from_resample(*filter);
+    let mut bytes = pixels.as_raw().to_vec();
+    let mut dimensions = source_dimensions;
+
     if horizontal_compact {
-        let Some(words) = gpu_f_resize_compact_box_pass_bits(
-            pixels.as_raw(),
-            source_dimensions,
-            source_dimensions.0,
-            true,
-        ) else {
+        let Some(words) =
+            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.0, true)
+        else {
             return false;
         };
-        if words.is_empty() {
+        let Some(next_bytes) = words_to_bytes(words) else {
             return false;
-        }
+        };
+        bytes = next_bytes;
+        dimensions.0 = *w;
+    } else if *w != source_dimensions.0 {
+        let coeffs = precompute_coeffs_f64(*w, source_dimensions.0, kernel, support);
+        let Some(words) = ordered_pass(&bytes, dimensions, &coeffs, true) else {
+            return false;
+        };
+        let Some(next_bytes) = words_to_bytes(words) else {
+            return false;
+        };
+        bytes = next_bytes;
+        dimensions.0 = *w;
     }
+
     if vertical_compact {
-        let Some(words) = gpu_f_resize_compact_box_pass_bits(
-            pixels.as_raw(),
-            source_dimensions,
-            source_dimensions.1,
-            false,
-        ) else {
+        let Some(words) =
+            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.1, false)
+        else {
             return false;
         };
-        if words.is_empty() {
+        let Some(next_bytes) = words_to_bytes(words) else {
             return false;
-        }
+        };
+        bytes = next_bytes;
+        dimensions.1 = *h;
+    } else if *h != source_dimensions.1 {
+        let coeffs = precompute_coeffs_f64(*h, source_dimensions.1, kernel, support);
+        let Some(words) = ordered_pass(&bytes, dimensions, &coeffs, false) else {
+            return false;
+        };
+        let Some(next_bytes) = words_to_bytes(words) else {
+            return false;
+        };
+        bytes = next_bytes;
+        dimensions.1 = *h;
     }
-    true
+
+    dimensions == (*w, *h) && !bytes.is_empty()
 }
 
 fn gpu_f_resize_compact_box_vertical_only_is_exact(
@@ -9809,10 +9877,38 @@ fn gpu_dimensions_require_cpu(
             // allocate hundreds of MiB only to reject an over-limit row.
             let compact_vertical = logical_mode == Some("F")
                 && gpu_f_resize_compact_box_vertical_only_is_exact(ops, image, logical_mode);
+            let compact_box = logical_mode == Some("F")
+                && ops.len() == 1
+                && matches!(ops.first(), Some(PipelineOp::Resize { filter, .. }) if matches!(filter, ResampleFilter::Box))
+                && gpu_f_resize_compact_box_is_exact(ops, image, logical_mode);
             if compact_vertical {
                 let horizontal = gpu_resize_coefficients(next.0, cur_w, *filter);
                 if resize_coeff_word_count(&horizontal).is_err() {
                     return true;
+                }
+            } else if compact_box {
+                // Marker 13 supplies the compact table for the over-limit
+                // axis.  The other axis may still change when its ordinary
+                // f64 table fits the binding and every row stays within the
+                // ordered reducer's tap cap; the compact proof has already
+                // validated both pass results and finite-only chaining.
+                let (kernel, support) = filter_from_resample(*filter);
+                for (source_size, output_size, compact) in [
+                    (cur_w, next.0, gpu_f_resize_compact_box_axis(cur_w, next.0)),
+                    (cur_h, next.1, gpu_f_resize_compact_box_axis(cur_h, next.1)),
+                ] {
+                    if compact {
+                        continue;
+                    }
+                    let coeffs = precompute_coeffs_f64(output_size, source_size, kernel, support);
+                    if !gpu_f_resize_f64_coefficients_fit_binding(&coeffs)
+                        || coeffs
+                            .count
+                            .iter()
+                            .any(|&count| count > GPU_F_RESIZE_ORDERED_MAX_TAPS)
+                    {
+                        return true;
+                    }
                 }
             } else if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), next) {
                 return true;
@@ -20748,6 +20844,75 @@ mod tests {
             &source_dynamic,
             Some("F")
         ));
+    }
+
+    #[test]
+    fn f_resize_compact_box_proof_covers_changed_second_axis() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // The horizontal compact row is followed by a two-tap ordinary Box
+        // row.  This exercises the pass ordering that was previously rejected
+        // solely because the non-compact axis changed.
+        let width = 8_388_608usize;
+        let pattern = [0.125f32, -17.25, 1.0, -2.5, 3.75, -0.0, 100.0, -99.0];
+        let words: Vec<u32> = (0..width * 2)
+            .map(|index| pattern[index % pattern.len()].to_bits())
+            .collect();
+        let source = Image::frombytes("F", (width as u32, 2), &bytes(&words))
+            .expect("compact chained Box source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize compact chained Box source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Box,
+        };
+        assert!(gpu_f_resize_compact_box_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_compact_box_vertical_only_geometry(
+            &op,
+            (width as u32, 2),
+            (1, 1),
+            Some("F")
+        ));
+        let mut special_words = words.clone();
+        special_words[width / 2] = 0x7fc1_2345;
+        let special_source = Image::frombytes("F", (width as u32, 2), &bytes(&special_words))
+            .expect("compact chained special Box source")
+            .materialize()
+            .expect("materialize compact chained special Box source");
+        assert!(!gpu_f_resize_compact_box_is_exact(
+            std::slice::from_ref(&op),
+            &special_source,
+            Some("F")
+        ));
+        let filter = ResampleInput::Name("BOX".into());
+        let expected = source
+            .resize((1, 1), Some(filter.clone()), None)
+            .expect("CPU compact chained Box resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU compact chained Box bytes");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = source
+            .resize((1, 1), Some(filter), None)
+            .expect("GPU compact chained Box resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            .expect("native GPU compact chained Box bytes");
+        assert_eq!(actual, expected);
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("compact chained Box resize must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
