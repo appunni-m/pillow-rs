@@ -6827,3 +6827,47 @@ f64-intermediate boundary cases, arithmetic-changing chains, and broader
 fractional/scaled/non-dyadic projective, mesh, and palette arithmetic remain
 open. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
 changed.
+
+## 32.131 Ordered F Resize reducer through 8192 taps (2026-09-03)
+
+The matched marker-12 host proof and WGSL convolution guards previously
+stopped at 4096 taps, leaving finite rows with representable ordered state on
+exact host semantic control. Pillow 12.2.0 `src/libImaging/Resample.c` keeps
+the scalar f64 FMA path for vertical rows and the arm64 horizontal
+product/ordered-add split after 15 taps. Commit `828dee094` (source
+`677fb9e43`) raises the shared proof and both shader bounds to 8192 while
+retaining the U128 representability and f64-intermediate checks; rows over the
+bound or outside those checks remain exact host semantic control.
+
+The focused ordered-F group is 10/10 and the complete pool-GPU unit group is
+94/94. Native Pillow 12.2.0 versus RSPIL probes cover all five filters at
+8192 taps on horizontal, vertical, and two-axis reductions, including
+subnormal and largest-finite inputs, with 15/15 exact bytes and terminal
+requested=actual GPU receipts (two dispatches, no fallback). The 8193-tap
+finite boundary remains explicitly host-controlled. No fixtures, thresholds,
+IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.132 Full backend replay after the 8192-tap reducer (2026-09-03)
+
+The maintained schema-v3 replay at source revision
+`828dee094a0e31a12619a4f8e49968ad0af33a28` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM (each lane
+reported 10,952 passed, zero failed, and zero not-run); the GPU smoke gate was
+1/1. The aggregate remains `passed_with_backend_gaps` because backend identity
+is explicit rather than relabeling exact host semantic control as native
+coverage: CPU has 6,838 terminal CPU receipts; SIMD has 6,847 native SIMD plus
+three CPU layout controls; GPU has 6,743 native GPU plus 95 exact host/dimension
+controls; and Node/browser WASM each have 6,951 CPU receipts. Every terminal
+receipt is complete.
+
+Artifact SHA-256 values are result
+`c05e1758cdb0d04b27d3fd0dc6199698567d4bbb6bfa1ee4b866367f9d36251a`, GPU
+execution `6ca0792f49b5710f163b49f08cfd4d392c0c5c5504b8a7362614b0e65023a887`,
+and WGSL coverage
+`0ae74fedbb9de58bef7bb0a8eabe3a99c2e2cb6f6071d8a3d61cc0b8f810651a`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The timing zero-violation gate, F reducer work beyond 8192 taps,
+f64-intermediate subnormal/overflow boundaries, arithmetic-changing chains,
+and broader fractional/scaled/non-dyadic projective, mesh, and palette
+arithmetic remain open. No fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
