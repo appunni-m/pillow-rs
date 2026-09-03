@@ -2498,6 +2498,16 @@ fn gpu_f_resize_f64_is_exact(
         for coeffs in [&horizontal, &vertical] {
             if coeffs.xmin.len() != coeffs.count.len()
                 || coeffs.xmin.len() != coeffs.weights.len()
+                // Marker 9's exact-real reducer is not a proof of Pillow's
+                // arm64 wide-row contract.  Above 32 taps, native
+                // Resample.c may use a different ordered product/add path
+                // (and filter-kernel rounding can become observable under
+                // cancellation), so keep the row on exact host control until
+                // that wider domain has its own proof.
+                || coeffs
+                    .weights
+                    .iter()
+                    .any(|weights| weights.len() > GPU_F_RESIZE_ORDERED_MAX_TAPS)
                 || coeffs.weights.iter().any(|row| {
                     row.iter()
                         .any(|&weight| gpu_f64_integer_parts(weight).is_none())
@@ -16331,6 +16341,83 @@ mod tests {
         assert_eq!(actual, expected);
         let telemetry = Backend::take_pipeline_telemetry()
             .expect("wide Box host-control resize must publish a receipt");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_wide_lanczos_cancellation_stays_host_controlled() {
+        fn bytes(values: &[f32]) -> Vec<u8> {
+            values
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect()
+        }
+
+        // A 48-tap Lanczos row is outside the proven marker-12 envelope.  The
+        // marker-9 exact-real reducer used to admit it anyway; its GPU kernel
+        // coefficients cancel the alternating row to +0.0, while Pillow's
+        // native arm64 path stores -2.0 after the ordered f64 reduction.
+        let values = [2f32.powi(60), -2f32.powi(60)]
+            .into_iter()
+            .cycle()
+            .take(48)
+            .collect::<Vec<_>>();
+        let source = Image::frombytes("F", (48, 1), &bytes(&values)).expect("wide F source");
+        let source_dynamic = source.materialize().expect("materialize wide F source");
+        let op = PipelineOp::Resize {
+            w: 3,
+            h: 1,
+            filter: ResampleFilter::Lanczos,
+        };
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+
+        let expected = bytes(&[
+            f32::from_bits(0x5aa1_ab41),
+            f32::from_bits(0xc000_0000),
+            f32::from_bits(0xdaa1_ab41),
+        ]);
+        let cpu = source
+            .resize((3, 1), Some(ResampleInput::Name("LANCZOS".into())), None)
+            .expect("CPU wide Lanczos resize operation")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU wide Lanczos resize");
+        assert_eq!(cpu, expected);
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((3, 1), Some(ResampleInput::Name("LANCZOS".into())), None)
+            .expect("GPU wide Lanczos resize operation")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU wide Lanczos resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "wide Lanczos host-control parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("wide Lanczos host-control resize must publish a receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
         assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
