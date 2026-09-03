@@ -7955,3 +7955,30 @@ reported seven timing violations. Receipt and operation structure were
 unchanged across the pair; the differences were timing-only, so the required
 zero-violation P2 gate remains open and no benchmark scripts, fixtures,
 thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.183 Compact over-limit F Box special values (2026-09-04)
+
+Marker 13 originally admitted only finite compact Box rows. Its WGSL ordered
+reducer returned a zero sentinel as soon as it saw an IEEE special word, so a
+horizontal or vertical one-pixel row above 8,388,607 taps with NaN or infinity
+was conservatively routed to exact host semantic control even though the Box
+coefficient is the same positive `1/source_axis` value for every tap. The
+host compact proof had the same finite-only restriction. This was a real
+coverage gap, not a value mismatch: the existing marker-9 special prepass
+already defines Pillow's first quieted NaN payload and opposite-infinity
+cancellation semantics.
+
+Commit `c2cc1b5bf` (source `0346d21f1`) adds that special scan to both compact
+resize shaders and to the host admission proof. The scan has no zero
+coefficient case in this domain, preserves the first NaN payload in tap order,
+canonicalizes opposite signed infinities to a quiet NaN, and otherwise keeps
+the infinity sign. Native Pillow 12.2.0 versus RSPIL direct probes are 4/4
+exact at 8,388,608 taps: horizontal NaN, horizontal opposite infinities,
+vertical opposite infinities, and vertical NaN. Every row has a terminal
+`actual_backend=gpu` receipt with no fallback. Serial pool-GPU tests pass
+111/111, `make -C pillow-rs fmt`, `make build-dev`, and release `make build`
+pass. The canonical all-backends replay was started on this candidate but was
+bounded at the pre-existing WASM `num-traits` compilation stall; no fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed. Special
+rows outside the compact one-pixel Box proof, non-Box filters, and
+arithmetic-changing chains remain exact host semantic control.

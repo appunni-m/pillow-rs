@@ -162,9 +162,10 @@ receipt rules unchanged.
   one-pixel Box rows above that bound. Commit `8c92e95d8` closes the
   binding-size edge for the full table, `d513cfa13` proves the horizontal
   compact row, and `f5f3c1271` adds the vertical compact row without changing
-  the ABI. Non-finite special rows, tall vertical geometries outside the
-  one-pixel Box proof, non-Box filters, and arithmetic-changing chains remain
-  exact host semantic control; the broader reducer bucket stays open.
+  the ABI. Commit `c2cc1b5bf` adds the same marker-13 special-value state
+  machine for compact rows. Tall vertical geometries outside the one-pixel Box
+  proof, non-Box filters, and arithmetic-changing chains remain exact host
+  semantic control; the broader reducer bucket stays open.
 - [x] Extend the filtered Quad/Mesh relocation proof (`cfa3b2690`, source
   `206bff9dfe82ab9eab5346931db2ddd0b11f4388`): correct non-square Quad
   axis-swap source extents, reject extra Mesh records, and admit only the
@@ -290,10 +291,16 @@ receipt rules unchanged.
   Native Pillow 12.2.0 versus RSPIL is exact for 5/5 finite direct probes
   (including a width-2 capacity-bound vertical row and the existing horizontal
   row), with actual GPU receipts, one dispatch for vertical rows, and no
-  fallback; 2/2 Inf/NaN probes remain exact host semantic control. The full
-  pool-GPU group is 110/110 and the all-backends replay at this revision is
-  10,952/10,952 exact. Non-Box, non-finite native arithmetic and
-  arithmetic-changing chains remain exact host semantic control.
+  fallback. Non-finite compact rows are covered separately below; non-Box,
+  tall, and arithmetic-changing chains remain exact host semantic control.
+- [x] Extend marker-13 compact F Box rows to IEEE special values
+  (`c2cc1b5bf`, source `0346d21f1`): the horizontal and vertical WGSL kernels
+  now scan compact rows for first-NaN payloads and signed-infinity
+  cancellation before entering the ordered finite reducer. Native Pillow
+  12.2.0 versus RSPIL is 4/4 exact for horizontal/vertical NaN and opposite-
+  infinity rows at 8,388,608 taps, with terminal actual GPU receipts and no
+  fallback; serial pool-GPU tests are 111/111. Special rows outside this
+  compact one-pixel proof remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
@@ -751,7 +758,7 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `f5f3c1271` (typed-F filtered
+`main` includes the parity fixes through `c2cc1b5bf` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 8388607 taps, tall-image F ordering, filtered
@@ -762,9 +769,11 @@ centered constant-denominator integer and proof-certified fractional
 and nonconstant-denominator Perspective nearest envelopes, identity projective
 routing, proof-certified Quad/Mesh nearest maps, receipt-proven suite cohorts,
   and packed SIMD ExtractBand, plus the 128-MiB F binding guard, compact
-  over-limit horizontal and vertical Box paths, and the interior-integer
+  over-limit horizontal and vertical Box paths with compact special-value
+  handling, and the interior-integer
   Bilinear/Bicubic projective envelopes across all proven raw packed modes).
-The fresh combined replay at this revision is 10,952/10,952 value/error exact
+The fresh combined replay recorded at `f5f3c1271` (before the compact
+special-value extension) is 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,744 GPU plus 94 CPU
@@ -773,7 +782,8 @@ controls; Node/browser WASM 6,951 each. Result SHA-256 is
 execution sidecar is `b4321131697906789688360e8d20f812e985a77a6a704d7ffc0f09dea4fdb592`,
 with WGSL coverage `421d0643bc819e3641391b44cf22cf88b51eb34c9207b22cd32d8670bd0033bf`.
 The focused list still has four open acceptance buckets: broader F device
-arithmetic beyond the compact horizontal/vertical Box proofs (including
+arithmetic beyond the compact horizontal/vertical Box and special-state
+proofs (including
 f64-intermediate boundaries and arithmetic-changing chains), broader
 arithmetic-changing projective/mesh/palette admission, native/host partition
 reconciliation, and the two-consecutive-run zero-budget performance gate.
