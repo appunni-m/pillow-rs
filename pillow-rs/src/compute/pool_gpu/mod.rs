@@ -1495,6 +1495,177 @@ fn gpu_f_resize_f64_ordered_pass_bits(
     Some(result)
 }
 
+/// Evaluate one over-limit Box row whose normalized coefficient is constant.
+///
+/// Pillow's `Resample.c::precompute_coeffs` gives a one-pixel Box downscale
+/// exactly `1 / source_axis` for every selected source word.  That row does
+/// not need one four-word f64 coefficient record per tap: the compact device
+/// path transports one record and repeats it in the ordered reducer.  Keep
+/// the proof finite-only for now; non-finite words retain marker-9/host
+/// control because their first-NaN payload and infinity interactions need a
+/// separate compact state-machine proof.
+fn gpu_f_resize_compact_box_sample_bits(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    source_axis: u32,
+    horizontal: bool,
+    line: usize,
+) -> Option<u32> {
+    if source_axis == 0
+        || line
+            >= usize::try_from(if horizontal {
+                source_dimensions.1
+            } else {
+                source_dimensions.0
+            })
+            .ok()?
+    {
+        return None;
+    }
+    let source_w = usize::try_from(source_dimensions.0).ok()?;
+    let source_h = usize::try_from(source_dimensions.1).ok()?;
+    let source_axis_usize = usize::try_from(source_axis).ok()?;
+    if source_axis_usize != if horizontal { source_w } else { source_h } {
+        return None;
+    }
+    let coefficient = 1.0 / f64::from(source_axis);
+    let coefficient_parts = gpu_f64_integer_parts(coefficient)?;
+    let mut state = F64OrderedState {
+        magnitude: 0,
+        exponent: 0,
+        negative: false,
+    };
+    let mut ordered_accumulator = 0.0f64;
+    for tap in 0..source_axis_usize {
+        let pixel = if horizontal {
+            line.checked_mul(source_w)?.checked_add(tap)?
+        } else {
+            tap.checked_mul(source_w)?.checked_add(line)?
+        };
+        let offset = pixel.checked_mul(4)?;
+        let word = bytes.get(offset..offset.checked_add(4)?)?;
+        let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+        let exponent_bits = (bits >> 23) & 0xff;
+        if exponent_bits == 0xff {
+            return None;
+        }
+        let sample = gpu_f32_f64_integer_parts(bits)?;
+        let separate_product_add =
+            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, source_axis_usize, tap);
+        gpu_f_resize_accumulate_f64(
+            &mut ordered_accumulator,
+            coefficient,
+            f32::from_bits(bits),
+            separate_product_add,
+        );
+        if sample.mantissa == 0 {
+            continue;
+        }
+        let product =
+            u128::from(sample.mantissa).checked_mul(u128::from(coefficient_parts.mantissa))?;
+        let product_exp = sample
+            .exponent
+            .checked_sub(23)?
+            .checked_add(coefficient_parts.exponent)?;
+        state = gpu_f64_ordered_add_product(
+            state,
+            product,
+            product_exp,
+            sample.negative != coefficient_parts.negative,
+            separate_product_add,
+        )?;
+    }
+    let actual = gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)?;
+    let expected = (ordered_accumulator as f32).to_bits();
+    (actual == expected).then_some(actual)
+}
+
+fn gpu_f_resize_compact_box_pass_bits(
+    bytes: &[u8],
+    source_dimensions: (u32, u32),
+    source_axis: u32,
+    horizontal: bool,
+) -> Option<Vec<u32>> {
+    let line_count = usize::try_from(if horizontal {
+        source_dimensions.1
+    } else {
+        source_dimensions.0
+    })
+    .ok()?;
+    let mut result = Vec::new();
+    result.try_reserve(line_count).ok()?;
+    for line in 0..line_count {
+        result.push(gpu_f_resize_compact_box_sample_bits(
+            bytes,
+            source_dimensions,
+            source_axis,
+            horizontal,
+            line,
+        )?);
+    }
+    Some(result)
+}
+
+fn gpu_f_resize_compact_box_axis(source_size: u32, output_size: u32) -> bool {
+    output_size == 1 && source_size > GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
+}
+
+/// Prove the compact over-limit Box domain without materializing a full f64
+/// coefficient table.  A one-pixel Box downscale has one normalized weight
+/// per source tap, so a single repeated coefficient is enough on the device.
+/// Restrict the first implementation to a horizontal changed axis; the
+/// current adapter's vertical dispatch grid cannot carry an over-limit source
+/// height. The unchanged height is an observable word copy and can retain its
+/// ordinary tiny coefficient table.
+fn gpu_f_resize_compact_box_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
+    {
+        return false;
+    }
+    let DynamicImage::ImageRgba8(pixels) = image else {
+        return false;
+    };
+    let PipelineOp::Resize { w, h, filter } = &ops[0] else {
+        return false;
+    };
+    if !matches!(filter, ResampleFilter::Box) || *w == 0 || *h == 0 {
+        return false;
+    }
+    let source_dimensions = image.dimensions();
+    let source_checked = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4).ok();
+    if source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || source_checked
+            .as_ref()
+            .is_none_or(|dims| dims.total_pixels() > GPU_BUFFER_CAPACITY as usize)
+        || source_checked.map(|dims| dims.total_bytes()) != Some(pixels.as_raw().len())
+    {
+        return false;
+    }
+    // The current resize dispatch grid visits source rows during its first
+    // pass.  An over-limit vertical row would therefore exceed the adapter's
+    // per-dimension workgroup bound even when its pixel buffer fits; keep this
+    // compact device proof horizontal-only and leave vertical/tall requests
+    // on exact host semantic control.
+    let horizontal_compact = gpu_f_resize_compact_box_axis(source_dimensions.0, *w);
+    if !horizontal_compact || *h != source_dimensions.1 {
+        return false;
+    }
+    let Some(words) = gpu_f_resize_compact_box_pass_bits(
+        pixels.as_raw(),
+        source_dimensions,
+        source_dimensions.0,
+        true,
+    ) else {
+        return false;
+    };
+    !words.is_empty()
+}
+
 /// Pillow's high-level Image.resize uses a vertical-first pair of resample
 /// passes for very tall inputs before calling Resample.c. The GPU lowering is
 /// currently horizontal-first, so keep this geometry on exact host semantic
@@ -1518,6 +1689,9 @@ fn gpu_f_resize_f64_ordered_is_exact(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
+    if gpu_f_resize_compact_box_is_exact(ops, image, logical_mode) {
+        return true;
+    }
     if logical_mode != Some("F") || ops.len() != 1 || !matches!(image, DynamicImage::ImageRgba8(_))
     {
         return false;
@@ -4064,6 +4238,34 @@ fn encode_resize_coeffs_f64(coeffs: &FilterCoeffsF64) -> Result<Vec<u32>, PilErr
     Ok(words)
 }
 
+/// Encode one compact Box row whose normalized coefficient is repeated for
+/// every tap.  This is used only for a one-pixel downscale beyond the full
+/// f64 coefficient binding envelope; ordinary rows continue to use the
+/// complete per-tap table above.
+fn encode_resize_compact_box_axis(
+    source_size: u32,
+    output_size: u32,
+) -> Result<Vec<u32>, PilError> {
+    if output_size != 1 || source_size <= GPU_F_RESIZE_ORDERED_MAX_TAPS as u32 {
+        return Err(PilError::InternalError(
+            "GPU compact Box coefficient geometry is invalid".into(),
+        ));
+    }
+    let coefficient = 1.0 / f64::from(source_size);
+    let parts = gpu_f64_integer_parts(coefficient).ok_or_else(|| {
+        PilError::ValueError("GPU compact Box coefficient is not a finite normal value".into())
+    })?;
+    Ok(vec![
+        0,
+        source_size,
+        0,
+        parts.mantissa as u32,
+        (parts.mantissa >> 32) as u32,
+        parts.exponent as u32,
+        u32::from(parts.negative && parts.mantissa != 0),
+    ])
+}
+
 fn gpu_resize_coefficients_are_safe(
     filter: ResampleFilter,
     source_dimensions: (u32, u32),
@@ -5472,13 +5674,35 @@ impl GpuInner {
                 && !matches!(filter, ResampleFilter::Nearest)
                 && matches!(op, PipelineOp::Resize { .. } | PipelineOp::Pad { .. })
             {
+                let compact_box = f_resize_f64_ordered_is_exact
+                    && mode == 8
+                    && matches!(op, PipelineOp::Resize { .. })
+                    && matches!(filter, ResampleFilter::Box)
+                    && gpu_f_resize_compact_box_axis(source_w, resize_w);
                 let (kernel, support) = filter_from_resample(filter);
-                let horizontal = precompute_coeffs_f64(resize_w, source_w, kernel, support);
-                let vertical = precompute_coeffs_f64(resize_h, source_h, kernel, support);
-                (
-                    resize_coeff_word_count_f64(&horizontal)?,
-                    resize_coeff_word_count_f64(&vertical)?,
-                )
+                let axis_words = |source_size: u32, output_size: u32| {
+                    if gpu_f_resize_compact_box_axis(source_size, output_size) {
+                        Ok(7usize)
+                    } else {
+                        let coeffs =
+                            precompute_coeffs_f64(output_size, source_size, kernel, support);
+                        resize_coeff_word_count_f64(&coeffs)
+                    }
+                };
+                let (horizontal, vertical) = if compact_box {
+                    (
+                        axis_words(source_w, resize_w)?,
+                        axis_words(source_h, resize_h)?,
+                    )
+                } else {
+                    let horizontal = precompute_coeffs_f64(resize_w, source_w, kernel, support);
+                    let vertical = precompute_coeffs_f64(resize_h, source_h, kernel, support);
+                    (
+                        resize_coeff_word_count_f64(&horizontal)?,
+                        resize_coeff_word_count_f64(&vertical)?,
+                    )
+                };
+                (horizontal, vertical)
             } else {
                 let horizontal = gpu_resize_coefficients(resize_w, source_w, filter);
                 let vertical = gpu_resize_coefficients(resize_h, source_h, filter);
@@ -5642,11 +5866,28 @@ impl GpuInner {
     ) -> Result<(BufferRange, BufferRange), PilError> {
         let horizontal_words = encode_resize_coeffs_f64(horizontal)?;
         let vertical_words = encode_resize_coeffs_f64(vertical)?;
+        self.append_resize_coeff_word_ranges(
+            img2_arena,
+            auxiliary_cache,
+            &horizontal_words,
+            &vertical_words,
+            storage_alignment,
+        )
+    }
+
+    fn append_resize_coeff_word_ranges(
+        &self,
+        img2_arena: &mut Vec<u32>,
+        auxiliary_cache: &GpuAuxiliaryCache,
+        horizontal_words: &[u32],
+        vertical_words: &[u32],
+        storage_alignment: usize,
+    ) -> Result<(BufferRange, BufferRange), PilError> {
         let base_offset = (auxiliary_cache.img2_values.len() * 4) as u64;
         let mut horizontal_range =
-            append_arena_slice(img2_arena, &horizontal_words, storage_alignment);
+            append_arena_slice(img2_arena, horizontal_words, storage_alignment);
         horizontal_range.offset += base_offset;
-        let mut vertical_range = append_arena_slice(img2_arena, &vertical_words, storage_alignment);
+        let mut vertical_range = append_arena_slice(img2_arena, vertical_words, storage_alignment);
         vertical_range.offset += base_offset;
         Ok((horizontal_range, vertical_range))
     }
@@ -5869,6 +6110,9 @@ impl GpuInner {
                 let f64_ordered_is_exact = f_resize_f64_ordered_is_exact
                     && logical_mode == Some("F")
                     && !matches!(filter, ResampleFilter::Nearest);
+                let compact_box_is_exact = f64_ordered_is_exact
+                    && matches!(filter, ResampleFilter::Box)
+                    && gpu_f_resize_compact_box_axis(cur_w, out_w);
                 let i_f64_is_exact = f_resize_f64_is_exact
                     && logical_mode == Some("I")
                     && !matches!(filter, ResampleFilter::Nearest);
@@ -5891,6 +6135,8 @@ impl GpuInner {
                         5
                     } else if box_average_is_exact {
                         4
+                    } else if compact_box_is_exact {
+                        13
                     } else if f64_ordered_is_exact {
                         12
                     } else if f64_is_exact {
@@ -6124,16 +6370,47 @@ impl GpuInner {
                                 || (op_mode == 7 && logical_mode == Some("I")))
                         {
                             let (kernel, support) = filter_from_resample(*filter);
-                            let horizontal_f64 =
-                                precompute_coeffs_f64(out_w, cur_w, kernel, support);
-                            let vertical_f64 = precompute_coeffs_f64(out_h, cur_h, kernel, support);
-                            Some(self.append_resize_f64_coeff_ranges(
-                                &mut img2_arena,
-                                auxiliary_cache,
-                                &horizontal_f64,
-                                &vertical_f64,
-                                storage_alignment,
-                            )?)
+                            let compact_box = f_resize_f64_ordered_is_exact
+                                && logical_mode == Some("F")
+                                && matches!(filter, ResampleFilter::Box)
+                                && gpu_f_resize_compact_box_axis(cur_w, out_w);
+                            if compact_box {
+                                let horizontal_words =
+                                    if gpu_f_resize_compact_box_axis(cur_w, out_w) {
+                                        encode_resize_compact_box_axis(cur_w, out_w)?
+                                    } else {
+                                        let coeffs =
+                                            precompute_coeffs_f64(out_w, cur_w, kernel, support);
+                                        encode_resize_coeffs_f64(&coeffs)?
+                                    };
+                                let vertical_words = if gpu_f_resize_compact_box_axis(cur_h, out_h)
+                                {
+                                    encode_resize_compact_box_axis(cur_h, out_h)?
+                                } else {
+                                    let coeffs =
+                                        precompute_coeffs_f64(out_h, cur_h, kernel, support);
+                                    encode_resize_coeffs_f64(&coeffs)?
+                                };
+                                Some(self.append_resize_coeff_word_ranges(
+                                    &mut img2_arena,
+                                    auxiliary_cache,
+                                    &horizontal_words,
+                                    &vertical_words,
+                                    storage_alignment,
+                                )?)
+                            } else {
+                                let horizontal_f64 =
+                                    precompute_coeffs_f64(out_w, cur_w, kernel, support);
+                                let vertical_f64 =
+                                    precompute_coeffs_f64(out_h, cur_h, kernel, support);
+                                Some(self.append_resize_f64_coeff_ranges(
+                                    &mut img2_arena,
+                                    auxiliary_cache,
+                                    &horizontal_f64,
+                                    &vertical_f64,
+                                    storage_alignment,
+                                )?)
+                            }
                         } else {
                             Some(self.append_resize_coeff_ranges(
                                 &mut img2_arena,
@@ -13185,12 +13462,13 @@ mod tests {
     #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
     use super::{
-        GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, gpu_buffer_reuse_allowed,
-        gpu_byte_point_mode_allowed, gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix,
-        gpu_f_pad_f64_is_exact, gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
-        gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
-        gpu_f_resize_f64_ordered_is_exact, gpu_f_resize_identity_is_exact,
-        gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
+        GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
+        encode_resize_compact_box_axis, gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed,
+        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_f_pad_f64_is_exact,
+        gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
+        gpu_f_resize_compact_box_is_exact, gpu_f_resize_constant_bits,
+        gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_ordered_is_exact,
+        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
@@ -20201,6 +20479,53 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Cpu);
         assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_compact_box_proof_covers_horizontal_over_binding_row() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let height = 8_388_608usize;
+        let pattern = [0.125f32, -17.25, 1.0, -2.5, 3.75, -0.0, 100.0, -99.0];
+        let words: Vec<u32> = (0..height)
+            .map(|index| pattern[index % pattern.len()].to_bits())
+            .collect();
+        let source = Image::frombytes("F", (height as u32, 1), &bytes(&words))
+            .expect("horizontal compact Box source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize horizontal compact Box source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Box,
+        };
+        assert!(gpu_f_resize_compact_box_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let compact_words =
+            encode_resize_compact_box_axis(height as u32, 1).expect("compact Box coefficient row");
+        assert_eq!(compact_words.len(), 7);
+        assert_eq!(&compact_words[0..3], &[0, height as u32, 0]);
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
     }
 
     #[test]

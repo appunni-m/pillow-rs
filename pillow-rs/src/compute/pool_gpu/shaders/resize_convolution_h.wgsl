@@ -692,17 +692,23 @@ fn f64_ordered_add_product(
     return f64_ordered_round(sum, minimum_exponent);
 }
 
-fn filtered_f64_ordered_bounded(source_y: u32, output_x: u32) -> u32 {
+fn filtered_f64_ordered_bounded(
+    source_y: u32,
+    output_x: u32,
+    compact_box: bool,
+) -> u32 {
     let metadata = output_x * 3u;
     let source_x = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
-    if count > 8388607u {
+    if !compact_box && count > 8388607u {
         return 0u;
     }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
     for (var tap = 0u; tap < count; tap = tap + 1u) {
-        let coeff = f64_coeff(weight_base + tap * 4u);
+        // Marker 13 stores one 1/source-width coefficient and repeats it for
+        // every Box tap; ordinary marker 12 rows retain one record per tap.
+        let coeff = f64_coeff(select(weight_base + tap * 4u, weight_base, compact_box));
         let bits = f64_sample_bits(input[source_y * params.width + source_x + tap]);
         let exponent_bits = (bits >> 23u) & 255u;
         if exponent_bits == 255u {
@@ -1058,7 +1064,15 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
             if params.width == params.dst_w {
                 return input[source_y * params.width + output_x];
             }
-            return filtered_f64_ordered_bounded(source_y, output_x);
+            return filtered_f64_ordered_bounded(source_y, output_x, false);
+        }
+        if params.premultiply == 13u {
+            if params.width == params.dst_w {
+                return input[source_y * params.width + output_x];
+            }
+            let metadata = output_x * 3u;
+            let count = u32(coefficients[metadata + 1u]);
+            return filtered_f64_ordered_bounded(source_y, output_x, count > 8388607u);
         }
         return bitcast<u32>(filtered_float(source_y, output_x));
     }
