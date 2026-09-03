@@ -324,6 +324,17 @@ receipt rules unchanged.
   pairs reported 4, 12, and 6 violations, with varying row sets and no receipt
   or source divergence. The zero-violation gate remains open pending a pair at
   the newest integrated source revision.
+  A fresh next20 pair at integrated revision
+  `730d6f5ee4ef2fdf5fe2d84f8ea288fdfdc3de3b` again selected/measured 11/11
+  workloads with 44/44 comparable records and 33/33 terminal
+  requested=actual target receipts in each run. The normalized execution
+  fingerprint stayed
+  `7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32`; run
+  SHAs were `4e95c713932320ad30b06a8724387517354f2512633a9583e0e173dcea10dbf4`
+  and `25c0a24c9b915eecda38761b7adc68d31ad1c732108f0b45fcb078678d7f5fee`.
+  The budget artifact
+  `3735f15f0f1ecab2f36f4bdc14a3d7fb5e76db74e15d732628c274772cef28b0`
+  reported 11 timing-only violations; P2 remains open.
 
 ## Verified changes already integrated
 
