@@ -6775,3 +6775,55 @@ f64-intermediate boundary cases, arithmetic-changing chains, and broader
 fractional/scaled/non-dyadic projective, mesh, and palette arithmetic remain
 open. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
 changed.
+
+## 32.129 Filtered alpha projective relocation and Quad lowering (2026-09-03)
+
+The filtered projective relocation proof already admitted ordinary packed
+L/RGB and palette-alpha pairs, but kept LA/RGBA on exact host semantic control.
+The first current-HEAD divergence exposed two related device issues. For a
+non-square Quad axis swap, the WGSL bilinear map reconstructed an integral
+source coordinate through f32 division/multiplication (`7 * (3 / 7)`), landing
+one ULP below the Pillow coordinate and selecting a neighboring byte. For
+filtered LA/RGBA, the shader copied raw channels while Pillow's
+`Image.transform` path converts through premultiplied La/RGBa, applies the
+projective callback, and unpremultiplies the result. The same source byte can
+therefore differ at low alpha even when the filter weights are zero.
+
+Commit `a0fb33394` mirrors that contract only inside the proven unit-scale
+direct/axis relocation envelope. WGSL now lowers direct and axis-swapped Quad
+coordinates to exact integer source positions and applies Pillow's integer
+premultiply/unpremultiply round trip for LA/RGBA zero-weight samples. The
+host-side admission remains bounded to L/LA/RGB/RGBA/PA, Bilinear/Bicubic,
+f32-exact integer translations, and complete direct/axis relocations; fractional,
+scaled, non-dyadic, nonzero-weight, and other-mode arithmetic remains exact
+host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL probes cover 224/224 LA/RGBA Perspective,
+Quad, and Mesh cases with varied alpha and fill values, and the focused
+pool-GPU unit group passes 93/93. No fixtures, thresholds, IDs, denominators,
+policy, or receipt taxonomy changed.
+
+## 32.130 Full backend replay after filtered alpha admission (2026-09-03)
+
+The post-commit schema-v3 replay at source revision
+`a0fb333948a4b263cd15928e66e4b11edea0f787` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every lane
+reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate was
+1/1. The aggregate remains `passed_with_backend_gaps` because backend identity
+is explicit rather than relabeling exact host semantic control as native
+coverage: CPU has 6,838 terminal CPU receipts; SIMD has 6,847 native SIMD plus
+three CPU layout controls; GPU has 6,743 native GPU plus 95 exact host/dimension
+controls; and Node/browser WASM each have 6,951 CPU receipts. Every terminal
+receipt is complete.
+
+Artifact SHA-256 values are result
+`2fdacf161775a3b8f8eb5e0edf860c44027f296d23aaefdec6efdf7a41bce6ee`, GPU
+execution `4b1e72b4f7c42982b1412555ff48a5b98719ba4d58c66ff4940359fbcdf14c1f`,
+and WGSL coverage
+`0ae74fedbb9de58bef7bb0a8eabe3a99c2e2cb6f6071d8a3d61cc0b8f810651a`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The timing zero-violation gate, F reducer work beyond 4096 taps,
+f64-intermediate boundary cases, arithmetic-changing chains, and broader
+fractional/scaled/non-dyadic projective, mesh, and palette arithmetic remain
+open. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed.
