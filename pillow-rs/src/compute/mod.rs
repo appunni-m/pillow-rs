@@ -1052,6 +1052,19 @@ fn backend_label(backend: Backend) -> &'static str {
     }
 }
 
+/// Describe an automatic SIMD-to-CPU handoff without misclassifying a valid
+/// public operation as an unsupported outcome.  Contextual SIMD capability is
+/// checked only after the image layout and logical mode are known; when that
+/// check rejects a step, CPU remains the exact semantic executor and the
+/// receipt should expose that fact while retaining the operation key for
+/// diagnosis.
+fn simd_host_control_reason(op: &PipelineOp) -> String {
+    format!(
+        "exact host semantic control: SIMD image-layout guard for {}",
+        registry::variant_key(op)
+    )
+}
+
 fn is_simd_capability_error(error: &PilError) -> bool {
     matches!(error, PilError::NotImplementedError(message) if message.starts_with("SIMD "))
 }
@@ -1241,12 +1254,7 @@ fn execute_automatic_simd_segments(
         let backend = if simd.supports_for_image(&ops[index], input, op_mode)? {
             Backend::Simd
         } else {
-            fallback_reason.get_or_insert_with(|| {
-                format!(
-                    "SIMD does not support {} for the current image layout/mode",
-                    registry::variant_key(&ops[index])
-                )
-            });
+            fallback_reason.get_or_insert_with(|| simd_host_control_reason(&ops[index]));
             Backend::Cpu
         };
 
@@ -1414,7 +1422,14 @@ pub(crate) fn execute_prepared(
                     // receipts first so the final sample describes the
                     // operation that produced the returned pixels.
                     effective_backend = Backend::Cpu;
-                    contextual_fallback_reason.get_or_insert(error.to_string());
+                    let host_control_reason =
+                        pool_simd::ops::adapters::first_unsupported_simd_op(img, ops, mode)
+                            .map(simd_host_control_reason)
+                            .unwrap_or_else(|| {
+                                "exact host semantic control: SIMD runtime capability boundary"
+                                    .to_owned()
+                            });
+                    contextual_fallback_reason.get_or_insert_with(|| host_control_reason.clone());
                     if timed {
                         reset_pipeline_allocation_telemetry();
                         reset_pipeline_operation_telemetry();
@@ -1423,7 +1438,7 @@ pub(crate) fn execute_prepared(
                         let _ = take_pipeline_dispatch_count();
                         let _ = take_pipeline_resize_coeff_cache_stats();
                     }
-                    record_pipeline_backend_fallback(error.to_string());
+                    record_pipeline_backend_fallback(host_control_reason);
                     let cpu = pools()
                         .iter()
                         .find(|candidate| candidate.name() == Backend::Cpu)
@@ -1531,7 +1546,7 @@ mod tests {
         assert_eq!(actual_backend, Backend::Cpu);
         assert_eq!(
             fallback_reason.as_deref(),
-            Some("SIMD does not support Transform for the current image layout/mode")
+            Some("exact host semantic control: SIMD image-layout guard for Transform")
         );
     }
 }
