@@ -28,30 +28,32 @@ receipt rules unchanged.
 - [x] Preserve source-aware Grayscale conversion for scalar and packed modes,
   including the segmented GPU terminal receipt after an exact host-controlled
   prefix.
-- [x] Admit exact-identity nearest Perspective, Quad, and complete one-record
-  Mesh transforms for L/LA/RGB/RGBA (`1c34fddd0`, source `d2690bf62`).
-  Fractional, scaled, filtered, and broader projective/mesh maps remain on
-  exact host semantic control pending a device arithmetic proof.
+- [x] Admit proof-certified nearest projective/mesh relocations for packed
+  L/LA/RGB/RGBA: exact-identity Perspective/Quad/complete one-record Mesh
+  (`1c34fddd0`, source `d2690bf62`), constant-denominator integer Perspective
+  translation/axis-swap (`4db4d4981`, source `9885acb6`), and full-output
+  unit-scale Mesh translation/axis-swap (`413ed65ef`, source `10c9a49fd`).
+  Fractional, scaled, filtered, nonconstant-denominator, and non-identity
+  Quad/Mesh maps remain on exact host semantic control pending a device
+  arithmetic proof.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
   signed two-axis envelope and the bounded marker-12 reducer. Marker 12 now
-  covers direct Resize rows with at most eight taps and finite normal f32
-  intermediates; the remaining inputs include rows over the eight-tap bound,
-  mixed non-finite ordering, negative-zero cancellation, f64 subnormal or
-  overflowing intermediates, and arithmetic-changing chains. Forced generic
-  WGSL f32 convolution already differs from Pillow's ordered host arithmetic
-  by ULPs. A fresh 20-row probe is exact on 18/20 CPU and GPU rows, but the
-  deterministic failures are `F(16,1) -> (1,1)` and `F(32,1) -> (1,1)`
-  Bilinear (Pillow words `c8be3d3d`/`baafc8bb`, Rust words
-  `c9be3d3d`/`b9afc8bb`). Local arm64 Pillow disassembly confirms the source
-  behavior changes at horizontal tap counts over 15 from scalar FMA to vector
-  multiply followed by ordered adds; the current reducer models only the FMA
-  envelope, so widening it without a separate >15-tap proof is unsafe.
+  models direct finite-normal Resize rows through 32 taps, including Pillow's
+  arm64 split (scalar FMA through 15 horizontal taps, complete 16-tap product/
+  ordered-add blocks, scalar FMA tail; vertical remains FMA). The deterministic
+  16/32-tap Bilinear failures are fixed by `31dfca10c`: the bounded matrix is
+  now 20/20 (from 18/20), and strict finite probes are 90/90 exact with
+  87 native GPU receipts and 3 exact host-control rows. Remaining inputs are
+  rows over 32 taps, mixed non-finite ordering, negative-zero cancellation,
+  f64 subnormal or overflowing intermediates, and arithmetic-changing chains.
+  Forced generic WGSL f32 convolution still differs from Pillow's ordered host
+  arithmetic by ULPs, so these rows remain exact host semantic control.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
-  Constant-denominator integer Perspective nearest maps for packed
-  L/LA/RGB/RGBA are now admitted by an exhaustive source-selection proof;
-  fractional, scaled, nonconstant-denominator, filtered, and non-identity
-  Quad/Mesh maps remain on exact host semantic control until their device
-  arithmetic is proven.
+  Constant-denominator integer Perspective nearest maps and full-output
+  unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA are
+  now admitted by exhaustive source-selection proofs. Fractional, scaled,
+  nonconstant-denominator, filtered, and non-identity Quad/Mesh maps remain on
+  exact host semantic control until their device arithmetic is proven.
 
 ### P1 — backend identity and receipts
 
@@ -107,9 +109,11 @@ receipt rules unchanged.
   marker-9 changed-axis GPU path (25/25 matrix exact; 23 native GPU).
 - [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`, `9762c2af5`): marker 12
   emulates Pillow's per-tap f64 FMA rounding with an integer U128 reducer for
-  direct finite-normal rows whose coefficient ranges have at most eight taps.
-  The former host-controlled heterogeneous 3x1→2x1 Bilinear row and a native
-  three-tap Lanczos row are exact; rows over the bound, special values, and
+  direct finite-normal rows whose coefficient ranges have at most eight taps,
+  then the arm64 wide-row extension (`31dfca10c`) models complete 16-tap
+  product/add blocks through a 32-tap bound. The former host-controlled
+  heterogeneous 3x1→2x1 Bilinear row, three-tap Lanczos row, and deterministic
+  16/32-tap Bilinear rows are exact; rows over the bound, special values, and
   chains remain explicitly host-controlled.
 - [x] Fractional Rotate routing (`7ca91ed47`): exact normalized right angles
   alone use transpose fast paths; the fixed 576-case CPU/SIMD matrix is
@@ -127,6 +131,20 @@ receipt rules unchanged.
   `9885acb6`): proof-certified constant-denominator translation and axis-swap
   maps add 12/12 exact Pillow 12.2.0 versus CPU/GPU mode cases, with one
   native GPU dispatch and no fallback; the bounded Rust matrix is 24/24.
+- [x] Mesh unit-relocation GPU routing (`413ed65ef`, source `10c9a49fd`):
+  full-output one-record unit-scale direct/axis-swapped integer translations
+  are admitted for L/LA/RGB/RGBA only after exhaustive source-selection proof.
+  Native Pillow 12.2.0 versus RSPIL is 256/256 exact across four modes, four
+  source sizes, four output shapes, and identity/positive/negative/axis-swap
+  maps; every receipt is terminal requested=actual GPU with one dispatch and
+  no fallback. Scaled, fractional, filtered, partial, and multi-record Mesh
+  remains exact host semantic control.
+- [x] Arm64 wide-row F Resize arithmetic (`31dfca10c`, source
+  `68aa5472763`): CPU and marker-12 host/WGSL reducers mirror Pillow's
+  horizontal >15-tap product/ordered-add split through a bounded 32-tap path,
+  with a high-bit truncation guard for marker-6. The deterministic 16/32-tap
+  Bilinear matrix improved 18/20→20/20; strict finite probes are 90/90 exact
+  (87 native GPU, 3 host-control), and 6/6 special probes remain exact.
 - [x] Receipt-aware suite aggregation (`1f49b7890`): a fresh 744-workload
   benchmark remains 744/744 measured, while suite comparisons move from
   276/324 status-only comparable cells to 180/324 receipt-proven cells;
@@ -146,15 +164,21 @@ receipt rules unchanged.
   two dispatches, and no fallback. The host admission proof compares the
   integer ordered-FMA model with Pillow's direct f64 `mul_add` result before
   selecting the shader path.
+- [x] The arm64 wide-row extension preserves the same conservative proof:
+  complete 16-tap horizontal blocks use rounded product/ordered-add state,
+  scalar tails and all vertical rows use the FMA state, and special wide rows
+  stay host-controlled. The focused wide-row native test and the full library
+  suite pass; no rows over 32 taps or arithmetic-changing chains are admitted.
 - [x] A heterogeneous finite matrix of 4,270 direct F Resize cases (five
   filters, varied source/target sizes) had zero mismatches; 3,950 rows used
   native GPU and the remainder stayed on exact host semantic control. A
   1,175-case random finite-normal probe also had zero mismatches (428 native
   rows) on the two-tap implementation. After the eight-tap extension,
   a 2,000-case native GPU probe spanning Bilinear, Bicubic, Lanczos, Hamming,
-  and Box rows had zero mismatches, including wider-tap rows. These probes do
-  not close rows over the eight-tap bound, special-value, or chained arithmetic
-  buckets above.
+  and Box rows had zero mismatches, including wider-tap rows. The arm64
+  16/32-tap regressions and 90-case finite matrix are also exact after
+  `31dfca10c`. These probes do not close rows over the 32-tap bound,
+  special-value, or chained arithmetic buckets above.
 - [x] Fresh all-backends replay at `9762c2af5` passed 10,952/10,952
   value/error comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM with
   zero failed or not-run cases. Terminal receipts remain explicit (CPU 6,838;
@@ -183,8 +207,8 @@ receipt rules unchanged.
   `make migration-parity-evidence-check`.
 
 Current evidence hashes: all-backends envelope
-`2354185a8b4d2dbf12045a11d5904974c87e0d3d06868ecc85d3e2dea9a0abe7`, GPU
-sidecar `3a1aad720667834e23980cab0e2f4da389333d17833f3c67da75287cbf08ecb0`,
+`6c451cfce4b155aa9e8ff5fe58d80687335b794a435d497f5b62a5e7f4287be2`, GPU
+sidecar `d546710154af689713d7a485b27ae5b1389e937823e2020f95fb3440393ed792`,
 benchmark `180f1d80bf1d0d197ce4a76c02c490dbcfbc5570a6d78a4afe318bddcfc211b3`,
 and benchmark parity `1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c63d965`.
 
@@ -193,16 +217,17 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `4db4d4981` (integer Perspective
-nearest routing, identity projective routing, receipt-proven suite cohorts,
-and packed SIMD ExtractBand). The fresh combined replay at this revision is
+`main` includes the parity fixes through `31dfca10c` (arm64 wide-row F
+accumulation, unit-scale Mesh relocation, integer Perspective nearest routing,
+identity projective routing, receipt-proven suite cohorts, and packed SIMD
+ExtractBand). The fresh combined replay at this revision is
 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
-CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,737 GPU plus 101 CPU
+CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,739 GPU plus 99 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`39c632af3ffeea341d866af7bde7fe9261482060a3c3dfe0b1a5b0a5e4bfbc08`; the GPU
-execution sidecar is `ea5fc80c7a7b9d98dd4aac09e2008326797f30af2b1b15545f9c3e3d55a7f7ec`.
+`6c451cfce4b155aa9e8ff5fe58d80687335b794a435d497f5b62a5e7f4287be2`; the GPU
+execution sidecar is `d546710154af689713d7a485b27ae5b1389e937823e2020f95fb3440393ed792`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
 and broader projective admission work above.
