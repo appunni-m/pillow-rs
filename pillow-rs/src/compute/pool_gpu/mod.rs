@@ -1610,13 +1610,44 @@ fn gpu_f_resize_compact_box_axis(source_size: u32, output_size: u32) -> bool {
     output_size == 1 && source_size > GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
 }
 
+#[inline]
+fn gpu_f_resize_compact_box_any_axis(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+) -> bool {
+    gpu_f_resize_compact_box_axis(source_dimensions.0, output_dimensions.0)
+        || gpu_f_resize_compact_box_axis(source_dimensions.1, output_dimensions.1)
+}
+
+/// Return whether a direct F Box resize needs only the vertical compact pass.
+/// The unchanged horizontal axis has one unit coefficient and must remain an
+/// identity copy; skipping that pass is what keeps an over-limit source height
+/// below the adapter's workgroup-per-dimension bound.
+fn gpu_f_resize_compact_box_vertical_only_geometry(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> bool {
+    if logical_mode != Some("F") {
+        return false;
+    }
+    let PipelineOp::Resize { w, h, filter } = op else {
+        return false;
+    };
+    matches!(filter, ResampleFilter::Box)
+        && (*w, *h) == output_dimensions
+        && output_dimensions.0 == source_dimensions.0
+        && !gpu_f_resize_compact_box_axis(source_dimensions.0, output_dimensions.0)
+        && gpu_f_resize_compact_box_axis(source_dimensions.1, output_dimensions.1)
+}
+
 /// Prove the compact over-limit Box domain without materializing a full f64
 /// coefficient table.  A one-pixel Box downscale has one normalized weight
 /// per source tap, so a single repeated coefficient is enough on the device.
-/// Restrict the first implementation to a horizontal changed axis; the
-/// current adapter's vertical dispatch grid cannot carry an over-limit source
-/// height. The unchanged height is an observable word copy and can retain its
-/// ordinary tiny coefficient table.
+/// At most one axis can exceed the full-table bound for an image that fits the
+/// device buffer budget. The other axis must therefore be unchanged and keeps
+/// its ordinary tiny coefficient table.
 fn gpu_f_resize_compact_box_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -1646,24 +1677,61 @@ fn gpu_f_resize_compact_box_is_exact(
     {
         return false;
     }
-    // The current resize dispatch grid visits source rows during its first
-    // pass.  An over-limit vertical row would therefore exceed the adapter's
-    // per-dimension workgroup bound even when its pixel buffer fits; keep this
-    // compact device proof horizontal-only and leave vertical/tall requests
-    // on exact host semantic control.
     let horizontal_compact = gpu_f_resize_compact_box_axis(source_dimensions.0, *w);
-    if !horizontal_compact || *h != source_dimensions.1 {
+    let vertical_compact = gpu_f_resize_compact_box_axis(source_dimensions.1, *h);
+    if (horizontal_compact && vertical_compact)
+        || (!horizontal_compact && !vertical_compact)
+        || (!horizontal_compact && *w != source_dimensions.0)
+        || (!vertical_compact && *h != source_dimensions.1)
+    {
         return false;
     }
-    let Some(words) = gpu_f_resize_compact_box_pass_bits(
-        pixels.as_raw(),
-        source_dimensions,
-        source_dimensions.0,
-        true,
-    ) else {
+    if horizontal_compact {
+        let Some(words) = gpu_f_resize_compact_box_pass_bits(
+            pixels.as_raw(),
+            source_dimensions,
+            source_dimensions.0,
+            true,
+        ) else {
+            return false;
+        };
+        if words.is_empty() {
+            return false;
+        }
+    }
+    if vertical_compact {
+        let Some(words) = gpu_f_resize_compact_box_pass_bits(
+            pixels.as_raw(),
+            source_dimensions,
+            source_dimensions.1,
+            false,
+        ) else {
+            return false;
+        };
+        if words.is_empty() {
+            return false;
+        }
+    }
+    true
+}
+
+fn gpu_f_resize_compact_box_vertical_only_is_exact(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if ops.len() != 1 {
+        return false;
+    }
+    let Some(output_dimensions) = op_output_dims(&ops[0], image.width(), image.height()) else {
         return false;
     };
-    !words.is_empty()
+    gpu_f_resize_compact_box_vertical_only_geometry(
+        &ops[0],
+        image.dimensions(),
+        output_dimensions,
+        logical_mode,
+    ) && gpu_f_resize_compact_box_is_exact(ops, image, logical_mode)
 }
 
 /// Pillow's high-level Image.resize uses a vertical-first pair of resample
@@ -5678,7 +5746,10 @@ impl GpuInner {
                     && mode == 8
                     && matches!(op, PipelineOp::Resize { .. })
                     && matches!(filter, ResampleFilter::Box)
-                    && gpu_f_resize_compact_box_axis(source_w, resize_w);
+                    && gpu_f_resize_compact_box_any_axis(
+                        (source_w, source_h),
+                        (resize_w, resize_h),
+                    );
                 let (kernel, support) = filter_from_resample(filter);
                 let axis_words = |source_size: u32, output_size: u32| {
                     if gpu_f_resize_compact_box_axis(source_size, output_size) {
@@ -6112,7 +6183,7 @@ impl GpuInner {
                     && !matches!(filter, ResampleFilter::Nearest);
                 let compact_box_is_exact = f64_ordered_is_exact
                     && matches!(filter, ResampleFilter::Box)
-                    && gpu_f_resize_compact_box_axis(cur_w, out_w);
+                    && gpu_f_resize_compact_box_any_axis((cur_w, cur_h), (out_w, out_h));
                 let i_f64_is_exact = f_resize_f64_is_exact
                     && logical_mode == Some("I")
                     && !matches!(filter, ResampleFilter::Nearest);
@@ -6373,7 +6444,10 @@ impl GpuInner {
                             let compact_box = f_resize_f64_ordered_is_exact
                                 && logical_mode == Some("F")
                                 && matches!(filter, ResampleFilter::Box)
-                                && gpu_f_resize_compact_box_axis(cur_w, out_w);
+                                && gpu_f_resize_compact_box_any_axis(
+                                    (cur_w, cur_h),
+                                    (out_w, out_h),
+                                );
                             if compact_box {
                                 let horizontal_words =
                                     if gpu_f_resize_compact_box_axis(cur_w, out_w) {
@@ -6830,7 +6904,14 @@ impl GpuInner {
                 else {
                     unreachable!("typed resize pipeline shape changed")
                 };
-                {
+                let compact_vertical = ops.len() == 1
+                    && gpu_f_resize_compact_box_vertical_only_geometry(
+                        &ops[index],
+                        prepared.input_dims[index],
+                        prepared.output_dims[index],
+                        logical_mode,
+                    );
+                if !compact_vertical {
                     let mut resize_pass =
                         encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                             label: Some("gpu_batch_compute_resize_h"),
@@ -7320,7 +7401,7 @@ impl GpuInner {
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
-        let dispatch_count = gpu_dispatch_count(ops, logical_mode);
+        let dispatch_count = gpu_dispatch_count(ops, logical_mode, (w, h));
         gpu_log!(
             "[GPU] batch_impl: {} ops, start dims {}x{}",
             ops.len(),
@@ -8521,16 +8602,36 @@ fn can_fuse_gpu_multiply_screen(ops: &[PipelineOp], index: usize) -> bool {
     }
 }
 
-fn gpu_dispatch_count(ops: &[PipelineOp], logical_mode: Option<&str>) -> u64 {
+fn gpu_dispatch_count(
+    ops: &[PipelineOp],
+    logical_mode: Option<&str>,
+    image_dimensions: (u32, u32),
+) -> u64 {
     let mut count = 0u64;
     let mut index = 0usize;
+    let (mut cur_w, mut cur_h) = image_dimensions;
     while index < ops.len() {
         if can_fuse_gpu_multiply_screen(ops, index) {
             count += 1;
+            if let Some(next) = op_output_dims(&ops[index + 1], cur_w, cur_h) {
+                (cur_w, cur_h) = next;
+            }
             index += 2;
             continue;
         }
-        count += if matches!(
+        let next = op_output_dims(&ops[index], cur_w, cur_h).unwrap_or((cur_w, cur_h));
+        count += if ops.len() == 1
+            && gpu_f_resize_compact_box_vertical_only_geometry(
+                &ops[index],
+                (cur_w, cur_h),
+                next,
+                logical_mode,
+            ) {
+            // The unchanged horizontal axis is an identity copy.  The
+            // vertical compact reducer can consume the original source
+            // directly, so this proof emits one native dispatch.
+            1
+        } else if matches!(
             &ops[index],
             PipelineOp::Autocontrast { .. } | PipelineOp::Equalize
         ) {
@@ -8550,6 +8651,7 @@ fn gpu_dispatch_count(ops: &[PipelineOp], logical_mode: Option<&str>) -> u64 {
             GpuInner::blur_pass_count(&ops[index]).map_or(1usize, |passes| passes.saturating_mul(2))
                 as u64
         };
+        (cur_w, cur_h) = next;
         index += 1;
     }
     count
@@ -9623,7 +9725,11 @@ fn expand_gpu_geometry_ops(
 /// from source dimensions and readback needs a non-empty copy range. Operations
 /// whose host/shader output-size contract is incomplete are deliberately kept
 /// on the CPU until that contract is explicit.
-fn gpu_dimensions_require_cpu(ops: &[PipelineOp], image: &DynamicImage) -> bool {
+fn gpu_dimensions_require_cpu(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
     let dimensions_fit = |w: u32, h: u32| {
         CheckedDims::new(w, h, 1)
             .map(|dims| dims.total_pixels() <= GPU_BUFFER_CAPACITY as usize)
@@ -9670,7 +9776,18 @@ fn gpu_dimensions_require_cpu(ops: &[PipelineOp], image: &DynamicImage) -> bool 
         | PipelineOp::Contain { filter, .. }
         | PipelineOp::Cover { filter, .. } = op
         {
-            if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), next) {
+            // A direct F Box reduction to one column can use the compact
+            // repeated-coefficient vertical shader. Check that proof before
+            // asking for the full vertical table, which could otherwise
+            // allocate hundreds of MiB only to reject an over-limit row.
+            let compact_vertical = logical_mode == Some("F")
+                && gpu_f_resize_compact_box_vertical_only_is_exact(ops, image, logical_mode);
+            if compact_vertical {
+                let horizontal = gpu_resize_coefficients(next.0, cur_w, *filter);
+                if resize_coeff_word_count(&horizontal).is_err() {
+                    return true;
+                }
+            } else if !gpu_resize_coefficients_are_safe(*filter, (cur_w, cur_h), next) {
                 return true;
             }
         }
@@ -9811,11 +9928,12 @@ fn gpu_pipeline_requires_cpu(
     ops: &[PipelineOp],
     image: &DynamicImage,
     auxiliary_images: &[AuxiliaryImages],
+    logical_mode: Option<&str>,
 ) -> bool {
     if ops.len() != auxiliary_images.len() {
         return true;
     }
-    if gpu_dimensions_require_cpu(ops, image) {
+    if gpu_dimensions_require_cpu(ops, image, logical_mode) {
         return true;
     }
     let dimensions_fit = |w: u32, h: u32| {
@@ -10137,8 +10255,15 @@ fn gpu_dispatch_dimensions_require_cpu(
         {
             // The horizontal resize pass is indexed by output x and source
             // y; the vertical pass is indexed by output x and output y.
+            let compact_vertical = ops.len() == 1
+                && gpu_f_resize_compact_box_vertical_only_geometry(
+                    op,
+                    (cur_w, cur_h),
+                    next,
+                    logical_mode,
+                );
             next.0.div_ceil(16) > max_workgroups_per_dimension
-                || cur_h.div_ceil(16) > max_workgroups_per_dimension
+                || (!compact_vertical && cur_h.div_ceil(16) > max_workgroups_per_dimension)
                 || next.1.div_ceil(16) > max_workgroups_per_dimension
         } else {
             next.0.div_ceil(16) > max_workgroups_per_dimension
@@ -13160,7 +13285,7 @@ impl GpuPool {
         // device merely because a later auxiliary pipeline is present; the
         // entire batch will be handled by the CPU fallback.
         let empty_two_input_noop = gpu_empty_two_input_batch_is_noop(ops, img);
-        if gpu_dimensions_require_cpu(ops, img) && !empty_two_input_noop {
+        if gpu_dimensions_require_cpu(ops, img, mode) && !empty_two_input_noop {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsafe primary image dimensions"
             );
@@ -13230,7 +13355,7 @@ impl GpuPool {
             return Ok(img.clone());
         }
 
-        if gpu_pipeline_requires_cpu(ops, img, &auxiliary_images) {
+        if gpu_pipeline_requires_cpu(ops, img, &auxiliary_images, mode) {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete image dimensions"
             );
@@ -13464,11 +13589,13 @@ mod tests {
     use super::{
         GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
         encode_resize_compact_box_axis, gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed,
-        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_f_pad_f64_is_exact,
+        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu,
+        gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
-        gpu_f_resize_compact_box_is_exact, gpu_f_resize_constant_bits,
-        gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_ordered_is_exact,
-        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
+        gpu_f_resize_compact_box_is_exact, gpu_f_resize_compact_box_vertical_only_geometry,
+        gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
+        gpu_f_resize_f64_ordered_is_exact, gpu_f_resize_identity_is_exact,
+        gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
@@ -20497,6 +20624,74 @@ mod tests {
         let source_dynamic = source
             .materialize()
             .expect("materialize horizontal compact Box source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Box,
+        };
+        assert!(gpu_f_resize_compact_box_vertical_only_geometry(
+            &op,
+            (1, height as u32),
+            (1, 1),
+            Some("F")
+        ));
+        assert!(gpu_f_resize_compact_box_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let compact_words =
+            encode_resize_compact_box_axis(height as u32, 1).expect("compact Box coefficient row");
+        assert_eq!(compact_words.len(), 7);
+        assert_eq!(&compact_words[0..3], &[0, height as u32, 0]);
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_dyadic_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_dimensions_require_cpu(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_dispatch_dimensions_require_cpu(
+            std::slice::from_ref(&op),
+            (1, height as u32),
+            65_535,
+            Some("F")
+        ));
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&op), Some("F"), (1, height as u32)),
+            1
+        );
+    }
+
+    #[test]
+    fn f_resize_compact_box_proof_covers_vertical_over_binding_row() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let height = 8_388_608usize;
+        let pattern = [0.125f32, -17.25, 1.0, -2.5, 3.75, -0.0, 100.0, -99.0];
+        let words: Vec<u32> = (0..height)
+            .map(|index| pattern[index % pattern.len()].to_bits())
+            .collect();
+        let source = Image::frombytes("F", (1, height as u32), &bytes(&words))
+            .expect("vertical compact Box source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize vertical compact Box source");
         let op = PipelineOp::Resize {
             w: 1,
             h: 1,
