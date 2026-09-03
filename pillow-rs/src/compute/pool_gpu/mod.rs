@@ -10529,7 +10529,9 @@ fn gpu_nearest_affine_is_exact(
 /// This covers proof-certified integer maps for ordinary packed byte modes and
 /// raw indexed samples without claiming parity for fractional homographies or
 /// arbitrary mesh records. Filtered projective transforms remain host
-/// controlled because they change sample values rather than relocating bytes.
+/// controlled unless an L/RGB Perspective map is a unit-scale integer
+/// relocation. In that envelope the filtered sample lands exactly on one
+/// source pixel, so the shader's bilinear lowering preserves the byte value.
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
@@ -10570,6 +10572,42 @@ fn gpu_mesh_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
     data[4..12] == direct || data[4..12] == swapped
 }
 
+fn gpu_projective_filtered_relocation_is_admitted(
+    method: TransformMethod,
+    data: &[f64],
+    filter: ResampleFilter,
+    mode: Option<&str>,
+) -> bool {
+    // Pillow's Geometry.c filtered projective path subtracts the destination
+    // center offset before bilinear sampling.  For these integer unit maps,
+    // that produces an integral source coordinate and zero filter weights;
+    // the shader's raw-gid projective sampler therefore selects the same
+    // source byte.  Keep alpha modes out: their native path has a
+    // premultiplied round trip that this projective shader does not model.
+    if !matches!(mode, Some("L" | "RGB"))
+        || !matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
+        || !matches!(method, TransformMethod::Perspective)
+        || data.len() < 8
+    {
+        return false;
+    }
+
+    let integer_translation = |value: f64| {
+        value.is_finite()
+            && value.fract() == 0.0
+            && (value as f32).is_finite()
+            && f64::from(value as f32) == value
+    };
+    let direct_perspective = |tx: f64, ty: f64| data[..8] == [1.0, 0.0, tx, 0.0, 1.0, ty, 0.0, 0.0];
+    let swapped_perspective =
+        |tx: f64, ty: f64| data[..8] == [0.0, 1.0, tx, 1.0, 0.0, ty, 0.0, 0.0];
+    let tx = data[2];
+    let ty = data[5];
+    integer_translation(tx)
+        && integer_translation(ty)
+        && (direct_perspective(tx, ty) || swapped_perspective(tx, ty))
+}
+
 fn gpu_projective_nearest_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -10595,6 +10633,8 @@ fn gpu_projective_nearest_is_exact(
         _ => false,
     };
     let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
+    let filtered_relocation =
+        gpu_projective_filtered_relocation_is_admitted(method.clone(), data, *filter, mode);
     // The projective shader's raw-gid arithmetic is safe for the affine
     // subfamily of Perspective maps only when the denominator is constant.
     // The exhaustive source-selection proof below then decides whether its
@@ -10629,7 +10669,7 @@ fn gpu_projective_nearest_is_exact(
             method,
             TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
         )
-        || !gpu_transform_uses_nearest(mode, *filter)
+        || (!gpu_transform_uses_nearest(mode, *filter) && !filtered_relocation)
         || source_dimensions.0 == 0
         || source_dimensions.1 == 0
         || *w == 0
@@ -13132,6 +13172,69 @@ mod tests {
                 assert_eq!(telemetry.1, Backend::Gpu);
                 assert_eq!(telemetry.6, Some(1));
                 assert_eq!(telemetry.7, None);
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_filtered_relocations_native_gpu_preserve_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, channels) in [("L", 1usize), ("RGB", 3usize)] {
+            let bytes = (0..16 * 16 * channels)
+                .map(|index| (index * 29 + 7) as u8)
+                .collect::<Vec<_>>();
+            let source = Image::frombytes(mode, (16, 16), &bytes).expect("byte source");
+            let matrices = [
+                [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                [1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+                [1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0],
+                [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+            ];
+            for matrix in matrices {
+                for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
+                    let transformed = source
+                        .transform_public(
+                            (8, 8),
+                            2,
+                            Some(TransformData::Affine(matrix.to_vec())),
+                            match filter {
+                                ResampleFilter::Bilinear => 2,
+                                ResampleFilter::Bicubic => 3,
+                                _ => unreachable!(),
+                            },
+                            0,
+                            None,
+                        )
+                        .expect("filtered projective relocation");
+                    let expected = transformed
+                        .clone()
+                        .use_backend(Backend::Cpu)
+                        .tobytes()
+                        .expect("CPU filtered projective relocation");
+                    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                        Ok(actual) => actual,
+                        Err(error)
+                            if error.to_string().contains("GPU adapter not available")
+                                || error
+                                    .to_string()
+                                    .contains("GPU device initialization failed") =>
+                        {
+                            Backend::set_pipeline_telemetry_enabled(previous);
+                            return;
+                        }
+                        Err(error) => {
+                            panic!("native GPU filtered projective relocation failed: {error}")
+                        }
+                    };
+                    assert_eq!(actual, expected, "native {mode} filtered relocation");
+                    let telemetry = Backend::take_pipeline_telemetry()
+                        .expect("filtered relocation must publish a receipt");
+                    assert_eq!(telemetry.0, Some(Backend::Gpu));
+                    assert_eq!(telemetry.1, Backend::Gpu);
+                    assert_eq!(telemetry.6, Some(1));
+                    assert_eq!(telemetry.7, None);
+                }
             }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
