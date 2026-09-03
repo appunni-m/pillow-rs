@@ -10549,9 +10549,10 @@ fn gpu_nearest_affine_is_exact(
 /// and final source coordinate select the same source pixel in both domains.
 /// This covers proof-certified integer maps for ordinary packed byte modes and
 /// raw indexed samples without claiming parity for fractional homographies or
-/// arbitrary mesh records. Filtered projective transforms remain host
-/// controlled unless an L/LA/RGB/RGBA/PA Perspective, Quad, or complete
-/// one-record Mesh map is a unit-scale integer relocation. In that envelope
+/// arbitrary mesh records. Ordinary nearest Quad and Mesh maps additionally
+/// admit a constant integer source coordinate. Filtered projective transforms
+/// remain host controlled unless an L/LA/RGB/RGBA/PA Perspective, Quad, or
+/// complete one-record Mesh map is a unit-scale integer relocation. In that envelope
 /// the filtered sample lands exactly on one source pixel, so the shader's
 /// bilinear lowering preserves the byte or palette-alpha pair; LA/RGBA also
 /// mirror Pillow's premultiplied round trip.
@@ -10595,6 +10596,27 @@ fn gpu_mesh_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
     data[4..12] == direct || data[4..12] == swapped
 }
 
+/// Return whether a complete one-record Mesh maps every destination sample to
+/// one constant integer source coordinate. The generic shader may still do
+/// different f32 arithmetic for the bilinear weights, so the image-aware
+/// proof below must compare every source selection before admitting it.
+fn gpu_mesh_constant_map_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
+    if data.len() != 12 || data[..4] != [0.0, 0.0, f64::from(w), f64::from(h)] {
+        return false;
+    }
+    let x = data[4];
+    let y = data[5];
+    x.is_finite()
+        && y.is_finite()
+        && x.fract() == 0.0
+        && y.fract() == 0.0
+        && (x as f32).is_finite()
+        && (y as f32).is_finite()
+        && f64::from(x as f32) == x
+        && f64::from(y as f32) == y
+        && data[6..12].chunks_exact(2).all(|pair| pair == [x, y])
+}
+
 /// Return whether a Quad is a complete unit-scale relocation in Pillow's
 /// NW/SW/SE/NE corner order. Direct identity and axis-swapped forms keep
 /// every destination sample on an existing source pixel; arbitrary corner
@@ -10612,6 +10634,27 @@ fn gpu_quad_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
     // for square outputs and admits a scaled map for every other shape.
     let swapped = [0.0, 0.0, height, 0.0, height, width, 0.0, width];
     data[..8] == direct || data[..8] == swapped
+}
+
+/// Return whether a Quad maps every destination sample to one constant
+/// integer source coordinate. Nearest sampling needs only the resulting
+/// source selection; the exhaustive proof still rejects any f32 arithmetic
+/// that could move that selection across a fill or pixel boundary.
+fn gpu_quad_constant_map_is_admitted(data: &[f64]) -> bool {
+    if data.len() != 8 {
+        return false;
+    }
+    let x = data[0];
+    let y = data[1];
+    x.is_finite()
+        && y.is_finite()
+        && x.fract() == 0.0
+        && y.fract() == 0.0
+        && (x as f32).is_finite()
+        && (y as f32).is_finite()
+        && f64::from(x as f32) == x
+        && f64::from(y as f32) == y
+        && data[2..8].chunks_exact(2).all(|pair| pair == [x, y])
 }
 
 fn gpu_projective_filtered_relocation_is_admitted(
@@ -10683,9 +10726,9 @@ fn gpu_projective_filtered_relocation_is_admitted(
 /// transform requests to nearest. The filtered Perspective relocation below
 /// is admitted only when its weights are provably zero; other PA filtered
 /// transforms remain on the exact host path rather than being silently
-/// changed to pair-copy sampling. Quad and complete one-record Mesh are
-/// admitted only for the same direct/axis-swapped unit relocations already
-/// proven for ordinary byte layouts.
+/// changed to pair-copy sampling. Quad and complete one-record Mesh also
+/// admit a constant integer source coordinate: nearest sampling only selects
+/// one raw pair, and the image-aware proof still checks every output boundary.
 fn gpu_palette_alpha_projective_relocation_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -10709,9 +10752,11 @@ fn gpu_palette_alpha_projective_relocation_is_admitted(
         }
         TransformMethod::Quad => {
             gpu_quad_unit_relocation_is_admitted(data, output_dimensions.0, output_dimensions.1)
+                || gpu_quad_constant_map_is_admitted(data)
         }
         TransformMethod::Mesh => {
             gpu_mesh_unit_relocation_is_admitted(data, output_dimensions.0, output_dimensions.1)
+                || gpu_mesh_constant_map_is_admitted(data, output_dimensions.0, output_dimensions.1)
         }
         TransformMethod::Affine => false,
     }
@@ -10760,13 +10805,19 @@ fn gpu_projective_nearest_is_exact(
     // subfamily of Perspective maps only when the denominator is constant.
     // The exhaustive source-selection proof below then decides whether its
     // f32 map and Pillow's centered f64 map select the same complete byte
-    // sample. Keep Quad ordinary bytes at the proven unit-relocation envelope;
-    // Mesh ordinary bytes use a separate unit-relocation proof below.
+    // sample. Ordinary Quad and Mesh bytes use unit-relocation or
+    // constant-map proofs below. Filtered transforms intentionally remain
+    // relocation-only.
     let ordinary_projective_geometry_is_admitted = match method {
         TransformMethod::Perspective => data.get(6) == Some(&0.0) && data.get(7) == Some(&0.0),
-        TransformMethod::Quad => gpu_quad_unit_relocation_is_admitted(data, *w, *h),
+        TransformMethod::Quad => {
+            gpu_quad_unit_relocation_is_admitted(data, *w, *h)
+                || gpu_quad_constant_map_is_admitted(data)
+        }
         TransformMethod::Mesh => {
-            !ordinary_byte_mode || gpu_mesh_unit_relocation_is_admitted(data, *w, *h)
+            !ordinary_byte_mode
+                || gpu_mesh_unit_relocation_is_admitted(data, *w, *h)
+                || gpu_mesh_constant_map_is_admitted(data, *w, *h)
         }
         TransformMethod::Affine => false,
     };
@@ -10827,6 +10878,9 @@ fn gpu_projective_nearest_is_exact(
                 (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Quad => {
+                if gpu_quad_constant_map_is_admitted(data) {
+                    return Some((data[0], data[1]));
+                }
                 let dx = dx + 0.5;
                 let dy = dy + 0.5;
                 let sw = f64::from(*w);
@@ -10855,6 +10909,9 @@ fn gpu_projective_nearest_is_exact(
                     || data[3] != f64::from(*h)
                 {
                     return None;
+                }
+                if gpu_mesh_constant_map_is_admitted(data, *w, *h) {
+                    return Some((data[4], data[5]));
                 }
                 if ordinary_byte_mode && gpu_mesh_unit_relocation_is_admitted(data, *w, *h) {
                     // For the admitted unit relocations, mirror the CPU
@@ -10907,12 +10964,16 @@ fn gpu_projective_nearest_is_exact(
                 (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Quad => {
+                let x0 = f(0);
+                let y0 = f(1);
+                if x0 == f(2) && x0 == f(4) && x0 == f(6) && y0 == f(3) && y0 == f(5) && y0 == f(7)
+                {
+                    return Some((x0, y0));
+                }
                 let width = *w as f32;
                 let height = *h as f32;
                 let u = dx / width;
                 let v = dy / height;
-                let x0 = f(0);
-                let y0 = f(1);
                 let sx = x0 + (f(6) - x0) * u + (f(2) - x0) * v + (f(4) - f(2) - f(6) + x0) * u * v;
                 let sy = y0 + (f(7) - y0) * u + (f(3) - y0) * v + (f(5) - f(3) - f(7) + y0) * u * v;
                 (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
@@ -10929,6 +10990,15 @@ fn gpu_projective_nearest_is_exact(
                 let height = *h as f32;
                 let x0 = f(4);
                 let y0 = f(5);
+                if x0 == f(6)
+                    && x0 == f(8)
+                    && x0 == f(10)
+                    && y0 == f(7)
+                    && y0 == f(9)
+                    && y0 == f(11)
+                {
+                    return Some((x0, y0));
+                }
                 let direct_relocation = bx0 == 0.0
                     && by0 == 0.0
                     && bx1 == width
@@ -13031,6 +13101,26 @@ mod tests {
             fill_is_none: false,
             palette_fill: Some(7),
         };
+        let quad_constant = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Quad,
+            data: Arc::from(vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+        let quad_constant_fill = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Quad,
+            data: Arc::from(vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
         let mesh = PipelineOp::Transform {
             w: 8,
             h: 8,
@@ -13042,6 +13132,30 @@ mod tests {
             fill: Some((7, 0, 0, 255)),
             fill_is_none: false,
             palette_fill: Some(7),
+        };
+        let mesh_constant = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+        let mesh_constant_fill = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
         };
         for op in [&perspective, &quad, &quad_direct, &mesh] {
             assert!(gpu_projective_nearest_is_exact(
@@ -13065,6 +13179,35 @@ mod tests {
                 );
             }
         }
+        for (name, op) in [
+            ("constant Quad", &quad_constant),
+            ("constant Quad fill", &quad_constant_fill),
+            ("constant Mesh", &mesh_constant),
+            ("constant Mesh fill", &mesh_constant_fill),
+        ] {
+            assert!(
+                gpu_projective_nearest_is_exact(op, &rgb, Some("RGB"), (16, 16)),
+                "{name} proof"
+            );
+            assert!(
+                gpu_projective_nearest_is_exact(op, &rgba, Some("RGBA"), (16, 16)),
+                "{name} proof for RGBA"
+            );
+        }
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Quad,
+            &[3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
+            ResampleFilter::Bilinear,
+            Some("RGB"),
+            (8, 8),
+        ));
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Mesh,
+            &[0.0, 0.0, 8.0, 8.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
+            ResampleFilter::Bicubic,
+            Some("RGBA"),
+            (8, 8),
+        ));
         let perspective_translate = PipelineOp::Transform {
             w: 8,
             h: 8,
@@ -13178,6 +13321,25 @@ mod tests {
         };
         assert!(!gpu_projective_nearest_is_exact(
             &mesh_extra_record,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
+        let mesh_constant_extra_record = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 0.0, 0.0, 8.0, 8.0,
+                3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+        assert!(!gpu_projective_nearest_is_exact(
+            &mesh_constant_extra_record,
             &rgb,
             Some("RGB"),
             (16, 16)
@@ -13340,6 +13502,14 @@ mod tests {
                     TransformData::Affine(vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0]),
                 ),
                 (
+                    3,
+                    TransformData::Affine(vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0]),
+                ),
+                (
+                    3,
+                    TransformData::Affine(vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0]),
+                ),
+                (
                     4,
                     TransformData::Mesh(vec![(
                         vec![0.0, 0.0, 8.0, 8.0],
@@ -13365,6 +13535,20 @@ mod tests {
                     TransformData::Mesh(vec![(
                         vec![0.0, 0.0, 8.0, 8.0],
                         vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
+                    )]),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 8.0, 8.0],
+                        vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
+                    )]),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 8.0, 8.0],
+                        vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0],
                     )]),
                 ),
             ];
@@ -13638,6 +13822,20 @@ mod tests {
             ResampleFilter::Nearest,
             (9, 6),
         ));
+        let quad_constant = [3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0];
+        assert!(gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Quad,
+            &quad_constant,
+            ResampleFilter::Nearest,
+            (9, 6),
+        ));
+        let quad_constant_fractional = [3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0];
+        assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Quad,
+            &quad_constant_fractional,
+            ResampleFilter::Nearest,
+            (9, 6),
+        ));
         let mesh_relocation = [0.0, 0.0, 9.0, 6.0, 1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0];
         let mesh_filtered = PipelineOp::Transform {
             w: 9,
@@ -13658,6 +13856,22 @@ mod tests {
         assert!(gpu_palette_alpha_projective_relocation_is_admitted(
             TransformMethod::Mesh,
             &mesh_relocation,
+            ResampleFilter::Nearest,
+            (9, 6),
+        ));
+        let mesh_constant = [0.0, 0.0, 9.0, 6.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0];
+        assert!(gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Mesh,
+            &mesh_constant,
+            ResampleFilter::Nearest,
+            (9, 6),
+        ));
+        let mesh_constant_extra = [
+            0.0, 0.0, 9.0, 6.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 0.0, 0.0,
+        ];
+        assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Mesh,
+            &mesh_constant_extra,
             ResampleFilter::Nearest,
             (9, 6),
         ));
@@ -13803,6 +14017,70 @@ mod tests {
             assert_eq!(actual, expected, "PA projective pair parity for {size:?}");
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("native PA projective transform must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
+        }
+        let constant_cases = [
+            (
+                (9, 6),
+                3,
+                TransformData::Affine(vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0]),
+                Some(TransformFill::Components(vec![199, 71])),
+            ),
+            (
+                (9, 6),
+                3,
+                TransformData::Affine(vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0]),
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (9, 6),
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
+                )]),
+                Some(TransformFill::Components(vec![199, 71])),
+            ),
+            (
+                (9, 6),
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0],
+                )]),
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+        ];
+        for (size, method, data, fill) in constant_cases {
+            let transformed = source
+                .transform_public(size, method, Some(data), 0, 0, fill)
+                .expect("PA constant projective transform");
+            assert_eq!(transformed.mode().expect("constant PA mode"), "PA");
+            assert_eq!(transformed.palette(), Some(vec![10, 20, 30, 40, 50, 60]));
+            let expected = transformed
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU PA constant projective transform");
+            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU PA constant projective transform failed: {error}"),
+            };
+            assert_eq!(actual, expected, "PA constant projective pair parity");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native PA constant projective transform must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
