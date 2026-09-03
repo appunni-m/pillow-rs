@@ -315,6 +315,14 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         );
     }
     if params.method == 1u {
+        // A constant half-pixel projective map is sampled at an exact source
+        // pixel after Geometry.c subtracts 0.5 for filtered transforms.
+        if params.filter_code != 0u
+            && params.g == 0.0 && params.h == 0.0
+            && params.a == 0.0 && params.b == 0.0
+            && params.d == 0.0 && params.e == 0.0 {
+            return vec2<f32>(params.c - 0.5, params.f - 0.5);
+        }
         // Pillow evaluates Perspective maps at destination pixel centers and
         // then truncates the resulting source coordinate. For signed
         // unit-axis maps, return the corresponding integer pixel coordinate
@@ -389,6 +397,12 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         // perturb an otherwise integral nearest selection through the generic
         // f32 bilinear expression.
         if x0 == x1 && x1 == x2 && x2 == x3 && y0 == y1 && y1 == y2 && y2 == y3 {
+            // Geometry.c subtracts 0.5 before its filtered sample window;
+            // carry that shift here so a half-pixel map reaches the same
+            // integral source sample in the projective bilinear helper.
+            if params.filter_code != 0u {
+                return vec2<f32>(x0 - 0.5, y0 - 0.5);
+            }
             return vec2<f32>(x0, y0);
         }
         // Unit-scale direct and axis-swapped Quad relocations are admitted
@@ -437,6 +451,9 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
     // identical for every output shape.
     if x0 == params.g && params.g == params.mesh0 && params.mesh0 == params.mesh2
         && y0 == params.h && params.h == params.mesh1 && params.mesh1 == params.mesh3 {
+        if params.filter_code != 0u {
+            return vec2<f32>(x0 - 0.5, y0 - 0.5);
+        }
         return vec2<f32>(x0, y0);
     }
     let direct_relocation =

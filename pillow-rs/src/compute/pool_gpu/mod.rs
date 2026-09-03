@@ -10574,10 +10574,11 @@ fn gpu_nearest_affine_is_exact(
 /// exhaustive source-selection proof, with explicit finite-intermediate
 /// guards for their generic f32 bilinear arithmetic. Filtered projective
 /// transforms remain host controlled unless an L/LA/RGB/RGBA/PA Perspective,
-/// Quad, or complete one-record Mesh map is a unit-scale integer relocation.
-/// In that envelope the filtered sample lands exactly on one source pixel, so
-/// the shader's bilinear lowering preserves the byte or palette-alpha pair;
-/// LA/RGBA also mirror Pillow's premultiplied round trip.
+/// Quad, or complete one-record Mesh map is a unit-scale integer relocation or
+/// a constant half-pixel source coordinate. In either envelope the filtered
+/// sample lands exactly on one source pixel, so the shader's bilinear lowering
+/// preserves the byte or palette-alpha pair; LA/RGBA also mirror Pillow's
+/// premultiplied round trip.
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
@@ -10932,14 +10933,14 @@ fn gpu_projective_filtered_relocation_is_admitted(
     output_dimensions: (u32, u32),
 ) -> bool {
     // Pillow's Geometry.c filtered projective path subtracts the destination
-    // center offset before bilinear sampling.  For these integer unit maps,
-    // that produces an integral source coordinate and zero filter weights;
-    // the shader's raw-gid projective sampler therefore selects the same
-    // source sample. LA/RGBA use Pillow's premultiplied round trip; the
-    // projective shader mirrors that round trip for the zero-weight source
-    // word. PA is different: its projective path preserves raw index/alpha
-    // pairs without premultiplied conversion, so the zero-weight argument
-    // applies to PA as well.
+    // center offset before bilinear sampling. For integer unit maps and
+    // constant half-pixel source coordinates, that produces an integral
+    // source coordinate and zero filter weights; the shader's raw-gid
+    // projective sampler therefore selects the same source sample. LA/RGBA
+    // use Pillow's premultiplied round trip; the projective shader mirrors
+    // that round trip for the zero-weight source word. PA is different: its
+    // projective path preserves raw index/alpha pairs without premultiplied
+    // conversion, so the zero-weight argument applies to PA as well.
     if !matches!(mode, Some("L" | "LA" | "PA" | "RGB" | "RGBA"))
         || !matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
         || data.len() < 8
@@ -10953,6 +10954,16 @@ fn gpu_projective_filtered_relocation_is_admitted(
             && (value as f32).is_finite()
             && f64::from(value as f32) == value
     };
+    let filter_center = |value: f64| {
+        let narrowed = value as f32;
+        let centered = value - 0.5;
+        value.is_finite()
+            && narrowed.is_finite()
+            && f64::from(narrowed) == value
+            && centered.fract() == 0.0
+            && (centered as f32).is_finite()
+            && f64::from(centered as f32) == centered
+    };
     match method {
         TransformMethod::Perspective => {
             let direct_perspective =
@@ -10961,21 +10972,35 @@ fn gpu_projective_filtered_relocation_is_admitted(
                 |tx: f64, ty: f64| data[..8] == [0.0, 1.0, tx, 1.0, 0.0, ty, 0.0, 0.0];
             let tx = data[2];
             let ty = data[5];
-            integer_translation(tx)
+            (integer_translation(tx)
                 && integer_translation(ty)
-                && (direct_perspective(tx, ty) || swapped_perspective(tx, ty))
+                && (direct_perspective(tx, ty) || swapped_perspective(tx, ty)))
+                || (data[..6] == [0.0, 0.0, tx, 0.0, 0.0, ty]
+                    && data[6] == 0.0
+                    && data[7] == 0.0
+                    && filter_center(tx)
+                    && filter_center(ty))
         }
         TransformMethod::Quad => {
             // QUAD's direct and axis-swapped unit maps evaluate to integral
-            // source coordinates at every raw destination gid.  The host
-            // Geometry.c path subtracts the half-pixel center before its
-            // filter window, so both paths have zero interpolation weights.
+            // source coordinates at every raw destination gid. A constant
+            // half-pixel map reaches the same integral coordinate after the
+            // Geometry.c filter window subtracts 0.5.
             gpu_quad_unit_relocation_is_admitted(data, output_dimensions.0, output_dimensions.1)
+                || (gpu_quad_constant_map_is_admitted(data)
+                    && filter_center(data[0])
+                    && filter_center(data[1]))
         }
         TransformMethod::Mesh => {
             // A complete one-record mesh has the same zero-weight property
-            // when its source quad is a unit-scale direct/axis relocation.
+            // for unit relocations and constant half-pixel source maps.
             gpu_mesh_unit_relocation_is_admitted(data, output_dimensions.0, output_dimensions.1)
+                || (gpu_mesh_constant_map_is_admitted(
+                    data,
+                    output_dimensions.0,
+                    output_dimensions.1,
+                ) && filter_center(data[4])
+                    && filter_center(data[5]))
         }
         TransformMethod::Affine => false,
     }
@@ -10994,8 +11019,10 @@ fn gpu_projective_filtered_relocation_is_admitted(
 /// is admitted only when its weights are provably zero; other PA filtered
 /// transforms remain on the exact host path rather than being silently
 /// changed to pair-copy sampling. Quad and complete one-record Mesh also
-/// admit a constant f32 source coordinate: nearest sampling only selects
-/// one raw pair, and the image-aware proof still checks every output boundary.
+/// admit a constant f32 source coordinate for nearest sampling, while the
+/// filtered proof admits only a half-pixel coordinate: Geometry.c's 0.5
+/// center shift then makes its filter weights exactly zero. The image-aware
+/// proof still checks every output boundary.
 fn gpu_palette_alpha_projective_relocation_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -11239,6 +11266,16 @@ fn gpu_projective_nearest_is_exact(
         let f = |index: usize| data[index] as f32;
         match method {
             TransformMethod::Perspective => {
+                if matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
+                    && f(6) == 0.0
+                    && f(7) == 0.0
+                    && f(0) == 0.0
+                    && f(1) == 0.0
+                    && f(3) == 0.0
+                    && f(4) == 0.0
+                {
+                    return Some((f(2) - 0.5, f(5) - 0.5));
+                }
                 if gpu_perspective_signed_unit_relocation_is_admitted(data) {
                     let a = f(0);
                     let b = f(1);
@@ -11284,6 +11321,14 @@ fn gpu_projective_nearest_is_exact(
                 let y0 = f(1);
                 if x0 == f(2) && x0 == f(4) && x0 == f(6) && y0 == f(3) && y0 == f(5) && y0 == f(7)
                 {
+                    // Geometry.c filters after subtracting 0.5 from the
+                    // mapped source coordinate.  A constant half-pixel map
+                    // therefore lands exactly on one source pixel, while
+                    // the projective shader's bilinear sampler expects the
+                    // already-shifted coordinate.
+                    if !matches!(filter, ResampleFilter::Nearest) {
+                        return Some((x0 - 0.5, y0 - 0.5));
+                    }
                     return Some((x0, y0));
                 }
                 let width = *w as f32;
@@ -11313,6 +11358,9 @@ fn gpu_projective_nearest_is_exact(
                     && y0 == f(9)
                     && y0 == f(11)
                 {
+                    if !matches!(filter, ResampleFilter::Nearest) {
+                        return Some((x0 - 0.5, y0 - 0.5));
+                    }
                     return Some((x0, y0));
                 }
                 let direct_relocation = bx0 == 0.0
@@ -14696,6 +14744,8 @@ mod tests {
                 [1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
                 [1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0],
                 [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.5, 0.0, 0.0, 4.5, 0.0, 0.0],
+                [0.0, 0.0, 2.5, 0.0, 0.0, 3.5, 0.0, 0.0],
             ];
             for matrix in matrices {
                 for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
@@ -14791,6 +14841,16 @@ mod tests {
                     (9, 6),
                 ),
                 (
+                    3,
+                    TransformData::Affine(vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5]),
+                    (9, 6),
+                ),
+                (
+                    3,
+                    TransformData::Affine(vec![2.5, 3.5, 2.5, 3.5, 2.5, 3.5, 2.5, 3.5]),
+                    (9, 6),
+                ),
+                (
                     4,
                     TransformData::Mesh(vec![(
                         vec![0.0, 0.0, 9.0, 6.0],
@@ -14803,6 +14863,14 @@ mod tests {
                     TransformData::Mesh(vec![(
                         vec![0.0, 0.0, 9.0, 6.0],
                         vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0],
+                    )]),
+                    (9, 6),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 9.0, 6.0],
+                        vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5],
                     )]),
                     (9, 6),
                 ),
@@ -15150,6 +15218,21 @@ mod tests {
             ResampleFilter::Nearest,
             (9, 6),
         ));
+        let quad_constant_half = [1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5];
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Quad,
+            &quad_constant_half,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+            (9, 6),
+        ));
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Quad,
+            &quad_constant_fractional,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+            (9, 6),
+        ));
         let mesh_relocation = [0.0, 0.0, 9.0, 6.0, 1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0];
         let mesh_filtered = PipelineOp::Transform {
             w: 9,
@@ -15180,6 +15263,21 @@ mod tests {
             ResampleFilter::Nearest,
             (9, 6),
         ));
+        let mesh_constant_half = [0.0, 0.0, 9.0, 6.0, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5];
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Mesh,
+            &mesh_constant_half,
+            ResampleFilter::Bicubic,
+            Some("PA"),
+            (9, 6),
+        ));
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Mesh,
+            &mesh_constant,
+            ResampleFilter::Bicubic,
+            Some("PA"),
+            (9, 6),
+        ));
         let mesh_constant_extra = [
             0.0, 0.0, 9.0, 6.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 0.0, 0.0,
         ];
@@ -15208,6 +15306,22 @@ mod tests {
             ResampleFilter::Bicubic,
             Some("PA"),
             (5, 7),
+        ));
+        let perspective_constant_half = [0.0, 0.0, 1.5, 0.0, 0.0, 4.5, 0.0, 0.0];
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &perspective_constant_half,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+            (9, 6),
+        ));
+        let perspective_constant_fractional = [0.0, 0.0, 1.25, 0.0, 0.0, 4.5, 0.0, 0.0];
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &perspective_constant_fractional,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+            (9, 6),
         ));
         assert!(gpu_projective_filtered_relocation_is_admitted(
             TransformMethod::Perspective,
@@ -15487,6 +15601,18 @@ mod tests {
                 [0.0, 1.0, 2.0, 1.0, 0.0, -1.0, 0.0, 0.0],
                 Some(TransformFill::Components(vec![113, 7])),
             ),
+            (
+                (16, 16),
+                (8, 8),
+                [0.0, 0.0, 1.5, 0.0, 0.0, 4.5, 0.0, 0.0],
+                None,
+            ),
+            (
+                (16, 16),
+                (8, 8),
+                [0.0, 0.0, -0.5, 0.0, 0.0, -0.5, 0.0, 0.0],
+                Some(TransformFill::Components(vec![17, 203])),
+            ),
         ];
         let palette = vec![10, 20, 30, 40, 50, 60];
         let previous = Backend::set_pipeline_telemetry_enabled(true);
@@ -15582,6 +15708,17 @@ mod tests {
                 TransformData::Mesh(vec![(
                     vec![0.0, 0.0, 9.0, 6.0],
                     vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0],
+                )]),
+            ),
+            (
+                3,
+                TransformData::Affine(vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5]),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![1.5, 4.5, 1.5, 4.5, 1.5, 4.5, 1.5, 4.5],
                 )]),
             ),
         ];
