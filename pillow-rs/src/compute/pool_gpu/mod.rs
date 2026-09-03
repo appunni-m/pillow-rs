@@ -10565,10 +10565,10 @@ fn gpu_nearest_affine_is_exact(
 /// rounds its selected source coordinate. Admit only a bounded proof where
 /// every coefficient, destination coordinate, intermediate arithmetic result,
 /// and final source coordinate select the same source pixel in both domains.
-/// This covers proof-certified integer maps for ordinary packed byte modes and
-/// raw indexed samples without claiming parity for fractional homographies or
-/// arbitrary mesh records. Ordinary nearest Quad and Mesh maps additionally
-/// admit a constant integer source coordinate. Filtered projective transforms
+/// This covers proof-certified f32-representable maps for ordinary packed byte
+/// modes and raw indexed samples without claiming parity for arbitrary
+/// homographies or mesh records. Ordinary nearest Quad and Mesh maps
+/// additionally admit a constant f32 source coordinate. Filtered projective transforms
 /// remain host controlled unless an L/LA/RGB/RGBA/PA Perspective, Quad, or
 /// complete one-record Mesh map is a unit-scale integer relocation. In that envelope
 /// the filtered sample lands exactly on one source pixel, so the shader's
@@ -10615,7 +10615,7 @@ fn gpu_mesh_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
 }
 
 /// Return whether a complete one-record Mesh maps every destination sample to
-/// one constant integer source coordinate. The generic shader may still do
+/// one constant f32 source coordinate. The generic shader may still do
 /// different f32 arithmetic for the bilinear weights, so the image-aware
 /// proof below must compare every source selection before admitting it.
 fn gpu_mesh_constant_map_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
@@ -10626,8 +10626,6 @@ fn gpu_mesh_constant_map_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
     let y = data[5];
     x.is_finite()
         && y.is_finite()
-        && x.fract() == 0.0
-        && y.fract() == 0.0
         && (x as f32).is_finite()
         && (y as f32).is_finite()
         && f64::from(x as f32) == x
@@ -10688,8 +10686,8 @@ fn gpu_quad_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
     data[..8] == direct || data[..8] == swapped
 }
 
-/// Return whether a Quad maps every destination sample to one constant
-/// integer source coordinate. Nearest sampling needs only the resulting
+/// Return whether a Quad maps every destination sample to one constant f32
+/// source coordinate. Nearest sampling needs only the resulting
 /// source selection; the exhaustive proof still rejects any f32 arithmetic
 /// that could move that selection across a fill or pixel boundary.
 fn gpu_quad_constant_map_is_admitted(data: &[f64]) -> bool {
@@ -10700,8 +10698,6 @@ fn gpu_quad_constant_map_is_admitted(data: &[f64]) -> bool {
     let y = data[1];
     x.is_finite()
         && y.is_finite()
-        && x.fract() == 0.0
-        && y.fract() == 0.0
         && (x as f32).is_finite()
         && (y as f32).is_finite()
         && f64::from(x as f32) == x
@@ -10779,7 +10775,7 @@ fn gpu_projective_filtered_relocation_is_admitted(
 /// is admitted only when its weights are provably zero; other PA filtered
 /// transforms remain on the exact host path rather than being silently
 /// changed to pair-copy sampling. Quad and complete one-record Mesh also
-/// admit a constant integer source coordinate: nearest sampling only selects
+/// admit a constant f32 source coordinate: nearest sampling only selects
 /// one raw pair, and the image-aware proof still checks every output boundary.
 fn gpu_palette_alpha_projective_relocation_is_admitted(
     method: TransformMethod,
@@ -10913,7 +10909,7 @@ fn gpu_projective_nearest_is_exact(
     if data[..required_data]
         .iter()
         .copied()
-        .any(|value| !f32_exact(value) || value.fract() != 0.0)
+        .any(|value| !f32_exact(value))
     {
         return false;
     }
@@ -11546,7 +11542,7 @@ fn gpu_geometry_requires_exact_host_control(
     // in f64 at pixel centers, while the shader evaluates raw destination
     // coordinates in f32. Keep every non-proven projective/quad/mesh transform
     // on exact host semantic control; the bounded projective helper below
-    // retains only its exhaustive integer-map proof for raw byte samples.
+    // retains only its exhaustive source-selection proof for raw byte samples.
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
@@ -13494,13 +13490,13 @@ mod tests {
             fill_is_none: false,
             palette_fill: Some(7),
         };
-        assert!(!gpu_projective_nearest_is_exact(
+        assert!(gpu_projective_nearest_is_exact(
             &fractional,
             &image,
             Some("P"),
             (16, 16)
         ));
-        assert!(!gpu_projective_nearest_is_exact(
+        assert!(gpu_projective_nearest_is_exact(
             &fractional,
             &rgb,
             Some("RGB"),
@@ -13845,6 +13841,242 @@ mod tests {
     }
 
     #[test]
+    fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                (9u32, 8u32),
+                (8u32, 7u32),
+                [1.0, 0.0, 0.25, 0.0, 1.0, 0.25, 0.0, 0.0],
+                251u8,
+            ),
+            (
+                (16u32, 16u32),
+                (13u32, 11u32),
+                [0.5, 0.25, 0.125, -0.25, 0.5, 0.375, 0.0, 0.0],
+                17u8,
+            ),
+            (
+                (5u32, 7u32),
+                (9u32, 6u32),
+                [0.75, -0.125, 0.25, 0.125, 0.625, 0.375, 0.0, 0.0],
+                199u8,
+            ),
+            (
+                (32u32, 32u32),
+                (16u32, 16u32),
+                [1.0, 0.125, 0.25, -0.125, 1.0, 0.375, 0.0, 0.0],
+                61u8,
+            ),
+        ];
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+            ("P", 1usize),
+        ] {
+            for (case_index, (source_size, output_size, matrix, fill)) in cases.iter().enumerate() {
+                let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                    .map(|index| (index * (31 + case_index * 7) + 13 + channels) as u8)
+                    .collect::<Vec<_>>();
+                let mut source = Image::frombytes(mode, *source_size, &source_bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+                if mode == "P" {
+                    let palette = (0..768)
+                        .map(|index| (index * 17 + 5) as u8)
+                        .collect::<Vec<_>>();
+                    source
+                        .putpalette(&palette, "RGB")
+                        .unwrap_or_else(|error| panic!("P palette: {error}"));
+                }
+                let fill = match mode {
+                    "L" | "P" => Some(TransformFill::Scalar(i64::from(*fill))),
+                    "LA" => Some(TransformFill::Components(vec![i64::from(*fill), 93])),
+                    "RGB" => Some(TransformFill::Components(vec![i64::from(*fill), 93, 41])),
+                    "RGBA" => Some(TransformFill::Components(vec![
+                        i64::from(*fill),
+                        93,
+                        41,
+                        173,
+                    ])),
+                    _ => unreachable!(),
+                };
+                let transformed = source
+                    .transform_public(
+                        *output_size,
+                        2,
+                        Some(TransformData::Affine(matrix.to_vec())),
+                        0,
+                        0,
+                        fill,
+                    )
+                    .unwrap_or_else(|error| panic!("{mode} fractional transform: {error}"));
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .unwrap_or_else(|error| panic!("{mode} fractional CPU transform: {error}"));
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => panic!("native GPU {mode} fractional transform failed: {error}"),
+                };
+                assert_eq!(
+                    actual, expected,
+                    "native {mode} fractional matrix={matrix:?}"
+                );
+                let telemetry = Backend::take_pipeline_telemetry().unwrap_or_else(|| {
+                    panic!("native GPU {mode} fractional transform missing telemetry")
+                });
+                assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+                assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+                assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
+                assert_eq!(telemetry.7, None, "{mode} fallback reason");
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_fractional_constant_quad_mesh_native_gpu_preserves_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                3,
+                TransformData::Affine(vec![3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0]),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0],
+                )]),
+            ),
+        ];
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+            ("P", 1usize),
+        ] {
+            let source_size = (9u32, 6u32);
+            let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                .map(|index| (index * 73 + 17 + channels) as u8)
+                .collect::<Vec<_>>();
+            let mut source = Image::frombytes(mode, source_size, &source_bytes)
+                .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+            if mode == "P" {
+                let palette = (0..768)
+                    .map(|index| (index * 19 + 7) as u8)
+                    .collect::<Vec<_>>();
+                source
+                    .putpalette(&palette, "RGB")
+                    .unwrap_or_else(|error| panic!("P palette: {error}"));
+            }
+            let fill = match mode {
+                "L" | "P" => Some(TransformFill::Scalar(251)),
+                "LA" => Some(TransformFill::Components(vec![251, 93])),
+                "RGB" => Some(TransformFill::Components(vec![251, 93, 41])),
+                "RGBA" => Some(TransformFill::Components(vec![251, 93, 41, 173])),
+                _ => unreachable!(),
+            };
+            for (method, data) in &cases {
+                let transformed = source
+                    .transform_public((9, 6), *method, Some(data.clone()), 0, 0, fill.clone())
+                    .unwrap_or_else(|error| panic!("{mode} constant transform: {error}"));
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .unwrap_or_else(|error| panic!("{mode} constant CPU transform: {error}"));
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => panic!("native GPU {mode} constant transform failed: {error}"),
+                };
+                assert_eq!(actual, expected, "native {mode} constant data={data:?}");
+                let telemetry = Backend::take_pipeline_telemetry().unwrap_or_else(|| {
+                    panic!("native GPU {mode} constant transform missing telemetry")
+                });
+                assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+                assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+                assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
+                assert_eq!(telemetry.7, None, "{mode} fallback reason");
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn indexed_projective_fractional_nonconstant_nearest_native_gpu_preserves_pixels() {
+        let source_size = (9u32, 8u32);
+        let source_bytes = (0..source_size.0 as usize * source_size.1 as usize)
+            .map(|index| (index * 73 + 19) as u8)
+            .collect::<Vec<_>>();
+        let mut source = Image::frombytes("P", source_size, &source_bytes).expect("P source");
+        let palette = (0..768)
+            .map(|index| (index * 23 + 11) as u8)
+            .collect::<Vec<_>>();
+        source.putpalette(&palette, "RGB").expect("P palette");
+        let matrix = [1.0, 0.0, 8.0, 0.0, 1.0, 4.0, -0.125, 0.015625];
+        let transformed = source
+            .transform_public(
+                (8, 7),
+                2,
+                Some(TransformData::Affine(matrix.to_vec())),
+                0,
+                0,
+                Some(TransformFill::Scalar(251)),
+            )
+            .expect("P nonconstant projective transform");
+        let expected = transformed
+            .clone()
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("P nonconstant CPU transform");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU P nonconstant transform failed: {error}"),
+        };
+        assert_eq!(actual, expected, "native P nonconstant fractional matrix");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("native P nonconstant transform must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
     fn byte_projective_filtered_relocations_native_gpu_preserve_pixels() {
         let previous = Backend::set_pipeline_telemetry_enabled(true);
         for (mode, channels) in [
@@ -14090,7 +14322,7 @@ mod tests {
             (9, 6),
         ));
         let quad_constant_fractional = [3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0];
-        assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
+        assert!(gpu_palette_alpha_projective_relocation_is_admitted(
             TransformMethod::Quad,
             &quad_constant_fractional,
             ResampleFilter::Nearest,
@@ -14342,6 +14574,21 @@ mod tests {
                     vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0],
                 )]),
                 Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (9, 6),
+                3,
+                TransformData::Affine(vec![3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0]),
+                Some(TransformFill::Components(vec![199, 71])),
+            ),
+            (
+                (9, 6),
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 6.0],
+                    vec![3.25, 4.0, 3.25, 4.0, 3.25, 4.0, 3.25, 4.0],
+                )]),
+                Some(TransformFill::Components(vec![199, 71])),
             ),
         ];
         for (size, method, data, fill) in constant_cases {
