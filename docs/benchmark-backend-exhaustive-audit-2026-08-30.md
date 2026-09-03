@@ -5984,3 +5984,26 @@ marker-12 device reducer intentionally models the bounded FMA order. Extending
 the tap bound without modeling this platform-specific >15-tap split would
 admit a known one-ULP divergence, so these rows remain exact host semantic
 control pending a separately verified reducer.
+
+## 32.95 Integer Perspective nearest GPU envelope (2026-09-03)
+
+Commit `4db4d4981` extends the existing projective source-selection proof to
+ordinary packed L/LA/RGB/RGBA Perspective nearest maps whose denominator is
+constant (`g=h=0`) and whose coefficients are exactly representable integer
+f32 values. This admits proof-certified positive/negative translations and
+axis-swap relocation while leaving fractional, scaled, nonconstant-denominator,
+filtered, and non-identity Quad/Mesh maps on exact host semantic control.
+
+The first divergence that motivated the conservative gate remains the forced
+fractional Perspective case: output byte 8 selected 51 in Pillow/corrected CPU
+but 14 in the shader because Pillow evaluates centered f64 coordinates and
+truncates `COORD`, while the shader uses raw destination indices and
+`floor(source + 0.5)`. The new proof compares every host/device source
+selection, including fill boundaries, before admitting a row.
+
+Native Pillow 12.2.0 versus RSPIL CPU/GPU hashes match for 12 mode/map cases
+(four modes by positive translation, negative translation, and axis swap), and
+all native GPU receipts are requested=actual GPU with one dispatch and no
+fallback. The Rust native matrix is 24/24 exact; focused projective tests are
+4/4 and the full GPU unit suite is 74/74. No fixtures, thresholds, IDs,
+denominators, receipt rules, or policy changed.

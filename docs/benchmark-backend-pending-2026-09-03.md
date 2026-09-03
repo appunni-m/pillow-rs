@@ -47,8 +47,11 @@ receipt rules unchanged.
   multiply followed by ordered adds; the current reducer models only the FMA
   envelope, so widening it without a separate >15-tap proof is unsafe.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
-  Until a device proof exists, the exact host path remains the required
-  behavior for fractional and filtered geometry.
+  Constant-denominator integer Perspective nearest maps for packed
+  L/LA/RGB/RGBA are now admitted by an exhaustive source-selection proof;
+  fractional, scaled, nonconstant-denominator, filtered, and non-identity
+  Quad/Mesh maps remain on exact host semantic control until their device
+  arithmetic is proven.
 
 ### P1 — backend identity and receipts
 
@@ -120,6 +123,10 @@ receipt rules unchanged.
   `d2690bf62`): 12/12 native L/LA/RGB/RGBA Perspective/Quad/Mesh cases match
   CPU bytes and publish requested=actual GPU receipts; non-identity and
   filtered geometry remains exact host semantic control.
+- [x] Integer Perspective nearest GPU routing (`4db4d4981`, source
+  `9885acb6`): proof-certified constant-denominator translation and axis-swap
+  maps add 12/12 exact Pillow 12.2.0 versus CPU/GPU mode cases, with one
+  native GPU dispatch and no fallback; the bounded Rust matrix is 24/24.
 - [x] Receipt-aware suite aggregation (`1f49b7890`): a fresh 744-workload
   benchmark remains 744/744 measured, while suite comparisons move from
   276/324 status-only comparable cells to 180/324 receipt-proven cells;
@@ -186,15 +193,16 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `f35002e1c` (identity projective
-nearest routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
-The fresh combined replay at this revision is 10,952/10,952 value/error exact
+`main` includes the parity fixes through `4db4d4981` (integer Perspective
+nearest routing, identity projective routing, receipt-proven suite cohorts,
+and packed SIMD ExtractBand). The fresh combined replay at this revision is
+10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
-CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,707 GPU plus 131 CPU
+CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,737 GPU plus 101 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`3db4e5c3543816325ab9ac3bea0e5d821c0cc23a25716386b78d3bafb6beb336`; the GPU
-execution sidecar is `6d639b0ed60e191212f1975352231f9911880bd932ff1f8a0c2d489a445efbbe`.
+`39c632af3ffeea341d866af7bde7fe9261482060a3c3dfe0b1a5b0a5e4bfbc08`; the GPU
+execution sidecar is `ea5fc80c7a7b9d98dd4aac09e2008326797f30af2b1b15545f9c3e3d55a7f7ec`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
 and broader projective admission work above.
