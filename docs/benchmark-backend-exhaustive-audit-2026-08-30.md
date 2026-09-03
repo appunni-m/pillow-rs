@@ -6674,3 +6674,61 @@ state remains 39/39 and the evidence contract remains benchmark/coverage/parity
 projective/mesh/palette arithmetic remain on their documented exact host
 semantic control paths. No fixtures, thresholds, IDs, denominators, policy,
 or receipt taxonomy changed.
+
+## 32.125 Ordered F Resize reducer through 2048 taps (2026-09-03)
+
+The matched marker-12 host proof and WGSL convolution guards stopped at 1024
+taps, leaving another finite, representable envelope on exact host semantic
+control. Commit `a16349c7e` (source `f97e51dc1`) extends the ordered reducer
+and both shader guards through 2048 taps. The implementation continues to
+mirror Pillow 12.2.0 `src/libImaging/Resample.c`: scalar f64 FMA ordering,
+arm64 horizontal product/add blocks, and explicit host/shader handling for
+finite f32 subnormal words (including the exact `2^-149` representation).
+Rows beyond 2048 taps, f64-intermediate subnormal/overflow boundaries, and
+arithmetic-changing chains remain exact host semantic control.
+
+The focused native Pillow 12.2.0 versus RSPIL matrix is 175/175 exact across
+Bilinear, Bicubic, Lanczos, Hamming, and Box; horizontal, vertical, and
+two-axis reductions; normal, subnormal, and largest-finite inputs; and random
+finite mixtures. Eighty-five rows publish terminal requested=actual GPU
+receipts, while 90 remain explicit exact host semantic control. Focused F
+tests are 9/9, and the integrated pool-GPU suite remains green. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.126 Filtered Quad/Mesh relocations and integrated replay (2026-09-03)
+
+The projective admission proof had a deterministic non-square Quad axis-swap
+edge: the old guard used output dimensions as source extents, falsely
+classifying `[0,0,9,0,9,6,0,6]` on a 9x6 image as a unit relocation. The
+forced device path selected different source bytes than Pillow's
+`src/libImaging/Geometry.c`. Commit `cfa3b2690` (source
+`206bff9dfe82ab9eab5346931db2ddd0b11f4388`) fixes the swapped source extents,
+requires a complete one-record Mesh (12 values), and extends the exhaustive
+source-selection proof to direct/axis-swapped filtered Quad and Mesh
+relocations for ordinary packed L/RGB and palette-alpha pairs. Filtered,
+scaled, partial, extra-record, and fractional arithmetic outside this proof
+continues on exact host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL filtered relocation probes are 16/16 exact
+for L/RGB and 8/8 exact for palette-alpha, with terminal native GPU receipts;
+the full pool-GPU unit group passes 93/93 after integration. The subsequent
+schema-v3 all-backends replay at source revision
+`cfa3b26904951d4d5d48d5c20dbb233eaad05335` compared all 10,952 selected public
+cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM (10,952/10,952
+passed in every lane, zero failed and zero not-run); the GPU smoke gate was
+1/1. Terminal receipts remain explicit: CPU 6,838; SIMD 6,847 native plus
+three CPU layout controls; GPU 6,743 native plus 95 exact host/dimension
+controls; and Node/browser WASM 6,951 each. Every terminal receipt is
+complete, so the aggregate status is `passed_with_backend_gaps` solely for
+the intentional backend partition.
+
+Artifact SHA-256 values are result
+`d550013664ce92e73e25aaa2c3ea5b59b9ace720d851c41148618d9d0515ff05`, GPU
+execution `258f5186e40d546dc01d4350b690a4a972cded33d83f071c0b6eb4759e6b7b3b`,
+and WGSL coverage
+`39a4b4828935cf25d81e95c78d86cc08db297ba47a785ebe61cf62b429eab0de`. The
+receipt-state suite remains 39/39 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. The P2 zero-violation timing gate,
+beyond-2048 F arithmetic, and broader fractional/scaled/non-dyadic
+projective, mesh, and palette arithmetic remain open. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
