@@ -278,7 +278,11 @@ receipt rules unchanged.
   `7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32`
   unchanged across all four runs. Violations moved among Pillow/CPU/SIMD/GPU
   rows and remained timing-only. P2 therefore remains timing noise rather than
-  a receipt defect.
+  a receipt defect. A fresh next18b campaign at the current integrated
+  revision repeated the same 11/11, 44/44, and 33/33 receipt invariants in
+  two consecutive pairs; the pairs reported 10 and 15 violations, respectively,
+  with the normalized execution fingerprint unchanged. Violations again moved
+  across Pillow/CPU/SIMD/GPU rows, so no source or receipt fix is justified.
 
 ## Verified changes already integrated
 
