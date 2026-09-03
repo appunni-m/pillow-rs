@@ -1002,6 +1002,196 @@ pub(crate) fn effect_noise_values(
 
 // ── Transform ──
 
+/// Apply Pillow's FLOAT32 affine transform filters to an explicit `F` image.
+///
+/// `F` images use the four-byte `RgbaImage` transport internally, but their
+/// samples are IEEE-754 words rather than four independent byte bands.  The
+/// generic byte affine path therefore cannot be used for bilinear/bicubic
+/// transforms: it would interpolate each byte and can even copy a source word
+/// into a neighbouring output byte.  Pillow's `Geometry.c` FLOAT32 filters
+/// promote each source word to `double`, compute horizontal rows with the
+/// compiler's f32-difference/f64-FMA order, then store one f32 word.
+fn transform_affine_f32(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageRgba8(rgba) = img else {
+        return Err(PilError::InternalError(
+            "F affine transform requires four-byte storage".into(),
+        ));
+    };
+    let (src_w, src_h) = rgba.dimensions();
+    let source_len = usize::try_from(src_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(src_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let raw = rgba.as_raw();
+    let source = raw
+        .chunks_exact(4)
+        .take(source_len)
+        .map(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+        .collect::<Vec<_>>();
+    if source.len() != source_len {
+        return Err(PilError::InternalError(
+            "F affine source buffer shape mismatch".into(),
+        ));
+    }
+
+    let fill_word = fill
+        .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
+        .unwrap_or(0.0);
+    let mut output = vec![fill_word; output_len];
+    let (a, b, c, d, e, f) = (data[0], data[1], data[2], data[3], data[4], data[5]);
+    let src_w_i = i64::from(src_w);
+    let src_h_i = i64::from(src_h);
+
+    #[inline]
+    fn bilinear_horizontal(left: f32, right: f32, distance: f64) -> f64 {
+        // Geometry.c's FLOAT32 path subtracts the f32 samples before
+        // promoting that difference, then uses an f64 fused multiply-add.
+        f64::from(right - left).mul_add(distance, f64::from(left))
+    }
+
+    #[inline]
+    fn bicubic_horizontal(samples: [f32; 4], distance: f64) -> f64 {
+        // The native filter computes the polynomial coefficients in f32 (the
+        // source type) and evaluates the Horner chain in f64 with FMA.  Keep
+        // the coefficient order from Geometry.c's BICUBIC macro.
+        let [v1, v2, v3, v4] = samples;
+        let p1 = f64::from(v2);
+        let p2 = f64::from(v3 - v1);
+        let p3 = f64::from((v1 - v2).mul_add(2.0, v3) - v4);
+        let p4 = f64::from((v2 - v1 - v3) + v4);
+        let inner = distance.mul_add(p4, p3);
+        let middle = distance.mul_add(inner, p2);
+        distance.mul_add(middle, p1)
+    }
+
+    #[inline]
+    fn bicubic_vertical(samples: [f64; 4], distance: f64) -> f64 {
+        // Vertical rows are already f64 intermediates in Geometry.c, so the
+        // same Horner expression keeps all coefficient arithmetic in f64.
+        let [v1, v2, v3, v4] = samples;
+        let p1 = v2;
+        let p2 = -v1 + v3;
+        let p3 = (v1 - v2).mul_add(2.0, v3) - v4;
+        let p4 = -v1 + v2 - v3 + v4;
+        let inner = distance.mul_add(p4, p3);
+        let middle = distance.mul_add(inner, p2);
+        distance.mul_add(middle, p1)
+    }
+
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            let output_index = (dy as usize) * dst_w as usize + dx as usize;
+            let xin = f64::from(dx) + 0.5;
+            let yin = f64::from(dy) + 0.5;
+            // Pillow's Geometry.c affine callback is compiled as a multiply
+            // followed by fused multiply-add, then a separate translation
+            // add. Keep `b * yin`/`e * yin` out of the fused term with the
+            // translation: a one-ULP coordinate change can select a wildly
+            // different FLOAT32 neighbour at a map boundary.
+            let sx = a.mul_add(xin, b * yin) + c;
+            let sy = d.mul_add(xin, e * yin) + f;
+
+            if !sx.is_finite()
+                || !sy.is_finite()
+                || sx < 0.0
+                || sx >= f64::from(src_w)
+                || sy < 0.0
+                || sy >= f64::from(src_h)
+            {
+                continue;
+            }
+
+            if matches!(filter, ResampleFilter::Nearest) {
+                let ix = sx as i64;
+                let iy = sy as i64;
+                if ix >= 0 && ix < src_w_i && iy >= 0 && iy < src_h_i {
+                    output[output_index] = source[(iy as usize) * src_w as usize + ix as usize];
+                }
+                continue;
+            }
+
+            let sample_x = sx - 0.5;
+            let sample_y = sy - 0.5;
+            let floor_x = sample_x.floor() as i64;
+            let floor_y = sample_y.floor() as i64;
+            let dx_fraction = sample_x - floor_x as f64;
+            let dy_fraction = sample_y - floor_y as f64;
+
+            match filter {
+                ResampleFilter::Bilinear => {
+                    let x0 = floor_x.clamp(0, src_w_i - 1) as usize;
+                    let x1 = (floor_x + 1).clamp(0, src_w_i - 1) as usize;
+                    let y0 = floor_y.clamp(0, src_h_i - 1) as usize;
+                    let y1 = (floor_y + 1).clamp(0, src_h_i - 1) as usize;
+                    let top = bilinear_horizontal(
+                        source[y0 * src_w as usize + x0],
+                        source[y0 * src_w as usize + x1],
+                        dx_fraction,
+                    );
+                    let bottom = bilinear_horizontal(
+                        source[y1 * src_w as usize + x0],
+                        source[y1 * src_w as usize + x1],
+                        dx_fraction,
+                    );
+                    output[output_index] = (bottom - top).mul_add(dy_fraction, top) as f32;
+                }
+                ResampleFilter::Bicubic => {
+                    let x = floor_x - 1;
+                    let y = floor_y - 1;
+                    let mut rows = [0.0f64; 4];
+                    for row in 0..4i64 {
+                        let yy = y + row;
+                        if row > 0 && (yy < 0 || yy >= src_h_i) {
+                            rows[row as usize] = rows[row as usize - 1];
+                            continue;
+                        }
+                        let cy = yy.clamp(0, src_h_i - 1) as usize;
+                        let samples = [
+                            source[cy * src_w as usize + (x).clamp(0, src_w_i - 1) as usize],
+                            source[cy * src_w as usize + (x + 1).clamp(0, src_w_i - 1) as usize],
+                            source[cy * src_w as usize + (x + 2).clamp(0, src_w_i - 1) as usize],
+                            source[cy * src_w as usize + (x + 3).clamp(0, src_w_i - 1) as usize],
+                        ];
+                        rows[row as usize] = bicubic_horizontal(samples, dx_fraction);
+                    }
+                    output[output_index] = bicubic_vertical(rows, dy_fraction) as f32;
+                }
+                // Image.transform accepts only nearest, bilinear, and bicubic
+                // filters. Keep an internal fallback deterministic if a direct
+                // Rust caller constructs another descriptor.
+                _ => output[output_index] = source.first().copied().unwrap_or(fill_word),
+            }
+        }
+    }
+
+    let bytes = output
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect::<Vec<_>>();
+    let out = RgbaImage::from_raw(dst_w, dst_h, bytes)
+        .ok_or_else(|| PilError::InternalError("F affine output shape mismatch".into()))?;
+    Ok(DynamicImage::ImageRgba8(out))
+}
+
 /// Apply an affine transform working on the native number of channels.
 /// When `nearest` is true, uses nearest-neighbor sampling.
 fn transform_affine_generic(
@@ -1351,6 +1541,10 @@ pub fn op_transform(
                 (data[0], data[1], data[2], data[3], data[4], data[5]);
             let p_mode = explicit_mode == Some("P") || explicit_mode == Some("1");
             let i_f_mode = explicit_mode == Some("I") || explicit_mode == Some("F");
+            if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
+                let result = transform_affine_f32(img, w, h, data, filter, fill)?;
+                return Ok(preserve_mode(img, result));
+            }
             let use_nearest = matches!(filter, ResampleFilter::Nearest) || p_mode || i_f_mode;
 
             // Pillow's ImagingTransformAffine resamples LA/RGBA through the
@@ -2073,6 +2267,16 @@ mod tests {
         DynamicImage::ImageRgba8(RgbaImage::from_raw(9, 8, raw).expect("rgba source"))
     }
 
+    fn f32_source(values: &[f32], width: u32, height: u32) -> DynamicImage {
+        let raw = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect::<Vec<_>>();
+        DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width, height, raw).expect("F source buffer shape"),
+        )
+    }
+
     const VARIED_MESH: [f64; 12] = [
         -1.0, -1.0, 6.0, 5.0, -0.4, 0.2, 4.6, 3.4, 4.1, -0.3, 0.3, 3.7,
     ];
@@ -2255,6 +2459,94 @@ mod tests {
         ];
 
         assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn f_affine_filters_interpolate_float_words() {
+        let source = f32_source(&[1.0, 2.0, 3.0, 4.0], 2, 2);
+        let matrix = [1.0, 0.5, 0.0, 0.0, 1.0, 0.0];
+        let expected_bilinear = [
+            0x3fa0_0000,
+            0x4000_0000,
+            0x0000_0000,
+            0x4070_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+        ];
+        let expected_bicubic = [
+            0x3fa0_0000,
+            0x4009_0000,
+            0x0000_0000,
+            0x4070_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+        ];
+
+        for (filter, expected) in [
+            (ResampleFilter::Bilinear, expected_bilinear),
+            (ResampleFilter::Bicubic, expected_bicubic),
+        ] {
+            let result = op_transform(
+                &source,
+                3,
+                3,
+                &TransformMethod::Affine,
+                &matrix,
+                &filter,
+                Some((0, 0, 0, 0)),
+                Some("F"),
+            )
+            .expect("F affine filter");
+            let words = result
+                .as_bytes()
+                .chunks_exact(4)
+                .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+                .collect::<Vec<_>>();
+            assert_eq!(words, expected);
+        }
+    }
+
+    #[test]
+    fn f_affine_coordinate_fma_preserves_float32_boundary() {
+        // At destination (1, 0), Geometry.c's compiled affine callback maps
+        // this matrix to exactly (1.5, 0.75).  Computing the two products
+        // separately produces 1.5000000000000002 and lets a huge neighbouring
+        // FLOAT32 word contaminate the bilinear result.
+        let source = f32_source(
+            &[
+                f32::from_bits(0x6bc6_6dcc),
+                f32::from_bits(0xac52_ded2),
+                f32::from_bits(0xf587_a6b6),
+                f32::from_bits(0x984a_6295),
+                f32::from_bits(0x2e79_39ae),
+                f32::from_bits(0x2113_8c85),
+            ],
+            3,
+            2,
+        );
+        let result = op_transform(
+            &source,
+            7,
+            5,
+            &TransformMethod::Affine,
+            &[0.8, 0.2, 0.2, -0.3, 2.0, 0.2],
+            &ResampleFilter::Bilinear,
+            Some((0, 0, 0, 0)),
+            Some("F"),
+        )
+        .expect("F affine boundary transform");
+        let words = result
+            .as_bytes()
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+            .collect::<Vec<_>>();
+        assert_eq!(words[1], 0x2d51_afe7);
     }
 
     #[test]
