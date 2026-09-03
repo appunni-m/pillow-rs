@@ -731,6 +731,7 @@ fn rotate_arbitrary_generic(
     angle: f64,
     expand: bool,
     fill: Option<(u8, u8, u8, u8)>,
+    filter: ResampleFilter,
     nearest: bool,
     center: Option<(f64, f64)>,
     translate: Option<(f64, f64)>,
@@ -760,8 +761,18 @@ fn rotate_arbitrary_generic(
         aff_a * (-center_x - translate_x) + aff_b * (-center_y - translate_y) + center_x;
     let mut aff_f =
         aff_d * (-center_x - translate_x) + aff_e * (-center_y - translate_y) + center_y;
+    // Python's rotate() constructs the matrix and expanded bounds with
+    // ordinary Python float operations. Keep that order for the matrix
+    // translation/bounds pass; the native Geometry.c callback uses the
+    // target's fused multiply-add grouping only when sampling pixels.
     let transform =
         |x: f64, y: f64, c: f64, f: f64| (aff_a * x + aff_b * y + c, aff_d * x + aff_e * y + f);
+    let sample_transform = |x: f64, y: f64, c: f64, f: f64| {
+        (
+            aff_a.mul_add(x, aff_b * y) + c,
+            aff_d.mul_add(x, aff_e * y) + f,
+        )
+    };
 
     // Pillow rounds each outer edge independently. This differs from taking
     // ceil(max - min) whenever the transformed minimum is fractional.
@@ -813,6 +824,7 @@ fn rotate_arbitrary_generic(
             channels,
             [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
             fill_color,
+            filter,
             explicit_mode == Some("F"),
             &mut out,
         );
@@ -824,7 +836,8 @@ fn rotate_arbitrary_generic(
                 // pixel's corner coordinate by subtracting 0.5. Keep the
                 // two stages explicit so arbitrary rotations use the same
                 // source coordinates as Pillow's affine kernel.
-                let (sx_rel, sy_rel) = transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
+                let (sx_rel, sy_rel) =
+                    sample_transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
                 let (sx_rel, sy_rel) = if explicit_mode == Some("PA") {
                     // The palette-preserving PA pipeline has already
                     // expressed its index samples in pixel-center space.
@@ -846,48 +859,81 @@ fn rotate_arbitrary_generic(
                     sx_rel >= -0.5 && sx_rel < sw - 0.5 && sy_rel >= -0.5 && sy_rel < sh - 0.5
                 };
                 if in_filter_support {
-                    let sx_rel = if pa_mode {
+                    let sx_rel = if pa_mode || matches!(filter, ResampleFilter::Bicubic) {
                         sx_rel
                     } else {
                         sx_rel.clamp(0.0, sw - 1.0)
                     };
-                    let sy_rel = if pa_mode {
+                    let sy_rel = if pa_mode || matches!(filter, ResampleFilter::Bicubic) {
                         sy_rel
                     } else {
                         sy_rel.clamp(0.0, sh - 1.0)
                     };
-                    let sx = sx_rel.floor() as u32;
-                    let sy = sy_rel.floor() as u32;
-                    let fx = sx_rel - sx as f64;
-                    let fy = sy_rel - sy as f64;
-                    let sx1 = (sx + 1).min(w - 1);
-                    let sy1 = (sy + 1).min(h - 1);
+                    let bilinear_x = sx_rel.floor() as i64;
+                    let bilinear_y = sy_rel.floor() as i64;
+                    let bicubic_x = bilinear_x - 1;
+                    let bicubic_y = bilinear_y - 1;
+                    let fx = sx_rel - bilinear_x as f64;
+                    let fy = sy_rel - bilinear_y as f64;
                     for c in 0..channels {
-                        let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
-                        let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
-                        let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
-                        let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
-                        // Evaluate the two horizontal blends first for
-                        // regular byte modes. This preserves an exact
-                        // constant edge sample in f64; expanding all four
-                        // products can leave a value such as
-                        // 14.999999999999998, which C's fixed-point
-                        // accumulator reports as 15 after truncation. PA
-                        // retains its established arithmetic ordering.
-                        let v = if pa_mode {
-                            (1.0 - fx) * (1.0 - fy) * p00
-                                + fx * (1.0 - fy) * p10
-                                + (1.0 - fx) * fy * p01
-                                + fx * fy * p11
-                        } else {
-                            (1.0 - fy) * ((1.0 - fx) * p00 + fx * p10)
-                                + fy * ((1.0 - fx) * p01 + fx * p11)
+                        let value = match filter {
+                            ResampleFilter::Bicubic => {
+                                let cubic_fx = sx_rel - (bicubic_x + 1) as f64;
+                                let cubic_fy = sy_rel - (bicubic_y + 1) as f64;
+                                let mut rows = [0.0f64; 4];
+                                for (row, output) in rows.iter_mut().enumerate() {
+                                    let yy = bicubic_y + row as i64;
+                                    let cy = yy.clamp(0, i64::from(h - 1)) as usize;
+                                    let samples = [
+                                        raw[(cy * w as usize
+                                            + bicubic_x.clamp(0, i64::from(w - 1)) as usize)
+                                            * channels
+                                            + c] as f64,
+                                        raw[(cy * w as usize
+                                            + (bicubic_x + 1).clamp(0, i64::from(w - 1)) as usize)
+                                            * channels
+                                            + c] as f64,
+                                        raw[(cy * w as usize
+                                            + (bicubic_x + 2).clamp(0, i64::from(w - 1)) as usize)
+                                            * channels
+                                            + c] as f64,
+                                        raw[(cy * w as usize
+                                            + (bicubic_x + 3).clamp(0, i64::from(w - 1)) as usize)
+                                            * channels
+                                            + c] as f64,
+                                    ];
+                                    *output = rotate_cubic_horizontal_f64(samples, cubic_fx);
+                                }
+                                rotate_cubic_vertical_f64(rows, cubic_fy)
+                            }
+                            _ => {
+                                let sx = bilinear_x.clamp(0, i64::from(w - 1)) as u32;
+                                let sy = bilinear_y.clamp(0, i64::from(h - 1)) as u32;
+                                let sx1 = (bilinear_x + 1).clamp(0, i64::from(w - 1)) as u32;
+                                let sy1 = (bilinear_y + 1).clamp(0, i64::from(h - 1)) as u32;
+                                let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
+                                let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
+                                let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
+                                let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
+                                // Geometry.c's BILINEAR macro evaluates each
+                                // horizontal row as `a + (b-a) * d`, then
+                                // applies the same form vertically. Keep the
+                                // fused operations explicit so byte filters
+                                // use the native rounding order, including
+                                // CMYK and palette-alpha rows.
+                                let top = (p10 - p00).mul_add(fx, p00);
+                                let bottom = (p11 - p01).mul_add(fx, p01);
+                                (bottom - top).mul_add(fy, top)
+                            }
                         };
-                        // Geometry.c's UINT8 bilinear filter stores a C cast
-                        // of the interpolated value, which truncates toward
-                        // zero. This matters for the premultiplied alpha
-                        // round trip used by LA/RGBA transforms.
-                        out[out_idx + c] = v as u8;
+                        // Geometry.c's UINT8 filters store a C cast of the
+                        // interpolated value, truncating toward zero. This
+                        // matters for the premultiplied alpha round trip.
+                        out[out_idx + c] = if matches!(filter, ResampleFilter::Bicubic) {
+                            value.clamp(0.0, 255.0) as u8
+                        } else {
+                            value as u8
+                        };
                     }
                 } else {
                     for c in 0..channels.min(4) {
@@ -906,7 +952,81 @@ fn rotate_arbitrary_generic(
     raw_bytes_to_image(dw, dh, out, channels)
 }
 
-/// Apply Pillow's bilinear transform to native four-byte `I`/`F` samples.
+#[inline]
+fn rotate_cubic_horizontal_f32(samples: [f32; 4], distance: f64) -> f64 {
+    let [v1, v2, v3, v4] = samples;
+    let p1 = f64::from(v2);
+    let p2 = f64::from(v3 - v1);
+    let p3 = f64::from((v1 - v2).mul_add(2.0, v3) - v4);
+    let p4 = f64::from((v2 - v1 - v3) + v4);
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
+}
+
+#[inline]
+fn rotate_cubic_horizontal_f64(samples: [f64; 4], distance: f64) -> f64 {
+    let [v1, v2, v3, v4] = samples;
+    let p1 = v2;
+    let p2 = -v1 + v3;
+    let p3 = 2.0 * (v1 - v2) + v3 - v4;
+    let p4 = -v1 + v2 - v3 + v4;
+    // Geometry.c's optimized arm64 build contracts each Horner step into an
+    // FMA.  Keep the contraction explicit; the final UINT8 cast can change
+    // at a one-ULP boundary when this is evaluated as separate multiply/add
+    // operations.
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
+}
+
+#[inline]
+fn rotate_cubic_horizontal_i32(samples: [i32; 4], distance: f64) -> f64 {
+    let [v1, v2, v3, v4] = samples;
+    // Geometry.c's INT32 BICUBIC coefficients are formed in the source
+    // integer type before the Horner chain is promoted to double. Explicit
+    // wrapping keeps Rust's defined arithmetic aligned with Pillow's native
+    // two's-complement operations for large signed samples.
+    let p1 = f64::from(v2);
+    let p2 = f64::from(v1.wrapping_neg().wrapping_add(v3));
+    let p3 = f64::from(
+        v1.wrapping_sub(v2)
+            .wrapping_mul(2)
+            .wrapping_add(v3)
+            .wrapping_sub(v4),
+    );
+    let p4 = f64::from(
+        v1.wrapping_neg()
+            .wrapping_add(v2)
+            .wrapping_sub(v3)
+            .wrapping_add(v4),
+    );
+    // As in the UINT8 kernel, the native INT32 path uses an FMA Horner
+    // chain after the integer coefficient preparation.
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
+}
+
+#[inline]
+fn rotate_cubic_vertical_f64_fma(samples: [f64; 4], distance: f64) -> f64 {
+    let [v1, v2, v3, v4] = samples;
+    let p1 = v2;
+    let p2 = -v1 + v3;
+    let p3 = (v1 - v2).mul_add(2.0, v3) - v4;
+    let p4 = -v1 + v2 - v3 + v4;
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
+}
+
+#[inline]
+fn rotate_cubic_vertical_f64(samples: [f64; 4], distance: f64) -> f64 {
+    rotate_cubic_horizontal_f64(samples, distance)
+}
+
+/// Apply Pillow's bilinear/bicubic transform to native four-byte `I`/`F`
+/// samples.
 ///
 /// These modes are represented by four bytes in the backend image, but the
 /// transform kernel operates on one signed 32-bit or float32 sample. Pillow's
@@ -919,6 +1039,7 @@ fn rotate_arbitrary_scalar(
     channels: usize,
     affine: [f64; 6],
     fill: (u8, u8, u8, u8),
+    filter: ResampleFilter,
     is_float: bool,
     output: &mut [u8],
 ) {
@@ -931,10 +1052,30 @@ fn rotate_arbitrary_scalar(
         i32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]) as f64
     };
 
+    if source_width == 0 || source_height == 0 {
+        for output_index in (0..destination_width as usize * destination_height as usize)
+            .map(|index| index * channels)
+        {
+            let bytes = if is_float {
+                (scalar_fill as f32).to_le_bytes()
+            } else {
+                (scalar_fill as i32).to_le_bytes()
+            };
+            output[output_index..output_index + 4].copy_from_slice(&bytes);
+        }
+        return;
+    }
+
     for dy in 0..destination_height {
         for dx in 0..destination_width {
-            let sx = a * (dx as f64 + 0.5) + b * (dy as f64 + 0.5) + c - 0.5;
-            let sy = d * (dx as f64 + 0.5) + e * (dy as f64 + 0.5) + f - 0.5;
+            let xin = dx as f64 + 0.5;
+            let yin = dy as f64 + 0.5;
+            // Geometry.c evaluates affine coordinates as a product followed
+            // by a fused multiply-add and a separate translation add for both
+            // typed 32-bit and FLOAT32 images. The filter subtracts 0.5 only
+            // after the center-space bounds check.
+            let sx = a.mul_add(xin, b * yin) + c;
+            let sy = d.mul_add(xin, e * yin) + f;
             let output_index = (dy * destination_width + dx) as usize * channels;
 
             let value = if sx >= 0.0
@@ -942,12 +1083,8 @@ fn rotate_arbitrary_scalar(
                 && sy >= 0.0
                 && sy < source_height as f64
             {
-                let x0 = sx.floor() as u32;
-                let y0 = sy.floor() as u32;
-                let x1 = (x0 + 1).min(source_width - 1);
-                let y1 = (y0 + 1).min(source_height - 1);
-                let fx = sx - x0 as f64;
-                let fy = sy - y0 as f64;
+                let sample_x = sx - 0.5;
+                let sample_y = sy - 0.5;
                 let read = |x: u32, y: u32| {
                     let index = ((y * source_width + x) as usize) * channels;
                     if is_float {
@@ -966,14 +1103,101 @@ fn rotate_arbitrary_scalar(
                         ]) as f64
                     }
                 };
-                let p00 = read(x0, y0);
-                let p10 = read(x1, y0);
-                let p01 = read(x0, y1);
-                let p11 = read(x1, y1);
-                (1.0 - fx) * (1.0 - fy) * p00
-                    + fx * (1.0 - fy) * p10
-                    + (1.0 - fx) * fy * p01
-                    + fx * fy * p11
+                let read_f32 = |x: u32, y: u32| {
+                    let index = ((y * source_width + x) as usize) * channels;
+                    f32::from_le_bytes([
+                        source[index],
+                        source[index + 1],
+                        source[index + 2],
+                        source[index + 3],
+                    ])
+                };
+                let read_i32 = |x: u32, y: u32| {
+                    let index = ((y * source_width + x) as usize) * channels;
+                    i32::from_le_bytes([
+                        source[index],
+                        source[index + 1],
+                        source[index + 2],
+                        source[index + 3],
+                    ])
+                };
+                if matches!(filter, ResampleFilter::Bicubic) {
+                    let floor_x = sample_x.floor() as i64;
+                    let floor_y = sample_y.floor() as i64;
+                    let base_x = floor_x - 1;
+                    let base_y = floor_y - 1;
+                    let fx = sample_x - floor_x as f64;
+                    let fy = sample_y - floor_y as f64;
+                    let mut rows = [0.0f64; 4];
+                    for (row, output) in rows.iter_mut().enumerate() {
+                        let yy =
+                            (base_y + row as i64).clamp(0, i64::from(source_height - 1)) as u32;
+                        let taps = [
+                            (base_x).clamp(0, i64::from(source_width - 1)) as u32,
+                            (base_x + 1).clamp(0, i64::from(source_width - 1)) as u32,
+                            (base_x + 2).clamp(0, i64::from(source_width - 1)) as u32,
+                            (base_x + 3).clamp(0, i64::from(source_width - 1)) as u32,
+                        ];
+                        *output = if is_float {
+                            rotate_cubic_horizontal_f32(
+                                [
+                                    read_f32(taps[0], yy),
+                                    read_f32(taps[1], yy),
+                                    read_f32(taps[2], yy),
+                                    read_f32(taps[3], yy),
+                                ],
+                                fx,
+                            )
+                        } else {
+                            rotate_cubic_horizontal_i32(
+                                [
+                                    read_i32(taps[0], yy),
+                                    read_i32(taps[1], yy),
+                                    read_i32(taps[2], yy),
+                                    read_i32(taps[3], yy),
+                                ],
+                                fx,
+                            )
+                        };
+                    }
+                    if is_float {
+                        rotate_cubic_vertical_f64_fma(rows, fy)
+                    } else {
+                        rotate_cubic_vertical_f64(rows, fy)
+                    }
+                } else {
+                    let floor_x = sample_x.floor() as i64;
+                    let floor_y = sample_y.floor() as i64;
+                    let x0 = floor_x.clamp(0, i64::from(source_width - 1)) as u32;
+                    let y0 = floor_y.clamp(0, i64::from(source_height - 1)) as u32;
+                    let x1 = (floor_x + 1).clamp(0, i64::from(source_width - 1)) as u32;
+                    let y1 = (floor_y + 1).clamp(0, i64::from(source_height - 1)) as u32;
+                    let fx = sample_x - floor_x as f64;
+                    let fy = sample_y - floor_y as f64;
+                    let p00 = read(x0, y0);
+                    let p10 = read(x1, y0);
+                    let p01 = read(x0, y1);
+                    let p11 = read(x1, y1);
+                    let horizontal_top = if is_float {
+                        f64::from((p10 as f32) - (p00 as f32)).mul_add(fx, p00)
+                    } else {
+                        let p00 = p00 as i32;
+                        let p10 = p10 as i32;
+                        f64::from(p10.wrapping_sub(p00)) * fx + f64::from(p00)
+                    };
+                    let horizontal_bottom = if is_float {
+                        f64::from((p11 as f32) - (p01 as f32)).mul_add(fx, p01)
+                    } else {
+                        let p01 = p01 as i32;
+                        let p11 = p11 as i32;
+                        f64::from(p11.wrapping_sub(p01)) * fx + f64::from(p01)
+                    };
+                    if is_float {
+                        (horizontal_bottom - horizontal_top).mul_add(fy, horizontal_top)
+                    } else {
+                        (horizontal_bottom - horizontal_top) * fy + horizontal_top
+                    }
+                }
             } else {
                 scalar_fill
             };
@@ -1175,11 +1399,17 @@ pub fn execute_rotate(
     fill: Option<(u8, u8, u8, u8)>,
     center: Option<(f64, f64)>,
     translate: Option<(f64, f64)>,
+    filter: ResampleFilter,
     requested_nearest: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let has_custom_transform = center.is_some() || translate.is_some();
     let nearest = requested_nearest || explicit_mode == Some("P") || explicit_mode == Some("1");
+    let filter = if nearest {
+        ResampleFilter::Nearest
+    } else {
+        filter
+    };
     // Pillow's PA transform path samples the raw index/alpha bands directly;
     // unlike LA and RGBA, it does not use a premultiplied intermediate. The
     // public fillcolor arrives as (index, index, index, alpha) so the generic
@@ -1224,7 +1454,7 @@ pub fn execute_rotate(
         let needs_alpha_roundtrip = !nearest
             && !matches!(
                 explicit_mode,
-                Some("PA") | Some("RGBa") | Some("F") | Some("I")
+                Some("PA") | Some("RGBa") | Some("RGBX") | Some("CMYK") | Some("F") | Some("I")
             )
             && matches!(
                 img.color(),
@@ -1237,9 +1467,10 @@ pub fn execute_rotate(
         };
         let rotated = rotate_arbitrary_generic(
             &work,
-            angle,
+            normalized_angle,
             expand,
             fill,
+            filter,
             nearest,
             center,
             translate,
@@ -1850,7 +2081,7 @@ pub fn execute_reduce(
 mod tests {
     use super::{reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
     use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, GenericImageView, RgbImage, RgbaImage};
+    use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
     #[test]
     fn rotate_near_right_angle_uses_affine_sampling() {
@@ -1867,17 +2098,111 @@ mod tests {
         // multiple.  Rounding 89.9° or 90.1° into that path moves the source
         // pixel selected at the edge and diverges from Geometry.c's affine
         // nearest sampler.
-        let rgb_output =
-            super::execute_rotate(&rgb, 89.9, false, None, None, None, true, Some("RGB"))
-                .expect("near-right RGB rotation");
+        let rgb_output = super::execute_rotate(
+            &rgb,
+            89.9,
+            false,
+            None,
+            None,
+            None,
+            ResampleFilter::Nearest,
+            true,
+            Some("RGB"),
+        )
+        .expect("near-right RGB rotation");
         assert_eq!(rgb_output.dimensions(), (2, 1));
         assert_eq!(rgb_output.as_bytes(), &[10, 20, 30, 0, 0, 0]);
 
-        let rgba_output =
-            super::execute_rotate(&rgba, 90.1, false, None, None, None, true, Some("RGBA"))
-                .expect("near-right RGBA rotation");
+        let rgba_output = super::execute_rotate(
+            &rgba,
+            90.1,
+            false,
+            None,
+            None,
+            None,
+            ResampleFilter::Nearest,
+            true,
+            Some("RGBA"),
+        )
+        .expect("near-right RGBA rotation");
         assert_eq!(rgba_output.dimensions(), (2, 1));
         assert_eq!(rgba_output.as_bytes(), &[50, 60, 70, 80, 0, 0, 0, 0]);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_rotate_bicubic_uses_scalar_filter() {
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                2,
+                2,
+                [0.0f32, 1.0, 2.0, 3.0]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect(),
+            )
+            .expect("F source shape must be valid"),
+        );
+        let output = super::execute_rotate(
+            &source,
+            45.0,
+            true,
+            None,
+            None,
+            None,
+            ResampleFilter::Bicubic,
+            false,
+            Some("F"),
+        )
+        .expect("F bicubic rotation must succeed");
+        assert_eq!(output.dimensions(), (4, 4));
+        let expected_words = [
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x3e75_57b3,
+            0x4008_5542,
+            0x0000_0000,
+            0x0000_0000,
+            0x3f5e_aaf6,
+            0x4030_aa85,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+        ];
+        let expected: Vec<u8> = expected_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        assert_eq!(output.as_bytes(), expected);
+    }
+
+    #[test]
+    fn byte_rotate_bicubic_uses_geometry_c_horner() {
+        let source = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(2, 2, vec![0, 1, 2, 3]).expect("L source shape must be valid"),
+        );
+        let output = super::execute_rotate(
+            &source,
+            45.0,
+            true,
+            None,
+            None,
+            None,
+            ResampleFilter::Bicubic,
+            false,
+            Some("L"),
+        )
+        .expect("L bicubic rotation must succeed");
+        assert_eq!(output.dimensions(), (4, 4));
+        assert_eq!(
+            output.as_bytes(),
+            &[0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0]
+        );
     }
 
     #[cfg(target_endian = "little")]

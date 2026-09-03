@@ -9212,6 +9212,7 @@ fn expand_gpu_geometry_ops(
                 fill,
                 center,
                 translate,
+                filter,
                 nearest,
             } => {
                 let normalized_angle = angle.rem_euclid(360.0);
@@ -9241,6 +9242,12 @@ fn expand_gpu_geometry_ops(
                     };
                     if let Some(method) = right_angle {
                         PipelineOp::Transpose { method }
+                    } else if !*nearest && !matches!(filter, ResampleFilter::Bilinear) {
+                        // The reviewed Transform lowering implements Pillow's
+                        // bilinear byte kernel only. Keep bicubic and any
+                        // future filtered rotate requests on the exact CPU
+                        // path until their arithmetic is separately proven.
+                        op.clone()
                     } else if let Some((affine, (w, h))) =
                         gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
                     {
@@ -9264,7 +9271,7 @@ fn expand_gpu_geometry_ops(
                             filter: if *nearest || matches!(logical_mode, Some("1" | "P")) {
                                 ResampleFilter::Nearest
                             } else {
-                                ResampleFilter::Bilinear
+                                *filter
                             },
                             fill: transform_fill,
                             palette_fill: None,
@@ -11236,6 +11243,7 @@ fn gpu_rotate_nearest_affine_is_exact(
         fill,
         center,
         translate,
+        ..
     } = op
     else {
         return false;

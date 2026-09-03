@@ -73,6 +73,8 @@ pub enum PipelineOp {
         center: Option<(f64, f64)>,
         /// Optional post-rotation translation in pixels.
         translate: Option<(f64, f64)>,
+        /// Resampling filter requested by the public rotate call.
+        filter: ResampleFilter,
         /// Whether nearest-neighbor resampling was requested.
         nearest: bool,
     },

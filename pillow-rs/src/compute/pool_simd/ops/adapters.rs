@@ -4602,6 +4602,7 @@ pub(crate) fn simd_supports_for_image(
             expand,
             center,
             translate,
+            filter,
             nearest,
             ..
         } => {
@@ -4649,6 +4650,11 @@ pub(crate) fn simd_supports_for_image(
                         nearest,
                     )
                 } else if matches!(img, DynamicImage::ImageLuma16(_)) {
+                    false
+                } else if !matches!(filter, ResampleFilter::Bilinear) {
+                    // SIMD's arbitrary-angle kernel is reviewed only for
+                    // Pillow's bilinear arithmetic. Keep bicubic and any
+                    // future filtered rotate requests on the exact CPU path.
                     false
                 } else {
                     rotate_bilinear_supported_for_shape(
@@ -6129,6 +6135,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             expand,
             center,
             translate,
+            filter,
             nearest,
             ..
         } => {
@@ -6166,6 +6173,8 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                         nearest,
                     )
                 } else if shape.layout == SimdLayout::Luma16 {
+                    false
+                } else if !matches!(filter, ResampleFilter::Bilinear) {
                     false
                 } else {
                     rotate_bilinear_supported_for_shape(
@@ -22182,7 +22191,9 @@ pub fn simd_rotate(
         fill,
         center,
         translate,
+        filter,
         nearest,
+        ..
     } = op
     else {
         return Err(PilError::ValueError("expected Rotate op".into()));
@@ -22215,6 +22226,7 @@ pub fn simd_rotate(
         return Ok(result);
     }
     if !nearest
+        && matches!(filter, ResampleFilter::Bilinear)
         && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
         && let Some(result) = simd_typed_bilinear_rotate_native(
             img, *angle, *expand, *fill, *center, *translate, mode,
@@ -22223,6 +22235,7 @@ pub fn simd_rotate(
         return Ok(result);
     }
     if !nearest
+        && matches!(filter, ResampleFilter::Bilinear)
         && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
         && let Some(result) =
             simd_bilinear_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
