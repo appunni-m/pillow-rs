@@ -102,6 +102,13 @@ backend is complete.
   preserving complete f32 words, including signed zero, NaN payload, infinity,
   and subnormal values. Filtered F rotations remain exact host semantic control
   because they interpolate scalar values rather than relocating words.
+- [x] F affine filtered-word parity: commit `5e76790cd`. The CPU affine path
+  now decodes explicit F words and mirrors Pillow Geometry.c's destination
+  center FMA and BILINEAR/BICUBIC f32/f64 ordering. Native differential probes
+  are 10,000/10,000 exact across varied dimensions and finite/special words;
+  nearest relocation remains on the existing exact path. Typed F projective,
+  mesh, and rotation filters remain queued until their distinct geometry and
+  filter contracts are carried through the same ordered arithmetic.
 - [x] PA nearest rotate raw pair relocation: commit `74ceca899`. The bounded
   fixed-point nearest proof now admits palette-alpha index/alpha pairs on the
   native GPU path. The lowered rotate fill is normalized from the public

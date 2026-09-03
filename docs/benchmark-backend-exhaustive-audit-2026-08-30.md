@@ -6248,3 +6248,30 @@ coverage is
 `make migration-parity-evidence-check` passes with document counts 25/24/24.
 The P2 zero-violation gate and remaining broader F/projective/mesh/palette
 arithmetic envelopes remain open.
+
+## 32.107 F affine filtered-word parity (2026-09-03)
+
+Randomized differential probing found a value-parity gap outside the maintained
+corpus: explicit `F` affine transforms with BILINEAR or BICUBIC resampling
+entered the packed-byte affine kernel. A 1x1 float rotated by a nonzero angle
+could therefore interpolate individual word bytes and corrupt neighboring
+FLOAT32 samples. Pillow's `src/libImaging/Geometry.c` decodes one scalar word,
+evaluates destination centers with the compiled affine FMA order, and applies
+the FLOAT32 filter's ordered f32/f64 arithmetic before storing one f32 result.
+
+Commit `5e76790cd` adds a typed CPU F affine path for the two public filtered
+transform modes. It mirrors the native coordinate FMA order, bilinear
+f32-difference/f64-FMA rows, and bicubic f32-coefficient/f64-Horner rows;
+nearest relocation remains on the existing exact word-copy path. The focused
+Rust tests pass 2/2, and native Pillow 12.2.0 versus RSPIL probes pass
+10,000/10,000 randomized filtered transforms (5,000 BILINEAR and 5,000
+BICUBIC), including finite extremes, NaN/infinity, signed zero, subnormals,
+zero/edge coordinates, and varied dimensions. A separate 2,000-case nearest
+probe remains exact. `make -C pillow-rs fmt`, `make build-dev`, and
+`git diff --check` pass. No fixtures, thresholds, IDs, denominators, policy,
+or receipt rules changed.
+
+The remaining P0 arithmetic bucket is typed F filtered projective/mesh and
+rotation behavior plus broader non-dyadic device admission. P1 backend
+identity reconciliation and the P2 equal-ID/equal-receipt timing gate remain
+open.
