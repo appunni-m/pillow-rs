@@ -9274,6 +9274,7 @@ fn expand_gpu_geometry_ops(
                                 *filter
                             },
                             fill: transform_fill,
+                            fill_is_none: fill.is_none(),
                             palette_fill: None,
                         }
                     } else {
@@ -11269,6 +11270,7 @@ fn gpu_rotate_nearest_affine_is_exact(
         data: Arc::from(affine.to_vec()),
         filter: ResampleFilter::Nearest,
         fill: *fill,
+        fill_is_none: fill.is_none(),
         palette_fill: None,
     };
     gpu_nearest_affine_is_exact(&transformed, image, mode, source_dimensions)
@@ -12643,6 +12645,7 @@ mod tests {
             data: Arc::from(data.to_vec()),
             filter,
             fill: Some((7, 8, 9, 10)),
+            fill_is_none: false,
             palette_fill: None,
         };
         let outside = [1.0, 0.0, 100.0, 0.0, 1.0, 100.0];
@@ -12687,6 +12690,7 @@ mod tests {
                 data: Arc::from(vec![1.0; 8]),
                 filter: ResampleFilter::Bicubic,
                 fill: Some((7, 8, 9, 10)),
+                fill_is_none: false,
                 palette_fill: None,
             },
             &rgba,
@@ -12707,6 +12711,7 @@ mod tests {
             data: Arc::from(vec![7.0 / 6.0, 0.0, -1.0, 0.0, 7.0 / 6.0, -1.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((76, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         assert!(gpu_nearest_affine_is_exact(
@@ -12726,6 +12731,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, 0.499999, 0.0, 1.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((76, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         let small_image = DynamicImage::ImageRgba8(
@@ -12748,6 +12754,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
             filter: ResampleFilter::Bilinear,
             fill: Some((76, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         assert!(!gpu_nearest_affine_is_exact(
@@ -12764,6 +12771,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: None,
+            fill_is_none: true,
             palette_fill: None,
         };
         assert_eq!(gpu_transform_fill(&no_fill, Some("F"), 8), 0);
@@ -12883,6 +12891,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: Some(7),
         };
         let quad = PipelineOp::Transform {
@@ -12892,6 +12901,7 @@ mod tests {
             data: Arc::from(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: Some(7),
         };
         let mesh = PipelineOp::Transform {
@@ -12903,6 +12913,7 @@ mod tests {
             ]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: Some(7),
         };
         for op in [&perspective, &quad, &mesh] {
@@ -12934,6 +12945,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         let perspective_axis_swap = PipelineOp::Transform {
@@ -12943,6 +12955,7 @@ mod tests {
             data: Arc::from(vec![0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         for (name, op) in [
@@ -12963,6 +12976,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         assert!(gpu_projective_nearest_is_exact(
@@ -12980,6 +12994,7 @@ mod tests {
             ]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         let mesh_axis_swap = PipelineOp::Transform {
@@ -12991,6 +13006,7 @@ mod tests {
             ]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         for (name, op) in [
@@ -13011,6 +13027,7 @@ mod tests {
             ]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         assert!(!gpu_projective_nearest_is_exact(
@@ -13026,6 +13043,7 @@ mod tests {
             data: Arc::from(vec![1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: Some(7),
         };
         assert!(!gpu_projective_nearest_is_exact(
@@ -13047,6 +13065,7 @@ mod tests {
             data: Arc::from(vec![2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0]),
             filter: ResampleFilter::Nearest,
             fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
             palette_fill: None,
         };
         assert!(!gpu_projective_nearest_is_exact(
@@ -17536,6 +17555,7 @@ mod tests {
                 data: Arc::from(vec![0.5, 0.0, 0.0, 0.0, 0.5, 0.0]),
                 filter: ResampleFilter::Bicubic,
                 fill: Some((2, 1, 0, 0)),
+                fill_is_none: false,
                 palette_fill: None,
             };
             let image = source.materialize().expect("materialize typed source");

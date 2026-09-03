@@ -54,6 +54,8 @@ pub enum TransformFill {
     Name(String),
     /// A sequence whose components are not integers.
     FloatingComponents(Vec<f64>),
+    /// A scalar real value, accepted by mode F.
+    FloatingScalar(f64),
     /// An object that is not a supported fill representation.
     Invalid,
 }
@@ -100,6 +102,11 @@ fn packed_transform_float(value: i64) -> (u8, u8, u8, u8) {
     (bytes[0], bytes[1], bytes[2], bytes[3])
 }
 
+fn packed_transform_float64(value: f64) -> (u8, u8, u8, u8) {
+    let bytes = (value as f32).to_le_bytes();
+    (bytes[0], bytes[1], bytes[2], bytes[3])
+}
+
 fn transform_fill_arity_error(mode: &str) -> PilError {
     let message = match mode {
         "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" => {
@@ -108,6 +115,16 @@ fn transform_fill_arity_error(mode: &str) -> PilError {
         "F" => "must be real number, not tuple",
         "LA" | "PA" => "color must be int, or tuple of one or two elements",
         _ => "color must be int, or tuple of one, three or four elements",
+    };
+    PilError::TypeError(message.into())
+}
+
+fn transform_float_scalar_error(mode: &str) -> PilError {
+    let message = match mode {
+        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+            "color must be int or single-element tuple"
+        }
+        _ => "color must be int or tuple",
     };
     PilError::TypeError(message.into())
 }
@@ -422,6 +439,16 @@ impl Image {
                 let color = crate::color::getcolor(r, g, b, a, &mode)?;
                 Ok((transform_color_value_fill(&mode, color)?, None))
             }
+            Some(TransformFill::FloatingScalar(value)) if mode == "F" => {
+                Ok((packed_transform_float64(value), None))
+            }
+            Some(TransformFill::FloatingScalar(_)) => Err(transform_float_scalar_error(&mode)),
+            Some(TransformFill::FloatingComponents(values)) if mode == "F" => {
+                match values.as_slice() {
+                    [value] => Ok((packed_transform_float64(*value), None)),
+                    _ => Err(transform_fill_arity_error(&mode)),
+                }
+            }
             Some(TransformFill::FloatingComponents(_)) => Err(PilError::TypeError(
                 "'float' object cannot be interpreted as an integer".into(),
             )),
@@ -447,6 +474,7 @@ impl Image {
         fillcolor: Option<TransformFill>,
     ) -> Result<Image, PilError> {
         let requested_filter = parse_transform_resample(resample)?;
+        let fill_is_none = fillcolor.is_none();
         // Pillow's indexed affine transform keeps the raw palette index and
         // therefore uses nearest-neighbor sampling regardless of the public
         // filter code. Keep the operation palette-safe so materialization does
@@ -467,9 +495,22 @@ impl Image {
                 // their index, while tuple/name fills resolve to palette index
                 // zero through the same helper.
                 if let Some(index) = palette_fill {
-                    self.transform_affine_palette_index_with_filter(size, &matrix, index, filter)
+                    self.transform_affine_palette_index_with_filter(
+                        size,
+                        &matrix,
+                        index,
+                        filter,
+                        fill_is_none,
+                    )
                 } else {
-                    self.transform_affine_with_palette_fill(size, &matrix, fill, None, filter)
+                    self.transform_affine_with_palette_fill(
+                        size,
+                        &matrix,
+                        fill,
+                        None,
+                        filter,
+                        fill_is_none,
+                    )
                 }
             }
             1 => {
@@ -499,7 +540,14 @@ impl Image {
                     (y1 - y0) / f64::from(size.1),
                     *y0,
                 ];
-                self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill, filter)
+                self.transform_affine_with_palette_fill(
+                    size,
+                    &matrix,
+                    fill,
+                    palette_fill,
+                    filter,
+                    fill_is_none,
+                )
             }
             2 | 3 => {
                 let Some(TransformData::Affine(data)) = data else {
@@ -521,6 +569,7 @@ impl Image {
                         fill,
                         palette_fill,
                         filter,
+                        fill_is_none,
                     )
                 } else {
                     self.transform_quad_with_palette_fill(
@@ -529,6 +578,7 @@ impl Image {
                         fill,
                         palette_fill,
                         filter,
+                        fill_is_none,
                     )
                 }
             }
@@ -575,7 +625,7 @@ impl Image {
                     }
                     None => return Err(PilError::ValueError("missing method data".into())),
                 };
-                self.transform_mesh_with_filter(size, data, fill, filter)
+                self.transform_mesh_with_filter(size, data, fill, filter, fill_is_none)
             }
             _ => Err(PilError::ValueError("unknown transformation method".into())),
         }
@@ -609,6 +659,7 @@ impl Image {
             fillcolor,
             palette_fill,
             ResampleFilter::Nearest,
+            false,
         )
     }
 
@@ -618,6 +669,7 @@ impl Image {
         matrix: &[f64],
         fill_index: u8,
         filter: ResampleFilter,
+        fill_is_none: bool,
     ) -> Result<Image, PilError> {
         if !self.has_palette_mode() {
             return Err(PilError::ValueError(
@@ -630,6 +682,7 @@ impl Image {
             (fill_index, 0, 0, 255),
             Some(fill_index),
             filter,
+            fill_is_none,
         )
     }
 
@@ -640,6 +693,7 @@ impl Image {
         fillcolor: (u8, u8, u8, u8),
         palette_fill: Option<u8>,
         filter: ResampleFilter,
+        fill_is_none: bool,
     ) -> Result<Image, PilError> {
         if matrix.len() != 6 {
             return Err(PilError::ValueError(
@@ -659,6 +713,7 @@ impl Image {
                 data: data.into(),
                 filter,
                 fill,
+                fill_is_none,
                 palette_fill,
             },
         ))
@@ -671,6 +726,7 @@ impl Image {
         fillcolor: (u8, u8, u8, u8),
         palette_fill: Option<u8>,
         filter: ResampleFilter,
+        fill_is_none: bool,
     ) -> Result<Image, PilError> {
         if data.len() != 8 {
             return Err(PilError::ValueError("wrong number of data points".into()));
@@ -684,6 +740,7 @@ impl Image {
                 data: data.to_vec().into(),
                 filter,
                 fill: Some(fillcolor),
+                fill_is_none,
                 palette_fill,
             },
         ))
@@ -696,6 +753,7 @@ impl Image {
         fillcolor: (u8, u8, u8, u8),
         palette_fill: Option<u8>,
         filter: ResampleFilter,
+        fill_is_none: bool,
     ) -> Result<Image, PilError> {
         if data.len() != 8 {
             return Err(PilError::ValueError("wrong number of data points".into()));
@@ -709,6 +767,7 @@ impl Image {
                 data: data.to_vec().into(),
                 filter,
                 fill: Some(fillcolor),
+                fill_is_none,
                 palette_fill,
             },
         ))
@@ -733,6 +792,7 @@ impl Image {
         data: Vec<f64>,
         fillcolor: (u8, u8, u8, u8),
         filter: ResampleFilter,
+        fill_is_none: bool,
     ) -> Result<Image, PilError> {
         Ok(Image::push_op(
             self,
@@ -743,6 +803,7 @@ impl Image {
                 data: data.into(),
                 filter,
                 fill: Some(fillcolor),
+                fill_is_none,
                 palette_fill: None,
             },
         ))

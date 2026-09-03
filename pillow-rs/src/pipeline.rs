@@ -535,6 +535,13 @@ pub enum PipelineOp {
         filter: ResampleFilter,
         /// Optional fill color.
         fill: Option<(u8, u8, u8, u8)>,
+        /// Whether Pillow's public call omitted `fillcolor`.
+        ///
+        /// Pillow initializes an output image with an explicit fill and lets
+        /// failed mesh samples leave that value in place. When no fill is
+        /// supplied, `ImagingGenericTransform` instead clears each failed
+        /// sample, including a later mesh record overwriting an earlier one.
+        fill_is_none: bool,
         /// Raw palette index used to fill out-of-bounds `P` samples.
         ///
         /// Pillow distinguishes scalar palette indices from tuple/string

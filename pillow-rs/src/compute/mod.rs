@@ -1519,6 +1519,7 @@ mod tests {
                 data: vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0].into(),
                 filter: ResampleFilter::Bilinear,
                 fill: Some((0, 0, 0, 255)),
+                fill_is_none: false,
                 palette_fill: None,
             },
         ];

@@ -2686,11 +2686,22 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     data,
                     filter,
                     fill,
+                    fill_is_none,
                     palette_fill,
                 } = op
                 {
                     let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
-                    op_transform(img, *w, *h, method, data, filter, resolved_fill, mode)
+                    op_transform(
+                        img,
+                        *w,
+                        *h,
+                        method,
+                        data,
+                        filter,
+                        resolved_fill,
+                        *fill_is_none,
+                        mode,
+                    )
                 } else {
                     Err(PilError::ValueError("expected Transform op".into()))
                 }

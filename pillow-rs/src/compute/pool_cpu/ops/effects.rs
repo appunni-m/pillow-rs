@@ -1192,6 +1192,339 @@ fn transform_affine_f32(
     Ok(DynamicImage::ImageRgba8(out))
 }
 
+/// Sample one FLOAT32 word with Pillow's generic-transform filter contract.
+///
+/// `Geometry.c` uses the same FLOAT32 filter callbacks for affine, perspective,
+/// quad, and mesh transforms. Keep this helper separate from the byte path:
+/// each source pixel is one f32 word, horizontal rows use f32 coefficient
+/// arithmetic promoted to f64, and the final value is stored as f32.
+#[inline]
+fn sample_transform_f32(
+    source: &[f32],
+    src_w: u32,
+    src_h: u32,
+    sx: f64,
+    sy: f64,
+    filter: &ResampleFilter,
+) -> f32 {
+    let src_w_i = i64::from(src_w);
+    let src_h_i = i64::from(src_h);
+    let sample_x = sx - 0.5;
+    let sample_y = sy - 0.5;
+    let floor_x = sample_x.floor() as i64;
+    let floor_y = sample_y.floor() as i64;
+    let dx = sample_x - floor_x as f64;
+    let dy = sample_y - floor_y as f64;
+    let at = |x: i64, y: i64| -> f32 {
+        let x = x.clamp(0, src_w_i - 1) as usize;
+        let y = y.clamp(0, src_h_i - 1) as usize;
+        source[y * src_w as usize + x]
+    };
+
+    match filter {
+        ResampleFilter::Bilinear => {
+            // Keep the source-type subtraction before the f64 FMA, matching
+            // Geometry.c's FLOAT32 BILINEAR macro rather than evaluating four
+            // independent f64 products.
+            let top = f64::from(at(floor_x + 1, floor_y) - at(floor_x, floor_y))
+                .mul_add(dx, f64::from(at(floor_x, floor_y)));
+            let bottom = f64::from(at(floor_x + 1, floor_y + 1) - at(floor_x, floor_y + 1))
+                .mul_add(dx, f64::from(at(floor_x, floor_y + 1)));
+            (bottom - top).mul_add(dy, top) as f32
+        }
+        ResampleFilter::Bicubic => {
+            #[inline]
+            fn horizontal(samples: [f32; 4], distance: f64) -> f64 {
+                let [v1, v2, v3, v4] = samples;
+                let p1 = f64::from(v2);
+                let p2 = f64::from(v3 - v1);
+                let p3 = f64::from((v1 - v2).mul_add(2.0, v3) - v4);
+                let p4 = f64::from((v2 - v1 - v3) + v4);
+                let inner = distance.mul_add(p4, p3);
+                let middle = distance.mul_add(inner, p2);
+                distance.mul_add(middle, p1)
+            }
+
+            let base_x = floor_x - 1;
+            let base_y = floor_y - 1;
+            let mut rows = [0.0f64; 4];
+            for (row, output) in rows.iter_mut().enumerate() {
+                let y = base_y + row as i64;
+                *output = horizontal(
+                    [
+                        at(base_x, y),
+                        at(base_x + 1, y),
+                        at(base_x + 2, y),
+                        at(base_x + 3, y),
+                    ],
+                    dx,
+                );
+            }
+            let [v1, v2, v3, v4] = rows;
+            let p1 = v2;
+            let p2 = -v1 + v3;
+            let p3 = (v1 - v2).mul_add(2.0, v3) - v4;
+            let p4 = -v1 + v2 - v3 + v4;
+            let inner = dy.mul_add(p4, p3);
+            let middle = dy.mul_add(inner, p2);
+            dy.mul_add(middle, p1) as f32
+        }
+        // The public transform parser accepts only nearest, bilinear, and
+        // bicubic. Keep an internal fallback deterministic if a direct Rust
+        // caller constructs another descriptor.
+        _ => at(floor_x, floor_y),
+    }
+}
+
+/// Apply Pillow's FLOAT32 filters to a perspective or quadrilateral map.
+///
+/// The map is evaluated at destination pixel centers using the arm64 FMA
+/// grouping emitted for `perspective_transform`/`quad_transform` in
+/// `src/libImaging/Geometry.c`; only then does the filter apply its 0.5
+/// source-coordinate shift and edge clipping.
+fn transform_projective_f32(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    _fill_is_none: bool,
+    quad: bool,
+) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageRgba8(rgba) = img else {
+        return Err(PilError::InternalError(
+            "F projective transform requires four-byte storage".into(),
+        ));
+    };
+    let (src_w, src_h) = rgba.dimensions();
+    let source_len = usize::try_from(src_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(src_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let raw = rgba.as_raw();
+    let source = raw
+        .chunks_exact(4)
+        .take(source_len)
+        .map(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+        .collect::<Vec<_>>();
+    if source.len() != source_len {
+        return Err(PilError::InternalError(
+            "F projective source buffer shape mismatch".into(),
+        ));
+    }
+    let fill_word = fill
+        .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
+        .unwrap_or(0.0);
+    let mut output = vec![fill_word; output_len];
+
+    let quad_coefficients = if quad {
+        if dst_w == 0 || dst_h == 0 {
+            None
+        } else {
+            let x0 = data[0];
+            let y0 = data[1];
+            let inverse_width = 1.0 / f64::from(dst_w);
+            let inverse_height = 1.0 / f64::from(dst_h);
+            Some([
+                x0,
+                (data[6] - x0) * inverse_width,
+                (data[2] - x0) * inverse_height,
+                (data[4] - data[2] - data[6] + x0) * inverse_width * inverse_height,
+                y0,
+                (data[7] - y0) * inverse_width,
+                (data[3] - y0) * inverse_height,
+                (data[5] - data[3] - data[7] + y0) * inverse_width * inverse_height,
+            ])
+        }
+    } else {
+        None
+    };
+    let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
+        let xin = dx + 0.5;
+        let yin = dy + 0.5;
+        let (sx, sy) = if let Some(coefficients) = quad_coefficients {
+            let sx_linear = coefficients[1].mul_add(xin, coefficients[0]);
+            let sx_linear = coefficients[2].mul_add(yin, sx_linear);
+            let sx = (coefficients[3] * xin).mul_add(yin, sx_linear);
+            let sy_linear = coefficients[5].mul_add(xin, coefficients[4]);
+            let sy_linear = coefficients[6].mul_add(yin, sy_linear);
+            let sy = (coefficients[7] * xin).mul_add(yin, sy_linear);
+            (sx, sy)
+        } else {
+            let denominator = data[6].mul_add(xin, data[7] * yin) + 1.0;
+            let sx = (data[0].mul_add(xin, data[1] * yin) + data[2]) / denominator;
+            let sy = (data[3].mul_add(xin, data[4] * yin) + data[5]) / denominator;
+            (sx, sy)
+        };
+        (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
+    };
+
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            let output_index = (dy as usize) * dst_w as usize + dx as usize;
+            if let Some((sx, sy)) = source_at(f64::from(dx), f64::from(dy))
+                && sx >= 0.0
+                && sx < f64::from(src_w)
+                && sy >= 0.0
+                && sy < f64::from(src_h)
+            {
+                output[output_index] = sample_transform_f32(&source, src_w, src_h, sx, sy, filter);
+            }
+        }
+    }
+
+    let bytes = output
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect::<Vec<_>>();
+    let out = RgbaImage::from_raw(dst_w, dst_h, bytes)
+        .ok_or_else(|| PilError::InternalError("F projective output shape mismatch".into()))?;
+    Ok(DynamicImage::ImageRgba8(out))
+}
+
+/// Apply Pillow's FLOAT32 filters to a piecewise quadrilateral mesh.
+fn transform_mesh_f32(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    mesh_data: &[f64],
+    fill: Option<(u8, u8, u8, u8)>,
+    fill_is_none: bool,
+    filter: &ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageRgba8(rgba) = img else {
+        return Err(PilError::InternalError(
+            "F mesh transform requires four-byte storage".into(),
+        ));
+    };
+    let (src_w, src_h) = rgba.dimensions();
+    let source_len = usize::try_from(src_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(src_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let raw = rgba.as_raw();
+    let source = raw
+        .chunks_exact(4)
+        .take(source_len)
+        .map(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+        .collect::<Vec<_>>();
+    if source.len() != source_len {
+        return Err(PilError::InternalError(
+            "F mesh source buffer shape mismatch".into(),
+        ));
+    }
+    let fill_word = fill
+        .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
+        .unwrap_or(0.0);
+    let mut output = vec![fill_word; output_len];
+    let sw_f = f64::from(src_w);
+    let sh_f = f64::from(src_h);
+
+    for mesh in mesh_data.chunks_exact(12) {
+        let x0_d = mesh[0] as i64;
+        let y0_d = mesh[1] as i64;
+        let x1_d = mesh[2] as i64;
+        let y1_d = mesh[3] as i64;
+        let width = x1_d.saturating_sub(x0_d);
+        let height = y1_d.saturating_sub(y0_d);
+        if width <= 0 || height <= 0 {
+            continue;
+        }
+        let width_f = width as f64;
+        let height_f = height as f64;
+        let inverse_width = 1.0 / width_f;
+        let inverse_height = 1.0 / height_f;
+        let x0_s = mesh[4];
+        let y0_s = mesh[5];
+        let x1_s = mesh[6];
+        let y1_s = mesh[7];
+        let x2_s = mesh[8];
+        let y2_s = mesh[9];
+        let x3_s = mesh[10];
+        let y3_s = mesh[11];
+        let coefficients = [
+            x0_s,
+            (x3_s - x0_s) * inverse_width,
+            (x1_s - x0_s) * inverse_height,
+            (x2_s - x1_s - x3_s + x0_s) * inverse_width * inverse_height,
+            y0_s,
+            (y3_s - y0_s) * inverse_width,
+            (y1_s - y0_s) * inverse_height,
+            (y2_s - y1_s - y3_s + y0_s) * inverse_width * inverse_height,
+        ];
+        let bx0 = x0_d.max(0).min(i64::from(dst_w));
+        let by0 = y0_d.max(0).min(i64::from(dst_h));
+        let bx1 = x1_d.max(0).min(i64::from(dst_w));
+        let by1 = y1_d.max(0).min(i64::from(dst_h));
+        if bx0 >= bx1 || by0 >= by1 {
+            continue;
+        }
+        for destination_y in by0..by1 {
+            let local_y = (destination_y - by0) as f64 + 0.5;
+            for destination_x in bx0..bx1 {
+                let local_x = (destination_x - bx0) as f64 + 0.5;
+                let sx_linear = coefficients[2]
+                    .mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
+                let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
+                let sy_linear = coefficients[6]
+                    .mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
+                let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
+                let output_index = destination_y as usize * dst_w as usize + destination_x as usize;
+                if !sx.is_finite()
+                    || !sy.is_finite()
+                    || sx < 0.0
+                    || sx >= sw_f
+                    || sy < 0.0
+                    || sy >= sh_f
+                {
+                    // ImagingGenericTransform clears a failed sample when
+                    // fillcolor is omitted; with an explicit fill the output
+                    // was already initialized to that word and must retain a
+                    // valid sample written by an earlier overlapping record.
+                    if fill_is_none {
+                        output[output_index] = 0.0;
+                    }
+                    continue;
+                }
+                output[output_index] = sample_transform_f32(&source, src_w, src_h, sx, sy, filter);
+            }
+        }
+    }
+
+    let bytes = output
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect::<Vec<_>>();
+    let out = RgbaImage::from_raw(dst_w, dst_h, bytes)
+        .ok_or_else(|| PilError::InternalError("F mesh output shape mismatch".into()))?;
+    Ok(DynamicImage::ImageRgba8(out))
+}
+
 /// Apply an affine transform working on the native number of channels.
 /// When `nearest` is true, uses nearest-neighbor sampling.
 fn transform_affine_generic(
@@ -1525,6 +1858,7 @@ pub fn op_transform(
     data: &[f64],
     filter: &ResampleFilter,
     fill: Option<(u8, u8, u8, u8)>,
+    fill_is_none: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     match method {
@@ -1591,6 +1925,10 @@ pub fn op_transform(
             // this operation. The old public raw-data wrapper was removed, so
             // malformed mesh descriptors are outside the supported input
             // boundary.
+            if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
+                let result = transform_mesh_f32(img, w, h, data, fill, fill_is_none, filter)?;
+                return Ok(preserve_mode(img, result));
+            }
             // Pillow's non-nearest Image.transform path premultiplies LA/RGBA
             // before invoking the mesh filter and unpremultiplies afterward.
             // Mesh records otherwise operate on the same native byte layout
@@ -1606,7 +1944,7 @@ pub fn op_transform(
             } else {
                 img.clone()
             };
-            let result = transform_mesh(&work, w, h, data, fill, *filter)?;
+            let result = transform_mesh(&work, w, h, data, fill, *filter, fill_is_none)?;
             let result = if needs_alpha_roundtrip {
                 unpremultiply_alpha(&result)
             } else {
@@ -1618,6 +1956,19 @@ pub fn op_transform(
             // `Image::transform_public` and the maintained perspective
             // wrapper validate the exact eight-coefficient contract before
             // queuing this operation.
+            if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
+                let result = transform_projective_f32(
+                    img,
+                    w,
+                    h,
+                    &data[..8],
+                    filter,
+                    fill,
+                    fill_is_none,
+                    false,
+                )?;
+                return Ok(preserve_mode(img, result));
+            }
             let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, false)?;
             Ok(preserve_mode(img, result))
         }
@@ -1625,6 +1976,19 @@ pub fn op_transform(
             // `Image::transform_public` and the maintained quad wrapper
             // validate the exact eight-coordinate contract before queuing
             // this operation.
+            if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
+                let result = transform_projective_f32(
+                    img,
+                    w,
+                    h,
+                    &data[..8],
+                    filter,
+                    fill,
+                    fill_is_none,
+                    true,
+                )?;
+                return Ok(preserve_mode(img, result));
+            }
             let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, true)?;
             Ok(preserve_mode(img, result))
         }
@@ -2001,8 +2365,9 @@ fn transform_mesh(
     mesh_data: &[f64],
     fill: Option<(u8, u8, u8, u8)>,
     filter: ResampleFilter,
+    fill_is_none: bool,
 ) -> Result<DynamicImage, PilError> {
-    transform_mesh_with_filter(img, dst_w, dst_h, mesh_data, fill, filter)
+    transform_mesh_with_filter(img, dst_w, dst_h, mesh_data, fill, filter, fill_is_none)
 }
 
 /// Apply Pillow's piecewise quadrilateral mesh transform using the exact
@@ -2023,6 +2388,7 @@ fn transform_mesh_with_filter(
     mesh_data: &[f64],
     fill: Option<(u8, u8, u8, u8)>,
     filter: ResampleFilter,
+    fill_is_none: bool,
 ) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
@@ -2130,6 +2496,8 @@ fn transform_mesh_with_filter(
                         let source_idx = ((iy as usize * sw as usize) + ix as usize) * channels;
                         out[out_idx..out_idx + channels]
                             .copy_from_slice(&raw[source_idx..source_idx + channels]);
+                    } else if fill_is_none {
+                        out[out_idx..out_idx + channels].fill(0);
                     }
                     continue;
                 }
@@ -2141,6 +2509,9 @@ fn transform_mesh_with_filter(
                     || sy < 0.0
                     || sy >= sh_f
                 {
+                    if fill_is_none {
+                        out[out_idx..out_idx + channels].fill(0);
+                    }
                     continue;
                 }
 
@@ -2277,6 +2648,129 @@ mod tests {
         )
     }
 
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_projective_filters_use_scalar_words() {
+        let source = f32_source(&[1.25, -2.5, 7.75, 10.5], 2, 2);
+        let cases = [
+            (
+                TransformMethod::Perspective,
+                vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                ResampleFilter::Bilinear,
+                [
+                    0x3fa0_0000,
+                    0xc020_0000,
+                    0x0000_0000,
+                    0x40f8_0000,
+                    0x4128_0000,
+                    0x0000_0000,
+                    0x0000_0000,
+                    0x0000_0000,
+                    0x0000_0000,
+                ],
+            ),
+            (
+                TransformMethod::Quad,
+                vec![0.0, 0.0, 2.0, 0.0, 2.0, 2.0, 0.0, 2.0],
+                ResampleFilter::Bicubic,
+                [
+                    0x3f82_6798,
+                    0x4091_da13,
+                    0x4101_8d20,
+                    0xbfe0_71c7,
+                    0x4088_0000,
+                    0x4124_0e39,
+                    0xc090_d2ca,
+                    0x407c_4bda,
+                    0x4146_8f52,
+                ],
+            ),
+            (
+                TransformMethod::Mesh,
+                vec![0.0, 0.0, 3.0, 3.0, 0.0, 0.0, 2.0, 0.0, 2.0, 2.0, 0.0, 2.0],
+                ResampleFilter::Bilinear,
+                [
+                    0x3fa0_0000,
+                    0x4090_0000,
+                    0x40f8_0000,
+                    0xbf20_0000,
+                    0x4088_0000,
+                    0x4112_0000,
+                    0xc020_0000,
+                    0x4080_0000,
+                    0x4128_0000,
+                ],
+            ),
+        ];
+        for (method, data, filter, expected) in cases {
+            let output = op_transform(
+                &source,
+                3,
+                3,
+                &method,
+                &data,
+                &filter,
+                Some((0, 0, 0, 0)),
+                false,
+                Some("F"),
+            )
+            .expect("F projective transform");
+            let words = output
+                .as_bytes()
+                .chunks_exact(4)
+                .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+                .collect::<Vec<_>>();
+            assert_eq!(words, expected);
+        }
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_mesh_fill_presence_matches_generic_transform() {
+        let source = f32_source(&[5.0], 1, 1);
+        let mesh = [
+            0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, -1.0,
+            -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
+        ];
+        let fill = Some((0x00, 0x00, 0xe0, 0x40));
+
+        let explicit = op_transform(
+            &source,
+            1,
+            1,
+            &TransformMethod::Mesh,
+            &mesh,
+            &ResampleFilter::Bilinear,
+            fill,
+            false,
+            Some("F"),
+        )
+        .expect("explicit F mesh fill");
+        let omitted = op_transform(
+            &source,
+            1,
+            1,
+            &TransformMethod::Mesh,
+            &mesh,
+            &ResampleFilter::Bilinear,
+            fill,
+            true,
+            Some("F"),
+        )
+        .expect("omitted F mesh fill");
+
+        let word = |image: &DynamicImage| {
+            u32::from_le_bytes([
+                image.as_bytes()[0],
+                image.as_bytes()[1],
+                image.as_bytes()[2],
+                image.as_bytes()[3],
+            ])
+        };
+        assert_eq!(word(&explicit), 5.0f32.to_bits());
+        assert_eq!(word(&omitted), 0.0f32.to_bits());
+    }
+
     const VARIED_MESH: [f64; 12] = [
         -1.0, -1.0, 6.0, 5.0, -0.4, 0.2, 4.6, 3.4, 4.1, -0.3, 0.3, 3.7,
     ];
@@ -2290,6 +2784,7 @@ mod tests {
             &VARIED_MESH,
             Some((7, 0, 0, 0)),
             ResampleFilter::Nearest,
+            false,
         )
         .expect("mesh transform");
         let expected = [
@@ -2308,6 +2803,7 @@ mod tests {
             &VARIED_MESH,
             Some((7, 9, 11, 13)),
             ResampleFilter::Bilinear,
+            false,
         )
         .expect("mesh transform");
         let expected = [
@@ -2336,6 +2832,7 @@ mod tests {
             &mesh,
             Some((0, 0, 0, 255)),
             ResampleFilter::Bilinear,
+            false,
         )
         .expect("mesh transform");
 
@@ -2355,6 +2852,7 @@ mod tests {
             &[2.0, 0.0, 9.0, 7.0, 7.1, -0.5, 1.2, 3.7, 4.8, 8.3, -1.2, 6.9],
             &ResampleFilter::Bilinear,
             Some((7, 9, 11, 13)),
+            false,
             Some("RGBA"),
         )
         .expect("mesh transform");
@@ -2382,6 +2880,7 @@ mod tests {
             &VARIED_MESH,
             Some((7, 0, 0, 0)),
             ResampleFilter::Bicubic,
+            false,
         )
         .expect("mesh transform");
         let expected = [
@@ -2500,6 +2999,7 @@ mod tests {
                 &matrix,
                 &filter,
                 Some((0, 0, 0, 0)),
+                false,
                 Some("F"),
             )
             .expect("F affine filter");
@@ -2538,6 +3038,7 @@ mod tests {
             &[0.8, 0.2, 0.2, -0.3, 2.0, 0.2],
             &ResampleFilter::Bilinear,
             Some((0, 0, 0, 0)),
+            false,
             Some("F"),
         )
         .expect("F affine boundary transform");
