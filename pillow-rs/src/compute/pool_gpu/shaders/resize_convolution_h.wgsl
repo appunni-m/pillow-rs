@@ -585,8 +585,9 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
 // normal binary64 value after every tap. Pillow's arm64 FLOAT32 horizontal
 // kernel uses FMA through 15 taps, then its complete 16-tap vector blocks
 // round each product before the ordered additions; a scalar FMA tail follows
-// any complete blocks. The host admission proof selects that split. Wider or
-// exceptional rows use marker 9 or exact host semantic control.
+// any complete blocks. The host admission proof selects that split. Rows over
+// 64 taps or exceptional rows use marker 9 where its narrower proof applies,
+// or exact host semantic control.
 struct F64OrderedState {
     magnitude: U128,
     exponent: i32,
@@ -696,7 +697,7 @@ fn filtered_f64_ordered_bounded(source_y: u32, output_x: u32) -> u32 {
     let source_x = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
-    if count > 32u {
+    if count > 64u {
         return 0u;
     }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
