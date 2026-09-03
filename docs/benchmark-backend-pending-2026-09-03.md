@@ -153,10 +153,12 @@ receipt rules unchanged.
   probes are 10/10 finite at four million taps, 20/20 special-value rows, and
   5/5 over-bound host-control rows; focused ordered-F tests are 11/11 and the
   full pool-GPU group is 104/104.
-- [ ] Extend the exact F reducer beyond 4194304 taps, f64-intermediate
+- [ ] Extend the exact F reducer beyond 8388607 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
-  arithmetic by ULPs, so these rows require a separate device proof.
+  arithmetic by ULPs, so these rows require a separate device proof. The
+  adapter-fitting marker-12 envelope now reaches 8388607 taps; 8388608 and
+  wider rows remain exact host semantic control.
 - [x] Extend the filtered Quad/Mesh relocation proof (`cfa3b2690`, source
   `206bff9dfe82ab9eab5346931db2ddd0b11f4388`): correct non-square Quad
   axis-swap source extents, reject extra Mesh records, and admit only the
@@ -230,6 +232,14 @@ receipt rules unchanged.
   versus RSPIL probes are 160/160 exact with terminal requested=actual GPU
   receipts; fractional, nonconstant-denominator maps without the proof,
   filtered, and arithmetic-changing maps remain exact host semantic control.
+- [x] Admit constant half-pixel filtered projective maps
+  (`730d6f5ee`, source `18df688e1`): f32-exact constant `n + 0.5` source
+  coordinates for Bilinear/Bicubic Perspective, Quad, and complete one-record
+  Mesh now lower to the integral sample reached after Pillow Geometry.c's
+  filtered `-0.5` center shift. Native Pillow 12.2.0 differentials are
+  480/480 exact on CPU and GPU across L/LA/RGB/RGBA/PA, with 240/240 terminal
+  native GPU receipts; quarter-pixel, scaled/nonconstant, partial/multi-record,
+  and other arithmetic-changing maps remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
@@ -265,6 +275,13 @@ receipt rules unchanged.
   capability errors remain unchanged. The full SIMD lane is 10,952/10,952
   exact with 6,847 native SIMD receipts, three terminal CPU controls, and no
   missing, partial, or indeterminate pipeline receipts.
+  A next19 sidecar audit of the current replay independently revalidated all
+  10,952 IDs: complete=6,832, not_applicable=4,120, and
+  missing/partial/indeterminate=0. Terminal identity remains internally
+  consistent (CPU 6,838 native; SIMD 6,847 native plus three explicit CPU
+  layout controls; GPU 6,744 native plus 94 explicit CPU controls), with no
+  empty-fallback host receipt or fallback on a native receipt. No actionable
+  partition defect was found without relabeling intentional host controls.
 
 ### P2 — performance acceptance
 
@@ -299,6 +316,14 @@ receipt rules unchanged.
   two consecutive pairs; the pairs reported 10 and 15 violations, respectively,
   with the normalized execution fingerprint unchanged. Violations again moved
   across Pillow/CPU/SIMD/GPU rows, so no source or receipt fix is justified.
+  A next19 four-run campaign at the same revision retained 11/11 selected and
+  measured workloads, 44/44 comparable records, and 33/33 terminal
+  requested=actual target receipts per run. All four normalized execution
+  fingerprints remained
+  `7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32`; adjacent
+  pairs reported 4, 12, and 6 violations, with varying row sets and no receipt
+  or source divergence. The zero-violation gate remains open pending a pair at
+  the newest integrated source revision.
 
 ## Verified changes already integrated
 
