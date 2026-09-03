@@ -33,9 +33,14 @@ receipt rules unchanged.
   (`1c34fddd0`, source `d2690bf62`), constant-denominator integer Perspective
   translation/axis-swap (`4db4d4981`, source `9885acb6`), and full-output
   unit-scale Mesh translation/axis-swap (`413ed65ef`, source `10c9a49fd`).
-  Fractional, scaled, filtered, nonconstant-denominator, and non-identity
-  Quad/Mesh maps remain on exact host semantic control pending a device
-  arithmetic proof.
+  Fractional, scaled, nonconstant-denominator, and non-identity Quad/Mesh maps
+  remain on exact host semantic control pending a device arithmetic proof.
+- [x] Admit the separately proven filtered Perspective relocation envelope
+  (`a826e1b8c`, source `bba3794bf`): ordinary packed L/RGB, direct or
+  axis-swapped unit-scale maps with f32-exact integer translations, for
+  Bilinear/Bicubic only. Native Pillow 12.2.0 versus GPU is 1,152/1,152 exact
+  with terminal native receipts. Alpha modes, Mesh/Quad filters, fractional or
+  scaled maps, and other filter arithmetic remain exact host semantic control.
 - [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
   signed two-axis envelope and the bounded marker-12 reducer. Marker 12 now
   models direct finite-normal Resize rows through 32 taps, including Pillow's
@@ -46,19 +51,24 @@ receipt rules unchanged.
   87 native GPU receipts and 3 exact host-control rows. Remaining inputs are
   rows over 32 taps, mixed non-finite ordering, negative-zero cancellation,
   f64 subnormal or overflowing intermediates, and arithmetic-changing chains.
-  Forced generic WGSL f32 convolution still differs from Pillow's ordered host
-  arithmetic by ULPs, so these rows remain exact host semantic control.
+  The explicit >32-tap admission guard (`f98859d07`) keeps wider rows on exact
+  host semantic control: a forced 48x1 Lanczos cancellation case diverged in
+  the GPU reducer at the middle word before the guard. Forced generic WGSL f32
+  convolution still differs from Pillow's ordered host arithmetic by ULPs, so
+  these rows remain exact host semantic control.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Constant-denominator integer Perspective nearest maps and full-output
-  unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA are
-  now admitted by exhaustive source-selection proofs. Fractional, scaled,
-  nonconstant-denominator, filtered, and non-identity Quad/Mesh maps remain on
-  exact host semantic control until their device arithmetic is proven.
+  unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
+  the narrow L/RGB filtered Perspective relocation envelope, are now admitted
+  by exhaustive or bounded native proofs. Fractional, scaled,
+  nonconstant-denominator, and non-identity Quad/Mesh maps, alpha/other-mode
+  filtered rows, and palette arithmetic remain on exact host semantic control
+  until their device arithmetic is proven.
 
 ### P1 — backend identity and receipts
 
 - [ ] Reconcile native versus host-controlled partitions without relabeling
-  outcomes. The last full envelope is exact on all five public lanes, but GPU
+  outcomes. The latest full envelope is exact on all five public lanes, but GPU
   still has a host-controlled partition alongside native receipts. Preserve
   terminal actual-backend identity and make every fallback reason actionable.
 - [x] Correct mixed SIMD/CPU terminal identity (`ddcff735c`): receipts now
@@ -140,12 +150,24 @@ receipt rules unchanged.
   maps; every receipt is terminal requested=actual GPU with one dispatch and
   no fallback. Scaled, fractional, filtered, partial, and multi-record Mesh
   remains exact host semantic control.
+- [x] Filtered Perspective relocation GPU routing (`a826e1b8c`, source
+  `bba3794bf`): ordinary L/RGB direct or axis-swapped unit-scale maps with
+  f32-exact integer translations are admitted for Bilinear/Bicubic after a
+  bounded native proof (1,152/1,152 exact; 16/16 focused receipts native).
+  Alpha modes, Mesh/Quad filters, and non-integral or scaled maps remain exact
+  host semantic control; a clipped 1x1 Mesh relocation was rejected by the
+  proof rather than admitted.
 - [x] Arm64 wide-row F Resize arithmetic (`31dfca10c`, source
   `68aa5472763`): CPU and marker-12 host/WGSL reducers mirror Pillow's
   horizontal >15-tap product/ordered-add split through a bounded 32-tap path,
   with a high-bit truncation guard for marker-6. The deterministic 16/32-tap
   Bilinear matrix improved 18/20→20/20; strict finite probes are 90/90 exact
   (87 native GPU, 3 host-control), and 6/6 special probes remain exact.
+- [x] Wide F reducer admission guard (`f98859d07`, source
+  `a77477179`): reject every coefficient row over 32 taps before marker-9
+  exact-real reduction. A forced 48x1 Lanczos cancellation case that
+  previously differed at the middle word now stays on exact host semantic
+  control; the focused guard and full GPU tests pass.
 - [x] Receipt-aware suite aggregation (`1f49b7890`): a fresh 744-workload
   benchmark remains 744/744 measured, while suite comparisons move from
   276/324 status-only comparable cells to 180/324 receipt-proven cells;
@@ -208,8 +230,9 @@ receipt rules unchanged.
   `make migration-parity-evidence-check`.
 
 Current evidence hashes: all-backends envelope
-`6c451cfce4b155aa9e8ff5fe58d80687335b794a435d497f5b62a5e7f4287be2`, GPU
-sidecar `d546710154af689713d7a485b27ae5b1389e937823e2020f95fb3440393ed792`,
+`3c60069a328286e2556201ac87d531d5463c53b98a71cb7f6ceee9b14dbd4cc7`, GPU
+sidecar `a78c4c40b7cd565b138f0c82b0fa09dca37d058be8d925d81009b00d22d9fb5b`,
+WGSL coverage `3ec08641d0b6427a33b48ba982c90a9ea451c62bda134b6971019f8b316a591c`,
 benchmark `180f1d80bf1d0d197ce4a76c02c490dbcfbc5570a6d78a4afe318bddcfc211b3`,
 and benchmark parity `1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c63d965`.
 
@@ -218,17 +241,19 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `31dfca10c` (arm64 wide-row F
-accumulation, unit-scale Mesh relocation, integer Perspective nearest routing,
-identity projective routing, receipt-proven suite cohorts, and packed SIMD
-ExtractBand). The fresh combined replay at this revision is
+`main` includes the parity fixes through `a826e1b8c` (wide-row F admission
+guard, filtered Perspective relocation, arm64 wide-row F accumulation,
+unit-scale Mesh relocation, integer Perspective nearest routing, identity
+projective routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
+The fresh combined replay at this revision is
 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
-CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,739 GPU plus 99 CPU
+CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,741 GPU plus 97 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`6c451cfce4b155aa9e8ff5fe58d80687335b794a435d497f5b62a5e7f4287be2`; the GPU
-execution sidecar is `d546710154af689713d7a485b27ae5b1389e937823e2020f95fb3440393ed792`.
+`3c60069a328286e2556201ac87d531d5463c53b98a71cb7f6ceee9b14dbd4cc7`; the GPU
+execution sidecar is `a78c4c40b7cd565b138f0c82b0fa09dca37d058be8d925d81009b00d22d9fb5b`,
+with WGSL coverage `3ec08641d0b6427a33b48ba982c90a9ea451c62bda134b6971019f8b316a591c`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
 and broader projective admission work above.

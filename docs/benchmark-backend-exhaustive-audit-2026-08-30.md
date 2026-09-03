@@ -6094,3 +6094,71 @@ budget report hash is
 The checker exits nonzero as designed, so the two-consecutive zero-violation
 gate remains open. No scripts, fixtures, thresholds, IDs, denominators,
 receipt rules, or policy changed.
+
+## 32.100 Wide F reducer admission guard (2026-09-03)
+
+The arm64 wide-row F reducer needed one further admission boundary. A forced
+`F(48,1) -> (3,1)` Lanczos cancellation case with alternating `+/-2^60`
+samples was previously admitted by marker 9 but diverged at the middle output
+word: Pillow/CPU stored `0xc0000000`, while the GPU reducer stored
+`0x00000000` (the expected words are
+`[0x5aa1ab41, 0xc0000000, 0xdaa1ab41]`). The first divergence is the device
+reducer's arithmetic order, not source selection: the marker-9 exact-real
+model does not reproduce Pillow arm64's ordered wide-row product/add path above
+the already modeled 32-tap envelope.
+
+Commit `f98859d07` (source `a77477179`) adds a conservative check to
+`gpu_f_resize_f64_is_exact`: any coefficient row with more than
+`GPU_F_RESIZE_ORDERED_MAX_TAPS` (32) is rejected before marker-9 admission.
+Those rows now publish exact host semantic control until a separately verified
+wider reducer exists. The focused F guard and full GPU tests pass; the bounded
+matrix is 1,100/1,100 exact after the guard. `make -C pillow-rs fmt`,
+`make -C pillow-rs build`, and `make build-dev` pass. No fixtures, thresholds,
+IDs, denominators, receipt rules, or policy changed.
+
+## 32.101 Filtered Perspective relocation GPU envelope (2026-09-03)
+
+The generic filtered projective shader remains unsafe for arbitrary maps. A
+disposable forced Mesh probe found a concrete clipped edge in RGB `1x1 -> 5x4`
+with a `(-1,-1)` relocation: three output bytes differed because the native
+clipped local-origin sample and shader fill behavior are not equivalent. This
+case remains exact host semantic control.
+
+For the narrower Perspective case, Pillow `Geometry.c` evaluates filtered
+maps at destination pixel centers and subtracts the half-pixel before the
+bilinear kernel. For a direct or axis-swapped unit-scale map with an integer
+translation, that produces an integral source coordinate and zero filter
+weights, so the shader's bilinear lowering preserves the source byte. Commit
+`a826e1b8c` (source `bba3794bf`) admits only ordinary packed L/RGB Perspective
+maps in that envelope for Bilinear and Bicubic. Alpha modes, Mesh/Quad
+filters, fractional/scaled maps, and other arithmetic-changing transforms
+remain exact host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL covered 1,152/1,152 varied-size,
+heterogeneous-byte cases exactly; all native receipts were terminal
+`requested_backend=actual_backend=gpu` with one dispatch and no fallback. The
+focused native test is 16/16 and the complete GPU unit module is 78/78. No
+fixtures, thresholds, IDs, denominators, receipt rules, or policy changed.
+
+## 32.102 Combined post-guard/projective replay (2026-09-03)
+
+The fresh schema-v3 all-backends replay at revision
+`a826e1b8c8098e236909c07f4bfbcd59fc03662d` passes all 10,952/10,952 selected
+value/error comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM, with
+zero failed or not-run cases and GPU smoke 1/1. It intentionally reports
+`passed_with_backend_gaps`: CPU has 6,838 terminal receipts; SIMD has 6,847
+SIMD plus three CPU controls; GPU has 6,741 native GPU plus 97 exact host
+semantic controls; and each WASM lane has 6,951 CPU receipts. The explicit
+host-controlled partitions and the Transform capability guard remain visible
+in the receipt taxonomy.
+
+The all-backends result SHA-256 is
+`3c60069a328286e2556201ac87d531d5463c53b98a71cb7f6ceee9b14dbd4cc7`; the GPU
+execution sidecar is
+`a78c4c40b7cd565b138f0c82b0fa09dca37d058be8d925d81009b00d22d9fb5b`; and WGSL
+coverage is
+`3ec08641d0b6427a33b48ba982c90a9ea451c62bda134b6971019f8b316a591c`.
+`make migration-parity-receipt-test` passes 39/39 and
+`make migration-parity-evidence-check` passes with benchmark/coverage/parity
+document counts 25/24/24. The P2 two-consecutive zero-budget gate and the
+remaining broader F/projective/mesh/palette arithmetic envelopes remain open.
