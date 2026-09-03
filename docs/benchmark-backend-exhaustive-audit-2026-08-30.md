@@ -8004,3 +8004,7 @@ NaN row in the changed-axis geometry remains exact host semantic control.
 The focused compact-chain test and serial pool-GPU suite pass 112/112;
 format/build-dev and the receipt/evidence contracts remain unchanged. No
 fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+The canonical all-backends replay on this isolated revision also passed all
+10,952 CPU, SIMD, GPU, and Node-WASM cases (GPU smoke 1/1); browser-WASM was
+blocked before execution by the existing macOS `wasm-bindgen` unsupported
+target, with no source parity failure.
