@@ -10966,6 +10966,9 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
 /// differently. LA/RGBA are also excluded because their transform pipeline
 /// has a premultiplied-alpha round trip that this raw-channel path does not
 /// reproduce for nonzero weights.
+/// CMYK, HSV, YCbCr, RGBX, and RGBa remain raw byte channels in their native
+/// projective paths, so they can share this proof once their physical packed
+/// layout is checked.
 fn gpu_projective_filtered_integer_constant_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -10974,7 +10977,12 @@ fn gpu_projective_filtered_integer_constant_is_admitted(
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
 ) -> bool {
-    if !matches!(filter, ResampleFilter::Bilinear) || !matches!(mode, Some("L" | "PA" | "RGB")) {
+    if !matches!(filter, ResampleFilter::Bilinear)
+        || !matches!(
+            mode,
+            Some("L" | "PA" | "RGB" | "CMYK" | "HSV" | "YCbCr" | "RGBX" | "RGBa")
+        )
+    {
         return false;
     }
     let interior_integer_f32 = |value: f64, extent: u32| {
@@ -11165,11 +11173,16 @@ fn gpu_projective_nearest_is_exact(
     let image_layout_is_valid = match mode {
         Some("P" | "1" | "L") => matches!(image, DynamicImage::ImageLuma8(_)),
         Some("LA" | "PA") => matches!(image, DynamicImage::ImageLumaA8(_)),
-        Some("RGB") => matches!(image, DynamicImage::ImageRgb8(_)),
-        Some("RGBA") => matches!(image, DynamicImage::ImageRgba8(_)),
+        Some("RGB" | "HSV" | "YCbCr") => matches!(image, DynamicImage::ImageRgb8(_)),
+        Some("RGBA" | "RGBX" | "RGBa" | "CMYK") => {
+            matches!(image, DynamicImage::ImageRgba8(_))
+        }
         _ => false,
     };
-    let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
+    let ordinary_byte_mode = matches!(
+        mode,
+        Some("L" | "LA" | "RGB" | "RGBA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr")
+    );
     let filtered_integer_constant = gpu_projective_filtered_integer_constant_is_admitted(
         method.clone(),
         data,
@@ -15252,7 +15265,16 @@ mod tests {
         let perspective = [0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0];
         let quad = [3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
         let mesh = [0.0, 0.0, 9.0, 7.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
-        for mode in [Some("L"), Some("RGB"), Some("PA")] {
+        for mode in [
+            Some("L"),
+            Some("RGB"),
+            Some("PA"),
+            Some("CMYK"),
+            Some("HSV"),
+            Some("YCbCr"),
+            Some("RGBX"),
+            Some("RGBa"),
+        ] {
             assert!(gpu_projective_filtered_integer_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
@@ -15346,7 +15368,16 @@ mod tests {
                 )]),
             ),
         ];
-        for (mode, channels) in [("L", 1usize), ("RGB", 3usize), ("PA", 2usize)] {
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("RGB", 3usize),
+            ("PA", 2usize),
+            ("CMYK", 4usize),
+            ("HSV", 3usize),
+            ("YCbCr", 3usize),
+            ("RGBX", 4usize),
+            ("RGBa", 4usize),
+        ] {
             let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * 53 + 17) as u8)
                 .collect::<Vec<_>>();
@@ -15365,6 +15396,8 @@ mod tests {
                 "L" => TransformFill::Scalar(199),
                 "RGB" => TransformFill::Components(vec![199, 71, 17]),
                 "PA" => TransformFill::Components(vec![199, 71]),
+                "CMYK" | "RGBX" | "RGBa" => TransformFill::Components(vec![199, 71, 17, 233]),
+                "HSV" | "YCbCr" => TransformFill::Components(vec![199, 71, 17]),
                 _ => unreachable!(),
             };
             for (method, data) in &maps {
