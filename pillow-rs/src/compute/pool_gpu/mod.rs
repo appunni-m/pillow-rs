@@ -10580,38 +10580,69 @@ fn gpu_nearest_affine_is_exact(
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
 fn gpu_mesh_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
-    if data.len() != 12 || data[..4] != [0.0, 0.0, f64::from(w), f64::from(h)] {
+    if data.len() != 12 {
+        return false;
+    }
+
+    // ImagingGenericTransform clips each record's destination box before it
+    // calls Geometry.c's local quad mapper.  Admit a partial record only when
+    // the box is wholly inside the output and all four bounds are integers;
+    // otherwise the Rust CPU path's truncating/clipping conversion would not
+    // be represented by the shader's f32 comparisons.  A full-output record
+    // is the existing special case of this same shape.
+    let integral = |value: f64| value.is_finite() && value.fract() == 0.0;
+    let [bx0, by0, bx1, by1] = [data[0], data[1], data[2], data[3]];
+    if ![bx0, by0, bx1, by1].into_iter().all(integral)
+        || bx0 < 0.0
+        || by0 < 0.0
+        || bx1 > f64::from(w)
+        || by1 > f64::from(h)
+        || bx1 <= bx0
+        || by1 <= by0
+    {
+        return false;
+    }
+    let box_width = bx1 - bx0;
+    let box_height = by1 - by0;
+    if !data[4..12].iter().all(|value| value.is_finite()) {
+        return false;
+    }
+    if !data[4..12].iter().copied().all(integral) {
+        // A fractional translation is not a raw relocation: nearest uses
+        // Geometry.c's truncation while the projective sampler rounds, and
+        // filtered requests would retain nonzero interpolation weights.
         return false;
     }
 
     // Mesh records use Pillow's corner order: top-left, bottom-left,
     // bottom-right, top-right.  These two forms are the only non-identity
-    // records admitted for ordinary bytes: unit-scale relocation with an
-    // integer translation, and the corresponding axis swap.  The exhaustive
-    // proof below still checks every source selection and fill boundary; this
-    // shape guard prevents arbitrary bilinear corner arithmetic from entering
-    // the shader merely because one small image happened to compare equal.
+    // records admitted for ordinary bytes: unit-scale relocation over either
+    // a complete output or an in-output partial box, and the corresponding
+    // axis swap.  The exhaustive proof below still checks every source
+    // selection and fill boundary; this shape guard prevents arbitrary
+    // bilinear corner arithmetic from entering the shader merely because one
+    // small image happened to compare equal.
     let tx = data[4];
     let ty = data[5];
     let direct = [
         tx,
         ty,
         tx,
-        ty + f64::from(h),
-        tx + f64::from(w),
-        ty + f64::from(h),
-        tx + f64::from(w),
+        ty + box_height,
+        tx + box_width,
+        ty + box_height,
+        tx + box_width,
         ty,
     ];
     let swapped = [
         tx,
         ty,
-        tx + f64::from(h),
+        tx + box_height,
         ty,
-        tx + f64::from(h),
-        ty + f64::from(w),
+        tx + box_height,
+        ty + box_width,
         tx,
-        ty + f64::from(w),
+        ty + box_width,
     ];
     data[4..12] == direct || data[4..12] == swapped
 }
@@ -10975,6 +11006,7 @@ fn gpu_projective_nearest_is_exact(
         method,
         data,
         filter,
+        fill_is_none,
         ..
     } = op
     else {
@@ -11056,6 +11088,26 @@ fn gpu_projective_nearest_is_exact(
         return false;
     }
 
+    // The shader carries one Mesh record and can only represent a partial
+    // record's outside-bbox result with an explicit fill word.  Its direct
+    // and axis-swapped unit relocation lowering is exact for an in-output
+    // integer bbox; keep fractional/scaled/partially clipped records and
+    // no-fill records on the host path rather than letting the generic
+    // shader's clipping or default fill semantics stand in for Geometry.c.
+    let mesh_is_full_output = !matches!(method, TransformMethod::Mesh)
+        || data[..4] == [0.0, 0.0, f64::from(*w), f64::from(*h)];
+    let mesh_is_partial_relocation = matches!(method, TransformMethod::Mesh)
+        && gpu_mesh_unit_relocation_is_admitted(data, *w, *h);
+    if matches!(method, TransformMethod::Mesh)
+        && !mesh_is_full_output
+        && !mesh_is_partial_relocation
+    {
+        return false;
+    }
+    if matches!(method, TransformMethod::Mesh) && !mesh_is_full_output && *fill_is_none {
+        return false;
+    }
+
     let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
         match method {
             TransformMethod::Perspective => {
@@ -11092,14 +11144,11 @@ fn gpu_projective_nearest_is_exact(
                 (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
             }
             TransformMethod::Mesh => {
-                // A single record covering the complete output is the only
-                // mesh shape whose clamping and shader bbox tests are the
-                // same without a second auxiliary dispatch.
-                if data[0] != 0.0
-                    || data[1] != 0.0
-                    || data[2] != f64::from(*w)
-                    || data[3] != f64::from(*h)
-                {
+                // The shader emits the fill word outside a record's bbox.
+                // Compare source selection only for pixels inside the
+                // record, just as Geometry.c's clipped destination loop
+                // does; a full-output record naturally passes this check.
+                if dx < data[0] || dx >= data[2] || dy < data[1] || dy >= data[3] {
                     return None;
                 }
                 if gpu_mesh_constant_map_is_admitted(data, *w, *h) {
@@ -11112,13 +11161,14 @@ fn gpu_projective_nearest_is_exact(
                     // second rounding shape to the proof at large integer
                     // translations, even though Pillow's coefficients have
                     // already reduced to a unit step.
-                    let local_x = dx + 0.5;
-                    let local_y = dy + 0.5;
+                    let local_x = dx + 0.5 - data[0];
+                    let local_y = dy + 0.5 - data[1];
+                    let box_width = data[2] - data[0];
                     // Mesh source corners are NW/SW/SE/NE.  The direct
                     // relocation therefore has its NE corner one width to
                     // the right of TL and at the same Y; checking the
                     // opposite diagonal admits a scaled/axis map instead.
-                    let direct = data[10] == data[4] + f64::from(*w) && data[11] == data[5];
+                    let direct = data[10] == data[4] + box_width && data[11] == data[5];
                     let (sx, sy) = if direct {
                         (data[4] + local_x, data[5] + local_y)
                     } else {
@@ -11126,8 +11176,13 @@ fn gpu_projective_nearest_is_exact(
                     };
                     return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
                 }
-                let u = (dx + 0.5) / f64::from(*w);
-                let v = (dy + 0.5) / f64::from(*h);
+                let bbox_width = data[2] - data[0];
+                let bbox_height = data[3] - data[1];
+                if bbox_width <= 0.0 || bbox_height <= 0.0 {
+                    return None;
+                }
+                let u = (dx + 0.5 - data[0]) / bbox_width;
+                let v = (dy + 0.5 - data[1]) / bbox_height;
                 let x0 = data[4];
                 let y0 = data[5];
                 let sx = (1.0 - u) * (1.0 - v) * x0
@@ -14749,6 +14804,221 @@ mod tests {
             }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_partial_mesh_relocations_native_gpu_preserve_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                [1.0, 2.0, 6.0, 6.0],
+                [2.0, 3.0, 2.0, 7.0, 7.0, 7.0, 7.0, 3.0],
+            ),
+            (
+                [1.0, 2.0, 6.0, 6.0],
+                [2.0, 3.0, 6.0, 3.0, 6.0, 8.0, 2.0, 8.0],
+            ),
+            (
+                [0.0, 3.0, 9.0, 7.0],
+                [1.0, 2.0, 1.0, 6.0, 10.0, 6.0, 10.0, 2.0],
+            ),
+            (
+                [0.0, 3.0, 9.0, 7.0],
+                [1.0, 2.0, 5.0, 2.0, 5.0, 11.0, 1.0, 11.0],
+            ),
+        ];
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+        ] {
+            let source_size = (16u32, 16u32);
+            let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                .map(|index| (index * 37 + channels * 11 + 5) as u8)
+                .collect::<Vec<_>>();
+            let source = Image::frombytes(mode, source_size, &bytes).expect("byte source");
+            let fill = match mode {
+                "L" => Some(TransformFill::Scalar(199)),
+                "LA" => Some(TransformFill::Components(vec![199, 71])),
+                "RGB" => Some(TransformFill::Components(vec![199, 71, 17])),
+                "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
+                _ => unreachable!(),
+            };
+            for (bbox, quad) in cases {
+                let data = TransformData::Mesh(vec![(bbox.to_vec(), quad.to_vec())]);
+                for filter in [
+                    (0, ResampleFilter::Nearest),
+                    (2, ResampleFilter::Bilinear),
+                    (3, ResampleFilter::Bicubic),
+                ] {
+                    let transformed = source
+                        .transform_public((9, 8), 4, Some(data.clone()), filter.0, 0, fill.clone())
+                        .unwrap_or_else(|error| {
+                            panic!(
+                                "{mode} partial Mesh transform bbox={bbox:?} quad={quad:?}: {error}"
+                            )
+                        });
+                    let expected = transformed
+                        .clone()
+                        .use_backend(Backend::Cpu)
+                        .tobytes()
+                        .expect("CPU partial Mesh transform");
+                    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                        Ok(actual) => actual,
+                        Err(error)
+                            if error.to_string().contains("GPU adapter not available")
+                                || error
+                                    .to_string()
+                                    .contains("GPU device initialization failed") =>
+                        {
+                            Backend::set_pipeline_telemetry_enabled(previous);
+                            return;
+                        }
+                        Err(error) => {
+                            panic!("native GPU {mode} partial Mesh transform failed: {error}")
+                        }
+                    };
+                    assert_eq!(
+                        actual, expected,
+                        "native {mode} partial Mesh filter={filter:?}"
+                    );
+                    let telemetry = Backend::take_pipeline_telemetry()
+                        .expect("partial Mesh transform must publish telemetry");
+                    assert_eq!(
+                        telemetry.0,
+                        Some(Backend::Gpu),
+                        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+                    );
+                    assert_eq!(
+                        telemetry.1,
+                        Backend::Gpu,
+                        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+                    );
+                    assert_eq!(
+                        telemetry.6,
+                        Some(1),
+                        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+                    );
+                    assert_eq!(
+                        telemetry.7, None,
+                        "telemetry={telemetry:?} mode={mode} bbox={bbox:?} quad={quad:?} filter={filter:?}"
+                    );
+                }
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn palette_projective_partial_mesh_relocations_native_gpu_preserve_pairs() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                [1.0, 2.0, 6.0, 6.0],
+                [2.0, 3.0, 2.0, 7.0, 7.0, 7.0, 7.0, 3.0],
+            ),
+            (
+                [1.0, 2.0, 6.0, 6.0],
+                [2.0, 3.0, 6.0, 3.0, 6.0, 8.0, 2.0, 8.0],
+            ),
+        ];
+        let palette = (0..768)
+            .map(|index| (index * 19 + 7) as u8)
+            .collect::<Vec<_>>();
+        for (mode, channels, fill) in [
+            ("P", 1usize, TransformFill::Scalar(251)),
+            ("PA", 2usize, TransformFill::Components(vec![199, 71])),
+        ] {
+            let source_size = (16u32, 16u32);
+            let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                .map(|index| (index * 37 + channels * 11 + 5) as u8)
+                .collect::<Vec<_>>();
+            let storage_mode = if mode == "PA" { "LA" } else { mode };
+            let mut source = Image::frombytes(storage_mode, source_size, &bytes)
+                .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+            source
+                .putpalette(&palette, "RGB")
+                .unwrap_or_else(|error| panic!("{mode} palette: {error}"));
+            assert_eq!(source.mode().expect("palette mode"), mode);
+            for (bbox, quad) in cases {
+                let data = TransformData::Mesh(vec![(bbox.to_vec(), quad.to_vec())]);
+                for filter in [
+                    (0, ResampleFilter::Nearest),
+                    (2, ResampleFilter::Bilinear),
+                    (3, ResampleFilter::Bicubic),
+                ] {
+                    let transformed = source
+                        .transform_public(
+                            (9, 8),
+                            4,
+                            Some(data.clone()),
+                            filter.0,
+                            0,
+                            Some(fill.clone()),
+                        )
+                        .unwrap_or_else(|error| {
+                            panic!(
+                                "{mode} partial Mesh transform bbox={bbox:?} quad={quad:?}: {error}"
+                            )
+                        });
+                    let expected = transformed
+                        .clone()
+                        .use_backend(Backend::Cpu)
+                        .tobytes()
+                        .expect("CPU partial palette Mesh transform");
+                    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                        Ok(actual) => actual,
+                        Err(error)
+                            if error.to_string().contains("GPU adapter not available")
+                                || error
+                                    .to_string()
+                                    .contains("GPU device initialization failed") =>
+                        {
+                            Backend::set_pipeline_telemetry_enabled(previous);
+                            return;
+                        }
+                        Err(error) => {
+                            panic!("native GPU {mode} partial Mesh transform failed: {error}")
+                        }
+                    };
+                    assert_eq!(
+                        actual, expected,
+                        "native {mode} partial Mesh filter={filter:?}"
+                    );
+                    let telemetry = Backend::take_pipeline_telemetry()
+                        .expect("partial palette Mesh transform must publish telemetry");
+                    assert_eq!(telemetry.0, Some(Backend::Gpu));
+                    assert_eq!(telemetry.1, Backend::Gpu);
+                    assert_eq!(telemetry.6, Some(1));
+                    assert_eq!(telemetry.7, None);
+                }
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn partial_mesh_without_fill_stays_on_exact_host_control() {
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(16, 16, vec![0; 16 * 16 * 3]).expect("RGB image"),
+        );
+        let op = PipelineOp::Transform {
+            w: 9,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from([1.0, 2.0, 6.0, 6.0, 2.0, 3.0, 2.0, 7.0, 7.0, 7.0, 7.0, 3.0].to_vec()),
+            filter: ResampleFilter::Bilinear,
+            fill: Some((0, 0, 0, 255)),
+            fill_is_none: true,
+            palette_fill: None,
+        };
+        assert!(!gpu_projective_nearest_is_exact(
+            &op,
+            &image,
+            Some("RGB"),
+            (16, 16),
+        ));
     }
 
     #[test]

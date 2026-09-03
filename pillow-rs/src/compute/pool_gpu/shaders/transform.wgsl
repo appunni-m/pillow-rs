@@ -426,8 +426,8 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
     if dx < bx0 || dx >= bx1 || dy < by0 || dy >= by1 {
         return vec2<f32>(-1.0, -1.0);
     }
-    let width = f32(params.dst_w);
-    let height = f32(params.dst_h);
+    let bbox_width = bx1 - bx0;
+    let bbox_height = by1 - by0;
     let x0 = params.e;
     let y0 = params.f;
     // A constant-coordinate one-record Mesh is likewise a raw nearest sample;
@@ -438,23 +438,25 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         return vec2<f32>(x0, y0);
     }
     let direct_relocation =
-        bx0 == 0.0 && by0 == 0.0 && bx1 == width && by1 == height
-        && params.g == x0 && params.h == y0 + height
-        && params.mesh0 == x0 + width && params.mesh1 == y0 + height
-        && params.mesh2 == x0 + width && params.mesh3 == y0;
+        bx0 >= 0.0 && by0 >= 0.0 && bx1 <= f32(params.dst_w) && by1 <= f32(params.dst_h)
+        && bbox_width > 0.0 && bbox_height > 0.0
+        && params.g == x0 && params.h == y0 + bbox_height
+        && params.mesh0 == x0 + bbox_width && params.mesh1 == y0 + bbox_height
+        && params.mesh2 == x0 + bbox_width && params.mesh3 == y0;
     let swapped_relocation =
-        bx0 == 0.0 && by0 == 0.0 && bx1 == width && by1 == height
-        && params.g == x0 + height && params.h == y0
-        && params.mesh0 == x0 + height && params.mesh1 == y0 + width
-        && params.mesh2 == x0 && params.mesh3 == y0 + width;
+        bx0 >= 0.0 && by0 >= 0.0 && bx1 <= f32(params.dst_w) && by1 <= f32(params.dst_h)
+        && bbox_width > 0.0 && bbox_height > 0.0
+        && params.g == x0 + bbox_height && params.h == y0
+        && params.mesh0 == x0 + bbox_height && params.mesh1 == y0 + bbox_width
+        && params.mesh2 == x0 && params.mesh3 == y0 + bbox_width;
     if direct_relocation {
-        return vec2<f32>(x0 + dx, y0 + dy);
+        return vec2<f32>(x0 + dx - bx0, y0 + dy - by0);
     }
     if swapped_relocation {
-        return vec2<f32>(x0 + dy, y0 + dx);
+        return vec2<f32>(x0 + dy - by0, y0 + dx - bx0);
     }
-    let bw = max(bx1 - bx0, 1.0);
-    let bh = max(by1 - by0, 1.0);
+    let bw = max(bbox_width, 1.0);
+    let bh = max(bbox_height, 1.0);
     let u = (dx - bx0) / bw;
     let v = (dy - by0) / bh;
     let x1 = params.g;
