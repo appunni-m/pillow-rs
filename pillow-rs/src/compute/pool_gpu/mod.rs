@@ -10101,17 +10101,21 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
 
 /// Return whether an operation's GPU capability depends on the source image.
 ///
-/// Convolution filters are valid for more than one logical sample contract:
-/// the byte path is admitted only for kernels proven exact by the operation
-/// validator, while the I-mode path uses the same shader with signed samples
-/// and a different accumulation contract.  The operation-only routing pass
-/// runs before lazy source materialization, so it must defer these filters to
-/// the image-aware preflight instead of selecting CPU merely because it cannot
-/// inspect the logical mode yet.
+/// Convolution filters and geometry transforms are valid for more than one
+/// concrete image contract. The byte filter path is admitted only for kernels
+/// proven exact by the operation validator, while the I-mode path uses the
+/// same shader with signed samples and a different accumulation contract.
+/// Likewise, Transform admission depends on the materialized source layout
+/// and method-specific map proof; a non-finite projective map is still a
+/// valid Pillow operation whose exact result must be produced by host control.
+/// The operation-only routing pass runs before lazy source materialization, so
+/// it must defer these operations to image-aware preflight instead of
+/// manufacturing a backend capability error merely because it cannot inspect
+/// the concrete image yet.
 fn gpu_operation_requires_image_context(op: &PipelineOp) -> bool {
     matches!(
         op,
-        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } | PipelineOp::Transform { .. }
     )
 }
 
@@ -12495,7 +12499,8 @@ mod tests {
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_nearest_affine_is_exact, gpu_palette_alpha_projective_relocation_is_admitted,
+        gpu_nearest_affine_is_exact, gpu_operation_requires_image_context,
+        gpu_palette_alpha_projective_relocation_is_admitted,
         gpu_palette_first_rgb_merge_is_supported, gpu_projective_nearest_is_exact,
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
         gpu_transform_all_fill_is_exact, gpu_transform_fill, luma16_resample_big_endian,
@@ -12634,6 +12639,26 @@ mod tests {
             readback_poll_backoff(true, 1, now + Duration::from_nanos(1), now),
             None
         );
+    }
+
+    #[test]
+    fn transform_safety_is_deferred_to_image_aware_preflight() {
+        let op = PipelineOp::Transform {
+            w: 2,
+            h: 1,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, f64::NAN, 0.0]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((0, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+
+        // The operation-only router runs before the source image is
+        // materialized. A non-finite map must therefore reach the GPU pool's
+        // image-aware exact-host-control preflight instead of being reported
+        // as a public "GPU does not support Transform" capability error.
+        assert!(gpu_operation_requires_image_context(&op));
     }
 
     #[test]
