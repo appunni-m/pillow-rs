@@ -6073,3 +6073,24 @@ coverage is
 32 taps/special F arithmetic plus broader arithmetic-changing projective,
 Mesh, and palette domains; P1 native/host reconciliation and the P2
 two-consecutive zero-budget equal-receipt gate remain open.
+
+## 32.99 Equal-receipt performance gate recheck (2026-09-03)
+
+A fresh fixed-11-ID pair on revision `5e2c8e1c6` rechecked the remaining P2
+acceptance gate without changing the benchmark implementation. Both runs
+selected and measured all 11 IDs, passed every correctness gate, and were
+schema-valid. The pair contains 44 comparable records: 11 explicit Pillow
+oracle receipts and 33 target receipts, all terminal with
+`requested_backend=actual_backend` and empty fallback reasons.
+
+The maintained budget checker still reports three violations (Pillow
+`simd-constant`, Pillow CMYK `ImageStat`, and SIMD CMYK `ImageStat`). They are
+timing-variance rows with no stable source-path regression; no deterministic
+source optimization was identified. Run hashes are
+`724e0ccfc191d0d0d78e9da9932d3f34fae6d2333147423405c325757a7edb2c` and
+`133efa9158142bc8f5c6b28699bfe62cdf3240866f5cc591850d0b305de41e4a`; the
+budget report hash is
+`4a3a8a44b352f6f204fb0d555e9a706593ad4e4dc293168221eb184b54f5048c`.
+The checker exits nonzero as designed, so the two-consecutive zero-violation
+gate remains open. No scripts, fixtures, thresholds, IDs, denominators,
+receipt rules, or policy changed.
