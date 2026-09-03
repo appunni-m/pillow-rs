@@ -7458,3 +7458,27 @@ and WGSL coverage
 Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
+
+## 32.161 Additional fixed-ID timing pairs remain receipt-stable (2026-09-04)
+
+A fresh next18b campaign at source revision
+`3d2d4b6c058b5bffe0009dc084aaf6e256cd167a` repeated the maintained 11-ID
+cohort in two consecutive six-sample pairs. Each run selected and measured
+11/11 workloads; each pair had 44/44 comparable records, and every run had
+33/33 terminal target receipts with `requested_backend=actual_backend` and
+empty fallback/error state. The first pair reported 10 budget violations and
+the second 15. Run hashes are `f75ecda41a5cb2a47d096524ae76a69b5eb782c5113c4ff0dc08fb4f51d175f3`,
+`875241152d0f470b7f57b2996cda6d483eb26accc8593084ce62ce659d3a343e`,
+`5e040014e8cc37af4c9e403fbe4226f6dfba3b0214593627540f1026de5dbd2f`, and
+`2c2f9015c55f87d9b33318bf5262191feec08c38cd85fe5f95ded21e298ef0d7`; the
+budget hashes are `3a6c8a4238403a42aefb931f9ddbbb5dfc75c5609a20b125dfd9b433a91bdcd3`
+and `558f89f3494f01eef4c89a228202f8c7ee5d80e9e4d19cca8e25782cd15687b6`.
+
+After timing fields were removed, the normalized operation, dispatch, cache,
+resource, and backend execution fingerprint remained
+`7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32` across
+all four runs. Violations moved across Pillow/CPU/SIMD/GPU rows and remained
+timing-only; no deterministic source or receipt defect was found. Receipt
+state remains 40/40 and the evidence contract remains benchmark/coverage/
+parity 25/24/24. No benchmark scripts, fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
