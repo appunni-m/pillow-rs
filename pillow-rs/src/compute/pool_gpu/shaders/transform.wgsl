@@ -397,16 +397,18 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         // as `7.0 * (3.0 / 7.0)` can land one ULP below 3 and reintroduce a
         // nonzero filter weight at an otherwise exact source pixel.
         let direct_relocation =
-            x0 == 0.0 && y0 == 0.0 && x1 == 0.0 && y1 == height
-            && x2 == width && y2 == height && x3 == width && y3 == 0.0;
+            x1 == x0 && y1 == y0 + height
+            && x2 == x0 + width && y2 == y0 + height
+            && x3 == x0 + width && y3 == y0;
         let swapped_relocation =
-            x0 == 0.0 && y0 == 0.0 && x1 == height && y1 == 0.0
-            && x2 == height && y2 == width && x3 == 0.0 && y3 == width;
+            x1 == x0 + height && y1 == y0
+            && x2 == x0 + height && y2 == y0 + width
+            && x3 == x0 && y3 == y0 + width;
         if direct_relocation {
-            return vec2<f32>(dx, dy);
+            return vec2<f32>(x0 + dx, y0 + dy);
         }
         if swapped_relocation {
-            return vec2<f32>(dy, dx);
+            return vec2<f32>(x0 + dy, y0 + dx);
         }
         let u = dx / width;
         let v = dy / height;

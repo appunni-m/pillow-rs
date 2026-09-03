@@ -10711,11 +10711,46 @@ fn gpu_quad_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
     }
     let width = f64::from(w);
     let height = f64::from(h);
-    let direct = [0.0, 0.0, 0.0, height, width, height, width, 0.0];
+    // A translated Quad is still a raw relocation when both source origins
+    // are integral and f32-exact.  Pillow's Geometry.c evaluates the map at
+    // the destination center; the filtered callback then subtracts 0.5, so
+    // an integer translation leaves zero interpolation weights.  Fractional
+    // origins remain behind the centered f64/host proof because the shader's
+    // raw-gid sampler rounds them differently.
+    let integer_f32 = |value: f64| {
+        value.is_finite()
+            && value.fract() == 0.0
+            && (value as f32).is_finite()
+            && f64::from(value as f32) == value
+    };
+    let tx = data[0];
+    let ty = data[1];
+    if !integer_f32(tx) || !integer_f32(ty) {
+        return false;
+    }
+    let direct = [
+        tx,
+        ty,
+        tx,
+        ty + height,
+        tx + width,
+        ty + height,
+        tx + width,
+        ty,
+    ];
     // The swapped map exchanges destination axes, so its source extents are
     // height on X and width on Y.  Using `(width, height)` here only works
     // for square outputs and admits a scaled map for every other shape.
-    let swapped = [0.0, 0.0, height, 0.0, height, width, 0.0, width];
+    let swapped = [
+        tx,
+        ty,
+        tx + height,
+        ty,
+        tx + height,
+        ty + width,
+        tx,
+        ty + width,
+    ];
     data[..8] == direct || data[..8] == swapped
 }
 
@@ -14409,6 +14444,16 @@ mod tests {
                 (9, 6),
             ),
             (
+                3,
+                TransformData::Affine(vec![2.0, 1.0, 2.0, 7.0, 8.0, 7.0, 8.0, 1.0]),
+                (9, 6),
+            ),
+            (
+                3,
+                TransformData::Affine(vec![2.0, 1.0, 8.0, 1.0, 8.0, 10.0, 2.0, 10.0]),
+                (9, 6),
+            ),
+            (
                 4,
                 TransformData::Mesh(vec![(
                     vec![0.0, 0.0, 9.0, 6.0],
@@ -14731,6 +14776,16 @@ mod tests {
                 (
                     3,
                     TransformData::Affine(vec![0.0, 0.0, 6.0, 0.0, 6.0, 9.0, 0.0, 9.0]),
+                    (9, 6),
+                ),
+                (
+                    3,
+                    TransformData::Affine(vec![1.0, 2.0, 1.0, 8.0, 10.0, 8.0, 10.0, 2.0]),
+                    (9, 6),
+                ),
+                (
+                    3,
+                    TransformData::Affine(vec![1.0, 2.0, 7.0, 2.0, 7.0, 11.0, 1.0, 11.0]),
                     (9, 6),
                 ),
                 (
@@ -15621,6 +15676,18 @@ mod tests {
                     vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
                 )]),
                 None,
+            ),
+            (
+                (8, 8),
+                3,
+                TransformData::Affine(vec![1.0, 2.0, 1.0, 10.0, 9.0, 10.0, 9.0, 2.0]),
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (8, 8),
+                3,
+                TransformData::Affine(vec![1.0, 2.0, 9.0, 2.0, 9.0, 10.0, 1.0, 10.0]),
+                Some(TransformFill::Components(vec![17, 203])),
             ),
         ];
 
