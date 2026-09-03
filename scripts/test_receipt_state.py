@@ -1699,6 +1699,98 @@ class ReceiptStateTests(unittest.TestCase):
             "complete",
         )
 
+    def test_partial_receipt_cannot_replace_observed_terminal_candidate(self) -> None:
+        """A later partial error must not terminalize the earlier observed prefix."""
+
+        class Telemetry:
+            def __init__(self) -> None:
+                self.samples: list[dict[str, object] | None] = [
+                    None,
+                    {
+                        "actual_backend": "cpu",
+                        "operation_count": 1,
+                        "operation_telemetry": [{"operation": "Filter"}],
+                    },
+                    {
+                        "actual_backend": "gpu",
+                        "operation_count": 1,
+                        "operation_telemetry": [{"operation": "Invert"}],
+                    },
+                    None,
+                ]
+
+            def take_pipeline_telemetry(self) -> dict[str, object] | None:
+                return self.samples.pop(0)
+
+        case = {
+            "case_id": "partial-after-observed-prefix",
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "new",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "arguments": {},
+                },
+                {
+                    "step_id": "filtered",
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": {"kind": "binding", "step_id": "new"},
+                    "arguments": {},
+                },
+                {
+                    "step_id": "later-error",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": {"kind": "binding", "step_id": "filtered"},
+                    "arguments": {},
+                },
+            ],
+            "observations": ["filtered", "materialize"],
+        }
+        sink: list[dict[str, object]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch(
+                    "scripts.run_migration_parity.operation_definition",
+                    return_value={"source": {"result": {"shape": "scalar"}}},
+                ),
+                patch(
+                    "scripts.run_migration_parity.call_workflow_step",
+                    side_effect=[object(), object(), ValueError("later error")],
+                ),
+                patch(
+                    "scripts.run_migration_parity.serialize_value",
+                    return_value=7,
+                ),
+            ):
+                result = run_case(
+                    "target",
+                    case,
+                    {},
+                    Path(directory),
+                    pipeline_execution_api=Telemetry(),
+                    pipeline_execution_sink=sink,
+                )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(sink[0]["terminal_complete"])
+        self.assertEqual(sink[0]["status"], "completed")
+        self.assertFalse(sink[1]["terminal_complete"])
+        self.assertEqual(sink[1]["status"], "partial")
+        self.assertEqual(
+            classify_pipeline_case(case, sink, result=result)["status"],
+            "complete",
+        )
+
     def test_unobserved_final_step_clears_prior_receipt_candidate(self) -> None:
         class Telemetry:
             def __init__(self) -> None:

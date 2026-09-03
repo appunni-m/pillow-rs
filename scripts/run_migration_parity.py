@@ -2220,7 +2220,12 @@ def run_case(
         set_receipt_terminal_complete(receipt)
         assert pipeline_execution_sink is not None
         pipeline_execution_sink.append(receipt)
-        if receipt_is_meaningful(receipt):
+        # A partial receipt is meaningful evidence of a pipeline attempt, but
+        # it cannot become the terminal candidate for a successful observed
+        # prefix.  Otherwise a later observation would mark that partial
+        # record terminal and either violate the receipt contract or hide the
+        # earlier completed backend identity.
+        if status in {"completed", "cached"} and receipt_is_meaningful(receipt):
             terminal_receipt_index = len(pipeline_execution_sink) - 1
 
     selected_indices = [
