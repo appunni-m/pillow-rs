@@ -6396,6 +6396,38 @@ cases exact. Focused F tests are 35/35, full core tests 134/134, formatting,
 build-dev, receipt-state 39/39, and the evidence contract pass. No fixtures,
 thresholds, IDs, denominators, policy, or receipt taxonomy changed.
 
+## 32.116 CPU filtered affine/projective mode and error parity (2026-09-03)
+
+Bounded native Pillow 12.2.0 probes found several CPU transform divergences
+outside the maintained corpus. Filtered LA/RGBA Perspective and Quad sampled
+straight channels, while Pillow's `Image.transform` first converts those modes
+to premultiplied `La`/`RGBa` and converts back. The affine byte kernel treated
+every non-nearest request as bilinear, so RGBX BICUBIC never reached the
+four-tap callback and its unused fourth byte was also eligible for an alpha
+round trip. Affine bilinear used a reassociated four-term sum instead of
+Geometry.c's horizontal-first rows; on arm64, the plain affine and perspective
+map expressions likewise differed from clang's fused product grouping at a
+clipped edge. Finally, the public parser collapsed known resize-only filter
+codes into the generic unknown-filter error.
+
+Commit `f08673da5` fixes those bounded causes in the pure-Rust CPU path. It
+adds the La/RGBa round trip with explicit raw/scalar mode guards, mirrors
+Geometry.c's affine FMA and bilinear ordering, implements clipped four-tap
+BICUBIC with the native sequential row fallback and Horner/FMA evaluation,
+and preserves Pillow's exact LANCZOS/BOX/HAMMING/unknown filter messages.
+
+Native Pillow 12.2.0 versus RSPIL probes are exact for 2,400/2,400 randomized
+affine cases and 1,920/1,920 randomized Perspective/Quad cases across
+L/LA/RGB/RGBA/RGBX/CMYK, including nontrivial fills. Focused CPU effects tests
+pass 15/15 and transform parser tests 2/2. The maintained
+`make migration-parity-test` replay at this revision is 10,952/10,952 exact,
+with result SHA-256
+`6220138a4255d62c6cf09d6d78e4411093ff1938e26d12d73a10110b2c58d4b7`; format,
+build-dev, receipt-state 39/39, and evidence counts 25/24/24 pass. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed. Filtered GPU alpha and broader non-dyadic transform arithmetic remain
+explicit exact host semantic control pending independent device proofs.
+
 ## 32.113 CPU projective BICUBIC parity (2026-09-03)
 
 The generic CPU projective path treated every non-nearest request as
