@@ -253,8 +253,14 @@ receipt rules unchanged.
   11/11 workloads, 44/44 comparable records, and 33/33 terminal requested=actual
   target receipts per run with empty fallback/error state, but still reports
   six timing violations; all 44 execution fingerprints are identical after
-  removing timing fields. P2 therefore remains timing noise rather than a
-  receipt defect.
+  removing timing fields. The next18 campaign repeated the same 11/11,
+  44/44, and 33/33 receipt invariants in two consecutive pairs; the first
+  pair had 11 violations and the second six, with normalized execution
+  fingerprint
+  `7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32`
+  unchanged across all four runs. Violations moved among Pillow/CPU/SIMD/GPU
+  rows and remained timing-only. P2 therefore remains timing noise rather than
+  a receipt defect.
 
 ## Verified changes already integrated
 
