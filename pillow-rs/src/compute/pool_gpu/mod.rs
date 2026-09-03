@@ -14230,11 +14230,8 @@ mod tests {
 
     #[test]
     fn i_filter_nearest_resize_native_gpu_preserves_signed_words() {
-        let values = (0..99i32)
+        let source_bytes = (0..99i32)
             .map(|index| index.saturating_mul(257).saturating_sub(20_000))
-            .collect::<Vec<_>>();
-        let source_bytes = values
-            .into_iter()
             .flat_map(i32::to_le_bytes)
             .collect::<Vec<_>>();
         let source = Image::frombytes("I", (11, 9), &source_bytes).expect("I source");
