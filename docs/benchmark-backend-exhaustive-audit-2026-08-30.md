@@ -6323,3 +6323,27 @@ corrected host-control reason. The new routing regression, formatting,
 `make migration-parity-evidence-check` all pass. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed. The broader native-versus-
 host partition remains open where arithmetic is intentionally host-controlled.
+
+## 32.110 PA Quad/Mesh nearest pair relocation (2026-09-03)
+
+The PA transport already keeps each pixel as its native `(index, alpha)` pair,
+but Quad and complete one-record Mesh nearest relocations were still routed to
+exact host semantic control. Pillow's projective nearest path copies those two
+bytes without palette expansion or alpha arithmetic for direct and
+axis-swapped unit relocations. The GPU admission now reuses the existing
+exhaustive source-selection proof for those two methods and also admits the
+true direct Quad identity for ordinary packed byte modes. Fractional, scaled,
+partial, multi-record, and filtered PA/projective rows remain host-controlled.
+
+Commit `46c51e032` carries this narrow admission without changing the public
+operation or receipt contract.
+
+Native Pillow 12.2.0 versus RSPIL CPU/GPU probing covered 40 PA Quad/Mesh
+cases across nine source/output dimensions, direct and axis-swapped Quad and
+Mesh forms, and translated Mesh fills: all 40/40 matched bytes and mode/size.
+Thirty-seven rows published terminal native GPU receipts (one dispatch, no
+fallback); the three non-square axis-swapped Quad rows stayed on terminal CPU
+exact host semantic control because the proof correctly rejected their
+non-integral source selection. The focused proof and native regression tests
+pass, and the serialized GPU unit module is 82/82. No fixtures, thresholds,
+IDs, denominators, receipt rules, or policy changed.
