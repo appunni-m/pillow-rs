@@ -10540,9 +10540,10 @@ fn gpu_nearest_affine_is_exact(
 /// This covers proof-certified integer maps for ordinary packed byte modes and
 /// raw indexed samples without claiming parity for fractional homographies or
 /// arbitrary mesh records. Filtered projective transforms remain host
-/// controlled unless an L/RGB Perspective map is a unit-scale integer
+/// controlled unless an L/RGB/PA Perspective map is a unit-scale integer
 /// relocation. In that envelope the filtered sample lands exactly on one
-/// source pixel, so the shader's bilinear lowering preserves the byte value.
+/// source pixel, so the shader's bilinear lowering preserves the byte or
+/// palette-alpha pair.
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
@@ -10609,13 +10610,18 @@ fn gpu_projective_filtered_relocation_is_admitted(
     // center offset before bilinear sampling.  For these integer unit maps,
     // that produces an integral source coordinate and zero filter weights;
     // the shader's raw-gid projective sampler therefore selects the same
-    // source byte.  Keep alpha modes out: their native path has a
-    // premultiplied round trip that this projective shader does not model.
-    if !matches!(mode, Some("L" | "RGB"))
+    // source sample. Keep LA/RGBA out: their native path has a premultiplied
+    // round trip that this projective shader does not model. PA is different:
+    // its projective path preserves raw index/alpha pairs without that
+    // premultiplied conversion, so the zero-weight argument applies to PA.
+    if !matches!(mode, Some("L" | "PA" | "RGB"))
         || !matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
-        || !matches!(method, TransformMethod::Perspective)
         || data.len() < 8
     {
+        return false;
+    }
+
+    if !matches!(method, TransformMethod::Perspective) {
         return false;
     }
 
@@ -10644,10 +10650,12 @@ fn gpu_projective_filtered_relocation_is_admitted(
 /// never expands the palette or performs alpha arithmetic.  Keep this
 /// separate from ordinary byte modes: PA's palette metadata and two-band fill
 /// contract need their own proof. Pillow does not force PA's non-nearest
-/// transform requests to nearest, so those requests remain on the exact host
-/// path rather than being silently changed to pair-copy sampling. Quad and
-/// complete one-record Mesh are admitted only for the same direct/axis-swapped
-/// unit relocations already proven for ordinary byte layouts.
+/// transform requests to nearest. The filtered Perspective relocation below
+/// is admitted only when its weights are provably zero; other PA filtered
+/// transforms remain on the exact host path rather than being silently
+/// changed to pair-copy sampling. Quad and complete one-record Mesh are
+/// admitted only for the same direct/axis-swapped unit relocations already
+/// proven for ordinary byte layouts.
 fn gpu_palette_alpha_projective_relocation_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -10709,15 +10717,15 @@ fn gpu_projective_nearest_is_exact(
         _ => false,
     };
     let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
+    let filtered_relocation =
+        gpu_projective_filtered_relocation_is_admitted(method.clone(), data, *filter, mode);
     let palette_alpha_relocation = mode == Some("PA")
-        && gpu_palette_alpha_projective_relocation_is_admitted(
+        && (gpu_palette_alpha_projective_relocation_is_admitted(
             method.clone(),
             data,
             *filter,
             (*w, *h),
-        );
-    let filtered_relocation =
-        gpu_projective_filtered_relocation_is_admitted(method.clone(), data, *filter, mode);
+        ) || filtered_relocation);
     // The projective shader's raw-gid arithmetic is safe for the affine
     // subfamily of Perspective maps only when the denominator is constant.
     // The exhaustive source-selection proof below then decides whether its
@@ -12523,10 +12531,10 @@ mod tests {
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_nearest_affine_is_exact, gpu_operation_requires_image_context,
         gpu_palette_alpha_projective_relocation_is_admitted,
-        gpu_palette_first_rgb_merge_is_supported, gpu_projective_nearest_is_exact,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
-        gpu_transform_all_fill_is_exact, gpu_transform_fill, luma16_resample_big_endian,
-        readback_poll_backoff,
+        gpu_palette_first_rgb_merge_is_supported, gpu_projective_filtered_relocation_is_admitted,
+        gpu_projective_nearest_is_exact, gpu_resize_coefficients,
+        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact, gpu_transform_fill,
+        luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -13420,6 +13428,31 @@ mod tests {
             ResampleFilter::Nearest,
             (9, 6),
         ));
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &direct,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+        ));
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &swapped,
+            ResampleFilter::Bicubic,
+            Some("PA"),
+        ));
+        let fractional = [1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0];
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &fractional,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+        ));
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Quad,
+            &direct,
+            ResampleFilter::Bilinear,
+            Some("PA"),
+        ));
     }
 
     #[test]
@@ -13489,6 +13522,108 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {
+        let cases = [
+            (
+                (1, 1),
+                (1, 1),
+                [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                None,
+            ),
+            (
+                (2, 3),
+                (2, 3),
+                [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                None,
+            ),
+            (
+                (4, 3),
+                (6, 5),
+                [1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![199, 71])),
+            ),
+            (
+                (7, 5),
+                (5, 7),
+                [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (16, 9),
+                (18, 11),
+                [1.0, 0.0, -2.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![17, 203])),
+            ),
+            (
+                (33, 17),
+                (31, 19),
+                [0.0, 1.0, 2.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![113, 7])),
+            ),
+        ];
+        let palette = vec![10, 20, 30, 40, 50, 60];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (source_size, output_size, matrix, fill) in cases {
+            let (source_width, source_height) = source_size;
+            let source_bytes = (0..source_width * source_height)
+                .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
+                .collect::<Vec<_>>();
+            let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
+            source.putpalette(&palette, "RGB").expect("PA palette");
+            assert_eq!(source.mode().expect("PA mode"), "PA");
+
+            for filter in [(2, ResampleFilter::Bilinear), (3, ResampleFilter::Bicubic)] {
+                let transformed = source
+                    .transform_public(
+                        output_size,
+                        2,
+                        Some(TransformData::Affine(matrix.to_vec())),
+                        filter.0,
+                        0,
+                        fill.clone(),
+                    )
+                    .expect("PA filtered projective transform");
+                assert_eq!(transformed.mode().expect("transformed PA mode"), "PA");
+                assert_eq!(transformed.palette(), Some(palette.clone()));
+                let expected_image = transformed.clone().use_backend(Backend::Cpu);
+                let expected = expected_image
+                    .tobytes()
+                    .expect("CPU PA filtered projective transform");
+                let gpu_image = transformed.clone().use_backend(Backend::Gpu);
+                assert_eq!(gpu_image.mode().expect("GPU PA mode"), "PA");
+                assert_eq!(gpu_image.palette(), Some(palette.clone()));
+                let actual = match gpu_image.tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => {
+                        panic!("native GPU PA filtered projective transform failed: {error}")
+                    }
+                };
+                assert_eq!(
+                    actual, expected,
+                    "PA filtered projective parity for {source_size:?} -> {output_size:?}, filter={:?}",
+                    filter.1
+                );
+                let telemetry = Backend::take_pipeline_telemetry()
+                    .expect("native PA filtered projective transform must publish a receipt");
+                assert_eq!(telemetry.0, Some(Backend::Gpu));
+                assert_eq!(telemetry.1, Backend::Gpu, "telemetry={telemetry:?}");
+                assert_eq!(telemetry.6, Some(1));
+                assert_eq!(telemetry.7, None);
+            }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
