@@ -576,7 +576,7 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
 // exact integer mantissa/exponent pairs, then the accumulator is rounded to a
 // normal binary64 value after every tap. Pillow's arm64 FLOAT32 vertical
 // kernel stays on the scalar FMA path; the host admission proof selects that
-// model here. Rows over 1024 taps or exceptional rows use marker 9 where its
+// model here. Rows over 2048 taps or exceptional rows use marker 9 where its
 // special prepass is proven, or exact host semantic control.
 struct F64OrderedState {
     magnitude: U128,
@@ -687,7 +687,7 @@ fn filtered_f64_ordered_bounded(output_x: u32, output_y: u32) -> u32 {
     let source_y = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
-    if count > 1024u {
+    if count > 2048u {
         return 0u;
     }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
@@ -698,15 +698,17 @@ fn filtered_f64_ordered_bounded(output_x: u32, output_y: u32) -> u32 {
         if exponent_bits == 255u {
             return 0u;
         }
-        if exponent_bits == 0u {
-            if (bits & 0x7fffffu) != 0u {
-                return 0u;
-            }
-            continue;
-        }
-        let sample_mantissa = (bits & 0x7fffffu) | 0x800000u;
+        let sample_mantissa = select(
+            (bits & 0x7fffffu) | 0x800000u,
+            bits & 0x7fffffu,
+            exponent_bits == 0u,
+        );
         let product = f64_product(sample_mantissa, coeff);
-        let sample_exp = i32(exponent_bits) - 127 - 23;
+        let sample_exp = select(
+            i32(exponent_bits) - 127 - 23,
+            -149,
+            exponent_bits == 0u,
+        );
         let product_exp = sample_exp + coeff.exponent;
         let sample_negative = (bits & 0x80000000u) != 0u;
         state = f64_ordered_add_product(
