@@ -10630,6 +10630,40 @@ fn gpu_mesh_constant_map_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
         && data[6..12].chunks_exact(2).all(|pair| pair == [x, y])
 }
 
+/// Return whether a Perspective map is a signed unit-axis relocation.
+///
+/// Pillow's `src/libImaging/Geometry.c` evaluates the inverse map at each
+/// destination pixel center and then applies `COORD` truncation. For a
+/// reflected unit axis, the shader's raw destination index plus
+/// `floor(source + 0.5)` is one pixel off unless the center offset is reduced
+/// explicitly. Keep the shape narrow; arbitrary affine arithmetic remains
+/// subject to the exhaustive source-selection proof below.
+fn gpu_perspective_signed_unit_relocation_is_admitted(data: &[f64]) -> bool {
+    if data.len() < 8 || data[6] != 0.0 || data[7] != 0.0 {
+        return false;
+    }
+    let integer_f32 = |value: f64| {
+        value.is_finite()
+            && value.fract() == 0.0
+            && (value as f32).is_finite()
+            && f64::from(value as f32) == value
+    };
+    if !integer_f32(data[2]) || !integer_f32(data[5]) {
+        return false;
+    }
+    matches!(
+        data[..6],
+        [1.0, 0.0, _, 0.0, 1.0, _]
+            | [-1.0, 0.0, _, 0.0, 1.0, _]
+            | [1.0, 0.0, _, 0.0, -1.0, _]
+            | [-1.0, 0.0, _, 0.0, -1.0, _]
+            | [0.0, 1.0, _, 1.0, 0.0, _]
+            | [0.0, -1.0, _, 1.0, 0.0, _]
+            | [0.0, 1.0, _, -1.0, 0.0, _]
+            | [0.0, -1.0, _, -1.0, 0.0, _]
+    )
+}
+
 /// Return whether a Quad is a complete unit-scale relocation in Pillow's
 /// NW/SW/SE/NE corner order. Direct identity and axis-swapped forms keep
 /// every destination sample on an existing source pixel; arbitrary corner
@@ -10731,8 +10765,8 @@ fn gpu_projective_filtered_relocation_is_admitted(
 /// relocation that the projective shader can reproduce exactly.
 ///
 /// PA stores one palette index and one per-pixel alpha byte in the native
-/// two-band image.  A nearest unit-scale direct or axis-swapped map with an
-/// integer translation only selects an existing `(index, alpha)` pair; it
+/// two-band image.  A nearest signed unit-axis map with an integer translation
+/// only selects an existing `(index, alpha)` pair; it
 /// never expands the palette or performs alpha arithmetic.  Keep this
 /// separate from ordinary byte modes: PA's palette metadata and two-band fill
 /// contract need their own proof. Pillow does not force PA's non-nearest
@@ -10761,7 +10795,9 @@ fn gpu_palette_alpha_projective_relocation_is_admitted(
         TransformMethod::Perspective => {
             let direct = data[..8] == [1.0, 0.0, data[2], 0.0, 1.0, data[5], 0.0, 0.0];
             let swapped = data[..8] == [0.0, 1.0, data[2], 1.0, 0.0, data[5], 0.0, 0.0];
-            integer_f32(data[2]) && integer_f32(data[5]) && (direct || swapped)
+            integer_f32(data[2])
+                && integer_f32(data[5])
+                && (direct || swapped || gpu_perspective_signed_unit_relocation_is_admitted(data))
         }
         TransformMethod::Quad => {
             gpu_quad_unit_relocation_is_admitted(data, output_dimensions.0, output_dimensions.1)
@@ -10968,6 +11004,31 @@ fn gpu_projective_nearest_is_exact(
         let f = |index: usize| data[index] as f32;
         match method {
             TransformMethod::Perspective => {
+                if gpu_perspective_signed_unit_relocation_is_admitted(data) {
+                    let a = f(0);
+                    let b = f(1);
+                    let d = f(3);
+                    let e = f(4);
+                    let sx = if a == 1.0 {
+                        f(2) + dx
+                    } else if a == -1.0 {
+                        f(2) - dx - 1.0
+                    } else if b == 1.0 {
+                        f(2) + dy
+                    } else {
+                        f(2) - dy - 1.0
+                    };
+                    let sy = if d == 1.0 {
+                        f(5) + if b.abs() == 1.0 { dx } else { dy }
+                    } else if d == -1.0 {
+                        f(5) - if b.abs() == 1.0 { dx } else { dy } - 1.0
+                    } else if e == 1.0 {
+                        f(5) + dy
+                    } else {
+                        f(5) - dy - 1.0
+                    };
+                    return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
+                }
                 let denominator = f(6) * dx + f(7) * dy + 1.0;
                 if denominator == 0.0 || !denominator.is_finite() {
                     return None;
@@ -13278,6 +13339,34 @@ mod tests {
             Some("RGB"),
             (16, 16)
         ));
+        let perspective_signed_unit = [
+            [-1.0, 0.0, 8.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, -1.0, 8.0, 0.0, 0.0],
+            [-1.0, 0.0, 8.0, 0.0, -1.0, 8.0, 0.0, 0.0],
+            [0.0, -1.0, 8.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, -1.0, 0.0, 8.0, 0.0, 0.0],
+            [0.0, -1.0, 8.0, -1.0, 0.0, 8.0, 0.0, 0.0],
+            [-1.0, 0.0, 7.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, -1.0, 7.0, 0.0, 0.0],
+        ];
+        for matrix in perspective_signed_unit {
+            let op = PipelineOp::Transform {
+                w: 8,
+                h: 8,
+                method: TransformMethod::Perspective,
+                data: Arc::from(matrix.to_vec()),
+                filter: ResampleFilter::Nearest,
+                fill: Some((7, 0, 0, 255)),
+                fill_is_none: false,
+                palette_fill: None,
+            };
+            assert!(gpu_projective_nearest_is_exact(
+                &op,
+                &rgb,
+                Some("RGB"),
+                (16, 16),
+            ));
+        }
         let mesh_translate = PipelineOp::Transform {
             w: 8,
             h: 8,
@@ -13515,6 +13604,30 @@ mod tests {
                 (
                     2,
                     TransformData::Affine(vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![-1.0, 0.0, 8.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![1.0, 0.0, 0.0, 0.0, -1.0, 8.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![-1.0, 0.0, 8.0, 0.0, -1.0, 8.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![0.0, -1.0, 8.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![0.0, 1.0, 0.0, -1.0, 0.0, 8.0, 0.0, 0.0]),
+                ),
+                (
+                    2,
+                    TransformData::Affine(vec![0.0, -1.0, 8.0, -1.0, 0.0, 8.0, 0.0, 0.0]),
                 ),
                 (
                     3,
@@ -13819,6 +13932,13 @@ mod tests {
             ResampleFilter::Nearest,
             (5, 7),
         ));
+        let reflected = [-1.0, 0.0, 9.0, 0.0, 1.0, 6.0, 0.0, 0.0];
+        assert!(gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &reflected,
+            ResampleFilter::Nearest,
+            (9, 6),
+        ));
         assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
             TransformMethod::Perspective,
             &direct,
@@ -14004,6 +14124,36 @@ mod tests {
                 (5, 7),
                 [0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
                 Some(TransformFill::Components(vec![17, 203])),
+            ),
+            (
+                (7, 5),
+                [-1.0, 0.0, 7.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (7, 5),
+                [1.0, 0.0, 0.0, 0.0, -1.0, 5.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (7, 5),
+                [-1.0, 0.0, 7.0, 0.0, -1.0, 5.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (7, 5),
+                [0.0, -1.0, 5.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (7, 5),
+                [0.0, 1.0, 0.0, -1.0, 0.0, 7.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (7, 5),
+                [0.0, -1.0, 5.0, -1.0, 0.0, 7.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
             ),
         ];
 
