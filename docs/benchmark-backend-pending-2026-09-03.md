@@ -158,7 +158,12 @@ receipt rules unchanged.
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof. The
   adapter-fitting marker-12 envelope now reaches 8388607 taps; 8388608 and
-  wider rows remain exact host semantic control.
+  wider rows remain exact host semantic control. Commit `8c92e95d8` also
+  closes the binding-size edge: per-row special prepasses and aggregate
+  coefficient arenas reject aligned tables above the 128-MiB storage-binding
+  limit, preserving terminal host control instead of issuing an oversized
+  bind-group. Native over-cap qNaN and 8388607-to-2x1 probes are exact
+  host-control rows; no reducer bound was widened.
 - [x] Extend the filtered Quad/Mesh relocation proof (`cfa3b2690`, source
   `206bff9dfe82ab9eab5346931db2ddd0b11f4388`): correct non-square Quad
   axis-swap source extents, reject extra Mesh records, and admit only the
@@ -240,6 +245,17 @@ receipt rules unchanged.
   480/480 exact on CPU and GPU across L/LA/RGB/RGBA/PA, with 240/240 terminal
   native GPU receipts; quarter-pixel, scaled/nonconstant, partial/multi-record,
   and other arithmetic-changing maps remain exact host semantic control.
+
+- [x] Admit the interior-integer Bilinear projective envelope
+  (`30e5aed11`, source `bd4bad16c`): for L/RGB/PA only, constant f32-exact
+  integer source coordinates strictly inside the source bounds now mirror
+  Pillow Geometry.c's filtered `-0.5` shift, four-neighbor sampling, and
+  truncating byte conversion for Perspective, Quad, and complete one-record
+  Mesh. Native Pillow 12.2.0 differentials are 1,620/1,620 exact across
+  ordinary matrices and 7,203/7,203 exhaustive 2x2 value cases per mode;
+  every admitted row has a terminal native GPU receipt. Edges, LA/RGBA
+  premultiplied paths, Bicubic, fractional/scaled maps, and partial or
+  multi-record geometry remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
@@ -654,26 +670,27 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `acefea1ce` (typed-F filtered
+`main` includes the parity fixes through `30e5aed11` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 4194304 taps, tall-image F ordering, filtered
+reducer through 8388607 taps, tall-image F ordering, filtered
 Perspective/Quad/Mesh relocation, arm64 wide-row F accumulation, unit-scale
 Mesh relocation including exact partial bboxes, integer and signed-unit
 Perspective nearest routing, translated Quad relocation, the
 centered constant-denominator integer and proof-certified fractional
 and nonconstant-denominator Perspective nearest envelopes, identity projective
 routing, proof-certified Quad/Mesh nearest maps, receipt-proven suite cohorts,
-and packed SIMD ExtractBand).
+and packed SIMD ExtractBand, plus the 128-MiB F binding guard and interior-
+integer Bilinear projective envelope).
 The fresh combined replay at this revision is 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,744 GPU plus 94 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`e697c75080629d93eae23a0e675c1d76edd1836a949b325551cba557c22b7781`; the GPU
-execution sidecar is `8d6384a7fe9a7cc9e66dbc6f42243cd5a0acc364a502e271e0ee5b7bd619f94a`,
-with WGSL coverage `0bb1ae47305aed7d4c6711e82383d53ac5919a418fe3c4883f009803c62e59ed`.
+`185b875971e164795ba5153f9c49a96612ad751bf76c8665ef9f9260cc9efe81`; the GPU
+execution sidecar is `e90e233b27a0131e582bcc8e36a6c2031f8f3dac1cb2afb7529e062394e3e33a`,
+with WGSL coverage `cf932bea42db4673f4b990b4d4a1c730ed18d4b7030cd369d94aa784825cf0f6`.
 The focused list still has four open acceptance buckets: F device arithmetic
-beyond 4194304 taps, broader arithmetic-changing projective/mesh/palette
+beyond 8388607 taps, broader arithmetic-changing projective/mesh/palette
 admission, native/host partition reconciliation, and the two-consecutive-run
 zero-budget performance gate.
