@@ -76,8 +76,9 @@ receipt rules unchanged.
 - [ ] Obtain two consecutive fixed-ID, equal-receipt comparisons with zero
   budget violations. The Brightness factor-1 identity path and SIMD constant
   allocation plus the packed ExtractBand path are deterministic row-level
-  wins, but aggregate comparisons are still timing-noisy and do not close this
-  gate.
+  wins, but the latest 11-ID pair still has three timing-noise violations
+  (Pillow SIMD constant, Pillow CMYK ImageStat, and SIMD CMYK ImageStat), so
+  aggregate comparisons do not close this gate.
 
 ## Verified changes already integrated
 
