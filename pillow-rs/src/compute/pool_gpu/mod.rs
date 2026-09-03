@@ -968,7 +968,7 @@ struct F64SignedMagnitude {
 const GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS: usize = 15;
 const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
 const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 16384;
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 32768;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1355,7 +1355,7 @@ fn gpu_f64_ordered_add_product(
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles rows through 16384 taps by emulating the scalar FMA path and
+/// marker 12 handles rows through 32768 taps by emulating the scalar FMA path and
 /// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
@@ -17827,7 +17827,7 @@ mod tests {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        // Marker 12 deliberately stops at 16384 taps. Marker 9's special
+        // Marker 12 deliberately stops at 32768 taps. Marker 9's special
         // prepass is independent of the arm64 vector product/add split, so a
         // 257-tap row can still be native when the host proof agrees on the
         // exact NaN or infinity bits. Finite rows use marker 12 when its
@@ -18045,7 +18045,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_through_16384_taps_native_matches_cpu() {
+    fn f_resize_ordered_f64_through_32768_taps_native_matches_cpu() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
@@ -18074,6 +18074,11 @@ mod tests {
             (16384usize, ResampleFilter::Lanczos),
             (16384usize, ResampleFilter::Hamming),
             (16384usize, ResampleFilter::Box),
+            (32768usize, ResampleFilter::Bilinear),
+            (32768usize, ResampleFilter::Bicubic),
+            (32768usize, ResampleFilter::Lanczos),
+            (32768usize, ResampleFilter::Hamming),
+            (32768usize, ResampleFilter::Box),
         ] {
             let words: Vec<u32> = (0..width)
                 .map(|index| {
@@ -18139,12 +18144,12 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_16384_two_axis_native_matches_cpu() {
+    fn f_resize_ordered_f64_32768_two_axis_native_matches_cpu() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        let width = 16384usize;
+        let width = 32768usize;
         let height = 2usize;
         let words: Vec<u32> = (0..width * height)
             .map(|index| {
@@ -18194,7 +18199,7 @@ mod tests {
                 .use_backend(Backend::Gpu)
                 .tobytes()
                 .expect("GPU wide two-axis ordered F bytes");
-            assert_eq!(actual, expected, "16384-tap two-axis {filter_name} resize");
+            assert_eq!(actual, expected, "32768-tap two-axis {filter_name} resize");
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("wide two-axis ordered F resize must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
@@ -18206,12 +18211,12 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_over_16384_taps_stays_host_controlled() {
+    fn f_resize_ordered_f64_over_32768_taps_stays_host_controlled() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        let width = 16385usize;
+        let width = 32769usize;
         let words: Vec<u32> = (0..width)
             .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
             .collect();
@@ -18274,7 +18279,7 @@ mod tests {
             (ResampleFilter::Bicubic, 0x7f7f_ffffu32),
             (ResampleFilter::Hamming, 0x7f7f_ffffu32),
         ] {
-            let width = 16384usize;
+            let width = 32768usize;
             let words = vec![value; width];
             let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
                 .expect("subnormal/extreme F source");
@@ -18288,7 +18293,7 @@ mod tests {
                     &source_dynamic,
                     Some("F")
                 ),
-                "ordered proof should cover 16384-tap {filter:?} row"
+                "ordered proof should cover 32768-tap {filter:?} row"
             );
             let filter_name = match filter {
                 ResampleFilter::Bilinear => "BILINEAR",
@@ -18323,7 +18328,7 @@ mod tests {
                 }
                 Err(error) => panic!("native GPU subnormal/extreme F resize failed: {error}"),
             };
-            assert_eq!(actual, expected, "16384-tap {filter_name} F resize");
+            assert_eq!(actual, expected, "32768-tap {filter_name} F resize");
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("subnormal/extreme F resize must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
@@ -18350,7 +18355,7 @@ mod tests {
             (ResampleFilter::Hamming, 0x7f7f_ffffu32),
             (ResampleFilter::Box, 0x7f7f_ffffu32),
         ] {
-            let height = 16384usize;
+            let height = 32768usize;
             let words = vec![value; height];
             let source = Image::frombytes("F", (1, height as u32), &bytes(&words))
                 .expect("vertical subnormal/extreme F source");
@@ -18398,7 +18403,7 @@ mod tests {
             };
             assert_eq!(
                 actual, expected,
-                "16384-tap vertical {filter_name} F resize"
+                "32768-tap vertical {filter_name} F resize"
             );
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("vertical F resize must publish telemetry");
