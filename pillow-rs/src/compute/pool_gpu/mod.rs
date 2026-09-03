@@ -10851,15 +10851,15 @@ fn gpu_projective_nearest_is_exact(
             *filter,
             (*w, *h),
         ) || filtered_relocation);
-    // The projective shader's raw-gid arithmetic is safe for the affine
-    // subfamily of Perspective maps only when the denominator is constant.
-    // The exhaustive source-selection proof below then decides whether its
-    // f32 map and Pillow's centered f64 map select the same complete byte
-    // sample. Ordinary Quad and Mesh bytes use unit-relocation or
-    // constant-map proofs below. Filtered transforms intentionally remain
-    // relocation-only.
+    // Perspective maps use the shader's raw-gid f32 arithmetic, while the
+    // exhaustive source-selection proof below compares it with Pillow's
+    // centered f64/COORD result for every output pixel. Keep that proof as
+    // the only geometry gate for nearest Perspective maps, including
+    // nonconstant denominators; ordinary Quad and Mesh bytes still use their
+    // narrower unit-relocation or constant-map proofs. Filtered transforms
+    // intentionally remain relocation-only.
     let ordinary_projective_geometry_is_admitted = match method {
-        TransformMethod::Perspective => data.get(6) == Some(&0.0) && data.get(7) == Some(&0.0),
+        TransformMethod::Perspective => true,
         TransformMethod::Quad => {
             gpu_quad_unit_relocation_is_admitted(data, *w, *h)
                 || gpu_quad_constant_map_is_admitted(data)
@@ -11145,6 +11145,27 @@ fn gpu_projective_nearest_is_exact(
 
     for dy in 0..*h {
         for dx in 0..*w {
+            // The generic projective shader checks only a zero denominator
+            // before dividing.  Reject any non-finite f32 intermediate here:
+            // a NaN source coordinate would bypass the sampler's bounds
+            // checks, whereas Pillow's f64 path still resolves a fill or a
+            // source pixel.  Constant-denominator maps use a different
+            // centered shader branch; this guard is for the nonconstant
+            // arithmetic admitted by the proof above.
+            if matches!(method, TransformMethod::Perspective) && (data[6] != 0.0 || data[7] != 0.0)
+            {
+                let f = |index: usize| data[index] as f32;
+                let dx = dx as f32;
+                let dy = dy as f32;
+                let denominator = f(6) * dx + f(7) * dy + 1.0;
+                if denominator != 0.0
+                    && (!denominator.is_finite()
+                        || !(f(0) * dx + f(1) * dy + f(2)).is_finite()
+                        || !(f(3) * dx + f(4) * dy + f(5)).is_finite())
+                {
+                    return false;
+                }
+            }
             let host = source_at(f64::from(dx), f64::from(dy));
             let device = shader_source_at(dx as f32, dy as f32);
             let host_sample = host.and_then(|(x, y)| {
@@ -13518,6 +13539,35 @@ mod tests {
             Some("RGB"),
             (16, 16)
         ));
+        let overflowing = PipelineOp::Transform {
+            w: 3,
+            h: 1,
+            method: TransformMethod::Perspective,
+            data: Arc::from(vec![
+                f64::from(f32::MAX),
+                0.0,
+                2.0,
+                0.0,
+                1.0,
+                0.0,
+                f64::from(f32::MAX),
+                0.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            fill_is_none: false,
+            palette_fill: None,
+        };
+        // The raw WGSL path overflows at destination x=2 and produces a
+        // NaN coordinate; keep this arithmetic-changing boundary on host
+        // control even though the ordinary source-selection proof sees fill
+        // on both sides of that pixel.
+        assert!(!gpu_projective_nearest_is_exact(
+            &overflowing,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
     }
 
     #[test]
@@ -13939,6 +13989,140 @@ mod tests {
                 });
                 assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
                 assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+                assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
+                assert_eq!(telemetry.7, None, "{mode} fallback reason");
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_nonconstant_denominator_nearest_native_gpu_preserves_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                (9u32, 8u32),
+                (8u32, 7u32),
+                [1.0, 0.0, 8.0, 0.0, 1.0, 4.0, -0.125, 0.015625],
+                251u8,
+            ),
+            (
+                (16u32, 16u32),
+                (8u32, 7u32),
+                [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0 / 1024.0, 1.0 / 1024.0],
+                17u8,
+            ),
+            (
+                (16u32, 16u32),
+                (8u32, 7u32),
+                [1.0, 0.0, -2.0, 0.0, 1.0, -1.0, 1.0 / 32.0, -1.0 / 32.0],
+                83u8,
+            ),
+        ];
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+        ] {
+            for (case_index, (source_size, output_size, matrix, fill)) in cases.iter().enumerate() {
+                let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                    .map(|index| (index * (37 + case_index * 11) + 13 + channels) as u8)
+                    .collect::<Vec<_>>();
+                let proof_image = match mode {
+                    "L" => DynamicImage::ImageLuma8(
+                        GrayImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
+                            .expect("L proof image"),
+                    ),
+                    "LA" => DynamicImage::ImageLumaA8(
+                        GrayAlphaImage::from_raw(
+                            source_size.0,
+                            source_size.1,
+                            source_bytes.clone(),
+                        )
+                        .expect("LA proof image"),
+                    ),
+                    "RGB" => DynamicImage::ImageRgb8(
+                        RgbImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
+                            .expect("RGB proof image"),
+                    ),
+                    "RGBA" => DynamicImage::ImageRgba8(
+                        RgbaImage::from_raw(source_size.0, source_size.1, source_bytes.clone())
+                            .expect("RGBA proof image"),
+                    ),
+                    _ => unreachable!(),
+                };
+                let proof_op = PipelineOp::Transform {
+                    w: output_size.0,
+                    h: output_size.1,
+                    method: TransformMethod::Perspective,
+                    data: Arc::from(matrix.to_vec()),
+                    filter: ResampleFilter::Nearest,
+                    fill: Some((*fill, 93, 41, 173)),
+                    fill_is_none: false,
+                    palette_fill: None,
+                };
+                assert!(
+                    gpu_projective_nearest_is_exact(
+                        &proof_op,
+                        &proof_image,
+                        Some(mode),
+                        *source_size,
+                    ),
+                    "proof rejected case={case_index} mode={mode} matrix={matrix:?}"
+                );
+                let source = Image::frombytes(mode, *source_size, &source_bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+                let fill = match mode {
+                    "L" => Some(TransformFill::Scalar(i64::from(*fill))),
+                    "LA" => Some(TransformFill::Components(vec![i64::from(*fill), 93])),
+                    "RGB" => Some(TransformFill::Components(vec![i64::from(*fill), 93, 41])),
+                    "RGBA" => Some(TransformFill::Components(vec![
+                        i64::from(*fill),
+                        93,
+                        41,
+                        173,
+                    ])),
+                    _ => unreachable!(),
+                };
+                let transformed = source
+                    .transform_public(
+                        *output_size,
+                        2,
+                        Some(TransformData::Affine(matrix.to_vec())),
+                        0,
+                        0,
+                        fill,
+                    )
+                    .unwrap_or_else(|error| panic!("{mode} nonconstant transform: {error}"));
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .unwrap_or_else(|error| panic!("{mode} CPU nonconstant transform: {error}"));
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => panic!("native GPU {mode} nonconstant transform failed: {error}"),
+                };
+                assert_eq!(actual, expected, "native {mode} matrix={matrix:?}");
+                let telemetry = Backend::take_pipeline_telemetry().unwrap_or_else(|| {
+                    panic!("native GPU {mode} nonconstant transform missing telemetry")
+                });
+                assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+                assert_eq!(
+                    telemetry.1,
+                    Backend::Gpu,
+                    "{mode} actual backend case={case_index} matrix={matrix:?} telemetry={telemetry:?}"
+                );
                 assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
                 assert_eq!(telemetry.7, None, "{mode} fallback reason");
             }
