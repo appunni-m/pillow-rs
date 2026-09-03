@@ -968,7 +968,7 @@ struct F64SignedMagnitude {
 const GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS: usize = 15;
 const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
 const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 256;
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 1024;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1355,7 +1355,7 @@ fn gpu_f64_ordered_add_product(
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles rows through 256 taps by emulating the scalar FMA path and
+/// marker 12 handles rows through 1024 taps by emulating the scalar FMA path and
 /// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
@@ -17152,7 +17152,7 @@ mod tests {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        // Marker 12 deliberately stops at 256 taps. Marker 9's special
+        // Marker 12 deliberately stops at 1024 taps. Marker 9's special
         // prepass is independent of the arm64 vector product/add split, so a
         // 257-tap row can still be native when the host proof agrees on the
         // exact NaN or infinity bits. Finite 257-tap rows remain host control.
@@ -17369,7 +17369,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_through_256_taps_native_matches_cpu() {
+    fn f_resize_ordered_f64_through_1024_taps_native_matches_cpu() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
@@ -17380,6 +17380,10 @@ mod tests {
             (256usize, ResampleFilter::Lanczos),
             (192usize, ResampleFilter::Hamming),
             (256usize, ResampleFilter::Box),
+            (384usize, ResampleFilter::Bilinear),
+            (512usize, ResampleFilter::Lanczos),
+            (768usize, ResampleFilter::Bicubic),
+            (1024usize, ResampleFilter::Box),
         ] {
             let words: Vec<u32> = (0..width)
                 .map(|index| {
@@ -17387,9 +17391,9 @@ mod tests {
                     value.to_bits()
                 })
                 .collect();
-            let source =
-                Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("256-tap F source");
-            let source_dynamic = source.materialize().expect("materialize 256-tap source");
+            let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+                .expect("1024-tap F source");
+            let source_dynamic = source.materialize().expect("materialize 1024-tap source");
             let op = PipelineOp::Resize { w: 1, h: 1, filter };
             assert!(
                 gpu_f_resize_f64_ordered_is_exact(
@@ -17409,14 +17413,14 @@ mod tests {
             };
             let expected = source
                 .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-                .expect("CPU 256-tap F resize")
+                .expect("CPU 1024-tap F resize")
                 .use_backend(Backend::Cpu)
                 .tobytes()
-                .expect("CPU 256-tap F bytes");
+                .expect("CPU 1024-tap F bytes");
             let previous = Backend::set_pipeline_telemetry_enabled(true);
             let actual = match source
                 .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
-                .expect("GPU 256-tap F resize")
+                .expect("GPU 1024-tap F resize")
                 .use_backend(Backend::Gpu)
                 .tobytes()
             {
@@ -17430,11 +17434,11 @@ mod tests {
                     Backend::set_pipeline_telemetry_enabled(previous);
                     return;
                 }
-                Err(error) => panic!("native GPU 256-tap F resize failed: {error}"),
+                Err(error) => panic!("native GPU 1024-tap F resize failed: {error}"),
             };
-            assert_eq!(actual, expected, "256-tap {filter_name} F resize");
+            assert_eq!(actual, expected, "1024-tap {filter_name} F resize");
             let telemetry = Backend::take_pipeline_telemetry()
-                .expect("256-tap F resize must publish telemetry");
+                .expect("1024-tap F resize must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.7, None);
@@ -17443,12 +17447,12 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_over_256_taps_stays_host_controlled() {
+    fn f_resize_ordered_f64_over_1024_taps_stays_host_controlled() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        let width = 257usize;
+        let width = 1025usize;
         let words: Vec<u32> = (0..width)
             .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
             .collect();
