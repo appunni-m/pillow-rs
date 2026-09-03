@@ -6162,3 +6162,89 @@ coverage is
 `make migration-parity-evidence-check` passes with benchmark/coverage/parity
 document counts 25/24/24. The P2 two-consecutive zero-budget gate and the
 remaining broader F/projective/mesh/palette arithmetic envelopes remain open.
+
+## 32.103 Current-HEAD equal-receipt performance recheck (2026-09-03)
+
+A fresh two-run fixed-ID comparison at current HEAD `59dcf26da` kept the
+maintained performance gate's receipt contract intact: both runs selected,
+measured, and correctness-passed 11/11 workloads; all 44 records were
+comparable, including 33 target receipts terminal with
+`requested_backend=actual_backend` and empty fallback reasons. The pair still
+has nine budget violations. The affected rows move in both directions across
+the pair or retain identical operation/dispatch structure, so no deterministic
+source regression or safe optimization is established; the aggregate P2
+zero-violation gate remains open.
+
+The run IDs are
+`migration-benchmark-b12da691f027441ab002bdadaf7272b2` and
+`migration-benchmark-7a9508f00529415e8c29fd8d802ddfec`. Result SHA-256 values
+are
+`c681dd91f4ce19108085857681902650846e06303c8aa1b8b7433b68f5ad61ec` and
+`ebb512b8b329c0fe91d6e1ed2309a31d615263df2f29cfbf20b0bcbfab12b71f`; the
+budget report hash is
+`604c6c08e92c3bd5377a7ca1d6bda1c92002e6cf19095a9723cc45da78eba87a`.
+Both schemas, `make migration-parity-receipt-test` (39/39), and the evidence
+contract pass. No benchmark scripts, fixtures, thresholds, IDs, denominators,
+policy, or receipt taxonomy changed.
+
+## 32.104 Palette-alpha Perspective nearest relocation (2026-09-03)
+
+PA remained on exact host semantic control for projective transforms even
+though the GPU transport already preserves its native two-band `(index, alpha)`
+pair. Commit `683313494` (source `afc6e0eaf`) adds a separate, narrow proof for
+nearest Perspective direct or axis-swapped unit-scale maps whose integer
+translations are exactly representable in f32. It admits no palette
+expansion or alpha arithmetic; non-nearest, fractional, scaled, Quad, and
+Mesh PA maps remain host-controlled.
+
+The broader forced projective shader still diverges at the established
+fractional edge (Pillow/CPU source byte 51 versus raw shader byte 14) because
+Pillow `Geometry.c` evaluates destination centers and truncates `COORD`, while
+the shader uses raw gids and `floor(source + 0.5)`. The bounded native matrix
+is 25/25 exact across varied sizes, clipped edges, fills, palette metadata, and
+bytes, with every receipt terminal `requested_backend=actual_backend=gpu`, one
+dispatch, and no fallback. Rejected fractional/scaled/filtered/Quad/Mesh
+probes are 6/6 exact with terminal CPU exact host semantic control. Focused PA
+tests are 2/2 and the complete GPU unit module passes 80/80. No fixtures,
+thresholds, IDs, denominators, receipt rules, or policy changed.
+
+## 32.105 Near-zero Hamming kernel parity (2026-09-03)
+
+The CPU F Hamming path had one deterministic one-ULP mismatch. In a
+`(4,25) -> (4,11)` resize, output word 20 was Pillow `0xbfb356af` while Rust
+stored `0xbfb356ae`, with no horizontal pass involved. Pillow `Resample.c`
+special-cases only an exact `x == 0.0`; Rust had treated every `|x| < 1e-10`
+as exactly one, erasing the small `sin/cos` residual from the float Hamming
+window.
+
+Commit `256c5a0b8` (source `e7647f692`) changes both pure-Rust F/I Hamming
+kernels to use the exact-zero branch and preserves Pillow's `sin_cos` and
+fused window order. The bounded F matrix improves from 4,188/4,200 exact
+(12 mismatching cases and 19 words) to 4,200/4,200; L/LA/RGB/RGBA and I
+matrices remain 2,400/2,400 exact each. Focused Hamming tests are 2/2,
+`make -C pillow-rs fmt`, `make -C pillow-rs build`, and `make build-dev` pass.
+No backend admission, receipt, fixture, threshold, ID, denominator, or policy
+changed.
+
+## 32.106 Combined post-PA/Hamming replay (2026-09-03)
+
+The schema-v3 all-backends replay at revision
+`256c5a0b80484ac35a4500e0574a8f63a90b1af8` passes all 10,952/10,952 selected
+value/error comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM, with
+zero failed or not-run cases and GPU smoke 1/1. It intentionally reports
+`passed_with_backend_gaps`: CPU has 6,838 terminal receipts; SIMD has 6,847
+SIMD plus three CPU controls; GPU has 6,741 native GPU plus 97 exact host
+semantic controls; and each WASM lane has 6,951 CPU receipts. Host-control
+partitions and the Transform capability guard remain explicit in the receipt
+taxonomy.
+
+The all-backends result SHA-256 is
+`2ab98459b5721d3a8b700d31bf7acf45dc2333ed8afdec6c7e2b14d6de6c9c75`; the GPU
+execution sidecar is
+`382844e4457228047fb53a9522449ad341d549c14e299a58c86a4af7fafce1bb`; and WGSL
+coverage is
+`3ec08641d0b6427a33b48ba982c90a9ea451c62bda134b6971019f8b316a591c`.
+`make migration-parity-receipt-test` passes 39/39 and
+`make migration-parity-evidence-check` passes with document counts 25/24/24.
+The P2 zero-violation gate and remaining broader F/projective/mesh/palette
+arithmetic envelopes remain open.

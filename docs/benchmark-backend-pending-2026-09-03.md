@@ -86,9 +86,10 @@ receipt rules unchanged.
 - [ ] Obtain two consecutive fixed-ID, equal-receipt comparisons with zero
   budget violations. The Brightness factor-1 identity path and SIMD constant
   allocation plus the packed ExtractBand path are deterministic row-level
-  wins, but the latest 11-ID pair still has three timing-noise violations
-  (Pillow SIMD constant, Pillow CMYK ImageStat, and SIMD CMYK ImageStat), so
-  aggregate comparisons do not close this gate.
+  wins, but the latest current-HEAD 11-ID pair still has nine
+  timing-noise violations, so aggregate comparisons do not close this gate.
+  Both runs measured 11/11 with 44/44 comparable records and 33/33 target
+  receipts terminal with requested=actual and empty fallback reasons.
 
 ## Verified changes already integrated
 
@@ -157,6 +158,12 @@ receipt rules unchanged.
   Alpha modes, Mesh/Quad filters, and non-integral or scaled maps remain exact
   host semantic control; a clipped 1x1 Mesh relocation was rejected by the
   proof rather than admitted.
+- [x] Palette-alpha Perspective nearest relocation (`683313494`, source
+  `afc6e0eaf`): PA's native `(index, alpha)` transport is admitted only for
+  direct or axis-swapped unit-scale integer Perspective maps. Native Pillow
+  12.2.0 parity is 25/25 across varied/clipped cases with terminal GPU
+  receipts; fractional, scaled, filtered, Quad, and Mesh PA rows remain exact
+  host semantic control.
 - [x] Arm64 wide-row F Resize arithmetic (`31dfca10c`, source
   `68aa5472763`): CPU and marker-12 host/WGSL reducers mirror Pillow's
   horizontal >15-tap product/ordered-add split through a bounded 32-tap path,
@@ -168,6 +175,11 @@ receipt rules unchanged.
   exact-real reduction. A forced 48x1 Lanczos cancellation case that
   previously differed at the middle word now stays on exact host semantic
   control; the focused guard and full GPU tests pass.
+- [x] Hamming near-zero kernel parity (`256c5a0b8`, source `e7647f692`):
+  Pillow's `Resample.c` exact-zero branch is now mirrored in both pure-Rust
+  F/I kernels, preserving near-zero sin/cos residuals. The bounded F matrix
+  improved 4,188/4,200→4,200/4,200, with L/LA/RGB/RGBA and I matrices still
+  100% exact.
 - [x] Receipt-aware suite aggregation (`1f49b7890`): a fresh 744-workload
   benchmark remains 744/744 measured, while suite comparisons move from
   276/324 status-only comparable cells to 180/324 receipt-proven cells;
@@ -230,8 +242,8 @@ receipt rules unchanged.
   `make migration-parity-evidence-check`.
 
 Current evidence hashes: all-backends envelope
-`3c60069a328286e2556201ac87d531d5463c53b98a71cb7f6ceee9b14dbd4cc7`, GPU
-sidecar `a78c4c40b7cd565b138f0c82b0fa09dca37d058be8d925d81009b00d22d9fb5b`,
+`2ab98459b5721d3a8b700d31bf7acf45dc2333ed8afdec6c7e2b14d6de6c9c75`, GPU
+sidecar `382844e4457228047fb53a9522449ad341d549c14e299a58c86a4af7fafce1bb`,
 WGSL coverage `3ec08641d0b6427a33b48ba982c90a9ea451c62bda134b6971019f8b316a591c`,
 benchmark `180f1d80bf1d0d197ce4a76c02c490dbcfbc5570a6d78a4afe318bddcfc211b3`,
 and benchmark parity `1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c63d965`.
@@ -239,20 +251,36 @@ and benchmark parity `1f54eceae77d7d81f42fcce5868ae8b3bc23ce50ed54d8524b545f854c
 Known environment blocker: `make -C pillow-rs clippy` still requires the
 pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
+## Current performance evidence
+
+- [x] Fresh current-HEAD equal-receipt pair (`59dcf26da`): both fixed-11 runs
+  measured and passed 11/11 workloads, with 44/44 comparable records and
+  33/33 target terminal requested=actual receipts with empty fallback reasons.
+  The maintained checker reports nine bidirectional timing violations; the
+  affected rows have unchanged operation/dispatch structure and no stable
+  source regression. Run hashes are
+  `c681dd91f4ce19108085857681902650846e06303c8aa1b8b7433b68f5ad61ec` and
+  `ebb512b8b329c0fe91d6e1ed2309a31d615263df2f29cfbf20b0bcbfab12b71f`; the
+  budget report hash is
+  `604c6c08e92c3bd5377a7ca1d6bda1c92002e6cf19095a9723cc45da78eba87a`.
+  This recheck leaves P2 open and did not modify benchmark scripts, fixtures,
+  thresholds, IDs, denominators, policy, or receipt taxonomy.
+
 ## Current integration state
 
-`main` includes the parity fixes through `a826e1b8c` (wide-row F admission
-guard, filtered Perspective relocation, arm64 wide-row F accumulation,
-unit-scale Mesh relocation, integer Perspective nearest routing, identity
-projective routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
+`main` includes the parity fixes through `256c5a0b8` (near-zero Hamming F/I
+parity, PA projective relocation, wide-row F admission guard, filtered
+Perspective relocation, arm64 wide-row F accumulation, unit-scale Mesh
+relocation, integer Perspective nearest routing, identity projective routing,
+receipt-proven suite cohorts, and packed SIMD ExtractBand).
 The fresh combined replay at this revision is
 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,741 GPU plus 97 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`3c60069a328286e2556201ac87d531d5463c53b98a71cb7f6ceee9b14dbd4cc7`; the GPU
-execution sidecar is `a78c4c40b7cd565b138f0c82b0fa09dca37d058be8d925d81009b00d22d9fb5b`,
+`2ab98459b5721d3a8b700d31bf7acf45dc2333ed8afdec6c7e2b14d6de6c9c75`; the GPU
+execution sidecar is `382844e4457228047fb53a9522449ad341d549c14e299a58c86a4af7fafce1bb`,
 with WGSL coverage `3ec08641d0b6427a33b48ba982c90a9ea451c62bda134b6971019f8b316a591c`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
