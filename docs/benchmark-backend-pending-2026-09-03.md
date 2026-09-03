@@ -58,10 +58,12 @@ receipt rules unchanged.
   translation/axis-swap (`4db4d4981`, source `9885acb6`), general constant-
   denominator integer Perspective scale/shear/reflection/translation
   (`a735a563f`, source `51a5e110`), and full-output
-  unit-scale Mesh translation/axis-swap (`413ed65ef`, source `10c9a49fd`).
-  Fractional/non-integer, nonconstant-denominator, and non-identity Quad/Mesh
-  maps, plus scaled maps outside the integer proof, remain on exact host
-  semantic control pending a device arithmetic proof.
+  unit-scale Mesh translation/axis-swap (`413ed65ef`, source `10c9a49fd`),
+  plus proof-certified f32-representable fractional Perspective and constant
+  Quad/Mesh/PA maps (`549bc3e08`, source `51a5e110`). Fractional boundaries
+  outside the exhaustive source-selection proof, nonconstant-denominator
+  arithmetic without a proof, filtered maps, and broader Quad/Mesh records
+  remain on exact host semantic control pending a device arithmetic proof.
 - [x] Admit the separately proven filtered Perspective relocation envelope
   (`a826e1b8c`, source `bba3794bf`): ordinary packed L/RGB, direct or
   axis-swapped unit-scale maps with f32-exact integer translations, for
@@ -107,14 +109,14 @@ receipt rules unchanged.
   remain exact host semantic control. Filtered/nearest two- and three-stage
   chain probes are 36/36 exact on CPU and GPU. Focused ordered-F tests are
   10/10, the full pool-GPU group is 94/94, and CPU geometry tests are 12/12.
-- [x] Extend the ordered F reducer through the proven 65536-tap marker-12
-  envelope (`70dc3f410`, source `8be644570`). The host proof and both WGSL
-  guards now cover direct finite rows through 65536 taps while preserving
+- [x] Extend the ordered F reducer through the proven 131072-tap marker-12
+  envelope (`cc780e7b9`, source `8be644570`). The host proof and both WGSL
+  guards now cover direct finite rows through 131072 taps while preserving
   Pillow 12.2.0's ordered f64/FMA and FLOAT32-store semantics. Native direct
-  probes at 32769, 65535, and 65536 taps are exact; 65537 remains terminal
-  exact host semantic control. Focused ordered-F tests are 10/10 and the
-  release/build-dev/format gates pass.
-- [ ] Extend the exact F reducer beyond 65536 taps, f64-intermediate
+  probes are 180/180 exact; 131073 remains terminal exact host semantic
+  control. Focused ordered-F tests are 10/10 and the release/build-dev/format
+  gates pass.
+- [ ] Extend the exact F reducer beyond 131072 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -141,8 +143,9 @@ receipt rules unchanged.
   constant-integer nearest Quad/Mesh subfamily, signed unit-axis Perspective
   nearest relocations (including PA), and the narrow
   L/LA/RGB/RGBA/PA filtered direct/axis relocation envelope are now admitted by
-  exhaustive or bounded native proofs. Fractional/non-integer, scaled maps
-  outside the integer proof, nonconstant-denominator, nonzero-weight,
+  exhaustive or bounded native proofs. Fractional boundaries outside the
+  source-selection proof, scaled maps outside the integer proof,
+  nonconstant-denominator arithmetic without a proof, nonzero-weight,
   partial/multi-record, filtered projective maps, other modes, and broader
   palette arithmetic remain on exact host semantic control until their device
   arithmetic is proven.
@@ -159,7 +162,8 @@ receipt rules unchanged.
   center-plus-`COORD` truncation for reflected and axis-swapped unit maps,
   including palette-alpha index/alpha pairs. Native Pillow 12.2.0 versus
   RSPIL probes are 4,392/4,392 exact with terminal actual=GPU receipts,
-  one dispatch, and no fallback. Fractional, scaled, nonconstant-denominator,
+  one dispatch, and no fallback. Fractional boundaries outside the proof,
+  scaled maps outside the integer proof, nonconstant-denominator,
   filtered, partial, and multi-record maps remain exact host semantic control.
 - [x] Admit constant-denominator integer Perspective nearest relocations
   (`a735a563f`, source `51a5e110`): the WGSL path mirrors centered destination
@@ -208,6 +212,11 @@ receipt rules unchanged.
   terminal with requested=actual and empty fallback reasons; a 40-sample GPU
   profile ranged 0.589083–42.261666 ms with stable 4 operations/9 dispatches,
   confirming timing bimodality rather than a source regression.
+  A subsequent pair at the same source revision retained 11/11 workloads,
+  44/44 comparable records, and 33/33 terminal requested=actual target
+  receipts per run, but reported 23 timing violations with identical
+  operation/resource fingerprints; P2 therefore remains timing noise rather
+  than a receipt defect.
 
 ## Verified changes already integrated
 
@@ -340,12 +349,12 @@ receipt rules unchanged.
   control; no fixtures, thresholds, IDs, denominators, policy, or receipt
   taxonomy changed.
 
-- [x] Ordered F Resize reducer through 65536 taps (`70dc3f410`, source
+- [x] Ordered F Resize reducer through 131072 taps (`cc780e7b9`, source
   `8be644570`): the host proof and both WGSL guards now cover direct rows
-  through 65536 taps while preserving Pillow's ordered f64/FMA and
-  FLOAT32-store semantics. Native Pillow 12.2.0 versus RSPIL probes at 32769,
-  65535, and 65536 taps are exact; 65537 remains exact host semantic control.
-  Focused ordered-F tests are 10/10 and release/build-dev/format gates pass.
+  through 131072 taps while preserving Pillow's ordered f64/FMA and
+  FLOAT32-store semantics. Native Pillow 12.2.0 versus RSPIL probes are
+  180/180 exact; 131073 remains exact host semantic control. Focused
+  ordered-F tests are 10/10 and release/build-dev/format gates pass.
 
 - [x] Signed unit-axis Perspective nearest GPU routing (`8caddc219`, source
   `423ebf445`): reflected and axis-swapped integer relocations, including PA
@@ -357,8 +366,17 @@ receipt rules unchanged.
   (`a735a563f`, source `51a5e110`): proof-certified integer scale/shear/
   reflection/translation maps use the centered source-selection proof before
   WGSL admission. Native Pillow 12.2.0 probes are 160/160 exact with terminal
-  native GPU receipts; fractional, nonconstant-denominator, filtered, and
-  arithmetic-changing maps remain exact host semantic control.
+  native GPU receipts; fractional boundaries outside the proof,
+  nonconstant-denominator, filtered, and arithmetic-changing maps remain exact
+  host semantic control.
+- [x] Proof-certified f32-representable fractional Perspective and constant
+  Quad/Mesh/PA nearest routing (`549bc3e08`, source `51a5e110`): the existing
+  exhaustive per-output host f64 versus shader f32 source-selection proof now
+  admits safe fractional Perspective maps and constant-coordinate Quad/Mesh
+  and palette-alpha cases. Native Pillow 12.2.0 versus RSPIL probes are
+  1,280/1,280 exact with terminal requested=actual GPU receipts; unsafe
+  boundaries, filtered maps, and broader records remain exact host semantic
+  control.
 
 ## Bounded marker-12 evidence
 
@@ -454,22 +472,23 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `a735a563f` (typed-F filtered
+`main` includes the parity fixes through `633fdb878` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 65536 taps, tall-image F ordering, filtered
+reducer through 131072 taps, tall-image F ordering, filtered
 Perspective/Quad/Mesh relocation, arm64 wide-row F accumulation, unit-scale
 Mesh relocation, integer and signed-unit Perspective nearest routing, the
-centered constant-denominator integer Perspective nearest envelope, identity
-projective routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
+centered constant-denominator integer and proof-certified fractional
+Perspective nearest envelopes, identity projective routing, receipt-proven
+suite cohorts, and packed SIMD ExtractBand).
 The fresh combined replay at this revision is 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,743 GPU plus 95 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`d658f26af5d354264f6d1fde7e63db17489a077d96ee33ddb7fe4051318dd932`; the GPU
-execution sidecar is `dcdc3610caa50bdbfc00e966afef324c787b907f17e1cc01643712b78dfeb31a`,
+`b44ef9387691470150e2978782434aca1438056c17d2107a59e719e977d83d2e`; the GPU
+execution sidecar is `6d599713115b8e74042f0c5c71085ed1dd3a0420970182260bb62363f9e3de04`,
 with WGSL coverage `2b63567b080843c6749951f8e9b4fd05eac5e360ae0ee3ee0dea0c44c4658a1c`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
-beyond 65536 taps and broader projective admission work above.
+beyond 131072 taps and broader projective admission work above.

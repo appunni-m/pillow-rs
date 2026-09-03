@@ -7071,3 +7071,79 @@ f64-intermediate boundary cases, arithmetic-changing chains, and broader
 fractional/scaled/non-dyadic projective, mesh, and palette arithmetic remain
 open. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
 changed.
+
+## 32.143 Ordered F Resize reducer through 131072 taps (2026-09-03)
+
+The marker-12 ordered-F proof and both convolution shaders previously stopped
+at 65536 taps. Commit `cc780e7b9` (source
+`8be6445704d001c004d419967dd1ef9f91b10440`) raises the shared bound to 131072
+while preserving Pillow 12.2.0 `src/libImaging/Resample.c`'s ordered f64/FMA
+and FLOAT32-store semantics. The prior divergence was only an overly narrow
+admission guard: representable rows through 131072 were forced to exact host
+semantic control despite the ordered reducer being able to represent them.
+Rows above 131072 and unproven f64-intermediate or arithmetic-changing states
+remain host-controlled.
+
+Native Pillow 12.2.0 versus RSPIL direct probes are 180/180 exact. Finite rows
+through 131072 publish terminal native-GPU receipts; the first 131073-tap row
+remains a terminal exact host semantic-control receipt. No new divergence was
+found for f64 subnormal/overflow intermediates or arithmetic-changing chains.
+Focused ordered-F tests are 10/10, the full pool-GPU suite is 95/95, geometry
+tests are 12/12, and fmt/build-dev/release build gates pass. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.144 Proof-certified fractional projective and constant Quad/Mesh maps (2026-09-03)
+
+Pillow's `src/libImaging/Geometry.c` evaluates projective coordinates at
+destination pixel centers in f64 and applies `COORD` truncation. The first
+forced fractional Perspective divergence was output byte 8: Pillow and the
+corrected CPU selected source byte 51, while the old raw-gid WGSL path selected
+14. Commit `549bc3e08` (source
+`51a5e110eb098a5a3eb69d354176973f61819d8c`) removes only the redundant integer
+coefficient restriction and keeps the existing exhaustive per-output proof of
+host f64 versus shader f32 source selection, fill classification, and bounds.
+The same proof now admits f32-representable fractional Perspective maps and
+constant-coordinate Quad/Mesh/PA nearest maps; unsafe boundaries, filtered
+maps, and broader records remain exact host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL is 1,280/1,280 exact: 20/20 fractional
+Perspective cases, 10/10 constant Quad/Mesh cases, 1/1 indexed nonconstant-
+denominator case, and 15/15 palette-alpha projective cases. Every admitted
+case reports terminal requested=actual GPU, one dispatch, and no fallback. The
+focused projective tests are 4/4 and the full pool-GPU suite is 98/98. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.145 Full backend replay after 131072-tap F and fractional projective fixes (2026-09-03)
+
+The maintained schema-v3 replay at source revision
+`633fdb878bf8cd8f3efc8dd9a31cfbeeff098cb0` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU has 6,838 native receipts;
+SIMD has 6,847 native plus three CPU layout controls; GPU has 6,743 native
+plus 95 exact host/dimension controls; and Node/browser WASM each have 6,951
+CPU receipts. Every terminal receipt is complete, so the aggregate remains
+`passed_with_backend_gaps` solely for the intentional backend partition.
+
+Artifact SHA-256 values are result
+`b44ef9387691470150e2978782434aca1438056c17d2107a59e719e977d83d2e`, GPU
+execution `6d599713115b8e74042f0c5c71085ed1dd3a0420970182260bb62363f9e3de04`,
+and WGSL coverage
+`2b63567b080843c6749951f8e9b4fd05eac5e360ae0ee3ee0dea0c44c4658a1c`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The timing zero-violation gate, F reducer work beyond 131072 taps,
+f64-intermediate boundary cases, arithmetic-changing chains, and broader
+projective, mesh, and palette arithmetic remain open. No fixtures, thresholds,
+IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.146 Current receipt/timing no-change audit (2026-09-03)
+
+A fresh fixed-ID equal-receipt pair at the integrated source revision measured
+11/11 workloads in each run, with 44/44 comparable records and 33/33 target
+receipts per run terminal, requested=actual, and free of fallback reasons. The
+maintained checker reported 23 timing violations, while operation/resource
+fingerprints were identical across runs. Direct SIMD profiles likewise kept
+native terminal receipts and stable operation telemetry. This is host/GPU
+warm-up timing noise rather than a deterministic source or receipt defect; no
+benchmark scripts, fixtures, thresholds, IDs, denominators, policy, or receipt
+taxonomy changed. The P2 zero-violation gate remains open.
