@@ -6538,3 +6538,26 @@ parity failure. No fixtures, thresholds, IDs, denominators, policy, or
 receipt taxonomy changed. Remaining P0 work is beyond-128 taps, mixed
 special/subnormal/overflow values, arithmetic-changing chains, and broader
 projective/mesh/palette device arithmetic.
+
+## 32.119 Full backend replay after the 128-tap reducer (2026-09-03)
+
+The maintained schema-v3 replay at revision `f1f9237e6` completed against the
+required Pillow 12.2.0 oracle. CPU, SIMD, GPU, Node WASM, and browser WASM
+each compared all 10,952 selected public cases with 10,952/10,952 passed,
+zero failed, and zero not-run; the bounded GPU smoke gate was 1/1. The result
+is `passed_with_backend_gaps` by policy because exact host semantic controls
+remain explicitly partitioned from native backend receipts: CPU has 6,838
+terminal receipts; SIMD has 6,847 native receipts plus three CPU layout
+controls; GPU has 6,742 native receipts plus 96 CPU controls; and Node/browser
+WASM each have 6,951 CPU receipts. Every terminal receipt is complete.
+
+Artifact SHA-256 values are result
+`2bb400c114ddabf4850dff1f198a2d283ee09c4224ba42b9b308153cf680ad11`, GPU
+execution `7b96fa162d535f97440b294131157ad22c9924bda9159a3f00ffcfbc552f1b0b`,
+and WGSL coverage
+`fefe96b841e686b0e0c08474456b4e6c2c8756a4258a0c6e98dc9da54665b9c0`. The
+receipt-state suite remains 39/39 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. This replay confirms no regression in the
+public corpus but does not close the P2 timing gate or the remaining beyond-
+128/special-value F and broader projective arithmetic proofs. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
