@@ -69,20 +69,24 @@ fn f_kernel_lanczos(x: f64, a: f64) -> f64 {
 
 /// Hamming kernel.
 fn f_kernel_hamming(x: f64) -> f64 {
-    if x.abs() >= 1.0 {
-        0.0
-    } else if x.abs() < 1e-10 {
-        1.0
-    } else {
-        // Keep the numeric F/I paths aligned with Pillow's Hamming
-        // windowed-sinc resampler (Resample.c), including its sinc factor.
-        let pix = std::f64::consts::PI * x;
-        // Resample.c uses sincos and contracts the `0.46f * cos + 0.54f`
-        // window expression; preserving those operations matters for exact
-        // f32 cancellation residuals.
-        let (sin, cos) = pix.sin_cos();
-        (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
+    let x = x.abs();
+    if x == 0.0 {
+        // Resample.c has an exact-zero special case.  Values merely close to
+        // zero still run through sin/cos; the float constants then leave a
+        // visible residual (0.54f + 0.46f) in cancellation-sensitive F rows.
+        return 1.0;
     }
+    if x >= 1.0 {
+        return 0.0;
+    }
+    // Keep the numeric F/I paths aligned with Pillow's Hamming windowed-sinc
+    // resampler (Resample.c), including its sinc factor.
+    let pix = std::f64::consts::PI * x;
+    // Resample.c uses sincos and contracts the `0.46f * cos + 0.54f` window
+    // expression; preserving those operations matters for exact f32
+    // cancellation residuals.
+    let (sin, cos) = pix.sin_cos();
+    (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
 }
 
 fn f_kernel_lanczos3(x: f64) -> f64 {
@@ -2076,6 +2080,50 @@ mod tests {
         // residuals here catch either a separated window expression or a
         // changed accumulation order.
         let expected_words = [0x3df4_077e, 0xa3c0_0000, 0xa300_0000, 0xbd22_afaa];
+        let expected_bytes: Vec<u8> = expected_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_hamming_preserves_near_zero_kernel_residual() {
+        let source_values = [
+            -2.0f32, -1.0, -0.5, -2.0, -1.0, -0.5, -2.0, -1.0, -0.5, -2.0, -1.0, -0.5, -2.0, -1.0,
+            -0.5, -2.0, -1.0, -0.5, -2.0, -1.0, -0.5, -2.0, -1.0, -0.5, -2.0,
+        ];
+        let source_bytes: Vec<u8> = source_values
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(1, 25, source_bytes).expect("source shape must be valid"),
+        );
+
+        let output = resize_f(&source, 1, 11, &ResampleFilter::Hamming)
+            .expect("finite F-mode Hamming resize must succeed");
+        let DynamicImage::ImageRgba8(output) = output else {
+            panic!("F-mode resize must retain packed float storage");
+        };
+        // For the centered output row, Resample.c evaluates a tiny non-zero
+        // kernel argument rather than taking its exact-zero branch.  The
+        // float Hamming constants therefore contribute a residual that is
+        // visible in the serialized f32 word.
+        let expected_words = [
+            0xbfab_ebf1,
+            0xbfb0_c781,
+            0xbf86_fa08,
+            0xbf6f_206e,
+            0xbfa1_ad5c,
+            0xbfb3_56af,
+            0xbf8c_8ddf,
+            0xbf6b_37f1,
+            0xbf9b_c741,
+            0xbfb4_e066,
+            0xbf93_63f8,
+        ];
         let expected_bytes: Vec<u8> = expected_words
             .into_iter()
             .flat_map(u32::to_le_bytes)

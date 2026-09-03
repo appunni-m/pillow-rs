@@ -61,22 +61,26 @@ fn kernel_lanczos(x: f64, a: f64) -> f64 {
 
 /// Hamming kernel.
 fn kernel_hamming(x: f64) -> f64 {
-    if x.abs() >= 1.0 {
-        0.0
-    } else if x.abs() < 1e-10 {
-        1.0
-    } else {
-        // Pillow's Hamming resampler is a windowed sinc, not only the
-        // cosine window. This mirrors the Hamming branch in Pillow's
-        // Resample.c and is observable on downsampled impulses.
-        let pix = std::f64::consts::PI * x;
-        // Resample.c evaluates sin/cos together and contracts the Hamming
-        // window's `0.46f * cos + 0.54f` expression.  Preserve both the
-        // float-to-double constants and the fused operation; separating the
-        // window terms changes cancellation rows by one f32 ULP.
-        let (sin, cos) = pix.sin_cos();
-        (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
+    let x = x.abs();
+    if x == 0.0 {
+        // Resample.c has an exact-zero special case.  Values merely close to
+        // zero still run through sin/cos; the float constants then leave a
+        // visible residual (0.54f + 0.46f) in cancellation-sensitive F rows.
+        return 1.0;
     }
+    if x >= 1.0 {
+        return 0.0;
+    }
+    // Pillow's Hamming resampler is a windowed sinc, not only the cosine
+    // window. This mirrors the Hamming branch in Pillow's Resample.c and is
+    // observable on downsampled impulses.
+    let pix = std::f64::consts::PI * x;
+    // Resample.c evaluates sin/cos together and contracts the Hamming
+    // window's `0.46f * cos + 0.54f` expression.  Preserve both the
+    // float-to-double constants and the fused operation; separating the
+    // window terms changes cancellation rows by one f32 ULP.
+    let (sin, cos) = pix.sin_cos();
+    (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
 }
 
 fn kernel_lanczos3(x: f64) -> f64 {
