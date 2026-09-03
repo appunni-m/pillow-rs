@@ -6585,3 +6585,52 @@ The broader P0 remains beyond-256 taps, mixed special/subnormal/overflow
 values, arithmetic-changing chains, and wider projective/mesh/palette device
 arithmetic; these continue to use exact host semantic control until separately
 proven.
+
+## 32.121 Wide F special-value reducer admission (2026-09-03)
+
+The marker-9 F proof rejected every coefficient row above 32 taps before
+examining its values, and its sample helper separately rejected horizontal
+rows that Pillow's arm64 kernel evaluates through the vector product/add path
+when a NaN or infinity was present. This was conservative but left a distinct
+safe domain on exact host semantic control: marker-9's WGSL reducer already
+scans all IEEE special products in tap order before doing any finite
+arithmetic, so that prepass is independent of the vector rounding boundary.
+
+Commit `9503aff04` keeps the host comparison against Pillow's ordered f64
+result, admits a row wider than 32 taps only when it contains a special value
+and the predicted NaN/infinity word matches, and leaves finite wide rows on
+the bounded ordered reducer or exact host semantic control. Native Pillow
+12.2.0 versus RSPIL covered a 257-tap matrix for Bilinear, Bicubic, Lanczos,
+Hamming, and Box (including a vertical reduction) at 5/5 exact with terminal
+requested=actual GPU receipts. A randomized 120-case wide/special probe was
+also 120/120 byte-exact; 30 cases used native GPU receipts and 90 retained
+exact host semantic control. The finite 257-tap boundary remains explicitly
+host-controlled. Focused pool-GPU tests are 89/89, formatting/build-dev and
+the existing receipt/evidence gates remain clean. No fixtures, thresholds,
+IDs, denominators, policy, or receipt taxonomy changed. Remaining P0 work is
+finite/subnormal/overflow rows beyond 256 taps, arithmetic-changing chains,
+and broader projective/mesh/palette device arithmetic.
+
+## 32.122 Full backend replay after wide F special admission (2026-09-03)
+
+The maintained schema-v3 replay at revision `9503aff04` completed after the
+wide-special reducer change. CPU, SIMD, GPU, Node WASM, and browser WASM each
+reported 10,952/10,952 selected cases passed, with zero failed and zero
+not-run; the GPU smoke gate was 1/1. As in the prior envelope, the aggregate
+status is `passed_with_backend_gaps` because backend identity remains explicit:
+CPU has 6,838 terminal receipts; SIMD has 6,847 native SIMD plus three CPU
+layout controls; GPU has 6,742 native GPU plus 96 exact host semantic controls;
+and Node/browser WASM each have 6,951 CPU receipts. Every terminal receipt is
+complete.
+
+Artifact SHA-256 values are result
+`e10cdabd8371407b3146601694ea4837ee395053825c5f277b2208011be944cd`, GPU
+execution `2f4e4af54839d7e33722488d014e74aa39368930f24c4e16287b53c864be32c0`,
+and WGSL coverage
+`fefe96b841e686b0e0c08474456b4e6c2c8756a4258a0c6e98dc9da54665b9c0`. The
+receipt-state suite remains 39/39 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. This replay confirms no public-corpus
+regression; finite/subnormal/overflow F rows beyond 256 taps, arithmetic-
+changing chains, and broader projective/mesh/palette arithmetic remain on
+their documented exact host semantic control paths. No fixtures, thresholds,
+IDs, denominators, policy, or receipt taxonomy changed.
