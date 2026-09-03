@@ -1621,11 +1621,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     fill,
                     center,
                     translate,
+                    filter,
                     nearest,
                 } = op
                 {
                     execute_rotate(
-                        img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
+                        img, *angle, *expand, *fill, *center, *translate, *filter, *nearest, mode,
                     )
                 } else {
                     Err(PilError::ValueError("expected Rotate op".into()))

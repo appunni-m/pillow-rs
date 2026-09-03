@@ -1,7 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::imageops::ImageOpsColor;
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{PipelineOp, ResampleFilter};
 
 /// Host-neutral resampling input for Pillow's rotate wrapper.
 #[derive(Debug, Clone)]
@@ -19,6 +19,16 @@ fn rotate_uses_nearest(input: &RotateResampleInput) -> bool {
         RotateResampleInput::None => true,
         RotateResampleInput::Code(code) => *code == 0,
         RotateResampleInput::Name(name) => name == "NEAREST",
+    }
+}
+
+fn rotate_filter(input: &RotateResampleInput) -> ResampleFilter {
+    match input {
+        RotateResampleInput::Code(2) => ResampleFilter::Bilinear,
+        RotateResampleInput::Name(name) if name == "BILINEAR" => ResampleFilter::Bilinear,
+        RotateResampleInput::Code(3) => ResampleFilter::Bicubic,
+        RotateResampleInput::Name(name) if name == "BICUBIC" => ResampleFilter::Bicubic,
+        _ => ResampleFilter::Nearest,
     }
 }
 
@@ -165,6 +175,7 @@ impl Image {
         }
         let normalized_angle = angle % 360.0;
         let requested_nearest = rotate_uses_nearest(&resample);
+        let requested_filter = rotate_filter(&resample);
         // Pillow skips resampling-name validation only for an exact multiple of
         // 360 degrees. Route every other angle through the public normalizer;
         // its contract is specifically the non-zero-angle path.
@@ -179,6 +190,11 @@ impl Image {
         // geometry planner see the same contract as the native rotate call.
         let source_mode = self.mode()?;
         let nearest = requested_nearest || matches!(source_mode.as_str(), "1" | "P");
+        let filter = if nearest {
+            ResampleFilter::Nearest
+        } else {
+            requested_filter
+        };
         let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &source_mode)?;
         let center_truthy = center.is_truthy();
         let translate_truthy = translate.is_truthy();
@@ -192,7 +208,15 @@ impl Image {
         // as the public core method. Reuse it after Python-facing validation so
         // the Python and WASM entry points share one rotation constructor.
         if nearest && center.is_none() && translate.is_none() {
-            return self.rotate(normalized_angle, expand, fillcolor);
+            return self.rotate_with_options(
+                normalized_angle,
+                expand,
+                fillcolor,
+                None,
+                None,
+                filter,
+                true,
+            );
         }
         self.rotate_with_options(
             normalized_angle,
@@ -200,6 +224,7 @@ impl Image {
             fillcolor,
             center,
             translate,
+            filter,
             nearest,
         )
     }
@@ -220,7 +245,15 @@ impl Image {
         expand: bool,
         fillcolor: Option<(u8, u8, u8, u8)>,
     ) -> Result<Image, PilError> {
-        self.rotate_with_options(angle, expand, fillcolor, None, None, true)
+        self.rotate_with_options(
+            angle,
+            expand,
+            fillcolor,
+            None,
+            None,
+            ResampleFilter::Nearest,
+            true,
+        )
     }
 
     fn rotate_with_options(
@@ -230,9 +263,14 @@ impl Image {
         fillcolor: Option<(u8, u8, u8, u8)>,
         center: Option<(f64, f64)>,
         translate: Option<(f64, f64)>,
+        filter: ResampleFilter,
         nearest: bool,
     ) -> Result<Image, PilError> {
-        let angle = angle % 360.0;
+        // Python's ``angle % 360.0`` always yields a non-negative remainder.
+        // Keep the normalized angle in the queued operation so trigonometric
+        // rounding is independent of whether the caller supplied `-x` or
+        // its equivalent `360-x`.
+        let angle = angle.rem_euclid(360.0);
         Ok(Image::push_op(
             self,
             PipelineOp::Rotate {
@@ -241,6 +279,7 @@ impl Image {
                 fill: fillcolor,
                 center,
                 translate,
+                filter,
                 nearest,
             },
         ))
