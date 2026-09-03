@@ -7324,3 +7324,46 @@ and WGSL coverage
 state is 39/39 and the evidence contract is benchmark/coverage/parity
 25/24/24. No fixtures, thresholds, IDs, denominators, policy, or receipt
 taxonomy changed.
+
+## 32.155 Preserve completed-prefix terminal receipt candidates (2026-09-03)
+
+Receipt-state tracing found a latent accounting defect in
+`scripts/run_migration_parity.py`: after an observed completed prefix, a later
+partial/error observation could replace the earlier terminal candidate and be
+marked terminal. That erased the successful backend identity and could turn a
+partial attempt into authoritative completion. Commit
+`058b5e48bfb5378470d9ae5a1d229588f0df3f0f` (source
+`5a65691c96e4e5acea575ca24905a0087d4b3882`) now advances the terminal
+candidate only for meaningful `completed` or `cached` receipts. Partial
+telemetry remains visible but cannot terminalize or replace a successful
+prefix.
+
+The focused regression distinguishes one terminal completed receipt from one
+later nonterminal partial receipt while preserving `complete` classification
+for the observed prefix. Receipt-state tests pass 40/40, the evidence contract
+passes benchmark/coverage/parity 25/24/24, and `git diff --check` is clean. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.156 Full backend replay after receipt-state correction (2026-09-03)
+
+The schema-v3 replay at source revision
+`058b5e48bfb5378470d9ae5a1d229588f0df3f0f` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every lane
+reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate was
+1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847 native
+plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls; and
+Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero, and the aggregate status is
+`passed_with_backend_gaps` only because intentional host controls are not
+relabeled as native coverage.
+
+Artifact SHA-256 values are result
+`95b77ab14a17342bd8ad1613d6332818941da0c6ee5fc3acbf2f52c9396f0529`, GPU
+execution `47b196f6d680a9275e6251337d3e77b3259518838be0635dad9c4c558ac4a039`,
+and WGSL coverage
+`f02ea46100424b88bceadaed5a6c5693417d7623db3bd34e0488c94894a7e494`. Receipt
+state is 40/40 and the evidence contract is benchmark/coverage/parity
+25/24/24. No fixtures, thresholds, IDs, denominators, policy, or receipt
+taxonomy changed.
