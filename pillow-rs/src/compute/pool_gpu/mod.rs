@@ -10422,6 +10422,43 @@ fn gpu_nearest_affine_is_exact(
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
+fn gpu_mesh_unit_relocation_is_admitted(data: &[f64], w: u32, h: u32) -> bool {
+    if data.len() < 12 || data[..4] != [0.0, 0.0, f64::from(w), f64::from(h)] {
+        return false;
+    }
+
+    // Mesh records use Pillow's corner order: top-left, bottom-left,
+    // bottom-right, top-right.  These two forms are the only non-identity
+    // records admitted for ordinary bytes: unit-scale relocation with an
+    // integer translation, and the corresponding axis swap.  The exhaustive
+    // proof below still checks every source selection and fill boundary; this
+    // shape guard prevents arbitrary bilinear corner arithmetic from entering
+    // the shader merely because one small image happened to compare equal.
+    let tx = data[4];
+    let ty = data[5];
+    let direct = [
+        tx,
+        ty,
+        tx,
+        ty + f64::from(h),
+        tx + f64::from(w),
+        ty + f64::from(h),
+        tx + f64::from(w),
+        ty,
+    ];
+    let swapped = [
+        tx,
+        ty,
+        tx + f64::from(h),
+        ty,
+        tx + f64::from(h),
+        ty + f64::from(w),
+        tx,
+        ty + f64::from(w),
+    ];
+    data[4..12] == direct || data[4..12] == swapped
+}
+
 fn gpu_projective_nearest_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -10451,8 +10488,8 @@ fn gpu_projective_nearest_is_exact(
     // subfamily of Perspective maps only when the denominator is constant.
     // The exhaustive source-selection proof below then decides whether its
     // f32 map and Pillow's centered f64 map select the same complete byte
-    // sample. Keep Quad/Mesh ordinary bytes at their established identity
-    // envelope until their non-identity corner arithmetic has its own proof.
+    // sample. Keep Quad ordinary bytes at its established identity envelope;
+    // Mesh ordinary bytes use a separate unit-relocation proof below.
     let ordinary_projective_geometry_is_admitted = match method {
         TransformMethod::Perspective => data.get(6) == Some(&0.0) && data.get(7) == Some(&0.0),
         TransformMethod::Quad => {
@@ -10471,23 +10508,7 @@ fn gpu_projective_nearest_is_exact(
                 )
         }
         TransformMethod::Mesh => {
-            data.get(..12)
-                == Some(
-                    &[
-                        0.0,
-                        0.0,
-                        f64::from(*w),
-                        f64::from(*h),
-                        0.0,
-                        0.0,
-                        f64::from(*w),
-                        0.0,
-                        f64::from(*w),
-                        f64::from(*h),
-                        0.0,
-                        f64::from(*h),
-                    ][..],
-                )
+            !ordinary_byte_mode || gpu_mesh_unit_relocation_is_admitted(data, *w, *h)
         }
         TransformMethod::Affine => false,
     };
@@ -10575,6 +10596,23 @@ fn gpu_projective_nearest_is_exact(
                     || data[3] != f64::from(*h)
                 {
                     return None;
+                }
+                if ordinary_byte_mode && gpu_mesh_unit_relocation_is_admitted(data, *w, *h) {
+                    // For the admitted unit relocations, mirror the CPU
+                    // quad_transform FMA order directly.  Reconstructing the
+                    // same affine map from four bilinear weights would add a
+                    // second rounding shape to the proof at large integer
+                    // translations, even though Pillow's coefficients have
+                    // already reduced to a unit step.
+                    let local_x = dx + 0.5;
+                    let local_y = dy + 0.5;
+                    let direct = data[6] == data[4] && data[7] == data[5] + f64::from(*h);
+                    let (sx, sy) = if direct {
+                        (data[4] + local_x, data[5] + local_y)
+                    } else {
+                        (data[4] + local_y, data[5] + local_x)
+                    };
+                    return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
                 }
                 let u = (dx + 0.5) / f64::from(*w);
                 let v = (dy + 0.5) / f64::from(*h);
@@ -12737,6 +12775,54 @@ mod tests {
             Some("RGB"),
             (16, 16)
         ));
+        let mesh_translate = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, 1.0, 1.0, 1.0, 9.0, 9.0, 9.0, 9.0, 1.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        let mesh_axis_swap = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        for (name, op) in [
+            ("unit mesh translation", &mesh_translate),
+            ("unit mesh axis swap", &mesh_axis_swap),
+        ] {
+            assert!(
+                gpu_projective_nearest_is_exact(op, &rgb, Some("RGB"), (16, 16)),
+                "{name} proof"
+            );
+        }
+        let mesh_scaled = PipelineOp::Transform {
+            w: 8,
+            h: 8,
+            method: TransformMethod::Mesh,
+            data: Arc::from(vec![
+                0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 0.0, 16.0, 16.0, 16.0, 16.0, 0.0,
+            ]),
+            filter: ResampleFilter::Nearest,
+            fill: Some((7, 0, 0, 255)),
+            palette_fill: None,
+        };
+        assert!(!gpu_projective_nearest_is_exact(
+            &mesh_scaled,
+            &rgb,
+            Some("RGB"),
+            (16, 16)
+        ));
         let fractional = PipelineOp::Transform {
             w: 8,
             h: 8,
@@ -12871,6 +12957,27 @@ mod tests {
                 (
                     3,
                     TransformData::Affine(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 8.0, 8.0],
+                        vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0],
+                    )]),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 8.0, 8.0],
+                        vec![1.0, 1.0, 1.0, 9.0, 9.0, 9.0, 9.0, 1.0],
+                    )]),
+                ),
+                (
+                    4,
+                    TransformData::Mesh(vec![(
+                        vec![0.0, 0.0, 8.0, 8.0],
+                        vec![-1.0, -1.0, -1.0, 7.0, 7.0, 7.0, 7.0, -1.0],
+                    )]),
                 ),
                 (
                     4,
