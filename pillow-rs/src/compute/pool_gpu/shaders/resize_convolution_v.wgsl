@@ -576,7 +576,7 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
 // exact integer mantissa/exponent pairs, then the accumulator is rounded to a
 // normal binary64 value after every tap. Pillow's arm64 FLOAT32 vertical
 // kernel stays on the scalar FMA path; the host admission proof selects that
-// model here. Rows over 1048576 taps or exceptional rows use marker 9 where its
+// model here. Rows over 4194304 taps or exceptional rows use marker 9 where its
 // special prepass is proven, or exact host semantic control.
 struct F64OrderedState {
     magnitude: U128,
@@ -687,7 +687,7 @@ fn filtered_f64_ordered_bounded(output_x: u32, output_y: u32) -> u32 {
     let source_y = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
-    if count > 1048576u {
+    if count > 4194304u {
         return 0u;
     }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
