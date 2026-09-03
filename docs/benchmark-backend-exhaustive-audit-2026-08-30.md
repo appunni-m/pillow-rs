@@ -6561,3 +6561,27 @@ benchmark/coverage/parity 25/24/24. This replay confirms no regression in the
 public corpus but does not close the P2 timing gate or the remaining beyond-
 128/special-value F and broader projective arithmetic proofs. No fixtures,
 thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.120 Ordered F Resize reducer through 256 taps (2026-09-03)
+
+The 128-tap marker-12 boundary was still a policy-only host-control split for
+finite rows that the integer ordered-f64 state can represent. Commit
+`c08dc378b` extends the matched host proof and horizontal/vertical WGSL count
+guards through 256 taps. The reducer continues to model Pillow 12.2.0
+`src/libImaging/Resample.c`'s ordered f64 FMA semantics, including the
+arm64 horizontal 16-tap product/add blocks; rows over 256 taps or with an
+unrepresentable intermediate state remain exact host semantic control.
+
+The focused native GPU matrix covers heterogeneous finite 129/192/256-tap
+Bilinear/Bicubic/Lanczos/Hamming/Box rows, the existing 65×65 two-axis and
+wide-cancellation cases, and a 257-tap boundary. All seven ordered-F focused
+tests pass, including terminal requested=actual GPU receipts for the admitted
+rows and an explicit terminal CPU receipt at 257 taps. Direct Pillow 12.2.0
+versus RSPIL randomized wide-row probes are 35/35 exact on CPU and 35/35 exact
+on GPU across six widths and a 129×129 two-axis source. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+The broader P0 remains beyond-256 taps, mixed special/subnormal/overflow
+values, arithmetic-changing chains, and wider projective/mesh/palette device
+arithmetic; these continue to use exact host semantic control until separately
+proven.
