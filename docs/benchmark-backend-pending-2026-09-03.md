@@ -93,6 +93,13 @@ receipt rules unchanged.
   matching latency samples, and empty fallback/error state (`1f49b7890`).
   Timing-complete rows without backend proof remain visible in independent
   coverage summaries but are explicitly `not_comparable` for speed claims.
+- [x] Automatic SIMD layout-control receipt normalization (`8bb69acd0`):
+  contextual SIMD-to-CPU handoffs for valid operations now publish an
+  actionable `exact host semantic control: SIMD image-layout guard for ...`
+  reason instead of an operation-level unsupported label. Strict explicit-SIMD
+  capability errors remain unchanged. The full SIMD lane is 10,952/10,952
+  exact with 6,847 native SIMD receipts, three terminal CPU controls, and no
+  missing, partial, or indeterminate pipeline receipts.
 
 ### P2 — performance acceptance
 
