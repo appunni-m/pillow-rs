@@ -968,7 +968,7 @@ struct F64SignedMagnitude {
 const GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS: usize = 15;
 const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
 const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 64;
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 128;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1353,7 +1353,7 @@ fn gpu_f64_ordered_add_product(
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles rows through 64 taps by emulating the scalar FMA path and
+/// marker 12 handles rows through 128 taps by emulating the scalar FMA path and
 /// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
@@ -2501,7 +2501,7 @@ fn gpu_f_resize_f64_is_exact(
                 || coeffs.xmin.len() != coeffs.weights.len()
                 // Marker 9's exact-real reducer is not a proof of Pillow's
                 // arm64 wide-row contract. Above 32 taps, use marker 12's
-                // ordered reducer; rows beyond its 64-tap bounded domain stay
+                // ordered reducer; rows beyond its 128-tap bounded domain stay
                 // on exact host control.
                 || coeffs
                     .weights
@@ -17146,6 +17146,252 @@ mod tests {
             assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // The ordered reducer is a dynamic tap loop; exercise rows larger
+        // than the former policy cap with heterogeneous finite values. The
+        // host proof must still reject any state that cannot be represented,
+        // so this test only asserts native execution for rows it certifies.
+        for (width, filter) in [
+            (65usize, ResampleFilter::Bilinear),
+            (96usize, ResampleFilter::Bicubic),
+            (128usize, ResampleFilter::Lanczos),
+            (96usize, ResampleFilter::Hamming),
+            (128usize, ResampleFilter::Box),
+        ] {
+            let words: Vec<u32> = (0..width)
+                .map(|index| {
+                    let value = 0.5f32 + ((index * 37 % 100) as f32) * 0.01f32;
+                    value.to_bits()
+                })
+                .collect();
+            let source =
+                Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("wide F source");
+            let source_dynamic = source.materialize().expect("materialize wide F source");
+            let op = PipelineOp::Resize { w: 1, h: 1, filter };
+            assert!(
+                gpu_f_resize_f64_ordered_is_exact(
+                    std::slice::from_ref(&op),
+                    &source_dynamic,
+                    Some("F")
+                ),
+                "ordered proof should cover {width}-tap {filter:?} row"
+            );
+            let filter_name = match filter {
+                ResampleFilter::Bilinear => "BILINEAR",
+                ResampleFilter::Bicubic => "BICUBIC",
+                ResampleFilter::Lanczos => "LANCZOS",
+                ResampleFilter::Hamming => "HAMMING",
+                ResampleFilter::Box => "BOX",
+                _ => unreachable!(),
+            };
+            let expected = source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("CPU wide F resize")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU wide F bytes");
+            let previous = Backend::set_pipeline_telemetry_enabled(true);
+            let actual = match source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("GPU wide F resize")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU wide F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "wide {filter_name} F resize");
+            let telemetry =
+                Backend::take_pipeline_telemetry().expect("wide F resize must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+            Backend::set_pipeline_telemetry_enabled(previous);
+        }
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_two_axes_over_64_taps_native_matches_cpu() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let width = 65usize;
+        let height = 65usize;
+        let words: Vec<u32> = (0..width * height)
+            .map(|index| {
+                let value = 0.75f32 + ((index * 17 % 80) as f32) * 0.01f32;
+                value.to_bits()
+            })
+            .collect();
+        let source = Image::frombytes("F", (width as u32, height as u32), &bytes(&words))
+            .expect("wide two-axis F source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize wide two-axis F source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let filter = ResampleInput::Name("BILINEAR".into());
+        let expected = source
+            .resize((1, 1), Some(filter.clone()), None)
+            .expect("CPU wide two-axis F resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU wide two-axis F bytes");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .resize((1, 1), Some(filter), None)
+            .expect("GPU wide two-axis F resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU wide two-axis F resize failed: {error}"),
+        };
+        assert_eq!(actual, expected, "wide two-axis F resize");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("wide two-axis F resize must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_over_128_taps_stays_host_controlled() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        let width = 129usize;
+        let words: Vec<u32> = (0..width)
+            .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
+            .collect();
+        let source =
+            Image::frombytes("F", (width as u32, 1), &bytes(&words)).expect("over-cap F source");
+        let source_dynamic = source.materialize().expect("materialize over-cap F source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(!gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let filter = ResampleInput::Name("BILINEAR".into());
+        let expected = source
+            .resize((1, 1), Some(filter.clone()), None)
+            .expect("CPU over-cap F resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU over-cap F bytes");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = source
+            .resize((1, 1), Some(filter), None)
+            .expect("GPU over-cap F resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            .expect("host-controlled over-cap F resize");
+        assert_eq!(actual, expected);
+        let telemetry =
+            Backend::take_pipeline_telemetry().expect("over-cap F resize must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_ordered_f64_wide_cancellation_native_matches_cpu() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        for (width, filter) in [
+            (65usize, ResampleFilter::Bilinear),
+            (96usize, ResampleFilter::Lanczos),
+        ] {
+            let words: Vec<u32> = (0..width)
+                .map(|index| {
+                    if index % 2 == 0 {
+                        0x3f80_0000
+                    } else {
+                        0xbf80_0000
+                    }
+                })
+                .collect();
+            let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+                .expect("wide cancellation F source");
+            let source_dynamic = source
+                .materialize()
+                .expect("materialize cancellation source");
+            let op = PipelineOp::Resize { w: 1, h: 1, filter };
+            assert!(gpu_f_resize_f64_ordered_is_exact(
+                std::slice::from_ref(&op),
+                &source_dynamic,
+                Some("F")
+            ));
+            let filter_name = match filter {
+                ResampleFilter::Bilinear => "BILINEAR",
+                ResampleFilter::Lanczos => "LANCZOS",
+                _ => unreachable!(),
+            };
+            let expected = source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("CPU cancellation resize")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU cancellation bytes");
+            let previous = Backend::set_pipeline_telemetry_enabled(true);
+            let actual = source
+                .resize((1, 1), Some(ResampleInput::Name(filter_name.into())), None)
+                .expect("GPU cancellation resize")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+                .expect("GPU cancellation bytes");
+            assert_eq!(actual, expected, "wide cancellation {filter_name} resize");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("wide cancellation resize must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+            Backend::set_pipeline_telemetry_enabled(previous);
+        }
     }
 
     #[test]
