@@ -55,7 +55,11 @@ fn kernel_lanczos(x: f64, a: f64) -> f64 {
     }
     let pix = std::f64::consts::PI * x;
     let sa = pix.sin() / pix;
-    let s = (std::f64::consts::PI * x / a).sin() / (std::f64::consts::PI * x / a);
+    // Pillow's src/libImaging/Resample.c forms x/a before multiplying by pi.
+    // Reassociating this as pi*x/a changes a few wide cancellation rows by
+    // one f64 ULP before the final f32 store.
+    let scaled_pix = (x / a) * std::f64::consts::PI;
+    let s = scaled_pix.sin() / scaled_pix;
     sa * s
 }
 

@@ -967,7 +967,8 @@ struct F64SignedMagnitude {
 // differs by one ULP.
 const GPU_F_RESIZE_HORIZONTAL_FMA_MAX_TAPS: usize = 15;
 const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 32;
+const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 64;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1352,7 +1353,7 @@ fn gpu_f64_ordered_add_product(
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles this bounded domain by emulating the scalar FMA path and
+/// marker 12 handles rows through 64 taps by emulating the scalar FMA path and
 /// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
@@ -2499,15 +2500,13 @@ fn gpu_f_resize_f64_is_exact(
             if coeffs.xmin.len() != coeffs.count.len()
                 || coeffs.xmin.len() != coeffs.weights.len()
                 // Marker 9's exact-real reducer is not a proof of Pillow's
-                // arm64 wide-row contract.  Above 32 taps, native
-                // Resample.c may use a different ordered product/add path
-                // (and filter-kernel rounding can become observable under
-                // cancellation), so keep the row on exact host control until
-                // that wider domain has its own proof.
+                // arm64 wide-row contract. Above 32 taps, use marker 12's
+                // ordered reducer; rows beyond its 64-tap bounded domain stay
+                // on exact host control.
                 || coeffs
                     .weights
                     .iter()
-                    .any(|weights| weights.len() > GPU_F_RESIZE_ORDERED_MAX_TAPS)
+                    .any(|weights| weights.len() > GPU_F_RESIZE_MARKER9_MAX_TAPS)
                 || coeffs.weights.iter().any(|row| {
                     row.iter()
                         .any(|&weight| gpu_f64_integer_parts(weight).is_none())
@@ -16780,7 +16779,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_f64_wide_lanczos_cancellation_stays_host_controlled() {
+    fn f_resize_f64_wide_lanczos_cancellation_native_matches_pillow() {
         fn bytes(values: &[f32]) -> Vec<u8> {
             values
                 .iter()
@@ -16788,10 +16787,12 @@ mod tests {
                 .collect()
         }
 
-        // A 48-tap Lanczos row is outside the proven marker-12 envelope.  The
-        // marker-9 exact-real reducer used to admit it anyway; its GPU kernel
-        // coefficients cancel the alternating row to +0.0, while Pillow's
-        // native arm64 path stores -2.0 after the ordered f64 reduction.
+        // This 48-tap Lanczos row was the first proven failure above the old
+        // marker-12 cap: marker 9's exact-real GPU coefficients cancelled the
+        // middle result to +0.0, while Pillow's src/libImaging/Resample.c
+        // arm64 ordered reduction stores -2.0. The ordered reducer now models
+        // that wider row after using the native multiply/divide order for the
+        // Lanczos coefficient.
         let values = [2f32.powi(60), -2f32.powi(60)]
             .into_iter()
             .cycle()
@@ -16807,12 +16808,12 @@ mod tests {
         assert!(!gpu_f_resize_f64_is_exact(
             std::slice::from_ref(&op),
             &source_dynamic,
-            Some("F")
+            Some("F"),
         ));
-        assert!(!gpu_f_resize_f64_ordered_is_exact(
+        assert!(gpu_f_resize_f64_ordered_is_exact(
             std::slice::from_ref(&op),
             &source_dynamic,
-            Some("F")
+            Some("F"),
         ));
 
         let expected = bytes(&[
@@ -16847,12 +16848,12 @@ mod tests {
             }
             Err(error) => panic!("native GPU wide Lanczos resize failed: {error}"),
         };
-        assert_eq!(actual, expected, "wide Lanczos host-control parity");
+        assert_eq!(actual, expected, "wide Lanczos native parity");
         let telemetry = Backend::take_pipeline_telemetry()
-            .expect("wide Lanczos host-control resize must publish a receipt");
+            .expect("wide Lanczos native resize must publish a receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
