@@ -135,6 +135,122 @@ fn f_resize_accumulate(
     }
 }
 
+/// Run Pillow's tall-image resample ordering for an F image.
+///
+/// `PIL.Image.Image.resize` avoids a numerically unstable horizontal-first
+/// reduction when the source is more than 100 times taller than it is wide.
+/// It first resizes vertically to `(source_width, destination_height)`, then
+/// resizes that intermediate horizontally.  The intermediate is still stored
+/// as FLOAT32 between the two native `Resample.c` passes.
+fn resize_f_tall_order(
+    src_floats: &[f32],
+    source_width: u32,
+    source_height: u32,
+    destination_width: u32,
+    destination_height: u32,
+    filter: &ResampleFilter,
+) -> Vec<f32> {
+    let (kernel, support) = resample_kernel(filter);
+    let vertical = precompute_coeffs_f64(destination_height, source_height, kernel, support);
+    let source_width_usize = source_width as usize;
+    let destination_height_usize = destination_height as usize;
+    let mut vertical_output = vec![0.0f32; source_width_usize * destination_height_usize];
+
+    // This is the first pass in Pillow's tall-image branch.  Each destination
+    // row is independent, so retain the normal row-parallel CPU contract.
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        &mut vertical_output,
+        source_width_usize,
+        destination_height_usize,
+        |_row_start, _row_end, destination_y, row| {
+            let y0 = vertical.xmin[destination_y as usize];
+            for (source_x, output) in row.iter_mut().enumerate() {
+                let mut accumulator = 0.0f64;
+                for (offset, &weight) in vertical.weights[destination_y as usize].iter().enumerate()
+                {
+                    let source_y = (y0 + offset as i64) as usize;
+                    accumulator = weight.mul_add(
+                        f64::from(src_floats[source_y * source_width_usize + source_x]),
+                        accumulator,
+                    );
+                }
+                *output = accumulator as f32;
+            }
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (destination_y, row) in vertical_output.chunks_mut(source_width_usize).enumerate() {
+        let y0 = vertical.xmin[destination_y];
+        for (source_x, output) in row.iter_mut().enumerate() {
+            let mut accumulator = 0.0f64;
+            for (offset, &weight) in vertical.weights[destination_y].iter().enumerate() {
+                let source_y = (y0 + offset as i64) as usize;
+                accumulator = weight.mul_add(
+                    f64::from(src_floats[source_y * source_width_usize + source_x]),
+                    accumulator,
+                );
+            }
+            *output = accumulator as f32;
+        }
+    }
+
+    // The second pass resamples each already-materialized vertical row from
+    // source_width to destination_width.  The >15-tap horizontal product/add
+    // split is the same arm64 FLOAT32 contract used by the ordinary path.
+    let horizontal = precompute_coeffs_f64(destination_width, source_width, kernel, support);
+    let destination_width_usize = destination_width as usize;
+    let mut output = vec![0.0f32; destination_width_usize * destination_height_usize];
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        &mut output,
+        destination_width_usize,
+        destination_height_usize,
+        |_row_start, _row_end, destination_y, row| {
+            let source_row_start = destination_y as usize * source_width_usize;
+            for (destination_x, output) in row.iter_mut().enumerate() {
+                let x0 = horizontal.xmin[destination_x];
+                let vector_product_count = (horizontal.weights[destination_x].len()
+                    / F_RESIZE_VECTOR_WIDTH)
+                    * F_RESIZE_VECTOR_WIDTH;
+                let mut accumulator = 0.0f64;
+                for (offset, &weight) in horizontal.weights[destination_x].iter().enumerate() {
+                    let source_x = (x0 + offset as i64) as usize;
+                    f_resize_accumulate(
+                        &mut accumulator,
+                        weight,
+                        vertical_output[source_row_start + source_x],
+                        offset < vector_product_count,
+                    );
+                }
+                *output = accumulator as f32;
+            }
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (destination_y, row) in output.chunks_mut(destination_width_usize).enumerate() {
+        let source_row_start = destination_y * source_width_usize;
+        for (destination_x, output) in row.iter_mut().enumerate() {
+            let x0 = horizontal.xmin[destination_x];
+            let vector_product_count = (horizontal.weights[destination_x].len()
+                / F_RESIZE_VECTOR_WIDTH)
+                * F_RESIZE_VECTOR_WIDTH;
+            let mut accumulator = 0.0f64;
+            for (offset, &weight) in horizontal.weights[destination_x].iter().enumerate() {
+                let source_x = (x0 + offset as i64) as usize;
+                f_resize_accumulate(
+                    &mut accumulator,
+                    weight,
+                    vertical_output[source_row_start + source_x],
+                    offset < vector_product_count,
+                );
+            }
+            *output = accumulator as f32;
+        }
+    }
+    output
+}
+
 // ── F-mode / I-mode resize ──
 
 /// Resize an F-mode image (32-bit floats stored as RGBA8 bytes).
@@ -267,6 +383,19 @@ fn resize_f(
         // a public input error.
         let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
             .expect("resize_f nearest output shape must match its dimensions");
+        return Ok(DynamicImage::ImageRgba8(out));
+    }
+
+    // Pillow's high-level Image.resize takes a vertical-first path for very
+    // tall images before invoking Resample.c.  A direct horizontal-first
+    // reduction is observably different for long F rows (for example, the
+    // native 2x16384 -> 1x1 BICUBIC and BOX results differ by one ULP), so
+    // preserve that axis order and FLOAT32 intermediate boundary here.
+    if sh > sw.saturating_mul(100) && dst_h < sh && dst_w != sw {
+        let out_floats = resize_f_tall_order(&src_floats, sw, sh, dst_w, dst_h, filter);
+        let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
+        let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+            .expect("resize_f tall-order output shape must match its dimensions");
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
@@ -2231,6 +2360,44 @@ mod tests {
             .flat_map(u32::to_le_bytes)
             .collect();
         assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn f_resize_tall_uses_pillow_vertical_first_order() {
+        // Pillow's Image.resize switches a source taller than 100x its width
+        // to vertical-first passes.  This 2x256 source is intentionally
+        // heterogeneous so the materialized FLOAT32 intermediate is part of
+        // the observable result rather than an algebraically interchangeable
+        // detail.
+        let source_words: Vec<u32> = (0..512)
+            .map(|index| {
+                let value = 0.25f32 + ((index * 29 % 120) as f32) * 0.01f32;
+                value.to_bits()
+            })
+            .collect();
+        let source_bytes: Vec<u8> = source_words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 256, source_bytes).expect("tall F source shape must be valid"),
+        );
+
+        for (filter, expected_word) in [
+            (ResampleFilter::Bilinear, 0x3f57_eb1eu32),
+            (ResampleFilter::Bicubic, 0x3f57_ee45),
+            (ResampleFilter::Lanczos, 0x3f57_e8a6),
+            (ResampleFilter::Box, 0x3f57_b852),
+            (ResampleFilter::Hamming, 0x3f58_0fba),
+        ] {
+            let output = resize_f(&source, 1, 1, &filter)
+                .expect("tall F resize must preserve Pillow's pass order");
+            let DynamicImage::ImageRgba8(output) = output else {
+                panic!("F-mode resize must retain packed float storage");
+            };
+            assert_eq!(output.as_raw(), &expected_word.to_le_bytes());
+        }
     }
 
     #[cfg(target_endian = "little")]
