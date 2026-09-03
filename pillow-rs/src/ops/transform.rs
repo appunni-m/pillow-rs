@@ -14,6 +14,19 @@ fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
         0 => Ok(ResampleFilter::Nearest),
         2 => Ok(ResampleFilter::Bilinear),
         3 => Ok(ResampleFilter::Bicubic),
+        1 | 4 | 5 => {
+            // Pillow distinguishes known resize-only filters from an
+            // unknown integer in Image.transform's public error contract.
+            let name = match code {
+                1 => "Image.Resampling.LANCZOS",
+                4 => "Image.Resampling.BOX",
+                5 => "Image.Resampling.HAMMING",
+                _ => unreachable!(),
+            };
+            Err(PilError::ValueError(format!(
+                "{name} ({code}) cannot be used. {TRANSFORM_RESAMPLE_GUIDANCE}"
+            )))
+        }
         // Image.transform has a narrower public filter contract than resize;
         // Pillow reports only its three accepted filters here.
         other => Err(PilError::ValueError(format!(
@@ -807,5 +820,34 @@ impl Image {
                 palette_fill: None,
             },
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_transform_resample;
+    use crate::error::PilError;
+
+    #[test]
+    fn transform_resize_only_filter_errors_match_pillow() {
+        for (code, name) in [
+            (1, "Image.Resampling.LANCZOS"),
+            (4, "Image.Resampling.BOX"),
+            (5, "Image.Resampling.HAMMING"),
+        ] {
+            let error = parse_transform_resample(code).expect_err("resize-only filter");
+            assert!(
+                matches!(error, PilError::ValueError(message) if message == format!(
+                    "{name} ({code}) cannot be used. Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn transform_unknown_filter_error_remains_distinct() {
+        let error = parse_transform_resample(6).expect_err("unknown filter");
+        assert!(matches!(error, PilError::ValueError(message) if message ==
+            "Unknown resampling filter (6). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"));
     }
 }

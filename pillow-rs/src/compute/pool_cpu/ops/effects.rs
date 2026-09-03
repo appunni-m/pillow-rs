@@ -1539,6 +1539,7 @@ fn transform_affine_generic(
     aff_f: f64,
     fill: Option<(u8, u8, u8, u8)>,
     nearest: bool,
+    bicubic: bool,
 ) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
@@ -1562,8 +1563,13 @@ fn transform_affine_generic(
             // centers before applying the matrix. The nearest filter then
             // truncates non-negative coordinates, while interpolating filters
             // subtract 0.5 inside their own filter prologue.
-            let sx = aff_a * (dx as f64 + 0.5) + aff_b * (dy as f64 + 0.5) + aff_c;
-            let sy = aff_d * (dx as f64 + 0.5) + aff_e * (dy as f64 + 0.5) + aff_f;
+            // Keep the same grouping as Geometry.c's affine_transform()
+            // expression as compiled by clang: the first product is fused
+            // with the second product, then the translation is added. A
+            // reassociated plain expression can move an edge coordinate by
+            // one ULP after an LA/RGBA premultiplied round trip.
+            let sx = aff_a.mul_add(dx as f64 + 0.5, aff_b * (dy as f64 + 0.5)) + aff_c;
+            let sy = aff_d.mul_add(dx as f64 + 0.5, aff_e * (dy as f64 + 0.5)) + aff_f;
             let out_idx = (dy * dst_w + dx) as usize * channels;
 
             if nearest {
@@ -1586,34 +1592,84 @@ fn transform_affine_generic(
                         };
                     }
                 }
-            } else if sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64 {
+            } else if sw > 0 && sh > 0 && sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64
+            {
                 // Matches Geometry.c's BILINEAR_HEAD(): bounds are checked
                 // in center space, then the filter moves to the surrounding
                 // sample corners. XCLIP/YCLIP keep the half-pixel border
                 // valid without indexing a negative floor coordinate.
                 let sample_x = sx - 0.5;
                 let sample_y = sy - 0.5;
-                let x_floor = sample_x.floor() as i64;
-                let y_floor = sample_y.floor() as i64;
-                let x0 = x_floor.clamp(0, sw as i64 - 1) as u32;
-                let y0 = y_floor.clamp(0, sh as i64 - 1) as u32;
-                let x1 = (x_floor + 1).clamp(0, sw as i64 - 1) as u32;
-                let y1 = (y_floor + 1).clamp(0, sh as i64 - 1) as u32;
-                let fx = sample_x - x_floor as f64;
-                let fy = sample_y - y_floor as f64;
-                for ch in 0..channels {
-                    let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
-                    let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;
-                    let p01 = raw[(y1 * sw + x0) as usize * channels + ch] as f64;
-                    let p11 = raw[(y1 * sw + x1) as usize * channels + ch] as f64;
-                    let v = (1.0 - fx) * (1.0 - fy) * p00
-                        + fx * (1.0 - fy) * p10
-                        + (1.0 - fx) * fy * p01
-                        + fx * fy * p11;
-                    // Pillow's ImagingTransformAffine byte path stores the
-                    // weighted sample by truncating toward zero; rounding
-                    // here turns exact half-way samples one value too high.
-                    out[out_idx + ch] = v.clamp(0.0, 255.0) as u8;
+                if bicubic {
+                    // Pillow's src/libImaging/Geometry.c BICUBIC_HEAD/BODY
+                    // uses four horizontally clipped taps and a sequential
+                    // vertical fallback: an out-of-range row repeats the
+                    // previously computed row, rather than independently
+                    // clamping every row. The native BICUBIC macro is a
+                    // fused Horner evaluation, mirrored by `cubic_sample`.
+                    let x_floor = sample_x.floor() as i64;
+                    let y_floor = sample_y.floor() as i64;
+                    let x = x_floor - 1;
+                    let y = y_floor - 1;
+                    let fx = sample_x - x_floor as f64;
+                    let fy = sample_y - y_floor as f64;
+                    for ch in 0..channels {
+                        let mut rows = [0.0; 4];
+                        for row in 0..4 {
+                            let yy = y + row as i64;
+                            if row == 0 || (yy >= 0 && yy < sh as i64) {
+                                let y_index = yy.clamp(0, sh as i64 - 1) as usize;
+                                let samples = [
+                                    raw[(y_index * sw as usize
+                                        + x.clamp(0, sw as i64 - 1) as usize)
+                                        * channels
+                                        + ch] as f64,
+                                    raw[(y_index * sw as usize
+                                        + (x + 1).clamp(0, sw as i64 - 1) as usize)
+                                        * channels
+                                        + ch] as f64,
+                                    raw[(y_index * sw as usize
+                                        + (x + 2).clamp(0, sw as i64 - 1) as usize)
+                                        * channels
+                                        + ch] as f64,
+                                    raw[(y_index * sw as usize
+                                        + (x + 3).clamp(0, sw as i64 - 1) as usize)
+                                        * channels
+                                        + ch] as f64,
+                                ];
+                                rows[row] = cubic_sample(samples, fx);
+                            } else {
+                                rows[row] = rows[row - 1];
+                            }
+                        }
+                        out[out_idx + ch] = cubic_sample(rows, fy).clamp(0.0, 255.0) as u8;
+                    }
+                } else {
+                    let x_floor = sample_x.floor() as i64;
+                    let y_floor = sample_y.floor() as i64;
+                    let x0 = x_floor.clamp(0, sw as i64 - 1) as u32;
+                    let y0 = y_floor.clamp(0, sh as i64 - 1) as u32;
+                    let x1 = (x_floor + 1).clamp(0, sw as i64 - 1) as u32;
+                    let y1 = (y_floor + 1).clamp(0, sh as i64 - 1) as u32;
+                    let fx = sample_x - x_floor as f64;
+                    let fy = sample_y - y_floor as f64;
+                    for ch in 0..channels {
+                        let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
+                        let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;
+                        let p01 = raw[(y1 * sw + x0) as usize * channels + ch] as f64;
+                        let p11 = raw[(y1 * sw + x1) as usize * channels + ch] as f64;
+                        // Geometry.c's BILINEAR_BODY interpolates each row
+                        // first and then interpolates those two results. The
+                        // equivalent four-term weighted sum can differ by
+                        // one ULP on premultiplied LA/RGBA samples.
+                        let top = (p10 - p00).mul_add(fx, p00);
+                        let bottom = (p11 - p01).mul_add(fx, p01);
+                        let v = (bottom - top).mul_add(fy, top);
+                        // Pillow's ImagingTransformAffine byte path stores the
+                        // weighted sample by truncating toward zero; rounding
+                        // here turns exact half-way samples one value too high.
+                        out[out_idx + ch] = v.clamp(0.0, 255.0) as u8;
+                    }
                 }
             } else {
                 for ch in 0..channels.min(4) {
@@ -1709,12 +1765,17 @@ fn transform_projective_generic(
         // evaluates the inverse map at each destination pixel center.
         let dx = dx + 0.5;
         let dy = dy + 0.5;
-        let denominator = data[6] * dx + data[7] * dy + 1.0;
+        // Keep the same fused grouping as Geometry.c's compiled
+        // `perspective_transform`: the first product is fused with the
+        // second product, then the constant term is added.  Reassociating
+        // these three terms can move a clipped edge coordinate by one ULP,
+        // which is observable after an LA/RGBA premultiplied round trip.
+        let denominator = data[6].mul_add(dx, data[7] * dy) + 1.0;
         if denominator == 0.0 || !denominator.is_finite() {
             return None;
         }
-        let x = (data[0] * dx + data[1] * dy + data[2]) / denominator;
-        let y = (data[3] * dx + data[4] * dy + data[5]) / denominator;
+        let x = (data[0].mul_add(dx, data[1] * dy) + data[2]) / denominator;
+        let y = (data[3].mul_add(dx, data[4] * dy) + data[5]) / denominator;
         (x.is_finite() && y.is_finite()).then_some((x, y))
     };
 
@@ -1924,7 +1985,7 @@ pub fn op_transform(
             // The fill sample is written as supplied into that temporary mode
             // and is unpremultiplied along with the sampled pixels.
             let needs_alpha_roundtrip = !use_nearest
-                && !matches!(explicit_mode, Some("PA") | Some("RGBa"))
+                && !matches!(explicit_mode, Some("PA") | Some("RGBa") | Some("RGBX"))
                 && !matches!(explicit_mode, Some("CMYK" | "I" | "F"))
                 && matches!(
                     img.color(),
@@ -1949,6 +2010,7 @@ pub fn op_transform(
                 aff_f,
                 transform_fill,
                 use_nearest,
+                matches!(filter, ResampleFilter::Bicubic),
             )?;
             let result = if needs_alpha_roundtrip {
                 unpremultiply_alpha(&result)
@@ -1972,7 +2034,10 @@ pub fn op_transform(
             // Mesh records otherwise operate on the same native byte layout
             // as the scalar transform implementation.
             let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
-                && !matches!(explicit_mode, Some("PA" | "RGBa" | "RGBX"))
+                && !matches!(
+                    explicit_mode,
+                    Some("PA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
+                )
                 && matches!(
                     img.color(),
                     crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
@@ -2007,7 +2072,32 @@ pub fn op_transform(
                 )?;
                 return Ok(preserve_mode(img, result));
             }
-            let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, false)?;
+            // Pillow's filtered projective path uses the same premultiplied
+            // La/RGBa round trip as affine and mesh transforms. Without it,
+            // straight RGB/luma channels from transparent pixels bleed into
+            // the filtered result. PA, RGBa, RGBX, CMYK, I, and F already
+            // carry native raw/scalar representations and must stay untouched.
+            let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
+                && !matches!(
+                    explicit_mode,
+                    Some("PA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
+                )
+                && matches!(
+                    img.color(),
+                    crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+                );
+            let work = if needs_alpha_roundtrip {
+                premultiply_alpha(img)
+            } else {
+                img.clone()
+            };
+            let result =
+                transform_projective_generic(&work, w, h, &data[..8], filter, fill, false)?;
+            let result = if needs_alpha_roundtrip {
+                unpremultiply_alpha(&result)
+            } else {
+                result
+            };
             Ok(preserve_mode(img, result))
         }
         &TransformMethod::Quad => {
@@ -2027,7 +2117,30 @@ pub fn op_transform(
                 )?;
                 return Ok(preserve_mode(img, result));
             }
-            let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, true)?;
+            // Geometry.c's Quad filter also works on the premultiplied
+            // temporary for LA/RGBA. Keep PA/raw-premultiplied and scalar
+            // compatibility modes out of this conversion just as in the
+            // affine and mesh paths.
+            let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
+                && !matches!(
+                    explicit_mode,
+                    Some("PA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
+                )
+                && matches!(
+                    img.color(),
+                    crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+                );
+            let work = if needs_alpha_roundtrip {
+                premultiply_alpha(img)
+            } else {
+                img.clone()
+            };
+            let result = transform_projective_generic(&work, w, h, &data[..8], filter, fill, true)?;
+            let result = if needs_alpha_roundtrip {
+                unpremultiply_alpha(&result)
+            } else {
+                result
+            };
             Ok(preserve_mode(img, result))
         }
     }
@@ -3135,6 +3248,116 @@ mod tests {
             .expect("bilinear projective transform");
             assert_eq!(result.as_bytes(), expected, "quad={quad}");
         }
+    }
+
+    #[test]
+    fn projective_filtered_alpha_roundtrip_matches_pillow() {
+        // Pillow's Image.transform converts LA/RGBA to La/RGBa before a
+        // filtered projective operation, then converts back.  The coordinate
+        // expression also follows Geometry.c's fused grouping: at the
+        // bottom edge of this map, the unfused numerator lands one ULP lower
+        // and changes the final unpremultiplied luma/R channel.
+        let data = [0.8, 0.15, -0.4, -0.12, 1.1, 0.2, 0.0, 0.0];
+        let la_raw = (0..40)
+            .map(|index| ((index * 53 + 17) % 256) as u8)
+            .collect::<Vec<_>>();
+        let la =
+            DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(5, 4, la_raw).expect("LA source"));
+        let perspective = op_transform(
+            &la,
+            6,
+            5,
+            &TransformMethod::Perspective,
+            &data,
+            &ResampleFilter::Bilinear,
+            Some((0, 0, 0, 255)),
+            false,
+            Some("LA"),
+        )
+        .expect("LA perspective transform");
+        assert_eq!(&perspective.as_bytes()[..2], &[20, 73]);
+        assert_eq!(&perspective.as_bytes()[40..42], &[120, 136]);
+
+        let rgba_raw = (0..80)
+            .map(|index| ((index * 53 + 17) % 256) as u8)
+            .collect::<Vec<_>>();
+        let rgba =
+            DynamicImage::ImageRgba8(RgbaImage::from_raw(5, 4, rgba_raw).expect("RGBA source"));
+        let perspective = op_transform(
+            &rgba,
+            6,
+            5,
+            &TransformMethod::Perspective,
+            &data,
+            &ResampleFilter::Bilinear,
+            Some((0, 0, 0, 255)),
+            false,
+            Some("RGBA"),
+        )
+        .expect("RGBA perspective transform");
+        assert_eq!(&perspective.as_bytes()[..4], &[25, 77, 130, 182]);
+        assert_eq!(&perspective.as_bytes()[80..84], &[54, 108, 161, 212]);
+
+        let affine_rgba = op_transform(
+            &rgba,
+            6,
+            5,
+            &TransformMethod::Affine,
+            &data[..6],
+            &ResampleFilter::Bilinear,
+            Some((0, 0, 0, 255)),
+            false,
+            Some("RGBA"),
+        )
+        .expect("RGBA affine transform");
+        assert_eq!(&affine_rgba.as_bytes()[..4], &[25, 77, 130, 182]);
+        assert_eq!(&affine_rgba.as_bytes()[80..84], &[54, 108, 161, 212]);
+
+        // RGBX's fourth byte is padding, not alpha. Pillow therefore filters
+        // all four stored bytes directly instead of applying an alpha cycle.
+        let affine = op_transform(
+            &rgba,
+            6,
+            5,
+            &TransformMethod::Affine,
+            &data[..6],
+            &ResampleFilter::Bilinear,
+            Some((0, 0, 0, 255)),
+            false,
+            Some("RGBX"),
+        )
+        .expect("RGBX affine transform");
+        assert_eq!(&affine.as_bytes()[..4], &[23, 76, 129, 182]);
+        assert_eq!(&affine.as_bytes()[40..44], &[173, 210, 68, 76]);
+
+        let affine_bicubic = op_transform(
+            &rgba,
+            6,
+            5,
+            &TransformMethod::Affine,
+            &data[..6],
+            &ResampleFilter::Bicubic,
+            Some((0, 0, 0, 255)),
+            false,
+            Some("RGBX"),
+        )
+        .expect("RGBX affine bicubic transform");
+        assert_eq!(&affine_bicubic.as_bytes()[..4], &[0, 81, 134, 187]);
+        assert_eq!(&affine_bicubic.as_bytes()[40..44], &[175, 240, 51, 74]);
+
+        let quad = op_transform(
+            &rgba,
+            6,
+            5,
+            &TransformMethod::Quad,
+            &data,
+            &ResampleFilter::Bilinear,
+            Some((0, 0, 0, 255)),
+            false,
+            Some("RGBA"),
+        )
+        .expect("RGBA quad transform");
+        assert_eq!(&quad.as_bytes()[..4], &[39, 64, 118, 170]);
     }
 
     #[test]
