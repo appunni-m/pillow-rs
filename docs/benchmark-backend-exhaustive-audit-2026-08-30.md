@@ -7459,65 +7459,6 @@ Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
 
-## 32.172 F reducer boundary remains ABI-hard (2026-09-04)
-
-A fresh next23 audit at `27d7bda79ad08a3254a7276df2c9b400563dec9d` checked the
-remaining F device-arithmetic boundary without changing source. Under the
-current WGSL ABI, one f64 coefficient row carries three metadata words plus
-four u32 words per tap: 8,388,607 taps encode to 33,554,431 words, or exactly
-128 MiB after the required 256-byte alignment; 8,388,608 taps encode to
-128 MiB + 256 bytes before any additional rows. A compact or segmented
-reducer/f64-state proof was not found, and generic f32 convolution remains
-ULP-unsafe against Pillow's ordered f64/product-add and FLOAT32-store path.
-
-Native Pillow 12.2.0 differentials are exact for heterogeneous finite
-8,388,607-tap rows in all five filters (5/5 terminal native GPU), finite
-8,388,608-tap rows (5/5 terminal host control), and qNaN rows at both widths
-(10/10, with the over-bound rows on host control). F-focused tests are 39/39,
-the integrated pool-GPU group is 108/108, receipt-state is 40/40, and the
-evidence contract is 25/24/24. No reducer bound, fixture, threshold, ID,
-denominator, policy, or receipt taxonomy changed.
-
-## 32.173 Fixed-ID timing pair at pushed HEAD remains timing-noisy (2026-09-04)
-
-At pushed revision `27d7bda79ad08a3254a7276df2c9b400563dec9d`, next21 repeated
-the maintained fixed 11-ID cohort in two consecutive runs. Both runs selected
-and measured 11/11 workloads, retained 44/44 comparable records, and had
-33/33 terminal target receipts with `requested_backend=actual_backend` and
-empty fallback/error state (11 CPU, 11 SIMD, 11 GPU). The normalized receipt
-fingerprint was
-`7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32` in both.
-
-Run SHA-256 values were
-`e5c9f26a079aae3e306f118146910504efb58ecc8017170b379a40446e2c52ac` and
-`74246220d8ee446c3dbf8fbf1486c998de9dcd8fa20d8300ed2eb2edede9749f`; the
-budget artifact SHA-256 was
-`c3d54d53cb18c22d88094e0e3e12de8cd6e61eb4cfefa4e337ea12351239037a` and
-reported 11 violations. All differences were timing-only with no receipt or
-identity divergence, so the required zero-violation P2 gate remains open.
-
-## 32.171 Interior-integer Bilinear projective proof (2026-09-04)
-
-The generic filtered projective shader had a deterministic byte-ordering
-divergence even for constant integer source maps. In a 2x2 L Bilinear case
-with constant source `(1,1)` and source bytes `fd e6 f1 c2`, WGSL's
-`round(lerp(...))` produced `e6` while Pillow's `Geometry.c` filtered path
-produced `e5`; an edge `(0,0)` map also exposed the shader's shifted-bounds
-fill (`00` versus Pillow's `fd`). Pillow validates the original coordinate,
-then subtracts 0.5 for the filter window, evaluates the four terms, and
-casts the result toward zero. Commit `30e5aed11` (source
-`bd4bad16ce130661a6f4ef84e4faa44301ed8a31`) mirrors that operation order and
-admits only f32-exact integer coordinates strictly inside the source bounds,
-for Bilinear L/RGB/PA Perspective, Quad, and complete one-record Mesh. Edges,
-LA/RGBA premultiplied paths, Bicubic, fractional/scaled maps, and partial or
-multi-record geometry remain exact host semantic control.
-
-Native Pillow 12.2.0 differentials are 1,620/1,620 exact across ordinary
-matrices and 7,203/7,203 exhaustive seven-value 2x2 cases independently for
-L, RGB, and PA; every admitted row has a terminal native GPU receipt. Focused
-projective tests are 3/3 and the integrated pool-GPU group is 108/108. No
-fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
-
 ## 32.161 Additional fixed-ID timing pairs remain receipt-stable (2026-09-04)
 
 A fresh next18b campaign at source revision
@@ -7749,6 +7690,110 @@ parity artifact SHA-256 is
 `827b342c03d8d136c1cee3a71545127fe848ca24d3773343e9136808ed0894b7`, the GPU
 execution sidecar SHA-256 is
 `e90e233b27a0131e582bcc8e36a6c2031f8f3dac1cb2afb7529e062394e3e33a`, and
+WGSL coverage is
+`cf932bea42db4673f4b990b4d4a1c730ed18d4b7030cd369d94aa784825cf0f6`.
+Receipt-state tests remain 40/40 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.171 Interior-integer Bilinear projective proof (2026-09-04)
+
+The generic filtered projective shader had a deterministic byte-ordering
+divergence even for constant integer source maps. In a 2x2 L Bilinear case
+with constant source `(1,1)` and source bytes `fd e6 f1 c2`, WGSL's
+`round(lerp(...))` produced `e6` while Pillow's `Geometry.c` filtered path
+produced `e5`; an edge `(0,0)` map also exposed the shader's shifted-bounds
+fill (`00` versus Pillow's `fd`). Pillow validates the original coordinate,
+then subtracts 0.5 for the filter window, evaluates the four terms, and
+casts the result toward zero. Commit `30e5aed11` (source
+`bd4bad16ce130661a6f4ef84e4faa44301ed8a31`) mirrors that operation order and
+admits only f32-exact integer coordinates strictly inside the source bounds,
+for Bilinear L/RGB/PA Perspective, Quad, and complete one-record Mesh. Edges,
+LA/RGBA premultiplied paths, Bicubic, fractional/scaled maps, and partial or
+multi-record geometry remain exact host semantic control.
+
+Native Pillow 12.2.0 differentials are 1,620/1,620 exact across ordinary
+matrices and 7,203/7,203 exhaustive seven-value 2x2 cases independently for
+L, RGB, and PA; every admitted row has a terminal native GPU receipt. Focused
+projective tests are 3/3 and the integrated pool-GPU group is 108/108. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.172 F reducer boundary remains ABI-hard (2026-09-04)
+
+A fresh next23 audit at `27d7bda79ad08a3254a7276df2c9b400563dec9d` checked the
+remaining F device-arithmetic boundary without changing source. Under the
+current WGSL ABI, one f64 coefficient row carries three metadata words plus
+four u32 words per tap: 8,388,607 taps encode to 33,554,431 words, or exactly
+128 MiB after the required 256-byte alignment; 8,388,608 taps encode to
+128 MiB + 256 bytes before any additional rows. A compact or segmented
+reducer/f64-state proof was not found, and generic f32 convolution remains
+ULP-unsafe against Pillow's ordered f64/product-add and FLOAT32-store path.
+
+Native Pillow 12.2.0 differentials are exact for heterogeneous finite
+8,388,607-tap rows in all five filters (5/5 terminal native GPU), finite
+8,388,608-tap rows (5/5 terminal host control), and qNaN rows at both widths
+(10/10, with the over-bound rows on host control). F-focused tests are 39/39,
+the integrated pool-GPU group is 108/108, receipt-state is 40/40, and the
+evidence contract is 25/24/24. No reducer bound, fixture, threshold, ID,
+denominator, policy, or receipt taxonomy changed.
+
+## 32.173 Fixed-ID timing pair at pushed HEAD remains timing-noisy (2026-09-04)
+
+At pushed revision `27d7bda79ad08a3254a7276df2c9b400563dec9d`, next21 repeated
+the maintained fixed 11-ID cohort in two consecutive runs. Both runs selected
+and measured 11/11 workloads, retained 44/44 comparable records, and had
+33/33 terminal target receipts with `requested_backend=actual_backend` and
+empty fallback/error state (11 CPU, 11 SIMD, 11 GPU). The normalized receipt
+fingerprint was
+`7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32` in both.
+
+Run SHA-256 values were
+`e5c9f26a079aae3e306f118146910504efb58ecc8017170b379a40446e2c52ac` and
+`74246220d8ee446c3dbf8fbf1486c998de9dcd8fa20d8300ed2eb2edede9749f`; the
+budget artifact SHA-256 was
+`c3d54d53cb18c22d88094e0e3e12de8cd6e61eb4cfefa4e337ea12351239037a` and
+reported 11 violations. All differences were timing-only with no receipt or
+identity divergence, so the required zero-violation P2 gate remains open.
+
+## 32.174 Raw packed interior-integer Bilinear projective modes (2026-09-04)
+
+The corrected interior-integer Bilinear proof previously covered L/RGB/PA.
+Commit `23b920fa1` (source
+`4242808f45af23397b853f83bc4865d539bfac13`) extends the same Pillow
+`src/libImaging/Geometry.c` operation order to raw packed CMYK, HSV, YCbCr,
+RGBX, and RGBa channels after checking their native physical layouts. The
+shader keeps the filtered `-0.5` window shift, four-neighbor arithmetic, and
+truncating UINT8 store; premultiplied LA/RGBA and nonzero-weight arithmetic
+remain host-controlled.
+
+Native Pillow 12.2.0 versus RSPIL is exact for 36,015 exhaustive 2x2 cases
+(seven-value tiles across five modes and three projective methods) and 1,080
+varied-size/coordinate cases, all with terminal requested=actual GPU receipts.
+Rejected edge, fractional, and non-Bilinear cases remain exact host semantic
+control in 20/20 cases. The integrated pool-GPU group is 108/108; no fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.175 Full backend replay at the raw packed Bilinear projective head (2026-09-04)
+
+The schema-v3 replay at source revision
+`23b920fa1ba4e0de4f2815e5a9160b6489ba6aaa` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847
+native plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls;
+and Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero; aggregate status is
+`passed_with_backend_gaps` solely because intentional host controls are not
+relabeled as native coverage.
+
+The replay summary SHA-256 is
+`6391461876be6ca93ab077ecb2018bf30cf7db8d92420d467a8968bb30b502a6`, the GPU
+parity artifact SHA-256 is
+`0288ca76b3be535598f4456575214aec923faf45c28071bba315858b1cc65e92`, the GPU
+execution sidecar SHA-256 is
+`eb6f9b4ae5616bb48e7f104f2a05944649a9325d0eac9691c2cb1ddd19f758dd`, and
 WGSL coverage is
 `cf932bea42db4673f4b990b4d4a1c730ed18d4b7030cd369d94aa784825cf0f6`.
 Receipt-state tests remain 40/40 and the evidence contract remains

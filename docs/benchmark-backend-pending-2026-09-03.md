@@ -260,6 +260,15 @@ receipt rules unchanged.
   premultiplied paths, Bicubic, fractional/scaled maps, and partial or
   multi-record geometry remain exact host semantic control.
 
+- [x] Extend the interior-integer Bilinear proof to raw packed modes
+  (`23b920fa1`, source `4242808f4`): CMYK, HSV, YCbCr, RGBX, and RGBa now use
+  the same Geometry.c operation-order proof after their native physical
+  channel layouts are checked. Native Pillow 12.2.0 versus RSPIL is exact for
+  36,015 exhaustive 2x2 cases (seven-value tiles across five modes and three
+  projective methods) plus 1,080 varied-size/coordinate cases, all with
+  terminal requested=actual GPU receipts. Edge, fractional, and non-Bilinear
+  cases remain exact host semantic control.
+
 ### P1 — backend identity and receipts
 
 - [ ] Reconcile native versus host-controlled partitions without relabeling
@@ -682,7 +691,7 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `30e5aed11` (typed-F filtered
+`main` includes the parity fixes through `23b920fa1` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 8388607 taps, tall-image F ordering, filtered
@@ -692,15 +701,16 @@ Perspective nearest routing, translated Quad relocation, the
 centered constant-denominator integer and proof-certified fractional
 and nonconstant-denominator Perspective nearest envelopes, identity projective
 routing, proof-certified Quad/Mesh nearest maps, receipt-proven suite cohorts,
-and packed SIMD ExtractBand, plus the 128-MiB F binding guard and interior-
-integer Bilinear projective envelope).
+and packed SIMD ExtractBand, plus the 128-MiB F binding guard and the
+interior-integer Bilinear projective envelope across all proven raw packed
+modes).
 The fresh combined replay at this revision is 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,744 GPU plus 94 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`185b875971e164795ba5153f9c49a96612ad751bf76c8665ef9f9260cc9efe81`; the GPU
-execution sidecar is `e90e233b27a0131e582bcc8e36a6c2031f8f3dac1cb2afb7529e062394e3e33a`,
+`6391461876be6ca93ab077ecb2018bf30cf7db8d92420d467a8968bb30b502a6`; the GPU
+execution sidecar is `eb6f9b4ae5616bb48e7f104f2a05944649a9325d0eac9691c2cb1ddd19f758dd`,
 with WGSL coverage `cf932bea42db4673f4b990b4d4a1c730ed18d4b7030cd369d94aa784825cf0f6`.
 The focused list still has four open acceptance buckets: F device arithmetic
 beyond 8388607 taps, broader arithmetic-changing projective/mesh/palette
