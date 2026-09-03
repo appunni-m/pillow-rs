@@ -81,10 +81,17 @@ receipt rules unchanged.
   are exact with terminal native GPU receipts; a 257-tap row remains host-controlled.
   Rows over 256 taps and exceptional or arithmetic-changing inputs remain
   host-controlled.
-- [ ] Extend the exact F reducer beyond 256 taps and through mixed special-value,
-  subnormal/overflow, and arithmetic-changing chains. Forced generic WGSL f32
-  convolution still differs from Pillow's ordered host arithmetic by ULPs, so
-  these rows require a separate device proof.
+- [x] Extend marker-9's IEEE special-value prepass beyond the finite 32-tap
+  envelope (`9503aff04`): rows wider than 32 taps may use the existing exact
+  reducer only when a special-product scan is present and its NaN/infinity
+  bits match Pillow's ordered f64 result. Native 257-tap Bilinear/Bicubic/
+  Lanczos/Hamming/Box cases (horizontal and vertical) are exact with terminal
+  GPU receipts; finite wide rows remain on marker 12 or exact host semantic
+  control.
+- [ ] Extend the exact F reducer beyond 256 taps for finite/subnormal/overflow
+  rows and arithmetic-changing chains. Forced generic WGSL f32 convolution
+  still differs from Pillow's ordered host arithmetic by ULPs, so these rows
+  require a separate device proof.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Constant-denominator integer Perspective nearest maps and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
