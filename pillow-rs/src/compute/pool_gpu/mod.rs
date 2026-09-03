@@ -7284,14 +7284,17 @@ fn gpu_transform_should_premultiply(
     filter: ResampleFilter,
     method: TransformMethod,
 ) -> bool {
-    // Perspective/Quad use the direct ImagingTransformProjective byte path;
-    // unlike affine transforms it does not enter the premultiplied-alpha
-    // temporary. The bounded Mesh relocation path follows the same raw
-    // projective contract for its admitted L/RGB/PA filtered cases.
-    if !matches!(method, TransformMethod::Affine)
-        || gpu_transform_uses_nearest(logical_mode, filter)
-    {
+    // Perspective/Quad use the direct ImagingTransformProjective byte path.
+    // Its filtered LA/RGBA relocation envelope still performs Pillow's
+    // premultiplied round trip in the shader, while raw L/RGB/PA paths remain
+    // unpremultiplied. The bounded Mesh relocation path follows the same
+    // projective contract.
+    if gpu_transform_uses_nearest(logical_mode, filter) {
         return false;
+    }
+    if !matches!(method, TransformMethod::Affine) {
+        return matches!(logical_mode, Some("LA" | "RGBA"))
+            || (logical_mode.is_none() && matches!(mode, 1 | 3));
     }
     match logical_mode {
         Some("LA" | "RGBA") => true,
@@ -10547,10 +10550,11 @@ fn gpu_nearest_affine_is_exact(
 /// This covers proof-certified integer maps for ordinary packed byte modes and
 /// raw indexed samples without claiming parity for fractional homographies or
 /// arbitrary mesh records. Filtered projective transforms remain host
-/// controlled unless an L/RGB/PA Perspective, Quad, or complete one-record
-/// Mesh map is a unit-scale integer relocation. In that envelope the filtered
-/// sample lands exactly on one source pixel, so the shader's bilinear lowering
-/// preserves the byte or palette-alpha pair.
+/// controlled unless an L/LA/RGB/RGBA/PA Perspective, Quad, or complete
+/// one-record Mesh map is a unit-scale integer relocation. In that envelope
+/// the filtered sample lands exactly on one source pixel, so the shader's
+/// bilinear lowering preserves the byte or palette-alpha pair; LA/RGBA also
+/// mirror Pillow's premultiplied round trip.
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
 // pixel center before evaluating the map and then applies `COORD` truncation.
@@ -10621,11 +10625,12 @@ fn gpu_projective_filtered_relocation_is_admitted(
     // center offset before bilinear sampling.  For these integer unit maps,
     // that produces an integral source coordinate and zero filter weights;
     // the shader's raw-gid projective sampler therefore selects the same
-    // source sample. Keep LA/RGBA out: their native path has a premultiplied
-    // round trip that this projective shader does not model. PA is different:
-    // its projective path preserves raw index/alpha pairs without that
-    // premultiplied conversion, so the zero-weight argument applies to PA.
-    if !matches!(mode, Some("L" | "PA" | "RGB"))
+    // source sample. LA/RGBA use Pillow's premultiplied round trip; the
+    // projective shader mirrors that round trip for the zero-weight source
+    // word. PA is different: its projective path preserves raw index/alpha
+    // pairs without premultiplied conversion, so the zero-weight argument
+    // applies to PA as well.
+    if !matches!(mode, Some("L" | "LA" | "PA" | "RGB" | "RGBA"))
         || !matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
         || data.len() < 8
     {
@@ -12591,7 +12596,7 @@ mod tests {
         gpu_palette_first_rgb_merge_is_supported, gpu_projective_filtered_relocation_is_admitted,
         gpu_projective_nearest_is_exact, gpu_resize_coefficients,
         gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact, gpu_transform_fill,
-        luma16_resample_big_endian, readback_poll_backoff,
+        gpu_transform_should_premultiply, luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -13405,11 +13410,21 @@ mod tests {
     #[test]
     fn byte_projective_filtered_relocations_native_gpu_preserve_pixels() {
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        for (mode, channels) in [("L", 1usize), ("RGB", 3usize)] {
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+        ] {
             let bytes = (0..16 * 16 * channels)
                 .map(|index| (index * 29 + 7) as u8)
                 .collect::<Vec<_>>();
             let source = Image::frombytes(mode, (16, 16), &bytes).expect("byte source");
+            let fill = match mode {
+                "LA" => Some(TransformFill::Components(vec![199, 71])),
+                "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
+                _ => None,
+            };
             let matrices = [
                 [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
                 [1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
@@ -13429,7 +13444,7 @@ mod tests {
                                 _ => unreachable!(),
                             },
                             0,
-                            None,
+                            fill.clone(),
                         )
                         .expect("filtered projective relocation");
                     let expected = transformed
@@ -13455,7 +13470,11 @@ mod tests {
                     assert_eq!(actual, expected, "native {mode} filtered relocation");
                     let telemetry = Backend::take_pipeline_telemetry()
                         .expect("filtered relocation must publish a receipt");
-                    assert_eq!(telemetry.0, Some(Backend::Gpu));
+                    assert_eq!(
+                        telemetry.0,
+                        Some(Backend::Gpu),
+                        "telemetry={telemetry:?} mode={mode} matrix={matrix:?} filter={filter:?}"
+                    );
                     assert_eq!(telemetry.1, Backend::Gpu);
                     assert_eq!(telemetry.6, Some(1));
                     assert_eq!(telemetry.7, None);
@@ -13468,12 +13487,22 @@ mod tests {
     #[test]
     fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        for (mode, channels) in [("L", 1usize), ("RGB", 3usize)] {
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+        ] {
             let source_size = (16u32, 16u32);
             let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * 29 + 7) as u8)
                 .collect::<Vec<_>>();
             let source = Image::frombytes(mode, source_size, &bytes).expect("byte source");
+            let fill = match mode {
+                "LA" => Some(TransformFill::Components(vec![199, 71])),
+                "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
+                _ => None,
+            };
             let cases = [
                 (
                     3,
@@ -13515,7 +13544,7 @@ mod tests {
                                 _ => unreachable!(),
                             },
                             0,
-                            None,
+                            fill.clone(),
                         )
                         .expect("filtered Quad/Mesh relocation");
                     let expected = transformed
@@ -13560,6 +13589,12 @@ mod tests {
 
     #[test]
     fn palette_alpha_projective_relocation_proof_is_narrow() {
+        assert!(gpu_transform_should_premultiply(
+            1,
+            None,
+            ResampleFilter::Bilinear,
+            TransformMethod::Quad,
+        ));
         let image = DynamicImage::ImageLuma8(
             GrayImage::from_raw(16, 16, vec![0; 16 * 16]).expect("luma image"),
         );
@@ -13646,12 +13681,33 @@ mod tests {
             Some("PA"),
             (5, 7),
         ));
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &direct,
+            ResampleFilter::Bilinear,
+            Some("LA"),
+            (9, 6),
+        ));
+        assert!(gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &swapped,
+            ResampleFilter::Bicubic,
+            Some("RGBA"),
+            (5, 7),
+        ));
         let fractional = [1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0];
         assert!(!gpu_projective_filtered_relocation_is_admitted(
             TransformMethod::Perspective,
             &fractional,
             ResampleFilter::Bilinear,
             Some("PA"),
+            (9, 6),
+        ));
+        assert!(!gpu_projective_filtered_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &fractional,
+            ResampleFilter::Bilinear,
+            Some("LA"),
             (9, 6),
         ));
         assert!(!gpu_projective_filtered_relocation_is_admitted(
