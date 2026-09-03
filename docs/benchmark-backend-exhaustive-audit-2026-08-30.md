@@ -7482,3 +7482,66 @@ timing-only; no deterministic source or receipt defect was found. Receipt
 state remains 40/40 and the evidence contract remains benchmark/coverage/
 parity 25/24/24. No benchmark scripts, fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
+
+## 32.162 Translated Quad relocation proof (2026-09-03)
+
+The next projective admission slice was integer-translated Quad relocation.
+Before commit `e615a2e5d6ed68a870135b484da41a89c4f95157`, the existing proof
+recognized only zero-origin direct and axis-swapped unit maps, so integral
+translations stayed on exact host semantic control despite having zero
+interpolation weights. Pillow `src/libImaging/Geometry.c` evaluates Quad
+coordinates at destination centers and the filtered callback subtracts 0.5;
+the patch admits only integral f32-exact source origins and mirrors that
+coordinate order in WGSL. Fractional, scaled, nonzero-weight, and broader
+projective arithmetic remain host-controlled.
+
+Native Pillow 12.2.0 differentials are 288/288 exact across ordinary L/LA/RGB/
+RGBA cases, 16/16 exact for P, and 16/16 exact for PA, all with terminal native
+GPU receipts. The integrated pool-GPU group remains 104/104; receipt-state
+tests are 40/40 and the evidence contract is benchmark/coverage/parity
+25/24/24. No fixtures, thresholds, IDs, denominators, policy, or receipt
+taxonomy changed.
+
+## 32.163 Ordered F Resize reducer through 4194304 taps (2026-09-03)
+
+The ordered marker-12 reducer's previous 1048576-tap guard was an admission
+bound rather than a value mismatch. Commit
+`acefea1ce3eed227d47b7e11721cfaac806b1a9d` (source
+`e90ce53554ef9844166b21a2491adc0b25e636b9`) raises the host proof and both
+resize-convolution WGSL guards through 4194304 taps. The reducer still models
+Pillow 12.2.0's ordered f64/FMA and arm64 complete-16-tap product/add split;
+rows beyond the bound and arithmetic-changing chains remain exact host
+semantic control.
+
+Native Pillow 12.2.0 differential probes are 10/10 finite four-million-tap
+rows, 20/20 special-value rows, and 5/5 over-bound host-control rows. Focused
+ordered-F tests are 11/11 and the integrated pool-GPU group is 104/104; fmt,
+build, build-dev, receipt 40/40, and evidence 25/24/24 pass. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.164 Full backend replay at the translated-Quad and 4M-F head (2026-09-04)
+
+The schema-v3 replay at source revision
+`acefea1ce3eed227d47b7e11721cfaac806b1a9d` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847
+native plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls;
+and Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero; aggregate status is
+`passed_with_backend_gaps` solely because intentional host controls are not
+relabeled as native coverage.
+
+The replay summary SHA-256 is
+`25215fa00ef35d1c622d4132a2357a6235590905c203dd54373d6d8a64a89d82`, the GPU
+parity artifact SHA-256 is
+`598255dc348fc4c96f385b3e8c620b5c3f075d53a5be8c5155a820c3fd4449b1`, the GPU
+execution sidecar SHA-256 is
+`6fb8322adb85c7c822ad5b2689ad54476a31b8eb2de2bc0496254ce975112819`, and
+WGSL coverage SHA-256 is
+`da46e8ae984d4a66155a0605e032ddf201be0013ade389aa0682c13e84ecf3c1`.
+Receipt-state tests remain 40/40 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.

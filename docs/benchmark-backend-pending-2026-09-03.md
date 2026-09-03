@@ -146,7 +146,14 @@ receipt rules unchanged.
   two-axis rows, all five non-nearest filters, and an over-bound 1048577 row;
   the 1048577 rows remain exact host semantic control. Focused ordered-F
   tests are 11/11 and the full pool-GPU group is 101/101.
-- [ ] Extend the exact F reducer beyond 1048576 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 4194304-tap marker-12
+  envelope (`acefea1ce`, source `e90ce5355`). The host proof and both WGSL
+  guards now cover direct finite rows through 4194304 taps while preserving
+  Pillow's ordered f64/FMA and FLOAT32-store semantics. Native Pillow 12.2.0
+  probes are 10/10 finite at four million taps, 20/20 special-value rows, and
+  5/5 over-bound host-control rows; focused ordered-F tests are 11/11 and the
+  full pool-GPU group is 104/104.
+- [ ] Extend the exact F reducer beyond 4194304 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -190,6 +197,15 @@ receipt rules unchanged.
   48/48 and P/PA palette-pair tests 12/12 with terminal native GPU receipts.
   Fractional, scaled, clipped, multi-record, and arithmetic-changing Mesh
   cases remain exact host semantic control.
+
+- [x] Admit translated Quad relocations (`37baf748d`, source `e615a2e5d`):
+  integral f32-exact source origins with direct or axis-swapped unit
+  relocation now use the existing exhaustive source-selection proof and
+  mirror Pillow Geometry.c's centered coordinate/FMA order. Native Pillow
+  12.2.0 differentials are 288/288 ordinary L/LA/RGB/RGBA, 16/16 P, and
+  16/16 PA exact with terminal native GPU receipts. Fractional, scaled,
+  nonzero-weight, and broader Quad/Mesh arithmetic remains exact host semantic
+  control.
 
 - [x] Extend filtered projective relocation to LA/RGBA and Quad/Mesh
   (`a0fb33394`): the WGSL path now mirrors Pillow's premultiplied La/RGBa
@@ -602,13 +618,13 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `c722e47b7` (typed-F filtered
+`main` includes the parity fixes through `acefea1ce` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 1048576 taps, tall-image F ordering, filtered
+reducer through 4194304 taps, tall-image F ordering, filtered
 Perspective/Quad/Mesh relocation, arm64 wide-row F accumulation, unit-scale
 Mesh relocation including exact partial bboxes, integer and signed-unit
-Perspective nearest routing, the
+Perspective nearest routing, translated Quad relocation, the
 centered constant-denominator integer and proof-certified fractional
 and nonconstant-denominator Perspective nearest envelopes, identity projective
 routing, proof-certified Quad/Mesh nearest maps, receipt-proven suite cohorts,
@@ -622,6 +638,6 @@ controls; Node/browser WASM 6,951 each. Result SHA-256 is
 execution sidecar is `8d6384a7fe9a7cc9e66dbc6f42243cd5a0acc364a502e271e0ee5b7bd619f94a`,
 with WGSL coverage `0bb1ae47305aed7d4c6711e82383d53ac5919a418fe3c4883f009803c62e59ed`.
 The focused list still has four open acceptance buckets: F device arithmetic
-beyond 1048576 taps, broader arithmetic-changing projective/mesh/palette
+beyond 4194304 taps, broader arithmetic-changing projective/mesh/palette
 admission, native/host partition reconciliation, and the two-consecutive-run
 zero-budget performance gate.
