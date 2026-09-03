@@ -6300,3 +6300,26 @@ effects tests pass 13/13, the maintained transform parity case is 1/1, and
 pass. No fixtures, thresholds, IDs, denominators, policy, or receipt rules
 changed. Broader non-dyadic GPU projective/mesh arithmetic remains exact host
 semantic control pending a device-side ordered-f64 proof.
+
+## 32.109 Transform safety classification at the image-aware boundary (2026-09-03)
+
+The schema-v3 GPU replay at revision `ddc4caab1` exposed one stale receipt
+classification for `PIL.Image.Image.transform.nuanced.perspective-nan-denominator-fill`.
+Pillow accepts the Perspective map with a NaN denominator and produces the
+explicit fill bytes; RSPIL produced the same RGB `2x1` result, but the
+operation-only router rejected the non-finite map before lazy source
+materialization and recorded `GPU does not support Transform`. That label did
+not describe a missing public operation: the image-aware GPU preflight already
+has the exact host semantic control required for this valid arithmetic edge.
+
+Commit `8f440af60` treats `Transform` as image-context-dependent during the
+operation-only support check. Unsafe maps now reach
+`gpu_geometry_requires_exact_host_control`, which preserves exact CPU
+ownership and records `exact host semantic control`; proof-certified maps keep
+their native GPU admissions. The focused native Pillow 12.2.0 versus RSPIL
+case is 1/1 exact, with a terminal `actual_backend=cpu` receipt and the
+corrected host-control reason. The new routing regression, formatting,
+`make build-dev`, `make migration-parity-receipt-test` (39/39), and
+`make migration-parity-evidence-check` all pass. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed. The broader native-versus-
+host partition remains open where arithmetic is intentionally host-controlled.
