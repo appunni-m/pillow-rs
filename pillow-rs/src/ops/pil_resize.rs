@@ -98,6 +98,31 @@ pub(crate) fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f
     }
 }
 
+// Pillow 12.2.0's arm64 FLOAT32 horizontal resampler uses scalar FMA for
+// rows with at most 15 taps, then switches to complete 16-tap vector blocks
+// that round each product before the ordered additions; any tail remains
+// scalar FMA. Its vertical path remains scalar FMA.
+// Fractional-box F resizes use the same native resampler contract.
+const F_RESIZE_VECTOR_WIDTH: usize = 16;
+
+fn f_resize_accumulate(
+    accumulator: &mut f64,
+    weight: f64,
+    sample: f32,
+    separate_product_add: bool,
+) {
+    let sample = f64::from(sample);
+    if separate_product_add {
+        // Keep the product out of the following add. LLVM may otherwise
+        // contract this expression back into an FMA, defeating the arm64
+        // wide-row contract that Pillow uses after 15 taps.
+        let product = std::hint::black_box(weight * sample);
+        *accumulator += product;
+    } else {
+        *accumulator = weight.mul_add(sample, *accumulator);
+    }
+}
+
 // ── Pixel access helpers ──
 
 /// Get pixel as 4 f64 values (r, g, b, a). Grayscale replicates to RGB.
@@ -1903,9 +1928,16 @@ fn pil_resize_f_boxed(
         for output_x in 0..dst_w as usize {
             let x0 = horizontal.xmin[output_x];
             let mut sum = 0.0;
+            let vector_product_count = (horizontal.weights[output_x].len() / F_RESIZE_VECTOR_WIDTH)
+                * F_RESIZE_VECTOR_WIDTH;
             for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
                 let source_x = (x0 + tap as i64) as usize;
-                sum = weight.mul_add(f64::from(source[source_start + source_x]), sum);
+                f_resize_accumulate(
+                    &mut sum,
+                    weight,
+                    source[source_start + source_x],
+                    tap < vector_product_count,
+                );
             }
             intermediate[intermediate_start + output_x] = if sum == 0.0 { 0.0 } else { sum as f32 };
         }

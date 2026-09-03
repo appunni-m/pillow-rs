@@ -105,6 +105,32 @@ pub(crate) fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) 
 
 // ── Helpers ──
 
+// Pillow 12.2.0's arm64 FLOAT32 horizontal resampler uses scalar FMA for
+// rows with at most 15 taps, then switches to complete 16-tap vector
+// product/add blocks; any tail remains scalar FMA. The vertical resampler
+// remains scalar FMA for every tap count. Keep the same split in the exact CPU
+// implementation so heterogeneous wide reductions match the native Pillow
+// build rather than the compiler's fused Rust loop.
+const F_RESIZE_VECTOR_WIDTH: usize = 16;
+
+fn f_resize_accumulate(
+    accumulator: &mut f64,
+    weight: f64,
+    sample: f32,
+    separate_product_add: bool,
+) {
+    let sample = f64::from(sample);
+    if separate_product_add {
+        // Keep the product out of the following add. LLVM may otherwise
+        // contract this expression back into an FMA, defeating the arm64
+        // wide-row contract that Pillow uses after 15 taps.
+        let product = std::hint::black_box(weight * sample);
+        *accumulator += product;
+    } else {
+        *accumulator = weight.mul_add(sample, *accumulator);
+    }
+}
+
 // ── F-mode / I-mode resize ──
 
 /// Resize an F-mode image (32-bit floats stored as RGBA8 bytes).
@@ -261,14 +287,17 @@ fn resize_f(
                 let src_row_base = (sy * sw) as usize;
                 for (dx, output) in row.iter_mut().enumerate() {
                     let x0 = h_coeffs.xmin[dx];
+                    let vector_product_count = (h_coeffs.weights[dx].len() / F_RESIZE_VECTOR_WIDTH)
+                        * F_RESIZE_VECTOR_WIDTH;
                     let mut acc = 0.0f64;
                     for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
                         let sx = (x0 + offset as i64) as usize;
-                        // Pillow's optimized Resample.c build contracts the
-                        // source/weight product with the running sum. Keep
-                        // that fused operation explicit so f32 storage sees
-                        // the same final rounding on heterogeneous samples.
-                        acc = weight.mul_add(f64::from(src_floats[src_row_base + sx]), acc);
+                        f_resize_accumulate(
+                            &mut acc,
+                            weight,
+                            src_floats[src_row_base + sx],
+                            offset < vector_product_count,
+                        );
                     }
                     *output = acc as f32;
                 }
@@ -279,10 +308,17 @@ fn resize_f(
             let src_row_base = sy * sw as usize;
             for (dx, output) in row.iter_mut().enumerate() {
                 let x0 = h_coeffs.xmin[dx];
+                let vector_product_count =
+                    (h_coeffs.weights[dx].len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH;
                 let mut acc = 0.0f64;
                 for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
                     let sx = (x0 + offset as i64) as usize;
-                    acc = weight.mul_add(f64::from(src_floats[src_row_base + sx]), acc);
+                    f_resize_accumulate(
+                        &mut acc,
+                        weight,
+                        src_floats[src_row_base + sx],
+                        offset < vector_product_count,
+                    );
                 }
                 *output = acc as f32;
             }

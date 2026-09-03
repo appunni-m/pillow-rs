@@ -572,12 +572,12 @@ fn f64_sum_to_f32(sum: SignedU128, minimum_exponent: i32) -> u32 {
     return result;
 }
 
-// Marker 12 carries a bounded ordered-f64 reducer.  Products are formed as
+// Marker 12 carries a bounded ordered-f64 reducer. Products are formed as
 // exact integer mantissa/exponent pairs, then the accumulator is rounded to a
-// normal binary64 value after every tap to match Pillow's `f64::mul_add`
-// sequence.  The host admission proof limits this path to rows with at most
-// eight taps and finite normal intermediates; all wider or exceptional rows use
-// marker 9 or exact host semantic control.
+// normal binary64 value after every tap. Pillow's arm64 FLOAT32 vertical
+// kernel stays on the scalar FMA path; the host admission proof selects that
+// model here. Wider or exceptional rows use marker 9 or exact host semantic
+// control.
 struct F64OrderedState {
     magnitude: U128,
     exponent: i32,
@@ -626,6 +626,7 @@ fn f64_ordered_add_product(
     product: U128,
     product_exp: i32,
     product_negative: bool,
+    separate_product_add: bool,
 ) -> F64OrderedState {
     if !state.valid {
         return state;
@@ -633,22 +634,51 @@ fn f64_ordered_add_product(
     if product.a == 0u && product.b == 0u && product.c == 0u && product.d == 0u {
         return state;
     }
+    var product_magnitude = product;
+    var product_exponent = product_exp;
+    var product_is_negative = product_negative;
+    var product_is_rounded = false;
+    if separate_product_add {
+        let rounded_product = f64_ordered_round(
+            SignedU128(product, product_negative),
+            product_exp,
+        );
+        if !rounded_product.valid {
+            return rounded_product;
+        }
+        product_magnitude = rounded_product.magnitude;
+        product_exponent = rounded_product.exponent;
+        product_is_negative = rounded_product.negative;
+        product_is_rounded = true;
+    }
     if state.magnitude.a == 0u && state.magnitude.b == 0u
         && state.magnitude.c == 0u && state.magnitude.d == 0u {
+        if product_is_rounded {
+            return F64OrderedState(
+                product_magnitude,
+                product_exponent,
+                product_is_negative,
+                true,
+            );
+        }
         return f64_ordered_round(SignedU128(product, product_negative), product_exp);
     }
-    let minimum_exponent = min(state.exponent, product_exp);
+    let minimum_exponent = min(state.exponent, product_exponent);
     let state_shift = u32(state.exponent - minimum_exponent);
-    let product_shift = u32(product_exp - minimum_exponent);
+    let product_shift = u32(product_exponent - minimum_exponent);
     if u128_bit_length(state.magnitude) + state_shift > 128u
-        || u128_bit_length(product) + product_shift > 128u {
+        || u128_bit_length(product_magnitude) + product_shift > 128u {
         return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
     }
     var sum = SignedU128(
         u128_shl(state.magnitude, state_shift),
         state.negative,
     );
-    sum = signed_u128_add(sum, u128_shl(product, product_shift), product_negative);
+    sum = signed_u128_add(
+        sum,
+        u128_shl(product_magnitude, product_shift),
+        product_is_negative,
+    );
     return f64_ordered_round(sum, minimum_exponent);
 }
 
@@ -657,7 +687,7 @@ fn filtered_f64_ordered_bounded(output_x: u32, output_y: u32) -> u32 {
     let source_y = u32(coefficients[metadata]);
     let count = u32(coefficients[metadata + 1u]);
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
-    if count > 8u {
+    if count > 32u {
         return 0u;
     }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
@@ -684,6 +714,7 @@ fn filtered_f64_ordered_bounded(output_x: u32, output_y: u32) -> u32 {
             product,
             product_exp,
             sample_negative != coeff.negative,
+            false,
         );
     }
     if !state.valid {
