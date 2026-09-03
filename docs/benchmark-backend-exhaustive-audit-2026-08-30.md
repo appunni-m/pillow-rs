@@ -6275,3 +6275,28 @@ The remaining P0 arithmetic bucket is typed F filtered projective/mesh and
 rotation behavior plus broader non-dyadic device admission. P1 backend
 identity reconciliation and the P2 equal-ID/equal-receipt timing gate remain
 open.
+
+## 32.108 Typed F projective and mesh filter parity (2026-09-03)
+
+Differential probing found that explicit `F` Perspective, Quad, and Mesh
+transforms with BILINEAR or BICUBIC resampling still entered the packed-byte
+transform kernel. A FLOAT32 word could therefore be interpolated as four
+independent channels. Pillow's `src/libImaging/Geometry.c` evaluates each map
+at the destination pixel center, follows the arm64 FMA grouping, applies the
+FLOAT32 filter's f32 coefficient/f64 FMA ordering, and stores one f32 word.
+
+Commit `f36e1d1a7` adds a typed CPU path for all three projective methods. It
+also carries whether the public call omitted `fillcolor`: `ImagingGenericTransform`
+clears a failed sample only for an omitted fill, while an explicit fill is
+initialized once and must survive an invalid later overlapping mesh record.
+Scalar Python float and one-item float-tuple fills are now accepted for mode
+`F` after FLOAT32 conversion; non-F modes retain Pillow's integer-fill errors.
+
+Native Pillow 12.2.0 versus RSPIL probes are exact for 30,000 finite and
+30,000 special-value projective cases, 10,000 overlapping/clipped Mesh cases,
+6,000 fresh mixed typed-F cases, and 3,600 byte-Mesh cases. Focused Rust
+effects tests pass 13/13, the maintained transform parity case is 1/1, and
+`make -C pillow-rs fmt-fix`, `make -C pillow-rs build`, and `make build-dev`
+pass. No fixtures, thresholds, IDs, denominators, policy, or receipt rules
+changed. Broader non-dyadic GPU projective/mesh arithmetic remains exact host
+semantic control pending a device-side ordered-f64 proof.

@@ -22,6 +22,13 @@ receipt rules unchanged.
   translated/clipped boxes, and explicit premultiplied modes. The final CPU
   path is exact across the six byte layouts; SIMD nearest is proven and SIMD
   filtered remains exact CPU semantic control.
+- [x] Preserve scalar FLOAT32 words for filtered Perspective, Quad, and Mesh
+  transforms (`f36e1d1a7`). The CPU path mirrors Pillow Geometry.c's
+  center/FMA map evaluation and FLOAT32 filter ordering, including overlapping
+  mesh records and the omitted-versus-explicit `fillcolor` contract. Native
+  Pillow 12.2.0 versus RSPIL is exact for the 60,000 finite/special projective
+  probes, 10,000 overlapping Mesh probes, and fresh mixed typed/byte matrices;
+  scalar and one-item tuple float fills are accepted only for mode F.
 - [x] Keep fractional Rotate angles on Pillow's affine path and reproduce the
   clipped wide-line bottom sentinel in Draw. CPU/SIMD Rotate and CPU/GPU Draw
   now match the bounded native matrices exactly.
@@ -109,6 +116,12 @@ receipt rules unchanged.
   RGBa/RGBX avoid double premultiplication, and compiled `Geometry.c` FMA/
   Horner order is preserved. SIMD filtered and fractional GPU paths retain
   exact host semantic control until device arithmetic is proven.
+- [x] Typed-F projective filter parity and fill presence (`f36e1d1a7`):
+  Perspective, Quad, and Mesh now operate on scalar FLOAT32 words instead of
+  packed byte channels, mirror Pillow's center/FMA and bilinear/bicubic
+  ordering, and preserve overlapping-mesh behavior for omitted versus
+  explicit fills. Scalar and one-item tuple float fills match Pillow's mode-F
+  contract; non-F float fills retain native type errors.
 - [x] SIMD constant allocation (`d9b5cec0a`): removed the redundant full-frame
   zero-fill/copy pass with unchanged bytes and telemetry.
 - [x] PA/F nearest relocation admissions and the bounded indexed projective
@@ -268,8 +281,9 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `256c5a0b8` (near-zero Hamming F/I
-parity, PA projective relocation, wide-row F admission guard, filtered
+`main` includes the parity fixes through `f36e1d1a7` (typed-F filtered
+projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
+F/I parity, PA projective relocation, wide-row F admission guard, filtered
 Perspective relocation, arm64 wide-row F accumulation, unit-scale Mesh
 relocation, integer Perspective nearest routing, identity projective routing,
 receipt-proven suite cohorts, and packed SIMD ExtractBand).
