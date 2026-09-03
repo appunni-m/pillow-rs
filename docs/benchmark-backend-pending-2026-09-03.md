@@ -94,13 +94,14 @@ receipt rules unchanged.
   Pillow's scalar-FMA and arm64 vector product/add ordering. Native Pillow
   12.2.0 matrices at 384, 512, 768, and 1024 taps are exact with terminal GPU
   receipts; the 1025-tap finite boundary remains exact host semantic control.
-- [x] Extend the ordered F reducer through the proven 4096-tap marker-12
-  envelope (`52de70c2f`) and admit finite f32 subnormal inputs in both
-  convolution shaders. Native Pillow 12.2.0 versus RSPIL focused rows at
-  3072 and 4096 taps, plus horizontal/vertical subnormal and largest-finite
-  cases, are exact; focused ordered-F tests are 9/9 and the full pool-GPU
-  group is 93/93. The 4097-tap boundary remains exact host semantic control.
-- [ ] Extend the exact F reducer beyond 4096 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 8192-tap marker-12
+  envelope (`828dee094`, source `677fb9e43`) and admit finite f32 subnormal
+  inputs in both convolution shaders. Native Pillow 12.2.0 versus RSPIL
+  focused rows at 3072, 4096, and 8192 taps, both-axis reductions, plus
+  horizontal/vertical subnormal and largest-finite cases, are exact; focused
+  ordered-F tests are 10/10 and the full pool-GPU group is 94/94. The 8193-tap
+  boundary remains exact host semantic control.
+- [ ] Extend the exact F reducer beyond 8192 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
