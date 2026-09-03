@@ -6007,3 +6007,69 @@ all native GPU receipts are requested=actual GPU with one dispatch and no
 fallback. The Rust native matrix is 24/24 exact; focused projective tests are
 4/4 and the full GPU unit suite is 74/74. No fixtures, thresholds, IDs,
 denominators, receipt rules, or policy changed.
+
+## 32.96 Arm64 wide-row F Resize arithmetic (2026-09-03)
+
+The 16-tap and 32-tap Bilinear failures from section 32.94 were fixed in
+`31dfca10c` (source `68aa5472763`). The CPU reducers in `compute/` and the
+marker-12 host/WGSL reducers now mirror Pillow 12.2.0's arm64 FLOAT32
+resampler: scalar fused multiply-add through 15 horizontal taps, complete
+16-tap blocks with separately rounded products and ordered additions, and a
+scalar FMA tail; vertical rows remain on the scalar FMA path. Marker-6 also
+rejects aligned integer terms whose high bits would otherwise be truncated.
+
+The deterministic heterogeneous matrix improved from 18/20 to 20/20 exact:
+`F(16,1) -> (1,1)` now stores Pillow's `c8be3d3d` and `F(32,1) -> (1,1)`
+stores `baafc8bb`. Strict finite probes are 90/90 exact (87 native GPU and
+three exact host-control rows), and six special-value probes are 6/6 exact.
+Rows above the explicit 32-tap bound, mixed non-finite ordering, f64 subnormal
+or overflowing intermediates, and arithmetic-changing chains remain exact
+host semantic control. The focused F/GPU tests and all 121 library tests pass;
+no fixtures, thresholds, IDs, denominators, receipt rules, or policy changed.
+
+## 32.97 Mesh unit-scale relocation GPU envelope (2026-09-03)
+
+Forcing a scaled Mesh through the generic shader exposed the next source
+selection divergence: on a 16x16 -> 8x8 case, Pillow `Geometry.c` selected
+byte 244 from source `(1,1)` at output 0 while the shader selected byte 7 from
+`(0,0)`. Pillow evaluates the map at centered f64 coordinates and applies
+truncating `COORD`; the generic shader uses the raw destination index and
+`floor(source + 0.5)`. This remains an exact host semantic control case.
+
+Commit `413ed65ef` (source `10c9a49fd`) admits only ordinary packed
+L/LA/RGB/RGBA Mesh records that describe a complete-output, one-record,
+unit-scale direct or axis-swapped relocation with integer translation. The
+existing indexed P/1 proof is preserved. Scaled, fractional, filtered,
+partial, multi-record, and non-identity Quad/Mesh maps are not admitted until
+their device arithmetic is proven.
+
+Native Pillow 12.2.0 versus RSPIL is 256/256 byte-exact across four modes,
+four source sizes, four output shapes, and identity/positive/negative/axis-swap
+maps. Every GPU receipt is terminal with `requested_backend=gpu`,
+`actual_backend=gpu`, one dispatch, and no fallback. The focused projective
+tests are 4/4 and the complete GPU unit suite is 74/74. No fixtures, expected
+values, thresholds, IDs, denominators, receipt rules, or policy changed.
+
+## 32.98 Combined post-fix envelope (2026-09-03)
+
+The schema-v3 all-backends replay at revision
+`31dfca10ca13f6f9d2a46ed2f0e818fa351b4eba` passes all 10,952/10,952 selected
+value/error comparisons on CPU, SIMD, GPU, Node WASM, and browser WASM, with
+zero failed or not-run cases and GPU smoke 1/1. It intentionally reports
+`passed_with_backend_gaps`: CPU has 6,838 terminal receipts; SIMD has 6,847
+SIMD plus three CPU controls; GPU has 6,739 GPU plus 99 CPU controls; and each
+WASM lane has 6,951 CPU receipts. The GPU fallback reasons remain explicit
+(`exact host semantic control`, unsafe dimensions, and the Transform capability
+guard), rather than relabeling host-controlled executions as native coverage.
+
+The replay artifact SHA-256 is
+`6c451cfce4b155aa9e8ff5fe58d80687335b794a435d497f5b62a5e7f4287be2`; the GPU
+execution sidecar is
+`d546710154af689713d7a485b27ae5b1389e937823e2020f95fb3440393ed792`; and WGSL
+coverage is
+`047157bf9eb76a76d3cb08842877cc5e876e85ad378a9ab28e7edf9949521a53`.
+`make migration-parity-receipt-test` passes 39/39 and
+`make migration-parity-evidence-check` passes. The P0 queue is now rows over
+32 taps/special F arithmetic plus broader arithmetic-changing projective,
+Mesh, and palette domains; P1 native/host reconciliation and the P2
+two-consecutive zero-budget equal-receipt gate remain open.
