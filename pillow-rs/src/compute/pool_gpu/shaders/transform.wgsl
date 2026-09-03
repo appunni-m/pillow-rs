@@ -327,12 +327,30 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
     if dx < bx0 || dx >= bx1 || dy < by0 || dy >= by1 {
         return vec2<f32>(-1.0, -1.0);
     }
+    let width = f32(params.dst_w);
+    let height = f32(params.dst_h);
+    let x0 = params.e;
+    let y0 = params.f;
+    let direct_relocation =
+        bx0 == 0.0 && by0 == 0.0 && bx1 == width && by1 == height
+        && params.g == x0 && params.h == y0 + height
+        && params.mesh0 == x0 + width && params.mesh1 == y0 + height
+        && params.mesh2 == x0 + width && params.mesh3 == y0;
+    let swapped_relocation =
+        bx0 == 0.0 && by0 == 0.0 && bx1 == width && by1 == height
+        && params.g == x0 + height && params.h == y0
+        && params.mesh0 == x0 + height && params.mesh1 == y0 + width
+        && params.mesh2 == x0 && params.mesh3 == y0 + width;
+    if direct_relocation {
+        return vec2<f32>(x0 + dx, y0 + dy);
+    }
+    if swapped_relocation {
+        return vec2<f32>(x0 + dy, y0 + dx);
+    }
     let bw = max(bx1 - bx0, 1.0);
     let bh = max(by1 - by0, 1.0);
     let u = (dx - bx0) / bw;
     let v = (dy - by0) / bh;
-    let x0 = params.e;
-    let y0 = params.f;
     let x1 = params.g;
     let y1 = params.h;
     let x2 = params.mesh0;
