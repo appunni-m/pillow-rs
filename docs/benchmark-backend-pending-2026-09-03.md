@@ -159,12 +159,12 @@ receipt rules unchanged.
   differs from Pillow's ordered host arithmetic by ULPs, so these rows require
   a separate device proof. The adapter-fitting marker-12 envelope reaches
   8,388,607 taps; marker 13 now covers finite direct horizontal or vertical
-  one-pixel Box rows above that bound. Commit `8c92e95d8` closes the
+  integer-ratio Box rows above that bound. Commit `8c92e95d8` closes the
   binding-size edge for the full table, `d513cfa13` proves the horizontal
   compact row, and `f5f3c1271` adds the vertical compact row without changing
   the ABI. Commit `c2cc1b5bf` adds the same marker-13 special-value state
-  machine for compact rows. Tall vertical geometries outside the one-pixel Box
-  proof, non-Box filters, and arithmetic-changing chains remain exact host
+  machine for compact rows. Tall vertical geometries outside the integer-ratio
+  Box proof, non-Box filters, and arithmetic-changing chains remain exact host
   semantic control; the broader reducer bucket stays open.
   Commit `42795f04f` extends the finite proof when a compact horizontal
   one-pixel Box row is followed by a changed small vertical axis, validating
@@ -172,6 +172,16 @@ receipt rules unchanged.
   Pillow 12.2.0 probes are exact with terminal GPU receipts; special-value
   chaining and the necessarily tall compact-vertical orientation remain exact
   host semantic control.
+- [x] Extend marker-13 compact F Box rows to integer-ratio multi-output
+  geometries (`d659a9c7b`, source `0ddeb2f88`). The compact encoder now emits
+  one metadata triplet per output row plus one shared `1/tap_count` f64
+  coefficient, and the host proof checks every row before native admission.
+  Native Pillow 12.2.0 versus RSPIL is 6/6 byte-exact for finite horizontal
+  and vertical rows with differentiated output values plus Inf and NaN row
+  placements; receipts are terminal native GPU with no fallback. Focused
+  compact tests are 5/5 and the serial pool-GPU group is 113/113. Non-divisible
+  ratios, rows over the proven bound, non-Box filters, and arithmetic-changing
+  chains remain exact host semantic control.
 - [x] Extend the filtered Quad/Mesh relocation proof (`cfa3b2690`, source
   `206bff9dfe82ab9eab5346931db2ddd0b11f4388`): correct non-square Quad
   axis-swap source extents, reject extra Mesh records, and admit only the
@@ -306,7 +316,7 @@ receipt rules unchanged.
   12.2.0 versus RSPIL is 4/4 exact for horizontal/vertical NaN and opposite-
   infinity rows at 8,388,608 taps, with terminal actual GPU receipts and no
   fallback; serial pool-GPU tests are 111/111. Special rows outside this
-  compact one-pixel proof remain exact host semantic control.
+  compact integer-ratio proof remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
@@ -764,7 +774,7 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `c2cc1b5bf` (typed-F filtered
+`main` includes the parity fixes through `d659a9c7b` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 8388607 taps, tall-image F ordering, filtered
@@ -776,7 +786,7 @@ and nonconstant-denominator Perspective nearest envelopes, identity projective
 routing, proof-certified Quad/Mesh nearest maps, receipt-proven suite cohorts,
   and packed SIMD ExtractBand, plus the 128-MiB F binding guard, compact
   over-limit horizontal and vertical Box paths with compact special-value
-  handling, and the interior-integer
+  handling, integer-ratio multi-row compact Box metadata, and the interior-integer
   Bilinear/Bicubic projective envelopes across all proven raw packed modes).
 The fresh combined replay recorded at `f5f3c1271` (before the compact
 special-value extension) is 10,952/10,952 value/error exact
