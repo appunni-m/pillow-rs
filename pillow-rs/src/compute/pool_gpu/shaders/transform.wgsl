@@ -346,6 +346,23 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
             if params.a == 0.0 && params.b == -1.0 && params.d == -1.0 && params.e == 0.0 {
                 return vec2<f32>(params.c - dy - 1.0, params.f - dx - 1.0);
             }
+
+            // Geometry.c's nearest projective path evaluates the affine
+            // inverse at the destination center and applies COORD, which
+            // truncates non-negative coordinates.  The generic sampler below
+            // rounds its input with floor(value + 0.5), so reduce an admitted
+            // constant-denominator nearest map to that integer coordinate
+            // before it reaches the sampler.  The Rust preflight compares
+            // every selected source pixel before allowing this path; filtered
+            // maps retain their raw fractional coordinates.
+            if params.filter_code == 0u {
+                let center_x = dx + 0.5;
+                let center_y = dy + 0.5;
+                return vec2<f32>(
+                    floor(params.a * center_x + params.b * center_y + params.c),
+                    floor(params.d * center_x + params.e * center_y + params.f),
+                );
+            }
         }
         let denominator = params.g * dx + params.h * dy + 1.0;
         if denominator == 0.0 {

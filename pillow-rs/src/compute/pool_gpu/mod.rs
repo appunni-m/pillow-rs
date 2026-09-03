@@ -11034,6 +11034,13 @@ fn gpu_projective_nearest_is_exact(
                     };
                     return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
                 }
+                if f(6) == 0.0 && f(7) == 0.0 && matches!(filter, ResampleFilter::Nearest) {
+                    let center_x = dx + 0.5;
+                    let center_y = dy + 0.5;
+                    let sx = (f(0) * center_x + f(1) * center_y + f(2)).floor();
+                    let sy = (f(3) * center_x + f(4) * center_y + f(5)).floor();
+                    return (sx.is_finite() && sy.is_finite()).then_some((sx, sy));
+                }
                 let denominator = f(6) * dx + f(7) * dy + 1.0;
                 if denominator == 0.0 || !denominator.is_finite() {
                     return None;
@@ -13509,7 +13516,7 @@ mod tests {
             fill_is_none: false,
             palette_fill: None,
         };
-        assert!(!gpu_projective_nearest_is_exact(
+        assert!(gpu_projective_nearest_is_exact(
             &scaled,
             &rgb,
             Some("RGB"),
@@ -13727,6 +13734,111 @@ mod tests {
                 assert_eq!(telemetry.1, Backend::Gpu);
                 assert_eq!(telemetry.6, Some(1));
                 assert_eq!(telemetry.7, None);
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let cases = [
+            (
+                (9u32, 7u32),
+                (4u32, 4u32),
+                [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0],
+                251u8,
+            ),
+            (
+                (9u32, 7u32),
+                (7u32, 5u32),
+                [-2.0, 1.0, 8.0, 1.0, 2.0, -3.0, 0.0, 0.0],
+                251u8,
+            ),
+            (
+                (9u32, 7u32),
+                (6u32, 5u32),
+                [1.0, 2.0, -3.0, 2.0, -1.0, 6.0, 0.0, 0.0],
+                17u8,
+            ),
+            (
+                (13u32, 11u32),
+                (9u32, 7u32),
+                [3.0, -1.0, 5.0, 1.0, 2.0, -4.0, 0.0, 0.0],
+                199u8,
+            ),
+        ];
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2usize),
+            ("RGB", 3usize),
+            ("RGBA", 4usize),
+            ("P", 1usize),
+        ] {
+            for (seed, (source_size, output_size, matrix, fill)) in cases.iter().enumerate() {
+                let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                    .map(|index| (index * (29 + 2 * seed) + 7 * channels + seed) as u8)
+                    .collect::<Vec<_>>();
+                let mut source = Image::frombytes(mode, *source_size, &bytes)
+                    .unwrap_or_else(|error| panic!("{mode} source: {error}"));
+                if mode == "P" {
+                    let palette = (0..768)
+                        .map(|index| (index * 11 + 3) as u8)
+                        .collect::<Vec<_>>();
+                    source
+                        .putpalette(&palette, "RGB")
+                        .unwrap_or_else(|error| panic!("P palette: {error}"));
+                }
+                let fill = match mode {
+                    "L" | "P" => Some(TransformFill::Scalar(i64::from(*fill))),
+                    "LA" => Some(TransformFill::Components(vec![i64::from(*fill), 93])),
+                    "RGB" => Some(TransformFill::Components(vec![i64::from(*fill), 93, 41])),
+                    "RGBA" => Some(TransformFill::Components(vec![
+                        i64::from(*fill),
+                        93,
+                        41,
+                        173,
+                    ])),
+                    _ => unreachable!(),
+                };
+                let transformed = source
+                    .transform_public(
+                        *output_size,
+                        2,
+                        Some(TransformData::Affine(matrix.to_vec())),
+                        0,
+                        0,
+                        fill,
+                    )
+                    .unwrap_or_else(|error| panic!("{mode} transform: {error}"));
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .unwrap_or_else(|error| panic!("{mode} CPU transform: {error}"));
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => panic!("native GPU {mode} transform failed: {error}"),
+                };
+                assert_eq!(
+                    actual, expected,
+                    "native {mode} integer projective matrix={matrix:?}"
+                );
+                let telemetry = Backend::take_pipeline_telemetry()
+                    .unwrap_or_else(|| panic!("native GPU {mode} transform missing telemetry"));
+                assert_eq!(telemetry.0, Some(Backend::Gpu), "{mode} requested backend");
+                assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
+                assert_eq!(telemetry.6, Some(1), "{mode} dispatch count");
+                assert_eq!(telemetry.7, None, "{mode} fallback reason");
             }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
