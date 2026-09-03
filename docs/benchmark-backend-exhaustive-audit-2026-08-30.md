@@ -7008,3 +7008,66 @@ reported seven budget violations. A 40-sample GPU profile ranged
 which is bimodal host timing rather than a localized source regression. The
 zero-violation P2 gate remains open; benchmark scripts, fixtures, thresholds,
 IDs, denominators, policy, and receipt taxonomy were unchanged.
+
+## 32.140 Ordered F Resize reducer through 65536 taps (2026-09-03)
+
+The marker-12 ordered-F proof and both convolution shaders previously stopped
+at 32768 taps. Commit `70dc3f410` (source
+`8be6445704d001c004d419967dd1ef9f91b10440`) raises the shared bound to 65536
+without changing Pillow 12.2.0 `src/libImaging/Resample.c`'s ordered f64/FMA
+and FLOAT32-store semantics. The prior divergence was the admission guard:
+representable 32769-tap finite rows were forced to exact host semantic control
+solely because the bound was too low. Rows beyond 65536, unrepresentable
+f64-intermediate states, and arithmetic-changing chains remain controlled by
+the host proof.
+
+Native Pillow 12.2.0 versus RSPIL direct probes are 20/20 exact for widths
+32769, 65535, 65536, and 65537 across Bilinear, Bicubic, Lanczos, Hamming, and
+Box. The 32769/65535/65536 rows publish native GPU receipts; 65537 remains a
+terminal exact host semantic-control receipt. Focused ordered-F tests are
+10/10, and the full pool-GPU suite after integration is 95/95. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.141 Constant-denominator integer Perspective nearest maps (2026-09-03)
+
+The existing Perspective nearest shader used raw destination coordinates and
+`floor(source + 0.5)`, while Pillow's `src/libImaging/Geometry.c` evaluates
+the inverse map at destination pixel centers and truncates with `COORD`. A
+forced scale-two map first diverged at destination `(0,0)`: Pillow selected
+source `(1,1)` while the old shader selected `(0,0)`. Commit `a735a563f`
+(source `51a5e110eb098a5a3eb69d354176973f61819d8c`) adds a centered f32 map
+and floor path only for constant-denominator (`g=h=0`) integer
+scale/shear/reflection/translation maps after the existing exhaustive
+per-output host f64 source-selection proof. Fractional, nonconstant-
+denominator, filtered, and arithmetic-changing maps remain exact host
+semantic control.
+
+Native Pillow 12.2.0 versus RSPIL probes are 160/160 exact across packed
+L/LA/RGB/RGBA/P cases, with every admitted execution reporting terminal
+requested=actual GPU, one dispatch, and no fallback. The focused projective
+tests and the full pool-GPU suite are 4/4 and 95/95 respectively. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.142 Full backend replay after 65536-tap F and integer Perspective fixes (2026-09-03)
+
+The maintained schema-v3 replay at source revision
+`a735a563fe0931d5c2b5ad7ee388f219646b6e98` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU has 6,838 native receipts;
+SIMD has 6,847 native plus three CPU layout controls; GPU has 6,743 native
+plus 95 exact host/dimension controls; and Node/browser WASM each have 6,951
+CPU receipts. Every terminal receipt is complete, so the aggregate remains
+`passed_with_backend_gaps` solely for the intentional backend partition.
+
+Artifact SHA-256 values are result
+`d658f26af5d354264f6d1fde7e63db17489a077d96ee33ddb7fe4051318dd932`, GPU
+execution `dcdc3610caa50bdbfc00e966afef324c787b907f17e1cc01643712b78dfeb31a`,
+and WGSL coverage
+`2b63567b080843c6749951f8e9b4fd05eac5e360ae0ee3ee0dea0c44c4658a1c`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The timing zero-violation gate, F reducer work beyond 65536 taps,
+f64-intermediate boundary cases, arithmetic-changing chains, and broader
+fractional/scaled/non-dyadic projective, mesh, and palette arithmetic remain
+open. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed.

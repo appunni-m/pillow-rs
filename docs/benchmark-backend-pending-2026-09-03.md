@@ -55,10 +55,13 @@ receipt rules unchanged.
 - [x] Admit proof-certified nearest projective/mesh relocations for packed
   L/LA/RGB/RGBA: exact-identity Perspective/Quad/complete one-record Mesh
   (`1c34fddd0`, source `d2690bf62`), constant-denominator integer Perspective
-  translation/axis-swap (`4db4d4981`, source `9885acb6`), and full-output
+  translation/axis-swap (`4db4d4981`, source `9885acb6`), general constant-
+  denominator integer Perspective scale/shear/reflection/translation
+  (`a735a563f`, source `51a5e110`), and full-output
   unit-scale Mesh translation/axis-swap (`413ed65ef`, source `10c9a49fd`).
-  Fractional, scaled, nonconstant-denominator, and non-identity Quad/Mesh maps
-  remain on exact host semantic control pending a device arithmetic proof.
+  Fractional/non-integer, nonconstant-denominator, and non-identity Quad/Mesh
+  maps, plus scaled maps outside the integer proof, remain on exact host
+  semantic control pending a device arithmetic proof.
 - [x] Admit the separately proven filtered Perspective relocation envelope
   (`a826e1b8c`, source `bba3794bf`): ordinary packed L/RGB, direct or
   axis-swapped unit-scale maps with f32-exact integer translations, for
@@ -104,7 +107,14 @@ receipt rules unchanged.
   remain exact host semantic control. Filtered/nearest two- and three-stage
   chain probes are 36/36 exact on CPU and GPU. Focused ordered-F tests are
   10/10, the full pool-GPU group is 94/94, and CPU geometry tests are 12/12.
-- [ ] Extend the exact F reducer beyond 32768 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 65536-tap marker-12
+  envelope (`70dc3f410`, source `8be644570`). The host proof and both WGSL
+  guards now cover direct finite rows through 65536 taps while preserving
+  Pillow 12.2.0's ordered f64/FMA and FLOAT32-store semantics. Native direct
+  probes at 32769, 65535, and 65536 taps are exact; 65537 remains terminal
+  exact host semantic control. Focused ordered-F tests are 10/10 and the
+  release/build-dev/format gates pass.
+- [ ] Extend the exact F reducer beyond 65536 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -124,16 +134,18 @@ receipt rules unchanged.
   nonconstant-denominator, nonzero-weight, partial/multi-record maps and
   broader palette arithmetic remain exact host semantic control.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
-  Constant-denominator integer Perspective nearest maps and full-output
+  Constant-denominator integer Perspective nearest maps (including the new
+  scale/shear/reflection envelope) and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
   direct/axis-swapped Quad and Mesh nearest pair relocations for PA, the
   constant-integer nearest Quad/Mesh subfamily, signed unit-axis Perspective
   nearest relocations (including PA), and the narrow
   L/LA/RGB/RGBA/PA filtered direct/axis relocation envelope are now admitted by
-  exhaustive or bounded native proofs. Fractional, scaled,
-  nonconstant-denominator, nonzero-weight, partial/multi-record, filtered
-  projective maps, other modes, and broader palette arithmetic remain on exact
-  host semantic control until their device arithmetic is proven.
+  exhaustive or bounded native proofs. Fractional/non-integer, scaled maps
+  outside the integer proof, nonconstant-denominator, nonzero-weight,
+  partial/multi-record, filtered projective maps, other modes, and broader
+  palette arithmetic remain on exact host semantic control until their device
+  arithmetic is proven.
 
 - [x] Extend filtered projective relocation to LA/RGBA and Quad/Mesh
   (`a0fb33394`): the WGSL path now mirrors Pillow's premultiplied La/RGBa
@@ -149,6 +161,13 @@ receipt rules unchanged.
   RSPIL probes are 4,392/4,392 exact with terminal actual=GPU receipts,
   one dispatch, and no fallback. Fractional, scaled, nonconstant-denominator,
   filtered, partial, and multi-record maps remain exact host semantic control.
+- [x] Admit constant-denominator integer Perspective nearest relocations
+  (`a735a563f`, source `51a5e110`): the WGSL path mirrors centered destination
+  coordinates and Pillow `COORD` truncation for proof-certified integer
+  scale/shear/reflection/translation maps with `g=h=0`. Native Pillow 12.2.0
+  versus RSPIL probes are 160/160 exact with terminal requested=actual GPU
+  receipts; fractional, nonconstant-denominator, filtered, and arithmetic-
+  changing maps remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
@@ -321,12 +340,25 @@ receipt rules unchanged.
   control; no fixtures, thresholds, IDs, denominators, policy, or receipt
   taxonomy changed.
 
+- [x] Ordered F Resize reducer through 65536 taps (`70dc3f410`, source
+  `8be644570`): the host proof and both WGSL guards now cover direct rows
+  through 65536 taps while preserving Pillow's ordered f64/FMA and
+  FLOAT32-store semantics. Native Pillow 12.2.0 versus RSPIL probes at 32769,
+  65535, and 65536 taps are exact; 65537 remains exact host semantic control.
+  Focused ordered-F tests are 10/10 and release/build-dev/format gates pass.
+
 - [x] Signed unit-axis Perspective nearest GPU routing (`8caddc219`, source
   `423ebf445`): reflected and axis-swapped integer relocations, including PA
   raw index/alpha pairs, are admitted only after the source-selection proof.
   Native Pillow 12.2.0 probes are 4,392/4,392 exact with terminal native GPU
   receipts; fractional/scaled/nonconstant-denominator/filtered/partial and
   multi-record maps remain exact host semantic control.
+- [x] Constant-denominator integer Perspective nearest GPU routing
+  (`a735a563f`, source `51a5e110`): proof-certified integer scale/shear/
+  reflection/translation maps use the centered source-selection proof before
+  WGSL admission. Native Pillow 12.2.0 probes are 160/160 exact with terminal
+  native GPU receipts; fractional, nonconstant-denominator, filtered, and
+  arithmetic-changing maps remain exact host semantic control.
 
 ## Bounded marker-12 evidence
 
@@ -422,22 +454,22 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `8caddc219` (typed-F filtered
+`main` includes the parity fixes through `a735a563f` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 32768 taps, tall-image F ordering, filtered
+reducer through 65536 taps, tall-image F ordering, filtered
 Perspective/Quad/Mesh relocation, arm64 wide-row F accumulation, unit-scale
-Mesh relocation, integer and signed-unit Perspective nearest routing, identity
+Mesh relocation, integer and signed-unit Perspective nearest routing, the
+centered constant-denominator integer Perspective nearest envelope, identity
 projective routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
-The fresh combined replay at this revision is
-10,952/10,952 value/error exact
+The fresh combined replay at this revision is 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,743 GPU plus 95 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`4a2280ed6ed621d27b45d2f27ef50bec8b6ed22a059e0e7a4ff2ea7329a12ec5`; the GPU
-execution sidecar is `942a4f79e6245a4351a5c1b8bc9ca832d703d9a895744b7c50a9567ce476ab51`,
-with WGSL coverage `a84a27127b8583564837868035cdcc8672bd5c1b00e43b437df671a9f7b4803d`.
+`d658f26af5d354264f6d1fde7e63db17489a077d96ee33ddb7fe4051318dd932`; the GPU
+execution sidecar is `dcdc3610caa50bdbfc00e966afef324c787b907f17e1cc01643712b78dfeb31a`,
+with WGSL coverage `2b63567b080843c6749951f8e9b4fd05eac5e360ae0ee3ee0dea0c44c4658a1c`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
-beyond 32768 taps and broader projective admission work above.
+beyond 65536 taps and broader projective admission work above.
