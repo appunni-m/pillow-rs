@@ -213,6 +213,13 @@ receipt rules unchanged.
   per-operation handoff telemetry and exact values.
 - [x] Preserve nonterminal host-control receipt prefixes in WASM evidence
   accounting (`385eeaab1`).
+- [x] Preserve an observed completed-prefix terminal candidate when a later
+  partial receipt arrives (`058b5e48b`, source `5a65691c9`). A later error
+  receipt can carry useful attempt telemetry, but it must not replace the
+  earlier meaningful `completed`/`cached` receipt or terminalize the partial
+  record. The regression suite is 40/40 and the full 10,952-case replay has
+  zero missing, partial, or indeterminate pipeline receipts; broader native/
+  host partition reconciliation remains open.
 - [x] Gate suite speed ratios on terminal requested=actual target receipts,
   matching latency samples, and empty fallback/error state (`1f49b7890`).
   Timing-complete rows without backend proof remain visible in independent
@@ -553,9 +560,21 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
   explicit host-controlled partition; no fixtures, thresholds, IDs,
   denominators, policy, or receipt taxonomy changed.
 
+- [x] Post-receipt-fix all-backends replay at `058b5e48b` again passed all
+  10,952/10,952 value/error cases on CPU, SIMD, GPU, Node WASM, and browser
+  WASM, with GPU smoke 1/1 and zero failed/not-run cases. Terminal receipt
+  counts remain CPU 6,838; SIMD 6,847 plus three CPU controls; GPU 6,744 plus
+  94 explicit host controls; and Node/browser WASM 6,951 each. The corrected
+  terminal-candidate logic leaves pipeline missing, partial, and indeterminate
+  counts at zero. Result SHA-256 is
+  `95b77ab14a17342bd8ad1613d6332818941da0c6ee5fc3acbf2f52c9396f0529`, GPU
+  execution is `47b196f6d680a9275e6251337d3e77b3259518838be0635dad9c4c558ac4a039`,
+  and WGSL coverage remains
+  `f02ea46100424b88bceadaed5a6c5693417d7623db3bd34e0488c94894a7e494`.
+
 ## Current integration state
 
-`main` includes the parity fixes through `ecac88ac1` (typed-F filtered
+`main` includes the parity fixes through `058b5e48b` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 524288 taps, tall-image F ordering, filtered
@@ -570,8 +589,8 @@ with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,744 GPU plus 94 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`d5c7b3eacfcac74e4cfb9e7c212c0452a91a6851e1b85406d3dda77599d37331`; the GPU
-execution sidecar is `6b6cabd0e1e37164e5238e714dfa2b64c486a4b2aa526f574d8a5bb8ce0e0c08`,
+`95b77ab14a17342bd8ad1613d6332818941da0c6ee5fc3acbf2f52c9396f0529`; the GPU
+execution sidecar is `47b196f6d680a9275e6251337d3e77b3259518838be0635dad9c4c558ac4a039`,
 with WGSL coverage `f02ea46100424b88bceadaed5a6c5693417d7623db3bd34e0488c94894a7e494`.
 The focused list still has four open acceptance buckets: F device arithmetic
 beyond 524288 taps, broader arithmetic-changing projective/mesh/palette
