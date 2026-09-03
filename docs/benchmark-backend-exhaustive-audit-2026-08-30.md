@@ -6347,3 +6347,28 @@ exact host semantic control because the proof correctly rejected their
 non-integral source selection. The focused proof and native regression tests
 pass, and the serialized GPU unit module is 82/82. No fixtures, thresholds,
 IDs, denominators, receipt rules, or policy changed.
+
+## 32.111 Automatic SIMD layout-control receipt normalization (2026-09-03)
+
+A full replay at revision `28a5cb7b8` immediately before this receipt-only
+fix exposed one remaining label mismatch rather than a public value mismatch:
+three valid Transform
+workflows were automatically handed from SIMD to CPU because their concrete
+image layout was outside the SIMD contextual proof, yet the terminal fallback
+reason still said `SIMD does not support Transform for the current image
+layout/mode`. CPU produced the exact Pillow result in each case, so that label
+described a capability error rather than the parity-preserving executor.
+
+Commit `8bb69acd0` normalizes automatic SIMD layout handoffs and any late
+contextual capability retry to the actionable reason `exact host semantic
+control: SIMD image-layout guard for <operation>`. Strict explicit-SIMD locks
+retain their public capability errors; only automatic fallback receipts and
+their history are changed. A focused native Pillow 12.2.0 versus RSPIL replay
+is 3/3 exact, with three terminal actual-CPU receipts carrying the new reason.
+The complete post-change SIMD lane is 10,952/10,952 exact, with 6,847 native
+SIMD receipts, three terminal CPU controls, 6,844 complete pipeline receipts,
+and zero missing, partial, or indeterminate pipeline cases. Its parity and
+execution sidecar hashes are `4c2ae10cbec21ddd181a07530731e5c2ee6cd91282fad85de4ffd2b8a16eab4e`
+and `fe52bfe0c92e46a8b644f14912573924a034761a46f055593623c65d31fd0d22`.
+No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed.
