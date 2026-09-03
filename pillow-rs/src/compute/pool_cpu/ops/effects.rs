@@ -1768,30 +1768,68 @@ fn transform_projective_generic(
                 fill_sample(destination);
                 continue;
             }
-            // Geometry.c's bilinear filter checks the unshifted source
-            // coordinate, subtracts 0.5, then uses FLOOR and edge clipping.
-            // Its horizontal interpolation is performed before the vertical
+            // Geometry.c's filtered path checks the unshifted source
+            // coordinate, subtracts 0.5, then clips the sample window. Its
+            // horizontal interpolation is performed before the vertical
             // interpolation, and the final UINT8 cast truncates toward zero.
             let sample_x = sx - 0.5;
             let sample_y = sy - 0.5;
-            let floor_x = sample_x.floor() as i64;
-            let floor_y = sample_y.floor() as i64;
-            let x0 = floor_x.clamp(0, i64::from(src_w - 1)) as usize;
-            let x1 = (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize;
-            let y0 = floor_y.clamp(0, i64::from(src_h - 1)) as usize;
-            let y1 = (floor_y + 1).clamp(0, i64::from(src_h - 1)) as usize;
-            let fx = sample_x - floor_x as f64;
-            let fy = sample_y - floor_y as f64;
-            for channel in 0..channels {
-                let p00 = raw[(y0 * src_w as usize + x0) * channels + channel] as f64;
-                let p10 = raw[(y0 * src_w as usize + x1) * channels + channel] as f64;
-                let p01 = raw[(y1 * src_w as usize + x0) * channels + channel] as f64;
-                let p11 = raw[(y1 * src_w as usize + x1) * channels + channel] as f64;
-                let horizontal_top = (p10 - p00).mul_add(fx, p00);
-                let horizontal_bottom = (p11 - p01).mul_add(fx, p01);
-                destination[channel] = (horizontal_bottom - horizontal_top)
-                    .mul_add(fy, horizontal_top)
-                    .clamp(0.0, 255.0) as u8;
+            if matches!(filter, ResampleFilter::Bicubic) {
+                // Pillow's BICUBIC callback uses a four-tap Horner form,
+                // with the same fused operations as `cubic_sample`. Keep the
+                // bicubic branch separate from bilinear: treating every
+                // non-nearest projective request as bilinear changes PA and
+                // ordinary byte results for fractional maps.
+                let floor_x = sample_x.floor() as i64 - 1;
+                let floor_y = sample_y.floor() as i64 - 1;
+                let fx = sample_x - (floor_x + 1) as f64;
+                let fy = sample_y - (floor_y + 1) as f64;
+                for channel in 0..channels {
+                    let mut rows = [0.0; 4];
+                    for (row, output) in rows.iter_mut().enumerate() {
+                        let y = (floor_y + row as i64).clamp(0, i64::from(src_h - 1)) as usize;
+                        let samples = [
+                            raw[(y * src_w as usize
+                                + (floor_x).clamp(0, i64::from(src_w - 1)) as usize)
+                                * channels
+                                + channel] as f64,
+                            raw[(y * src_w as usize
+                                + (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize)
+                                * channels
+                                + channel] as f64,
+                            raw[(y * src_w as usize
+                                + (floor_x + 2).clamp(0, i64::from(src_w - 1)) as usize)
+                                * channels
+                                + channel] as f64,
+                            raw[(y * src_w as usize
+                                + (floor_x + 3).clamp(0, i64::from(src_w - 1)) as usize)
+                                * channels
+                                + channel] as f64,
+                        ];
+                        *output = cubic_sample(samples, fx);
+                    }
+                    destination[channel] = cubic_sample(rows, fy).clamp(0.0, 255.0) as u8;
+                }
+            } else {
+                let floor_x = sample_x.floor() as i64;
+                let floor_y = sample_y.floor() as i64;
+                let x0 = floor_x.clamp(0, i64::from(src_w - 1)) as usize;
+                let x1 = (floor_x + 1).clamp(0, i64::from(src_w - 1)) as usize;
+                let y0 = floor_y.clamp(0, i64::from(src_h - 1)) as usize;
+                let y1 = (floor_y + 1).clamp(0, i64::from(src_h - 1)) as usize;
+                let fx = sample_x - floor_x as f64;
+                let fy = sample_y - floor_y as f64;
+                for channel in 0..channels {
+                    let p00 = raw[(y0 * src_w as usize + x0) * channels + channel] as f64;
+                    let p10 = raw[(y0 * src_w as usize + x1) * channels + channel] as f64;
+                    let p01 = raw[(y1 * src_w as usize + x0) * channels + channel] as f64;
+                    let p11 = raw[(y1 * src_w as usize + x1) * channels + channel] as f64;
+                    let horizontal_top = (p10 - p00).mul_add(fx, p00);
+                    let horizontal_bottom = (p11 - p01).mul_add(fx, p01);
+                    destination[channel] = (horizontal_bottom - horizontal_top)
+                        .mul_add(fy, horizontal_top)
+                        .clamp(0.0, 255.0) as u8;
+                }
             }
         }
     }
@@ -2600,7 +2638,9 @@ fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
 mod tests {
     use super::{cubic_sample, op_transform, transform_mesh, transform_projective_generic};
     use crate::pipeline::{ResampleFilter, TransformMethod};
-    use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
+    use crate::raster::{
+        DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
+    };
 
     fn varied_luma_source() -> DynamicImage {
         let raw: Vec<u8> = (0..4)
@@ -3095,5 +3135,27 @@ mod tests {
             .expect("bilinear projective transform");
             assert_eq!(result.as_bytes(), expected, "quad={quad}");
         }
+    }
+
+    #[test]
+    fn projective_bicubic_matches_raw_palette_alpha_filter() {
+        // Pillow's PA projective path keeps the index/alpha bands raw.  Before
+        // this branch, every non-nearest projective request used the bilinear
+        // kernel, so the first output pair for a fractional map was (7, 18)
+        // instead of Geometry.c's bicubic (6, 16).
+        let source = DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(4, 1, vec![3, 11, 20, 40, 37, 69, 54, 98]).expect("PA source"),
+        );
+        let result = transform_projective_generic(
+            &source,
+            4,
+            1,
+            &[1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0],
+            &ResampleFilter::Bicubic,
+            Some((61, 233, 0, 0)),
+            false,
+        )
+        .expect("PA bicubic projective transform");
+        assert_eq!(result.as_bytes(), &[6, 16, 25, 49, 43, 80, 56, 102]);
     }
 }
