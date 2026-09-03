@@ -10608,6 +10608,39 @@ fn gpu_projective_filtered_relocation_is_admitted(
         && (direct_perspective(tx, ty) || swapped_perspective(tx, ty))
 }
 
+/// Return whether a palette-alpha Perspective transform is a raw pair
+/// relocation that the projective shader can reproduce exactly.
+///
+/// PA stores one palette index and one per-pixel alpha byte in the native
+/// two-band image.  A nearest unit-scale direct or axis-swapped map with an
+/// integer translation only selects an existing `(index, alpha)` pair; it
+/// never expands the palette or performs alpha arithmetic.  Keep this
+/// separate from ordinary byte modes: PA's palette metadata and two-band fill
+/// contract need their own proof.  Pillow does not force PA's non-nearest
+/// transform requests to nearest, so those requests remain on the exact host
+/// path rather than being silently changed to pair-copy sampling.
+fn gpu_palette_alpha_projective_relocation_is_admitted(
+    method: TransformMethod,
+    data: &[f64],
+    filter: ResampleFilter,
+) -> bool {
+    if !matches!(method, TransformMethod::Perspective)
+        || !matches!(filter, ResampleFilter::Nearest)
+        || data.len() < 8
+    {
+        return false;
+    }
+    let integer_f32 = |value: f64| {
+        value.is_finite()
+            && value.fract() == 0.0
+            && (value as f32).is_finite()
+            && f64::from(value as f32) == value
+    };
+    let direct = data[..8] == [1.0, 0.0, data[2], 0.0, 1.0, data[5], 0.0, 0.0];
+    let swapped = data[..8] == [0.0, 1.0, data[2], 1.0, 0.0, data[5], 0.0, 0.0];
+    integer_f32(data[2]) && integer_f32(data[5]) && (direct || swapped)
+}
+
 fn gpu_projective_nearest_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -10627,12 +10660,14 @@ fn gpu_projective_nearest_is_exact(
     };
     let image_layout_is_valid = match mode {
         Some("P" | "1" | "L") => matches!(image, DynamicImage::ImageLuma8(_)),
-        Some("LA") => matches!(image, DynamicImage::ImageLumaA8(_)),
+        Some("LA" | "PA") => matches!(image, DynamicImage::ImageLumaA8(_)),
         Some("RGB") => matches!(image, DynamicImage::ImageRgb8(_)),
         Some("RGBA") => matches!(image, DynamicImage::ImageRgba8(_)),
         _ => false,
     };
     let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
+    let palette_alpha_relocation = mode == Some("PA")
+        && gpu_palette_alpha_projective_relocation_is_admitted(method.clone(), data, *filter);
     let filtered_relocation =
         gpu_projective_filtered_relocation_is_admitted(method.clone(), data, *filter, mode);
     // The projective shader's raw-gid arithmetic is safe for the affine
@@ -10665,6 +10700,7 @@ fn gpu_projective_nearest_is_exact(
     };
     if !image_layout_is_valid
         || (ordinary_byte_mode && !ordinary_projective_geometry_is_admitted)
+        || (mode == Some("PA") && !palette_alpha_relocation)
         || !matches!(
             method,
             TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh
@@ -12449,10 +12485,11 @@ mod tests {
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_nearest_affine_is_exact, gpu_palette_first_rgb_merge_is_supported,
-        gpu_projective_nearest_is_exact, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact, gpu_transform_fill,
-        luma16_resample_big_endian, readback_poll_backoff,
+        gpu_nearest_affine_is_exact, gpu_palette_alpha_projective_relocation_is_admitted,
+        gpu_palette_first_rgb_merge_is_supported, gpu_projective_nearest_is_exact,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
+        gpu_transform_all_fill_is_exact, gpu_transform_fill, luma16_resample_big_endian,
+        readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -13236,6 +13273,108 @@ mod tests {
                     assert_eq!(telemetry.7, None);
                 }
             }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn palette_alpha_projective_relocation_proof_is_narrow() {
+        let direct = [1.0, 0.0, -2.0, 0.0, 1.0, 1.0, 0.0, 0.0];
+        let swapped = [0.0, 1.0, 3.0, 1.0, 0.0, -4.0, 0.0, 0.0];
+        assert!(gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &direct,
+            ResampleFilter::Nearest,
+        ));
+        assert!(gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &swapped,
+            ResampleFilter::Nearest,
+        ));
+        assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &direct,
+            ResampleFilter::Bilinear,
+        ));
+        assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Quad,
+            &direct,
+            ResampleFilter::Nearest,
+        ));
+        assert!(!gpu_palette_alpha_projective_relocation_is_admitted(
+            TransformMethod::Perspective,
+            &[1.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0],
+            ResampleFilter::Nearest,
+        ));
+    }
+
+    #[test]
+    fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
+        let source_bytes = (0..7 * 5)
+            .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
+            .collect::<Vec<_>>();
+        let mut source = Image::frombytes("LA", (7, 5), &source_bytes).expect("LA source");
+        source
+            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
+            .expect("PA palette");
+        assert_eq!(source.mode().expect("PA mode"), "PA");
+
+        let cases = [
+            ((7, 5), [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], None),
+            (
+                (9, 6),
+                [1.0, 0.0, 1.0, 0.0, 1.0, 2.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![199, 71])),
+            ),
+            (
+                (9, 6),
+                [1.0, 0.0, -2.0, 0.0, 1.0, -1.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![61, 233])),
+            ),
+            (
+                (5, 7),
+                [0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                Some(TransformFill::Components(vec![17, 203])),
+            ),
+        ];
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (size, matrix, fill) in cases {
+            let transformed = source
+                .transform_public(
+                    size,
+                    2,
+                    Some(TransformData::Affine(matrix.to_vec())),
+                    0,
+                    0,
+                    fill,
+                )
+                .expect("PA projective transform");
+            let expected = transformed
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU PA projective transform");
+            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU PA projective transform failed: {error}"),
+            };
+            assert_eq!(actual, expected, "PA projective pair parity for {size:?}");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("native PA projective transform must publish a receipt");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
