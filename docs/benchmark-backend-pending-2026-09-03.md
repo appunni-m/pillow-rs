@@ -78,6 +78,11 @@ receipt rules unchanged.
   outcomes. The latest full envelope is exact on all five public lanes, but GPU
   still has a host-controlled partition alongside native receipts. Preserve
   terminal actual-backend identity and make every fallback reason actionable.
+  The stale `GPU does not support Transform` classification for the valid
+  Perspective NaN-denominator fill edge is fixed by `8f440af60`: operation-only
+  routing now defers Transform safety to image-aware preflight, which records
+  `exact host semantic control` with terminal `actual_backend=cpu`. Broader
+  native/host partition reconciliation remains open.
 - [x] Correct mixed SIMD/CPU terminal identity (`ddcff735c`): receipts now
   report the final successful segment (SIMD 6,847; CPU 3) while preserving
   per-operation handoff telemetry and exact values.
