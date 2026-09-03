@@ -970,10 +970,12 @@ const GPU_F_RESIZE_VECTOR_WIDTH: usize = 16;
 const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
 // The ordered integer reducer keeps only one rounded f64 state at a time, so
 // its representability does not depend on the number of taps.  Cap a single
-// device invocation at 4194304 taps: the matching shader bound keeps the
+// device invocation at 8388607 taps: the matching shader bound keeps the
 // worst-case ordered loop finite while allowing the next bounded direct-resize
-// envelope beyond the previously proven 1048576-tap limit.
-const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 4_194_304;
+// envelope beyond the previously proven 4194304-tap limit.  Keep one tap
+// below 8388608: the encoded coefficient range otherwise exceeds the
+// 128-MiB adapter binding limit after metadata/alignment overhead.
+const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 8_388_607;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1360,7 +1362,7 @@ fn gpu_f64_ordered_add_product(
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
-/// marker 12 handles rows through 4194304 taps by emulating the scalar FMA path and
+/// marker 12 handles rows through 8388607 taps by emulating the scalar FMA path and
 /// the >15-tap horizontal vector product/add path in integer arithmetic.
 fn gpu_f_resize_f64_ordered_sample_bits(
     bytes: &[u8],
@@ -19173,7 +19175,7 @@ mod tests {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        // Marker 12 deliberately stops at 4194304 taps. Marker 9's special
+        // Marker 12 deliberately stops at 8388607 taps. Marker 9's special
         // prepass is independent of the arm64 vector product/add split, so a
         // 257-tap row can still be native when the host proof agrees on the
         // exact NaN or infinity bits. Finite rows use marker 12 when its
@@ -19391,7 +19393,7 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_through_4194304_taps_native_matches_cpu() {
+    fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
@@ -19465,6 +19467,7 @@ mod tests {
             (4_194_304usize, ResampleFilter::Lanczos),
             (4_194_304usize, ResampleFilter::Hamming),
             (4_194_304usize, ResampleFilter::Box),
+            (8_388_607usize, ResampleFilter::Bilinear),
         ] {
             let words: Vec<u32> = (0..width)
                 .map(|index| {
@@ -19653,12 +19656,12 @@ mod tests {
     }
 
     #[test]
-    fn f_resize_ordered_f64_over_4194304_taps_stays_host_controlled() {
+    fn f_resize_ordered_f64_over_8388607_taps_stays_host_controlled() {
         fn bytes(words: &[u32]) -> Vec<u8> {
             words.iter().flat_map(|word| word.to_le_bytes()).collect()
         }
 
-        let width = 4_194_305usize;
+        let width = 8_388_608usize;
         let words: Vec<u32> = (0..width)
             .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
             .collect();
