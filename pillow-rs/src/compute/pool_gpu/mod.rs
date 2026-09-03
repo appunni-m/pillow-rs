@@ -1495,22 +1495,27 @@ fn gpu_f_resize_f64_ordered_pass_bits(
     Some(result)
 }
 
-/// Evaluate one over-limit Box row whose normalized coefficient is constant.
+/// Evaluate over-limit Box rows whose normalized coefficient is constant.
 ///
-/// Pillow's `Resample.c::precompute_coeffs` gives a one-pixel Box downscale
-/// exactly `1 / source_axis` for every selected source word.  That row does
-/// not need one four-word f64 coefficient record per tap: the compact device
-/// path transports one record and repeats it in the ordered reducer.  Finite
-/// rows use the integer state below; IEEE special rows use the same ordered
-/// NaN/infinity state machine as marker 9 before being admitted.
+/// Pillow's `Resample.c::precompute_coeffs` gives an integer-ratio Box
+/// downscale exactly `1 / tap_count` for every selected source word.  Such a
+/// row does not need one four-word f64 coefficient record per tap: the compact
+/// device path transports one record and repeats it in the ordered reducer.
+/// Finite rows use the integer state below; IEEE special rows use the same
+/// ordered NaN/infinity state machine as marker 9 before being admitted.
 fn gpu_f_resize_compact_box_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
     source_axis: u32,
+    output_axis: u32,
     horizontal: bool,
+    output_index: usize,
     line: usize,
 ) -> Option<u32> {
     if source_axis == 0
+        || output_axis == 0
+        || source_axis % output_axis != 0
+        || output_index >= usize::try_from(output_axis).ok()?
         || line
             >= usize::try_from(if horizontal {
                 source_dimensions.1
@@ -1524,10 +1529,13 @@ fn gpu_f_resize_compact_box_sample_bits(
     let source_w = usize::try_from(source_dimensions.0).ok()?;
     let source_h = usize::try_from(source_dimensions.1).ok()?;
     let source_axis_usize = usize::try_from(source_axis).ok()?;
-    if source_axis_usize != if horizontal { source_w } else { source_h } {
+    let output_axis_usize = usize::try_from(output_axis).ok()?;
+    if source_axis_usize != if horizontal { source_w } else { source_h } || output_axis_usize == 0 {
         return None;
     }
-    let coefficient = 1.0 / f64::from(source_axis);
+    let tap_count = source_axis_usize.checked_div(output_axis_usize)?;
+    let source_start = output_index.checked_mul(tap_count)?;
+    let coefficient = 1.0 / f64::from(u32::try_from(tap_count).ok()?);
     let coefficient_parts = gpu_f64_integer_parts(coefficient)?;
     let mut state = F64OrderedState {
         magnitude: 0,
@@ -1539,18 +1547,19 @@ fn gpu_f_resize_compact_box_sample_bits(
     let mut positive_infinity = false;
     let mut negative_infinity = false;
     let mut has_special = false;
-    for tap in 0..source_axis_usize {
+    for tap in 0..tap_count {
+        let coordinate = source_start.checked_add(tap)?;
         let pixel = if horizontal {
-            line.checked_mul(source_w)?.checked_add(tap)?
+            line.checked_mul(source_w)?.checked_add(coordinate)?
         } else {
-            tap.checked_mul(source_w)?.checked_add(line)?
+            coordinate.checked_mul(source_w)?.checked_add(line)?
         };
         let offset = pixel.checked_mul(4)?;
         let word = bytes.get(offset..offset.checked_add(4)?)?;
         let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
         let exponent_bits = (bits >> 23) & 0xff;
         let separate_product_add =
-            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, source_axis_usize, tap);
+            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, tap_count, tap);
         gpu_f_resize_accumulate_f64(
             &mut ordered_accumulator,
             coefficient,
@@ -1611,6 +1620,7 @@ fn gpu_f_resize_compact_box_pass_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
     source_axis: u32,
+    output_axis: u32,
     horizontal: bool,
 ) -> Option<Vec<u32>> {
     let line_count = usize::try_from(if horizontal {
@@ -1619,22 +1629,46 @@ fn gpu_f_resize_compact_box_pass_bits(
         source_dimensions.0
     })
     .ok()?;
+    let output_count = usize::try_from(output_axis).ok()?;
+    let word_count = line_count.checked_mul(output_count)?;
     let mut result = Vec::new();
-    result.try_reserve(line_count).ok()?;
-    for line in 0..line_count {
-        result.push(gpu_f_resize_compact_box_sample_bits(
-            bytes,
-            source_dimensions,
-            source_axis,
-            horizontal,
-            line,
-        )?);
+    result.try_reserve(word_count).ok()?;
+    if horizontal {
+        for line in 0..line_count {
+            for output_index in 0..output_count {
+                result.push(gpu_f_resize_compact_box_sample_bits(
+                    bytes,
+                    source_dimensions,
+                    source_axis,
+                    output_axis,
+                    true,
+                    output_index,
+                    line,
+                )?);
+            }
+        }
+    } else {
+        for output_index in 0..output_count {
+            for line in 0..line_count {
+                result.push(gpu_f_resize_compact_box_sample_bits(
+                    bytes,
+                    source_dimensions,
+                    source_axis,
+                    output_axis,
+                    false,
+                    output_index,
+                    line,
+                )?);
+            }
+        }
     }
     Some(result)
 }
 
 fn gpu_f_resize_compact_box_axis(source_size: u32, output_size: u32) -> bool {
-    output_size == 1 && source_size > GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
+    output_size != 0
+        && source_size % output_size == 0
+        && source_size / output_size > GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
 }
 
 #[inline]
@@ -1670,12 +1704,13 @@ fn gpu_f_resize_compact_box_vertical_only_geometry(
 }
 
 /// Prove the compact over-limit Box domain without materializing a full f64
-/// coefficient table.  A one-pixel Box downscale has one normalized weight
-/// per source tap, so a single repeated coefficient is enough on the device.
-/// At most one axis can exceed the full-table bound for an image that fits the
-/// device buffer budget. The other axis keeps its ordinary coefficient table;
-/// when that table is also proven exact, the second axis may change and the
-/// host proof below validates the materialized intermediate between passes.
+/// coefficient table.  An integer-ratio Box downscale has one normalized
+/// weight per source tap, so a single repeated coefficient is enough on the
+/// device for every output row.  At most one axis can exceed the full-table
+/// bound for an image that fits the device buffer budget. The other axis keeps
+/// its ordinary coefficient table; when that table is also proven exact, the
+/// second axis may change and the host proof below validates the materialized
+/// intermediate between passes.
 fn gpu_f_resize_compact_box_is_exact(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -1763,7 +1798,7 @@ fn gpu_f_resize_compact_box_is_exact(
 
     if horizontal_compact {
         let Some(words) =
-            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.0, true)
+            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.0, *w, true)
         else {
             return false;
         };
@@ -1786,7 +1821,7 @@ fn gpu_f_resize_compact_box_is_exact(
 
     if vertical_compact {
         let Some(words) =
-            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.1, false)
+            gpu_f_resize_compact_box_pass_bits(&bytes, dimensions, source_dimensions.1, *h, false)
         else {
             return false;
         };
@@ -4401,32 +4436,53 @@ fn encode_resize_coeffs_f64(coeffs: &FilterCoeffsF64) -> Result<Vec<u32>, PilErr
     Ok(words)
 }
 
-/// Encode one compact Box row whose normalized coefficient is repeated for
-/// every tap.  This is used only for a one-pixel downscale beyond the full
-/// f64 coefficient binding envelope; ordinary rows continue to use the
-/// complete per-tap table above.
+/// Encode compact Box rows whose normalized coefficient is repeated for every
+/// tap.  This is used only for integer-ratio downscales beyond the full f64
+/// coefficient binding envelope; ordinary rows continue to use the complete
+/// per-tap table above.
 fn encode_resize_compact_box_axis(
     source_size: u32,
     output_size: u32,
 ) -> Result<Vec<u32>, PilError> {
-    if output_size != 1 || source_size <= GPU_F_RESIZE_ORDERED_MAX_TAPS as u32 {
+    if output_size == 0
+        || source_size % output_size != 0
+        || source_size / output_size <= GPU_F_RESIZE_ORDERED_MAX_TAPS as u32
+    {
         return Err(PilError::InternalError(
             "GPU compact Box coefficient geometry is invalid".into(),
         ));
     }
-    let coefficient = 1.0 / f64::from(source_size);
+    let tap_count = source_size / output_size;
+    let coefficient = 1.0 / f64::from(tap_count);
     let parts = gpu_f64_integer_parts(coefficient).ok_or_else(|| {
         PilError::ValueError("GPU compact Box coefficient is not a finite normal value".into())
     })?;
-    Ok(vec![
-        0,
-        source_size,
-        0,
+    let output_count = usize::try_from(output_size)
+        .map_err(|_| PilError::ValueError("GPU compact Box output size is too large".into()))?;
+    let mut words = Vec::with_capacity(
+        output_count
+            .checked_mul(3)
+            .and_then(|count| count.checked_add(4))
+            .ok_or_else(|| PilError::ValueError("GPU compact Box arena size overflow".into()))?,
+    );
+    for output_index in 0..output_count {
+        let xmin = u32::try_from(
+            output_index
+                .checked_mul(usize::try_from(tap_count).map_err(|_| {
+                    PilError::ValueError("GPU compact Box tap count is too large".into())
+                })?)
+                .ok_or_else(|| PilError::ValueError("GPU compact Box offset overflow".into()))?,
+        )
+        .map_err(|_| PilError::ValueError("GPU compact Box offset exceeds shader limits".into()))?;
+        words.extend([xmin, tap_count, 0]);
+    }
+    words.extend([
         parts.mantissa as u32,
         (parts.mantissa >> 32) as u32,
         parts.exponent as u32,
         u32::from(parts.negative && parts.mantissa != 0),
-    ])
+    ]);
+    Ok(words)
 }
 
 fn gpu_resize_coefficients_are_safe(
@@ -5848,7 +5904,15 @@ impl GpuInner {
                 let (kernel, support) = filter_from_resample(filter);
                 let axis_words = |source_size: u32, output_size: u32| {
                     if gpu_f_resize_compact_box_axis(source_size, output_size) {
-                        Ok(7usize)
+                        usize::try_from(output_size)
+                            .ok()
+                            .and_then(|count| count.checked_mul(3))
+                            .and_then(|metadata| metadata.checked_add(4))
+                            .ok_or_else(|| {
+                                PilError::ValueError(
+                                    "GPU compact Box coefficient arena size overflow".into(),
+                                )
+                            })
                     } else {
                         let coeffs =
                             precompute_coeffs_f64(output_size, source_size, kernel, support);
@@ -13715,10 +13779,10 @@ mod tests {
         gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu,
         gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
-        gpu_f_resize_compact_box_is_exact, gpu_f_resize_compact_box_vertical_only_geometry,
-        gpu_f_resize_constant_bits, gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact,
-        gpu_f_resize_f64_ordered_is_exact, gpu_f_resize_identity_is_exact,
-        gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
+        gpu_f_resize_compact_box_axis, gpu_f_resize_compact_box_is_exact,
+        gpu_f_resize_compact_box_vertical_only_geometry, gpu_f_resize_constant_bits,
+        gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_ordered_is_exact,
+        gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
@@ -20797,6 +20861,86 @@ mod tests {
             gpu_dispatch_count(std::slice::from_ref(&op), Some("F"), (1, height as u32)),
             1
         );
+    }
+
+    #[test]
+    fn f_resize_compact_box_proof_covers_multiple_output_rows() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Two output columns each consume an integer 8,388,608-tap Box row.
+        // The complete per-tap table would exceed the binding limit, while
+        // Pillow's Resample.c geometry gives both rows the same 1/ratio
+        // coefficient and contiguous source ranges.
+        let ratio = 8_388_608usize;
+        let width = ratio * 2;
+        let pattern = [0.125f32, -17.25, 1.0, -2.5, 3.75, -0.0, 100.0, -99.0];
+        let words: Vec<u32> = (0..width)
+            .map(|index| pattern[index % pattern.len()].to_bits())
+            .collect();
+        let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+            .expect("multi-output compact Box source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize multi-output compact Box source");
+        let op = PipelineOp::Resize {
+            w: 2,
+            h: 1,
+            filter: ResampleFilter::Box,
+        };
+        assert!(gpu_f_resize_compact_box_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        let compact_words = encode_resize_compact_box_axis(width as u32, 2)
+            .expect("multi-output compact Box coefficient rows");
+        assert_eq!(compact_words.len(), 10);
+        assert_eq!(
+            &compact_words[0..6],
+            &[0, ratio as u32, 0, ratio as u32, ratio as u32, 0]
+        );
+        assert_eq!(
+            &compact_words[6..],
+            &encode_resize_compact_box_axis(ratio as u32, 1)
+                .expect("single-output compact Box coefficient row")[3..]
+        );
+        assert!(!gpu_dimensions_require_cpu(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_dispatch_dimensions_require_cpu(
+            std::slice::from_ref(&op),
+            (width as u32, 1),
+            65_535,
+            Some("F")
+        ));
+        let filter = ResampleInput::Name("BOX".into());
+        let expected = source
+            .resize((2, 1), Some(filter.clone()), None)
+            .expect("CPU multi-output compact Box resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU multi-output compact Box bytes");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = source
+            .resize((2, 1), Some(filter), None)
+            .expect("GPU multi-output compact Box resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            .expect("native GPU multi-output compact Box bytes");
+        assert_eq!(actual, expected);
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("multi-output compact Box resize must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.7, None);
+        Backend::set_pipeline_telemetry_enabled(previous);
+
+        assert!(!gpu_f_resize_compact_box_axis(width as u32 + 1, 2));
+        assert!(encode_resize_compact_box_axis(width as u32 + 1, 2).is_err());
     }
 
     #[test]
