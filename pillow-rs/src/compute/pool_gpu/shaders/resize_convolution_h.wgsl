@@ -704,6 +704,45 @@ fn filtered_f64_ordered_bounded(
     if !compact_box && count > 8388607u {
         return 0u;
     }
+    if compact_box {
+        // Marker 13 repeats one positive Box coefficient.  Scan IEEE special
+        // words separately so the compact row preserves Pillow's first-NaN
+        // payload and signed-infinity cancellation without relaxed f32 math.
+        var first_nan: u32 = 0u;
+        var has_nan = false;
+        var positive_infinity = false;
+        var negative_infinity = false;
+        for (var tap = 0u; tap < count; tap = tap + 1u) {
+            let bits = f64_sample_bits(input[source_y * params.width + source_x + tap]);
+            let exponent_bits = (bits >> 23u) & 255u;
+            if exponent_bits != 255u {
+                continue;
+            }
+            let fraction = bits & 0x7fffffu;
+            if fraction != 0u {
+                if !has_nan {
+                    first_nan = bits | 0x00400000u;
+                    has_nan = true;
+                }
+            } else if (bits & 0x80000000u) != 0u {
+                negative_infinity = true;
+            } else {
+                positive_infinity = true;
+            }
+        }
+        if has_nan {
+            return first_nan;
+        }
+        if positive_infinity && negative_infinity {
+            return 0x7fc00000u;
+        }
+        if positive_infinity {
+            return 0x7f800000u;
+        }
+        if negative_infinity {
+            return 0xff800000u;
+        }
+    }
     var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
     for (var tap = 0u; tap < count; tap = tap + 1u) {
         // Marker 13 stores one 1/source-width coefficient and repeats it for

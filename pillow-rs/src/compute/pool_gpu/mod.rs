@@ -1500,10 +1500,9 @@ fn gpu_f_resize_f64_ordered_pass_bits(
 /// Pillow's `Resample.c::precompute_coeffs` gives a one-pixel Box downscale
 /// exactly `1 / source_axis` for every selected source word.  That row does
 /// not need one four-word f64 coefficient record per tap: the compact device
-/// path transports one record and repeats it in the ordered reducer.  Keep
-/// the proof finite-only for now; non-finite words retain marker-9/host
-/// control because their first-NaN payload and infinity interactions need a
-/// separate compact state-machine proof.
+/// path transports one record and repeats it in the ordered reducer.  Finite
+/// rows use the integer state below; IEEE special rows use the same ordered
+/// NaN/infinity state machine as marker 9 before being admitted.
 fn gpu_f_resize_compact_box_sample_bits(
     bytes: &[u8],
     source_dimensions: (u32, u32),
@@ -1536,6 +1535,10 @@ fn gpu_f_resize_compact_box_sample_bits(
         negative: false,
     };
     let mut ordered_accumulator = 0.0f64;
+    let mut first_nan = None;
+    let mut positive_infinity = false;
+    let mut negative_infinity = false;
+    let mut has_special = false;
     for tap in 0..source_axis_usize {
         let pixel = if horizontal {
             line.checked_mul(source_w)?.checked_add(tap)?
@@ -1546,10 +1549,6 @@ fn gpu_f_resize_compact_box_sample_bits(
         let word = bytes.get(offset..offset.checked_add(4)?)?;
         let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
         let exponent_bits = (bits >> 23) & 0xff;
-        if exponent_bits == 0xff {
-            return None;
-        }
-        let sample = gpu_f32_f64_integer_parts(bits)?;
         let separate_product_add =
             gpu_f_resize_uses_separate_horizontal_product_add(horizontal, source_axis_usize, tap);
         gpu_f_resize_accumulate_f64(
@@ -1558,6 +1557,19 @@ fn gpu_f_resize_compact_box_sample_bits(
             f32::from_bits(bits),
             separate_product_add,
         );
+        if exponent_bits == 0xff {
+            has_special = true;
+            let fraction = bits & 0x7f_ff_ff;
+            if fraction != 0 {
+                first_nan.get_or_insert(bits | 0x0040_0000);
+            } else if (bits & 0x8000_0000) != 0 {
+                negative_infinity = true;
+            } else {
+                positive_infinity = true;
+            }
+            continue;
+        }
+        let sample = gpu_f32_f64_integer_parts(bits)?;
         if sample.mantissa == 0 {
             continue;
         }
@@ -1574,6 +1586,21 @@ fn gpu_f_resize_compact_box_sample_bits(
             sample.negative != coefficient_parts.negative,
             separate_product_add,
         )?;
+    }
+    if has_special {
+        let actual = if let Some(bits) = first_nan {
+            bits
+        } else if positive_infinity && negative_infinity {
+            0x7fc0_0000
+        } else if positive_infinity {
+            0x7f80_0000
+        } else if negative_infinity {
+            0xff80_0000
+        } else {
+            return None;
+        };
+        let expected = (ordered_accumulator as f32).to_bits();
+        return (actual == expected).then_some(actual);
     }
     let actual = gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)?;
     let expected = (ordered_accumulator as f32).to_bits();
@@ -20721,6 +20748,102 @@ mod tests {
             &source_dynamic,
             Some("F")
         ));
+    }
+
+    #[test]
+    fn f_resize_compact_box_special_over_binding_native_matches_cpu() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Marker 13 repeats a nonzero 1/source-axis coefficient, so its
+        // compact special scan can preserve the same first-NaN payload and
+        // signed-infinity cancellation as marker 9 without a full table.
+        // Exercise both shader directions at the adapter-fitting boundary.
+        let width = 8_388_608usize;
+        let cases = [
+            (
+                width as u32,
+                1u32,
+                vec![(width / 2, 0x7fa1_2345u32)],
+                "horizontal NaN",
+            ),
+            (
+                width as u32,
+                1u32,
+                vec![(width / 3, 0x7f80_0000u32), (width * 2 / 3, 0xff80_0000)],
+                "horizontal opposite infinities",
+            ),
+            (
+                1u32,
+                width as u32,
+                vec![(width / 3, 0x7f80_0000u32), (width * 2 / 3, 0xff80_0000)],
+                "vertical opposite infinities",
+            ),
+            (
+                1u32,
+                width as u32,
+                vec![(width / 2, 0x7fc2_3456u32)],
+                "vertical NaN",
+            ),
+        ];
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (source_w, source_h, specials, label) in cases {
+            let mut words = vec![0x3f80_0000u32; width];
+            for (index, value) in specials {
+                words[index] = value;
+            }
+            let source = Image::frombytes("F", (source_w, source_h), &bytes(&words))
+                .expect("compact special F source");
+            let source_dynamic = source
+                .materialize()
+                .expect("materialize compact special F source");
+            let op = PipelineOp::Resize {
+                w: 1,
+                h: 1,
+                filter: ResampleFilter::Box,
+            };
+            assert!(
+                gpu_f_resize_compact_box_is_exact(
+                    std::slice::from_ref(&op),
+                    &source_dynamic,
+                    Some("F")
+                ),
+                "compact proof should cover {label}"
+            );
+            let filter = ResampleInput::Name("BOX".into());
+            let expected = source
+                .resize((1, 1), Some(filter.clone()), None)
+                .expect("CPU compact special F resize")
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU compact special F bytes");
+            let actual = match source
+                .resize((1, 1), Some(filter), None)
+                .expect("GPU compact special F resize")
+                .use_backend(Backend::Gpu)
+                .tobytes()
+            {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    Backend::set_pipeline_telemetry_enabled(previous);
+                    return;
+                }
+                Err(error) => panic!("native GPU compact special F resize failed: {error}"),
+            };
+            assert_eq!(actual, expected, "native compact special {label}");
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("compact special F resize must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
