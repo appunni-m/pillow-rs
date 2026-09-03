@@ -974,8 +974,17 @@ const GPU_F_RESIZE_MARKER9_MAX_TAPS: usize = 32;
 // worst-case ordered loop finite while allowing the next bounded direct-resize
 // envelope beyond the previously proven 4194304-tap limit.  Keep one tap
 // below 8388608: the encoded coefficient range otherwise exceeds the
-// 128-MiB adapter binding limit after metadata/alignment overhead.
+// 128-MiB adapter binding limit after metadata/alignment overhead.  The
+// complete coefficient table is checked separately below because several
+// output rows can exceed that binding even when each row fits this cap.
 const GPU_F_RESIZE_ORDERED_MAX_TAPS: usize = 8_388_607;
+// `GpuInner::new` requests wgpu's default limits, whose storage-buffer
+// binding limit is 128 MiB.  Keep f64 coefficient admission within that
+// guaranteed limit even when the selected adapter reports a larger maximum;
+// this also prevents a future adapter-specific range from turning a valid
+// Pillow operation into a device validation error.
+const GPU_F_RESIZE_MAX_COEFFICIENT_BINDING_BYTES: usize = 128 << 20;
+const GPU_F_RESIZE_COEFFICIENT_ALIGNMENT_BYTES: usize = 256;
 
 fn gpu_f_resize_uses_separate_horizontal_product_add(
     horizontal: bool,
@@ -1070,7 +1079,7 @@ fn gpu_f_resize_f64_sample_bits(
     let source_start = usize::try_from(*coeffs.xmin.get(output_index)?).ok()?;
     let weights = coeffs.weights.get(output_index)?;
     let expected_count = *coeffs.count.get(output_index)?;
-    if expected_count != weights.len() {
+    if expected_count != weights.len() || weights.len() > GPU_F_RESIZE_ORDERED_MAX_TAPS {
         return None;
     }
     if line >= if horizontal { source_h } else { source_w } {
@@ -1163,9 +1172,9 @@ fn gpu_f_resize_f64_sample_bits(
 
     // Finite rows wider than marker 9's historical domain must use the
     // bounded ordered reducer (marker 12), whose device state models Pillow's
-    // arm64 product/add split. Only rows with an IEEE special value can use
-    // marker 9 beyond this bound because its special prepass resolves the
-    // result before any vector arithmetic is observed.
+    // arm64 product/add split. Special rows use the same per-row binding cap:
+    // their prepass avoids arithmetic, but it still consumes the encoded
+    // coefficient range and cannot bypass the adapter's storage limit.
     if weights.len() > GPU_F_RESIZE_MARKER9_MAX_TAPS {
         return None;
     }
@@ -1546,6 +1555,7 @@ fn gpu_f_resize_f64_ordered_is_exact(
     if [&horizontal, &vertical].iter().any(|coeffs| {
         coeffs.xmin.len() != coeffs.count.len()
             || coeffs.xmin.len() != coeffs.weights.len()
+            || !gpu_f_resize_f64_coefficients_fit_binding(coeffs)
             || coeffs
                 .count
                 .iter()
@@ -2519,6 +2529,7 @@ fn gpu_f_resize_f64_is_exact(
         for coeffs in [&horizontal, &vertical] {
             if coeffs.xmin.len() != coeffs.count.len()
                 || coeffs.xmin.len() != coeffs.weights.len()
+                || !gpu_f_resize_f64_coefficients_fit_binding(coeffs)
                 // Marker 9's exact-real reducer is not a proof of Pillow's
                 // arm64 wide-row contract. Finite rows above 32 taps use
                 // marker 12's ordered reducer; only rows containing a special
@@ -3994,6 +4005,24 @@ fn resize_coeff_word_count_f64(coeffs: &FilterCoeffsF64) -> Result<usize, PilErr
         .checked_mul(3)
         .and_then(|metadata| metadata.checked_add(weight_words))
         .ok_or_else(|| PilError::ValueError("GPU resize coefficient arena size overflow".into()))
+}
+
+/// Return whether one f64 coefficient table can be bound as one storage range.
+///
+/// The host proof may certify every row's arithmetic while the encoded table
+/// still exceeds the device binding limit when multiple output rows are
+/// present.  Keep this check next to the encoder's word-count contract so
+/// marker 9's special-value prepass and marker 12's ordered reducer make the
+/// same adapter-safe admission decision before any bind group is created.
+fn gpu_f_resize_f64_coefficients_fit_binding(coeffs: &FilterCoeffsF64) -> bool {
+    let Ok(word_count) = resize_coeff_word_count_f64(coeffs) else {
+        return false;
+    };
+    let Some(bytes) = word_count.checked_mul(std::mem::size_of::<u32>()) else {
+        return false;
+    };
+    aligned_bytes(bytes, GPU_F_RESIZE_COEFFICIENT_ALIGNMENT_BYTES)
+        <= GPU_F_RESIZE_MAX_COEFFICIENT_BINDING_BYTES
 }
 
 fn encode_resize_coeffs_f64(coeffs: &FilterCoeffsF64) -> Result<Vec<u32>, PilError> {
@@ -19315,8 +19344,8 @@ mod tests {
         // Marker 12 deliberately stops at 8388607 taps. Marker 9's special
         // prepass is independent of the arm64 vector product/add split, so a
         // 257-tap row can still be native when the host proof agrees on the
-        // exact NaN or infinity bits. Finite rows use marker 12 when its
-        // ordered proof is representable.
+        // exact NaN or infinity bits and its encoded table fits one binding.
+        // Finite rows use marker 12 when its ordered proof is representable.
         let cases = [
             (
                 ResampleFilter::Bilinear,
@@ -19839,6 +19868,117 @@ mod tests {
         assert_eq!(actual, expected);
         let telemetry =
             Backend::take_pipeline_telemetry().expect("over-bound F resize must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_special_over_8388607_taps_stays_host_controlled() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Marker 9's special-value prepass must obey the same adapter-fitting
+        // coefficient cap as marker 12. Before this guard, an 8388608-tap
+        // NaN row bypassed the finite-row limit and reached bind-group
+        // creation with a 134217984-byte range, exceeding wgpu's 128-MiB
+        // storage binding limit instead of taking exact host control.
+        let width = 8_388_608usize;
+        let mut words = vec![0x3f80_0000; width];
+        words[width / 2] = 0x7fc1_2345;
+        let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+            .expect("over-bound special F source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize over-bound special F source");
+        let op = PipelineOp::Resize {
+            w: 1,
+            h: 1,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+
+        let filter = ResampleInput::Name("BILINEAR".into());
+        let expected = source
+            .resize((1, 1), Some(filter.clone()), None)
+            .expect("CPU over-bound special F resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU over-bound special F bytes");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = source
+            .resize((1, 1), Some(filter), None)
+            .expect("GPU over-bound special F resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            .expect("host-controlled over-bound special F resize");
+        assert_eq!(actual, expected);
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("over-bound special F resize must publish telemetry");
+        assert_eq!(telemetry.0, Some(Backend::Gpu));
+        assert_eq!(telemetry.1, Backend::Cpu);
+        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn f_resize_f64_coeff_table_over_binding_stays_host_controlled() {
+        fn bytes(words: &[u32]) -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_le_bytes()).collect()
+        }
+
+        // Each output row below is individually within the ordered reducer's
+        // tap cap, but the two-row horizontal table is 201326592 bytes after
+        // f64 coefficient encoding. Admission must account for the complete
+        // binding range rather than checking rows in isolation.
+        let width = 8_388_607usize;
+        let words: Vec<u32> = (0..width)
+            .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
+            .collect();
+        let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+            .expect("multi-row coefficient F source");
+        let source_dynamic = source
+            .materialize()
+            .expect("materialize multi-row coefficient F source");
+        let op = PipelineOp::Resize {
+            w: 2,
+            h: 1,
+            filter: ResampleFilter::Bilinear,
+        };
+        assert!(!gpu_f_resize_f64_ordered_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+        assert!(!gpu_f_resize_f64_is_exact(
+            std::slice::from_ref(&op),
+            &source_dynamic,
+            Some("F")
+        ));
+
+        let filter = ResampleInput::Name("BILINEAR".into());
+        let expected = source
+            .resize((2, 1), Some(filter.clone()), None)
+            .expect("CPU multi-row coefficient F resize")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU multi-row coefficient F bytes");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = source
+            .resize((2, 1), Some(filter), None)
+            .expect("GPU multi-row coefficient F resize")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+            .expect("host-controlled multi-row coefficient F resize");
+        assert_eq!(actual, expected);
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("multi-row coefficient F resize must publish telemetry");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
         assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
