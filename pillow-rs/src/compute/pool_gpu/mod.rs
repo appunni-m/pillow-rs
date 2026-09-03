@@ -10954,6 +10954,63 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
     rounded.is_finite() && (value < 0.0 || rounded.floor() < 4_294_967_296.0)
 }
 
+/// Return whether a constant integer map is safe for filtered Bilinear
+/// sampling in the generic projective shader.
+///
+/// Geometry.c validates the original source coordinate before subtracting
+/// 0.5 for its filter window.  An interior integer coordinate therefore
+/// becomes an exact half-pixel `(n - 0.5)` in the shader, with all four
+/// neighbors in bounds and nonzero 0.5 weights.  Coordinates on the source
+/// edge are intentionally excluded: Pillow clamps their filter window while
+/// the shader's shifted bounds check would classify `0` or `width`
+/// differently. LA/RGBA are also excluded because their transform pipeline
+/// has a premultiplied-alpha round trip that this raw-channel path does not
+/// reproduce for nonzero weights.
+fn gpu_projective_filtered_integer_constant_is_admitted(
+    method: TransformMethod,
+    data: &[f64],
+    filter: ResampleFilter,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+) -> bool {
+    if !matches!(filter, ResampleFilter::Bilinear) || !matches!(mode, Some("L" | "PA" | "RGB")) {
+        return false;
+    }
+    let interior_integer_f32 = |value: f64, extent: u32| {
+        value.is_finite()
+            && value.fract() == 0.0
+            && value >= 1.0
+            && value < f64::from(extent)
+            && (value as f32).is_finite()
+            && f64::from(value as f32) == value
+    };
+    match method {
+        TransformMethod::Perspective => {
+            data.len() >= 8
+                && data[0] == 0.0
+                && data[1] == 0.0
+                && data[3] == 0.0
+                && data[4] == 0.0
+                && data[6] == 0.0
+                && data[7] == 0.0
+                && interior_integer_f32(data[2], source_dimensions.0)
+                && interior_integer_f32(data[5], source_dimensions.1)
+        }
+        TransformMethod::Quad => {
+            gpu_quad_constant_map_is_admitted(data)
+                && interior_integer_f32(data[0], source_dimensions.0)
+                && interior_integer_f32(data[1], source_dimensions.1)
+        }
+        TransformMethod::Mesh => {
+            gpu_mesh_constant_map_is_admitted(data, output_dimensions.0, output_dimensions.1)
+                && interior_integer_f32(data[4], source_dimensions.0)
+                && interior_integer_f32(data[5], source_dimensions.1)
+        }
+        TransformMethod::Affine => false,
+    }
+}
+
 fn gpu_projective_filtered_relocation_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -11113,13 +11170,22 @@ fn gpu_projective_nearest_is_exact(
         _ => false,
     };
     let ordinary_byte_mode = matches!(mode, Some("L" | "LA" | "RGB" | "RGBA"));
-    let filtered_relocation = gpu_projective_filtered_relocation_is_admitted(
+    let filtered_integer_constant = gpu_projective_filtered_integer_constant_is_admitted(
         method.clone(),
         data,
         *filter,
         mode,
+        source_dimensions,
         (*w, *h),
     );
+    let filtered_relocation = filtered_integer_constant
+        || gpu_projective_filtered_relocation_is_admitted(
+            method.clone(),
+            data,
+            *filter,
+            mode,
+            (*w, *h),
+        );
     let palette_alpha_relocation = mode == Some("PA")
         && (gpu_palette_alpha_projective_relocation_is_admitted(
             method.clone(),
@@ -11132,7 +11198,9 @@ fn gpu_projective_nearest_is_exact(
     // it with Pillow's centered f64/COORD result for every output pixel.
     // Finite-intermediate guards in the proof keep generic Quad/Mesh
     // bilinear overflow from bypassing the shader sampler's bounds checks.
-    // Filtered transforms intentionally remain relocation-only.
+    // Filtered transforms intentionally remain limited to zero-weight
+    // relocations, constant half-pixel maps, and the interior integer
+    // Bilinear envelope proven above.
     let ordinary_projective_geometry_is_admitted = match method {
         TransformMethod::Perspective => true,
         TransformMethod::Quad | TransformMethod::Mesh => true,
@@ -13108,10 +13176,12 @@ mod tests {
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_nearest_affine_is_exact, gpu_operation_requires_image_context,
         gpu_palette_alpha_projective_relocation_is_admitted,
-        gpu_palette_first_rgb_merge_is_supported, gpu_projective_filtered_relocation_is_admitted,
-        gpu_projective_nearest_is_exact, gpu_resize_coefficients,
-        gpu_resize_nearest_uses_coefficients, gpu_transform_all_fill_is_exact, gpu_transform_fill,
-        gpu_transform_should_premultiply, luma16_resample_big_endian, readback_poll_backoff,
+        gpu_palette_first_rgb_merge_is_supported,
+        gpu_projective_filtered_integer_constant_is_admitted,
+        gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
+        gpu_transform_all_fill_is_exact, gpu_transform_fill, gpu_transform_should_premultiply,
+        luma16_resample_big_endian, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -15173,6 +15243,174 @@ mod tests {
             Some("RGB"),
             (16, 16),
         ));
+    }
+
+    #[test]
+    fn projective_filtered_integer_constant_proof_is_narrow() {
+        let source = (16, 16);
+        let output = (9, 7);
+        let perspective = [0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0];
+        let quad = [3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
+        let mesh = [0.0, 0.0, 9.0, 7.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
+        for mode in [Some("L"), Some("RGB"), Some("PA")] {
+            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &perspective,
+                ResampleFilter::Bilinear,
+                mode,
+                source,
+                output,
+            ));
+            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Quad,
+                &quad,
+                ResampleFilter::Bilinear,
+                mode,
+                source,
+                output,
+            ));
+            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Mesh,
+                &mesh,
+                ResampleFilter::Bilinear,
+                mode,
+                source,
+                output,
+            ));
+            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &perspective,
+                ResampleFilter::Bicubic,
+                mode,
+                source,
+                output,
+            ));
+        }
+        for mode in [Some("LA"), Some("RGBA")] {
+            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &perspective,
+                ResampleFilter::Bilinear,
+                mode,
+                source,
+                output,
+            ));
+        }
+        for (x, y) in [
+            (0.0, 5.0),
+            (16.0, 5.0),
+            (3.0, 0.0),
+            (3.0, 16.0),
+            (3.25, 5.0),
+        ] {
+            let map = [0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0];
+            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &map,
+                ResampleFilter::Bilinear,
+                Some("RGB"),
+                source,
+                output,
+            ));
+        }
+        let partial_mesh = [1.0, 1.0, 8.0, 6.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
+        assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            TransformMethod::Mesh,
+            &partial_mesh,
+            ResampleFilter::Bilinear,
+            Some("RGB"),
+            source,
+            output,
+        ));
+    }
+
+    #[test]
+    fn projective_filtered_integer_constants_native_gpu_preserve_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let source_size = (16, 16);
+        let output_size = (9, 7);
+        let maps = [
+            (
+                2,
+                TransformData::Affine(vec![0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0]),
+            ),
+            (
+                3,
+                TransformData::Affine(vec![3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0]),
+            ),
+            (
+                4,
+                TransformData::Mesh(vec![(
+                    vec![0.0, 0.0, 9.0, 7.0],
+                    vec![3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0],
+                )]),
+            ),
+        ];
+        for (mode, channels) in [("L", 1usize), ("RGB", 3usize), ("PA", 2usize)] {
+            let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
+                .map(|index| (index * 53 + 17) as u8)
+                .collect::<Vec<_>>();
+            let mut source =
+                Image::frombytes(if mode == "PA" { "LA" } else { mode }, source_size, &bytes)
+                    .expect("integer-constant projective source");
+            if mode == "PA" {
+                let palette = (0..768)
+                    .map(|index| (index * 19 + 7) as u8)
+                    .collect::<Vec<_>>();
+                source
+                    .putpalette(&palette, "RGB")
+                    .expect("integer-constant PA palette");
+            }
+            let fill = match mode {
+                "L" => TransformFill::Scalar(199),
+                "RGB" => TransformFill::Components(vec![199, 71, 17]),
+                "PA" => TransformFill::Components(vec![199, 71]),
+                _ => unreachable!(),
+            };
+            for (method, data) in &maps {
+                let transformed = source
+                    .transform_public(
+                        output_size,
+                        *method,
+                        Some(data.clone()),
+                        2,
+                        0,
+                        Some(fill.clone()),
+                    )
+                    .expect("integer-constant projective transform");
+                let expected = transformed
+                    .clone()
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .expect("CPU integer-constant projective transform");
+                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                    Ok(actual) => actual,
+                    Err(error)
+                        if error.to_string().contains("GPU adapter not available")
+                            || error
+                                .to_string()
+                                .contains("GPU device initialization failed") =>
+                    {
+                        Backend::set_pipeline_telemetry_enabled(previous);
+                        return;
+                    }
+                    Err(error) => {
+                        panic!("native GPU integer-constant projective transform failed: {error}")
+                    }
+                };
+                assert_eq!(
+                    actual, expected,
+                    "native {mode} method={method} integer constant"
+                );
+                let telemetry = Backend::take_pipeline_telemetry()
+                    .expect("integer-constant projective transform must publish telemetry");
+                assert_eq!(telemetry.0, Some(Backend::Gpu));
+                assert_eq!(telemetry.1, Backend::Gpu);
+                assert_eq!(telemetry.6, Some(1));
+                assert_eq!(telemetry.7, None);
+            }
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
