@@ -138,7 +138,15 @@ receipt rules unchanged.
   finite/extreme/cancellation probes are 45/45 exact, and arithmetic-changing
   chains are 175/175 exact without widening chain admission. Focused
   ordered-F tests are 38/38 and pool-GPU tests are 99/99.
-- [ ] Extend the exact F reducer beyond 524288 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 1048576-tap marker-12
+  envelope (`5bc7f0786`, source `722b90638`). The host proof and both WGSL
+  guards now cover direct finite rows through 1048576 taps while preserving
+  Pillow's ordered f64/FMA and FLOAT32-store semantics. Native Pillow 12.2.0
+  differential probes are 20/20 exact across 524289 and 1048576 one- and
+  two-axis rows, all five non-nearest filters, and an over-bound 1048577 row;
+  the 1048577 rows remain exact host semantic control. Focused ordered-F
+  tests are 11/11 and the full pool-GPU group is 101/101.
+- [ ] Extend the exact F reducer beyond 1048576 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -169,9 +177,19 @@ receipt rules unchanged.
   exhaustive or bounded native proofs. Fractional boundaries outside the
   source-selection proof, scaled maps outside the integer proof,
   nonconstant-denominator maps without a source-selection proof, nonzero-weight,
-  partial/multi-record, filtered projective maps, other modes, and broader
+  clipped/multi-record, filtered projective maps, other modes, and broader
   palette arithmetic remain on exact host semantic control until their device
   arithmetic is proven.
+
+- [x] Admit exact partial unit-scale Mesh relocations
+  (`c722e47b7`, source `c80f8fa9b`): integer in-output Mesh bboxes with direct
+  or axis-swapped relocation are now admitted only after the exhaustive local
+  bbox/source-selection proof, with explicit fills required for partial
+  records. Native Pillow 12.2.0 differentials are 648/648, randomized
+  3,240/3,240, and negative-translation 60/60 exact; ordinary byte tests are
+  48/48 and P/PA palette-pair tests 12/12 with terminal native GPU receipts.
+  Fractional, scaled, clipped, multi-record, and arithmetic-changing Mesh
+  cases remain exact host semantic control.
 
 - [x] Extend filtered projective relocation to LA/RGBA and Quad/Mesh
   (`a0fb33394`): the WGSL path now mirrors Pillow's premultiplied La/RGBa
@@ -580,12 +598,13 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `058b5e48b` (typed-F filtered
+`main` includes the parity fixes through `c722e47b7` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 524288 taps, tall-image F ordering, filtered
+reducer through 1048576 taps, tall-image F ordering, filtered
 Perspective/Quad/Mesh relocation, arm64 wide-row F accumulation, unit-scale
-Mesh relocation, integer and signed-unit Perspective nearest routing, the
+Mesh relocation including exact partial bboxes, integer and signed-unit
+Perspective nearest routing, the
 centered constant-denominator integer and proof-certified fractional
 and nonconstant-denominator Perspective nearest envelopes, identity projective
 routing, proof-certified Quad/Mesh nearest maps, receipt-proven suite cohorts,
@@ -595,10 +614,10 @@ with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,744 GPU plus 94 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`95b77ab14a17342bd8ad1613d6332818941da0c6ee5fc3acbf2f52c9396f0529`; the GPU
-execution sidecar is `47b196f6d680a9275e6251337d3e77b3259518838be0635dad9c4c558ac4a039`,
-with WGSL coverage `f02ea46100424b88bceadaed5a6c5693417d7623db3bd34e0488c94894a7e494`.
+`e697c75080629d93eae23a0e675c1d76edd1836a949b325551cba557c22b7781`; the GPU
+execution sidecar is `8d6384a7fe9a7cc9e66dbc6f42243cd5a0acc364a502e271e0ee5b7bd619f94a`,
+with WGSL coverage `0bb1ae47305aed7d4c6711e82383d53ac5919a418fe3c4883f009803c62e59ed`.
 The focused list still has four open acceptance buckets: F device arithmetic
-beyond 524288 taps, broader arithmetic-changing projective/mesh/palette
+beyond 1048576 taps, broader arithmetic-changing projective/mesh/palette
 admission, native/host partition reconciliation, and the two-consecutive-run
 zero-budget performance gate.

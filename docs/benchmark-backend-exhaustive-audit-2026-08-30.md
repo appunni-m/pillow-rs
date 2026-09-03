@@ -7393,3 +7393,68 @@ found. The P2 zero-violation gate therefore remains open. Receipt-state tests
 remain 40/40 and the evidence contract remains benchmark/coverage/parity
 25/24/24. No benchmark scripts, fixtures, thresholds, IDs, denominators,
 policy, or receipt taxonomy changed.
+
+## 32.158 Ordered F Resize reducer through 1048576 taps (2026-09-03)
+
+The next direct F boundary was again an admission guard rather than a value
+mismatch: Pillow 12.2.0's `src/libImaging/Resample.c` retains the FLOAT32
+reducer's ordered f64 coefficient/sample accumulation, arm64 horizontal
+scalar-FMA plus complete-16-tap product/add split, scalar vertical FMA order,
+and f32 storage boundary. Commit `5bc7f0786485ccf6e21613ad171ffa256630f24d`
+(source `722b90638eb4f6bc0d506fb9975add88cac1ca6b`) raises the marker-12 host
+proof and both resize-convolution WGSL guards through 1048576 taps. Rows over
+1048576, adapter workgroup-limit cases, and arithmetic-changing chains remain
+exact host semantic control.
+
+Native Pillow 12.2.0 differential probes are 20/20 exact across 524289x1 and
+1048576x1 finite heterogeneous sources, 1048576x2 two-axis sources, all five
+non-nearest filters, and an over-bound 1048577x1 row. The 1048576 rows use
+terminal native GPU receipts with no fallback; the 1048577 rows remain host
+controlled. Focused ordered-F tests are 11/11 and the integrated pool-GPU
+group is 101/101. `make -C pillow-rs fmt`, build, build-dev, and
+`git diff --check` pass. No fixtures, thresholds, IDs, denominators, policy,
+or receipt taxonomy changed.
+
+## 32.159 Exact partial unit-scale Mesh relocations (2026-09-03)
+
+Partial Mesh records were unnecessarily host-controlled even when Pillow's
+`src/libImaging/Geometry.c` clipped an integer in-output bbox and reduced the
+local map to a direct or axis-swapped unit relocation. Commit
+`c722e47b740b2a14d930bbc7c43d1bb38fb4481b`
+(source `c80f8fa9bb193c64d9df8c0fb4bfac4ac5959a42`) mirrors that bbox-local
+source selection in the WGSL path and requires an explicit fill for a partial
+record. Fractional, scaled, clipped, multi-record, and arithmetic-changing
+Mesh maps remain exact host semantic control.
+
+Native Pillow 12.2.0 differentials are 648/648 exact, a randomized sweep is
+3240/3240 exact, and negative translations are 60/60 exact with terminal
+native GPU receipts. Focused ordinary-byte partial Mesh tests are 48/48 and
+P/PA palette-pair tests are 12/12, all with native GPU receipts; a 45/45
+unsafe-control matrix remains exact on the host path. The integrated
+pool-GPU group is 104/104, receipt-state tests are 40/40, and the evidence
+contract is benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.160 Full backend replay after F and partial-Mesh integrations (2026-09-03)
+
+The schema-v3 replay at source revision
+`c722e47b740b2a14d930bbc7c43d1bb38fb4481b` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847
+native plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls;
+and Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero, and aggregate status is
+`passed_with_backend_gaps` solely because intentional host controls are not
+relabeled as native coverage.
+
+Artifact SHA-256 values are result
+`e697c75080629d93eae23a0e675c1d76edd1836a949b325551cba557c22b7781`, GPU
+execution `8d6384a7fe9a7cc9e66dbc6f42243cd5a0acc364a502e271e0ee5b7bd619f94a`,
+and WGSL coverage
+`0bb1ae47305aed7d4c6711e82383d53ac5919a418fe3c4883f009803c62e59ed`.
+Receipt-state tests remain 40/40 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
