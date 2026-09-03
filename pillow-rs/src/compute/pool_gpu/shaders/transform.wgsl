@@ -266,6 +266,32 @@ fn sample_projective_bilinear(sx: f32, sy: f32) -> u32 {
     let p10 = input[y0 * params.width + x1];
     let p01 = input[y1 * params.width + x0];
     let p11 = input[y1 * params.width + x1];
+
+    // The admitted filtered LA/RGBA projective envelope has integral source
+    // coordinates, so all filter weights are exactly zero except p00. Pillow
+    // nevertheless converts LA/RGBA through premultiplied La/RGBa before the
+    // projective callback and unpremultiplies afterward. Mirror that byte
+    // contract with integer arithmetic here; the raw-channel path would
+    // differ from Geometry.c at alpha values that do not round-trip unchanged.
+    if params.premultiply != 0u && mode_has_a(params.mode) && fx == 0.0 && fy == 0.0 {
+        let alpha = (p00 >> 24u) & 0xffu;
+        let red = p00 & 0xffu;
+        let green = (p00 >> 8u) & 0xffu;
+        let blue = (p00 >> 16u) & 0xffu;
+        let premul_red = (red * alpha + 127u) / 255u;
+        let premul_green = (green * alpha + 127u) / 255u;
+        let premul_blue = (blue * alpha + 127u) / 255u;
+        var out_red = premul_red;
+        var out_green = premul_green;
+        var out_blue = premul_blue;
+        if alpha > 0u {
+            out_red = min(premul_red * 255u / alpha, 255u);
+            out_green = min(premul_green * 255u / alpha, 255u);
+            out_blue = min(premul_blue * 255u / alpha, 255u);
+        }
+        return out_red | (out_green << 8u) | (out_blue << 16u) | (alpha << 24u);
+    }
+
     let r = bilinear_channel(p00, p10, p01, p11, 0u, fx, fy);
     let g = select(0u, bilinear_channel(p00, p10, p01, p11, 8u, fx, fy), mode_has_g(params.mode));
     let b = select(0u, bilinear_channel(p00, p10, p01, p11, 16u, fx, fy), mode_has_b(params.mode));
@@ -309,6 +335,23 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         let y2 = params.f;
         let x3 = params.g;
         let y3 = params.h;
+        // Unit-scale direct and axis-swapped Quad relocations are admitted
+        // only after the host proof below. Avoid reconstructing their integer
+        // source coordinates through f32 division/multiplication: values such
+        // as `7.0 * (3.0 / 7.0)` can land one ULP below 3 and reintroduce a
+        // nonzero filter weight at an otherwise exact source pixel.
+        let direct_relocation =
+            x0 == 0.0 && y0 == 0.0 && x1 == 0.0 && y1 == height
+            && x2 == width && y2 == height && x3 == width && y3 == 0.0;
+        let swapped_relocation =
+            x0 == 0.0 && y0 == 0.0 && x1 == height && y1 == 0.0
+            && x2 == height && y2 == width && x3 == 0.0 && y3 == width;
+        if direct_relocation {
+            return vec2<f32>(dx, dy);
+        }
+        if swapped_relocation {
+            return vec2<f32>(dy, dx);
+        }
         let u = dx / width;
         let v = dy / height;
         return vec2<f32>(
