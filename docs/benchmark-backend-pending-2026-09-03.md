@@ -18,6 +18,12 @@ receipt rules unchanged.
 - [x] Correct varied CPU/SIMD Perspective and Quad sampling: destination
   centers, Pillow `COORD` truncation, filter edge clipping, and ordered
   interpolation are covered by the committed L/RGB regressions.
+- [x] Keep CPU projective BICUBIC distinct from BILINEAR
+  (`9430e4ae8`, source `63fa09472`): the generic byte/PA path now uses
+  Pillow Geometry.c's four-tap Horner/FMA filter for fractional Perspective
+  maps. Native Pillow 12.2.0 versus Rust is 45/45 exact across L/RGB/PA;
+  GPU admission remains restricted to the separately proven zero-weight
+  relocation envelope.
 - [x] Finish Mesh filtered (bilinear/bicubic) parity for L/LA/RGB/RGBA,
   translated/clipped boxes, and explicit premultiplied modes. The final CPU
   path is exact across the six byte layouts; SIMD nearest is proven and SIMD
@@ -46,29 +52,31 @@ receipt rules unchanged.
   (`a826e1b8c`, source `bba3794bf`): ordinary packed L/RGB, direct or
   axis-swapped unit-scale maps with f32-exact integer translations, for
   Bilinear/Bicubic only. Native Pillow 12.2.0 versus GPU is 1,152/1,152 exact
-  with terminal native receipts. Alpha modes, Mesh/Quad filters, fractional or
-  scaled maps, and other filter arithmetic remain exact host semantic control.
-- [ ] Extend exact native-GPU F reducers beyond the proven finite marker-9 /
-  signed two-axis envelope and the bounded marker-12 reducer. Marker 12 now
-  models direct finite-normal Resize rows through 32 taps, including Pillow's
+  with terminal native receipts. The PA extension (`0082a900a`, source
+  `b4df5d702`) proves the same zero-weight envelope for raw index/alpha pairs
+  (120/120 exact, 12/12 native focused receipts). LA/RGBA alpha round trips,
+  Mesh/Quad filters, fractional or scaled maps, and other filter arithmetic
+  remain exact host semantic control.
+- [x] Extend the exact native-GPU F reducer through the proven 64-tap
+  marker-12 envelope (`db57de978`, source `181471d876`): direct finite-normal
+  Resize rows model Pillow's
   arm64 split (scalar FMA through 15 horizontal taps, complete 16-tap product/
   ordered-add blocks, scalar FMA tail; vertical remains FMA). The deterministic
-  16/32-tap Bilinear failures are fixed by `31dfca10c`: the bounded matrix is
-  now 20/20 (from 18/20), and strict finite probes are 90/90 exact with
-  87 native GPU receipts and 3 exact host-control rows. Remaining inputs are
-  rows over 32 taps, mixed non-finite ordering, negative-zero cancellation,
-  f64 subnormal or overflowing intermediates, and arithmetic-changing chains.
-  The explicit >32-tap admission guard (`f98859d07`) keeps wider rows on exact
-  host semantic control: a forced 48x1 Lanczos cancellation case diverged in
-  the GPU reducer at the middle word before the guard. Forced generic WGSL f32
+  scalar FMA tail; vertical remains FMA. The former 48-tap Lanczos cancellation
+  divergence is now exact after matching Pillow's x/a-then-pi coefficient
+  order. Native Pillow-vs-RSPIL direct F probes are 600/600 CPU and GPU exact,
+  with 266 native GPU receipts; chained cases are 15/15 exact. Rows over 64
+  taps and exceptional or arithmetic-changing inputs remain host-controlled.
+- [ ] Extend the exact F reducer beyond 64 taps and through mixed special-value,
+  subnormal/overflow, and arithmetic-changing chains. Forced generic WGSL f32
   convolution still differs from Pillow's ordered host arithmetic by ULPs, so
-  these rows remain exact host semantic control.
+  these rows require a separate device proof.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Constant-denominator integer Perspective nearest maps and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
   direct/axis-swapped Quad and Mesh nearest pair relocations for PA, plus the
-  narrow L/RGB filtered Perspective relocation envelope, are now admitted by
-  exhaustive or bounded native proofs. Fractional, scaled,
+  narrow L/RGB/PA filtered Perspective relocation envelope, are now admitted
+  by exhaustive or bounded native proofs. Fractional, scaled,
   nonconstant-denominator, partial/multi-record, and filtered projective maps,
   alpha/other-mode filtered rows, and palette arithmetic remain on exact host
   semantic control until their device arithmetic is proven.
