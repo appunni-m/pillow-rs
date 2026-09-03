@@ -10604,9 +10604,10 @@ fn gpu_nearest_affine_is_exact(
 /// guards for their generic f32 bilinear arithmetic. Filtered projective
 /// transforms remain host controlled unless an L/LA/RGB/RGBA/PA Perspective,
 /// Quad, or complete one-record Mesh map is a unit-scale integer relocation or
-/// a constant half-pixel source coordinate. In either envelope the filtered
-/// sample lands exactly on one source pixel, so the shader's bilinear lowering
-/// preserves the byte or palette-alpha pair; LA/RGBA also mirror Pillow's
+/// a constant half-pixel source coordinate, or an interior integer coordinate
+/// with the dedicated Bicubic tap proof. The Bilinear/relocation envelopes
+/// land exactly on one source pixel, while the Bicubic envelope uses the
+/// integer `[-1, 5, 5, -1] / 8` tap reduction; LA/RGBA also mirror Pillow's
 /// premultiplied round trip.
 // The comparison is intentional: the current shader receives raw destination
 // indices and uses `floor(source + 0.5)`, whereas Pillow adds the destination
@@ -10954,8 +10955,8 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
     rounded.is_finite() && (value < 0.0 || rounded.floor() < 4_294_967_296.0)
 }
 
-/// Return whether a constant integer map is safe for filtered Bilinear
-/// sampling in the generic projective shader.
+/// Return whether a constant integer map is safe for filtered Bilinear or
+/// Bicubic sampling in the generic projective shader.
 ///
 /// Geometry.c validates the original source coordinate before subtracting
 /// 0.5 for its filter window.  An interior integer coordinate therefore
@@ -10969,6 +10970,9 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
 /// CMYK, HSV, YCbCr, RGBX, and RGBa remain raw byte channels in their native
 /// projective paths, so they can share this proof once their physical packed
 /// layout is checked.
+/// Bicubic additionally requires two valid source pixels on each side: at an
+/// integer source coordinate `n`, Geometry.c's four taps are `n-2..n+1` with
+/// the exact half-pixel weights `[-1, 5, 5, -1] / 8`.
 fn gpu_projective_filtered_integer_constant_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -10977,7 +10981,7 @@ fn gpu_projective_filtered_integer_constant_is_admitted(
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
 ) -> bool {
-    if !matches!(filter, ResampleFilter::Bilinear)
+    if !matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
         || !matches!(
             mode,
             Some("L" | "PA" | "RGB" | "CMYK" | "HSV" | "YCbCr" | "RGBX" | "RGBa")
@@ -10985,11 +10989,14 @@ fn gpu_projective_filtered_integer_constant_is_admitted(
     {
         return false;
     }
+    let bicubic = matches!(filter, ResampleFilter::Bicubic);
     let interior_integer_f32 = |value: f64, extent: u32| {
+        let lower_bound = if bicubic { 2.0 } else { 1.0 };
+        let upper_margin = if bicubic { 1.0 } else { 0.0 };
         value.is_finite()
             && value.fract() == 0.0
-            && value >= 1.0
-            && value < f64::from(extent)
+            && value >= lower_bound
+            && value + upper_margin < f64::from(extent)
             && (value as f32).is_finite()
             && f64::from(value as f32) == value
     };
@@ -11213,7 +11220,7 @@ fn gpu_projective_nearest_is_exact(
     // bilinear overflow from bypassing the shader sampler's bounds checks.
     // Filtered transforms intentionally remain limited to zero-weight
     // relocations, constant half-pixel maps, and the interior integer
-    // Bilinear envelope proven above.
+    // Bilinear/Bicubic envelopes proven above.
     let ordinary_projective_geometry_is_admitted = match method {
         TransformMethod::Perspective => true,
         TransformMethod::Quad | TransformMethod::Mesh => true,
@@ -15299,9 +15306,25 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_integer_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
+                ResampleFilter::Bicubic,
+                mode,
+                source,
+                output,
+            ));
+            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Quad,
+                &quad,
+                ResampleFilter::Bicubic,
+                mode,
+                source,
+                output,
+            ));
+            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Mesh,
+                &mesh,
                 ResampleFilter::Bicubic,
                 mode,
                 source,
@@ -15313,6 +15336,14 @@ mod tests {
                 TransformMethod::Perspective,
                 &perspective,
                 ResampleFilter::Bilinear,
+                mode,
+                source,
+                output,
+            ));
+            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &perspective,
+                ResampleFilter::Bicubic,
                 mode,
                 source,
                 output,
@@ -15331,6 +15362,25 @@ mod tests {
                 &map,
                 ResampleFilter::Bilinear,
                 Some("RGB"),
+                source,
+                output,
+            ));
+            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &map,
+                ResampleFilter::Bicubic,
+                Some("RGB"),
+                source,
+                output,
+            ));
+        }
+        for (x, y) in [(1.0, 5.0), (15.0, 5.0), (3.0, 1.0), (3.0, 15.0)] {
+            let map = [0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0];
+            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+                TransformMethod::Perspective,
+                &map,
+                ResampleFilter::Bicubic,
+                Some("CMYK"),
                 source,
                 output,
             ));
@@ -15400,47 +15450,55 @@ mod tests {
                 "HSV" | "YCbCr" => TransformFill::Components(vec![199, 71, 17]),
                 _ => unreachable!(),
             };
-            for (method, data) in &maps {
-                let transformed = source
-                    .transform_public(
-                        output_size,
-                        *method,
-                        Some(data.clone()),
-                        2,
-                        0,
-                        Some(fill.clone()),
-                    )
-                    .expect("integer-constant projective transform");
-                let expected = transformed
-                    .clone()
-                    .use_backend(Backend::Cpu)
-                    .tobytes()
-                    .expect("CPU integer-constant projective transform");
-                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => {
-                        panic!("native GPU integer-constant projective transform failed: {error}")
-                    }
-                };
-                assert_eq!(
-                    actual, expected,
-                    "native {mode} method={method} integer constant"
-                );
-                let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("integer-constant projective transform must publish telemetry");
-                assert_eq!(telemetry.0, Some(Backend::Gpu));
-                assert_eq!(telemetry.1, Backend::Gpu);
-                assert_eq!(telemetry.6, Some(1));
-                assert_eq!(telemetry.7, None);
+            for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
+                for (method, data) in &maps {
+                    let transformed = source
+                        .transform_public(
+                            output_size,
+                            *method,
+                            Some(data.clone()),
+                            match filter {
+                                ResampleFilter::Bilinear => 2,
+                                ResampleFilter::Bicubic => 3,
+                                _ => unreachable!(),
+                            },
+                            0,
+                            Some(fill.clone()),
+                        )
+                        .expect("integer-constant projective transform");
+                    let expected = transformed
+                        .clone()
+                        .use_backend(Backend::Cpu)
+                        .tobytes()
+                        .expect("CPU integer-constant projective transform");
+                    let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                        Ok(actual) => actual,
+                        Err(error)
+                            if error.to_string().contains("GPU adapter not available")
+                                || error
+                                    .to_string()
+                                    .contains("GPU device initialization failed") =>
+                        {
+                            Backend::set_pipeline_telemetry_enabled(previous);
+                            return;
+                        }
+                        Err(error) => {
+                            panic!(
+                                "native GPU integer-constant projective transform failed: {error}"
+                            )
+                        }
+                    };
+                    assert_eq!(
+                        actual, expected,
+                        "native {mode} method={method} filter={filter:?} integer constant"
+                    );
+                    let telemetry = Backend::take_pipeline_telemetry()
+                        .expect("integer-constant projective transform must publish telemetry");
+                    assert_eq!(telemetry.0, Some(Backend::Gpu));
+                    assert_eq!(telemetry.1, Backend::Gpu);
+                    assert_eq!(telemetry.6, Some(1));
+                    assert_eq!(telemetry.7, None);
+                }
             }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
