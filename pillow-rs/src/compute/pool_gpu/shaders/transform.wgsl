@@ -9,9 +9,11 @@
 // source pixel coordinates (floating-point).
 //
 // Sampling: nearest-neighbor (filter_code=0) or Pillow's affine bilinear
-// path (all other filter codes).  The public affine operation accepts other
-// resampling names, but Pillow's affine transform uses the bilinear transform
-// kernel for every non-nearest filter.
+// path (all other filter codes).  Projective transforms use the same bilinear
+// kernel except for the proof-certified constant interior Bicubic path.
+// The public affine operation accepts other resampling names, but Pillow's
+// affine transform uses the bilinear transform kernel for every non-nearest
+// filter.
 // Out-of-bounds source coordinates are filled with fill_color (packed u32 RGBA).
 //
 // Dispatch at dst_w x dst_h (output image dimensions).
@@ -36,7 +38,7 @@ struct Params {
     e: f32,
     f: f32,
     fill_color: u32, // packed RGBA: R|G<<8|B<<16|A<<24
-    filter_code: u32, // 0=nearest, 1=bilinear
+    filter_code: u32, // 0=nearest, 1=bilinear, 2=bicubic
     premultiply: u32,
     method: u32,      // 0=affine, 1=perspective, 2=quad, 3=mesh
     g: f32,           // perspective denominator / quad x3 / mesh source x1
@@ -251,6 +253,138 @@ fn bilinear_channel(
     let top = c00 + (c10 - c00) * fx;
     let bottom = c01 + (c11 - c01) * fx;
     return u32(clamp(top + (bottom - top) * fy, 0.0, 255.0));
+}
+
+fn byte_as_i32(pixel: u32, shift: u32) -> i32 {
+    return i32((pixel >> shift) & 0xffu);
+}
+
+// Geometry.c's BICUBIC macro at d=0.5 reduces exactly to
+// (-v0 + 5*v1 + 5*v2 - v3) / 8.  Keep the two axes in integer numerators so
+// the raw byte path does not depend on device f32 accumulation or contraction.
+// The caller admits only an interior integer source coordinate, which gives
+// four unclamped taps on each axis and a final denominator of 64.
+fn bicubic_half_row(p0: u32, p1: u32, p2: u32, p3: u32, shift: u32) -> i32 {
+    return -byte_as_i32(p0, shift)
+        + 5i * byte_as_i32(p1, shift)
+        + 5i * byte_as_i32(p2, shift)
+        - byte_as_i32(p3, shift);
+}
+
+fn bicubic_half_channel(
+    p00: u32,
+    p01: u32,
+    p02: u32,
+    p03: u32,
+    p10: u32,
+    p11: u32,
+    p12: u32,
+    p13: u32,
+    p20: u32,
+    p21: u32,
+    p22: u32,
+    p23: u32,
+    p30: u32,
+    p31: u32,
+    p32: u32,
+    p33: u32,
+    shift: u32,
+) -> u32 {
+    let row0 = bicubic_half_row(p00, p01, p02, p03, shift);
+    let row1 = bicubic_half_row(p10, p11, p12, p13, shift);
+    let row2 = bicubic_half_row(p20, p21, p22, p23, shift);
+    let row3 = bicubic_half_row(p30, p31, p32, p33, shift);
+    let numerator = -row0 + 5i * row1 + 5i * row2 - row3;
+    if numerator <= 0i {
+        return 0u;
+    }
+    if numerator >= 255i * 64i {
+        return 255u;
+    }
+    return u32(numerator / 64i);
+}
+
+fn projective_bicubic_integer_constant() -> bool {
+    if params.filter_code != 2u {
+        return false;
+    }
+    if params.method == 1u {
+        return params.a == 0.0 && params.b == 0.0 && params.d == 0.0 && params.e == 0.0
+            && params.g == 0.0 && params.h == 0.0
+            && params.c == floor(params.c) && params.f == floor(params.f);
+    }
+    if params.method == 2u {
+        return params.a == params.c && params.a == params.e && params.a == params.g
+            && params.b == params.d && params.b == params.f && params.b == params.h
+            && params.a == floor(params.a) && params.b == floor(params.b);
+    }
+    if params.method == 3u {
+        return params.e == params.g && params.e == params.mesh0 && params.e == params.mesh2
+            && params.f == params.h && params.f == params.mesh1 && params.f == params.mesh3
+            && params.e == floor(params.e) && params.f == floor(params.f);
+    }
+    return false;
+}
+
+fn sample_projective_bicubic(sx: f32, sy: f32) -> u32 {
+    let src_w_f = f32(params.width);
+    let src_h_f = f32(params.height);
+    if sx < 0.0 || sx >= src_w_f || sy < 0.0 || sy >= src_h_f {
+        return get_fill_pixel();
+    }
+    // source_coordinates() supplies the Geometry.c half-pixel shift for the
+    // admitted integer map: sx=n-0.5, sy=m-0.5. BICUBIC_HEAD floors those
+    // values and decrements once more before selecting its four taps.
+    let x0_f = floor(sx) - 1.0;
+    let y0_f = floor(sy) - 1.0;
+    let x0 = u32(clamp(x0_f, 0.0, src_w_f - 1.0));
+    let x1 = u32(clamp(x0_f + 1.0, 0.0, src_w_f - 1.0));
+    let x2 = u32(clamp(x0_f + 2.0, 0.0, src_w_f - 1.0));
+    let x3 = u32(clamp(x0_f + 3.0, 0.0, src_w_f - 1.0));
+    let y0 = u32(clamp(y0_f, 0.0, src_h_f - 1.0));
+    let y1 = u32(clamp(y0_f + 1.0, 0.0, src_h_f - 1.0));
+    let y2 = u32(clamp(y0_f + 2.0, 0.0, src_h_f - 1.0));
+    let y3 = u32(clamp(y0_f + 3.0, 0.0, src_h_f - 1.0));
+    let p00 = input[y0 * params.width + x0];
+    let p01 = input[y0 * params.width + x1];
+    let p02 = input[y0 * params.width + x2];
+    let p03 = input[y0 * params.width + x3];
+    let p10 = input[y1 * params.width + x0];
+    let p11 = input[y1 * params.width + x1];
+    let p12 = input[y1 * params.width + x2];
+    let p13 = input[y1 * params.width + x3];
+    let p20 = input[y2 * params.width + x0];
+    let p21 = input[y2 * params.width + x1];
+    let p22 = input[y2 * params.width + x2];
+    let p23 = input[y2 * params.width + x3];
+    let p30 = input[y3 * params.width + x0];
+    let p31 = input[y3 * params.width + x1];
+    let p32 = input[y3 * params.width + x2];
+    let p33 = input[y3 * params.width + x3];
+
+    let r = bicubic_half_channel(
+        p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 0u,
+    );
+    let g = select(
+        0u,
+        bicubic_half_channel(
+            p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 8u,
+        ),
+        mode_has_g(params.mode),
+    );
+    let b = select(
+        0u,
+        bicubic_half_channel(
+            p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 16u,
+        ),
+        mode_has_b(params.mode),
+    );
+    let alpha_sample = bicubic_half_channel(
+        p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 24u,
+    );
+    let alpha = select(255u, alpha_sample, mode_has_a(params.mode));
+    let fourth = select(alpha, alpha_sample, mode_has_fourth(params.mode));
+    return r | (g << 8u) | (b << 16u) | (fourth << 24u);
 }
 
 fn sample_projective_bilinear(sx: f32, sy: f32) -> u32 {
@@ -499,6 +633,9 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
 
 fn sample_bilinear(sx: f32, sy: f32) -> u32 {
     if params.method != 0u {
+        if projective_bicubic_integer_constant() {
+            return sample_projective_bicubic(sx, sy);
+        }
         return sample_projective_bilinear(sx, sy);
     }
     let src_w_f = f32(params.width);
