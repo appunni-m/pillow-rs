@@ -8008,3 +8008,27 @@ The canonical all-backends replay on this isolated revision also passed all
 10,952 CPU, SIMD, GPU, and Node-WASM cases (GPU smoke 1/1); browser-WASM was
 blocked before execution by the existing macOS `wasm-bindgen` unsupported
 target, with no source parity failure.
+
+## 32.185 Compact integer-ratio F Box rows (2026-09-04)
+
+The marker-13 compact Box path previously encoded only one output row, so an
+over-limit integer-ratio reduction such as `(16,777,216, 1) -> (2, 1)` stayed
+on exact host semantic control even though each output row has the same exact
+positive `1/8,388,608` coefficient. Commit `d659a9c7b` (source `0ddeb2f88`)
+extends Pillow `src/libImaging/Resample.c::precompute_coeffs`'s compact
+representation to one `[xmin, count, offset]` metadata triplet per output row
+plus one shared f64 coefficient. The host proof now checks each row's ordered
+f64/FLOAT32 result; the non-divisible and over-cap geometries remain exact
+host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL direct probes are 6/6 byte-exact: finite
+differentiated horizontal and vertical rows, a finite smoke row, an infinity
+row, and NaN rows in both output positions. Native GPU receipts are terminal
+with no fallback (horizontal rows use two dispatches; the vertical row uses
+one). The focused compact group is 5/5 and the serial pool-GPU group is
+113/113; migration parity is 10,952/10,952, receipt-state is 40/40, and the
+evidence contract remains benchmark/coverage/parity 25/24/24. Format,
+build-dev, and release build pass; clippy remains blocked only by the pinned
+AVIF toolchain. Broader non-Box/non-dyadic arithmetic and arithmetic-changing
+chains remain exact host semantic control. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
