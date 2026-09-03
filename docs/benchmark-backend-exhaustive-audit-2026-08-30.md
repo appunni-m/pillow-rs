@@ -7459,6 +7459,43 @@ Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
 
+## 32.172 F reducer boundary remains ABI-hard (2026-09-04)
+
+A fresh next23 audit at `27d7bda79ad08a3254a7276df2c9b400563dec9d` checked the
+remaining F device-arithmetic boundary without changing source. Under the
+current WGSL ABI, one f64 coefficient row carries three metadata words plus
+four u32 words per tap: 8,388,607 taps encode to 33,554,431 words, or exactly
+128 MiB after the required 256-byte alignment; 8,388,608 taps encode to
+128 MiB + 256 bytes before any additional rows. A compact or segmented
+reducer/f64-state proof was not found, and generic f32 convolution remains
+ULP-unsafe against Pillow's ordered f64/product-add and FLOAT32-store path.
+
+Native Pillow 12.2.0 differentials are exact for heterogeneous finite
+8,388,607-tap rows in all five filters (5/5 terminal native GPU), finite
+8,388,608-tap rows (5/5 terminal host control), and qNaN rows at both widths
+(10/10, with the over-bound rows on host control). F-focused tests are 39/39,
+the integrated pool-GPU group is 108/108, receipt-state is 40/40, and the
+evidence contract is 25/24/24. No reducer bound, fixture, threshold, ID,
+denominator, policy, or receipt taxonomy changed.
+
+## 32.173 Fixed-ID timing pair at pushed HEAD remains timing-noisy (2026-09-04)
+
+At pushed revision `27d7bda79ad08a3254a7276df2c9b400563dec9d`, next21 repeated
+the maintained fixed 11-ID cohort in two consecutive runs. Both runs selected
+and measured 11/11 workloads, retained 44/44 comparable records, and had
+33/33 terminal target receipts with `requested_backend=actual_backend` and
+empty fallback/error state (11 CPU, 11 SIMD, 11 GPU). The normalized receipt
+fingerprint was
+`7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32` in both.
+
+Run SHA-256 values were
+`e5c9f26a079aae3e306f118146910504efb58ecc8017170b379a40446e2c52ac` and
+`74246220d8ee446c3dbf8fbf1486c998de9dcd8fa20d8300ed2eb2edede9749f`; the
+budget artifact SHA-256 was
+`c3d54d53cb18c22d88094e0e3e12de8cd6e61eb4cfefa4e337ea12351239037a` and
+reported 11 violations. All differences were timing-only with no receipt or
+identity divergence, so the required zero-violation P2 gate remains open.
+
 ## 32.171 Interior-integer Bilinear projective proof (2026-09-04)
 
 The generic filtered projective shader had a deterministic byte-ordering
