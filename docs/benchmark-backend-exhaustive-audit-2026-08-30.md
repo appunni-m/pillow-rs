@@ -6481,7 +6481,7 @@ remain exact host semantic control. Native Pillow 12.2.0 versus RSPIL GPU is
 120/120 exact across varied sizes and both filters; the focused native test is
 12/12 with terminal `requested_backend=actual_backend=gpu`, one dispatch, and
 no fallback. No scripts, fixtures, thresholds, IDs, denominators, policy, or
-receipt taxonomy changed.
+ receipt taxonomy changed.
 
 ## 32.115 Current all-backends replay after ordered-F/projective fixes (2026-09-03)
 
@@ -6935,3 +6935,76 @@ f64-intermediate subnormal/overflow boundaries, arithmetic-changing chains,
 and broader fractional/scaled/non-dyadic projective, mesh, and palette
 arithmetic remain open. No fixtures, thresholds, IDs, denominators, policy, or
 receipt taxonomy changed.
+
+## 32.136 Ordered F Resize reducer through 32768 taps (2026-09-03)
+
+The marker-12 ordered-F proof and both convolution shaders previously stopped
+at 16384 taps. Commit `5eb257096` (source `e975f6831`) raises that shared bound
+to 32768 while preserving Pillow 12.2.0 `src/libImaging/Resample.c`'s ordered
+f64/FMA and FLOAT32-store semantics. Rows beyond 32768 and unrepresentable
+intermediate states remain exact host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL direct boundary probes are 250/250 exact on
+CPU and 250/250 exact on GPU over 16385, 16386, 32768, and 32769 rows, two-axis
+shapes, all five non-nearest filters, finite/signed-zero/subnormal/
+largest-finite/special words. The rows through 32768 publish 180 terminal
+native GPU receipts; the 32769 rows publish 70 exact host semantic-control
+receipts. Filtered and nearest two-/three-stage resize chains are 36/36 exact
+on both CPU and GPU. Focused ordered-F tests are 10/10, the full pool-GPU unit
+group is 94/94, CPU geometry tests are 12/12, and fmt/build-dev/release build
+pass. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed.
+
+## 32.137 Signed unit-axis Perspective nearest relocations (2026-09-03)
+
+The constant-denominator Perspective proof already admitted positive unit
+translations and axis swaps, while reflected unit axes still used the generic
+shader coordinate expression. Pillow's `src/libImaging/Geometry.c` evaluates
+at destination pixel centers and truncates with `COORD`; the generic WGSL
+`floor(source + 0.5)` path is one pixel off for a reflected axis. Commit
+`8caddc219` (source `423ebf445`) adds a narrow signed unit-axis admission and
+mirrors the integer source coordinate directly in WGSL, including palette-alpha
+index/alpha pairs. Fractional, scaled, nonconstant-denominator, filtered,
+partial, and multi-record maps remain exact host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL probes are 4,392/4,392 exact with terminal
+actual=GPU receipts, one dispatch, and no fallback. The full pool-GPU unit
+group remains 94/94; no fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
+
+## 32.138 Full backend replay after 32768-tap F and signed Perspective fixes (2026-09-03)
+
+The maintained schema-v3 replay at source revision
+`8caddc2194421f2263d5a3cb058bf7858cf150d5` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every lane
+reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate was
+1/1. Terminal receipts remain explicit: CPU has 6,838 native receipts; SIMD
+has 6,847 native plus three CPU layout controls; GPU has 6,743 native plus 95
+exact host/dimension controls; and Node/browser WASM each have 6,951 CPU
+receipts. Every terminal receipt is complete, so the aggregate is
+`passed_with_backend_gaps` solely for the intentional backend partition.
+
+Artifact SHA-256 values are result
+`4a2280ed6ed621d27b45d2f27ef50bec8b6ed22a059e0e7a4ff2ea7329a12ec5`, GPU
+execution `942a4f79e6245a4351a5c1b8bc9ca832d703d9a895744b7c50a9567ce476ab51`,
+and WGSL coverage
+`a84a27127b8583564837868035cdcc8672bd5c1b00e43b437df671a9f7b4803d`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The timing zero-violation gate, F reducer work beyond 32768 taps,
+f64-intermediate boundary cases, arithmetic-changing chains, and broader
+fractional/scaled/non-dyadic projective, mesh, and palette arithmetic remain
+open. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed.
+
+## 32.139 Current receipt and timing audit (2026-09-03)
+
+A fresh receipt audit found no P1 identity or accounting defect. The full
+replay has zero missing, partial, or indeterminate pipeline receipts, and the
+terminal CPU/SIMD/GPU partitions above agree with the sidecar evidence. A new
+fixed-ID equal-receipt pair measured 11/11 workloads, 44/44 comparable records,
+and 33/33 terminal requested=actual target receipts in both runs, but still
+reported seven budget violations. A 40-sample GPU profile ranged
+0.589083--42.261666 ms with stable four-operation/nine-dispatch telemetry,
+which is bimodal host timing rather than a localized source regression. The
+zero-violation P2 gate remains open; benchmark scripts, fixtures, thresholds,
+IDs, denominators, policy, and receipt taxonomy were unchanged.

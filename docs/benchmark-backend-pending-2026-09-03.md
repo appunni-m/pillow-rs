@@ -94,16 +94,17 @@ receipt rules unchanged.
   Pillow's scalar-FMA and arm64 vector product/add ordering. Native Pillow
   12.2.0 matrices at 384, 512, 768, and 1024 taps are exact with terminal GPU
   receipts; the 1025-tap finite boundary remains exact host semantic control.
-- [x] Extend the ordered F reducer through the proven 16384-tap marker-12
-  envelope (`e59307a96`, source `a944bad36`) and mirror Pillow's vertical-first
-  FLOAT32 intermediate for very tall F resizes. Native Pillow 12.2.0 versus
-  RSPIL focused rows at 3072, 4096, 8192, and 16384 taps, both-axis
-  reductions, horizontal/vertical subnormal and largest-finite cases, and
-  tall-image threshold boundaries are exact; focused ordered-F tests are
-  10/10, the full pool-GPU group is 94/94, CPU geometry tests are 12/12, and
-  direct 16384-tap probes are 150/150 CPU plus 150/150 GPU exact. The 16385-tap
-  boundary and GPU tall geometry remain exact host semantic control.
-- [ ] Extend the exact F reducer beyond 16384 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 32768-tap marker-12
+  envelope (`5eb257096`, source `e975f6831`) while retaining Pillow's
+  vertical-first FLOAT32 intermediate for very tall F resizes. Native Pillow
+  12.2.0 versus RSPIL direct boundary probes are 250/250 CPU and 250/250 GPU
+  exact across 16385/16386/32768/32769 rows, two-axis shapes, all five
+  non-nearest filters, finite/signed-zero/subnormal/largest-finite/special
+  words; 180 rows through 32768 use native GPU receipts and 70 rows at 32769
+  remain exact host semantic control. Filtered/nearest two- and three-stage
+  chain probes are 36/36 exact on CPU and GPU. Focused ordered-F tests are
+  10/10, the full pool-GPU group is 94/94, and CPU geometry tests are 12/12.
+- [ ] Extend the exact F reducer beyond 32768 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -126,7 +127,8 @@ receipt rules unchanged.
   Constant-denominator integer Perspective nearest maps and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
   direct/axis-swapped Quad and Mesh nearest pair relocations for PA, the
-  constant-integer nearest Quad/Mesh subfamily, and the narrow
+  constant-integer nearest Quad/Mesh subfamily, signed unit-axis Perspective
+  nearest relocations (including PA), and the narrow
   L/LA/RGB/RGBA/PA filtered direct/axis relocation envelope are now admitted by
   exhaustive or bounded native proofs. Fractional, scaled,
   nonconstant-denominator, nonzero-weight, partial/multi-record, filtered
@@ -140,6 +142,13 @@ receipt rules unchanged.
   RSPIL probes are 224/224 exact across LA/RGBA Perspective, Quad, and Mesh
   cases with varied alpha/fill values; the focused pool-GPU group is 93/93,
   and fractional/scaled/non-dyadic maps remain exact host semantic control.
+- [x] Admit signed unit-axis Perspective nearest relocations
+  (`8caddc219`, source `423ebf445`): the WGSL path mirrors Pillow's
+  center-plus-`COORD` truncation for reflected and axis-swapped unit maps,
+  including palette-alpha index/alpha pairs. Native Pillow 12.2.0 versus
+  RSPIL probes are 4,392/4,392 exact with terminal actual=GPU receipts,
+  one dispatch, and no fallback. Fractional, scaled, nonconstant-denominator,
+  filtered, partial, and multi-record maps remain exact host semantic control.
 
 ### P1 — backend identity and receipts
 
@@ -174,10 +183,12 @@ receipt rules unchanged.
 - [ ] Obtain two consecutive fixed-ID, equal-receipt comparisons with zero
   budget violations. The Brightness factor-1 identity path and SIMD constant
   allocation plus the packed ExtractBand path are deterministic row-level
-  wins, but the latest current-HEAD 11-ID pair still has ten
-  timing-noise violations, so aggregate comparisons do not close this gate.
-  Both runs measured 11/11 with 44/44 comparable records and 33/33 target
-  receipts terminal with requested=actual and empty fallback reasons.
+  wins, but the latest current-HEAD pair still has seven timing-noise
+  violations, so aggregate comparisons do not close this gate. Both runs
+  measured 11/11 with 44/44 comparable records and 33/33 target receipts
+  terminal with requested=actual and empty fallback reasons; a 40-sample GPU
+  profile ranged 0.589083–42.261666 ms with stable 4 operations/9 dispatches,
+  confirming timing bimodality rather than a source regression.
 
 ## Verified changes already integrated
 
@@ -303,6 +314,20 @@ receipt rules unchanged.
   Pillow 12.2.0 versus RSPIL CPU probes are 6/6 exact. No fixtures,
   thresholds, IDs, denominators, policy, or receipt taxonomy changed.
 
+- [x] Ordered F Resize reducer through 32768 taps (`5eb257096`, source
+  `e975f6831`): the host proof and both WGSL guards now cover the verified
+  32768-tap envelope. Native direct CPU/GPU probes are 250/250 exact each,
+  resize chains are 36/36 exact, and rows at 32769 remain exact host semantic
+  control; no fixtures, thresholds, IDs, denominators, policy, or receipt
+  taxonomy changed.
+
+- [x] Signed unit-axis Perspective nearest GPU routing (`8caddc219`, source
+  `423ebf445`): reflected and axis-swapped integer relocations, including PA
+  raw index/alpha pairs, are admitted only after the source-selection proof.
+  Native Pillow 12.2.0 probes are 4,392/4,392 exact with terminal native GPU
+  receipts; fractional/scaled/nonconstant-denominator/filtered/partial and
+  multi-record maps remain exact host semantic control.
+
 ## Bounded marker-12 evidence
 
 - [x] The marker-12 candidate is exact on native GPU with requested=actual GPU,
@@ -382,24 +407,37 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
   operation/dispatch telemetry, so this remains host timing noise rather than
   a deterministic source regression.
 
+- [x] Fresh P1/P2 receipt audit at the current HEAD found no identity or
+  accounting defect. The full replay remains 10,952/10,952 exact with CPU
+  6,838 native receipts, SIMD 6,847 native plus three explicit CPU controls,
+  and GPU 6,743 native plus 95 explicit CPU controls; all pipeline partitions
+  have zero missing, partial, or indeterminate receipts. A new fixed-ID pair
+  measured 11/11 workloads, 44/44 comparable records, and 33/33 terminal
+  requested=actual target receipts in both runs, but the pair still had seven
+  budget violations. A 40-sample GPU profile ranged 0.589083–42.261666 ms
+  with stable four-operation/nine-dispatch telemetry, so P2 remains open for
+  host timing noise rather than a localized source regression. No benchmark
+  scripts, fixtures, thresholds, IDs, denominators, policy, or receipt
+  taxonomy changed.
+
 ## Current integration state
 
-`main` includes the parity fixes through `52de70c2f` (typed-F filtered
+`main` includes the parity fixes through `8caddc219` (typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
-reducer through 4096 taps, filtered Perspective/Quad/Mesh relocation, arm64
-wide-row F accumulation, unit-scale Mesh relocation, integer Perspective
-nearest routing, identity projective routing, receipt-proven suite cohorts,
-and packed SIMD ExtractBand).
+reducer through 32768 taps, tall-image F ordering, filtered
+Perspective/Quad/Mesh relocation, arm64 wide-row F accumulation, unit-scale
+Mesh relocation, integer and signed-unit Perspective nearest routing, identity
+projective routing, receipt-proven suite cohorts, and packed SIMD ExtractBand).
 The fresh combined replay at this revision is
 10,952/10,952 value/error exact
 with zero failed or not-run cases. It remains `passed_with_backend_gaps` only
 because the explicit host-controlled partitions are still reported honestly:
 CPU 6,838; SIMD 6,847 SIMD plus 3 CPU controls; GPU 6,743 GPU plus 95 CPU
 controls; Node/browser WASM 6,951 each. Result SHA-256 is
-`a0452467c6e7cf5a85a6325a1dd352b4057386d26168df63e15d277c8209905c`; the GPU
-execution sidecar is `0fd5f97b5000045dd081e3f1de0c856797c679f34ae85d84d936c99d7b4d8306`,
-with WGSL coverage `39a4b4828935cf25d81e95c78d86cc08db297ba47a785ebe61cf62b429eab0de`.
+`4a2280ed6ed621d27b45d2f27ef50bec8b6ed22a059e0e7a4ff2ea7329a12ec5`; the GPU
+execution sidecar is `942a4f79e6245a4351a5c1b8bc9ca832d703d9a895744b7c50a9567ce476ab51`,
+with WGSL coverage `a84a27127b8583564837868035cdcc8672bd5c1b00e43b437df671a9f7b4803d`.
 The only open acceptance item in this focused list is the two-consecutive-run
 zero-budget performance gate, plus the explicitly bounded F device arithmetic
-beyond 4096 taps and broader projective admission work above.
+beyond 32768 taps and broader projective admission work above.
