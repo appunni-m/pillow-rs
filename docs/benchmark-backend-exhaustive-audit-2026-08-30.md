@@ -7816,3 +7816,74 @@ budget artifact SHA-256 was
 `07bfafa84b4ddd10ef40ce3e9db1b5db4e0d8a46adac51ffbd388b01d28e9f0a` and
 reported 19 violations. All differences were timing-only with no receipt or
 identity divergence, so the required zero-violation P2 gate remains open.
+
+## 32.177 Interior-integer Bicubic projective raw modes (2026-09-04)
+
+The generic projective shader had a deterministic first divergence for a
+constant interior map: a CMYK Perspective sample at `(3,5)` used the old
+bilinear path and returned `0x5d` where Pillow `Geometry.c` returned `0x35`.
+Commit `be74d45e9` (source `5cff60ee0`) adds a proof-certified raw-byte
+Bicubic path for f32-exact constant interior integer Perspective, Quad, and
+complete one-record Mesh maps. It mirrors Pillow's four-tap
+`[-1,5,5,-1]/8` weights with integer `/64` arithmetic, avoiding device f32
+rounding. Raw L/RGB/CMYK/HSV/YCbCr/RGBX/RGBa maps are admitted; PA is covered
+by the focused matrix, while LA/RGBA premultiplied, edge, fractional, and
+other arithmetic-changing maps remain exact host semantic control.
+
+Native Pillow 12.2.0 differentials are 2,016/2,016 exact across the seven raw
+modes, both filtered cases, and all three map families, with 2,016 terminal
+native GPU receipts. The focused PA matrix is 48/48 exact and rejected
+edge/fractional/LA/RGBA cases are 81/81 exact on host control. Full pool-GPU
+tests are 109/109 after the concurrent F lane; receipt-state is 40/40 and
+the evidence contract remains benchmark/coverage/parity 25/24/24. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.178 Compact over-limit F Box rows (2026-09-04)
+
+At 8,388,608 horizontal taps, the complete marker-12 f64 coefficient table
+would be 128 MiB plus 256 bytes before alignment, so the previous Rust path
+correctly retained exact host semantic control rather than issuing an invalid
+storage binding. Pillow `src/libImaging/Resample.c` gives a one-pixel Box
+downscale one identical normalized coefficient (`1/source_width`) per tap.
+Commit `d513cfa13` (source `547ccba56703d87240cd0d7815c22f17a9384585`)
+transports one repeated coefficient as marker 13 and keeps the existing
+ordered f64 accumulation and FLOAT32 store. Admission is limited to finite
+direct mode-F rows with horizontal source width above 8,388,607, output width
+1, unchanged height, and a buffer within the existing pixel capacity. Vertical
+or tall rows, non-finite/extreme values, and adapter-limit cases remain exact
+host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL is exact for 3/3 direct over-limit probes
+(8,388,608x1 and 8,388,609x1 to 1x1, plus 8,388,608x2 to 1x2); every row has
+`actual_backend=gpu`, two dispatches, and no fallback. Focused F tests are
+40/40 and serial full pool-GPU tests are 109/109. Release/build-dev, format,
+receipt-state 40/40, and evidence 25/24/24 gates pass; clippy remains blocked
+only by the pinned AVIF toolchain. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.179 Full backend replay after Bicubic and compact-F admissions (2026-09-04)
+
+The schema-v3 replay at source revision
+`d513cfa13d4830e570f850d39470eae6b52abdb0` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847
+native plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls;
+and Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero; aggregate status is
+`passed_with_backend_gaps` solely because intentional host controls are not
+relabeled as native coverage.
+
+The replay summary SHA-256 is
+`f0c0355fab5bc5951e285e29b00c44e5f543ef6197cbe7bb0a4a6af797587046`, the GPU
+parity artifact SHA-256 is
+`88bc919e66fbb99cba9711cf01771d830f5cff23b07ac3ec75ca2e06d59e5f32`, the GPU
+execution sidecar SHA-256 is
+`0c70a838b0f6ffcea6d0e80a7a2e0de2d943cb2405b1d1733d53863891e20780`, and
+WGSL coverage is
+`421d0643bc819e3641391b44cf22cf88b51eb34c9207b22cd32d8670bd0033bf`.
+Receipt-state tests remain 40/40 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
