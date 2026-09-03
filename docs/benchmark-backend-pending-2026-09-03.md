@@ -88,7 +88,13 @@ receipt rules unchanged.
   Lanczos/Hamming/Box cases (horizontal and vertical) are exact with terminal
   GPU receipts; finite wide rows remain on marker 12 or exact host semantic
   control.
-- [ ] Extend the exact F reducer beyond 256 taps for finite/subnormal/overflow
+- [x] Extend the ordered F reducer through the proven 1024-tap marker-12
+  envelope (`b78014790`): the matched host/WGSL reducer can cover finite rows
+  through 1024 taps when the ordered proof is representable, preserving
+  Pillow's scalar-FMA and arm64 vector product/add ordering. Native Pillow
+  12.2.0 matrices at 384, 512, 768, and 1024 taps are exact with terminal GPU
+  receipts; the 1025-tap finite boundary remains exact host semantic control.
+- [ ] Extend the exact F reducer beyond 1024 taps for finite/subnormal/overflow
   rows and arithmetic-changing chains. Forced generic WGSL f32 convolution
   still differs from Pillow's ordered host arithmetic by ULPs, so these rows
   require a separate device proof.

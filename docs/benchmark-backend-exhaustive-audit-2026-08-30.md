@@ -6634,3 +6634,43 @@ regression; finite/subnormal/overflow F rows beyond 256 taps, arithmetic-
 changing chains, and broader projective/mesh/palette arithmetic remain on
 their documented exact host semantic control paths. No fixtures, thresholds,
 IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.123 Ordered F Resize reducer through 1024 taps (2026-09-03)
+
+The matched marker-12 host proof and WGSL convolution guards stopped at 256
+taps, leaving finite rows whose ordered integer state was representable on
+exact host semantic control. Pillow 12.2.0 `src/libImaging/Resample.c` keeps
+the same scalar FMA path and arm64 horizontal product/add split for these
+rows. Commit `b78014790` raises the shared bound to 1024 without changing the
+marker-9 special-value prepass or its conservative fallback behavior.
+
+The focused native Pillow 12.2.0 versus RSPIL matrix covers representative
+384-, 512-, 768-, and 1024-tap Bilinear, Bicubic, Lanczos, Hamming, and Box
+rows (7/7 exact, all terminal requested=actual GPU receipts). The full ordered
+F test group is 33/33 and the complete pool-GPU unit group is 89/89. A 1025-tap
+finite row remains explicitly exact host semantic control. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.124 Full backend replay after the 1024-tap reducer (2026-09-03)
+
+The maintained schema-v3 replay at source revision
+`b780147905d24d4870fae7c041ba4734c14bbe85` completed all 10,952 selected
+cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM (each lane
+reported 10,952 passed, zero failed, and zero not-run); the GPU smoke gate was
+1/1. The aggregate status remains `passed_with_backend_gaps` because backend
+identity is still explicit: CPU has 6,838 terminal CPU receipts; SIMD has
+6,847 native SIMD plus three exact host semantic controls; GPU has 6,742
+native GPU plus 96 exact host/dimension controls; and Node/browser WASM each
+have 6,951 CPU receipts. Every terminal receipt is complete.
+
+Artifact SHA-256 values are result
+`6017e22740c33f198ae64006f6fa8cf8a1c3e52efca368e6c82b582a782f3d28`, GPU
+execution `f3aa052dc9265a75fcfbf41c2bab0b008c1dc32ba08bdcd032999ae84a5f5806`,
+and WGSL coverage
+`fefe96b841e686b0e0c08474456b4e6c2c8756a4258a0c6e98dc9da54665b9c0`. Receipt
+state remains 39/39 and the evidence contract remains benchmark/coverage/parity
+25/24/24. The replay confirms no public-corpus regression; F rows beyond
+1024 taps, unrepresentable or arithmetic-changing rows, and broader
+projective/mesh/palette arithmetic remain on their documented exact host
+semantic control paths. No fixtures, thresholds, IDs, denominators, policy,
+or receipt taxonomy changed.
