@@ -7545,3 +7545,105 @@ WGSL coverage SHA-256 is
 Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
+
+## 32.165 Ordered F Resize reducer through the adapter-fitting 8388607-tap bound (2026-09-04)
+
+The ordered marker-12 F reducer's previous 4194304-tap limit was still a
+conservative admission boundary. Commit
+`4d50e30c0` (source `2cf877c23563535fea779e1186a7873ef8cff213`) raises the
+host proof and both resize-convolution WGSL guards to 8388607 taps, the
+largest row whose encoded coefficient arena fits the adapter's 128-MiB
+storage-binding limit after metadata and alignment. The reducer continues to
+mirror Pillow 12.2.0 `src/libImaging/Resample.c`: ordered f64 coefficient and
+sample accumulation, the arm64 horizontal scalar-FMA/vector product-add
+split, scalar vertical FMA, and the final FLOAT32 store. Rows at 8388608 and
+above remain exact host semantic control.
+
+Native Pillow 12.2.0 differentials are exact for heterogeneous finite
+8388607-tap rows across Bilinear, Bicubic, Lanczos, Hamming, and Box (5/5
+terminal native GPU), and for a near-limit qNaN row. The 8388608 boundary is
+exact for all five filters (5/5 terminal CPU host-control). Focused ordered-F
+tests are 11/11 and the integrated pool-GPU group is 104/104; format, build,
+build-dev, release build, receipt-state 40/40, and evidence contract 25/24/24
+pass. No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
+changed.
+
+## 32.166 Constant half-pixel filtered projective maps (2026-09-04)
+
+The next projective proof slice was the zero-weight boundary where Pillow's
+`src/libImaging/Geometry.c` evaluates a constant `n + 0.5` source coordinate
+and the filtered callback subtracts 0.5 before sampling. Commit
+`730d6f5ee4ef2fdf5fe2d84f8ea288fdfdc3de3b` (source
+`18df688e1b8dab7857479f9c7960f74fd2175279`) admits only f32-exact constant
+half-pixel maps for Bilinear and Bicubic Perspective, Quad, and complete
+one-record Mesh. The WGSL lowering applies the same shift, so the resulting
+sample is an integral source word; PA keeps raw index/alpha pairs and LA/RGBA
+preserve Pillow's premultiplied round trip. Quarter-pixel, scaled,
+nonconstant, partial/multi-record, and other nonzero-weight arithmetic remain
+exact host semantic control.
+
+Native Pillow 12.2.0 differentials are 480/480 exact on CPU and GPU across
+L/LA/RGB/RGBA/PA, Perspective/Quad/complete Mesh, both filters, and in-range
+plus fill-boundary coordinates. All 240 GPU receipts are terminal
+`actual_backend=gpu` with no fallback. The integrated pool-GPU group is
+104/104; receipt-state tests are 40/40 and the evidence contract is
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.167 Full backend replay at the 8M-F and half-pixel projective head (2026-09-03)
+
+The schema-v3 replay at source revision
+`730d6f5ee4ef2fdf5fe2d84f8ea288fdfdc3de3b` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every
+lane reported 10,952 passed, zero failed, and zero not-run; the GPU smoke gate
+was 1/1. Terminal receipts remain explicit: CPU 6,838 native; SIMD 6,847
+native plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls;
+and Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. Pipeline missing, partial, and
+indeterminate counts remain zero; aggregate status is
+`passed_with_backend_gaps` solely because intentional host controls are not
+relabeled as native coverage.
+
+The replay summary SHA-256 is
+`288f62367eda2309fbf14c9969990252847e3fa78d3596a2610e45c75866b5fc`, the GPU
+parity artifact SHA-256 is
+`398e48727c02ef1692ed1ef523b34a7b78579a05e9f8ddce6be42837a3d32cf8`, the GPU
+execution sidecar SHA-256 is
+`ba5e9494a1bf72085e7cfe36d39b8d7ac737ddb589a894cb73fda46e6eec9011`, and
+WGSL coverage SHA-256 is
+`b45374789c13ddb3416343522e1b56e972dd9095a52871fdf4bd9ec185cbd8b9`.
+Receipt-state tests remain 40/40 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.168 Current-head receipt and timing audits remain conservative (2026-09-04)
+
+A next19 sidecar audit of the current replay revalidated all 10,952 case IDs:
+complete=6,832, not_applicable=4,120, and missing/partial/indeterminate=0.
+Terminal identity is internally consistent: CPU has 6,838 native receipts;
+SIMD has 6,847 native plus three explicit CPU layout controls; GPU has 6,744
+native plus 94 explicit CPU controls. No non-native terminal receipt has an
+empty fallback reason, no native receipt has a fallback, and no zero-operation
+terminal is counted. This finds no actionable P1 partition defect without
+relabeling intentional host controls.
+
+Four fixed-ID timing runs at revision `99cad050731e53cca80b6eeb9f9fe05ee034c513`
+retained 11/11 selected and measured workloads, 44/44 comparable records, and
+33/33 terminal requested=actual target receipts in every run. Their normalized
+execution fingerprint was
+`7f443376fd0e6c5e65032b8df84e92bc5f16c5e34783f96bc6e8d807365e4c32` in every
+run. Adjacent budget comparisons reported 4, 12, and 6 violations; the
+violating row sets varied and all differences were timing-only.
+
+At the newest integrated revision `730d6f5ee4ef2fdf5fe2d84f8ea288fdfdc3de3b`,
+a fresh pair again had 11/11 selected and measured workloads, 44/44
+comparable records, and 33/33 terminal requested=actual target receipts in
+each run, with the same normalized execution fingerprint. Run SHA-256 values
+were `4e95c713932320ad30b06a8724387517354f2512633a9583e0e173dcea10dbf4` and
+`25c0a24c9b915eecda38761b7adc68d31ad1c732108f0b45fcb078678d7f5fee`; the
+budget artifact SHA-256 was
+`3735f15f0f1ecab2f36f4bdc14a3d7fb5e76db74e15d732628c274772cef28b0` and it
+reported 11 timing-only violations. Receipt-state tests remain 40/40 and the
+evidence contract remains 25/24/24. The required zero-violation P2 gate
+therefore remains open.
