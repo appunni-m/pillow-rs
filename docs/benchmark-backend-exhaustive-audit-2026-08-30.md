@@ -6372,3 +6372,84 @@ execution sidecar hashes are `4c2ae10cbec21ddd181a07530731e5c2ee6cd91282fad85de4
 and `fe52bfe0c92e46a8b644f14912573924a034761a46f055593623c65d31fd0d22`.
 No fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy
 changed.
+
+## 32.112 Ordered F Resize reducer through 64 taps (2026-09-03)
+
+The prior 32-tap admission boundary still left a deterministic native-GPU
+parity gap. A forced `F(48,1) -> (3,1)` Lanczos cancellation row produced
+`[0x5aa1ab41, 0x00000000, 0xdaa1ab41]` in the old marker-9 exact-real reducer,
+while Pillow 12.2.0 and the CPU path produced
+`[0x5aa1ab41, 0xc0000000, 0xdaa1ab41]`. The first divergence was the device
+reducer's arithmetic order: Pillow's arm64 `src/libImaging/Resample.c` rounds
+wide horizontal products and ordered additions, and its Lanczos coefficient
+forms `x/a` before multiplying by pi; Rust had used the reassociated `pi*x/a`.
+
+Commit `db57de978` (verified source `181471d876`) extends marker 12 through
+64 taps, mirrors the native horizontal 16-tap product/add split, and aligns
+Lanczos coefficient preparation with Pillow. Direct native Pillow-versus-RSPIL
+F probes are 600/600 exact on CPU and GPU across 33/48/64/65/96/128-wide
+inputs, all five filters, cancellation/subnormal/signed-zero/special patterns;
+15/15 arithmetic-changing chains are exact. The direct matrix publishes 266
+native GPU receipts and 334 exact host controls; rows over 64 taps remain on
+host control. Non-F regression probes are 672 byte-mode and 96 I-mode CPU/GPU
+cases exact. Focused F tests are 35/35, full core tests 134/134, formatting,
+build-dev, receipt-state 39/39, and the evidence contract pass. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.113 CPU projective BICUBIC parity (2026-09-03)
+
+The generic CPU projective path treated every non-nearest request as
+bilinear. A fractional PA Perspective probe therefore produced `(7,18)` for
+the first index/alpha pair while Pillow produced `(6,16)`. The first
+divergence was the filter selection itself: Pillow's `src/libImaging/Geometry.c`
+callback uses a four-tap BICUBIC Horner/FMA evaluation, not the two-tap
+bilinear interpolation used by the prior Rust branch.
+
+Commit `9430e4ae8` (verified source `63fa09472`) adds a distinct bicubic
+branch while preserving the existing centered-coordinate, clipping, and byte
+store behavior. Native Pillow 12.2.0 versus RSPIL is exact for 45/45 cases
+across L/RGB/PA, five source sizes, three fractional or axis maps, and varied
+fills; the focused regression is 1/1. No scripts, fixtures, thresholds, IDs,
+denominators, policy, or receipt taxonomy changed.
+
+## 32.114 PA filtered Perspective relocation (2026-09-03)
+
+PA filtered Perspective rows were conservatively host-controlled even for
+direct or axis-swapped unit-scale integer relocations. Pillow preserves PA as
+raw `(index, alpha)` pairs, so in that narrow map envelope the centered source
+coordinate is integral and the bilinear or bicubic weights are zero; no
+premultiplied alpha arithmetic occurs.
+
+Commit `0082a900a` (verified source `b4df5d702`) extends the existing GPU proof
+only to Perspective PA rows with f32-exact integer translations and direct or
+axis-swapped unit scale. Fractional or scaled maps and filtered Quad/Mesh rows
+remain exact host semantic control. Native Pillow 12.2.0 versus RSPIL GPU is
+120/120 exact across varied sizes and both filters; the focused native test is
+12/12 with terminal `requested_backend=actual_backend=gpu`, one dispatch, and
+no fallback. No scripts, fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
+
+## 32.115 Current all-backends replay after ordered-F/projective fixes (2026-09-03)
+
+The maintained schema-v3 all-backends replay at revision
+`0082a900aa566124237560218744bc0d51ffa9c8` passes all 10,952/10,952
+selected value/error comparisons on CPU, SIMD, GPU, Node WASM, and browser
+WASM, with zero failed or not-run cases and GPU smoke 1/1. It reports
+`passed_with_backend_gaps` because backend identity is intentionally explicit:
+CPU has 6,838 terminal receipts; SIMD has 6,847 native SIMD plus three CPU
+host controls carrying the normalized layout-guard reason; GPU has 6,742
+native GPU plus 96 CPU controls; and each WASM lane has 6,951 CPU receipts.
+GPU fallback reasons are 33 `exact host semantic control`, one unsafe or
+incomplete-dimensions row, and 62 unsafe-primary-dimensions rows. All target
+receipts are terminal and there are no missing, partial, or indeterminate
+pipeline receipts.
+
+Artifact SHA-256 values are result
+`af165aed1803d087943ca210d3e910778a09ccd93a871a718e709cd3dc965231`, GPU
+execution `6b336f7ee5605139fbf34192c1d440c51cc7bc05e7541b220ad6eea0a9e3c64e`,
+and WGSL coverage
+`fefe96b841e686b0e0c08474456b4e6c2c8756a4258a0c6e98dc9da54665b9c0`. The
+receipt-state suite passes 39/39 and the evidence contract remains
+benchmark/coverage/parity 25/24/24. The P2 zero-violation timing gate and
+broader F/projective/mesh/palette arithmetic domains remain open. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.
