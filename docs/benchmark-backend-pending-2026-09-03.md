@@ -66,11 +66,12 @@ receipt rules unchanged.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Constant-denominator integer Perspective nearest maps and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
-  the narrow L/RGB filtered Perspective relocation envelope, are now admitted
-  by exhaustive or bounded native proofs. Fractional, scaled,
-  nonconstant-denominator, and non-identity Quad/Mesh maps, alpha/other-mode
-  filtered rows, and palette arithmetic remain on exact host semantic control
-  until their device arithmetic is proven.
+  direct/axis-swapped Quad and Mesh nearest pair relocations for PA, plus the
+  narrow L/RGB filtered Perspective relocation envelope, are now admitted by
+  exhaustive or bounded native proofs. Fractional, scaled,
+  nonconstant-denominator, partial/multi-record, and filtered projective maps,
+  alpha/other-mode filtered rows, and palette arithmetic remain on exact host
+  semantic control until their device arithmetic is proven.
 
 ### P1 — backend identity and receipts
 
@@ -180,8 +181,16 @@ receipt rules unchanged.
   `afc6e0eaf`): PA's native `(index, alpha)` transport is admitted only for
   direct or axis-swapped unit-scale integer Perspective maps. Native Pillow
   12.2.0 parity is 25/25 across varied/clipped cases with terminal GPU
-  receipts; fractional, scaled, filtered, Quad, and Mesh PA rows remain exact
-  host semantic control.
+  receipts; fractional, scaled, and filtered PA rows remain exact host
+  semantic control.
+- [x] Palette-alpha Quad/Mesh nearest pair relocation (`46c51e032`): PA's
+  native `(index, alpha)` transport now admits direct and
+  axis-swapped unit relocations for Quad and complete one-record Mesh after
+  the shared source-selection proof. Native Pillow 12.2.0 probing is 40/40
+  exact, with 37 native GPU receipts and three conservative host controls for
+  non-square axis-swapped Quad dimensions. Ordinary packed bytes also admit
+  the true direct Quad identity; filtered, scaled, partial, and multi-record
+  geometry remains exact host semantic control.
 - [x] Arm64 wide-row F Resize arithmetic (`31dfca10c`, source
   `68aa5472763`): CPU and marker-12 host/WGSL reducers mirror Pillow's
   horizontal >15-tap product/ordered-add split through a bounded 32-tap path,
