@@ -7234,3 +7234,93 @@ receipt/timing artifacts were `/tmp/pillow-rs-receipt-timing-next16-1.json`,
 `/tmp/pillow-rs-receipt-timing-next16-2.json`, and
 `/tmp/pillow-rs-receipt-timing-next16-budget.json`. No benchmark scripts,
 fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.151 Ordered F Resize reducer through 524288 taps (2026-09-03)
+
+The next direct F boundary was again an admission guard rather than a value
+mismatch: Pillow 12.2.0's `src/libImaging/Resample.c` FLOAT32 reducer keeps
+the ordered f64 coefficient accumulation, arm64 horizontal product/add split,
+and f32 store already modeled by the Rust proof, while the previous marker-12
+bound stopped at 262144 taps. Commit
+`f77fbbc29ba7798ee5ad7c93b3acc15e6f08f840` (source
+`cbfda102a8325a8ac361273bd6355b80ba767942`) raises the host proof and matching
+horizontal/vertical WGSL guards through 524288 taps. Rows over 524288 and
+arithmetic-changing chains remain exact host semantic control.
+
+Native Pillow 12.2.0 versus RSPIL candidate probes are 160/160 exact across
+524288x1, 524288x2, 1x524288, and 524289x1 sources, all five non-nearest
+filters, and finite, signed, subnormal, largest-finite, cancellation, NaN,
+and infinity words. Candidate receipts are 125 native GPU and 35 exact
+host-control rows. An arbitrary finite/extreme/cancellation matrix is 45/45
+exact, and a 175-case two-stage arithmetic-changing chain matrix is 175/175
+exact (45 existing native rows, 130 host-controlled) without widening chain
+admission. Focused ordered-F tests are 38/38, pool-GPU tests are 99/99, CPU
+geometry tests are 12/12, and fmt, build, build-dev, receipt 39/39, and
+evidence 25/24/24 gates pass. No fixtures, thresholds, IDs, denominators,
+policy, or receipt taxonomy changed.
+
+## 32.152 Current receipt/timing no-change audit (2026-09-03)
+
+A fresh fixed-ID equal-receipt pair at the integrated source revision measured
+11/11 workloads in each run, with 44/44 comparable records and 33/33 target
+receipts per run terminal, requested=actual, and empty fallback/error state.
+The maintained checker reported six timing violations. All 44 execution
+fingerprints are identical after timing fields are removed, including
+operation, dispatch, cache, resource, and backend structure; the changed rows
+only fluctuate in latency. This is host/GPU timing noise rather than a
+deterministic source or receipt defect, so the P2 zero-violation gate remains
+open. Run hashes are
+`289d142fae65609855308c63c5e51a370c718ef5fd8dd6832faac67ba9ee0efc` and
+`41860431dc0f250b7b6860a8b12c850b7dd5969447ffbfc8e5b9064bba6ab3e8`; the
+budget report hash is
+`882af37b2480b29625ce0a680827650b11d47c9865e5470fec5a2c29f67d3a62`, and
+the stable receipt fingerprint is
+`9193fbc8aedac91983394becac436e05000887be1970c9f902ba8ee5fc10ceb1`. No
+benchmark scripts, fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
+
+## 32.153 Proof-certified Quad/Mesh nearest maps (2026-09-03)
+
+The ordinary packed Quad/Mesh nearest path now admits only maps whose complete
+source-selection proof agrees with Pillow `src/libImaging/Geometry.c` and whose
+f32 intermediates and positive coordinate conversions are safe. Commit
+`ecac88ac14ef9934e16ba925f07835eb3521cf80` (source
+`de38b9cd798a0703e6496a8b7d42fd34960a9bbc`) mirrors the native quad-transform
+and mesh evaluation order, requires a complete one-record Mesh, and leaves
+filtered, partial, multi-record, and proof-failing arithmetic on exact host
+semantic control. A temporary broad admission first diverged on an extreme LA
+Quad at output byte 16 (native/CPU fill `[211,97]`, WGSL source `[19,72]`) due
+to an unsafe positive coordinate conversion; the final finite-coordinate guard
+keeps that boundary host-controlled.
+
+Native Pillow 12.2.0 versus RSPIL is 24/24 exact across direct, fractional, and
+translated Quad/Mesh cases in L/LA/RGB/RGBA. Two bounded varied and f32-boundary
+sweeps are 20,000/20,000 exact, with 3,517 native GPU receipts and the rest
+exact host semantic-control receipts. Focused pool-GPU tests are 100/100;
+`make -C pillow-rs fmt`, build, build-dev, receipt 39/39, and evidence
+25/24/24 gates pass. No fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed.
+
+## 32.154 Full backend replay after F and Quad/Mesh integrations (2026-09-03)
+
+The schema-v3 replay at source revision
+`ecac88ac14ef9934e16ba925f07835eb3521cf80` completed all 10,952 selected
+public cases exactly on CPU, SIMD, GPU, Node WASM, and browser WASM. Every lane
+reported 10,952 passed, zero failed, and zero not-run, and the GPU smoke gate
+passed 1/1. Terminal receipts are CPU 6,838 native; SIMD 6,847 native SIMD
+plus three CPU layout controls; GPU 6,744 native plus 94 CPU controls; and
+Node/browser WASM 6,951 CPU each. GPU fallback reasons are 31 exact host
+semantic controls, one unsafe/incomplete image-dimension control, and 62
+unsafe-primary-dimension controls. All pipeline missing, partial, and
+indeterminate counts are zero; the aggregate status remains
+`passed_with_backend_gaps` because the explicit partitions are not relabeled
+as native coverage.
+
+Artifact SHA-256 values are result
+`d5c7b3eacfcac74e4cfb9e7c212c0452a91a6851e1b85406d3dda77599d37331`, GPU
+execution `6b6cabd0e1e37164e5238e714dfa2b64c486a4b2aa526f574d8a5bb8ce0e0c08`,
+and WGSL coverage
+`f02ea46100424b88bceadaed5a6c5693417d7623db3bd34e0488c94894a7e494`. Receipt
+state is 39/39 and the evidence contract is benchmark/coverage/parity
+25/24/24. No fixtures, thresholds, IDs, denominators, policy, or receipt
+taxonomy changed.
