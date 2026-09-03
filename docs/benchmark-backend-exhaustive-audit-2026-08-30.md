@@ -7887,3 +7887,23 @@ WGSL coverage is
 Receipt-state tests remain 40/40 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
+
+## 32.180 Fixed-ID timing pairs after the combined source push remain noisy (2026-09-04)
+
+At integrated revision `068378f6ac11060bda2e0a1807a429d3ea0ba5b7`, two fresh
+consecutive fixed-11 runs each selected and measured 11/11 workloads, retained
+44/44 comparable records, and had 33/33 terminal target receipts with
+`requested_backend=actual_backend` and empty fallback/error state. The first
+pair's run SHA-256 values were
+`476c904bac37c3aedc28deb38855fc6082dd49327b64395e31d2efabe758d046` and
+`1f92c37db60953221a6fee436f507cf7fbc23e92d68a12118954b97c1f4a78b7`, with
+budget artifact `3f02eafe202382adc94e2c73ab0ecc8e933735078e820ca43b683e17487fbf12`
+and four violations. A second consecutive pair produced run hashes
+`9101a0cebc9ae6b7c57e24afe043cef780438ad0803fa86301b6b2e3c3fc5d84` and
+`5b45dfa363e66405e62f0783458e8a9b0ad38a7aaf74dcc81f9b632361ccca39`, with
+budget artifact `1eadb10832fa4c69825f3aa792d20903a1ffd12f038574d118ef77a13a5dcf7a`
+and eight violations. All 44 execution receipts in each pair were identical
+after removing phase timing summaries (structural fingerprint
+`4a874a7b8558491909ad3d91c195715da5a644b18b31679cb443aad3d3aeab19`), and
+the differing rows were timing-only. The required zero-violation P2 gate
+therefore remains open; no source or receipt defect is indicated.

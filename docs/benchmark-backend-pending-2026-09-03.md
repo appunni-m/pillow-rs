@@ -396,6 +396,18 @@ receipt rules unchanged.
   `07bfafa84b4ddd10ef40ce3e9db1b5db4e0d8a46adac51ffbd388b01d28e9f0a` and it
   reported 19 timing-only violations. The normalized fingerprint stayed
   unchanged; P2 remains open.
+  At the combined source push `068378f6a`, two fresh consecutive pairs kept
+  the same 11/11, 44/44, and 33/33 receipt invariants. The first pair reported
+  four violations (run SHAs
+  `476c904bac37c3aedc28deb38855fc6082dd49327b64395e31d2efabe758d046` and
+  `1f92c37db60953221a6fee436f507cf7fbc23e92d68a12118954b97c1f4a78b7`; budget
+  `3f02eafe202382adc94e2c73ab0ecc8e933735078e820ca43b683e17487fbf12`) and
+  the second reported eight (run SHAs
+  `9101a0cebc9ae6b7c57e24afe043cef780438ad0803fa86301b6b2e3c3fc5d84` and
+  `5b45dfa363e66405e62f0783458e8a9b0ad38a7aaf74dcc81f9b632361ccca39`; budget
+  `1eadb10832fa4c69825f3aa792d20903a1ffd12f038574d118ef77a13a5dcf7a`).
+  Execution receipts remained structurally identical after removing phase
+  timing summaries; violations remain timing-only and P2 is still open.
 
 ## Verified changes already integrated
 
