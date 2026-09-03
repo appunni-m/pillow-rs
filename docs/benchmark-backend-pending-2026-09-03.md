@@ -94,14 +94,16 @@ receipt rules unchanged.
   Pillow's scalar-FMA and arm64 vector product/add ordering. Native Pillow
   12.2.0 matrices at 384, 512, 768, and 1024 taps are exact with terminal GPU
   receipts; the 1025-tap finite boundary remains exact host semantic control.
-- [x] Extend the ordered F reducer through the proven 8192-tap marker-12
-  envelope (`828dee094`, source `677fb9e43`) and admit finite f32 subnormal
-  inputs in both convolution shaders. Native Pillow 12.2.0 versus RSPIL
-  focused rows at 3072, 4096, and 8192 taps, both-axis reductions, plus
-  horizontal/vertical subnormal and largest-finite cases, are exact; focused
-  ordered-F tests are 10/10 and the full pool-GPU group is 94/94. The 8193-tap
-  boundary remains exact host semantic control.
-- [ ] Extend the exact F reducer beyond 8192 taps, f64-intermediate
+- [x] Extend the ordered F reducer through the proven 16384-tap marker-12
+  envelope (`e59307a96`, source `a944bad36`) and mirror Pillow's vertical-first
+  FLOAT32 intermediate for very tall F resizes. Native Pillow 12.2.0 versus
+  RSPIL focused rows at 3072, 4096, 8192, and 16384 taps, both-axis
+  reductions, horizontal/vertical subnormal and largest-finite cases, and
+  tall-image threshold boundaries are exact; focused ordered-F tests are
+  10/10, the full pool-GPU group is 94/94, CPU geometry tests are 12/12, and
+  direct 16384-tap probes are 150/150 CPU plus 150/150 GPU exact. The 16385-tap
+  boundary and GPU tall geometry remain exact host semantic control.
+- [ ] Extend the exact F reducer beyond 16384 taps, f64-intermediate
   subnormal/overflow boundaries, and arithmetic-changing chains. Forced
   generic WGSL f32 convolution still differs from Pillow's ordered host
   arithmetic by ULPs, so these rows require a separate device proof.
@@ -113,15 +115,23 @@ receipt rules unchanged.
   16/16 exact for L/RGB and 8/8 exact for PA with terminal GPU receipts;
   filtered/scaled/partial/extra-record/fractional arithmetic outside the proof
   remains exact host semantic control.
+- [x] Admit proof-certified constant integer nearest Quad/Mesh maps
+  (`8b13f0c9b`, source `bff7976fa`) for packed byte modes and PA. Native
+  Pillow 12.2.0 versus RSPIL is 180/180 exact with native GPU receipts,
+  including 90/90 fill-boundary cases; interpolation is bypassed only after
+  the exhaustive source-selection proof. Filtered, fractional, scaled,
+  nonconstant-denominator, nonzero-weight, partial/multi-record maps and
+  broader palette arithmetic remain exact host semantic control.
 - [ ] Prove any broader arithmetic-changing projective/mesh/palette GPU domain.
   Constant-denominator integer Perspective nearest maps and full-output
   unit-scale Mesh direct/axis-swap relocations for packed L/LA/RGB/RGBA, plus
-  direct/axis-swapped Quad and Mesh nearest pair relocations for PA, plus the
-  narrow L/LA/RGB/RGBA/PA filtered direct/axis relocation envelope, are now
-  admitted by exhaustive or bounded native proofs. Fractional, scaled,
-  nonconstant-denominator, partial/multi-record, filtered projective maps with
-  nonzero weights, other modes, and palette arithmetic remain on exact host
-  semantic control until their device arithmetic is proven.
+  direct/axis-swapped Quad and Mesh nearest pair relocations for PA, the
+  constant-integer nearest Quad/Mesh subfamily, and the narrow
+  L/LA/RGB/RGBA/PA filtered direct/axis relocation envelope are now admitted by
+  exhaustive or bounded native proofs. Fractional, scaled,
+  nonconstant-denominator, nonzero-weight, partial/multi-record, filtered
+  projective maps, other modes, and broader palette arithmetic remain on exact
+  host semantic control until their device arithmetic is proven.
 
 - [x] Extend filtered projective relocation to LA/RGBA and Quad/Mesh
   (`a0fb33394`): the WGSL path now mirrors Pillow's premultiplied La/RGBa
@@ -154,7 +164,7 @@ receipt rules unchanged.
 - [x] Automatic SIMD layout-control receipt normalization (`8bb69acd0`):
   contextual SIMD-to-CPU handoffs for valid operations now publish an
   actionable `exact host semantic control: SIMD image-layout guard for ...`
-  reason instead of an operation-level unsupported label. Strict explicit-SIMD
+  reason instead of an operation-level capability label. Strict explicit-SIMD
   capability errors remain unchanged. The full SIMD lane is 10,952/10,952
   exact with 6,847 native SIMD receipts, three terminal CPU controls, and no
   missing, partial, or indeterminate pipeline receipts.
@@ -164,7 +174,7 @@ receipt rules unchanged.
 - [ ] Obtain two consecutive fixed-ID, equal-receipt comparisons with zero
   budget violations. The Brightness factor-1 identity path and SIMD constant
   allocation plus the packed ExtractBand path are deterministic row-level
-  wins, but the latest current-HEAD 11-ID pair still has nine
+  wins, but the latest current-HEAD 11-ID pair still has ten
   timing-noise violations, so aggregate comparisons do not close this gate.
   Both runs measured 11/11 with 44/44 comparable records and 33/33 target
   receipts terminal with requested=actual and empty fallback reasons.
