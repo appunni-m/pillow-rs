@@ -68,17 +68,20 @@ receipt rules unchanged.
   (120/120 exact, 12/12 native focused receipts). LA/RGBA alpha round trips,
   Mesh/Quad filters, fractional or scaled maps, and other filter arithmetic
   remain exact host semantic control.
-- [x] Extend the exact native-GPU F reducer through the proven 64-tap
-  marker-12 envelope (`db57de978`, source `181471d876`): direct finite-normal
+- [x] Extend the exact native-GPU F reducer through the proven 128-tap
+  marker-12 envelope (`9cc31d5c2`): direct finite-normal
   Resize rows model Pillow's
   arm64 split (scalar FMA through 15 horizontal taps, complete 16-tap product/
   ordered-add blocks, scalar FMA tail; vertical remains FMA). The deterministic
   scalar FMA tail; vertical remains FMA. The former 48-tap Lanczos cancellation
   divergence is now exact after matching Pillow's x/a-then-pi coefficient
   order. Native Pillow-vs-RSPIL direct F probes are 600/600 CPU and GPU exact,
-  with 266 native GPU receipts; chained cases are 15/15 exact. Rows over 64
-  taps and exceptional or arithmetic-changing inputs remain host-controlled.
-- [ ] Extend the exact F reducer beyond 64 taps and through mixed special-value,
+  with 266 native GPU receipts; chained cases are 15/15 exact. Additional
+  heterogeneous 65/96/128-tap rows, a two-axis row, and wide cancellation are
+  exact with terminal native GPU receipts; a 129-tap row remains host-controlled.
+  Rows over 128 taps and exceptional or arithmetic-changing inputs remain
+  host-controlled.
+- [ ] Extend the exact F reducer beyond 128 taps and through mixed special-value,
   subnormal/overflow, and arithmetic-changing chains. Forced generic WGSL f32
   convolution still differs from Pillow's ordered host arithmetic by ULPs, so
   these rows require a separate device proof.
@@ -245,6 +248,14 @@ receipt rules unchanged.
   0.166375→0.089396 ms and backend median 137084→60084 ns. Aggregate budget
   acceptance remains open because unrelated timing noise produced two
   violations.
+- [x] Ordered F Resize reducer through 128 taps (`9cc31d5c2`): keep the
+  host proof and both WGSL count guards aligned through 128 taps, covering
+  heterogeneous finite Bilinear/Bicubic/Lanczos/Hamming/Box rows, a 65×65
+  two-axis resize, and alternating wide cancellation. The 129-tap boundary
+  remains exact host semantic control; mixed special/subnormal/overflow and
+  arithmetic-changing chains remain pending. Focused GPU tests are 87/87 and
+  Pillow 12.2.0 versus RSPIL CPU probes are 6/6 exact. No fixtures,
+  thresholds, IDs, denominators, policy, or receipt taxonomy changed.
 
 ## Bounded marker-12 evidence
 

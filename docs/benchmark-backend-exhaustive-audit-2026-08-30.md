@@ -6507,3 +6507,34 @@ receipt-state suite passes 39/39 and the evidence contract remains
 benchmark/coverage/parity 25/24/24. The P2 zero-violation timing gate and
 broader F/projective/mesh/palette arithmetic domains remain open. No fixtures,
 thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.118 Ordered F Resize reducer through 128 taps (2026-09-03)
+
+The existing marker-12 host proof could certify finite ordered-F rows above
+the marker-9 32-tap domain, but its bounded device guard stopped at 64 taps.
+That left the admission proof and WGSL behavior inconsistent: a newly admitted
+65-tap row returned zero from the shader while the exact CPU result was a
+finite word. Commit `9cc31d5c2` extends the matched host and horizontal/
+vertical shader bounds through 128 taps. The ordered reducer continues to
+mirror Pillow 12.2.0 `src/libImaging/Resample.c`: scalar f64 FMA through the
+first 15 horizontal taps, separately rounded 16-tap product/add blocks, and
+the scalar FMA tail; vertical rows use the scalar FMA path. Rows over 128 taps
+or with unrepresentable intermediate states stay on exact host semantic
+control.
+
+Focused native GPU tests cover heterogeneous finite 65/96/128-tap
+Bilinear/Bicubic/Lanczos/Hamming/Box rows, a 65×65 two-axis Bilinear resize,
+and alternating wide cancellation. The 129-tap Bilinear boundary is verified
+to remain host-controlled with an explicit terminal CPU receipt. All 87/87
+pool-GPU tests pass, including the new cases. Direct Pillow 12.2.0 versus
+RSPIL CPU probes for the five filters plus the two-axis case are 6/6 exact;
+the Rust GPU cases publish requested=actual GPU receipts with no fallback.
+
+The full all-backends replay was attempted in the disposable verification
+tree but could not start its parity lanes because the active oracle was Pillow
+11.3.0 rather than the required 12.2.0; the existing macOS WASM toolchain
+limitation also remains. This is an environment limitation, not a source
+parity failure. No fixtures, thresholds, IDs, denominators, policy, or
+receipt taxonomy changed. Remaining P0 work is beyond-128 taps, mixed
+special/subnormal/overflow values, arithmetic-changing chains, and broader
+projective/mesh/palette device arithmetic.
