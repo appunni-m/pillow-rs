@@ -315,6 +315,38 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
         );
     }
     if params.method == 1u {
+        // Pillow evaluates Perspective maps at destination pixel centers and
+        // then truncates the resulting source coordinate. For signed
+        // unit-axis maps, return the corresponding integer pixel coordinate
+        // directly; the generic raw-gid expression would be one pixel off for
+        // a reflected axis because its `floor(source + 0.5)` rounds the
+        // half-pixel center in the opposite direction.
+        if params.g == 0.0 && params.h == 0.0 {
+            if params.a == 1.0 && params.b == 0.0 && params.d == 0.0 && params.e == 1.0 {
+                return vec2<f32>(params.c + dx, params.f + dy);
+            }
+            if params.a == -1.0 && params.b == 0.0 && params.d == 0.0 && params.e == 1.0 {
+                return vec2<f32>(params.c - dx - 1.0, params.f + dy);
+            }
+            if params.a == 1.0 && params.b == 0.0 && params.d == 0.0 && params.e == -1.0 {
+                return vec2<f32>(params.c + dx, params.f - dy - 1.0);
+            }
+            if params.a == -1.0 && params.b == 0.0 && params.d == 0.0 && params.e == -1.0 {
+                return vec2<f32>(params.c - dx - 1.0, params.f - dy - 1.0);
+            }
+            if params.a == 0.0 && params.b == 1.0 && params.d == 1.0 && params.e == 0.0 {
+                return vec2<f32>(params.c + dy, params.f + dx);
+            }
+            if params.a == 0.0 && params.b == -1.0 && params.d == 1.0 && params.e == 0.0 {
+                return vec2<f32>(params.c - dy - 1.0, params.f + dx);
+            }
+            if params.a == 0.0 && params.b == 1.0 && params.d == -1.0 && params.e == 0.0 {
+                return vec2<f32>(params.c + dy, params.f - dx - 1.0);
+            }
+            if params.a == 0.0 && params.b == -1.0 && params.d == -1.0 && params.e == 0.0 {
+                return vec2<f32>(params.c - dy - 1.0, params.f - dx - 1.0);
+            }
+        }
         let denominator = params.g * dx + params.h * dy + 1.0;
         if denominator == 0.0 {
             return vec2<f32>(-1.0, -1.0);
