@@ -1902,6 +1902,8 @@ fn pil_resize_f_boxed(
     let box_top = box_top as f32 as f64;
     let box_right = box_right as f32 as f64;
     let box_bottom = box_bottom as f32 as f64;
+    let need_horizontal = dst_w != source_width || box_left != 0.0 || box_right != dst_w as f64;
+    let need_vertical = dst_h != source_height || box_top != 0.0 || box_bottom != dst_h as f64;
 
     if matches!(filter, ResampleFilter::Nearest) {
         let scale_x = (box_right as f32 - box_left as f32) as f64 / f64::from(dst_w);
@@ -1909,20 +1911,28 @@ fn pil_resize_f_boxed(
         let last_x = i64::from(source_width - 1);
         let last_y = i64::from(source_height - 1);
         let mut output = Vec::with_capacity(output_len);
-        for dy in 0..dst_h {
-            let source_y = (box_top + (f64::from(dy) + 0.5) * scale_y).floor() as i64;
-            let source_y = source_y.clamp(0, last_y) as usize;
-            for dx in 0..dst_w {
-                let source_x = (box_left + (f64::from(dx) + 0.5) * scale_x).floor() as i64;
-                let source_x = source_x.clamp(0, last_x) as usize;
+        // Pillow's nearest boxed F resize also reaches ImagingScaleAffine,
+        // whose coordinates advance cumulatively from one pixel to the next.
+        // Keep that recurrence so exact upsample boundaries select the same
+        // source word as the native path.
+        let mut source_y = box_top + scale_y * 0.5;
+        for _ in 0..dst_h {
+            let source_y_index = source_y.floor() as i64;
+            let source_y_index = source_y_index.clamp(0, last_y) as usize;
+            let mut source_x = box_left + scale_x * 0.5;
+            for _ in 0..dst_w {
+                let source_x_index = source_x.floor() as i64;
+                let source_x_index = source_x_index.clamp(0, last_x) as usize;
                 output.extend_from_slice(
-                    &source[(source_y * source_width as usize + source_x)..][..1]
+                    &source[(source_y_index * source_width as usize + source_x_index)..][..1]
                         .first()
                         .copied()
                         .unwrap_or(0.0)
                         .to_le_bytes(),
                 );
+                source_x += scale_x;
             }
+            source_y += scale_y;
         }
         return raw_to_dynamic(&output, dst_w, dst_h, 4);
     }
@@ -1930,43 +1940,54 @@ fn pil_resize_f_boxed(
     let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
     let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
     let mut intermediate = vec![0.0f32; source_height as usize * dst_w as usize];
-    for source_y in 0..source_height as usize {
-        let source_start = source_y * source_width as usize;
-        let intermediate_start = source_y * dst_w as usize;
-        for output_x in 0..dst_w as usize {
-            let x0 = horizontal.xmin[output_x];
-            let mut sum = 0.0;
-            let vector_product_count = (horizontal.weights[output_x].len() / F_RESIZE_VECTOR_WIDTH)
-                * F_RESIZE_VECTOR_WIDTH;
-            for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
-                let source_x = (x0 + tap as i64) as usize;
-                f_resize_accumulate(
-                    &mut sum,
-                    weight,
-                    source[source_start + source_x],
-                    tap < vector_product_count,
-                );
+    if need_horizontal {
+        for source_y in 0..source_height as usize {
+            let source_start = source_y * source_width as usize;
+            let intermediate_start = source_y * dst_w as usize;
+            for output_x in 0..dst_w as usize {
+                let x0 = horizontal.xmin[output_x];
+                let mut sum = 0.0;
+                let vector_product_count = (horizontal.weights[output_x].len()
+                    / F_RESIZE_VECTOR_WIDTH)
+                    * F_RESIZE_VECTOR_WIDTH;
+                for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
+                    let source_x = (x0 + tap as i64) as usize;
+                    f_resize_accumulate(
+                        &mut sum,
+                        weight,
+                        source[source_start + source_x],
+                        tap < vector_product_count,
+                    );
+                }
+                intermediate[intermediate_start + output_x] =
+                    if sum == 0.0 { 0.0 } else { sum as f32 };
             }
-            intermediate[intermediate_start + output_x] = if sum == 0.0 { 0.0 } else { sum as f32 };
         }
+    } else {
+        intermediate.copy_from_slice(&source);
     }
 
-    let mut output_floats = vec![0.0f32; dst_w as usize * dst_h as usize];
-    for output_y in 0..dst_h as usize {
-        let y0 = vertical.xmin[output_y];
-        for output_x in 0..dst_w as usize {
-            let mut sum = 0.0;
-            for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
-                let source_y = (y0 + tap as i64) as usize;
-                sum = weight.mul_add(
-                    f64::from(intermediate[source_y * dst_w as usize + output_x]),
-                    sum,
-                );
+    let output_floats = if need_vertical {
+        let mut output_floats = vec![0.0f32; dst_w as usize * dst_h as usize];
+        for output_y in 0..dst_h as usize {
+            let y0 = vertical.xmin[output_y];
+            for output_x in 0..dst_w as usize {
+                let mut sum = 0.0;
+                for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
+                    let source_y = (y0 + tap as i64) as usize;
+                    sum = weight.mul_add(
+                        f64::from(intermediate[source_y * dst_w as usize + output_x]),
+                        sum,
+                    );
+                }
+                output_floats[output_y * dst_w as usize + output_x] =
+                    if sum == 0.0 { 0.0 } else { sum as f32 };
             }
-            output_floats[output_y * dst_w as usize + output_x] =
-                if sum == 0.0 { 0.0 } else { sum as f32 };
         }
-    }
+        output_floats
+    } else {
+        intermediate
+    };
     let output: Vec<u8> = output_floats
         .into_iter()
         .flat_map(f32::to_le_bytes)
@@ -1988,20 +2009,60 @@ pub fn pil_resize_boxed(
     explicit_mode: Option<&str>,
 ) -> DynamicImage {
     let orig_img = img;
-    if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
-        return pil_resize_f_boxed(
-            img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
-        );
+    // Pillow narrows the source box to float32 before `_resize` sees it. Keep
+    // those values for the crop and pass-elision decisions below so integer
+    // boundaries do not drift in Rust's f64 control plane.
+    let box_left_f32 = box_left as f32;
+    let box_top_f32 = box_top as f32;
+    let box_right_f32 = box_right as f32;
+    let box_bottom_f32 = box_bottom as f32;
+    let finite_box = box_left_f32.is_finite()
+        && box_top_f32.is_finite()
+        && box_right_f32.is_finite()
+        && box_bottom_f32.is_finite();
+    if finite_box
+        && dst_w == img.width()
+        && dst_h == img.height()
+        && box_left_f32 == 0.0
+        && box_top_f32 == 0.0
+        && box_right_f32 == img.width() as f32
+        && box_bottom_f32 == img.height() as f32
+    {
+        // Image.resize returns self.copy() before mode conversion for a
+        // complete source at its original size, including F and alpha modes.
+        return img.clone();
     }
     let is_cmyk = explicit_mode == Some("CMYK");
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
-    let needs_alpha = !is_cmyk
+    let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
+        && !is_cmyk
         && !is_fi
         && !matches!(explicit_mode, Some("RGBa" | "RGBX"))
         && matches!(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
         );
+
+    // `_imaging.c::_resize` crops an integer-aligned box whose dimensions
+    // already equal the target before selecting the resampler. This ordering
+    // also matters for F: sending an exact crop through the f64 filter tails
+    // would let NaN/Inf values leak into taps that Pillow never evaluates.
+    let integer_crop = finite_box
+        && box_left_f32.fract() == 0.0
+        && box_top_f32.fract() == 0.0
+        && box_right_f32 - box_left_f32 == dst_w as f32
+        && box_bottom_f32 - box_top_f32 == dst_h as f32;
+    if integer_crop && !needs_alpha {
+        let left = box_left_f32 as u32;
+        let top = box_top_f32 as u32;
+        return img.crop_imm(left, top, dst_w, dst_h);
+    }
+
+    if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
+        return pil_resize_f_boxed(
+            img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
+        );
+    }
     let (kernel_fn, support) = filter_from_resample(filter);
     let (sw, sh) = (img.width(), img.height());
 
@@ -2013,13 +2074,12 @@ pub fn pil_resize_boxed(
     };
 
     // Pillow's boxed nearest path is an affine sample, not a one-tap box
-    // convolution. This distinction matters for indexed ImageOps.fit: the
-    // convolution-style coefficient builder can include two adjacent raw
-    // palette samples at a boundary and produce an index that Pillow never
-    // emits. Keep P/PA in their native sample layout and apply the exact
-    // ``int(box_start + (x + 0.5) * scale)`` mapping used by ImagingTransform.
-    if matches!(filter, ResampleFilter::Nearest) && matches!(explicit_mode, Some("P") | Some("PA"))
-    {
+    // convolution. The convolution-style coefficient builder can include
+    // adjacent samples at a boundary and produce a value that Pillow never
+    // emits (most visibly for indexed ImageOps.fit, but the same source
+    // selection applies to every byte layout). Use the exact
+    // ``int(box_start + (x + 0.5) * scale)`` mapping from ImagingTransform.
+    if matches!(filter, ResampleFilter::Nearest) {
         if sw == 0 || sh == 0 {
             return pil_preserve_mode(
                 orig_img,
@@ -2043,15 +2103,23 @@ pub fn pil_resize_boxed(
         let scale_y = ((box_bottom_f32 - box_top_f32) as f64) / dst_h as f64;
         let source = img.as_bytes();
         let mut out_bytes = Vec::with_capacity((dst_w * dst_h) as usize * channels);
-        for dy in 0..dst_h {
-            let sy = (box_top + (dy as f64 + 0.5) * scale_y).floor();
-            let sy = sy.clamp(0.0, (sh - 1) as f64) as usize;
-            for dx in 0..dst_w {
-                let sx = (box_left + (dx as f64 + 0.5) * scale_x).floor();
-                let sx = sx.clamp(0.0, (sw - 1) as f64) as usize;
+        // `_resize` takes this path through ImagingScaleAffine. Its source
+        // coordinate is initialized once and advanced with `xo += a[0]` /
+        // `yo += a[4]` for every output pixel/row. Preserve that cumulative
+        // floating-point rounding instead of recomputing `(index + 0.5) *
+        // scale`; the difference is observable exactly at upsample boundaries
+        // such as a 2x1 box expanded to seven pixels.
+        let mut source_y = box_top + scale_y * 0.5;
+        for _ in 0..dst_h {
+            let sy = source_y.floor().clamp(0.0, (sh - 1) as f64) as usize;
+            let mut source_x = box_left + scale_x * 0.5;
+            for _ in 0..dst_w {
+                let sx = source_x.floor().clamp(0.0, (sw - 1) as f64) as usize;
                 let start = (sy * sw as usize + sx) * channels;
                 out_bytes.extend_from_slice(&source[start..start + channels]);
+                source_x += scale_x;
             }
+            source_y += scale_y;
         }
         return pil_preserve_mode(orig_img, raw_to_dynamic(&out_bytes, dst_w, dst_h, channels));
     }
@@ -2060,11 +2128,37 @@ pub fn pil_resize_boxed(
     let h_coeffs = precompute_coeffs_boxed(dst_w, sw, box_left, box_right, kernel_fn, support);
     let v_coeffs = precompute_coeffs_boxed(dst_h, sh, box_top, box_bottom, kernel_fn, support);
 
+    // Resample.c skips a pass when that axis already has the requested size
+    // and covers the complete source extent. A boxed one-axis crop therefore
+    // must resample only the changed axis; the unchanged axis retains source
+    // samples (or premultiplied samples for LA/RGBA).
+    let need_horizontal = dst_w != sw || box_left_f32 != 0.0 || box_right_f32 != dst_w as f32;
+    let need_vertical = dst_h != sh || box_top_f32 != 0.0 || box_bottom_f32 != dst_h as f32;
+
     // Allocate intermediate image (sh rows × dw columns × channels)
     let mut intermediate = vec![0u8; (sh * dst_w) as usize * channels];
 
     // Horizontal pass: each source row writes one independent intermediate row.
-    if needs_alpha {
+    if !need_horizontal {
+        if needs_alpha {
+            let source = img.as_bytes();
+            for (source_pixel, intermediate_pixel) in source
+                .chunks_exact(channels)
+                .zip(intermediate.chunks_exact_mut(channels))
+            {
+                let alpha = source_pixel[channels - 1];
+                for channel in 0..channels {
+                    intermediate_pixel[channel] = if channel == channels - 1 {
+                        alpha
+                    } else {
+                        premultiply_channel(source_pixel[channel], alpha)
+                    };
+                }
+            }
+        } else {
+            intermediate.copy_from_slice(img.as_bytes());
+        }
+    } else if needs_alpha {
         horizontal_pass_rows_alpha(
             img.as_bytes(),
             sw,
@@ -2090,7 +2184,26 @@ pub fn pil_resize_boxed(
     let mut out_bytes = vec![0u8; (dst_w * dst_h) as usize * channels];
 
     // Vertical output rows are independent after the horizontal pass.
-    if needs_alpha {
+    if !need_vertical {
+        if needs_alpha {
+            for (intermediate_pixel, output_pixel) in intermediate
+                .chunks_exact(channels)
+                .zip(out_bytes.chunks_exact_mut(channels))
+            {
+                let alpha = intermediate_pixel[channels - 1];
+                for channel in 0..channels {
+                    output_pixel[channel] = if channel == channels - 1 {
+                        alpha
+                    } else {
+                        unpremultiply_channel(intermediate_pixel[channel], alpha)
+                    };
+                }
+            }
+        } else {
+            let output_len = out_bytes.len();
+            out_bytes.copy_from_slice(&intermediate[..output_len]);
+        }
+    } else if needs_alpha {
         vertical_pass_rows_alpha(
             &intermediate,
             sh,

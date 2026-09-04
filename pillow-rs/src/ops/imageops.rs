@@ -1692,4 +1692,17 @@ mod tests {
             PilError::ZeroDivisionError(message) if message == "division by zero"
         ));
     }
+
+    #[test]
+    fn fit_integer_f_crop_precedes_filter_tails_for_special_values() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&f32::INFINITY.to_le_bytes());
+        bytes.extend_from_slice(&(-2.25f32).to_le_bytes());
+        let source = Image::frombytes("F", (1, 2), &bytes).expect("F source");
+        let fitted = fit(&source, 1, 1, Some("LANCZOS"), 0.0, (1.0, 1.0))
+            .expect("Fit operation")
+            .materialize()
+            .expect("Fit materializes");
+        assert_eq!(fitted.as_bytes(), &(-2.25f32).to_le_bytes());
+    }
 }

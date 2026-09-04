@@ -12583,6 +12583,25 @@ fn gpu_geometry_requires_exact_host_control(
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
+        if let PipelineOp::Fit { filter, .. } = op {
+            // Fit's fractional crop is lowered to the boxed Resample.c
+            // contract. The shared device convolution plan is not yet
+            // proven for straight-alpha/typed rows (tiny source spans can
+            // expose stale horizontal intermediates on Metal), so let the
+            // exact host path own those pixels. Raw-channel layouts retain
+            // their existing native path, and P forces NEAREST before this
+            // decision. Identity Fit is lowered to Duplicate and remains a
+            // native copy.
+            let effective_filter = if mode == Some("P") {
+                ResampleFilter::Nearest
+            } else {
+                *filter
+            };
+            let raw_channel_layout = matches!(mode, Some("PA" | "RGBX" | "RGBa" | "CMYK"));
+            if !matches!(effective_filter, ResampleFilter::Nearest) && !raw_channel_layout {
+                return true;
+            }
+        }
         if mode == Some("F")
             && let PipelineOp::Resize { w, h, .. } = op
             && gpu_f_resize_uses_pillow_tall_order(dimensions, (*w, *h))

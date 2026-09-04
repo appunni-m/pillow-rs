@@ -776,8 +776,11 @@ pub fn op_fit(
     let bleed_w = bleed * iw as f64;
     let bleed_h = bleed * ih as f64;
     // Live size
-    let live_w = (iw as f64 - 2.0 * bleed_w).max(1.0);
-    let live_h = (ih as f64 - 2.0 * bleed_h).max(1.0);
+    // ImageOps.fit keeps the live dimensions as the exact positive result of
+    // subtracting the bleed. Pillow does not clamp either axis to one pixel;
+    // doing so changes the crop box for small images with non-zero bleed.
+    let live_w = iw as f64 - 2.0 * bleed_w;
+    let live_h = ih as f64 - 2.0 * bleed_h;
     let live_ratio = live_w / live_h;
     let output_ratio = w as f64 / h as f64;
     // Compute crop dimensions (PIL: floats, no rounding)
