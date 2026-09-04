@@ -801,6 +801,12 @@ pub fn op_pad(
         let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
         (new_w, h)
     };
+    if iw != 0 && ih != 0 && (nw == 0 || nh == 0) {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+    if iw == 0 && ih != 0 && nh != ih {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
     // Pillow's ImagingCore resize keeps P/PA as indexed samples and ignores
     // the requested resampling kernel; using nearest here avoids interpolated
     // palette indices while preserving the raw mode through the pad path.
@@ -813,7 +819,12 @@ pub fn op_pad(
     // channels.  Image.resize already owns the exact f64 coefficient/f32
     // store path for this representation; reuse it for Pad's contain step
     // instead of routing through pil_resize's byte-oriented generic loop.
-    let resized = if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
+    let resized = if nw == 0 || nh == 0 {
+        // Pillow's empty-width source can resize only when the contain pass
+        // keeps its source height. Preserve the zero-width result instead of
+        // routing it through the generic F/byte kernels or clamping to one.
+        preserve_mode(img, pil_resize(img, nw, nh, resize_filter, explicit_mode))
+    } else if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
         execute_resize(img, nw.max(1), nh.max(1), &resize_filter, explicit_mode)?
     } else {
         pil_resize(img, nw.max(1), nh.max(1), resize_filter, explicit_mode)

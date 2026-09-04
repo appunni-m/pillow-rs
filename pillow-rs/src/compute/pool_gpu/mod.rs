@@ -9112,8 +9112,15 @@ fn gpu_pad_geometry(
     }
     let raw_w_u32 = raw_w as u32;
     let raw_h_u32 = raw_h as u32;
-    let resize_w = raw_w_u32.max(1);
-    let resize_h = raw_h_u32.max(1);
+    // Pillow passes the rounded contain dimensions directly to Image.resize;
+    // a zero axis raises ValueError instead of being clamped to one. Keep the
+    // GPU geometry helper out of that invalid domain so strict dispatch uses
+    // the same public error path.
+    if raw_w_u32 == 0 || raw_h_u32 == 0 {
+        return None;
+    }
+    let resize_w = raw_w_u32;
+    let resize_h = raw_h_u32;
     let cx = centering.0.clamp(0.0, 1.0);
     let cy = centering.1.clamp(0.0, 1.0);
     let (offset_x, offset_y) = if raw_w_u32 != *w {
@@ -13786,7 +13793,7 @@ mod tests {
         gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_nearest_affine_is_exact, gpu_operation_requires_image_context,
+        gpu_nearest_affine_is_exact, gpu_operation_requires_image_context, gpu_pad_geometry,
         gpu_palette_alpha_projective_relocation_is_admitted,
         gpu_palette_first_rgb_merge_is_supported,
         gpu_projective_filtered_integer_constant_is_admitted,
@@ -21529,6 +21536,23 @@ mod tests {
         assert_eq!(telemetry.6, Some(3));
         assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn pad_geometry_rejects_rounded_zero_contain_axes() {
+        for (source_dimensions, target_dimensions) in [((2, 100), (1, 1)), ((100, 2), (1, 1))] {
+            let op = PipelineOp::Pad {
+                w: target_dimensions.0,
+                h: target_dimensions.1,
+                filter: ResampleFilter::Box,
+                color: None,
+                centering: (0.5, 0.5),
+            };
+            assert_eq!(
+                gpu_pad_geometry(&op, source_dimensions.0, source_dimensions.1),
+                None
+            );
+        }
     }
 
     #[test]
