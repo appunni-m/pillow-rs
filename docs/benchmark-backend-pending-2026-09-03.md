@@ -497,7 +497,8 @@ receipt rules unchanged.
   across 3,000 zero-dimension/rounded-zero cases in L/LA/RGB/RGBA/F; focused
   ImageOps tests are 6/6 and serial pool-GPU tests are 114/114. The GPU
   geometry preflight leaves invalid zero axes on exact host semantic control.
-- [x] Preserve zero-size `ImageOps.contain` semantics (`5af16716e`): source or
+- [x] Preserve zero-size `ImageOps.contain` semantics (`612690497`, verified
+  in isolation as `5af16716e`): source or
   target height zero now raises Pillow's `ZeroDivisionError` before filter
   validation, rounded-zero output axes raise the resize `ValueError` after
   filter validation, and an empty-width source remains valid only when its
@@ -815,7 +816,7 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `5af16716e` (zero-size Pad and
+`main` includes the parity fixes through `b2d06a319` (zero-size Pad and
 Contain contain errors, typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
