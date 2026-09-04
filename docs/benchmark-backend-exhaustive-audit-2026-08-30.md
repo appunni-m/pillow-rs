@@ -8056,3 +8056,42 @@ ImageOps tests are 6/6, the GPU geometry test passes, serial pool-GPU tests are
 114/114, and migration parity is 10,952/10,952. Receipt-state is 40/40 and
 the evidence contract remains benchmark/coverage/parity 25/24/24. No
 fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.187 Fixed-ID pair after zero-size Pad fix remains timing-noisy (2026-09-04)
+
+Two consecutive runs at integrated revision
+`cbb2025cfb4aa039dcfc5db810b596af91e9564c` selected and measured the same
+11/11 maintained workloads, retained 44/44 comparable records, and produced
+33/33 terminal target receipts in each run with requested backend equal to
+actual backend and empty fallback/error state. The normalized execution
+fingerprint, after removing phase timing summaries, was
+`4a874a7b8558491909ad3d91c195715da5a644b18b31679cb443aad3d3aeab19` in both
+runs; all execution differences were timing fields only. Run SHA-256 values
+were `c0eba23a73310ca6752aa823a56f583fefdb4040de02a696c693dffff7fb2e2f`
+and `1b4e23ccc2f5a34b3c4688b7133d3d9197f2c299bd3af759ff891093d153854b`;
+the budget artifact SHA-256 was
+`b64702a373193c77e1b4bb0bfeed7e3e130855c6efa2e791742bfe0f00f03543` and
+reported eight timing violations. The target records were marked dirty only
+because the shared root contains pre-existing user files; no source, receipt,
+or operation structure changed. The required P2 zero-violation gate remains
+open. No fixtures, thresholds, IDs, denominators, policy, or receipt
+taxonomy changed.
+
+## 32.188 Latest image-slash-star and fontdone heads (2026-09-04)
+
+The current upstream `main` heads are image-slash-star
+`8675feb31d274879aaec1d23cdb0458451eea1ea` and fontdone
+`d260f3c70eebdae418f8785ed0efb3e1ebe591e7`. An isolated checkout of the
+latest image-slash-star head passes default and no-default feature checks,
+all default tests and doctests, strict workspace clippy, formatting, and the
+all-feature coverage matrix (40/40). No issue was reproduced there.
+
+An isolated checkout of the latest fontdone head passes `test-fast` (workspace
+tests, doctests, and all-target checks) and the no-runtime-FFI guard. Its
+strict lint does not pass upstream: `fontdone-wasm/src/implementation.rs:3043`
+triggers `clippy::arithmetic_side_effects`, and line 7242 triggers
+`clippy::expect_used` under `-D warnings`. The API/ABI compatibility check
+was blocked at its version-matched FreeType fetch by the shared network stall,
+not by a source result. The root lockfile remains intentionally pinned to
+image-slash-star `d7e60df1` and fontdone `95dc33f1`; these latest-head checks
+did not modify dependencies or Pillow parity denominators.
