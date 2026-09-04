@@ -661,6 +661,12 @@ pub fn op_contain(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
+    // Pillow's ImageOps.contain evaluates source and destination aspect
+    // ratios before calling Image.resize, so either zero height raises
+    // ZeroDivisionError instead of flowing into a deferred empty image.
+    if ih == 0 || h == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
     let im_ratio = iw as f64 / ih as f64;
     let dest_ratio = w as f64 / h as f64;
     let (nw, nh) = if (im_ratio - dest_ratio).abs() < 1e-10 {
@@ -674,6 +680,13 @@ pub fn op_contain(
         let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
         (new_w, h)
     };
+    // Image.resize rejects rounded-zero dimensions.  The one valid exception
+    // is an empty-width source whose contain height is unchanged: that
+    // request equals the source and Pillow returns an empty copy.
+    let empty_width_copy = iw == 0 && nw == 0 && nh == ih;
+    if (nw == 0 || nh == 0) && !empty_width_copy {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
     // Pillow preserves a zero dimension when the source aspect-ratio math
     // rounds one axis to zero. `pil_resize` has an explicit empty-image path;
     // clamping here would turn a valid 0×N result into 1×N.

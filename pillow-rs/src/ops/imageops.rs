@@ -169,6 +169,38 @@ fn pad_containment_dimensions(
     }
 }
 
+/// Return the dimensions that `ImageOps.contain` passes to `Image.resize`.
+///
+/// Pillow evaluates both aspect-ratio divisions in `ImageOps.contain` before
+/// it calls `Image.resize`, so zero source/target heights must be reported as
+/// `ZeroDivisionError` at this public boundary.  Rounded-zero output axes are
+/// deliberately returned for the later resize validation step: Pillow parses
+/// the resampling filter before `Image.resize` rejects those dimensions.
+fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<((u32, u32), (u32, u32)), PilError> {
+    let source = image.size()?;
+    if source.1 == 0 || h == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    let dimensions = pad_containment_dimensions(source.0, source.1, w, h)
+        .expect("non-zero contain heights were validated above");
+    Ok((source, dimensions))
+}
+
+/// Validate the dimensions produced by `ImageOps.contain` before queuing the
+/// resize.  Pillow's empty-width source is the one valid zero-axis result:
+/// when its height is unchanged, the resize request equals the source and
+/// `Image.resize` returns a copy without rejecting width zero.
+fn validate_contain_dimensions(
+    (source_w, source_h): (u32, u32),
+    (new_w, new_h): (u32, u32),
+) -> Result<(), PilError> {
+    let empty_width_copy = source_w == 0 && source_h != 0 && new_w == 0 && new_h == source_h;
+    if (new_w == 0 || new_h == 0) && !empty_width_copy {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+    Ok(())
+}
+
 /// Return which axes `ImageOps.pad` will fill after its `contain` step.
 /// `None` preserves deferred error handling for zero-sized inputs, where
 /// Pillow evaluates the aspect-ratio division before it can inspect color or
@@ -614,7 +646,9 @@ pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Imag
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
+    let (source, dimensions) = contain_dimensions(image, w, h)?;
     let filter = parse_resample(filter)?;
+    validate_contain_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
@@ -628,7 +662,9 @@ pub fn contain_with_input(
     if filter.is_none() {
         return contain(image, w, h, None);
     }
+    let (source, dimensions) = contain_dimensions(image, w, h)?;
     let filter = parse_imageops_filter(filter)?;
+    validate_contain_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
@@ -1230,7 +1266,9 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CenteringInput, ImageOpsColor, pad_with_input, scale_with_input};
+    use super::{
+        CenteringInput, ImageOpsColor, contain_with_input, pad_with_input, scale_with_input,
+    };
     use crate::error::PilError;
     use crate::image::Image;
     use crate::ops::resize::ResampleInput;
@@ -1352,6 +1390,53 @@ mod tests {
             CenteringInput::Default,
         )
         .expect_err("changed contain height must fail for an empty-width source");
+        assert!(matches!(
+            error,
+            PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+    }
+
+    #[test]
+    fn contain_preserves_zero_dimension_and_filter_error_ordering() {
+        let nonempty = empty_image((2, 100));
+        let error = contain_with_input(&nonempty, 1, 1, None)
+            .expect_err("rounded-zero contain output must fail");
+        assert!(matches!(
+            error,
+            PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+
+        let invalid_filter = contain_with_input(&nonempty, 1, 1, Some(ResampleInput::Code(99)))
+            .expect_err("resize filter validation precedes rounded-zero validation");
+        assert!(
+            matches!(invalid_filter, PilError::ValueError(message) if message.starts_with(
+                "Unknown resampling filter (99)."
+            ))
+        );
+
+        let zero_height =
+            contain_with_input(&empty_image((1, 0)), 1, 1, Some(ResampleInput::Code(99)))
+                .expect_err("zero source height must raise before filter validation");
+        assert!(matches!(
+            zero_height,
+            PilError::ZeroDivisionError(message) if message == "division by zero"
+        ));
+    }
+
+    #[test]
+    fn contain_preserves_empty_width_source_rules() {
+        let source = empty_image((0, 2));
+        for target in [(0, 2), (1, 2), (2, 2)] {
+            let result = contain_with_input(&source, target.0, target.1, None)
+                .expect("unchanged contain height keeps an empty-width copy")
+                .materialize()
+                .expect("empty-width contain materializes");
+            assert_eq!(result.dimensions(), (0, 2));
+            assert!(result.as_bytes().is_empty());
+        }
+
+        let error = contain_with_input(&source, 1, 1, None)
+            .expect_err("changed contain height must reject an empty-width result");
         assert!(matches!(
             error,
             PilError::ValueError(message) if message == "height and width must be > 0"
