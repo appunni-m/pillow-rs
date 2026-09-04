@@ -516,6 +516,16 @@ receipt rules unchanged.
   eight filters plus 2,240/2,240 heterogeneous byte cases; focused ImageOps
   tests are 9/9, serial pool-GPU tests are 114/114, and migration parity is
   10,952/10,952. Invalid dimensions remain exact host semantic control.
+- [x] Preserve zero-size `ImageOps.fit` semantics (`414e78f20`, verified in
+  isolation as `7646e88d6`): Pillow's eager live/output aspect-ratio
+  divisions, filter-error ordering, out-of-range centering normalization, and
+  zero-width source/target resize contract are mirrored in the public, CPU,
+  and SIMD paths. Native Pillow 12.2.0 versus RSPIL is exact for 4,000/4,000
+  zero/positive dimension cases and 56,000/56,000 bleed/centering stress
+  cases across L/LA/RGB/RGBA/F; focused ImageOps tests are 11/11, serial
+  pool-GPU tests are 114/114, and the receipt/evidence contracts pass. The
+  separate positive-dimension Fit nearest/filter arithmetic mismatches remain
+  an explicit P0 lane; invalid dimensions stay on exact host semantic control.
 - [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`, `9762c2af5`): marker 12
   emulates Pillow's per-tap f64 FMA rounding with an integer U128 reducer for
   direct finite-normal rows whose coefficient ranges have at most eight taps,
@@ -825,8 +835,8 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `2d9543fb1` (zero-size Pad and
-Contain contain errors, typed-F filtered
+`main` includes the parity fixes through `414e78f20` (zero-size Pad, Contain,
+and Fit errors, typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 8388607 taps, tall-image F ordering, filtered

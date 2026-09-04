@@ -8141,3 +8141,27 @@ ImageOps tests pass 9/9, serial pool-GPU tests pass 114/114, migration parity
 remains 10,952/10,952, receipt-state is 40/40, and the evidence contract is
 25/24/24. No fixtures, thresholds, IDs, denominators, policy, or receipt
 taxonomy changed.
+
+## 32.191 Preserve zero-dimension ImageOps.fit semantics (2026-09-04)
+
+The zero-dimension corrections for Pad, Contain, and Cover exposed the same
+contract gap in `ImageOps.fit`. Pillow's `ImageOps.fit` computes the live and
+output aspect-ratio divisions before parsing the resampling filter, then
+delegates the boxed dimensions to `Image.resize`. Consequently, a zero source
+or target height raises the native `ZeroDivisionError` first; an invalid filter
+must win over a later zero-width resize error; out-of-range centering values are
+replaced with `0.5`; and a zero-width source can produce a positive black
+result, while an empty-width result is valid only as a same-size, no-bleed
+copy. The old Rust path checked only source height, clamped target axes with
+`max(1)`, and could return blank dimensions or the wrong error ordering.
+
+Integrated commit `414e78f20` (verified in isolation as `7646e88d6`) mirrors
+the eager public validation and CPU/SIMD zero-axis guards without widening any
+arithmetic admission. Native Pillow 12.2.0 versus RSPIL is exact for
+4,000/4,000 zero/positive-dimension cases and 56,000/56,000 bleed/centering
+stress cases across L/LA/RGB/RGBA/F and seven/eight filter inputs. Focused
+ImageOps tests pass 11/11, the serial pool-GPU suite passes 114/114, release
+and development builds pass, and receipt-state/evidence checks pass 40/40 and
+25/24/24. Positive-dimension Fit still has a separate nearest/filter arithmetic
+lane (294 mismatches in 3,150 valid cases), and remains explicitly open; no
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
