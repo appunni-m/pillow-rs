@@ -65,7 +65,10 @@ fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
         CenteringInput::Scalar(_) => Err(PilError::TypeError(
             "cannot unpack non-iterable float object".into(),
         )),
-        CenteringInput::Values(values) if values.len() == 2 => Ok((values[0], values[1])),
+        CenteringInput::Values(values) if values.len() == 2 => Ok((
+            normalize_fit_centering(values[0]),
+            normalize_fit_centering(values[1]),
+        )),
         CenteringInput::Values(values) if values.len() < 2 => Err(PilError::ValueError(format!(
             "not enough values to unpack (expected 2, got {})",
             values.len()
@@ -76,6 +79,18 @@ fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
         CenteringInput::Invalid => Err(PilError::TypeError(
             "cannot unpack non-iterable NoneType object".into(),
         )),
+    }
+}
+
+/// Pillow replaces each out-of-range `ImageOps.fit` centering coordinate with
+/// `0.5` before computing its crop box. This also handles NaN and infinities,
+/// for which Rust's floating-point `clamp` would otherwise preserve a value
+/// that can make boxed coefficient spans invalid.
+fn normalize_fit_centering(value: f64) -> f64 {
+    if value.is_finite() && (0.0..=1.0).contains(&value) {
+        value
+    } else {
+        0.5
     }
 }
 
@@ -743,15 +758,25 @@ pub fn fit(
     bleed: f64,
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
+    let bleed = normalize_fit_bleed(bleed);
+    let centering = (
+        normalize_fit_centering(centering.0),
+        normalize_fit_centering(centering.1),
+    );
+    // Pillow computes both aspect ratios inside ImageOps.fit before calling
+    // Image.resize (and therefore before Image.resize parses its filter).
+    // Keep zero-height and zero-target errors at this eager boundary instead
+    // of letting a deferred backend clamp them to one pixel.
+    validate_fit_geometry(image, w, h, bleed)?;
     let filter = parse_resample(filter)?;
-    validate_fit_source(image)?;
+    validate_fit_resize_dimensions(image, w, h, bleed)?;
     Ok(Image::push_op(
         image,
         PipelineOp::Fit {
             w,
             h,
             filter,
-            bleed: normalize_fit_bleed(bleed),
+            bleed,
             centering,
         },
     ))
@@ -767,7 +792,6 @@ pub fn fit_with_input(
     centering: CenteringInput,
 ) -> Result<Image, PilError> {
     let filter_was_none = filter.is_none();
-    let filter = parse_imageops_filter(filter)?;
     // Pillow treats an explicit `(0.5, 0.5)` pair exactly like the omitted
     // default, but it still preserves an explicitly supplied resampling
     // method. Normalize the centering in core so that the default path cannot
@@ -781,17 +805,24 @@ pub fn fit_with_input(
         centering => centering,
     };
     let centering = resolve_centering(centering)?;
+    let bleed = normalize_fit_bleed(bleed);
+    // ImageOps.fit performs its centering unpack and crop-ratio divisions
+    // before delegating to Image.resize. In particular, a zero source height
+    // or target height must win over an invalid resampling value, while a
+    // zero-width source can still produce a valid black positive result.
+    validate_fit_geometry(image, w, h, bleed)?;
+    let filter = parse_imageops_filter(filter)?;
+    validate_fit_resize_dimensions(image, w, h, bleed)?;
     if filter_was_none && centering == (0.5, 0.5) {
         return fit(image, w, h, None, bleed, centering);
     }
-    validate_fit_source(image)?;
     Ok(Image::push_op(
         image,
         PipelineOp::Fit {
             w,
             h,
             filter,
-            bleed: normalize_fit_bleed(bleed),
+            bleed,
             centering,
         },
     ))
@@ -808,10 +839,60 @@ fn normalize_fit_bleed(bleed: f64) -> f64 {
     }
 }
 
-fn validate_fit_source(image: &Image) -> Result<(), PilError> {
-    let (_, height) = image.size()?;
-    if height == 0 {
+/// Validate the geometry and error ordering performed by `ImageOps.fit` before
+/// its lazy boxed resize is queued. Pillow evaluates the source/live aspect
+/// ratio and output aspect ratio in Python before parsing the resize filter.
+fn validate_fit_geometry(
+    image: &Image,
+    target_width: u32,
+    target_height: u32,
+    bleed: f64,
+) -> Result<(), PilError> {
+    let (source_width, source_height) = image.size()?;
+    if source_height == 0 {
         return Err(PilError::ZeroDivisionError("float division by zero".into()));
+    }
+    let bleed_height = bleed * f64::from(source_height);
+    let live_height = f64::from(source_height) - 2.0 * bleed_height;
+    if live_height == 0.0 {
+        return Err(PilError::ZeroDivisionError("float division by zero".into()));
+    }
+    // This is the first division in Pillow's fit implementation.
+    let live_width = f64::from(source_width) - 2.0 * bleed * f64::from(source_width);
+    let _live_ratio = live_width / live_height;
+    // The output ratio is evaluated next, before Image.resize parses its
+    // filter or validates a zero-width target.
+    if target_height == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    let _output_ratio = f64::from(target_width) / f64::from(target_height);
+
+    Ok(())
+}
+
+/// Validate the dimensions that Pillow's `Image.resize` checks after its
+/// filter has been parsed. Keeping this separate from [`validate_fit_geometry`]
+/// preserves the native precedence of an invalid filter over a zero-width
+/// resize, while source/target height divisions still win earlier.
+fn validate_fit_resize_dimensions(
+    image: &Image,
+    target_width: u32,
+    target_height: u32,
+    bleed: f64,
+) -> Result<(), PilError> {
+    let (source_width, source_height) = image.size()?;
+    if target_width == 0 {
+        // Image.resize can return an empty copy only when the source and
+        // requested dimensions remain identical and no bleed changes the
+        // boxed source height.
+        let empty_width_copy = source_width == 0 && target_height == source_height && bleed == 0.0;
+        if !empty_width_copy {
+            return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
+    } else if source_width == 0 && target_height < source_height {
+        // A zero-width boxed source is accepted by Pillow only when the
+        // positive destination has at least as many rows as the source.
+        return Err(PilError::ValueError("height and width must be > 0".into()));
     }
     Ok(())
 }
@@ -1290,8 +1371,8 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, pad_with_input,
-        scale_with_input,
+        CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, fit, fit_with_input,
+        pad_with_input, scale_with_input,
     };
     use crate::error::PilError;
     use crate::image::Image;
@@ -1496,6 +1577,118 @@ mod tests {
                 .expect_err("zero source height precedes filter validation");
         assert!(matches!(
             source_height,
+            PilError::ZeroDivisionError(message) if message == "division by zero"
+        ));
+    }
+
+    #[test]
+    fn fit_preserves_zero_dimension_source_rules() {
+        let source = empty_image((0, 2));
+        let empty = fit_with_input(&source, 0, 2, None, 0.0, CenteringInput::Default)
+            .expect("same-size empty-width fit is a valid copy")
+            .materialize()
+            .expect("empty-width fit materializes");
+        assert_eq!(empty.dimensions(), (0, 2));
+        assert!(empty.as_bytes().is_empty());
+
+        let black = fit_with_input(&source, 2, 2, None, 0.0, CenteringInput::Default)
+            .expect("a positive target at the source height is valid")
+            .materialize()
+            .expect("zero-width source fit materializes");
+        assert_eq!(black.dimensions(), (2, 2));
+        assert_eq!(black.as_bytes(), &[0, 0, 0, 0]);
+
+        for target in [(0, 1), (1, 1), (1, 0), (0, 3)] {
+            let error = fit_with_input(
+                &source,
+                target.0,
+                target.1,
+                None,
+                0.0,
+                CenteringInput::Default,
+            )
+            .expect_err("fit must preserve Pillow's zero-dimension error");
+            match (target, error) {
+                ((1, 0), PilError::ZeroDivisionError(message)) => {
+                    assert_eq!(message, "division by zero")
+                }
+                (_, PilError::ValueError(message)) => {
+                    assert_eq!(message, "height and width must be > 0")
+                }
+                (target, error) => panic!("unexpected fit result for {target:?}: {error:?}"),
+            }
+        }
+
+        let invalid_filter = fit_with_input(
+            &source,
+            2,
+            2,
+            Some(ResampleInput::Code(99)),
+            0.0,
+            CenteringInput::Default,
+        )
+        .expect_err("filter validation follows fit geometry");
+        assert!(matches!(
+            invalid_filter,
+            PilError::ValueError(message) if message.starts_with("Unknown resampling filter (99).")
+        ));
+
+        let invalid_filter_after_zero_width = fit_with_input(
+            &source,
+            0,
+            3,
+            Some(ResampleInput::Code(99)),
+            0.0,
+            CenteringInput::Default,
+        )
+        .expect_err("Image.resize parses the filter before rejecting a zero width");
+        assert!(matches!(
+            invalid_filter_after_zero_width,
+            PilError::ValueError(message) if message.starts_with("Unknown resampling filter (99).")
+        ));
+
+        let normalized_centering = fit_with_input(
+            &source,
+            2,
+            2,
+            None,
+            0.0,
+            CenteringInput::Values(vec![-1.0, 2.0]),
+        )
+        .expect("out-of-range centering falls back to the midpoint")
+        .materialize()
+        .expect("normalized fit materializes");
+        assert_eq!(normalized_centering.dimensions(), (2, 2));
+        assert_eq!(normalized_centering.as_bytes(), &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn fit_preserves_zero_height_and_filter_error_ordering() {
+        let zero_height = fit_with_input(
+            &empty_image((1, 0)),
+            1,
+            1,
+            Some(ResampleInput::Code(99)),
+            0.0,
+            CenteringInput::Default,
+        )
+        .expect_err("source height division precedes filter parsing");
+        assert!(matches!(
+            zero_height,
+            PilError::ZeroDivisionError(message) if message == "float division by zero"
+        ));
+
+        let zero_target_height = fit(
+            &empty_image((2, 3)),
+            1,
+            0,
+            Some("not-a-filter"),
+            0.0,
+            (0.5, 0.5),
+        )
+        .expect_err("target height division precedes filter parsing");
+        assert!(matches!(
+            zero_target_height,
             PilError::ZeroDivisionError(message) if message == "division by zero"
         ));
     }

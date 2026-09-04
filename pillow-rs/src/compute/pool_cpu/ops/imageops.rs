@@ -751,6 +751,27 @@ pub fn op_fit(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
+    // ImageOps.fit performs these divisions before Image.resize sees the
+    // boxed target. Keep the eager public checks mirrored here for callers
+    // that execute a deferred pipeline through an explicit CPU backend.
+    if ih == 0 {
+        return Err(PilError::ZeroDivisionError("float division by zero".into()));
+    }
+    if h == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    if iw == 0 {
+        // A zero-width source can be copied only when the fit request keeps
+        // the empty dimensions and does not alter the boxed source height.
+        if w == 0 && h == ih && bleed == 0.0 {
+            return Ok(img.clone());
+        }
+        if w == 0 || h < ih {
+            return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
+    } else if w == 0 {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
     // Bleed pixels (PIL: bleed * image.size)
     let bleed_w = bleed * iw as f64;
     let bleed_h = bleed * ih as f64;
@@ -783,8 +804,8 @@ pub fn op_fit(
     };
     let result = pil_resize_boxed(
         img,
-        w.max(1),
-        h.max(1),
+        w,
+        h,
         crop_left,
         crop_top,
         crop_left + crop_w,
