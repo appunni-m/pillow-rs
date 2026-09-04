@@ -442,6 +442,18 @@ receipt rules unchanged.
   `1eadb10832fa4c69825f3aa792d20903a1ffd12f038574d118ef77a13a5dcf7a`).
   Execution receipts remained structurally identical after removing phase
   timing summaries; violations remain timing-only and P2 is still open.
+  A same-revision pair after the zero-size Pad fix at `cbb2025cfb` again
+  selected/measured 11/11 workloads with 44/44 comparable records and 33/33
+  terminal requested=actual target receipts per run. The normalized execution
+  fingerprint remained
+  `4a874a7b8558491909ad3d91c195715da5a644b18b31679cb443aad3d3aeab19`; run
+  SHAs were `c0eba23a73310ca6752aa823a56f583fefdb4040de02a696c693dffff7fb2e2f`
+  and `1b4e23ccc2f5a34b3c4688b7133d3d9197f2c299bd3af759ff891093d153854b`,
+  with budget artifact
+  `b64702a373193c77e1b4bb0bfeed7e3e130855c6efa2e791742bfe0f00f03543`
+  reporting eight timing-only violations. The shared root's pre-existing
+  untracked files make the benchmark identity dirty; receipt and operation
+  structure are unchanged, so P2 remains open.
 
 ## Verified changes already integrated
 
@@ -780,9 +792,21 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
   no benchmark scripts, fixtures, thresholds, IDs, denominators, policy, or
   receipt taxonomy changed.
 
+## Latest dependency heads (audited 2026-09-04)
+
+- [x] image-slash-star `8675feb31d274879aaec1d23cdb0458451eea1ea`: default and
+  no-default checks, tests/doctests, strict clippy/formatting, and the
+  all-feature coverage matrix (40/40) pass in an isolated checkout.
+- [x] fontdone `d260f3c70eebdae418f8785ed0efb3e1ebe591e7`: test-fast and the
+  no-runtime-FFI guard pass. Strict upstream lint still fails at
+  `fontdone-wasm/src/implementation.rs:3043` (`arithmetic_side_effects`) and
+  line 7242 (`expect_used`); API/ABI compatibility was blocked by the shared
+  FreeType fetch stall. Keep the root lockfile pins unchanged until those
+  upstream issues and the oracle fetch are resolved.
+
 ## Current integration state
 
-`main` includes the parity fixes through `8e4a6b882` (zero-size Pad contain
+`main` includes the parity fixes through `cbb2025cf` (zero-size Pad contain
 errors, typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
