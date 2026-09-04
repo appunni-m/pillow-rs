@@ -135,31 +135,47 @@ fn round_positive_ties_even(value: f64) -> u32 {
     rounded.max(0.0).min(f64::from(u32::MAX)) as u32
 }
 
+/// Return the exact contain dimensions Pillow computes before `Image.resize`.
+/// A rounded axis of zero is intentionally preserved: Pillow passes that
+/// result to `resize`, which raises `ValueError("height and width must be > 0")`
+/// rather than silently clamping the axis to one.
+fn pad_containment_dimensions(
+    source_w: u32,
+    source_h: u32,
+    target_w: u32,
+    target_h: u32,
+) -> Option<(u32, u32)> {
+    if source_h == 0 || target_h == 0 {
+        return None;
+    }
+    let source_ratio = f64::from(source_w) / f64::from(source_h);
+    let destination_ratio = f64::from(target_w) / f64::from(target_h);
+    if (source_ratio - destination_ratio).abs() < 1e-10 {
+        Some((target_w, target_h))
+    } else if source_ratio > destination_ratio {
+        Some((
+            target_w,
+            round_positive_ties_even(
+                f64::from(source_h) / f64::from(source_w) * f64::from(target_w),
+            ),
+        ))
+    } else {
+        Some((
+            round_positive_ties_even(
+                f64::from(source_w) / f64::from(source_h) * f64::from(target_h),
+            ),
+            target_h,
+        ))
+    }
+}
+
 /// Return which axes `ImageOps.pad` will fill after its `contain` step.
 /// `None` preserves deferred error handling for zero-sized inputs, where
 /// Pillow evaluates the aspect-ratio division before it can inspect color or
 /// centering.
 fn pad_containment_axes(image: &Image, w: u32, h: u32) -> Result<Option<(bool, bool)>, PilError> {
     let (iw, ih) = image.size()?;
-    if iw == 0 || ih == 0 || w == 0 || h == 0 {
-        return Ok(None);
-    }
-    let source_ratio = f64::from(iw) / f64::from(ih);
-    let destination_ratio = f64::from(w) / f64::from(h);
-    let (new_w, new_h) = if (source_ratio - destination_ratio).abs() < 1e-10 {
-        (w, h)
-    } else if source_ratio > destination_ratio {
-        (
-            w,
-            round_positive_ties_even(f64::from(ih) / f64::from(iw) * f64::from(w)),
-        )
-    } else {
-        (
-            round_positive_ties_even(f64::from(iw) / f64::from(ih) * f64::from(h)),
-            h,
-        )
-    };
-    Ok(Some((new_w != w, new_h != h)))
+    Ok(pad_containment_dimensions(iw, ih, w, h).map(|(new_w, new_h)| (new_w != w, new_h != h)))
 }
 
 pub(crate) fn resolve_imageops_color(
@@ -786,16 +802,26 @@ pub fn pad_with_input(
     let containment_axes = pad_containment_axes(image, w, h)?;
     // Pillow evaluates ``contain`` before constructing the padded canvas. A
     // zero-height source or destination therefore raises division by zero at
-    // the public call boundary, while a zero-width destination reaches
-    // ``Image.new`` and raises its non-positive-dimension ValueError. Keep
-    // these checks after ``pad_containment_axes`` so the aspect-ratio guard
-    // remains exercised by valid public zero-dimension inputs.
+    // the public call boundary. A zero-width destination normally reaches
+    // ``Image.new`` and raises its non-positive-dimension ValueError, except
+    // when an empty-width source keeps the same height: that contain result
+    // remains empty and can be padded. Keep these checks after
+    // ``pad_containment_axes`` so the aspect-ratio guard remains exercised by
+    // valid public zero-dimension inputs.
     let (_, source_height) = image.size()?;
     if source_height == 0 || h == 0 {
         return Err(PilError::ZeroDivisionError("division by zero".into()));
     }
-    if w == 0 {
+    let (source_width, _) = image.size()?;
+    if w == 0 && !(source_width == 0 && source_height == h) {
         return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+    if let Some((new_w, new_h)) = pad_containment_dimensions(source_width, source_height, w, h) {
+        let zero_axis = new_w == 0 || new_h == 0;
+        let zero_width_source_resize = source_width == 0 && new_h == source_height;
+        if zero_axis && !zero_width_source_resize {
+            return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
     }
     if containment_axes == Some((false, false)) {
         return Ok(Image::push_op(
@@ -1204,10 +1230,11 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::scale_with_input;
+    use super::{CenteringInput, ImageOpsColor, pad_with_input, scale_with_input};
     use crate::error::PilError;
     use crate::image::Image;
     use crate::ops::resize::ResampleInput;
+    use crate::raster::GenericImageView;
 
     fn empty_image(size: (u32, u32)) -> Image {
         Image::new(size.0, size.1, "L", (0, 0, 0, 0)).expect("empty image dimensions are valid")
@@ -1259,6 +1286,72 @@ mod tests {
         let image = empty_image((2, 3));
         let error = scale_with_input(&image, 0.1, None)
             .expect_err("a nonempty source cannot resize to a zero dimension");
+        assert!(matches!(
+            error,
+            PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+    }
+
+    #[test]
+    fn pad_rejects_rounded_zero_contain_dimensions() {
+        for size in [(2, 100), (100, 2)] {
+            let image = empty_image(size);
+            let error = pad_with_input(
+                &image,
+                1,
+                1,
+                None,
+                ImageOpsColor::None,
+                CenteringInput::Default,
+            )
+            .expect_err("contain must reject a rounded zero resize axis");
+            assert!(matches!(
+                error,
+                PilError::ValueError(message) if message == "height and width must be > 0"
+            ));
+        }
+    }
+
+    #[test]
+    fn pad_preserves_pillow_zero_width_source_rules() {
+        let source = empty_image((0, 2));
+        let padded = pad_with_input(
+            &source,
+            2,
+            2,
+            None,
+            ImageOpsColor::None,
+            CenteringInput::Default,
+        )
+        .expect("matching source height keeps an empty-width contain result")
+        .materialize()
+        .expect("empty-width padded image materializes");
+        assert_eq!(padded.dimensions(), (2, 2));
+        assert_eq!(padded.as_bytes(), &[0, 0, 0, 0]);
+
+        let empty = pad_with_input(
+            &source,
+            0,
+            2,
+            None,
+            ImageOpsColor::None,
+            CenteringInput::Default,
+        )
+        .expect("zero-width target with matching source height is valid")
+        .materialize()
+        .expect("zero-width target materializes");
+        assert_eq!(empty.dimensions(), (0, 2));
+        assert!(empty.as_bytes().is_empty());
+
+        let error = pad_with_input(
+            &source,
+            1,
+            1,
+            None,
+            ImageOpsColor::None,
+            CenteringInput::Default,
+        )
+        .expect_err("changed contain height must fail for an empty-width source");
         assert!(matches!(
             error,
             PilError::ValueError(message) if message == "height and width must be > 0"
