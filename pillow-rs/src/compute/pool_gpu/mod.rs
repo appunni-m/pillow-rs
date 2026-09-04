@@ -4588,13 +4588,17 @@ fn gpu_fit_nearest_coefficients(
     let mut count = Vec::with_capacity(output_size as usize);
     let mut offsets = Vec::with_capacity(output_size as usize);
     let mut weights = Vec::with_capacity(output_size as usize);
-    for output in 0..output_size {
-        let coordinate = box_start + (f64::from(output) + 0.5) * scale;
+    // ImagingScaleAffine initializes one center coordinate and advances it
+    // cumulatively. Recomputing each `(index + 0.5) * scale` can cross an
+    // upsample boundary differently after f64 rounding.
+    let mut coordinate = box_start + scale * 0.5;
+    for _ in 0..output_size {
         let source = (coordinate.floor() as i64).clamp(0, last_source);
         xmin.push(source);
         count.push(1);
         offsets.push(weights.len());
         weights.push(1i64 << 22);
+        coordinate += scale;
     }
     FilterCoeffs {
         xmin,
@@ -8922,8 +8926,11 @@ fn gpu_fit_box(
     let output_h = f64::from(output_h);
     let bleed_w = b * source_w;
     let bleed_h = b * source_h;
-    let live_w = (source_w - 2.0 * bleed_w).max(1.0);
-    let live_h = (source_h - 2.0 * bleed_h).max(1.0);
+    // Pillow keeps the exact positive live dimensions here.  Clamping either
+    // axis to one changes the fractional box for small images/high bleed and
+    // sends NEAREST to the wrong source sample.
+    let live_w = source_w - 2.0 * bleed_w;
+    let live_h = source_h - 2.0 * bleed_h;
     let live_ratio = live_w / live_h;
     let output_ratio = output_w / output_h;
     let (crop_w, crop_h) = if (live_ratio - output_ratio).abs() < 1e-10 {
@@ -12583,7 +12590,7 @@ fn gpu_geometry_requires_exact_host_control(
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
-        if let PipelineOp::Fit { filter, .. } = op {
+        if let PipelineOp::Fit { w, h, filter, .. } = op {
             // Fit's fractional crop is lowered to the boxed Resample.c
             // contract. The shared device convolution plan is not yet
             // proven for straight-alpha/typed rows (tiny source spans can
@@ -12591,14 +12598,16 @@ fn gpu_geometry_requires_exact_host_control(
             // exact host path own those pixels. Raw-channel layouts retain
             // their existing native path, and P forces NEAREST before this
             // decision. Identity Fit is lowered to Duplicate and remains a
-            // native copy.
-            let effective_filter = if mode == Some("P") {
-                ResampleFilter::Nearest
-            } else {
-                *filter
-            };
-            let raw_channel_layout = matches!(mode, Some("PA" | "RGBX" | "RGBa" | "CMYK"));
-            if !matches!(effective_filter, ResampleFilter::Nearest) && !raw_channel_layout {
+            // native copy. F nearest remains native only when both axes are
+            // reductions; mixed/upsampling cases retain host control until
+            // their two-pass device dependency is proven on all adapters.
+            let native_f_nearest_fit = mode == Some("F")
+                && matches!(filter, ResampleFilter::Nearest)
+                && *w <= dimensions.0
+                && *h <= dimensions.1;
+            let native_fit_layout =
+                matches!(mode, Some("P" | "PA" | "RGBX" | "RGBa" | "CMYK")) || native_f_nearest_fit;
+            if !native_fit_layout {
                 return true;
             }
         }
