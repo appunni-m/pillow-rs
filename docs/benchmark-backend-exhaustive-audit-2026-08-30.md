@@ -8162,6 +8162,25 @@ arithmetic admission. Native Pillow 12.2.0 versus RSPIL is exact for
 stress cases across L/LA/RGB/RGBA/F and seven/eight filter inputs. Focused
 ImageOps tests pass 11/11, the serial pool-GPU suite passes 114/114, release
 and development builds pass, and receipt-state/evidence checks pass 40/40 and
-25/24/24. Positive-dimension Fit still has a separate nearest/filter arithmetic
-lane (294 mismatches in 3,150 valid cases), and remains explicitly open; no
-fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.
+25/24/24. The remaining positive-dimension arithmetic lane was then closed in
+two source commits. `c23185bad` (isolated source `721519cde`) mirrors Pillow's
+`src/libImaging/Resample.c` integer-crop shortcut, float32 box boundaries,
+unchanged-axis pass elision, alpha round-trip, and cumulative nearest mapping;
+the old CPU/SIMD path had treated boxed F words as byte channels and retained
+filter tails on unchanged axes. A separate GPU first divergence showed the
+shared two-pass plan selecting the wrong intermediate on ordinary straight-byte
+Fit rows, so `99b041252` (isolated source `4a744c969`) keeps those layouts on
+exact host semantic control, removes the stale positive live-dimension clamp,
+and admits F nearest natively only for reductions. Before that narrowing,
+`(1, 2) -> (2, 1)` F NEAREST with values `[1.5, -2.25]` and centered crop
+returned the first row on GPU while Pillow's cumulative `ImagingScaleAffine`
+walk returned the second; the corrected route is exact.
+
+Native Pillow 12.2.0 differential matrices after both commits are exact for
+92,400/92,400 L/LA/RGB/RGBA byte Fit cases and 16,500/16,500 heterogeneous F
+cases on CPU, SIMD, and GPU. The full serial pool-GPU suite passes 114/114;
+formatting, development and release builds, and the existing receipt/evidence
+contracts pass. Ordinary straight-byte non-identity Fit remains deliberately
+host-controlled, while the existing P/PA/RGBX/RGBa/CMYK raw layouts and the
+proven F-nearest reduction envelope retain native GPU receipts. No fixtures,
+thresholds, IDs, denominators, policy, or receipt taxonomy changed.

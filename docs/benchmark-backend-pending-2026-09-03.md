@@ -523,9 +523,19 @@ receipt rules unchanged.
   and SIMD paths. Native Pillow 12.2.0 versus RSPIL is exact for 4,000/4,000
   zero/positive dimension cases and 56,000/56,000 bleed/centering stress
   cases across L/LA/RGB/RGBA/F; focused ImageOps tests are 11/11, serial
-  pool-GPU tests are 114/114, and the receipt/evidence contracts pass. The
-  separate positive-dimension Fit nearest/filter arithmetic mismatches remain
-  an explicit P0 lane; invalid dimensions stay on exact host semantic control.
+  pool-GPU tests are 114/114, and the receipt/evidence contracts pass. Invalid
+  dimensions stay on exact host semantic control.
+- [x] Preserve positive-dimension `ImageOps.fit` boxed resize semantics
+  (`c23185bad`, GPU correction `99b041252`; isolated sources `721519cde` and
+  `4a744c969`): CPU/SIMD now mirror Pillow `Resample.c` float32 box
+  boundaries, integer-crop and unchanged-axis shortcuts, alpha handling, and
+  cumulative nearest coordinates. Ordinary straight-byte non-identity Fit
+  rows remain exact host semantic control after the first GPU divergence
+  exposed a stale two-pass intermediate; F nearest is native only for proven
+  reductions. Native Pillow 12.2.0 differential matrices are exact for
+  92,400/92,400 L/LA/RGB/RGBA byte cases and 16,500/16,500 heterogeneous F
+  cases on CPU, SIMD, and GPU; serial pool-GPU tests pass 114/114. No fixtures,
+  thresholds, IDs, denominators, policy, or receipt taxonomy changed.
 - [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`, `9762c2af5`): marker 12
   emulates Pillow's per-tap f64 FMA rounding with an integer U128 reducer for
   direct finite-normal rows whose coefficient ranges have at most eight taps,
@@ -835,8 +845,8 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `414e78f20` (zero-size Pad, Contain,
-and Fit errors, typed-F filtered
+`main` includes the parity fixes through `99b041252` (zero-size Pad, Contain,
+and Fit errors, positive-dimension Fit boxed resize semantics, typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 8388607 taps, tall-image F ordering, filtered
