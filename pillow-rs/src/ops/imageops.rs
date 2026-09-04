@@ -186,11 +186,11 @@ fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<((u32, u32), (u32
     Ok((source, dimensions))
 }
 
-/// Validate the dimensions produced by `ImageOps.contain` before queuing the
-/// resize.  Pillow's empty-width source is the one valid zero-axis result:
-/// when its height is unchanged, the resize request equals the source and
-/// `Image.resize` returns a copy without rejecting width zero.
-fn validate_contain_dimensions(
+/// Validate the dimensions produced by `ImageOps.contain` or `ImageOps.cover`
+/// before queuing the resize. Pillow's empty-width source is the one valid
+/// zero-axis result: when its height is unchanged, the resize request equals
+/// the source and `Image.resize` returns a copy without rejecting width zero.
+fn validate_aspect_resize_dimensions(
     (source_w, source_h): (u32, u32),
     (new_w, new_h): (u32, u32),
 ) -> Result<(), PilError> {
@@ -199,6 +199,38 @@ fn validate_contain_dimensions(
         return Err(PilError::ValueError("height and width must be > 0".into()));
     }
     Ok(())
+}
+
+/// Return the dimensions that `ImageOps.cover` passes to `Image.resize`.
+///
+/// Unlike `contain`, a zero-width source can only reach the resize call when
+/// the destination ratio is also zero. If the destination has positive width,
+/// Pillow divides by the source width while calculating the covering height
+/// and raises `ZeroDivisionError` before filter validation.
+fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<((u32, u32), (u32, u32)), PilError> {
+    let source = image.size()?;
+    if source.1 == 0 || h == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    let image_ratio = f64::from(source.0) / f64::from(source.1);
+    let destination_ratio = f64::from(w) / f64::from(h);
+    let dimensions = if (image_ratio - destination_ratio).abs() < 1e-10 {
+        (w, h)
+    } else if image_ratio < destination_ratio {
+        if source.0 == 0 {
+            return Err(PilError::ZeroDivisionError("division by zero".into()));
+        }
+        (
+            w,
+            round_positive_ties_even(f64::from(source.1) / f64::from(source.0) * f64::from(w)),
+        )
+    } else {
+        (
+            round_positive_ties_even(f64::from(source.0) / f64::from(source.1) * f64::from(h)),
+            h,
+        )
+    };
+    Ok((source, dimensions))
 }
 
 /// Return which axes `ImageOps.pad` will fill after its `contain` step.
@@ -648,7 +680,7 @@ pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Imag
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let (source, dimensions) = contain_dimensions(image, w, h)?;
     let filter = parse_resample(filter)?;
-    validate_contain_dimensions(source, dimensions)?;
+    validate_aspect_resize_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
@@ -664,7 +696,7 @@ pub fn contain_with_input(
     }
     let (source, dimensions) = contain_dimensions(image, w, h)?;
     let filter = parse_imageops_filter(filter)?;
-    validate_contain_dimensions(source, dimensions)?;
+    validate_aspect_resize_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
@@ -674,8 +706,9 @@ pub fn contain_with_input(
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
+    let (source, dimensions) = cover_dimensions(image, w, h)?;
     let filter = parse_resample(filter)?;
-    validate_cover_source(image)?;
+    validate_aspect_resize_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
@@ -689,8 +722,9 @@ pub fn cover_with_input(
     if filter.is_none() {
         return cover(image, w, h, None);
     }
+    let (source, dimensions) = cover_dimensions(image, w, h)?;
     let filter = parse_imageops_filter(filter)?;
-    validate_cover_source(image)?;
+    validate_aspect_resize_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
@@ -772,17 +806,6 @@ fn normalize_fit_bleed(bleed: f64) -> f64 {
     } else {
         0.0
     }
-}
-
-// Pillow evaluates ImageOps.cover/fit's source aspect ratio when the public
-// call is made. Keep those division errors in core instead of allowing a
-// deferred SIMD/CPU pipeline to turn an invalid empty input into an image.
-fn validate_cover_source(image: &Image) -> Result<(), PilError> {
-    let (width, height) = image.size()?;
-    if width == 0 || height == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    Ok(())
 }
 
 fn validate_fit_source(image: &Image) -> Result<(), PilError> {
@@ -1267,7 +1290,8 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CenteringInput, ImageOpsColor, contain_with_input, pad_with_input, scale_with_input,
+        CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, pad_with_input,
+        scale_with_input,
     };
     use crate::error::PilError;
     use crate::image::Image;
@@ -1440,6 +1464,39 @@ mod tests {
         assert!(matches!(
             error,
             PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+    }
+
+    #[test]
+    fn cover_preserves_empty_width_source_rules() {
+        let source = empty_image((0, 2));
+        let result = cover_with_input(&source, 0, 2, None)
+            .expect("same-size empty-width cover returns a copy")
+            .materialize()
+            .expect("empty-width cover materializes");
+        assert_eq!(result.dimensions(), (0, 2));
+        assert!(result.as_bytes().is_empty());
+
+        let error = cover_with_input(&source, 0, 1, None)
+            .expect_err("changed empty-width cover size must fail resize validation");
+        assert!(matches!(
+            error,
+            PilError::ValueError(message) if message == "height and width must be > 0"
+        ));
+
+        let division = cover_with_input(&source, 1, 2, None)
+            .expect_err("positive destination width divides by zero source width");
+        assert!(matches!(
+            division,
+            PilError::ZeroDivisionError(message) if message == "division by zero"
+        ));
+
+        let source_height =
+            cover_with_input(&empty_image((1, 0)), 1, 1, Some(ResampleInput::Code(99)))
+                .expect_err("zero source height precedes filter validation");
+        assert!(matches!(
+            source_height,
+            PilError::ZeroDivisionError(message) if message == "division by zero"
         ));
     }
 }
