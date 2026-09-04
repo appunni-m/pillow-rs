@@ -704,12 +704,22 @@ pub fn op_cover(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
+    // Pillow's ImageOps.cover evaluates source and destination aspect ratios
+    // before calling Image.resize. Preserve its division errors instead of
+    // allowing a deferred empty image or a zero target height to flow into
+    // Rust's non-panicking floating-point arithmetic.
+    if ih == 0 || h == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
     let im_ratio = iw as f64 / ih as f64;
     let dest_ratio = w as f64 / h as f64;
     let (nw, nh) = if (im_ratio - dest_ratio).abs() < 1e-10 {
         (w, h)
     } else if im_ratio < dest_ratio {
         // Image is taller: adjust height to cover
+        if iw == 0 {
+            return Err(PilError::ZeroDivisionError("division by zero".into()));
+        }
         let new_h = bankers_round(ih as f64 / iw as f64 * w as f64) as u32;
         (w, new_h)
     } else {
@@ -717,7 +727,14 @@ pub fn op_cover(
         let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
         (new_w, h)
     };
-    let result = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
+    // Image.resize rejects rounded-zero dimensions. The one valid exception
+    // is an empty-width source whose cover height is unchanged, for which the
+    // resize request equals the source and Pillow returns an empty copy.
+    let empty_width_copy = iw == 0 && nw == 0 && nh == ih;
+    if (nw == 0 || nh == 0) && !empty_width_copy {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+    let result = pil_resize(img, nw, nh, filter, explicit_mode);
     Ok(preserve_mode(img, result))
 }
 
