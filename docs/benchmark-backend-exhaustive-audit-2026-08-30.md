@@ -8095,3 +8095,27 @@ was blocked at its version-matched FreeType fetch by the shared network stall,
 not by a source result. The root lockfile remains intentionally pinned to
 image-slash-star `d7e60df1` and fontdone `95dc33f1`; these latest-head checks
 did not modify dependencies or Pillow parity denominators.
+
+## 32.189 Preserve zero-dimension ImageOps.contain semantics (2026-09-04)
+
+The zero-size Pad correction exposed the same contract gap in the standalone
+`ImageOps.contain` operation. Pillow's `ImageOps.contain` evaluates the source
+and destination aspect-ratio divisions before calling `Image.resize`: a zero
+source or target height raises `ZeroDivisionError("division by zero")`, while a
+rounded-zero output axis reaches `Image.resize` and raises
+`ValueError("height and width must be > 0")`. Filter validation occurs after
+those aspect-ratio divisions but before the rounded-zero dimension error.
+Pillow's only valid zero-axis result is an empty-width source whose contain
+height remains unchanged, because `Image.resize` returns its unchanged empty
+copy.
+
+Commit `5af16716e` adds the exact public validation ordering and mirrors the
+same guards in the CPU executor. Native Pillow 12.2.0 versus RSPIL is exact
+for 3,500/3,500 contain cases across L/LA/RGB/RGBA/F, zero and nonzero source
+and target geometries, and seven filters; a heterogeneous byte-mode matrix is
+256/256 exact. The existing zero-dimension Pad matrix remains 3,500/3,500
+exact. Focused ImageOps tests pass 8/8, the serial pool-GPU suite passes
+114/114, migration parity remains 10,952/10,952, receipt-state is 40/40, and
+the evidence contract remains benchmark/coverage/parity 25/24/24. No GPU
+admission was widened for invalid dimensions, and no fixtures, thresholds,
+IDs, denominators, policy, or receipt taxonomy changed.
