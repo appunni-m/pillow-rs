@@ -8109,8 +8109,9 @@ Pillow's only valid zero-axis result is an empty-width source whose contain
 height remains unchanged, because `Image.resize` returns its unchanged empty
 copy.
 
-Commit `5af16716e` adds the exact public validation ordering and mirrors the
-same guards in the CPU executor. Native Pillow 12.2.0 versus RSPIL is exact
+The integrated source commit `612690497` (verified in isolation as
+`5af16716e`) adds the exact public validation ordering and mirrors the same
+guards in the CPU executor. Native Pillow 12.2.0 versus RSPIL is exact
 for 3,500/3,500 contain cases across L/LA/RGB/RGBA/F, zero and nonzero source
 and target geometries, and seven filters; a heterogeneous byte-mode matrix is
 256/256 exact. The existing zero-dimension Pad matrix remains 3,500/3,500
