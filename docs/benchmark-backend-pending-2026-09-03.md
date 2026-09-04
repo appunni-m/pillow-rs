@@ -507,7 +507,8 @@ receipt rules unchanged.
   heterogeneous byte subset 256/256 exact; focused ImageOps tests are 8/8,
   serial pool-GPU tests are 114/114, and migration parity remains
   10,952/10,952. Invalid dimensions remain exact host semantic control.
-- [x] Preserve zero-size `ImageOps.cover` semantics (`86973443c`): zero source
+- [x] Preserve zero-size `ImageOps.cover` semantics (`b6f453cd1`, verified in
+  isolation as `86973443c`): zero source
   or target heights and positive-width/empty-source divisions now raise the
   same `ZeroDivisionError` as Pillow, same-size empty-width copies remain
   valid, and zero resize axes are no longer clamped. Native Pillow 12.2.0
@@ -824,7 +825,7 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `b2d06a319` (zero-size Pad and
+`main` includes the parity fixes through `2d9543fb1` (zero-size Pad and
 Contain contain errors, typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
