@@ -8032,3 +8032,27 @@ build-dev, and release build pass; clippy remains blocked only by the pinned
 AVIF toolchain. Broader non-Box/non-dyadic arithmetic and arithmetic-changing
 chains remain exact host semantic control. No fixtures, thresholds, IDs,
 denominators, policy, or receipt taxonomy changed.
+
+## 32.186 Preserve zero-size ImageOps.pad contain semantics (2026-09-04)
+
+The bounded compact-F Pad experiment exposed a separate public parity defect:
+for an extreme but valid nonempty source such as `(2, 100)` or `(100, 2)` and
+target `(1, 1)`, Pillow's `ImageOps.contain` rounds one resize axis to zero and
+passes that result to `Image.resize`, which raises
+`ValueError("height and width must be > 0")`. The Rust `op_pad` path clamped
+the contain axis to one and could return a nonempty image; the GPU geometry
+preflight made the same clamp. Pillow also permits empty-width sources when
+the contain pass preserves their height, for example `(0, 2) -> (2, 2)`
+produces a blank canvas and `(0, 2) -> (0, 2)` remains empty.
+
+Commit `8e4a6b882` preserves Pillow's rounded contain dimensions in the public
+and CPU paths, reports the exact zero-axis error, retains the valid
+empty-width/source-height rule, and returns exact host semantic control before
+GPU Pad geometry enters the invalid domain. Focused public and GPU geometry
+regressions cover both boundaries. Native Pillow 12.2.0 versus RSPIL is exact
+for 3,000 zero-dimension/rounded-zero cases across L/LA/RGB/RGBA/F, including
+all tested zero-width and zero-height error/value combinations; the focused
+ImageOps tests are 6/6, the GPU geometry test passes, serial pool-GPU tests are
+114/114, and migration parity is 10,952/10,952. Receipt-state is 40/40 and
+the evidence contract remains benchmark/coverage/parity 25/24/24. No
+fixtures, thresholds, IDs, denominators, policy, or receipt taxonomy changed.

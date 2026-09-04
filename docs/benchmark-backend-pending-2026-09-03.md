@@ -477,6 +477,14 @@ receipt rules unchanged.
 - [x] Heterogeneous F `ImageOps.pad` (`c5f03c6f3`): route the contain resize
   through exact f64-coefficient/f32-store semantics and admit only the proven
   marker-9 changed-axis GPU path (25/25 matrix exact; 23 native GPU).
+- [x] Preserve zero-size `ImageOps.pad` contain semantics (`8e4a6b882`):
+  rounded-zero contain axes now raise Pillow's exact
+  `ValueError("height and width must be > 0")` instead of being clamped to
+  one, while empty-width sources that retain their height preserve Pillow's
+  valid empty resize/pad behavior. Native Pillow 12.2.0 versus RSPIL is exact
+  across 3,000 zero-dimension/rounded-zero cases in L/LA/RGB/RGBA/F; focused
+  ImageOps tests are 6/6 and serial pool-GPU tests are 114/114. The GPU
+  geometry preflight leaves invalid zero axes on exact host semantic control.
 - [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`, `9762c2af5`): marker 12
   emulates Pillow's per-tap f64 FMA rounding with an integer U128 reducer for
   direct finite-normal rows whose coefficient ranges have at most eight taps,
@@ -774,7 +782,8 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
-`main` includes the parity fixes through `d659a9c7b` (typed-F filtered
+`main` includes the parity fixes through `8e4a6b882` (zero-size Pad contain
+errors, typed-F filtered
 projective/mesh words and fill presence, filtered Rotate, near-zero Hamming
 F/I parity, PA projective relocation, wide-row F admission guard, ordered F
 reducer through 8388607 taps, tall-image F ordering, filtered
