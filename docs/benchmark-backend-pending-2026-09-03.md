@@ -507,6 +507,14 @@ receipt rules unchanged.
   heterogeneous byte subset 256/256 exact; focused ImageOps tests are 8/8,
   serial pool-GPU tests are 114/114, and migration parity remains
   10,952/10,952. Invalid dimensions remain exact host semantic control.
+- [x] Preserve zero-size `ImageOps.cover` semantics (`86973443c`): zero source
+  or target heights and positive-width/empty-source divisions now raise the
+  same `ZeroDivisionError` as Pillow, same-size empty-width copies remain
+  valid, and zero resize axes are no longer clamped. Native Pillow 12.2.0
+  versus RSPIL is exact for 4,000/4,000 edge cases across L/LA/RGB/RGBA/F and
+  eight filters plus 2,240/2,240 heterogeneous byte cases; focused ImageOps
+  tests are 9/9, serial pool-GPU tests are 114/114, and migration parity is
+  10,952/10,952. Invalid dimensions remain exact host semantic control.
 - [x] Bounded ordered-f64 F Resize (`5cbbe7ff2`, `9762c2af5`): marker 12
   emulates Pillow's per-tap f64 FMA rounding with an integer U128 reducer for
   direct finite-normal rows whose coefficient ranges have at most eight taps,

@@ -8120,3 +8120,23 @@ exact. Focused ImageOps tests pass 8/8, the serial pool-GPU suite passes
 the evidence contract remains benchmark/coverage/parity 25/24/24. No GPU
 admission was widened for invalid dimensions, and no fixtures, thresholds,
 IDs, denominators, policy, or receipt taxonomy changed.
+
+## 32.190 Preserve zero-dimension ImageOps.cover semantics (2026-09-04)
+
+The contain correction exposed the same class of public contract gap in
+`ImageOps.cover`. Pillow computes both aspect ratios before calling
+`Image.resize`: zero source/target heights raise `ZeroDivisionError`, a
+positive destination width with an empty source width raises the same error
+while computing the covering height, and a same-size empty-width result is a
+valid copy when both ratios are zero. Rust rejected every zero-width source,
+used non-panicking divisions, and clamped the computed resize axes to one.
+
+The integrated source commit `86973443c` (verified in isolation before
+cherry-pick) mirrors Pillow's public ordering and CPU guards while keeping
+invalid dimensions on exact host semantic control. Native Pillow 12.2.0
+versus RSPIL is exact for 4,000/4,000 edge cases across L/LA/RGB/RGBA/F and
+eight filters, plus 2,240/2,240 heterogeneous byte-mode cases. Focused
+ImageOps tests pass 9/9, serial pool-GPU tests pass 114/114, migration parity
+remains 10,952/10,952, receipt-state is 40/40, and the evidence contract is
+25/24/24. No fixtures, thresholds, IDs, denominators, policy, or receipt
+taxonomy changed.
