@@ -15440,6 +15440,26 @@ fn native_fit_box(
     ))
 }
 
+/// Return whether the boxed fit target is valid for the zero-dimension
+/// contract that Pillow's `Image.resize` enforces after ImageOps.fit's ratio
+/// calculations.  A zero-width source may produce a positive black result,
+/// but an empty-width output is only a same-size, no-bleed copy.
+fn native_fit_dimensions_supported(
+    source_width: u32,
+    source_height: u32,
+    target_width: u32,
+    target_height: u32,
+    bleed: f64,
+) -> bool {
+    if source_height == 0 || target_height == 0 {
+        return false;
+    }
+    if target_width == 0 {
+        return source_width == 0 && target_height == source_height && bleed == 0.0;
+    }
+    !(source_width == 0 && target_height < source_height)
+}
+
 /// Return the raw byte layout and alpha contract accepted by the boxed SIMD
 /// resampler. P/PA are included as raw indexed samples: P forces nearest
 /// sampling in Pillow, while PA filters its index and alpha bytes without RGBA
@@ -15544,6 +15564,15 @@ fn native_fit_supported_for_image(
     centering: (f64, f64),
     mode: Option<&str>,
 ) -> bool {
+    if !native_fit_dimensions_supported(
+        img.width(),
+        img.height(),
+        target_width,
+        target_height,
+        bleed,
+    ) {
+        return false;
+    }
     if native_fit_float_supported_for_image(
         img,
         target_width,
@@ -15603,6 +15632,15 @@ fn native_fit_supported_for_shape(
     centering: (f64, f64),
     mode: Option<&str>,
 ) -> bool {
+    if !native_fit_dimensions_supported(
+        shape.width,
+        shape.height,
+        target_width,
+        target_height,
+        bleed,
+    ) {
+        return false;
+    }
     if native_fit_float_supported_for_shape(
         shape,
         target_width,
@@ -20091,8 +20129,16 @@ pub fn simd_fit(
     if !native_fit_supported_for_image(img, *w, *h, *filter, *bleed, *centering, mode) {
         return Err(simd_unsupported("Fit"));
     }
-    let output_width = (*w).max(1);
-    let output_height = (*h).max(1);
+    let output_width = *w;
+    let output_height = *h;
+    if img.width() == 0 && output_width == 0 {
+        // Preserve Pillow's independent empty-width copy without entering
+        // the boxed coefficient builder, which cannot represent a zero
+        // output axis. The public geometry guard admits only this exact
+        // same-size, no-bleed case.
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        return Ok(img.clone());
+    }
     let (box_left, box_top, box_right, box_bottom) = native_fit_box(
         img.width(),
         img.height(),
