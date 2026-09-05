@@ -1008,3 +1008,33 @@ proofs (including
 f64-intermediate boundaries and arithmetic-changing chains), broader
 arithmetic-changing projective/mesh/palette admission, native/host partition
 reconciliation, and the two-consecutive-run zero-budget performance gate.
+
+
+### Native F exponent-span follow-up (2026-09-05)
+
+The ordered binary64 GPU reducer now aligns finite terms with a jammed sticky
+bit instead of rejecting exponent spans wider than its 128-bit limbs. It keeps
+127 alignment bits and one carry bit. Since the binary64 state has 53 bits and
+the exact coefficient-times-FLOAT32 product has at most 77 bits, a discarded
+tail cannot become significant through cancellation. This preserves Pillow's
+ordered FMA/vector-product rounding, including opposing signs, subnormals, and
+finite maximum words. Horizontal FLOAT32 overflow also reuses the existing
+coefficient-aware IEEE scan in the subsequent pass.
+
+The new 25 public parity cases cover horizontal and vertical reductions,
+upsampling overflow, 257-sample non-Box tails, and chained exponent spans.
+They live in the Image.Image parity input and matching coverage plan, generated
+by `make migration-parity-inputs`; no expected output is stored. All 25 execute
+natively. The focused GPU replay passes 47/47 and the broader public F resize
+replay passes 58/58. All nine previously host-controlled actual F resize cases
+now have GPU terminal receipts. The two similarly named `simd-cov-f09-c02/c03`
+cases are I;16B/I;16N, not F, and remain a separate u16 rounding bucket.
+
+Validation: `make migration-parity-fixtures-check`, `make fmt`, and
+`RUSTC_WRAPPER= CARGO_INCREMENTAL=0 make clippy` pass. Corpus: 11,121 public
+cases; benchmark denominator remains 744. The focused artifacts are
+`build/migration-parity/f-native.json` and `f-native-execution.json` in the
+isolated F worktree. Full integrated replay and managed coverage are owned by
+the orchestrator. This closes the observed F arithmetic gaps, not storage
+limits: non-Box coefficient tables exceeding the 128-MiB binding envelope
+still require tiled dispatch and cannot be admitted by arithmetic proof alone.

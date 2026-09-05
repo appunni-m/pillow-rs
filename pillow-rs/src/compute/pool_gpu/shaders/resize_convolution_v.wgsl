@@ -621,6 +621,18 @@ fn f64_ordered_round(sum: SignedU128, scale_exp: i32) -> F64OrderedState {
     return F64OrderedState(mantissa, exponent - 52, sum.negative, true);
 }
 
+fn f64_align_jammed(magnitude: U128, shift: i32) -> U128 {
+    if shift >= 0 {
+        return u128_shl(magnitude, u32(shift));
+    }
+    let discarded = u128_low_bits(magnitude, u32(-shift));
+    var result = u128_shr(magnitude, u32(-shift));
+    if discarded.a != 0u || discarded.b != 0u || discarded.c != 0u || discarded.d != 0u {
+        result.a = result.a | 1u;
+    }
+    return result;
+}
+
 fn f64_ordered_add_product(
     state: F64OrderedState,
     product: U128,
@@ -663,20 +675,22 @@ fn f64_ordered_add_product(
         }
         return f64_ordered_round(SignedU128(product, product_negative), product_exp);
     }
-    let minimum_exponent = min(state.exponent, product_exponent);
-    let state_shift = u32(state.exponent - minimum_exponent);
-    let product_shift = u32(product_exponent - minimum_exponent);
-    if u128_bit_length(state.magnitude) + state_shift > 128u
-        || u128_bit_length(product_magnitude) + product_shift > 128u {
-        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
-    }
+    // Retain 127 alignment bits plus a carry bit. Round-to-odd tails keep
+    // Pillow's binary64 rounding decision when finite f32 exponents differ
+    // by more than the limb width. Cancellation cannot reach the jammed bit:
+    // exact products have at most 77 bits and the accumulator has only 53.
+    let high_bit = max(
+        state.exponent + i32(u128_bit_length(state.magnitude)),
+        product_exponent + i32(u128_bit_length(product_magnitude)),
+    );
+    let minimum_exponent = max(min(state.exponent, product_exponent), high_bit - 127);
     var sum = SignedU128(
-        u128_shl(state.magnitude, state_shift),
+        f64_align_jammed(state.magnitude, state.exponent - minimum_exponent),
         state.negative,
     );
     sum = signed_u128_add(
         sum,
-        u128_shl(product_magnitude, product_shift),
+        f64_align_jammed(product_magnitude, product_exponent - minimum_exponent),
         product_is_negative,
     );
     return f64_ordered_round(sum, minimum_exponent);
@@ -741,7 +755,9 @@ fn filtered_f64_ordered_bounded(
         let bits = f64_sample_bits(input[(source_y + tap) * params.dst_w + output_x]);
         let exponent_bits = (bits >> 23u) & 255u;
         if exponent_bits == 255u {
-            return 0u;
+            // Horizontal FLOAT32 storage can overflow a finite source row.
+            // The shared coefficient-aware IEEE scan preserves that state.
+            return filtered_f64_exact(output_x, output_y);
         }
         let sample_mantissa = select(
             (bits & 0x7fffffu) | 0x800000u,

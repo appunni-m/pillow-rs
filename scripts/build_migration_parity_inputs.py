@@ -11651,6 +11651,9 @@ def pipeline_composition_cases(
             ("finite", [(-1.0 if i % 3 else 1.0) * (i * .137 + .031) for i in range(99)]),
             ("special", [float("inf"), -float("inf"), float("nan"), -0.0, 1e-40] * 19
              + [1.0, -1.0, 3.0, 7.0]),
+            ("exponent-span", [struct.unpack("<f", struct.pack("<I", word))[0]
+                               for word in ((0x00000001, 0x80000001, 0x7F7FFFFF,
+                                             0xFF7FFFFF, 0x3F800001, 0xBF800001) * 17)[:99]]),
         ):
             sample_data = b"".join(struct.pack("<f", value) for value in samples)
             cases.append({
@@ -39541,6 +39544,26 @@ def build_nuanced_cases(
         }
         for label, size, output in (("tall", [2, 203], [3, 7]),
                                     ("ordered", [33, 3], [7, 2]))
+        for resample in (1, 2, 3, 4, 5)
+    )
+
+    # Ordered binary64 reduction must retain sticky low bits across the full
+    # finite FLOAT32 exponent span, including opposite signs and second-pass
+    # infinities after FLOAT32 storage. Both axes and vector/tail rows execute
+    # public resize calls; the inputs carry no oracle output.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-f-exponent-span-{label}-{resample}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": "backend-word-pattern", "size": size,
+            "values": {"size": literal(output), "resample": literal(resample)},
+        }
+        for label, size, output in (("horizontal", [67, 3], [9, 2]),
+                                    ("vertical", [3, 67], [2, 9]),
+                                    ("upsample", [3, 3], [19, 17]),
+                                    ("wide-tail", [257, 2], [3, 3]))
         for resample in (1, 2, 3, 4, 5)
     )
 
