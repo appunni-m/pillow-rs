@@ -11587,21 +11587,17 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
 /// neighbors in bounds and nonzero 0.5 weights.  Coordinates on the source
 /// edge are intentionally excluded: Pillow clamps their filter window while
 /// the shader's shifted bounds check would classify `0` or `width`
-/// differently. LA/RGBA are also excluded because their transform pipeline
-/// has a premultiplied-alpha round trip that this raw-channel path does not
-/// reproduce for nonzero weights.
-/// CMYK, HSV, YCbCr, RGBX, and RGBa remain raw byte channels in their native
-/// projective paths, so they can share this proof once their physical packed
-/// layout is checked.
-/// Bilinear additionally admits quarter-grid coordinates: after the exact
-/// half-pixel subtraction, horizontal interpolation has denominator four
-/// and vertical interpolation denominator sixteen. Geometry.c's
-/// `BILINEAR_BODY` intermediates have magnitude at most 255, so both f32
-/// and f64 represent every operation exactly, including contracted FMAs.
+/// differently. LA/RGBA use the same byte proof after exact integer
+/// premultiplication of each tap and unpremultiplication of the stored result.
+/// Bilinear admits sixteenth-grid coordinates: horizontal interpolation has
+/// denominator sixteen and vertical interpolation denominator 256. Geometry.c's
+/// `BILINEAR_BODY` intermediates have magnitude at most 255, so both f32 and
+/// f64 represent every operation exactly, including contracted FMAs.
 /// This proof is independent of the image's byte values.
-/// Bicubic additionally requires two valid source pixels on each side: at an
-/// integer source coordinate `n`, Geometry.c's four taps are `n-2..n+1` with
-/// the exact half-pixel weights `[-1, 5, 5, -1] / 8`.
+/// Bicubic additionally requires two valid source pixels on each side: at a
+/// quarter-grid source coordinate, Geometry.c's polynomial weights have
+/// denominator 64. The shader evaluates both axes as signed integer
+/// numerators with denominator 4096, before the same clip/truncate store.
 fn gpu_projective_filtered_constant_is_admitted(
     method: TransformMethod,
     data: &[f64],
@@ -11613,17 +11609,20 @@ fn gpu_projective_filtered_constant_is_admitted(
     if !matches!(filter, ResampleFilter::Bilinear | ResampleFilter::Bicubic)
         || !matches!(
             mode,
-            Some("L" | "PA" | "RGB" | "CMYK" | "HSV" | "YCbCr" | "RGBX" | "RGBa")
+            Some("L" | "LA" | "PA" | "RGB" | "RGBA" | "CMYK" | "HSV" | "YCbCr" | "RGBX" | "RGBa")
         )
     {
         return false;
     }
     let bicubic = matches!(filter, ResampleFilter::Bicubic);
+    if bicubic && matches!(mode, Some("LA" | "RGBA")) {
+        return false;
+    }
     let interior_coordinate_f32 = |value: f64, extent: u32| {
         let lower_bound = if bicubic { 2.0 } else { 1.0 };
         let upper_margin = if bicubic { 1.0 } else { 0.0 };
         value.is_finite()
-            && (if bicubic { value } else { value * 4.0 }).fract() == 0.0
+            && (if bicubic { value * 4.0 } else { value * 16.0 }).fract() == 0.0
             && f64::from((value - 0.5) as f32) == value - 0.5
             && value >= lower_bound
             && value + upper_margin < f64::from(extent)
@@ -16010,7 +16009,7 @@ mod tests {
             ));
         }
         for mode in [Some("LA"), Some("RGBA")] {
-            assert!(!gpu_projective_filtered_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
                 ResampleFilter::Bilinear,
@@ -16032,7 +16031,7 @@ mod tests {
             (16.0, 5.0),
             (3.0, 0.0),
             (3.0, 16.0),
-            (3.125, 5.0),
+            (3.03125, 5.0),
         ] {
             let map = [0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0];
             assert!(!gpu_projective_filtered_constant_is_admitted(
@@ -16061,7 +16060,7 @@ mod tests {
             source,
             output,
         ));
-        assert!(!gpu_projective_filtered_constant_is_admitted(
+        assert!(gpu_projective_filtered_constant_is_admitted(
             TransformMethod::Perspective,
             &quarter_map,
             ResampleFilter::Bicubic,

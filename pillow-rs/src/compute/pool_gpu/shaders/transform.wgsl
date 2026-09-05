@@ -259,19 +259,22 @@ fn byte_as_i32(pixel: u32, shift: u32) -> i32 {
     return i32((pixel >> shift) & 0xffu);
 }
 
-// Geometry.c's BICUBIC macro at d=0.5 reduces exactly to
-// (-v0 + 5*v1 + 5*v2 - v3) / 8.  Keep the two axes in integer numerators so
-// the raw byte path does not depend on device f32 accumulation or contraction.
-// The caller admits only an interior integer source coordinate, which gives
-// four unclamped taps on each axis and a final denominator of 64.
-fn bicubic_half_row(p0: u32, p1: u32, p2: u32, p3: u32, shift: u32) -> i32 {
-    return -byte_as_i32(p0, shift)
-        + 5i * byte_as_i32(p1, shift)
-        + 5i * byte_as_i32(p2, shift)
-        - byte_as_i32(p3, shift);
+// Geometry.c's BICUBIC polynomial at d=n/4 has integer weights /64.
+// Two axes need /4096; byte numerators remain safely inside i32. No device
+// float contraction or rounding can change the stored channel.
+fn bicubic_quarter_weights(n: i32) -> vec4<i32> {
+    let n2 = n * n;
+    let n3 = n2 * n;
+    return vec4<i32>(-16i*n + 8i*n2 - n3, 64i - 8i*n2 + n3,
+                     16i*n + 4i*n2 - n3, n3 - 4i*n2);
 }
 
-fn bicubic_half_channel(
+fn bicubic_quarter_row(p0: u32, p1: u32, p2: u32, p3: u32, shift: u32, weights: vec4<i32>) -> i32 {
+    return weights.x * byte_as_i32(p0, shift) + weights.y * byte_as_i32(p1, shift)
+        + weights.z * byte_as_i32(p2, shift) + weights.w * byte_as_i32(p3, shift);
+}
+
+fn bicubic_quarter_channel(
     p00: u32,
     p01: u32,
     p02: u32,
@@ -289,39 +292,41 @@ fn bicubic_half_channel(
     p32: u32,
     p33: u32,
     shift: u32,
+    wx: vec4<i32>,
+    wy: vec4<i32>,
 ) -> u32 {
-    let row0 = bicubic_half_row(p00, p01, p02, p03, shift);
-    let row1 = bicubic_half_row(p10, p11, p12, p13, shift);
-    let row2 = bicubic_half_row(p20, p21, p22, p23, shift);
-    let row3 = bicubic_half_row(p30, p31, p32, p33, shift);
-    let numerator = -row0 + 5i * row1 + 5i * row2 - row3;
+    let row0 = bicubic_quarter_row(p00, p01, p02, p03, shift, wx);
+    let row1 = bicubic_quarter_row(p10, p11, p12, p13, shift, wx);
+    let row2 = bicubic_quarter_row(p20, p21, p22, p23, shift, wx);
+    let row3 = bicubic_quarter_row(p30, p31, p32, p33, shift, wx);
+    let numerator = wy.x * row0 + wy.y * row1 + wy.z * row2 + wy.w * row3;
     if numerator <= 0i {
         return 0u;
     }
-    if numerator >= 255i * 64i {
+    if numerator >= 255i * 4096i {
         return 255u;
     }
-    return u32(numerator / 64i);
+    return u32(numerator / 4096i);
 }
 
-fn projective_bicubic_integer_constant() -> bool {
+fn projective_bicubic_quarter_constant() -> bool {
     if params.filter_code != 2u {
         return false;
     }
     if params.method == 1u {
         return params.a == 0.0 && params.b == 0.0 && params.d == 0.0 && params.e == 0.0
             && params.g == 0.0 && params.h == 0.0
-            && params.c == floor(params.c) && params.f == floor(params.f);
+            && params.c * 4.0 == floor(params.c * 4.0) && params.f * 4.0 == floor(params.f * 4.0);
     }
     if params.method == 2u {
         return params.a == params.c && params.a == params.e && params.a == params.g
             && params.b == params.d && params.b == params.f && params.b == params.h
-            && params.a == floor(params.a) && params.b == floor(params.b);
+            && params.a * 4.0 == floor(params.a * 4.0) && params.b * 4.0 == floor(params.b * 4.0);
     }
     if params.method == 3u {
         return params.e == params.g && params.e == params.mesh0 && params.e == params.mesh2
             && params.f == params.h && params.f == params.mesh1 && params.f == params.mesh3
-            && params.e == floor(params.e) && params.f == floor(params.f);
+            && params.e * 4.0 == floor(params.e * 4.0) && params.f * 4.0 == floor(params.f * 4.0);
     }
     return false;
 }
@@ -362,29 +367,40 @@ fn sample_projective_bicubic(sx: f32, sy: f32) -> u32 {
     let p32 = input[y3 * params.width + x2];
     let p33 = input[y3 * params.width + x3];
 
-    let r = bicubic_half_channel(
-        p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 0u,
+    let wx = bicubic_quarter_weights(i32((sx - floor(sx)) * 4.0));
+    let wy = bicubic_quarter_weights(i32((sy - floor(sy)) * 4.0));
+    let r = bicubic_quarter_channel(
+        p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 0u, wx, wy,
     );
     let g = select(
         0u,
-        bicubic_half_channel(
-            p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 8u,
+        bicubic_quarter_channel(
+            p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 8u, wx, wy,
         ),
         mode_has_g(params.mode),
     );
     let b = select(
         0u,
-        bicubic_half_channel(
-            p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 16u,
+        bicubic_quarter_channel(
+            p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 16u, wx, wy,
         ),
         mode_has_b(params.mode),
     );
-    let alpha_sample = bicubic_half_channel(
-        p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 24u,
+    let alpha_sample = bicubic_quarter_channel(
+        p00, p01, p02, p03, p10, p11, p12, p13, p20, p21, p22, p23, p30, p31, p32, p33, 24u, wx, wy,
     );
     let alpha = select(255u, alpha_sample, mode_has_a(params.mode));
     let fourth = select(alpha, alpha_sample, mode_has_fourth(params.mode));
     return r | (g << 8u) | (b << 16u) | (fourth << 24u);
+}
+
+// Convert.c's byte premultiplication is exact rounded division by 255.
+fn projective_premultiply(pixel: u32) -> u32 {
+    let a = (pixel >> 24u) & 255u;
+    let r = ((pixel & 255u) * a + 127u) / 255u;
+    let g = (((pixel >> 8u) & 255u) * a + 127u) / 255u;
+    let b = (((pixel >> 16u) & 255u) * a + 127u) / 255u;
+    return r | (g << 8u) | (b << 16u) | (a << 24u);
 }
 
 fn sample_projective_bilinear(sx: f32, sy: f32) -> u32 {
@@ -406,29 +422,24 @@ fn sample_projective_bilinear(sx: f32, sy: f32) -> u32 {
     let p01 = input[y1 * params.width + x0];
     let p11 = input[y1 * params.width + x1];
 
-    // The admitted filtered LA/RGBA projective envelope has integral source
-    // coordinates, so all filter weights are exactly zero except p00. Pillow
-    // nevertheless converts LA/RGBA through premultiplied La/RGBa before the
-    // projective callback and unpremultiplies afterward. Mirror that byte
-    // contract with integer arithmetic here; the raw-channel path would
-    // differ from Geometry.c at alpha values that do not round-trip unchanged.
-    if params.premultiply != 0u && mode_has_a(params.mode) && fx == 0.0 && fy == 0.0 {
-        let alpha = (p00 >> 24u) & 0xffu;
-        let red = p00 & 0xffu;
-        let green = (p00 >> 8u) & 0xffu;
-        let blue = (p00 >> 16u) & 0xffu;
-        let premul_red = (red * alpha + 127u) / 255u;
-        let premul_green = (green * alpha + 127u) / 255u;
-        let premul_blue = (blue * alpha + 127u) / 255u;
-        var out_red = premul_red;
-        var out_green = premul_green;
-        var out_blue = premul_blue;
+    // Image.transform converts all four source taps through La/RGBa before
+    // Geometry.c interpolation. Quantize the interpolated premultiplied byte
+    // before integer unpremultiplication, exactly as the intermediate image.
+    if params.premultiply != 0u && mode_has_a(params.mode) {
+        let q00 = projective_premultiply(p00);
+        let q10 = projective_premultiply(p10);
+        let q01 = projective_premultiply(p01);
+        let q11 = projective_premultiply(p11);
+        let alpha = bilinear_channel(q00, q10, q01, q11, 24u, fx, fy);
+        var r = bilinear_channel(q00, q10, q01, q11, 0u, fx, fy);
+        var g = bilinear_channel(q00, q10, q01, q11, 8u, fx, fy);
+        var b = bilinear_channel(q00, q10, q01, q11, 16u, fx, fy);
         if alpha > 0u {
-            out_red = min(premul_red * 255u / alpha, 255u);
-            out_green = min(premul_green * 255u / alpha, 255u);
-            out_blue = min(premul_blue * 255u / alpha, 255u);
+            r = min(r * 255u / alpha, 255u);
+            g = min(g * 255u / alpha, 255u);
+            b = min(b * 255u / alpha, 255u);
         }
-        return out_red | (out_green << 8u) | (out_blue << 16u) | (alpha << 24u);
+        return r | (g << 8u) | (b << 16u) | (alpha << 24u);
     }
 
     let r = bilinear_channel(p00, p10, p01, p11, 0u, fx, fy);
@@ -633,7 +644,7 @@ fn source_coordinates(dx: f32, dy: f32) -> vec2<f32> {
 
 fn sample_bilinear(sx: f32, sy: f32) -> u32 {
     if params.method != 0u {
-        if projective_bicubic_integer_constant() {
+        if projective_bicubic_quarter_constant() {
             return sample_projective_bicubic(sx, sy);
         }
         return sample_projective_bilinear(sx, sy);

@@ -2638,7 +2638,7 @@ class WorkflowBuilder:
                          0xBF000001, 0x7F7FFFFF, 0xFF7FFFFF, 0x00800000)
                 data = b"".join(struct.pack("<I", words[i % len(words)]) for i in range(count))
             else:
-                channels = {"L": 1, "PA": 2, "RGB": 3, "HSV": 3, "YCbCr": 3,
+                channels = {"L": 1, "LA": 2, "PA": 2, "RGB": 3, "HSV": 3, "YCbCr": 3,
                             "RGBA": 4, "RGBX": 4, "RGBa": 4, "CMYK": 4}[requested_mode]
                 data = bytes((i * 37 + i // channels * 11 + 3) % 256
                              for i in range(count * channels))
@@ -39454,8 +39454,28 @@ def build_nuanced_cases(
             ("mesh", 4, [([0, 0, 8, 7], [x, y] * 4)]),
         )
     )
-    # The shared admission guard must retain its stricter Bicubic boundary
-    # while Bilinear admits quarter-grid coordinates. Exercise both branches
+    # Native bilinear dyadic arithmetic and premultiplied-alpha storage.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-dyadic-alpha-{label}-{mode.lower()}-{position}",
+            "observe_result": "tobytes", "mode": mode,
+            "edge": "backend-word-pattern", "size": [9, 8],
+            "values": {"size": literal([8, 7]), "method": literal(method),
+                       "data": literal(data), "resample": literal(2)},
+        }
+        for mode in ("RGB", "LA", "RGBA", "PA")
+        for position, x, y in (("sixteenth", 3.0625, 5.9375),
+                               ("beyond-grid", 3.03125, 5.25))
+        for label, method, data in (
+            ("perspective", 2, [0, 0, x, 0, 0, y, 0, 0]),
+            ("quad", 3, [x, y] * 4),
+            ("mesh", 4, [([0, 0, 8, 7], [x, y] * 4)]),
+        )
+    )
+    # Bicubic uses exact integer quarter-phase weights; eighth phases stay
+    # on host control. Exercise both branches
     # through public inputs, including the palette-alpha pair layout.
     specs += tuple(
         {
@@ -39468,7 +39488,8 @@ def build_nuanced_cases(
                        "data": literal(data), "resample": literal(3)},
         }
         for mode in ("RGB", "PA")
-        for position, x, y in (("integer", 3.0, 5.0), ("quarter", 3.25, 5.0))
+        for position, x, y in (("integer", 3.0, 5.0), ("quarter", 3.25, 5.0),
+                               ("mixed-quarter", 3.75, 4.25), ("eighth-rejected", 3.125, 5.0))
         for label, method, data in (
             ("perspective", 2, [0, 0, x, 0, 0, y, 0, 0]),
             ("quad", 3, [x, y] * 4),
