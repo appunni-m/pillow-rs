@@ -1347,16 +1347,31 @@ fn gpu_f64_ordered_add_product(
         .map_or((product, product_exp, product_negative), |rounded| {
             (rounded.magnitude, rounded.exponent, rounded.negative)
         });
-    let minimum_exponent = state.exponent.min(product_exp);
-    let state_shift = u32::try_from(state.exponent.checked_sub(minimum_exponent)?).ok()?;
-    let product_shift = u32::try_from(product_exp.checked_sub(minimum_exponent)?).ok()?;
-    if (128 - state.magnitude.leading_zeros()) + state_shift > 128
-        || (128 - product.leading_zeros()) + product_shift > 128
-    {
-        return None;
-    }
-    let state_term = state.magnitude.checked_shl(state_shift)?;
-    let product_term = product.checked_shl(product_shift)?;
+    // Pillow Resample.c rounds each ordered product/add to binary64. Keep
+    // 127 significant alignment bits (one carry bit remains), jamming every
+    // discarded nonzero tail into the low bit. The operands have at most 77
+    // bits, so truncation only occurs when their leading bits are far apart:
+    // cancellation cannot expose the jammed tail at the 53-bit rounding cut.
+    // This preserves below/at/above-halfway distinctions for either sign even
+    // when f32 subnormal and maximum-finite samples share a coefficient row.
+    let high_bit = (state.exponent + (128 - state.magnitude.leading_zeros()) as i32)
+        .max(product_exp + (128 - product.leading_zeros()) as i32);
+    let minimum_exponent = state.exponent.min(product_exp).max(high_bit - 127);
+    let align = |magnitude: u128, exponent: i32| -> Option<u128> {
+        if exponent >= minimum_exponent {
+            magnitude.checked_shl((exponent - minimum_exponent) as u32)
+        } else {
+            let shift = (minimum_exponent - exponent) as u32;
+            if shift >= 128 {
+                Some(u128::from(magnitude != 0))
+            } else {
+                let discarded = magnitude & ((1u128 << shift) - 1);
+                Some((magnitude >> shift) | u128::from(discarded != 0))
+            }
+        }
+    };
+    let state_term = align(state.magnitude, state.exponent)?;
+    let product_term = align(product, product_exp)?;
     let sum = gpu_f64_signed_u128_add(
         F64SignedMagnitude {
             magnitude: state_term,
@@ -1413,7 +1428,19 @@ fn gpu_f_resize_f64_ordered_sample_bits(
         let offset = pixel.checked_mul(4)?;
         let word = bytes.get(offset..offset.checked_add(4)?)?;
         let bits = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
-        let sample = gpu_f32_f64_integer_parts(bits)?;
+        let Some(sample) = gpu_f32_f64_integer_parts(bits) else {
+            // A preceding FLOAT32 pass may overflow even when every source
+            // word was finite. Reuse marker 9's ordered IEEE special scan;
+            // its coefficient-aware NaN/infinity result needs no finite sum.
+            return gpu_f_resize_f64_sample_bits(
+                bytes,
+                source_dimensions,
+                coeffs,
+                output_index,
+                horizontal,
+                line,
+            );
+        };
         let separate_product_add =
             gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
         // f32 subnormal inputs are represented exactly at the fixed 2^-149
