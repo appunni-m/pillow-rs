@@ -19317,6 +19317,19 @@ fn simd_resize_f(
     output_height: u32,
     filter: &ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
+    // Pillow Image.resize reduces images taller than 100 times their width
+    // vertically first. The intermediate F storage rounds to f32, so reversing
+    // these passes changes bytes even when both reductions use ordered f64 FMA.
+    if !matches!(filter, ResampleFilter::Nearest)
+        && output_width != 0
+        && output_height != 0
+        && output_width != img.width()
+        && u64::from(img.height()) > u64::from(img.width()) * 100
+        && output_height < img.height()
+    {
+        let intermediate = simd_resize_f(img, img.width(), output_height, filter)?;
+        return simd_resize_f(&intermediate, output_width, output_height, filter);
+    }
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
     let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;

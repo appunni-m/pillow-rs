@@ -141,10 +141,7 @@ fn putdata_bulk(
     Ok(false)
 }
 
-fn is_exact_builtin_numeric_sequence(
-    data: &Bound<'_, PyAny>,
-    kind: PutDataValueKind,
-) -> bool {
+fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValueKind) -> bool {
     let is_number = |item: Bound<'_, PyAny>| {
         item.downcast_exact::<PyInt>().is_ok()
             || item.downcast_exact::<pyo3::types::PyFloat>().is_ok()

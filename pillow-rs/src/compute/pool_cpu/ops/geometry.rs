@@ -2370,14 +2370,11 @@ mod tests {
         // heterogeneous so the materialized FLOAT32 intermediate is part of
         // the observable result rather than an algebraically interchangeable
         // detail.
-        let source_words: Vec<u32> = (0..512)
+        let source_bytes: Vec<u8> = (0..512)
             .map(|index| {
                 let value = 0.25f32 + ((index * 29 % 120) as f32) * 0.01f32;
                 value.to_bits()
             })
-            .collect();
-        let source_bytes: Vec<u8> = source_words
-            .into_iter()
             .flat_map(u32::to_le_bytes)
             .collect();
         let source = DynamicImage::ImageRgba8(
