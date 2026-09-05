@@ -1865,9 +1865,9 @@ fn gpu_f_resize_compact_box_vertical_only_is_exact(
 }
 
 /// Pillow's high-level Image.resize uses a vertical-first pair of resample
-/// passes for very tall inputs before calling Resample.c. The GPU lowering is
-/// currently horizontal-first, so keep this geometry on exact host semantic
-/// control until a matching vertical-first device plan exists.
+/// passes for very tall inputs before calling Resample.c. Pure F resize
+/// chains lower this geometry into separately proven vertical/horizontal
+/// segments; mixed pipelines retain the host-order guard.
 fn gpu_f_resize_uses_pillow_tall_order(
     source_dimensions: (u32, u32),
     destination_dimensions: (u32, u32),
@@ -9689,7 +9689,28 @@ fn expand_gpu_geometry_ops(
     let (mut cur_w, mut cur_h) = dimensions;
     let i_resize_identity_is_exact = dimensions == image.dimensions()
         && gpu_i_resize_identity_is_exact(ops, image, logical_mode);
+    let f_resize_chain =
+        logical_mode == Some("F") && ops.iter().all(|op| matches!(op, PipelineOp::Resize { .. }));
     for op in ops {
+        if f_resize_chain
+            && let PipelineOp::Resize { w, h, filter } = op
+            && *w > 0
+            && *h > 0
+            && !matches!(filter, ResampleFilter::Nearest)
+            && gpu_f_resize_uses_pillow_tall_order((cur_w, cur_h), (*w, *h))
+        {
+            // PIL.Image.resize's tall-image branch stores FLOAT32 after
+            // the vertical pass. Separate GPU segments below retain those
+            // words and prove the horizontal pass from that actual result.
+            expanded.push(PipelineOp::Resize {
+                w: cur_w,
+                h: *h,
+                filter: *filter,
+            });
+            expanded.push(op.clone());
+            (cur_w, cur_h) = (*w, *h);
+            continue;
+        }
         if i_resize_identity_is_exact {
             // The proof is restricted to the one pure same-size resize, so a
             // raw-word Duplicate is equivalent to Pillow's typed identity
@@ -11558,8 +11579,7 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
     rounded.is_finite() && (value < 0.0 || rounded.floor() < 4_294_967_296.0)
 }
 
-/// Return whether a constant integer map is safe for filtered Bilinear or
-/// Bicubic sampling in the generic projective shader.
+/// Prove constant quarter-grid Bilinear and integer Bicubic maps.
 ///
 /// Geometry.c validates the original source coordinate before subtracting
 /// 0.5 for its filter window.  An interior integer coordinate therefore
@@ -11573,10 +11593,16 @@ fn gpu_projective_shader_coordinate_is_safe(value: f32) -> bool {
 /// CMYK, HSV, YCbCr, RGBX, and RGBa remain raw byte channels in their native
 /// projective paths, so they can share this proof once their physical packed
 /// layout is checked.
+/// Bilinear additionally admits quarter-grid coordinates: after the exact
+/// half-pixel subtraction, horizontal interpolation has denominator four
+/// and vertical interpolation denominator sixteen. Geometry.c's
+/// `BILINEAR_BODY` intermediates have magnitude at most 255, so both f32
+/// and f64 represent every operation exactly, including contracted FMAs.
+/// This proof is independent of the image's byte values.
 /// Bicubic additionally requires two valid source pixels on each side: at an
 /// integer source coordinate `n`, Geometry.c's four taps are `n-2..n+1` with
 /// the exact half-pixel weights `[-1, 5, 5, -1] / 8`.
-fn gpu_projective_filtered_integer_constant_is_admitted(
+fn gpu_projective_filtered_constant_is_admitted(
     method: TransformMethod,
     data: &[f64],
     filter: ResampleFilter,
@@ -11593,11 +11619,12 @@ fn gpu_projective_filtered_integer_constant_is_admitted(
         return false;
     }
     let bicubic = matches!(filter, ResampleFilter::Bicubic);
-    let interior_integer_f32 = |value: f64, extent: u32| {
+    let interior_coordinate_f32 = |value: f64, extent: u32| {
         let lower_bound = if bicubic { 2.0 } else { 1.0 };
         let upper_margin = if bicubic { 1.0 } else { 0.0 };
         value.is_finite()
-            && value.fract() == 0.0
+            && (if bicubic { value } else { value * 4.0 }).fract() == 0.0
+            && f64::from((value - 0.5) as f32) == value - 0.5
             && value >= lower_bound
             && value + upper_margin < f64::from(extent)
             && (value as f32).is_finite()
@@ -11612,18 +11639,18 @@ fn gpu_projective_filtered_integer_constant_is_admitted(
                 && data[4] == 0.0
                 && data[6] == 0.0
                 && data[7] == 0.0
-                && interior_integer_f32(data[2], source_dimensions.0)
-                && interior_integer_f32(data[5], source_dimensions.1)
+                && interior_coordinate_f32(data[2], source_dimensions.0)
+                && interior_coordinate_f32(data[5], source_dimensions.1)
         }
         TransformMethod::Quad => {
             gpu_quad_constant_map_is_admitted(data)
-                && interior_integer_f32(data[0], source_dimensions.0)
-                && interior_integer_f32(data[1], source_dimensions.1)
+                && interior_coordinate_f32(data[0], source_dimensions.0)
+                && interior_coordinate_f32(data[1], source_dimensions.1)
         }
         TransformMethod::Mesh => {
             gpu_mesh_constant_map_is_admitted(data, output_dimensions.0, output_dimensions.1)
-                && interior_integer_f32(data[4], source_dimensions.0)
-                && interior_integer_f32(data[5], source_dimensions.1)
+                && interior_coordinate_f32(data[4], source_dimensions.0)
+                && interior_coordinate_f32(data[5], source_dimensions.1)
         }
         TransformMethod::Affine => false,
     }
@@ -11793,7 +11820,7 @@ fn gpu_projective_nearest_is_exact(
         mode,
         Some("L" | "LA" | "RGB" | "RGBA" | "RGBX" | "RGBa" | "CMYK" | "HSV" | "YCbCr")
     );
-    let filtered_integer_constant = gpu_projective_filtered_integer_constant_is_admitted(
+    let filtered_constant = gpu_projective_filtered_constant_is_admitted(
         method.clone(),
         data,
         *filter,
@@ -11801,7 +11828,7 @@ fn gpu_projective_nearest_is_exact(
         source_dimensions,
         (*w, *h),
     );
-    let filtered_relocation = filtered_integer_constant
+    let filtered_relocation = filtered_constant
         || gpu_projective_filtered_relocation_is_admitted(
             method.clone(),
             data,
@@ -12568,7 +12595,7 @@ fn gpu_rotate_nearest_affine_is_exact(
     gpu_nearest_affine_is_exact(&transformed, image, mode, source_dimensions)
 }
 
-fn gpu_geometry_requires_exact_host_control(
+fn gpu_geometry_host_control_reason(
     ops: &[PipelineOp],
     image: &DynamicImage,
     mode: Option<&str>,
@@ -12578,7 +12605,7 @@ fn gpu_geometry_requires_exact_host_control(
     f_resize_box_average_is_exact: bool,
     f_resize_dyadic_is_exact: bool,
     f_resize_f64_is_exact: bool,
-) -> bool {
+) -> Option<&'static str> {
     // The affine shader is byte-exact for ordinary packed layouts, and its
     // fixed-point nearest branch additionally owns opaque raw words (CMYK/F)
     // and PA index/alpha pairs. Non-affine coordinates use a different
@@ -12608,7 +12635,7 @@ fn gpu_geometry_requires_exact_host_control(
             let native_fit_layout =
                 matches!(mode, Some("P" | "PA" | "RGBX" | "RGBa" | "CMYK")) || native_f_nearest_fit;
             if !native_fit_layout {
-                return true;
+                return Some("Fit boxed-resize layout or pass dependency is not proven");
             }
         }
         if mode == Some("F")
@@ -12619,7 +12646,7 @@ fn gpu_geometry_requires_exact_host_control(
             // observable pass order to vertical-first. The current GPU
             // reducer is horizontal-first, so the CPU exact path owns these
             // rows until the alternate device plan is proven.
-            return true;
+            return Some("F Resize requires Pillow vertical-first pass order");
         }
         let thumbnail_needs_control = matches!(op, PipelineOp::Thumbnail { .. })
             && gpu_thumbnail_requires_exact_host_control(op, dimensions, image, mode);
@@ -12638,12 +12665,19 @@ fn gpu_geometry_requires_exact_host_control(
             && !gpu_nearest_affine_is_exact(op, image, mode, dimensions)
             && !gpu_projective_nearest_is_exact(op, image, mode, dimensions)
             && !gpu_transform_all_fill_is_exact(op, image, mode, dimensions);
-        if thumbnail_needs_control
-            || projective_transform_needs_control
-            || typed_transform_needs_control
-            || (rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }))
-        {
-            return true;
+        if thumbnail_needs_control {
+            return Some("Thumbnail reducing-gap or typed arithmetic is not proven");
+        }
+        if projective_transform_needs_control {
+            return Some(
+                "Transform projective source-selection or filter arithmetic is not proven",
+            );
+        }
+        if typed_transform_needs_control {
+            return Some("Transform typed-sample arithmetic is not proven");
+        }
+        if rotate_needs_typed_control && matches!(op, PipelineOp::Rotate { .. }) {
+            return Some("Rotate typed-sample arithmetic is not proven");
         }
         if let Some(next) = op_output_dims(op, dimensions.0, dimensions.1) {
             dimensions = next;
@@ -12671,7 +12705,7 @@ fn gpu_geometry_requires_exact_host_control(
                 if !matches!(filter, ResampleFilter::Nearest)
         )
     });
-    (mode == Some("I") && has_filtered_resize && !f_resize_f64_is_exact)
+    if (mode == Some("I") && has_filtered_resize && !f_resize_f64_is_exact)
         || (matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
             && has_filtered_resize
             && !gpu_luma16_resize_f64_is_exact(ops, image, mode))
@@ -12683,6 +12717,11 @@ fn gpu_geometry_requires_exact_host_control(
             && !f_resize_box_average_is_exact
             && !f_resize_dyadic_is_exact
             && !f_resize_f64_is_exact)
+    {
+        Some("Resize typed ordered arithmetic or coefficient storage is not proven")
+    } else {
+        None
+    }
 }
 
 fn validate_gpu_operations(
@@ -12764,13 +12803,16 @@ impl GpuPool {
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
+        reason: &str,
     ) -> Result<DynamicImage, PilError> {
         // Keep receipts honest: this path is an exact semantic bridge, not a
         // native GPU implementation.  The marker is consumed by the outer
         // execution boundary and therefore reports the pixels as CPU-owned
         // even when the packed result is subsequently copied through a real
         // GPU dispatch for transport/parity coverage.
-        crate::compute::record_pipeline_backend_fallback("exact host semantic control");
+        crate::compute::record_pipeline_backend_fallback(&format!(
+            "exact host semantic control: {reason}"
+        ));
         let exact = crate::compute::CpuPool.execute_batch(ops, img, mode)?;
 
         // Keep the GPU parity lane honest when the result can use the
@@ -12810,8 +12852,7 @@ impl GpuPool {
         // inputs produce Pillow-compatible errors and valid inputs retain
         // their pixels while the native GPU implementation is completed.
         // Automatic routing still takes the normal CPU fallback branch above.
-        let _ = reason;
-        self.execute_exact_host_result(ops, img, mode)
+        self.execute_exact_host_result(ops, img, mode, reason)
     }
 
     fn execute_batch_with_policy(
@@ -12909,9 +12950,17 @@ impl GpuPool {
         // Execute the first mode-changing node as the terminal operation of a
         // GPU segment, convert its packed result back to the public native
         // image type, and continue with the remaining nodes. Recursion handles
-        // multiple transitions in one pipeline and never introduces a CPU
-        // fallback in strict mode.
-        if let Some(mode_index) = gpu_first_nonterminal_mode_change(ops) {
+        // multiple transitions in one pipeline. F resize chains likewise
+        // require materialized FLOAT32 words between public resize calls:
+        // each segment's admission proof must inspect the preceding result,
+        // not the original source. Every segment retains its own CPU guard.
+        let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
+            (mode == Some("F")
+                && ops.len() > 1
+                && ops.iter().all(|op| matches!(op, PipelineOp::Resize { .. })))
+            .then_some(0)
+        });
+        if let Some(mode_index) = segment_boundary {
             let (prefix, suffix) = ops.split_at(mode_index + 1);
             let prefix_result =
                 self.execute_batch_with_policy(prefix, img, mode, allow_cpu_fallback)?;
@@ -12969,7 +13018,7 @@ impl GpuPool {
         // result.  The helper still performs a real GPU copy for packed byte
         // results, so this is a controlled host/GPU boundary rather than an
         // operation-level capability outcome.
-        if gpu_geometry_requires_exact_host_control(
+        if let Some(reason) = gpu_geometry_host_control_reason(
             ops,
             img,
             mode,
@@ -12980,7 +13029,7 @@ impl GpuPool {
             f_resize_dyadic_is_exact,
             f_resize_f64_is_exact || f_resize_f64_ordered_is_exact,
         ) {
-            return self.execute_exact_host_result(ops, img, mode);
+            return self.execute_exact_host_result(ops, img, mode, reason);
         }
 
         // GPU shaders consume the packed L/LA/RGB/RGBA representation. P and
@@ -13412,7 +13461,7 @@ impl GpuPool {
                 img,
                 mode,
                 allow_cpu_fallback,
-                "exact host semantic control",
+                "GPU logical-mode operation contract is not proven",
             );
         }
 
@@ -13823,8 +13872,7 @@ mod tests {
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_nearest_affine_is_exact, gpu_operation_requires_image_context, gpu_pad_geometry,
         gpu_palette_alpha_projective_relocation_is_admitted,
-        gpu_palette_first_rgb_merge_is_supported,
-        gpu_projective_filtered_integer_constant_is_admitted,
+        gpu_palette_first_rgb_merge_is_supported, gpu_projective_filtered_constant_is_admitted,
         gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
         gpu_transform_all_fill_is_exact, gpu_transform_fill, gpu_transform_should_premultiply,
@@ -13885,7 +13933,10 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.2, 2);
         assert_eq!(telemetry.6, Some(2));
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(
+            telemetry.7.as_deref(),
+            Some("exact host semantic control: GPU logical-mode operation contract is not proven")
+        );
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -15893,7 +15944,7 @@ mod tests {
     }
 
     #[test]
-    fn projective_filtered_integer_constant_proof_is_narrow() {
+    fn projective_filtered_constant_proof_is_narrow() {
         let source = (16, 16);
         let output = (9, 7);
         let perspective = [0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0];
@@ -15909,7 +15960,7 @@ mod tests {
             Some("RGBX"),
             Some("RGBa"),
         ] {
-            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
                 ResampleFilter::Bilinear,
@@ -15917,7 +15968,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Quad,
                 &quad,
                 ResampleFilter::Bilinear,
@@ -15925,7 +15976,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Mesh,
                 &mesh,
                 ResampleFilter::Bilinear,
@@ -15933,7 +15984,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
                 ResampleFilter::Bicubic,
@@ -15941,7 +15992,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Quad,
                 &quad,
                 ResampleFilter::Bicubic,
@@ -15949,7 +16000,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Mesh,
                 &mesh,
                 ResampleFilter::Bicubic,
@@ -15959,7 +16010,7 @@ mod tests {
             ));
         }
         for mode in [Some("LA"), Some("RGBA")] {
-            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(!gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
                 ResampleFilter::Bilinear,
@@ -15967,7 +16018,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(!gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &perspective,
                 ResampleFilter::Bicubic,
@@ -15981,10 +16032,10 @@ mod tests {
             (16.0, 5.0),
             (3.0, 0.0),
             (3.0, 16.0),
-            (3.25, 5.0),
+            (3.125, 5.0),
         ] {
             let map = [0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0];
-            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(!gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &map,
                 ResampleFilter::Bilinear,
@@ -15992,7 +16043,7 @@ mod tests {
                 source,
                 output,
             ));
-            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(!gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &map,
                 ResampleFilter::Bicubic,
@@ -16001,9 +16052,26 @@ mod tests {
                 output,
             ));
         }
+        let quarter_map = [0.0, 0.0, 3.25, 0.0, 0.0, 5.0, 0.0, 0.0];
+        assert!(gpu_projective_filtered_constant_is_admitted(
+            TransformMethod::Perspective,
+            &quarter_map,
+            ResampleFilter::Bilinear,
+            Some("RGB"),
+            source,
+            output,
+        ));
+        assert!(!gpu_projective_filtered_constant_is_admitted(
+            TransformMethod::Perspective,
+            &quarter_map,
+            ResampleFilter::Bicubic,
+            Some("RGB"),
+            source,
+            output,
+        ));
         for (x, y) in [(1.0, 5.0), (15.0, 5.0), (3.0, 1.0), (3.0, 15.0)] {
             let map = [0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0];
-            assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+            assert!(!gpu_projective_filtered_constant_is_admitted(
                 TransformMethod::Perspective,
                 &map,
                 ResampleFilter::Bicubic,
@@ -16013,7 +16081,7 @@ mod tests {
             ));
         }
         let partial_mesh = [1.0, 1.0, 8.0, 6.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0];
-        assert!(!gpu_projective_filtered_integer_constant_is_admitted(
+        assert!(!gpu_projective_filtered_constant_is_admitted(
             TransformMethod::Mesh,
             &partial_mesh,
             ResampleFilter::Bilinear,
@@ -16902,7 +16970,12 @@ mod tests {
             // switch while the harness is running, so tolerate a missing or
             // replaced sample in parallel test execution.
             assert_eq!(telemetry.1, Backend::Cpu);
-            assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+            assert_eq!(
+                telemetry.7.as_deref(),
+                Some(
+                    "exact host semantic control: Transform projective source-selection or filter arithmetic is not proven"
+                )
+            );
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
@@ -18248,7 +18321,10 @@ mod tests {
             .expect("CMYK filtered rotate must publish a receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(
+            telemetry.7.as_deref(),
+            Some("exact host semantic control: Rotate typed-sample arithmetic is not proven")
+        );
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -20052,7 +20128,12 @@ mod tests {
             .expect("wide Box host-control resize must publish a receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(
+            telemetry.7.as_deref(),
+            Some(
+                "exact host semantic control: Resize typed ordered arithmetic or coefficient storage is not proven"
+            )
+        );
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -20826,7 +20907,12 @@ mod tests {
             Backend::take_pipeline_telemetry().expect("over-bound F resize must publish telemetry");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(
+            telemetry.7.as_deref(),
+            Some(
+                "exact host semantic control: Resize typed ordered arithmetic or coefficient storage is not proven"
+            )
+        );
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -21239,7 +21325,12 @@ mod tests {
             .expect("over-bound special F resize must publish telemetry");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(
+            telemetry.7.as_deref(),
+            Some(
+                "exact host semantic control: Resize typed ordered arithmetic or coefficient storage is not proven"
+            )
+        );
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
@@ -21297,7 +21388,12 @@ mod tests {
             .expect("multi-row coefficient F resize must publish telemetry");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
         assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(telemetry.7.as_deref(), Some("exact host semantic control"));
+        assert_eq!(
+            telemetry.7.as_deref(),
+            Some(
+                "exact host semantic control: Resize typed ordered arithmetic or coefficient storage is not proven"
+            )
+        );
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 

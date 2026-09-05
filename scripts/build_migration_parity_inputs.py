@@ -2628,6 +2628,29 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "backend-word-pattern" and label == "image":
+            # Public frombytes stimuli preserve exceptional F words and raw
+            # palette pairs. No expected result is stored with these inputs.
+            size = self.scenario_size or [9, 8]
+            count = size[0] * size[1]
+            if requested_mode == "F":
+                words = (0x00000000, 0x80000000, 0x00000001, 0x3F800001,
+                         0xBF000001, 0x7F7FFFFF, 0xFF7FFFFF, 0x00800000)
+                data = b"".join(struct.pack("<I", words[i % len(words)]) for i in range(count))
+            else:
+                channels = {"L": 1, "PA": 2, "RGB": 3, "HSV": 3, "YCbCr": 3,
+                            "RGBA": 4, "RGBX": 4, "RGBa": 4, "CMYK": 4}[requested_mode]
+                data = bytes((i * 37 + i // channels * 11 + 3) % 256
+                             for i in range(count * channels))
+            step_id = self.add_step(
+                "PIL.Image", "frombytes", receiver=None,
+                arguments={"mode": literal(requested_mode), "size": literal(size),
+                           "data": self.inline_bytes(f"{label}-backend-words", data,
+                                                     "application/octet-stream")},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge == "noise-fill":
             # Deterministic diverse images (used by quantize MAXCOVERAGE and
             # median-cut cases) are built through the public frombytes
@@ -11620,6 +11643,40 @@ def pipeline_composition_cases(
                 )
         matrix_cases.append(case)
     cases.extend(matrix_cases)
+    # Resize chains observe the terminal resize and bytes, keeping the lazy
+    # target pipeline intact. Intermediate public observations would split
+    # it before the backend can exercise its FLOAT32 segment boundary.
+    for resample in (1, 2, 3, 4, 5):
+        for label, samples in (
+            ("finite", [(-1.0 if i % 3 else 1.0) * (i * .137 + .031) for i in range(99)]),
+            ("special", [float("inf"), -float("inf"), float("nan"), -0.0, 1e-40] * 19
+             + [1.0, -1.0, 3.0, 7.0]),
+        ):
+            sample_data = b"".join(struct.pack("<f", value) for value in samples)
+            cases.append({
+                "case_id": f"pipeline-composition.backend-f-chain-{label}-{resample}",
+                "surface": "PIL.Image.Image", "operation": "resize",
+                "covers": [behavior("PIL.Image.Image", "resize")],
+                "target_profiles": [TARGET_PROFILE], "assets": [{
+                    "id": "f-chain-words", "kind": "inline", "encoding": "base64",
+                    "data": base64.b64encode(sample_data).decode("ascii"),
+                    "sha256": hashlib.sha256(sample_data).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }],
+                "steps": [
+                    {"step_id": "setup-image", "surface": "PIL.Image",
+                     "operation": "frombytes", "receiver": None,
+                     "arguments": {"mode": literal("F"), "size": literal([33, 3]),
+                                   "data": asset_value("f-chain-words")}},
+                    {"step_id": "first", "surface": "PIL.Image.Image", "operation": "resize",
+                     "receiver": binding("setup-image"),
+                     "arguments": {"size": literal([7, 2]), "resample": literal(resample)}},
+                    {"step_id": "second", "surface": "PIL.Image.Image", "operation": "resize",
+                     "receiver": binding("first"),
+                     "arguments": {"size": literal([3, 1]), "resample": literal(resample)}},
+                    materialize("second"),
+                ], "observations": ["second", "materialize"],
+            })
     return [case for case in cases if case["surface"] == surface_id]
 
 
@@ -39376,6 +39433,94 @@ def build_nuanced_cases(
         + tuple(simd_campaign_offset_specs)
         + tuple(simd_campaign_brightness_specs)
         + tuple(putdata_bytes_campaign_specs)
+    )
+
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-quarter-{label}-{'rgb-premul' if mode == 'RGBa' else mode.lower()}-{position}",
+            "observe_result": "tobytes", "mode": mode,
+            "edge": "backend-word-pattern", "size": [9, 8],
+            "values": {"size": literal([8, 7]), "method": literal(method),
+                       "data": literal(data), "resample": literal(2)},
+        }
+        for mode in ("L", "RGB", "PA", "RGBA", "RGBX", "RGBa", "CMYK", "HSV", "YCbCr")
+        for position, x, y in (("lower", 1.25, 1.75), ("interior", 3.75, 5.25),
+                               ("outside-proof", 3.125, 5.25))
+        for label, method, data in (
+            ("perspective", 2, [0, 0, x, 0, 0, y, 0, 0]),
+            ("quad", 3, [x, y] * 4),
+            ("mesh", 4, [([0, 0, 8, 7], [x, y] * 4)]),
+        )
+    )
+    # The shared admission guard must retain its stricter Bicubic boundary
+    # while Bilinear admits quarter-grid coordinates. Exercise both branches
+    # through public inputs, including the palette-alpha pair layout.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-bicubic-constant-{label}-{mode.lower()}-{position}",
+            "observe_result": "tobytes", "mode": mode,
+            "edge": "backend-word-pattern", "size": [9, 8],
+            "values": {"size": literal([8, 7]), "method": literal(method),
+                       "data": literal(data), "resample": literal(3)},
+        }
+        for mode in ("RGB", "PA")
+        for position, x, y in (("integer", 3.0, 5.0), ("quarter", 3.25, 5.0))
+        for label, method, data in (
+            ("perspective", 2, [0, 0, x, 0, 0, y, 0, 0]),
+            ("quad", 3, [x, y] * 4),
+            ("mesh", 4, [([0, 0, 8, 7], [x, y] * 4)]),
+        )
+    )
+    specs += tuple(
+        {"surface": "PIL.Image", "operation": "frombytes",
+         "requirement_suffix": "parameter.data", "name": f"pa-raw-pairs-{label}",
+         "mode": "PA", "observe_result": "tobytes",
+         "values": {"mode": literal("PA"), "size": literal(size),
+                    "data": bytes_literal(data)}}
+        for label, size, data in (
+            ("valid", [2, 1], [3, 40, 88, 125]),
+            ("trailing", [2, 1], [3, 40, 88, 125, 77]),
+            ("short", [2, 1], [3, 40, 88]),
+            ("empty", [0, 1], []),
+        )
+    )
+    # Backend admission boundaries remain live public parity workflows and
+    # are selected by the normal coverage plan alongside existing cases.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-arithmetic-{label}-{mode.lower()}-{resample}",
+            "observe_result": "tobytes", "mode": mode,
+            "edge": "backend-word-pattern", "size": [9, 8],
+            "values": {"size": literal([8, 7]), "method": literal(method),
+                       "data": literal(data), "resample": literal(resample)},
+        }
+        for mode in ("RGB", "PA", "F")
+        for resample in (0, 2, 3)
+        for label, method, data in (
+            ("perspective", 2, [1, .07, .4, -.03, 1, .2, .001, -.002]),
+            ("quad", 3, [.25, .5, .75, 7.5, 8.5, 7.25, 8.75, .25]),
+            ("mesh", 4, [([0, 0, 6, 7], [.25, .5, .75, 7.5, 8.5, 7.25, 8.75, .25]),
+                         ([4, 2, 8, 7], [1, 1, 1, 6, 7, 6, 7, 1])]),
+        )
+    )
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-arithmetic-f-{label}-{resample}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": "backend-word-pattern", "size": size,
+            "values": {"size": literal(output), "resample": literal(resample)},
+        }
+        for label, size, output in (("tall", [2, 203], [3, 7]),
+                                    ("ordered", [33, 3], [7, 2]))
+        for resample in (1, 2, 3, 4, 5)
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
