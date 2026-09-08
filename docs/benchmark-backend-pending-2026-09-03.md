@@ -1016,7 +1016,6 @@ f64-intermediate boundaries and arithmetic-changing chains), broader
 arithmetic-changing projective/mesh/palette admission, native/host partition
 reconciliation, and the two-consecutive-run zero-budget performance gate.
 
-
 ### Native F exponent-span follow-up (2026-09-05)
 
 The ordered binary64 GPU reducer now aligns finite terms with a jammed sticky
@@ -1186,3 +1185,50 @@ Validation: `make migration-parity-coverage-receipt-test` passes 18/18
 handling; the orchestrator owns the fresh integrated instrumented run and
 live-oracle parity. No runtime algorithm, public parity input, or threshold
 changed in this correction.
+### General projective device sampling, 2026-09-08
+
+The remaining arbitrary Perspective/Quad/multi-record Mesh bucket now uses
+native GPU sampling. Existing proven uniform paths remain available. Other
+maps upload thirteen words per destination pixel: source indices, binary64
+fractional distances, and fill/record-precedence flags. The host never reads
+source colors to construct this table. Its bound derives from the requested
+128 MiB storage-binding limit (2,581,110 destination pixels), with the shared
+image-size and dispatch guards still enforced.
+
+`transform_geometry.wgsl` performs integer-emulated binary64 FMA/Horner
+sampling and explicit FLOAT32 coefficient stores, plus native byte alpha
+premultiplication, intermediate quantization, and unpremultiplication.
+Pillow's `Geometry.c` subtracts source samples in their native type before
+promoting the filtered accumulator; FLOAT32 differences can overflow even
+when the final weighted value is ordinary. ARM subtraction propagates a NaN
+before applying its subtractive sign, and fused arithmetic propagates the
+addend before quiet-NaN multiplicands. The new inputs preserve quiet and
+signaling payloads, signed zero, subnormals, and overflow-generated NaNs.
+
+Mesh geometry preserves clipped-box coordinates and sequential overwrite
+semantics. A failed later record clears an earlier sample when fillcolor is
+`None`; explicit fill preserves it. New public overlap cases exposed the
+same missing clear in SIMD nearest Mesh; its native byte adapter now applies
+that clear without falling back or weakening the comparison.
+
+The maintained generator adds 141 public parity and coverage inputs. Its
+branch corpus is 11,273 cases; the 744 benchmark workloads are unchanged.
+The original 590-case transform/composition cohort plus these additions is
+731/731 exact on GPU. All 48 former projective CPU controls in that cohort
+are native GPU, including the original 30 remaining cases after the dyadic
+constant extension. The terminal partition is 648 GPU and seven CPU with
+655/655 complete applicable-case receipts; 76 public error/non-pipeline
+cases have no pipeline obligation. The seven controls are three existing
+empty-source guards, one existing typed affine guard, and three new general
+transform guards (empty source, I samples, metadata capacity).
+
+The 168-case focused campaign passes on CPU, SIMD, and GPU. GPU has 165
+native receipts plus the three explicit guards. SIMD passes the five new
+omitted-fill nearest Mesh cases after its fix; its broader filtered-transform
+CPU controls remain visible. Artifacts in the isolated transform worktree:
+`build/migration-parity/general-all.json`, `general-all-execution.json`,
+`general-cpu.json`, `general-simd.json`, and `general-simd-execution.json`.
+`make fmt`, `make clippy IMAGE_SLASH_STAR_SRC=/Users/lazytrot/work/image-slash-star`,
+and `make migration-parity-fixtures-check` passed. Parent integration owns
+the final combined corpus replay and changed-Rust-line coverage. WGSL
+receipts establish shader dispatch, not source-line or branch coverage.

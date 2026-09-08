@@ -2644,7 +2644,10 @@ class WorkflowBuilder:
                 )
             self._image_steps[cache_key] = step_id
             return step_id
-        if (self.edge or "").startswith("backend-word-pattern") and label == "image":
+        if (
+            (self.edge or "").startswith("backend-word-pattern")
+            or self.edge == "backend-special-pattern"
+        ) and label == "image":
             # Public frombytes stimuli preserve exceptional F words and raw
             # palette pairs. No expected result is stored with these inputs.
             size = self.scenario_size or [9, 8]
@@ -2662,6 +2665,10 @@ class WorkflowBuilder:
                     words = (0x3F800000, 0xFF800000)
                 elif self.edge == "backend-word-pattern-wide-box":
                     words = (0x7F7FFFFF,) + (0x3F800000,) * 15
+                elif self.edge == "backend-special-pattern":
+                    words = (0x7FC12345, 0xFFC54321, 0x7F800000, 0xFF800000,
+                             0x00000000, 0x80000000, 0x00000001, 0xBF800001,
+                             0x7F812345, 0xFF854321)
                 data = b"".join(struct.pack("<I", words[i % len(words)]) for i in range(count))
             else:
                 channels = {"L": 1, "LA": 2, "PA": 2, "RGB": 3, "HSV": 3, "YCbCr": 3,
@@ -39536,6 +39543,80 @@ def build_nuanced_cases(
             ("trailing", [2, 1], [3, 40, 88, 125, 77]),
             ("short", [2, 1], [3, 40, 88]),
             ("empty", [0, 1], []),
+        )
+    )
+    # General Geometry.c coordinates and ordered software-f64 interpolation.
+    # Width 31 exercises a partial workgroup; raw F words include subnormals
+    # and overflow-producing polynomial differences. Explicit/omitted mesh
+    # fill distinguish whether a failed later record retains an earlier one.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-general-{label}-{'rgb-premul' if mode == 'RGBa' else mode.lower()}-{resample}",
+            "observe_result": "tobytes", "mode": mode,
+            "edge": "backend-word-pattern", "size": [17, 9],
+            "values": {"size": literal([31, 7]), "method": literal(method),
+                       "data": literal(data), "resample": literal(resample)},
+        }
+        for mode in ("L", "LA", "RGB", "RGBA", "PA", "RGBa", "RGBX", "CMYK", "HSV", "YCbCr", "F")
+        for resample in (0, 2, 3)
+        for label, method, data in (
+            ("perspective", 2, [.531, .137, -.21, -.073, 1.13, .317, .0031, -.0137]),
+            ("quad", 3, [-.375, .03125, .137, 8.73, 16.931, 8.375, 16.73, -.137]),
+            ("mesh", 4, [([-3, -2, 19, 8], [-.31, .13, .71, 8.83, 16.17, 8.25, 16.91, -.23]),
+                         ([12, 3, 31, 7], [1.17, .73, 2.11, 8.13, 15.37, 8.61, 16.73, 1.31])]),
+        )
+    )
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": f"backend-general-mesh-overlap-{mode.lower()}-{resample}-{'fill' if explicit else 'clear'}",
+            "observe_result": "tobytes", "mode": mode,
+            "edge": "backend-word-pattern", "size": [9, 8],
+            "values": {"size": literal([11, 7]), "method": literal(4),
+                       "data": literal([([0, 0, 11, 7], [.25, .375, .75, 7.5, 8.5, 7.25, 8.75, .25]),
+                                        ([3, 2, 9, 6], [-100, -100] * 4)]),
+                       "resample": literal(resample),
+                       "fillcolor": literal(fill if explicit else None)},
+        }
+        for mode, fill in (("RGB", [191, 73, 29]), ("RGBA", [191, 73, 29, 113]),
+                           ("LA", [191, 113]), ("PA", [191, 113]), ("F", 1.25))
+        for resample in (0, 2, 3)
+        for explicit in (False, True)
+    )
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-general-special-f-{label}-{resample}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": "backend-special-pattern", "size": [9, 8],
+            "values": {"size": literal([8, 7]), "method": literal(method),
+                       "data": literal(data), "resample": literal(resample)},
+        }
+        for resample in (0, 2, 3)
+        for label, method, data in (
+            ("perspective", 2, [1, .07, .4, -.03, 1, .2, .001, -.002]),
+            ("quad", 3, [.25, .5, .75, 7.5, 8.5, 7.25, 8.75, .25]),
+            ("mesh", 4, [([0, 0, 8, 7], [.25, .5, .75, 7.5, 8.5, 7.25, 8.75, .25])]),
+        )
+    )
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "transform",
+            "requirement_suffix": "parameter.size",
+            "name": f"backend-general-guard-{label}",
+            "observe_result": "tobytes", "mode": mode, "size": source,
+            "values": {"size": literal(output), "method": literal(2),
+                       "data": literal([1, .07, .4, -.03, 1, .2, .001, -.002]),
+                       "resample": literal(2)},
+        }
+        for label, mode, source, output in (
+            ("empty-source", "RGB", [0, 1], [3, 2]),
+            ("typed-i", "I", [9, 8], [8, 7]),
+            ("metadata-storage", "L", [2, 2], [1607, 1607]),
         )
     )
     # Backend admission boundaries remain live public parity workflows and
