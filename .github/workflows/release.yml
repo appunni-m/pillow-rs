@@ -51,10 +51,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - name: require the main branch and clean checkout
+      - name: require a clean checkout
         run: |
-          test "$GITHUB_REF_NAME" = main
           test -z "$(git status --porcelain)"
+      - name: require the bootstrap branch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: test "$GITHUB_REF_NAME" = main
+      - name: require the immutable release tag
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
+          release_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          test "$release_commit" = "$(git rev-parse HEAD)"
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy
@@ -158,10 +166,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - name: require the main branch and clean checkout
+      - name: require a clean checkout
         run: |
-          test "$GITHUB_REF_NAME" = main
           test -z "$(git status --porcelain)"
+      - name: require the bootstrap branch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: test "$GITHUB_REF_NAME" = main
+      - name: require the immutable release tag
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
+          release_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          test "$release_commit" = "$(git rev-parse HEAD)"
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
