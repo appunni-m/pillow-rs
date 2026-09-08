@@ -1,11 +1,11 @@
 # Active parity/backend checklist — 2026-09-03 (focused)
 
-Current continuation: the verified PA/SIMD changes, dyadic projective GPU
-extension, and finite-exponent F reducer are integrated on
-`codex/benchmark-backend-parity-fixes` (`78ef57cce`, `e83e16f8c`,
-`9d04c991a`). The historical results below retain their original scope;
-general GPU transforms, coefficient transport, and the performance gate are
-still being verified in the 2026-09-08 continuation.
+Current continuation: ordered F GPU arithmetic, coefficient tiling, general
+projective sampling, and the PA/SIMD fixes are integrated on
+`codex/benchmark-backend-parity-fixes` in `967c40447`. The regenerated
+11,345-case replay and managed coverage are recorded below. The only remaining
+acceptance item is the zero-violation benchmark pair; its receipt structure is
+stable while timing violations remain nondeterministic.
 
 This is the short, actionable queue. Historical probes and superseded runs
 remain in the [exhaustive audit](benchmark-backend-exhaustive-audit-2026-08-30.md).
@@ -355,8 +355,9 @@ receipt rules unchanged.
   receipt can carry useful attempt telemetry, but it must not replace the
   earlier meaningful `completed`/`cached` receipt or terminalize the partial
   record. The regression suite is 40/40 and the full 10,952-case replay has
-  zero missing, partial, or indeterminate pipeline receipts; broader native/
-  host partition reconciliation remains open.
+  zero missing, partial, or indeterminate pipeline receipts. The final
+  11,345-case replay below also reconciles the native and explicit host-control
+  partitions without relabeling either outcome.
 - [x] Gate suite speed ratios on terminal requested=actual target receipts,
   matching latency samples, and empty fallback/error state (`1f49b7890`).
   Timing-complete rows without backend proof remain visible in independent
@@ -473,6 +474,34 @@ receipt rules unchanged.
   reporting eight timing-only violations. The shared root's pre-existing
   untracked files make the benchmark identity dirty; receipt and operation
   structure are unchanged, so P2 remains open.
+  A final-revision four-run campaign at `967c40447` retained 11/11 measured
+  workloads, 44/44 comparable records, and 33/33 terminal requested=actual
+  target receipts in every run. Adjacent budget comparisons reported 6, 3,
+  and 7 timing-only violations; all four normalized execution fingerprints
+  were identical after removing timing fields. The affected rows moved between
+  runs without a source, operation, or receipt change, so the zero-violation
+  P2 gate remains open under the unchanged budget policy. The retained run
+  artifacts are `benchmark-final-cohort-1.json` through
+  `benchmark-final-cohort-4.json`; budget reports are
+  `pipeline-budget-final-cohort-2-vs-1.json`,
+  `pipeline-budget-final-cohort-3-vs-2.json`, and
+  `pipeline-budget-final-cohort-4-vs-3.json`.
+  Three additional cohorts at the same revision retained the same 11/11,
+  44/44, and 33/33 receipt invariants. Their adjacent comparisons reported
+  8, 6, and 9 timing-only violations, respectively, with normalized
+  operation/resource/receipt structure unchanged. These results reinforce the
+  timing-noise classification but do not satisfy the required zero-violation
+  pair; their retained artifacts are `benchmark-final-cohort-5.json` through
+  `benchmark-final-cohort-7.json` and
+  `pipeline-budget-final-cohort-5-vs-4.json` through
+  `pipeline-budget-final-cohort-7-vs-6.json`. The three run SHA-256 values are
+  `c7eb9e093e031fbdb23f938c2248d503ee1c494d8d5a1ddb5a3c8b6a02c4cde0`,
+  `24b01c318de9266fea51d31f58b13b86389c21e169814e2c47df49565056fc73`, and
+  `2fdffb2b6979568ce857316428c5d9da6da098956c8a1fb3ea4025c318fb0bac`;
+  the budget report hashes are
+  `9897c59f0972895601def393dc3e084627074fc7c4ba2b786c034417f4f452be`,
+  `6ec57dad452c2d4bba2084557d678c4fc8ba3cba01fcab0cc8abfb60cc811336`, and
+  `47285bf032445acf8ed9bb887fc3ebf57d2ace11394605ec03b8619c828e85b2`.
 
 ## Verified changes already integrated
 
@@ -864,6 +893,28 @@ pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current integration state
 
+### Final integrated continuation — 2026-09-08
+
+Commit `967c40447` integrates the ordered F reducer, bounded coefficient
+tiling, general projective sampling, and the PA/SIMD corrections. The
+regenerated public corpus passes 11,345/11,345 exact on CPU, SIMD, GPU, Node
+WASM, and browser WASM. GPU has 7,090 native receipts plus 137 explicit host
+controls, and every F resize row is native GPU. Rust coverage passes 24/24
+plans and 11,325 tests; the all-backend aggregation passes 33,975 tests and
+covers 70/208 measured changed Rust lines. WGSL is validated by native
+dispatch receipts because LLVM does not instrument shaders. Generated direct,
+chain, special-value, tiled-tail, and changed-axis controls are in the
+maintained parity and coverage inputs; no expected output, budget, threshold,
+or receipt rule changed.
+
+The fixed 11-workload benchmark campaign kept 11/11 measured workloads,
+44/44 comparable records, and 33/33 terminal requested=actual receipts in
+each run. Seven consecutive runs retained identical normalized execution
+structure, but adjacent budget comparisons reported 6, 3, 7, 8, 6, and 9
+timing-only violations. The implementation and receipt gates are therefore
+closed; P2 remains open solely for a zero-violation timing pair under the
+unchanged policy. The dated sections below retain the intermediate evidence.
+
 ### Working branch follow-up — 2026-09-05
 
 `codex/benchmark-backend-parity-fixes` adds 144 generated public inputs;
@@ -967,16 +1018,16 @@ check reports **two violations**: Pillow constant-image median
 `backend-fixes-bench2.json`, and `backend-fixes-budget.json`. These failed
 comparisons are retained; the zero-violation performance gate remains open.
 
-The final `make migration-parity-test-all-backends` replay exits successfully
-with status `passed_with_backend_gaps`, recorded separately in
-`backend-fixes-final/all.json`. CPU, SIMD, GPU, Node/WASM,
-and browser/WASM each pass 11,096/11,096. Terminal partitions are
-CPU 6,978; SIMD 6,876 plus CPU 114;
-GPU 6,766 plus CPU 212. All three have zero missing, partial, or indeterminate
-pipeline receipts.
-Broader F device arithmetic remains an open
-proof obligation. No subagents are active. Changes are uncommitted on
-`codex/benchmark-backend-parity-fixes`.
+The pre-integration replay above is superseded by the final `967c40447`
+replay: `make migration-parity-test-all-backends` passes all 11,345 selected
+cases on CPU, SIMD, GPU, Node WASM, and browser WASM. GPU execution records
+7,090 native receipts and 137 explicit host controls; every F resize row is
+native GPU. Rust coverage passes 24/24 plans and 11,325 tests, while the
+all-backend aggregation passes 33,975 tests and covers 70/208 measured changed
+Rust lines. WGSL remains validated by native dispatch receipts because LLVM
+does not instrument shaders. No subagents are active; the checkout still has
+the pre-existing user state files `.DS_Store`, `.cargo/`, `.codex/`, and
+`round` outside this commit.
 
 ### Previously integrated baseline
 
@@ -1004,9 +1055,9 @@ controls; Node/browser WASM 6,951 each. Result SHA-256 is
 `30f53d32fadb13a8b9e9519bdae54b7d116ca04e50ba5815c383e30419042bb1`; the GPU
 execution sidecar is `b4321131697906789688360e8d20f812e985a77a6a704d7ffc0f09dea4fdb592`,
 with WGSL coverage `421d0643bc819e3641391b44cf22cf88b51eb34c9207b22cd32d8670bd0033bf`.
-The focused list still has four open acceptance buckets: broader F device
-arithmetic beyond the compact horizontal/vertical Box and special-state
-proofs (including
+At that earlier baseline the focused list had four open acceptance buckets:
+broader F device arithmetic beyond the compact horizontal/vertical Box and
+special-state proofs (including
 f64-intermediate boundaries and arithmetic-changing chains), broader
 arithmetic-changing projective/mesh/palette admission, native/host partition
 reconciliation, and the two-consecutive-run zero-budget performance gate.
@@ -1035,10 +1086,9 @@ Validation: `make migration-parity-fixtures-check`, `make fmt`, and
 `RUSTC_WRAPPER= CARGO_INCREMENTAL=0 make clippy` pass. Corpus: 11,121 public
 cases; benchmark denominator remains 744. The focused artifacts are
 `build/migration-parity/f-native.json` and `f-native-execution.json` in the
-isolated F worktree. Full integrated replay and managed coverage are owned by
-the orchestrator. This closes the observed F arithmetic gaps, not storage
-limits: non-Box coefficient tables exceeding the 128-MiB binding envelope
-still require tiled dispatch and cannot be admitted by arithmetic proof alone.
+isolated F worktree. The final integrated replay and managed coverage below
+supersede this intermediate worker snapshot and include the bounded tiled
+coefficient transport proof.
 
 ### Coverage provenance repair — 2026-09-08
 
@@ -1147,8 +1197,8 @@ The worker corpus is 11,148 public cases and 744 benchmark workloads.
 The former 8,388,607-tap admission boundary is no longer a mathematical or
 storage proof gap. The existing 16,777,216-pixel image-buffer bound, empty
 geometry guards, adapter limits, and bounded shader-work guards still apply.
-Full integrated all-backend replay and managed changed-line coverage remain
-owned by the orchestrator.
+The final integrated all-backend replay and managed changed-line coverage are
+recorded in the final continuation above.
 
 ### Coverage review corrections (2026-09-08)
 
@@ -1177,9 +1227,9 @@ records, including zero-hit lines, retain their complete denominator.
 Validation: `make migration-parity-coverage-receipt-test` passes 18/18
 (previously 6/6); `make migration-parity-receipt-test` remains 41/41.
 `make fmt` and `make repo-map-check` pass. These tests validate evidence
-handling; the orchestrator owns the fresh integrated instrumented run and
-live-oracle parity. No runtime algorithm, public parity input, or threshold
-changed in this correction.
+handling; the final integrated instrumented run and live-oracle parity are
+recorded in the final continuation above. No runtime algorithm, public parity
+input, or threshold changed in this correction.
 ### General projective device sampling, 2026-09-08
 
 The remaining arbitrary Perspective/Quad/multi-record Mesh bucket now uses
@@ -1224,6 +1274,7 @@ CPU controls remain visible. Artifacts in the isolated transform worktree:
 `build/migration-parity/general-all.json`, `general-all-execution.json`,
 `general-cpu.json`, `general-simd.json`, and `general-simd-execution.json`.
 `make fmt`, `make clippy IMAGE_SLASH_STAR_SRC=/Users/lazytrot/work/image-slash-star`,
-and `make migration-parity-fixtures-check` passed. Parent integration owns
-the final combined corpus replay and changed-Rust-line coverage. WGSL
-receipts establish shader dispatch, not source-line or branch coverage.
+and `make migration-parity-fixtures-check` passed. The final combined corpus
+replay and changed-Rust-line coverage are recorded in the final continuation
+above. WGSL receipts establish shader dispatch, not source-line or branch
+coverage.
