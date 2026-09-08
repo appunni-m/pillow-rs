@@ -1091,12 +1091,25 @@ including 0.568 s in `PIL._imaging.fill` and 0.120 s in `Image.tobytes`.
 This localizes the dominant oracle cost, but does not establish the cause of
 the older two-run regression or satisfy the performance acceptance gate.
 
+The corresponding clean-release CPU masked-analysis diagnostic executes
+1,000 workflows in 4.143 s of cumulative `run_case` time. Native
+`histogram_with_input` and `entropy_with_input` account for 2.265 s and
+1.642 s respectively; the thin Python wrappers consume about 0.002 s of
+self time. The retained `backend_ns` receipt describes the last deferred
+Resize, not both eager terminal scans. Its improvement in the failed budget
+pair therefore cannot establish that the regression occurred outside Rust.
+The diagnostic median is 3.330729 ms, with a 2.007333–25.749333 ms range;
+these instrumented samples are not acceptance measurements. Native heap
+inspection was denied by the host and that failure remains in its receipt.
+The cProfile capture succeeded. No causal runtime defect was established.
+
 The fixed 11 workload IDs, six measured samples per subject, 5% budget,
 comparison rules, and benchmark corpus remain unchanged. The old two failed
-comparisons remain evidence. The final acceptance pair must run after source
-integration and builds/coverage stop, use the same release installation,
-retain both consecutive runs, and compare all 44 records with the existing
-budget target. Profiler output must not be substituted for either run.
+comparisons remain evidence. The two-consecutive-comparison gate requires
+three predetermined runs after source integration and builds/coverage stop,
+using the same release installation. Retain every result and compare all 44
+records for run 2 versus run 1 and run 3 versus run 2 with the existing budget
+target. Profiler output must not be substituted for any acceptance run.
 
 Validation: `make migration-parity-receipt-test` passes 41/41, including the
 new profiler input-order regression. No core or binding behavior changed, so
