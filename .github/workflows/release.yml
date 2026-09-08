@@ -1,10 +1,12 @@
-# Release publication is manual by design. The default dispatch is a read-only
-# preflight; protected environments and the explicit publish input are both
-# required before any registry write or tag is created.
+# The first release is bootstrapped by a guarded manual dispatch. Later
+# releases are driven by a pushed version tag and never move an existing tag.
 
 name: Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -18,13 +20,13 @@ on:
         default: false
         type: boolean
       publish:
-        description: Publish artifacts and create the tag after the preflight succeeds
+        description: Publish artifacts after the preflight succeeds; push a tag separately to create the release
         required: true
         default: false
         type: boolean
 
 concurrency:
-  group: release-${{ inputs.version || github.run_id }}
+  group: release-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -37,7 +39,7 @@ env:
   WASM_PACK_VERSION: 0.15.0
   NODE_VERSION: 22.14.0
   NPM_VERSION: 11.5.1
-  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
   MIGRATION_WASM_NO_OPT: "1"
 
 jobs:
@@ -87,7 +89,7 @@ jobs:
           import subprocess
           import tomllib
 
-          expected = os.environ["RELEASE_VERSION"]
+          expected = os.environ["RELEASE_VERSION"].removeprefix("v")
           if not expected or any(char not in "0123456789.-" for char in expected):
               raise SystemExit(f"invalid release version: {expected!r}")
           metadata = json.loads(
@@ -111,7 +113,7 @@ jobs:
           print(f"all package versions: {expected}")
           PY
       - name: verify dependency registry visibility
-        if: ${{ inputs.dependencies_published }}
+        if: ${{ inputs.dependencies_published || github.event_name == 'push' }}
         run: |
           for package in image-slash-star fontdone; do
             version="$(DEP_NAME="$package" python -c 'import os,tomllib; d=tomllib.load(open("pillow-rs/Cargo.toml", "rb")); print(d["dependencies"][os.environ["DEP_NAME"]]["version"].lstrip("="))')"
@@ -136,7 +138,7 @@ jobs:
         run: make migration-parity-evidence-check
       - name: run the release package preflight
         env:
-          RELEASE_CRATES_READY: ${{ inputs.dependencies_published && '1' || '0' }}
+          RELEASE_CRATES_READY: ${{ (inputs.dependencies_published || github.event_name == 'push') && '1' || '0' }}
         run: make release-check
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -182,10 +184,11 @@ jobs:
       - name: create release directories
         run: mkdir -p dist/release/crate dist/release/python dist/release/npm
       - name: package the root crate after dependency publication
-        if: ${{ inputs.dependencies_published }}
+        if: ${{ inputs.dependencies_published || github.event_name == 'push' }}
         run: |
+          version="${RELEASE_VERSION#v}"
           cargo package --locked -p pillow-rs
-          cp "target/package/pillow-rs-$RELEASE_VERSION.crate" dist/release/crate/
+          cp "target/package/pillow-rs-$version.crate" dist/release/crate/
       - name: build the Python wheel
         run: python -m maturin build --manifest-path pillow-rs-py/Cargo.toml --release --locked --out dist/release/python
       - name: build and pack the npm package
@@ -205,7 +208,7 @@ jobs:
 
   publish-crates:
     name: Publish pillow-rs to crates.io
-    if: ${{ inputs.publish && inputs.dependencies_published }}
+    if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
     needs: package
     runs-on: ubuntu-24.04
     environment: crates-io
@@ -226,11 +229,17 @@ jobs:
       - name: publish the root crate
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        run: cargo publish --locked -p pillow-rs
+        run: |
+          version="${RELEASE_VERSION#v}"
+          if cargo info --registry crates-io "pillow-rs@$version" >/dev/null 2>&1; then
+            echo "pillow-rs@$version is already visible; keeping the immutable registry artifact"
+          else
+            cargo publish --locked -p pillow-rs
+          fi
 
   publish-pypi:
     name: Publish pillow-rs to PyPI
-    if: ${{ inputs.publish && inputs.dependencies_published }}
+    if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
     needs: package
     runs-on: ubuntu-24.04
     environment: pypi
@@ -245,11 +254,11 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: dist/release/python/
-          skip-existing: false
+          skip-existing: true
 
   publish-npm:
     name: Publish pillow-rs to npm
-    if: ${{ inputs.publish && inputs.dependencies_published }}
+    if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
     needs: package
     runs-on: ubuntu-24.04
     environment: npm
@@ -269,11 +278,17 @@ jobs:
       - name: install the npm CLI required by trusted publishing
         run: npm install --global "npm@$NPM_VERSION"
       - name: publish the npm tarball with provenance
-        run: npm publish "dist/release/npm/pillow-rs-$RELEASE_VERSION.tgz" --access public --provenance
+        run: |
+          version="${RELEASE_VERSION#v}"
+          if npm view "pillow-rs@$version" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
+            echo "pillow-rs@$version is already visible; keeping the immutable registry artifact"
+          else
+            npm publish "dist/release/npm/pillow-rs-$version.tgz" --access public --provenance
+          fi
 
   tag-and-release:
-    name: Tag and create the GitHub release
-    if: ${{ inputs.publish && inputs.dependencies_published }}
+    name: Create the GitHub release for the pushed tag
+    if: ${{ github.event_name == 'push' }}
     needs: [publish-crates, publish-pypi, publish-npm]
     runs-on: ubuntu-24.04
     permissions:
@@ -286,15 +301,12 @@ jobs:
         with:
           name: release-artifacts-${{ github.run_id }}
           path: dist/release
-      - name: create the immutable version tag
+      - name: create the immutable GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="v$RELEASE_VERSION"
-          if git show-ref --tags --verify --quiet "refs/tags/$tag"; then
-            echo "tag already exists: $tag" >&2
-            exit 2
-          fi
-          git tag --annotate "$tag" --message "Release $RELEASE_VERSION"
-          git push origin "$tag"
-          gh release create "$tag" --title "$tag" --generate-notes dist/release/SHA256SUMS dist/release/crate/*.crate dist/release/python/*.whl dist/release/npm/*.tgz
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/release/SHA256SUMS dist/release/crate/*.crate dist/release/python/*.whl dist/release/npm/*.tgz

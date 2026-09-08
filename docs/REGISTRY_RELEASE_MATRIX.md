@@ -23,6 +23,11 @@ registry publication and the exact-commit CI runs remain external prerequisites.
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
+The root workflow accepts a guarded manual dispatch for the first publication.
+After that bootstrap, pushing an annotated `v<version>` tag runs the same
+preflight, publishes only missing registry versions, and creates the
+immutable GitHub release for that tag.
+
 The root release workflow checks that Cargo, PyPI, and npm all report the same
 version before it creates an artifact. It is manual and defaults to a
 non-publishing preflight. The publish input is intentionally separate from
