@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 4748153a1f630b7f47143dd144521d06e650ceea1760a71f7297de91e96daf49
+manifest_sha256: 7fb0ed379ee29f57ed979dde9a20dbc9ab5c8aa957465210eab3f28836428597
 statement_status: declared
 ```
 
@@ -15,13 +15,13 @@ statement_status: declared
 
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
-- Target profiles: `python-cpu`
+- Target profiles: `python-cpu`, `python-simd`, `python-gpu`
 - Public surfaces: 24
 - Operations: 209
-- Requirements: 1797
-- Indexed parity cases: 2740
+- Requirements: 1801
+- Indexed parity cases: 11345
 - Indexed coverage plans: 24
-- Indexed benchmark workloads: 208
+- Indexed benchmark workloads: 744
 
 ## Declared operations
 
@@ -142,10 +142,10 @@ statement_status: declared
 | `PIL.ImageDraw.ImageDraw` | `text` | `method` | `PIL.ImageDraw.ImageDraw.text` | `pillow_rs.ImageDraw.Draw.text` | 25 |
 | `PIL.ImageDraw.ImageDraw` | `textbbox` | `method` | `PIL.ImageDraw.ImageDraw.textbbox` | `pillow_rs.ImageDraw.Draw.textbbox` | 18 |
 | `PIL.ImageDraw.ImageDraw` | `textlength` | `method` | `PIL.ImageDraw.ImageDraw.textlength` | `pillow_rs.ImageDraw.Draw.textlength` | 13 |
-| `PIL.ImageEnhance` | `Brightness` | `type` | `PIL.ImageEnhance.Brightness` | `pillow_rs.ImageEnhance.Brightness` | 7 |
-| `PIL.ImageEnhance` | `Color` | `type` | `PIL.ImageEnhance.Color` | `pillow_rs.ImageEnhance.Color` | 7 |
-| `PIL.ImageEnhance` | `Contrast` | `type` | `PIL.ImageEnhance.Contrast` | `pillow_rs.ImageEnhance.Contrast` | 7 |
-| `PIL.ImageEnhance` | `Sharpness` | `type` | `PIL.ImageEnhance.Sharpness` | `pillow_rs.ImageEnhance.Sharpness` | 7 |
+| `PIL.ImageEnhance` | `Brightness` | `type` | `PIL.ImageEnhance.Brightness` | `pillow_rs.ImageEnhance.Brightness` | 8 |
+| `PIL.ImageEnhance` | `Color` | `type` | `PIL.ImageEnhance.Color` | `pillow_rs.ImageEnhance.Color` | 8 |
+| `PIL.ImageEnhance` | `Contrast` | `type` | `PIL.ImageEnhance.Contrast` | `pillow_rs.ImageEnhance.Contrast` | 8 |
+| `PIL.ImageEnhance` | `Sharpness` | `type` | `PIL.ImageEnhance.Sharpness` | `pillow_rs.ImageEnhance.Sharpness` | 8 |
 | `PIL.ImageEnhance.Brightness` | `enhance` | `method` | `PIL.ImageEnhance.Brightness.enhance` | `pillow_rs.ImageEnhance.Brightness.enhance` | 3 |
 | `PIL.ImageEnhance.Color` | `enhance` | `method` | `PIL.ImageEnhance.Color.enhance` | `pillow_rs.ImageEnhance.Color.enhance` | 3 |
 | `PIL.ImageEnhance.Contrast` | `enhance` | `method` | `PIL.ImageEnhance.Contrast.enhance` | `pillow_rs.ImageEnhance.Contrast.enhance` | 3 |
@@ -247,4 +247,4 @@ accepted as input truth.
 | --- | ---: |
 | parity | 24 |
 | coverage | 24 |
-| benchmark | 24 |
+| benchmark | 25 |

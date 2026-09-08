@@ -15,6 +15,7 @@ END = "<!-- END GENERATED CODE TREE -->"
 DOC_PATH = Path("docs/REPO_MAP.md")
 
 ROOT_FILES = {
+    ".github/workflows/benchmark.yml",
     ".github/workflows/ci.yml",
     "AGENT.md",
     "AGENTS.md",
@@ -24,6 +25,7 @@ ROOT_FILES = {
     "CONTRIBUTING.md",
     "Makefile",
     "README.md",
+    "requirements-ci.txt",
     "deny.toml",
     "rust-toolchain.toml",
     "rustfmt.toml",

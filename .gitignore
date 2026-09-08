@@ -12,6 +12,7 @@ dist/
 *.wasm
 /pkg/
 /node_modules/
+.DS_Store
 coverage/report.json
 .coverage-mcp/
 .report.json

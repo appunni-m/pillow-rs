@@ -1,5 +1,9 @@
 # Manifest.yaml Audit — 2026-06-16
 
+> Historical audit snapshot. The generated active manifest and its validators
+> are authoritative now; the checks and issue counts below document the
+> migration from the retired fixture system.
+
 ## Verification Methodology
 
 A correct `manifest.yaml` must satisfy 5 invariants:

@@ -1,5 +1,11 @@
 # Image Pipeline Performance Roadmap
 
+> Historical roadmap snapshot. Detailed benchmark versions, machine-specific
+> timings, and intermediate FIL statuses below are retained for provenance.
+> The maintained benchmark contract is [`docs/BENCHMARKING.md`](BENCHMARKING.md)
+> and current acceptance evidence is in
+> [`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md).
+
 Status: active — verified slices recorded; remaining work is open  
 Reviewed: 2026-08-14
 Code revision reviewed: `d617752a3df3ff9a8da0eab65e473b8628204c45` with additional uncommitted worktree changes
@@ -435,7 +441,7 @@ The review covered the following active paths:
 | Area | Files reviewed | Main evidence |
 |---|---|---|
 | Lazy graph and materialization | [`image.rs`](../pillow-rs/src/image.rs), [`pipeline.rs`](../pillow-rs/src/pipeline.rs) | `Image::Pipeline`, `push_op`, `materialized_shared`, `materialize`, `evaluate_pipeline`, mode and palette propagation |
-| Routing and operation metadata | [`compute/mod.rs`](../pillow-rs/src/compute/mod.rs), [`registry.rs`](../pillow-rs/src/compute/registry.rs), [`backend_op.rs`](../pillow-rs/src/compute/backend_op.rs), [`op_def.rs`](../pillow-rs/src/compute/op_def.rs) | global backend lock, repeated support validation, string registry lookup, duplicated operation descriptions |
+| Routing and operation metadata | [`compute/mod.rs`](../pillow-rs/src/compute/mod.rs), [`registry.rs`](../pillow-rs/src/compute/registry.rs); historical `backend_op.rs` and `op_def.rs` were removed | global backend lock, repeated support validation, string registry lookup, duplicated operation descriptions |
 | CPU pool | [`pool_cpu`](../pillow-rs/src/compute/pool_cpu), [`pil_resize.rs`](../pillow-rs/src/ops/pil_resize.rs), [`quantize.rs`](../pillow-rs/src/ops/quantize.rs), [`par.rs`](../pillow-rs/src/par.rs) | serial loops, conversions, per-pixel allocation, naïve blur windows, resampling tables, unused parallel helpers |
 | SIMD pool | [`pool_simd`](../pillow-rs/src/compute/pool_simd) | packed RGBA conversion in adapters, scalar kernels, empty architecture modules, CPU delegation |
 | GPU pool and shaders | [`pool_gpu/mod.rs`](../pillow-rs/src/compute/pool_gpu/mod.rs), [`pool_gpu/shaders`](../pillow-rs/src/compute/pool_gpu/shaders) | upload/readback packing, resource lifetime, per-op bind groups, shader compilation, loop-based filters, fixed workgroups |

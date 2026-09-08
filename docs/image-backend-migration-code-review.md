@@ -1,5 +1,10 @@
 # `pillow-rs` Image Backend Migration Code Review
 
+> Historical review snapshot. The blockers and counts below describe the
+> migration checkpoint that produced this report; current status is maintained
+> by the active manifest, Makefile, and
+> [`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md).
+
 Date: 2026-07-23
 
 ## Decision

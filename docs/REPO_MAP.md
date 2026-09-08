@@ -151,6 +151,7 @@ generated reports, build outputs, and package installs.
 |           `-- SKILL.md
 |-- .github/
 |   `-- workflows/
+|       |-- benchmark.yml
 |       `-- ci.yml
 |-- AGENT.md
 |-- AGENTS.md
@@ -376,6 +377,7 @@ generated reports, build outputs, and package installs.
 |   `-- src/
 |       |-- lib.rs
 |       `-- putdata.rs
+|-- requirements-ci.txt
 |-- rust-toolchain.toml
 |-- rustfmt.toml
 `-- scripts/
