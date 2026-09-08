@@ -31,7 +31,8 @@ Pillow API, platform, or GPU adapter is supported.
 
 The Python wheel uses the `abi3-py38` boundary and declares `requires-python >=3.8`.
 The parity oracle is Pillow 12.2.0, which requires Python 3.10 or newer, so CI
-parity runs use Python 3.10 and 3.12. The WASM CI lane uses Node 20.19.0.
+parity runs use Python 3.10 and 3.12. The WASM CI lane uses Node 22.14.0 with
+npm 11.5.1.
 
 ## Quick start from a checkout
 
