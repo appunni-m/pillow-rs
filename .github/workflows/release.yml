@@ -31,6 +31,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -63,6 +64,15 @@ jobs:
           test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
           release_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
           test "$release_commit" = "$(git rev-parse HEAD)"
+      - name: require successful CI for this commit
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=success" \
+            --jq '.workflow_runs[0].id // empty')"
+          test -n "$run_id"
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy
