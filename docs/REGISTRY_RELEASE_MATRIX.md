@@ -14,7 +14,7 @@ registry publication and the exact-commit CI runs remain external prerequisites.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release candidate `d390b54855aa53fc6bd33f7b8e649cf48d9625c3`; local verification passes, while the exact 13-path package-surface manifest and push-safe history for the oversized AV1 oracle remain open |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release candidate code `d390b54855aa53fc6bd33f7b8e649cf48d9625c3`; package surface is now an exact 170-path contract (`92ee6ed9`), while only the push-safe history for the oversized AV1 oracle remains open |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commit `f328c999a33fcf1d4400b3225e5c2d4824f22343`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
@@ -121,9 +121,9 @@ The sibling release files need one clean release commit before they can be
 published. `fontdone` and `image-slash-star` now both have tag-driven release
 workflows with pinned toolchains, successful-CI checks, checksummed archives,
 and registry trusted-publisher jobs. Fontdone still needs the five target
-bundles and an owner decision on benchmark budgets. Image-slash-star still
-needs its exact Cargo package-surface manifest update and a push-safe history
-for the oversized generated AV1 oracle; those are release blockers rather than
+bundles and an owner decision on benchmark budgets. Image-slash-star now has
+the exact Cargo package-surface manifest; it still needs a push-safe history
+for the oversized generated AV1 oracle. These are release blockers rather than
 reasons to weaken the package or parity checks.
 
 Do not stage or discard those active sibling changes from this checkout. The
