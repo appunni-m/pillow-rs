@@ -1142,8 +1142,113 @@ fn pack_filtered(source_y: u32, output_x: u32) -> u32 {
     return red | (green << 8u) | (blue << 16u) | (alpha << 24u);
 }
 
+// Markers 14/15 stream a bounded coefficient tile through the same ordered
+// reducer. Six storage words retain the binary64 state and IEEE special-value
+// scan between dispatches. Only marker 15 performs Pillow's final FLOAT32
+// store, so a chunk boundary adds no arithmetic rounding.
+fn tiled_f64(gid: vec3<u32>) {
+    let horizontal = coefficients[0] == 0;
+    let row_start = u32(coefficients[1]);
+    let line_start = u32(coefficients[2]);
+    let rows = u32(coefficients[3]);
+    let lines = u32(coefficients[4]);
+    let tap_start = u32(coefficients[5]);
+    if gid.x >= rows || gid.y >= lines {
+        return;
+    }
+    let state_offset = (gid.y * rows + gid.x) * 6u;
+    if params.premultiply == 15u {
+        let state = SignedU128(
+            U128(input[state_offset], input[state_offset + 1u], 0u, 0u),
+            input[state_offset + 3u] != 0u,
+        );
+        let flags = input[state_offset + 5u];
+        var result = f64_sum_to_f32(state, bitcast<i32>(input[state_offset + 2u]));
+        if (flags & 1u) != 0u {
+            result = input[state_offset + 4u];
+        } else if (flags & 6u) == 6u {
+            result = 0x7fc00000u;
+        } else if (flags & 2u) != 0u {
+            result = 0x7f800000u;
+        } else if (flags & 4u) != 0u {
+            result = 0xff800000u;
+        }
+        let row = row_start + gid.x;
+        let line = line_start + gid.y;
+        let pixel = select(row * params.dst_w + line, line * params.dst_w + row, horizontal);
+        output[pixel] = result;
+        return;
+    }
+    var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
+    var first_nan = 0u;
+    var flags = 0u;
+    if tap_start != 0u {
+        state = F64OrderedState(
+            U128(output[state_offset], output[state_offset + 1u], 0u, 0u),
+            bitcast<i32>(output[state_offset + 2u]),
+            output[state_offset + 3u] != 0u,
+            true,
+        );
+        first_nan = output[state_offset + 4u];
+        flags = output[state_offset + 5u];
+    }
+    let metadata = 6u + gid.x * 4u;
+    let source_start = u32(coefficients[metadata]);
+    let total_count = u32(coefficients[metadata + 1u]);
+    let count = u32(coefficients[metadata + 2u]);
+    let weight_base = u32(coefficients[metadata + 3u]);
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let coeff = f64_coeff(weight_base + tap * 4u);
+        let coordinate = source_start + tap_start + tap;
+        let line = line_start + gid.y;
+        let pixel = select(coordinate * params.width + line, line * params.width + coordinate, horizontal);
+        let bits = input[pixel];
+        let exponent_bits = (bits >> 23u) & 255u;
+        let sample_negative = (bits & 0x80000000u) != 0u;
+        if exponent_bits == 255u {
+            if (bits & 0x7fffffu) != 0u {
+                if (flags & 1u) == 0u {
+                    first_nan = bits | 0x00400000u;
+                    flags = flags | 1u;
+                }
+            } else if coeff.mantissa_lo == 0u && coeff.mantissa_hi == 0u {
+                if (flags & 1u) == 0u {
+                    first_nan = 0x7fc00000u;
+                    flags = flags | 1u;
+                }
+            } else {
+                flags = flags | select(2u, 4u, sample_negative != coeff.negative);
+            }
+            continue;
+        }
+        let sample_mantissa = select(
+            (bits & 0x7fffffu) | 0x800000u,
+            bits & 0x7fffffu,
+            exponent_bits == 0u,
+        );
+        let sample_exp = select(i32(exponent_bits) - 127 - 23, -149, exponent_bits == 0u);
+        state = f64_ordered_add_product(
+            state,
+            f64_product(sample_mantissa, coeff),
+            sample_exp + coeff.exponent,
+            sample_negative != coeff.negative,
+            horizontal && tap_start + tap < (total_count & 0xfffffff0u),
+        );
+    }
+    output[state_offset] = state.magnitude.a;
+    output[state_offset + 1u] = state.magnitude.b;
+    output[state_offset + 2u] = bitcast<u32>(state.exponent);
+    output[state_offset + 3u] = select(0u, 1u, state.negative);
+    output[state_offset + 4u] = first_nan;
+    output[state_offset + 5u] = flags;
+}
+
 @compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if params.premultiply == 14u || params.premultiply == 15u {
+        tiled_f64(gid);
+        return;
+    }
     if gid.x >= params.dst_w || gid.y >= params.height {
         return;
     }
