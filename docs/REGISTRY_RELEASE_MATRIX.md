@@ -118,12 +118,13 @@ Keep `contents: read` at workflow scope. The tag/release job alone receives
 ## Sibling project follow-up
 
 The sibling release files need one clean release commit before they can be
-published. `fontdone` already has CI and a release workflow, but its current
-workflow still uses a long-lived `CARGO_REGISTRY_TOKEN`; migrate it to the
-trusted publisher after the manual first crate upload. `image-slash-star` has
-CI and a release guide but no release workflow; add one after its active AVIF,
-BMP, and fixture changes are committed and its `cargo package --locked` job no
-longer relies on `--allow-dirty`.
+published. `fontdone` and `image-slash-star` now both have tag-driven release
+workflows with pinned toolchains, successful-CI checks, checksummed archives,
+and registry trusted-publisher jobs. Fontdone still needs the five target
+bundles and an owner decision on benchmark budgets. Image-slash-star still
+needs its exact Cargo package-surface manifest update and a push-safe history
+for the oversized generated AV1 oracle; those are release blockers rather than
+reasons to weaken the package or parity checks.
 
 Do not stage or discard those active sibling changes from this checkout. The
 release audit must be repeated against the final release commits, with package
