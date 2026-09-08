@@ -502,6 +502,20 @@ receipt rules unchanged.
   `9897c59f0972895601def393dc3e084627074fc7c4ba2b786c034417f4f452be`,
   `6ec57dad452c2d4bba2084557d678c4fc8ba3cba01fcab0cc8abfb60cc811336`, and
   `47285bf032445acf8ed9bb887fc3ebf57d2ace11394605ec03b8619c828e85b2`.
+  A release-candidate pair at the current source revision `747df1647` again
+  selected and measured 11/11 workloads, with 44/44 comparable records and
+  33/33 terminal requested=actual target receipts in each run. Run IDs were
+  `migration-benchmark-379477664d9f4d9c8516f8d8d2c10352` and
+  `migration-benchmark-7a2f8f6b26e1478fb985954192dc73a1`; result SHA-256
+  values were `3aa38770bb29648da614b28dc8fc8b6666ef83f071bd594ab8257502c6e6f9bf`
+  and `36fab79309ec08f810058686ffd9534ba7c90f121986040e184a5920aba5cf1c`.
+  The unchanged budget check (`a7300b25e02935dc6730db76142250bf90e1af6965744c0cb6216b2a7b5371a4`)
+  reported three statistically credible timing-only violations: GPU
+  `resize-rotate-crop` (+15.59%), Pillow `simd-constant` (+13.31%), and CPU
+  `analysis-masked-rgb` (+30.45%). Operation, resource, backend, and receipt
+  fields remained stable; no threshold or fixture change is justified, so P2
+  remains open. A subsequent local rebuild could not prove the GPU subject on
+  this host and was discarded as incomplete rather than mixed into the gate.
 
 ## Verified changes already integrated
 
