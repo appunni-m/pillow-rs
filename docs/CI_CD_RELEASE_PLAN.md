@@ -70,7 +70,6 @@ recorded in [`REGISTRY_RELEASE_MATRIX.md`](REGISTRY_RELEASE_MATRIX.md). The
 tag path also requires a successful `ci.yml` run for the exact tagged commit
 before any registry job can publish. The Pages renderer remains the next
 delivery step.
-Pages renderer remains the next delivery step.
 
 ## Release sequence
 
