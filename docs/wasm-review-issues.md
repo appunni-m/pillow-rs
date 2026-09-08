@@ -1,5 +1,9 @@
 # WASM Test Infrastructure — Review Issues
 
+> Historical review snapshot from 2026-06-15. Current Node/browser parity is
+> driven by the manifest inputs and `make test-wasm`; do not use the old pass,
+> fail, or skip table below as current evidence.
+
 Generated 2026-06-15. Covers `wasm_backend.mjs`, `pillow-rs-js/src/lib.rs`, `test.html`, `run_wasm_test.mjs`, `execution_engine.mjs`, `test_fixture_parity.py`.
 
 ## Current Status (2026-06-15 EOD)

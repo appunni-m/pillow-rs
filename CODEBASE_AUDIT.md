@@ -1,5 +1,12 @@
 # pillow-rs Comprehensive Codebase Audit
 
+> **Historical snapshot (2026-09-08).** This audit records findings from an
+> earlier implementation state. It is retained for provenance; it is not the
+> active issue list. Use [`docs/REPOSITORY_FILE_AUDIT.md`](docs/REPOSITORY_FILE_AUDIT.md),
+> [`docs/DOCUMENTATION_CHECKLIST.md`](docs/DOCUMENTATION_CHECKLIST.md), the
+> current manifest, and the root Makefile for present guidance. A historical
+> finding is not a claim that the current tree still has the same defect.
+
 **Date:** 2026-06-20
 **Scope:** `pillow-rs/` (core), `pillow-rs-py/` (Python bindings), CPU backend, image implementation
 **Excluded:** JS/WASM bindings (in progress), SIMD (partial), GPU (partial)

@@ -1,5 +1,12 @@
 # Systemic Fix Patterns — Preventing Recurrence
 
+> **Historical implementation notes (2026-09-08).** These patterns describe
+> fixes and proposals from earlier phases. Keep them for provenance, but treat
+> [`CLAUDE.md`](CLAUDE.md), [`docs/REPO_MAP.md`](docs/REPO_MAP.md), the active
+> manifest, and the Makefile as the current source of truth. New work must
+> include fresh parity/coverage evidence rather than relying on an old pattern
+> table.
+
 Each audit finding category mapped to a **systemic guard** (type, macro, lint, script, or CI check) that prevents the entire class from recurring.
 
 ---

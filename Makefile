@@ -10,6 +10,11 @@ MATURIN      := $(PYTHON) -m maturin
 NODE         := node
 CARGO        := cargo
 WASM_PACK    := wasm-pack
+WASM_PACK_VERSION ?= 0.15.0
+CARGO_DENY_VERSION ?= 0.20.2
+CARGO_AUDIT_VERSION ?= 0.22.2
+CI_REQUIREMENTS ?= requirements-ci.txt
+RELEASE_CRATES_READY ?= 0
 MANIFEST     := pillow-rs/tests/fixtures/manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
@@ -237,10 +242,11 @@ help: ## Show this help
 	@printf "\n$(BOLD)Docs$(NC)\n"
 	@printf "  $(CYAN)make repo-map-check$(NC) Validate docs/REPO_MAP.md generated tree\n"
 	@printf "  $(CYAN)make repo-map-update$(NC) Refresh docs/REPO_MAP.md generated tree\n"
+	@printf "  $(CYAN)make docs-check$(NC)     Validate documentation entry points and generated inputs\n"
 	@printf "\n$(BOLD)Benchmark$(NC)\n"
-	@printf "  $(CYAN)make bench$(NC)          Full benchmark suite (166 functions, ~20 min)\n"
-	@printf "  $(CYAN)make bench-incr$(NC)     Incremental (only changed functions)\n"
-	@printf "  $(CYAN)make bench-priority$(NC) Priority tier only (12 ops)\n"
+	@printf "  $(CYAN)make bench$(NC)          Fixed correctness-gated benchmark cohort\n"
+	@printf "  $(CYAN)make bench-incr$(NC)     Same cohort with caller-selected inputs\n"
+	@printf "  $(CYAN)make bench-priority$(NC) Same cohort with caller-selected inputs\n"
 	@printf "  $(CYAN)make pillow-rs-py-binding-benchmark$(NC) Release-only PyO3 GIL/concurrency benchmark\n"
 	@printf "\n$(BOLD)CI$(NC)\n"
 	@printf "  $(CYAN)make ci$(NC)             Full CI pipeline (fmt → clippy → test → coverage)\n"
@@ -252,6 +258,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make release-pypi$(NC)   Build + publish to PyPI\n"
 	@printf "  $(CYAN)make release-npm$(NC)    Build WASM + publish to npm\n"
 	@printf "  $(CYAN)make release-crates$(NC) Publish to crates.io\n"
+	@printf "  $(CYAN)make release-check$(NC)  Build/package dry-run for every release target\n"
 	@printf "\n$(BOLD)Stubs$(NC)\n"
 	@printf "  $(CYAN)make stubs$(NC)          Check for missing Rust stubs vs manifest\n"
 
@@ -260,29 +267,29 @@ help: ## Show this help
 
 setup-venv: ## Create an isolated Python build/parity environment for this checkout
 	@test -x .venv/bin/python || $(PYTHON) -m venv .venv
-	.venv/bin/python -m pip install maturin coverage pillow==12.2.0 numpy pyyaml
+	.venv/bin/python -m pip install --requirement "$(CI_REQUIREMENTS)"
 
 setup: ## Install all dev dependencies
 	@$(PYTHON) -m pip --version >/dev/null 2>&1 || { echo "Bootstrapping pip..."; $(PYTHON) -m ensurepip --upgrade; }
-	@$(MATURIN) --version >/dev/null 2>&1 || { echo "Installing maturin..."; $(PIP) install maturin; }
-	@command -v $(WASM_PACK) >/dev/null 2>&1 || { echo "Installing wasm-pack..."; cargo install wasm-pack; }
+	@command -v $(WASM_PACK) >/dev/null 2>&1 && $(WASM_PACK) --version | grep -qx "wasm-pack $(WASM_PACK_VERSION)" || { echo "Installing wasm-pack $(WASM_PACK_VERSION)..."; cargo install wasm-pack --version $(WASM_PACK_VERSION) --locked; }
 	@[ -n "$$VIRTUAL_ENV" ] || [ -n "$$CONDA_PREFIX" ] || [ "$(PYTHON)" = ".venv/bin/python" ] || echo "⚠️  No virtualenv detected — consider: python3 -m venv .venv && source .venv/bin/activate"
-	$(PIP) install maturin coverage pillow==12.2.0 numpy pyyaml
+	$(PIP) install --requirement "$(CI_REQUIREMENTS)"
 	cd $(JS_SRC) && npm ci
 
 setup-ci: ## Install dev deps for CI
 	@$(PYTHON) -m pip --version >/dev/null 2>&1 || { echo "Bootstrapping pip..."; $(PYTHON) -m ensurepip --upgrade; }
-	$(PIP) install maturin coverage pillow==12.2.0 numpy pyyaml
+	$(PIP) install --requirement "$(CI_REQUIREMENTS)"
+	@command -v $(WASM_PACK) >/dev/null 2>&1 && $(WASM_PACK) --version | grep -qx "wasm-pack $(WASM_PACK_VERSION)" || { echo "Installing wasm-pack $(WASM_PACK_VERSION)..."; cargo install wasm-pack --version $(WASM_PACK_VERSION) --locked; }
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 .PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all
 
 build: ## Build Python package (release)
-	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --release
+	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --release --locked
 
 build-dev: ## Build Python package (debug, faster compile)
-	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml
+	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --locked
 
 build-wasm: build-wasm-core ## Build the default core WASM package (dev)
 
@@ -921,13 +928,22 @@ coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust \
 bench bench-incr bench-priority: migration-parity-benchmark ## Run the fixed correctness-gated benchmark lane
 
 # ── Documentation ─────────────────────────────────────────────────────────────
-.PHONY: repo-map-check repo-map-update
+.PHONY: repo-map-check repo-map-update docs-check
 
 repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py
 
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
+
+docs-check: repo-map-check migration-parity-inputs-check ## Validate documentation entry points and generated inputs
+	@test -s README.md
+	@test -s CONTRIBUTING.md
+	@test -s BENCHMARKS.md
+	@test -s docs/DOCUMENTATION_CHECKLIST.md
+	@test -s docs/CI_CD_RELEASE_PLAN.md
+	@test -s docs/BENCHMARKING.md
+	@test -s docs/COVERAGE.md
 
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
@@ -957,13 +973,28 @@ stubs:
 	@exit 2
 
 # ── Release ───────────────────────────────────────────────────────────────────
-.PHONY: release-pypi release-npm release-crates
+.PHONY: release-check release-pypi release-npm release-crates
 
-release-pypi: build ## Build + publish to PyPI
-	cd $(PY_SRC) && $(MATURIN) publish
+release-check: build-all ## Build and package every release artifact without publishing
+	$(CARGO) metadata --locked --no-deps --format-version 1 >/dev/null
+	@if test "$(RELEASE_CRATES_READY)" = "1"; then \
+		$(CARGO) package -p $(CORE_SRC) --locked --allow-dirty --no-verify; \
+	else \
+		printf "crate package dry-run deferred: publish image-slash-star and fontdone first, then set RELEASE_CRATES_READY=1.\n"; \
+	fi
+	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out dist/release-check
+	cd $(JS_SRC) && npm run test:package
+	cd $(JS_SRC) && npm pack --dry-run --ignore-scripts
 
-release-npm: build-wasm-release ## Build WASM + publish to npm
-	cd $(JS_SRC)/pkg && npm publish
+release-pypi: release-check ## Build + publish to PyPI (requires RELEASE_CONFIRM=1)
+	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to PyPI.\n" >&2; exit 2; }
+	cd $(PY_SRC) && $(MATURIN) publish --locked
 
-release-crates: ## Publish to crates.io
-	$(CARGO) publish -p $(CORE_SRC)
+release-npm: release-check ## Build WASM + publish the root npm package (requires RELEASE_CONFIRM=1)
+	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to npm.\n" >&2; exit 2; }
+	cd $(JS_SRC) && npm publish
+
+release-crates: release-check ## Publish to crates.io (requires RELEASE_CRATES_READY=1 and RELEASE_CONFIRM=1)
+	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
+	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to crates.io.\n" >&2; exit 2; }
+	$(CARGO) publish -p $(CORE_SRC) --locked

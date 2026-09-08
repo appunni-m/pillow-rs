@@ -1,7 +1,12 @@
-# Pillow 12.2.0 API Surface — Complete Inventory
+# Pillow 12.2.0 API Surface — Reference Inventory
+
+> Historical generated snapshot. The active public-surface denominator is the
+> manifest-driven inventory in
+> [`pillow-rs/tests/fixtures/manifest.yaml`](../pillow-rs/tests/fixtures/manifest.yaml).
+> This file is retained for source comparison and is not a completion claim.
 
 Auto-generated from `inspect.signature()` on installed Pillow 12.2.0.
-This is the master checklist. Every method listed here must be in manifest.yaml.
+Use the active manifest and its input index as the implementation checklist.
 
 ---
 

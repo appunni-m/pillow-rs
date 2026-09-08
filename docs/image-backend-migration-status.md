@@ -1,5 +1,9 @@
 # image-slash-star Backend Migration Status
 
+> Historical downstream migration snapshot. The active project-wide parity
+> and benchmark status is maintained in the manifest and
+> [`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md).
+
 Status: native backend migration, lazy-loading correctness, and JS/WASM
 core-extra codec packaging are implemented. Broader binding runtime parity
 remains separate work.

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin==1.14.1"]
 build-backend = "maturin"
 
 [project]
@@ -32,7 +32,12 @@ Repository = "https://github.com/pillow-rs/pillow-rs"
 Documentation = "https://github.com/pillow-rs/pillow-rs#readme"
 
 [project.optional-dependencies]
-dev = ["coverage", "pyyaml", "pillow==12.2.0", "numpy"]
+dev = [
+    "coverage==7.10.7; python_version >= '3.10'",
+    "pyyaml==6.0.3",
+    "pillow==12.2.0; python_version >= '3.10'",
+    "numpy==2.2.6; python_version >= '3.10'",
+]
 
 [tool.maturin]
 python-source = "python"

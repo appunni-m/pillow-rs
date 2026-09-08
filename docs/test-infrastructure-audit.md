@@ -1,5 +1,10 @@
 # Test Infrastructure Audit — PIL vs RSPIL Parity
 
+> Historical audit snapshot. The active input-only parity and coverage
+> contract is maintained by the manifest and
+> [`docs/DOCUMENTATION_CHECKLIST.md`](DOCUMENTATION_CHECKLIST.md); findings
+> below are retained to explain earlier harness decisions.
+
 Date: 2026-06-16
 
 ## 2026-07-23 Revalidation

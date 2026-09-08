@@ -1,9 +1,13 @@
 # Pillow Compatibility Program
 
-Status: active  
+Status: design reference (historical snapshot; reviewed 2026-09-08)
 Created: 2026-07-24  
-Authority: this document is the canonical plan for Pillow image API parity
-outside the FreeType-specific parity program.
+The active parity contract and evidence status now live in
+[`pillow-rs/tests/fixtures/manifest.yaml`](../pillow-rs/tests/fixtures/manifest.yaml),
+[`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md),
+and [`docs/DOCUMENTATION_CHECKLIST.md`](DOCUMENTATION_CHECKLIST.md). The
+implementation counts and open findings below are retained for provenance and
+must not be read as current acceptance claims.
 
 ## Executive Answers To The Five Questions
 

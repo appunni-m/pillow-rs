@@ -1,8 +1,10 @@
 # Tiny Image Star integration issues — solution proposal
 
-Status: proposal only. This document records review findings and a recommended
-implementation sequence; it does not change the binding, codec, packaging, or
-dependency code.
+Status: historical proposal (reviewed 2026-09-08). This document records
+review findings and a recommended implementation sequence from an earlier
+checkout; it does not describe the current binding, codec, packaging, or
+dependency state. Use the active manifest, Makefile, and
+[`docs/CI_CD_RELEASE_PLAN.md`](CI_CD_RELEASE_PLAN.md) for current guidance.
 
 ## Review basis
 
