@@ -1155,3 +1155,34 @@ storage proof gap. The existing 16,777,216-pixel image-buffer bound, empty
 geometry guards, adapter limits, and bounded shader-work guards still apply.
 Full integrated all-backend replay and managed changed-line coverage remain
 owned by the orchestrator.
+
+### Coverage review corrections (2026-09-08)
+
+The combined collector now retains every requested backend's selected case
+and command IDs, plan execution, summary, and child artifact. Its former
+last-backend summary could certify merged CPU/SIMD/GPU coverage as passing
+when an earlier backend failed. Test totals now sum actual executions across
+backends; the selected/executed plan denominator remains the number of
+unique plans. Any failed or incomplete backend yields a failed context and
+nonzero collector exit. Equal counts with different plan/case/command IDs or
+the wrong backend identity are rejected before certification.
+
+Coverage input receipts now record actual referenced asset hashes before
+execution, including bitmap-font companion images and the selected
+font-native JSON files. Verification discovers those native inputs again,
+detecting added/deleted JSON as well as changed bytes. Missing referenced
+files retain an explicit absent state. The native image-core lane's external
+`/tmp/orient6.jpg` is an input; its generated `/tmp/imagecore-save3.png` is
+excluded from the immutable snapshot. Source/input changes cannot receive a
+success receipt, including changes between report export and receipt writing.
+
+Changed-line attribution preserves external absolute LCOV source records
+under their absolute names instead of failing path normalization. Repository
+records, including zero-hit lines, retain their complete denominator.
+
+Validation: `make migration-parity-coverage-receipt-test` passes 18/18
+(previously 6/6); `make migration-parity-receipt-test` remains 41/41.
+`make fmt` and `make repo-map-check` pass. These tests validate evidence
+handling; the orchestrator owns the fresh integrated instrumented run and
+live-oracle parity. No runtime algorithm, public parity input, or threshold
+changed in this correction.

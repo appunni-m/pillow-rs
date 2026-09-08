@@ -259,6 +259,12 @@ Use `make migration-parity-changed-line-coverage
 MIGRATION_COVERAGE_DIFF_BASE=<base>` to report measured changed Rust lines.
 Lines without LCOV records and WGSL shader lines remain explicitly unmeasured.
 Verify collector guards with `make migration-parity-coverage-receipt-test`.
+Combined coverage retains each backend's selected IDs and execution results.
+Its plan denominator is unique plans; test totals count executions across all
+requested backends. Any failed or incomplete backend makes the collector fail.
+The source receipt also binds actual referenced assets, bitmap-font companion
+files, and selected native input JSON before execution. Native-generated
+temporary outputs are excluded from that immutable input snapshot.
 
 `make setup-venv PYTHON=/path/to/python3.12` creates this checkout's isolated
 Python environment for native builds and public parity. It does not install

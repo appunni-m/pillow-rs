@@ -147,6 +147,148 @@ def coverage_source_hashes() -> dict[str, str]:
     }
 
 
+def coverage_supplements(plans: list[dict[str, Any]], *, full_lane: bool) -> list[str]:
+    commands = {command for plan in plans for command in plan["selectors"]["command_ids"]}
+    scripts = {
+        "coverage-font-native": "run_migration_font_native_cases.py",
+        "coverage-imagecore-native": "run_migration_imagecore_native_cases.py",
+        "coverage-imageops-native": "run_migration_imageops_native_cases.py",
+        "coverage-imagesequence-native": "run_migration_imagesequence_native_cases.py",
+        "coverage-imagedraw-native": "run_migration_imagedraw_native_cases.py",
+        "coverage-imagecolor-native": "run_migration_imagecolor_native_cases.py",
+        "coverage-imagepalette-native": "run_migration_imagepalette_native_cases.py",
+    }
+    return [script for command, script in scripts.items() if full_lane or command in commands]
+
+
+def coverage_input_hashes(
+    manifest_path: Path,
+    input_paths: list[str],
+    cases: list[dict[str, Any]],
+    supplements: list[str],
+) -> dict[str, str | None]:
+    """Snapshot actual selected input bytes, including missing asset state.
+
+    Supplement JSON is discovered again on verification so added/deleted input
+    files cannot silently change a full lane's executed corpus. Generated
+    temporary outputs are excluded; the image-core EXIF source is an external
+    input and its absent/present state must be retained too.
+    """
+    paths = {manifest_path, *(FIXTURE_ROOT / path for path in input_paths)}
+
+    def add_asset(path: Path) -> None:
+        paths.add(path)
+        if path.suffix.lower() == ".pil":
+            # PIL bitmap fonts load an adjacent image after their metrics.
+            paths.update(path.with_suffix(suffix) for suffix in (".png", ".gif", ".pbm"))
+
+    for case in cases:
+        for asset in case.get("assets", []):
+            if asset["kind"] == "ref":
+                add_asset(FIXTURE_ROOT / "assets" / asset["path"])
+    if "run_migration_font_native_cases.py" in supplements:
+        from run_migration_font_native_cases import asset_path
+
+        for path in sorted((FIXTURE_ROOT / "inputs" / "font-native").glob("*.json")):
+            paths.add(path)
+            for case in json.loads(path.read_text(encoding="utf-8")).get("cases", []):
+                assets = case.get("inputs", {}).get("assets", {})
+                asset = next(iter(assets.values()), {})
+                if asset.get("kind") not in {"load_default", "pilfont_default"}:
+                    source = asset_path(asset, assets_root=FIXTURE_ROOT / "assets")
+                    if source is not None:
+                        add_asset(source)
+                if str(case.get("operation", "")).removeprefix("font.") == "unsupported_magic":
+                    add_asset(FIXTURE_ROOT / "assets" / "font" / "pilfont" / "courb08.png")
+    if "run_migration_imagecore_native_cases.py" in supplements:
+        paths.add(Path("/tmp/orient6.jpg"))
+    hashes: dict[str, str | None] = {}
+    for path in sorted(paths):
+        path = path.resolve()
+        try:
+            key = path.relative_to(ROOT).as_posix()
+        except ValueError:
+            key = str(path)
+        hashes[key] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+    return hashes
+
+
+def verify_coverage_input_hashes(hashes: dict[str, str | None]) -> None:
+    for key, expected in hashes.items():
+        path = ROOT / key
+        actual = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        if actual != expected:
+            raise RuntimeError(f"coverage input changed during collection: {key}")
+
+
+def aggregate_backend_coverage(
+    plans: list[dict[str, Any]], children: dict[str, dict[str, Any]],
+) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Keep unique plans but count every backend's actual test execution."""
+    if not children:
+        raise RuntimeError("coverage has no backend executions")
+    expected = {plan["plan_id"]: plan["selectors"] for plan in plans}
+    merged = {
+        plan_id: {"status": "completed", "tests_passed": 0, "tests_failed": 0}
+        for plan_id in expected
+    }
+    executions = []
+    for backend, child in children.items():
+        if [target["backend"] for target in child["identity"]["targets"]] != [backend]:
+            raise RuntimeError(f"{backend} coverage reported a different backend identity")
+        child_plans = {plan["plan_id"]: plan for plan in child["plans"]}
+        if len(child_plans) != len(child["plans"]) or child_plans.keys() != expected.keys():
+            raise RuntimeError(f"{backend} coverage selected different plan IDs")
+        summary = child["summary"]
+        if summary["plans_selected"] != len(expected):
+            raise RuntimeError(f"{backend} coverage summary disagrees with selected plans")
+        executed = sum(plan["execution"]["status"] != "not_run" for plan in child["plans"])
+        if (summary["plans_executed"], summary["plans_not_run"]) != (executed, len(expected) - executed):
+            raise RuntimeError(f"{backend} coverage summary disagrees with executed plans")
+        for field in ("tests_passed", "tests_failed"):
+            if summary[field] != sum(plan["execution"][field] for plan in child["plans"]):
+                raise RuntimeError(f"{backend} coverage summary disagrees with {field}")
+        for plan_id, plan in child_plans.items():
+            for field in ("parity_case_ids", "command_ids"):
+                selected = plan["selected"][field]
+                if len(selected) != len(set(selected)) or set(selected) != set(expected[plan_id][field]):
+                    raise RuntimeError(f"{backend} coverage selected different {field} for {plan_id}")
+            execution = plan["execution"]
+            current = merged[plan_id]
+            for field in ("tests_passed", "tests_failed"):
+                current[field] += execution[field]
+            if execution["status"] == "not_run":
+                current["status"] = "not_run"
+            elif current["status"] != "not_run" and (
+                execution["status"] != "completed" or execution["tests_failed"]
+                or child["status"] != "completed" or child["infrastructure_errors"]
+            ):
+                current["status"] = "failed"
+        executions.append({
+            "backend": backend, "run_id": child["identity"]["run_id"],
+            "status": child["status"], "summary": summary,
+            "infrastructure_errors": child["infrastructure_errors"],
+            "plans": [{key: plan[key] for key in ("plan_id", "selected", "execution")} for plan in child["plans"]],
+        })
+    not_run = sum(execution["status"] == "not_run" for execution in merged.values())
+    summary = {
+        "plans_selected": len(expected), "plans_executed": len(expected) - not_run,
+        "plans_not_run": not_run,
+        "tests_passed": sum(execution["tests_passed"] for execution in merged.values()),
+        "tests_failed": sum(execution["tests_failed"] for execution in merged.values()),
+    }
+    return summary, merged, executions
+
+
+def coverage_execution_passed(summary: dict[str, int], executions: list[dict[str, Any]]) -> bool:
+    return summary["plans_not_run"] == 0 and summary["tests_failed"] == 0 and all(
+        item["status"] == "completed" and not item["infrastructure_errors"] and all(
+            plan["execution"]["status"] == "completed"
+            and plan["execution"]["tests_failed"] == 0 for plan in item["plans"]
+        ) for item in executions
+    )
+
+
 def write_coverage_context(
     report: Path,
     source_hashes: dict[str, str],
@@ -155,6 +297,8 @@ def write_coverage_context(
     summary: dict[str, int],
     *,
     full_scope: bool,
+    input_hashes: dict[str, str | None] | None = None,
+    backend_executions: list[dict[str, Any]] | None = None,
 ) -> None:
     """Bind a fresh report to its measured source, build, and execution result.
 
@@ -165,10 +309,12 @@ def write_coverage_context(
 
     if coverage_source_hashes() != source_hashes:
         raise RuntimeError("coverage source changed during collection; rerun on stable source")
-    complete = summary["plans_not_run"] == 0 and summary["tests_failed"] == 0
+    verify_coverage_input_hashes(input_hashes or {})
+    complete = coverage_execution_passed(summary, backend_executions or [])
     context = {
         "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(),
         "source_hashes": source_hashes,
+        "input_hashes": input_hashes or {},
         "build_id": build_id,
         "recorded_revision": identity["targets"][0]["revision"],
         "scope": "full" if full_scope else "selected_tests",
@@ -178,6 +324,7 @@ def write_coverage_context(
             "command": identity["command"],
             "inputs": identity["inputs"],
             "summary": summary,
+            "backends": backend_executions or [],
         },
     }
     report.with_name(report.name + ".context.json").write_text(
@@ -247,6 +394,7 @@ from run_migration_parity import (  # noqa: E402
     load_cases,
     load_manifest,
 )
+from validate_migration_parity_result import coverage as validate_coverage_result  # noqa: E402
 
 
 def llvm_shape(file_entry: dict[str, Any]) -> dict[str, Any]:
@@ -331,6 +479,10 @@ def merged_file_data(
 
 
 def run_locked(args: argparse.Namespace) -> int:
+    # Invalidate before parsing/fingerprinting too: an early failed rerun must
+    # not leave a success receipt beside the previous report.
+    for report in (args.llvm_report, args.lcov_report):
+        report.with_name(report.name + ".context.json").unlink(missing_ok=True)
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     plans, plan_paths = load_coverage_plans(manifest)
@@ -369,14 +521,13 @@ def run_locked(args: argparse.Namespace) -> int:
     input_paths = sorted(
         set(plan_paths.values()) | {case_inputs[case_id] for case_id in selected_ids}
     )
-    measured_inputs = [manifest_path, *(FIXTURE_ROOT / path for path in input_paths)]
-    input_hashes = {
-        path: hashlib.sha256(path.read_bytes()).hexdigest() for path in measured_inputs
-    }
+    selected_cases = [cases_by_id[case_id] for case_id in sorted(selected_ids)]
+    canonical_full_lane = args.operation is None and not args.case_id
+    native_supplement_scripts = coverage_supplements(plans, full_lane=canonical_full_lane)
+    input_hashes = coverage_input_hashes(
+        manifest_path, input_paths, selected_cases, native_supplement_scripts,
+    )
     build_fingerprint, build_cache_hit = prepare_llvm_target()
-    # A failed or interrupted rerun must never retain a prior success receipt.
-    for report in (args.llvm_report, args.lcov_report):
-        report.with_name(report.name + ".context.json").unlink(missing_ok=True)
     profile_temp_dir: Path | None = None
     if args.profile == DEFAULT_LLVM_PROFILE:
         profile_temp_dir = Path(tempfile.mkdtemp(prefix="pillow-rs-llvm-", dir="/private/tmp"))
@@ -464,53 +615,12 @@ def run_locked(args: argparse.Namespace) -> int:
         target_python = str(ROOT / "pillow-rs-py" / "python")
         run_env["PYTHONPATH"] = target_python + os.pathsep + run_env.get("PYTHONPATH", "")
         run_env["LLVM_PROFILE_FILE"] = str(args.profile)
-        # Exercise the legacy FreeTypeFont core variants that the ordinary
-        # parity facade does not select (getlength, getmask2_with_start,
-        # native_getvaraxes, native_getvarnames, native_setvaraxes,
-        # native_setvarname, ...) through the maintained input-only corpus.
-        # Keep this in the public Python surface: non-parity harnesses must not inflate
-        # migration coverage.
-        selected_command_ids = {
-            command_id
-            for plan in plans
-            for command_id in plan["selectors"]["command_ids"]
-        }
-        # The canonical lane historically includes the maintained font-native
-        # corpus even though the generated input plans intentionally keep
-        # command_ids empty. Scoped operation lanes must not inherit that
-        # component exercise, or their operation evidence would be inflated.
-        run_font_native = (
-            (args.operation is None and not args.case_id)
-            or "coverage-font-native" in selected_command_ids
-        )
-        # The canonical full lane also includes the maintained image-core
-        # native corpus. These are supported public `pillow_rs` inputs that
-        # have no Pillow parity endpoint, so they must be measured through the
-        # instrumented extension rather than silently omitted from Rust
-        # coverage. Scoped operation/case runs intentionally remain
-        # operation-attributable and do not inherit this supplement.
-        canonical_full_lane = args.operation is None and not args.case_id
-        native_supplement_scripts: list[str] = []
-        native_supplements = {
-            "coverage-imagecore-native": "run_migration_imagecore_native_cases.py",
-            "coverage-imageops-native": "run_migration_imageops_native_cases.py",
-            "coverage-imagesequence-native": "run_migration_imagesequence_native_cases.py",
-            "coverage-imagedraw-native": "run_migration_imagedraw_native_cases.py",
-            "coverage-imagecolor-native": "run_migration_imagecolor_native_cases.py",
-            "coverage-imagepalette-native": "run_migration_imagepalette_native_cases.py",
-        }
-        for command_id, script_name in native_supplements.items():
-            if canonical_full_lane or command_id in selected_command_ids:
-                native_supplement_scripts.append(script_name)
-        child_results: list[dict[str, Any]] = []
+        # The full lane keeps its maintained public native supplements;
+        # scoped lanes only include explicitly selected supplement commands.
+        child_results: dict[str, dict[str, Any]] = {}
         python_data_paths: list[Path] = []
         for backend in COVERAGE_BACKENDS:
-            child_output = (
-                ROOT
-                / "target"
-                / "coverage"
-                / f"child-coverage-result-{backend}.json"
-            )
+            child_output = args.output.with_name(f"{args.output.stem}.{backend}.json")
             child_output.unlink(missing_ok=True)
             backend_env = {**run_env, "MIGRATION_TARGET_BACKEND": backend}
             backend_coverage_data = args.coverage_data.with_name(
@@ -522,6 +632,8 @@ def run_locked(args: argparse.Namespace) -> int:
                 [
                     sys.executable,
                     str(ROOT / "scripts" / "run_migration_coverage.py"),
+                    "--manifest",
+                    str(manifest_path),
                     "--output",
                     str(child_output),
                     "--coverage-report",
@@ -539,23 +651,8 @@ def run_locked(args: argparse.Namespace) -> int:
                 cwd=ROOT,
                 check=True,
             )
-            child_results.append(json.loads(child_output.read_text(encoding="utf-8")))
-            child_output.unlink()
-
-            if run_font_native:
-                subprocess.run(
-                    [
-                        sys.executable,
-                        str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
-                    ],
-                    env={
-                        **backend_env,
-                        "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
-                        "LLVM_PROFILE_FILE": str(args.profile),
-                    },
-                    cwd=ROOT,
-                    check=True,
-                )
+            child_results[backend] = json.loads(child_output.read_text(encoding="utf-8"))
+            validate_coverage_result(child_results[backend])
 
             for script_name in native_supplement_scripts:
                 subprocess.run(
@@ -574,13 +671,7 @@ def run_locked(args: argparse.Namespace) -> int:
 
             materialize_profiles()
 
-        child = child_results[-1]
-        if any(
-            item["summary"]["plans_selected"] != child["summary"]["plans_selected"]
-            or item["summary"]["plans_executed"] != child["summary"]["plans_executed"]
-            for item in child_results
-        ):
-            raise RuntimeError("combined coverage backends selected different coverage plans")
+        combined_summary, combined_plans, backend_executions = aggregate_backend_coverage(plans, child_results)
 
         combined_python = coverage.Coverage(
             data_file=str(args.coverage_data.resolve()),
@@ -679,10 +770,9 @@ def run_locked(args: argparse.Namespace) -> int:
             for component in manifest["coverage_components"]
             for path in component["paths"]
         }
-        if any(
-            hashlib.sha256(path.read_bytes()).hexdigest() != digest
-            for path, digest in input_hashes.items()
-        ):
+        if coverage_input_hashes(
+            manifest_path, input_paths, selected_cases, native_supplement_scripts,
+        ) != input_hashes:
             raise RuntimeError("coverage inputs changed during collection; rerun on stable inputs")
         command = scoped_coverage_command(
             COMMAND,
@@ -694,7 +784,7 @@ def run_locked(args: argparse.Namespace) -> int:
             manifest_path,
             input_paths,
             command,
-            [cases_by_id[case_id] for case_id in sorted(selected_ids)],
+            selected_cases,
             case_inputs,
         )
         identity["started_at"] = started
@@ -702,18 +792,13 @@ def run_locked(args: argparse.Namespace) -> int:
         identity["targets"][0]["revision"] = source_revision
         plan_results = []
         for plan in plans:
-            child_plan = next(
-                item
-                for item in child["plans"]
-                if item["plan_id"] == plan["plan_id"]
-            )
             plan_results.append(
                 {
                     "plan_id": plan["plan_id"],
                     "target_profile": plan["target_profile"],
                     "requirements": plan["covers"],
-                    "selected": child_plan["selected"],
-                    "execution": child_plan["execution"],
+                    "selected": {key: plan["selectors"][key] for key in ("parity_case_ids", "command_ids")},
+                    "execution": combined_plans[plan["plan_id"]],
                     "components": build_components(plan, component_index, files),
                 }
             )
@@ -727,14 +812,9 @@ def run_locked(args: argparse.Namespace) -> int:
                 "snapshot_id": None,
                 "artifact_ingested": False,
             },
-            "summary": {
-                "plans_selected": child["summary"]["plans_selected"],
-                "plans_executed": child["summary"]["plans_executed"],
-                "plans_not_run": child["summary"]["plans_not_run"],
-                "tests_passed": child["summary"]["tests_passed"],
-                "tests_failed": child["summary"]["tests_failed"],
-            },
+            "summary": combined_summary,
             "plans": plan_results,
+            "backend_executions": backend_executions,
             "infrastructure_errors": [],
         }
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
@@ -742,6 +822,7 @@ def run_locked(args: argparse.Namespace) -> int:
             write_coverage_context(
                 report, source_hashes, build_id, identity, result["summary"],
                 full_scope=canonical_full_lane and not args.exclude_case_id,
+                input_hashes=input_hashes, backend_executions=backend_executions,
             )
         print(json.dumps(result["summary"], sort_keys=True))
     finally:
@@ -756,7 +837,7 @@ def run_locked(args: argparse.Namespace) -> int:
         remove_build_profiles()
         if profile_temp_dir is not None:
             shutil.rmtree(profile_temp_dir, ignore_errors=True)
-    return 0
+    return 0 if coverage_execution_passed(combined_summary, backend_executions) else 1
 
 
 def run(args: argparse.Namespace) -> int:
