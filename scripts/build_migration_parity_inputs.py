@@ -2628,7 +2628,23 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
-        if self.edge == "backend-word-pattern" and label == "image":
+        if self.edge == "backend-wide-sparse-f" and label == "image":
+            size = self.scenario_size or [8_388_608, 1]
+            step_id = self.add_step(
+                "PIL.Image", "new", receiver=None,
+                arguments={"mode": literal("F"), "size": literal(size),
+                           "color": literal(0.5)},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            for x, value in ((0, -1.25), (size[0] // 2, 3.125), (size[0] - 1, -2.5)):
+                self.add_step(
+                    "PIL.Image.Image", "putpixel", receiver=binding(step_id),
+                    arguments={"xy": literal([x, 0]), "value": literal(value)},
+                    step_id=self.next_step_id(f"setup-{label}-pixel"),
+                )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if (self.edge or "").startswith("backend-word-pattern") and label == "image":
             # Public frombytes stimuli preserve exceptional F words and raw
             # palette pairs. No expected result is stored with these inputs.
             size = self.scenario_size or [9, 8]
@@ -2636,6 +2652,16 @@ class WorkflowBuilder:
             if requested_mode == "F":
                 words = (0x00000000, 0x80000000, 0x00000001, 0x3F800001,
                          0xBF000001, 0x7F7FFFFF, 0xFF7FFFFF, 0x00800000)
+                if self.edge == "backend-word-pattern-nan":
+                    words = (0x3F800000, 0x7FC12345, 0xFFC23456)
+                elif self.edge == "backend-word-pattern-infinities":
+                    words = (0x3F800000, 0x7F800000, 0xFF800000)
+                elif self.edge == "backend-word-pattern-positive-infinity":
+                    words = (0x3F800000, 0x7F800000)
+                elif self.edge == "backend-word-pattern-negative-infinity":
+                    words = (0x3F800000, 0xFF800000)
+                elif self.edge == "backend-word-pattern-wide-box":
+                    words = (0x7F7FFFFF,) + (0x3F800000,) * 15
                 data = b"".join(struct.pack("<I", words[i % len(words)]) for i in range(count))
             else:
                 channels = {"L": 1, "LA": 2, "PA": 2, "RGB": 3, "HSV": 3, "YCbCr": 3,
@@ -39566,6 +39592,58 @@ def build_nuanced_cases(
                                     ("wide-tail", [257, 2], [3, 3]))
         for resample in (1, 2, 3, 4, 5)
     )
+
+    # Streaming coefficients must retain the ordered binary64 state over tap
+    # and row-tile boundaries. These public inputs cover both axes, partial
+    # tiles, and the horizontal vector tail without embedding oracle output.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-f-coefficient-tiles-{label}-{resample}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": "backend-word-pattern", "size": size,
+            "values": {"size": literal(output), "resample": literal(resample)},
+        }
+        for label, size, output in (("horizontal", [16_385, 2], [1, 3]),
+                                    ("vertical", [2, 16_385], [3, 1]),
+                                    ("vector-tail", [16_399, 2], [1, 1]),
+                                    ("row-tail", [65_537, 2], [9, 3]))
+        for resample in (1, 2, 3, 5)
+    )
+
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-f-coefficient-tiles-{special}-{resample}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": f"backend-word-pattern-{special}", "size": [16_385, 1],
+            "values": {"size": literal([1, 1]), "resample": literal(resample)},
+        }
+        for special in ("nan", "infinities", "positive-infinity", "negative-infinity")
+        for resample in (1, 2)
+    )
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-f-coefficient-tiles-over-binding-{output}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": "backend-wide-sparse-f", "size": [8_388_608, 1],
+            "values": {"size": literal([output, 1]), "resample": literal(2)},
+        }
+        for output in (1, 2)
+    )
+
+    specs += ({
+        "surface": "PIL.Image.Image", "operation": "resize",
+        "requirement_suffix": "parameter.resample",
+        "name": "backend-f-wide-box-extreme-exponent",
+        "observe_result": "tobytes", "mode": "F",
+        "edge": "backend-word-pattern-wide-box", "size": [16, 1],
+        "values": {"size": literal([1, 1]), "resample": literal(4)},
+    },)
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:

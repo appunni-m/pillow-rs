@@ -1114,3 +1114,44 @@ target. Profiler output must not be substituted for any acceptance run.
 Validation: `make migration-parity-receipt-test` passes 41/41, including the
 new profiler input-order regression. No core or binding behavior changed, so
 no new public parity input is needed for this diagnostic-only repair.
+
+### Native F coefficient tiling follow-up (2026-09-08)
+
+The remaining coefficient-storage gap is now implemented with bounded GPU
+tiles. Each tile transports at most eight coefficient rows with 16,384 taps
+per row (about 2 MiB). Six device words per output retain the ordered binary64
+accumulator and IEEE special-value state across submissions. The final device
+store converts to FLOAT32 once per axis, preserving Resample.c's ordering and
+the horizontal vector-block/scalar-tail boundary by using the global tap
+index. Every eight submissions drain the queue to bound pending upload data.
+Host work builds coefficient/control metadata; all samples, arithmetic, and
+output words belong to the GPU.
+
+There are 27 new generated public inputs with matching coverage-plan entries:
+tap and row-tile tails, both axes, tall-image vertical-first segmentation,
+signed infinities, NaN payloads, a precise max-FLOAT32 Box regression, and two
+8,388,608-wide sparse images built through Image.new/putpixel. The latter
+cover the former per-row and complete-table binding limits without large
+embedded input blobs. No expected output or acceptance threshold changed.
+
+The 26 tiling cases pass 26/26 with complete native GPU terminal receipts and
+no fallbacks; the additional Box regression passes 1/1 natively. The broader
+F replay passes 84/84: 83 native GPU cases and the unchanged zero-width source
+geometry control. There are no missing, partial, or indeterminate receipts.
+Artifacts in the isolated F worktree are `f-tiles-all.json`,
+`f-tiles-all-execution.json`, `f-tiles-broad.json`,
+`f-tiles-broad-execution.json`, and `f-box-extreme.json` under
+`build/migration-parity/`. The two large cases use 513 and 385 dispatches;
+their cumulative coefficient uploads are 134,238,208 and 201,348,096 bytes,
+respectively, while each binding remains bounded by the tile size.
+
+`make migration-parity-fixtures-check`, `make fmt`, and
+`RUSTC_WRAPPER= CARGO_INCREMENTAL=0 make clippy
+IMAGE_SLASH_STAR_SRC=/Users/lazytrot/work/image-slash-star` pass (the override
+locates the existing pinned libavif oracle after moving the worktree).
+The worker corpus is 11,148 public cases and 744 benchmark workloads.
+The former 8,388,607-tap admission boundary is no longer a mathematical or
+storage proof gap. The existing 16,777,216-pixel image-buffer bound, empty
+geometry guards, adapter limits, and bounded shader-work guards still apply.
+Full integrated all-backend replay and managed changed-line coverage remain
+owned by the orchestrator.
