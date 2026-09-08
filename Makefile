@@ -90,6 +90,10 @@ MIGRATION_PROFILE_BACKEND ?= cpu
 MIGRATION_PROFILE_REPEAT ?= 40
 MIGRATION_PROFILE_TIMEOUT ?= 180
 MIGRATION_PROFILE_OUTPUT_DIR ?= build/migration-parity/profiles
+MIGRATION_RUST_COVERAGE_LLVM_REPORT ?= target/coverage/migration-parity-rust.json
+MIGRATION_RUST_COVERAGE_LCOV_REPORT ?= target/coverage/migration-parity-rust.lcov
+MIGRATION_COVERAGE_DIFF_BASE ?= HEAD
+MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT ?= build/migration-parity/changed-line-coverage.json
 MIGRATION_CORE_BENCHMARK_ARGS ?=
 MIGRATION_CORE_BENCHMARK_OUTPUT ?= build/migration-parity/pipeline-core-benchmark.json
 PILLOW_RS_PY_BENCHMARK_ARGS ?=
@@ -155,6 +159,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test MIGRATION_TEST_CASE_IDS=case-a,case-b$(NC) Isolate a filtered target/reverse snapshot under build/migration-parity/incremental\n"
 	@printf "  $(CYAN)make migration-parity-coverage-rust$(NC) Run merged Python+Rust coverage with a temporary instrumented extension\n"
 	@printf "  $(CYAN)make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS=case-a,case-b$(NC) Run exact cases for incremental coverage\n"
+	@printf "  $(CYAN)make migration-parity-changed-line-coverage MIGRATION_COVERAGE_DIFF_BASE=<base>$(NC) Check changed Rust lines against source-bound LCOV\n"
 	@printf "  $(CYAN)make migration-parity-operation-coverage MIGRATION_COVERAGE_OPERATION=PIL.Image.Image.getbbox$(NC) Run scoped operation coverage\n"
 	@printf "  $(CYAN)make migration-parity-font-native-coverage$(NC) Run the font-native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-imageops-native-coverage$(NC) Run the image-ops native coverage-only corpus\n"
@@ -473,6 +478,8 @@ migration-parity-coverage-rust: ## Run merged Python+Rust coverage with a tempor
 	set +e; \
 	$(PYTHON) scripts/run_migration_rust_coverage.py \
 		--output $(MIGRATION_RUST_COVERAGE_OUTPUT) \
+		--llvm-report $(MIGRATION_RUST_COVERAGE_LLVM_REPORT) \
+		--lcov-report $(MIGRATION_RUST_COVERAGE_LCOV_REPORT) \
 		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
 		$(MIGRATION_COVERAGE_CASE_ARGS); \
 	status=$$?; \
@@ -837,6 +844,17 @@ migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
 
 migration-parity-receipt-test: ## Verify terminal-complete receipt state transitions
 	$(PYTHON) -m unittest discover -s scripts -p 'test_receipt_state.py' -v
+
+.PHONY: migration-parity-coverage-receipt-test
+migration-parity-coverage-receipt-test: ## Verify coverage source/build provenance guards
+	$(PYTHON) -m unittest discover -s scripts -p 'test_coverage_context.py' -v
+
+.PHONY: migration-parity-changed-line-coverage
+migration-parity-changed-line-coverage: ## Attribute changed Rust lines to source-bound LCOV evidence
+	$(PYTHON) scripts/report_migration_changed_line_coverage.py \
+		--report $(MIGRATION_RUST_COVERAGE_LCOV_REPORT) \
+		--base $(MIGRATION_COVERAGE_DIFF_BASE) \
+		--output $(MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT)
 
 image-backend-fixtures putdata-fixtures imagefont-getmask2-fixtures \
 	compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures \

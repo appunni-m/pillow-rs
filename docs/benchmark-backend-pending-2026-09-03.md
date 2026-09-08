@@ -1,5 +1,12 @@
 # Active parity/backend checklist — 2026-09-03 (focused)
 
+Current continuation: the verified PA/SIMD changes, dyadic projective GPU
+extension, and finite-exponent F reducer are integrated on
+`codex/benchmark-backend-parity-fixes` (`78ef57cce`, `e83e16f8c`,
+`9d04c991a`). The historical results below retain their original scope;
+general GPU transforms, coefficient transport, and the performance gate are
+still being verified in the 2026-09-08 continuation.
+
 This is the short, actionable queue. Historical probes and superseded runs
 remain in the [exhaustive audit](benchmark-backend-exhaustive-audit-2026-08-30.md).
 
@@ -1038,3 +1045,30 @@ isolated F worktree. Full integrated replay and managed coverage are owned by
 the orchestrator. This closes the observed F arithmetic gaps, not storage
 limits: non-Box coefficient tables exceeding the 128-MiB binding envelope
 still require tiled dispatch and cannot be admitted by arithmetic proof alone.
+
+### Coverage provenance repair — 2026-09-08
+
+The maintained Rust collector now exports both LLVM JSON and LCOV, with
+source/build receipts consumed directly by Coverage MCP 0.16. Each receipt
+captures source hashes before compilation, identifies the instrumented binary
+and toolchain, binds the exact report bytes, and records the input selection
+and execution status. Source or input changes during collection reject the
+receipt; failed/incomplete execution cannot be recorded as passed. This
+replaces the stale registration metadata described in the historical results.
+
+The native Metal probe uses the maintained tall F public input, on CPU,
+SIMD, and GPU. `target/coverage/closure-context-native.lcov` reports
+`matches_receipt`, revision `9d04c991a`, passing execution, and 5,390/60,827
+covered lines. The preceding sandbox-only probe is retained separately; it
+had no Metal adapter and is not native GPU evidence. Six provenance/parser
+regressions pass with `make migration-parity-coverage-receipt-test`.
+
+`make migration-parity-changed-line-coverage
+MIGRATION_COVERAGE_DIFF_BASE=a6fa70951` attributes changed Rust lines using
+LCOV DA records and verified source hashes. The one-case native probe hits
+61 of 102 measured changed lines; this is deliberately a selected-case
+result, not complete coverage. Comments, declarations, and other lines with
+no DA record stay separate, and WGSL remains uninstrumented. Final full and
+incremental measurements must be taken after integrating the remaining
+runtime changes. Live Pillow equality is verified separately from coverage
+execution.

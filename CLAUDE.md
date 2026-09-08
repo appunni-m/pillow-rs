@@ -248,6 +248,17 @@ make ci
 make verify
 ```
 
+Rust parity coverage also exports LCOV and a `.context.json` sidecar binding
+each report to the measured source hashes, instrumented binary, revision,
+selected inputs, and execution status. The collector rejects source/input
+changes during collection. Preserve separate reports for incremental batches
+with `MIGRATION_RUST_COVERAGE_LLVM_REPORT` and
+`MIGRATION_RUST_COVERAGE_LCOV_REPORT`; do not attach receipts to old reports.
+Use `make migration-parity-changed-line-coverage
+MIGRATION_COVERAGE_DIFF_BASE=<base>` to report measured changed Rust lines.
+Lines without LCOV records and WGSL shader lines remain explicitly unmeasured.
+Verify collector guards with `make migration-parity-coverage-receipt-test`.
+
 `make pillow-rs-fixtures-check` regenerates the current imagingft fixtures in a
 temporary directory and requires exact JSON and raw-byte equality. The
 crate-local equivalent is `make -C pillow-rs fixtures-check`.
