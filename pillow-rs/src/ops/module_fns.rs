@@ -169,7 +169,7 @@ fn validate_merge_band_sizes(bands: &[Image]) -> Result<(), PilError> {
 #[derive(Debug, Clone)]
 pub enum MergeInput {
     /// A Rust image extracted by a binding.
-    Image(Image),
+    Image(Box<Image>),
     /// A non-image host value, retaining only its type name for the
     /// Pillow-compatible attribute error raised by the merge implementation.
     Invalid(String),
@@ -223,7 +223,7 @@ pub fn merge_inputs(mode: &str, bands: &[MergeInput]) -> Result<Image, PilError>
     let mut images = Vec::with_capacity(bands.len());
     for band in bands {
         match band {
-            MergeInput::Image(image) => images.push(image.clone()),
+            MergeInput::Image(image) => images.push((**image).clone()),
             MergeInput::Invalid(type_name) => {
                 return Err(PilError::AttributeError(format!(
                     "'{type_name}' object has no attribute 'load'"

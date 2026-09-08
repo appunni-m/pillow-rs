@@ -1301,7 +1301,11 @@ impl Image {
     pub fn paste_image(&mut self, src: &Image, x: i32, y: i32) -> Result<(), JsValue> {
         use pillow_rs::PasteSource;
         self.inner
-            .paste_at(PasteSource::Image(src.inner.clone()), Some((x, y)), None)
+            .paste_at(
+                PasteSource::Image(Box::new(src.inner.clone())),
+                Some((x, y)),
+                None,
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pasteImageMasked")]
@@ -1315,7 +1319,7 @@ impl Image {
         use pillow_rs::PasteSource;
         self.inner
             .paste_at(
-                PasteSource::Image(src.inner.clone()),
+                PasteSource::Image(Box::new(src.inner.clone())),
                 Some((x, y)),
                 Some(&mask.inner),
             )
@@ -1333,7 +1337,7 @@ impl Image {
         use pillow_rs::PasteSource;
         self.inner
             .paste(
-                PasteSource::Image(src.inner.clone()),
+                PasteSource::Image(Box::new(src.inner.clone())),
                 Some((l, t, r, b)),
                 None,
             )
@@ -1352,7 +1356,7 @@ impl Image {
         use pillow_rs::PasteSource;
         self.inner
             .paste(
-                PasteSource::Image(src.inner.clone()),
+                PasteSource::Image(Box::new(src.inner.clone())),
                 Some((l, t, r, b)),
                 Some(&mask.inner),
             )
@@ -1504,7 +1508,9 @@ impl Image {
     #[wasm_bindgen(js_name = "putalphaImageInput")]
     pub fn putalpha_image_input(&mut self, alpha: &Image) -> Result<(), JsValue> {
         self.inner
-            .putalpha_with_input(pillow_rs::PutAlphaInput::Image(alpha.inner.clone()))
+            .putalpha_with_input(pillow_rs::PutAlphaInput::Image(Box::new(
+                alpha.inner.clone(),
+            )))
             .map_err(err)
     }
 
@@ -1597,7 +1603,9 @@ impl Image {
     #[wasm_bindgen(js_name = "histogramWithInput")]
     pub fn histogram_with_input(&self, mask: &Image) -> Result<Vec<u32>, JsValue> {
         self.inner
-            .histogram_with_input(pillow_rs::ImageAnalysisMask::Image(mask.inner.clone()))
+            .histogram_with_input(pillow_rs::ImageAnalysisMask::Image(Box::new(
+                mask.inner.clone(),
+            )))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "histogramInvalidInput")]
@@ -1933,7 +1941,7 @@ impl Image {
                 colors,
                 method,
                 kmeans,
-                pillow_rs::QuantizePalette::Image(palette.inner.clone()),
+                pillow_rs::QuantizePalette::Image(Box::new(palette.inner.clone())),
                 dither,
             )
             .map(|i| Image { inner: i })
@@ -2071,7 +2079,7 @@ impl Image {
             .paste_with_input(
                 js_paste_source(&source),
                 js_paste_box(box_value.as_ref()),
-                pillow_rs::PythonPasteMask::Image(mask.inner.clone()),
+                pillow_rs::PythonPasteMask::Image(Box::new(mask.inner.clone())),
             )
             .map_err(err)
     }
@@ -3712,7 +3720,7 @@ impl ImageStat {
         let s = img
             .inner
             .stat_formatted_with_mask(match mask.as_ref() {
-                Some(mask) => pillow_rs::ImageOpsMask::Image(mask.inner.clone()),
+                Some(mask) => pillow_rs::ImageOpsMask::Image(Box::new(mask.inner.clone())),
                 None => pillow_rs::ImageOpsMask::None,
             })
             .map_err(err)?;
@@ -4282,7 +4290,7 @@ impl ImageOps {
     pub fn eq_with_input(img: &Image, mask: &Image) -> Result<Image, JsValue> {
         pillow_rs::imageops_equalize_with_mask(
             &img.inner,
-            pillow_rs::ImageOpsMask::Image(mask.inner.clone()),
+            pillow_rs::ImageOpsMask::Image(Box::new(mask.inner.clone())),
         )
         .map(|i| Image { inner: i })
         .map_err(err)
@@ -4298,7 +4306,7 @@ impl ImageOps {
         pillow_rs::imageops_autocontrast_with_mask(
             &img.inner,
             c,
-            pillow_rs::ImageOpsMask::Image(mask.inner.clone()),
+            pillow_rs::ImageOpsMask::Image(Box::new(mask.inner.clone())),
         )
         .map(|i| Image { inner: i })
         .map_err(err)
@@ -4595,7 +4603,7 @@ pub fn merge_with_input(
     // in the shared core contract.
     let mut inputs = bands
         .into_iter()
-        .map(|image| pillow_rs::MergeInput::Image(image.inner))
+        .map(|image| pillow_rs::MergeInput::Image(Box::new(image.inner)))
         .collect::<Vec<_>>();
     if let Some(type_name) = invalid_type {
         inputs.push(pillow_rs::MergeInput::Invalid(type_name));

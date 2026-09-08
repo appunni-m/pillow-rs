@@ -1071,7 +1071,11 @@ mod tests {
             let mut destination =
                 Image::new(1, 1, mode, (0, 0, 0, 255)).expect("destination image");
             destination
-                .paste(PasteSource::Image(source), Some((0, 0, 1, 1)), None)
+                .paste(
+                    PasteSource::Image(Box::new(source)),
+                    Some((0, 0, 1, 1)),
+                    None,
+                )
                 .expect("I;16 paste");
             assert_eq!(
                 destination.tobytes().expect("pasted bytes"),

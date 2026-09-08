@@ -106,7 +106,7 @@ pub struct PilFont {
 #[derive(Debug, Clone)]
 pub enum PilFontGlyphImage {
     /// Fully decoded glyph bitmap.
-    Image(Image),
+    Image(Box<Image>),
     /// Glyph image opened successfully, but rendering non-empty text raises.
     DeferredRenderError {
         /// Native bitmap mode.
@@ -178,7 +178,7 @@ impl PilFont {
     /// [`PilError::SyntaxError`] for a non-PILfont header, or
     /// [`PilError::ValueError`] for a truncated descriptor table.
     pub fn from_pilfont_data(data: &[u8], image: Image) -> Result<Self, PilError> {
-        Self::from_pilfont_glyph_data(data, PilFontGlyphImage::Image(image))
+        Self::from_pilfont_glyph_data(data, PilFontGlyphImage::Image(Box::new(image)))
     }
 
     /// Parses a PILfont metrics payload and Pillow-compatible glyph image state.
@@ -276,7 +276,7 @@ impl PilFont {
     /// contain PNG bytes and are detected by header before this fallback.
     pub fn open_pilfont_glyph_image(data: Vec<u8>) -> Result<PilFontGlyphImage, PilError> {
         match Image::open_bytes(data.clone()) {
-            Ok(image) => Ok(PilFontGlyphImage::Image(image)),
+            Ok(image) => Ok(PilFontGlyphImage::Image(Box::new(image))),
             Err(original_error) => {
                 if data.starts_with(b"P1") || data.starts_with(b"P4") {
                     decode_pbm_for_pilfont(&data)
@@ -560,7 +560,8 @@ fn decode_pbm_for_pilfont(data: &[u8]) -> Result<PilFontGlyphImage, PilError> {
         }
         _ => return Err(PilError::ValueError("unsupported PBM format".into())),
     }
-    Image::frombytes("1", (width, height), &packed).map(PilFontGlyphImage::Image)
+    Image::frombytes("1", (width, height), &packed)
+        .map(|image| PilFontGlyphImage::Image(Box::new(image)))
 }
 
 fn parse_pbm_dimension(token: Option<&[u8]>, name: &str) -> Result<u32, PilError> {

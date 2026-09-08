@@ -553,7 +553,7 @@ fn merge_inputs_from_python(values: &Bound<'_, PyAny>) -> PyResult<Vec<pillow_rs
         .map(|item| {
             let obj = item?;
             Ok(match image_from_python(&obj) {
-                Some(image) => pillow_rs::MergeInput::Image(image),
+                Some(image) => pillow_rs::MergeInput::Image(Box::new(image)),
                 None => pillow_rs::MergeInput::Invalid(obj.get_type().name()?.to_string()),
             })
         })
@@ -562,7 +562,7 @@ fn merge_inputs_from_python(values: &Bound<'_, PyAny>) -> PyResult<Vec<pillow_rs
 
 fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PythonPasteSource {
     if let Some(image) = image_from_python(value) {
-        return pillow_rs::PythonPasteSource::Image(image);
+        return pillow_rs::PythonPasteSource::Image(Box::new(image));
     }
     if let Ok(value) = value.extract::<i64>() {
         return pillow_rs::PythonPasteSource::Scalar(value);
@@ -584,7 +584,7 @@ fn paste_box_from_python(value: Option<&Bound<'_, PyAny>>) -> PyResult<pillow_rs
         return Ok(pillow_rs::PythonPasteBox::None);
     };
     if let Some(image) = image_from_python(value) {
-        return Ok(pillow_rs::PythonPasteBox::Image(image));
+        return Ok(pillow_rs::PythonPasteBox::Image(Box::new(image)));
     }
     if let Ok(values) = value.extract::<Vec<i64>>() {
         return Ok(pillow_rs::PythonPasteBox::Values(values));
@@ -602,7 +602,7 @@ fn paste_mask_from_python(
         return Ok(pillow_rs::PythonPasteMask::None);
     };
     if let Some(image) = image_from_python(value) {
-        return Ok(pillow_rs::PythonPasteMask::Image(image));
+        return Ok(pillow_rs::PythonPasteMask::Image(Box::new(image)));
     }
     Ok(pillow_rs::PythonPasteMask::Invalid(
         value.get_type().name()?.to_string(),
@@ -649,7 +649,7 @@ fn imageops_mask_from_python(
         return Ok(pillow_rs::ImageOpsMask::None);
     };
     if let Some(mask) = image_from_python(value) {
-        return Ok(pillow_rs::ImageOpsMask::Image(mask));
+        return Ok(pillow_rs::ImageOpsMask::Image(Box::new(mask)));
     }
     Ok(pillow_rs::ImageOpsMask::Invalid(
         value.get_type().name()?.to_string(),
@@ -666,7 +666,7 @@ fn image_analysis_mask_from_python(
         return Ok(pillow_rs::ImageAnalysisMask::None);
     };
     if let Some(mask) = image_from_python(value) {
-        return Ok(pillow_rs::ImageAnalysisMask::Image(mask));
+        return Ok(pillow_rs::ImageAnalysisMask::Image(Box::new(mask)));
     }
     Ok(pillow_rs::ImageAnalysisMask::Invalid(
         value.get_type().name()?.to_string(),
@@ -1170,10 +1170,10 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let palette = match palette {
             None => pillow_rs::QuantizePalette::None,
-            Some(value) => image_from_python(value).map_or(
-                pillow_rs::QuantizePalette::Other,
-                pillow_rs::QuantizePalette::Image,
-            ),
+            Some(value) => image_from_python(value)
+                .map_or(pillow_rs::QuantizePalette::Other, |image| {
+                    pillow_rs::QuantizePalette::Image(Box::new(image))
+                }),
         };
         let rs = py
             .allow_threads(|| {
@@ -1384,7 +1384,7 @@ impl PyImage {
 
     fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         let input = if let Some(mask) = image_from_python(alpha) {
-            pillow_rs::PutAlphaInput::Image(mask)
+            pillow_rs::PutAlphaInput::Image(Box::new(mask))
         } else if let Ok(value) = alpha.extract::<i64>() {
             pillow_rs::PutAlphaInput::Integer(value)
         } else {
@@ -2969,7 +2969,7 @@ fn pilfont_from_glyph_image(
 ) -> Result<pillow_rs::PilFont, PilError> {
     match image {
         pillow_rs::PilFontGlyphImage::Image(image) => {
-            pillow_rs::PilFont::from_pilfont_data(metrics, image)
+            pillow_rs::PilFont::from_pilfont_data(metrics, *image)
         }
         deferred @ pillow_rs::PilFontGlyphImage::DeferredRenderError { .. } => {
             pillow_rs::PilFont::from_pilfont_glyph_data(metrics, deferred)

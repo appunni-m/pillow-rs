@@ -149,7 +149,13 @@ pub trait GenericImage: GenericImageView {
             || y.checked_add(height)
                 .is_none_or(|bottom| bottom > self.height())
         {
-            return Err(crate::raster::error::ImageError::Dimensions);
+            return Err(crate::raster::error::ImageError::Dimensions {
+                format: None,
+                message: "image copy exceeds destination bounds".to_owned(),
+                stage: None,
+                offset: None,
+                identity: None,
+            });
         }
 
         for k in 0..height {
