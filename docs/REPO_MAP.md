@@ -273,6 +273,7 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- subtract_modulo.wgsl
 |   |   |   |       |-- thumbnail.wgsl
 |   |   |   |       |-- transform.wgsl
+|   |   |   |       |-- transform_geometry.wgsl
 |   |   |   |       `-- transpose.wgsl
 |   |   |   |-- pool_simd/
 |   |   |   |   |-- mod.rs

@@ -5087,6 +5087,7 @@ impl GpuInner {
         &self,
         ops: &[PipelineOp],
         logical_mode: Option<&str>,
+        input_dims: &[(u32, u32)],
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
         let mut resolved = Vec::with_capacity(ops.len());
         let mut index = 0usize;
@@ -5242,6 +5243,12 @@ impl GpuInner {
                     horizontal,
                     vertical,
                 });
+            } else if gpu_transform_uses_geometry_table(op, logical_mode, input_dims[index]) {
+                resolved.push(ResolvedPipeline::Single(self.resolve_pipeline(
+                    "__internal_transform_geometry",
+                    "transform_geometry.wgsl",
+                    include_str!("shaders/transform_geometry.wgsl"),
+                )?));
             } else {
                 let key = registry::variant_key(op);
                 let source = registry::registry()?
@@ -5833,6 +5840,7 @@ impl GpuInner {
         storage_alignment: usize,
         source_dimensions: (u32, u32),
         mode: u32,
+        logical_mode: Option<&str>,
         f_resize_f64_is_exact: bool,
         f_resize_f64_ordered_is_exact: bool,
     ) -> Result<usize, PilError> {
@@ -6033,6 +6041,21 @@ impl GpuInner {
                 })
                 .ok_or_else(|| {
                     PilError::ValueError("GPU Fit coefficient arena size overflow".into())
+                })?;
+        }
+
+        if gpu_transform_uses_geometry_table(op, logical_mode, source_dimensions) {
+            let (w, h) =
+                op_output_dims(op, source_dimensions.0, source_dimensions.1).ok_or_else(|| {
+                    PilError::InternalError("GPU transform dimensions missing".into())
+                })?;
+            total = total
+                .checked_add(aligned_bytes(
+                    CheckedDims::new(w, h, (GPU_TRANSFORM_GEOMETRY_WORDS * 4) as u8)?.total_bytes(),
+                    storage_alignment,
+                ))
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU transform geometry arena size overflow".into())
                 })?;
         }
 
@@ -6265,6 +6288,12 @@ impl GpuInner {
                     "__internal_resize_h",
                     "resize_convolution_h.wgsl",
                     include_str!("shaders/resize_convolution_h.wgsl"),
+                )?
+            } else if gpu_transform_uses_geometry_table(op, logical_mode, (cur_w, cur_h)) {
+                self.resolve_pipeline(
+                    "__internal_transform_geometry",
+                    "transform_geometry.wgsl",
+                    include_str!("shaders/transform_geometry.wgsl"),
                 )?
             } else {
                 let base_key = registry::variant_key(op);
@@ -6531,7 +6560,9 @@ impl GpuInner {
                 // premultiplied-alpha round trip; keep that decision in the
                 // control plane and let the shader own every pixel sample.
                 transform_params[8] = gpu_transform_fill(op, logical_mode, op_mode);
-                if gpu_transform_uses_nearest(logical_mode, *filter) {
+                if gpu_transform_uses_nearest(logical_mode, *filter)
+                    && !(logical_mode == Some("F") && gpu_transform_is_projective(op))
+                {
                     transform_params[9] = 0;
                 }
                 params.extend(transform_params);
@@ -6766,46 +6797,53 @@ impl GpuInner {
                     .flatten(),
             );
 
-            let second_range = if let PipelineOp::PutData { data, mode } = op {
-                let second_values = pack_put_data(data, *mode, buffers.capacity)?;
-                if second_values.is_empty() {
-                    None
-                } else {
-                    let mut range =
-                        append_arena_slice(&mut img2_arena, &second_values, storage_alignment);
-                    range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                    Some(range)
-                }
-            } else if let Some(second) = auxiliary_images[index].second.as_ref() {
-                if gpu_luma16_paste_source(op, op_mode, second) {
-                    let DynamicImage::ImageLuma16(source) = second.as_ref() else {
-                        return Err(PilError::InternalError(
-                            "GPU typed Paste source was admitted without an ImageLuma16 buffer"
-                                .into(),
-                        ));
-                    };
-                    let values = pack_luma16_numeric(source, buffers.capacity)?;
+            let second_range =
+                if gpu_transform_uses_geometry_table(op, logical_mode, (cur_w, cur_h)) {
+                    let values = gpu_transform_geometry_words(op, (cur_w, cur_h), logical_mode)?;
                     let mut range = append_arena_slice(&mut img2_arena, &values, storage_alignment);
                     range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
                     Some(range)
-                } else {
-                    let key = Arc::as_ptr(second) as usize;
-                    if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
-                        Some(range)
-                    } else if let Some(range) = second_cache.get(&key).copied() {
-                        Some(range)
+                } else if let PipelineOp::PutData { data, mode } = op {
+                    let second_values = pack_put_data(data, *mode, buffers.capacity)?;
+                    if second_values.is_empty() {
+                        None
                     } else {
-                        let values = pack_rgba(&second.to_rgba8(), buffers.capacity)?;
+                        let mut range =
+                            append_arena_slice(&mut img2_arena, &second_values, storage_alignment);
+                        range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
+                        Some(range)
+                    }
+                } else if let Some(second) = auxiliary_images[index].second.as_ref() {
+                    if gpu_luma16_paste_source(op, op_mode, second) {
+                        let DynamicImage::ImageLuma16(source) = second.as_ref() else {
+                            return Err(PilError::InternalError(
+                                "GPU typed Paste source was admitted without an ImageLuma16 buffer"
+                                    .into(),
+                            ));
+                        };
+                        let values = pack_luma16_numeric(source, buffers.capacity)?;
                         let mut range =
                             append_arena_slice(&mut img2_arena, &values, storage_alignment);
                         range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
-                        second_cache.insert(key, range);
                         Some(range)
+                    } else {
+                        let key = Arc::as_ptr(second) as usize;
+                        if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
+                            Some(range)
+                        } else if let Some(range) = second_cache.get(&key).copied() {
+                            Some(range)
+                        } else {
+                            let values = pack_rgba(&second.to_rgba8(), buffers.capacity)?;
+                            let mut range =
+                                append_arena_slice(&mut img2_arena, &values, storage_alignment);
+                            range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
+                            second_cache.insert(key, range);
+                            Some(range)
+                        }
                     }
-                }
-            } else {
-                None
-            };
+                } else {
+                    None
+                };
             img2_ranges.push(second_range);
 
             let third_range = if let Some(third) = auxiliary_images[index].third.as_ref() {
@@ -7065,7 +7103,7 @@ impl GpuInner {
         start_is_a: bool,
         logical_mode: Option<&str>,
     ) -> Result<bool, PilError> {
-        let resolved = self.resolve_batch_pipelines(ops, logical_mode)?;
+        let resolved = self.resolve_batch_pipelines(ops, logical_mode, &prepared.input_dims)?;
         let mut current_is_a = start_is_a;
         for (index, pipeline) in resolved.iter().enumerate() {
             if matches!(pipeline, ResolvedPipeline::Skip) {
@@ -7952,6 +7990,7 @@ impl GpuInner {
                     storage_alignment,
                     resource_source_dims[index],
                     op_modes[index],
+                    logical_mode,
                     f_resize_f64_is_exact,
                     f_resize_f64_ordered_is_exact,
                 )
@@ -11079,6 +11118,9 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
                 // CPU until a bounded auxiliary mesh buffer is available.
                 TransformMethod::Mesh => data.len() == 12,
             };
+            if gpu_transform_is_projective(op) {
+                return gpu_transform_geometry_is_admitted(op, None, (1, 1));
+            }
             *w > 0
                 && *h > 0
                 && shape_valid
@@ -12124,9 +12166,244 @@ fn gpu_palette_alpha_projective_relocation_is_admitted(
     }
 }
 
+// Geometry is host control, like resize coefficients: these records contain
+// only source indices and the exact binary64 fractional distances. Source
+// samples and every interpolation/alpha operation remain on the device.
+const GPU_TRANSFORM_GEOMETRY_WORDS: usize = 13;
+// GpuInner requests wgpu's default 128 MiB storage binding limit. Bound the
+// aligned per-operation table against that contract independently of image
+// allocation and workgroup limits; those are checked by the shared preflight.
+const GPU_TRANSFORM_GEOMETRY_MAX_BYTES: u64 = 128 << 20;
+
+fn gpu_transform_is_projective(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::Transform {
+            method: TransformMethod::Perspective | TransformMethod::Quad | TransformMethod::Mesh,
+            ..
+        }
+    )
+}
+
+fn gpu_transform_uses_geometry_table(
+    op: &PipelineOp,
+    mode: Option<&str>,
+    source: (u32, u32),
+) -> bool {
+    gpu_transform_is_projective(op) && !gpu_projective_uniform_is_exact(op, mode, source)
+}
+
+fn gpu_transform_geometry_is_admitted(
+    op: &PipelineOp,
+    mode: Option<&str>,
+    source: (u32, u32),
+) -> bool {
+    let PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data,
+        filter,
+        ..
+    } = op
+    else {
+        return false;
+    };
+    gpu_transform_is_projective(op)
+        && matches!(
+            mode,
+            None | Some(
+                "L" | "LA"
+                    | "P"
+                    | "PA"
+                    | "1"
+                    | "RGB"
+                    | "RGBA"
+                    | "RGBa"
+                    | "RGBX"
+                    | "CMYK"
+                    | "HSV"
+                    | "YCbCr"
+                    | "F"
+            )
+        )
+        && *w > 0
+        && *h > 0
+        && u64::from(*w) * u64::from(*h)
+            <= GPU_TRANSFORM_GEOMETRY_MAX_BYTES / (GPU_TRANSFORM_GEOMETRY_WORDS as u64 * 4)
+        && source.0 > 0
+        && source.1 > 0
+        && u64::from(source.0) * u64::from(source.1) <= u64::from(u32::MAX)
+        && source.0 < i32::MAX as u32
+        && source.1 < i32::MAX as u32
+        && matches!(
+            filter,
+            ResampleFilter::Nearest | ResampleFilter::Bilinear | ResampleFilter::Bicubic
+        )
+        && match method {
+            TransformMethod::Mesh => data.len().is_multiple_of(12),
+            _ => data.len() >= 8,
+        }
+}
+
+fn gpu_transform_geometry_words(
+    op: &PipelineOp,
+    source: (u32, u32),
+    mode: Option<&str>,
+) -> Result<Vec<u32>, PilError> {
+    let PipelineOp::Transform {
+        w,
+        h,
+        method,
+        data,
+        filter,
+        fill_is_none,
+        ..
+    } = op
+    else {
+        return Err(PilError::InternalError(
+            "GPU geometry requires a transform".into(),
+        ));
+    };
+    if !gpu_transform_geometry_is_admitted(op, mode, source) {
+        return Err(PilError::ValueError(
+            "GPU transform geometry exceeds bounded storage or sample layout".into(),
+        ));
+    }
+    let nearest = matches!(filter, ResampleFilter::Nearest) || matches!(mode, Some("P" | "1"));
+    let cubic = matches!(filter, ResampleFilter::Bicubic) && !nearest;
+    let mut words = vec![0; (*w as usize) * (*h as usize) * GPU_TRANSFORM_GEOMETRY_WORDS];
+    let mut record = |x: u32, y: u32, sx: f64, sy: f64, clear_failed: bool| {
+        let row = &mut words[((y * *w + x) as usize) * GPU_TRANSFORM_GEOMETRY_WORDS..]
+            [..GPU_TRANSFORM_GEOMETRY_WORDS];
+        if !sx.is_finite()
+            || !sy.is_finite()
+            || sx < 0.0
+            || sy < 0.0
+            || sx >= f64::from(source.0)
+            || sy >= f64::from(source.1)
+        {
+            if clear_failed {
+                row[0] = 2;
+            }
+            return;
+        }
+        row[0] = 1;
+        if nearest {
+            row[1] = sy as u32 * source.0 + sx as u32;
+            return;
+        }
+        let sample_x = sx - 0.5;
+        let sample_y = sy - 0.5;
+        let floor_x = sample_x.floor() as i64;
+        let floor_y = sample_y.floor() as i64;
+        let dx = (sample_x - floor_x as f64).to_bits();
+        let dy = (sample_y - floor_y as f64).to_bits();
+        row[9..13].copy_from_slice(&[dx as u32, (dx >> 32) as u32, dy as u32, (dy >> 32) as u32]);
+        for tap in 0..4 {
+            row[1 + tap] =
+                (floor_x + tap as i64 - i64::from(cubic)).clamp(0, i64::from(source.0) - 1) as u32;
+            row[5 + tap] = (floor_y + tap as i64 - i64::from(cubic))
+                .clamp(0, i64::from(source.1) - 1) as u32
+                * source.0;
+        }
+    };
+    let coefficients = |q: &[f64], width: f64, height: f64| {
+        let iw = 1.0 / width;
+        let ih = 1.0 / height;
+        [
+            q[0],
+            (q[6] - q[0]) * iw,
+            (q[2] - q[0]) * ih,
+            (q[4] - q[2] - q[6] + q[0]) * iw * ih,
+            q[1],
+            (q[7] - q[1]) * iw,
+            (q[3] - q[1]) * ih,
+            (q[5] - q[3] - q[7] + q[1]) * iw * ih,
+        ]
+    };
+    let quad = |c: [f64; 8], x: f64, y: f64| {
+        (
+            (c[3] * x).mul_add(y, c[2].mul_add(y, c[1].mul_add(x, c[0]))),
+            (c[7] * x).mul_add(y, c[6].mul_add(y, c[5].mul_add(x, c[4]))),
+        )
+    };
+    if matches!(method, TransformMethod::Mesh) {
+        for mesh in data.chunks_exact(12) {
+            let (x0, y0, x1, y1) = (
+                mesh[0] as i64,
+                mesh[1] as i64,
+                mesh[2] as i64,
+                mesh[3] as i64,
+            );
+            let width = x1.saturating_sub(x0);
+            let height = y1.saturating_sub(y0);
+            if width <= 0 || height <= 0 {
+                continue;
+            }
+            let c = coefficients(&mesh[4..], width as f64, height as f64);
+            let bx0 = x0.clamp(0, i64::from(*w)) as u32;
+            let by0 = y0.clamp(0, i64::from(*h)) as u32;
+            let bx1 = x1.clamp(0, i64::from(*w)) as u32;
+            let by1 = y1.clamp(0, i64::from(*h)) as u32;
+            // Geometry.c uses coordinates relative to the clipped box. With
+            // explicit fill, a failed later record preserves an earlier sample;
+            // omitted fill clears it. Resolve only this geometry precedence.
+            for y in by0..by1 {
+                for x in bx0..bx1 {
+                    let (sx, sy) = quad(c, f64::from(x - bx0) + 0.5, f64::from(y - by0) + 0.5);
+                    record(x, y, sx, sy, *fill_is_none);
+                }
+            }
+        }
+    } else {
+        let c = if matches!(method, TransformMethod::Quad) {
+            Some(coefficients(data, f64::from(*w), f64::from(*h)))
+        } else {
+            None
+        };
+        for y in 0..*h {
+            for x in 0..*w {
+                let dx = f64::from(x) + 0.5;
+                let dy = f64::from(y) + 0.5;
+                let (sx, sy) = if let Some(c) = c {
+                    quad(c, dx, dy)
+                } else {
+                    // Geometry.c perspective_transform: fused first two products,
+                    // then translation and division at destination pixel centers.
+                    let denominator = data[6].mul_add(dx, data[7] * dy) + 1.0;
+                    (
+                        (data[0].mul_add(dx, data[1] * dy) + data[2]) / denominator,
+                        (data[3].mul_add(dx, data[4] * dy) + data[5]) / denominator,
+                    )
+                };
+                record(x, y, sx, sy, false);
+            }
+        }
+    }
+    Ok(words)
+}
+
 fn gpu_projective_nearest_is_exact(
     op: &PipelineOp,
     image: &DynamicImage,
+    mode: Option<&str>,
+    source_dimensions: (u32, u32),
+) -> bool {
+    let image_layout_is_valid = match mode {
+        Some("P" | "1" | "L") => matches!(image, DynamicImage::ImageLuma8(_)),
+        Some("LA" | "PA") => matches!(image, DynamicImage::ImageLumaA8(_)),
+        Some("RGB" | "HSV" | "YCbCr") => matches!(image, DynamicImage::ImageRgb8(_)),
+        Some("RGBA" | "RGBX" | "RGBa" | "CMYK") => {
+            matches!(image, DynamicImage::ImageRgba8(_))
+        }
+        _ => false,
+    };
+    image_layout_is_valid && gpu_projective_uniform_is_exact(op, mode, source_dimensions)
+}
+
+fn gpu_projective_uniform_is_exact(
+    op: &PipelineOp,
     mode: Option<&str>,
     source_dimensions: (u32, u32),
 ) -> bool {
@@ -12141,15 +12418,6 @@ fn gpu_projective_nearest_is_exact(
     } = op
     else {
         return false;
-    };
-    let image_layout_is_valid = match mode {
-        Some("P" | "1" | "L") => matches!(image, DynamicImage::ImageLuma8(_)),
-        Some("LA" | "PA") => matches!(image, DynamicImage::ImageLumaA8(_)),
-        Some("RGB" | "HSV" | "YCbCr") => matches!(image, DynamicImage::ImageRgb8(_)),
-        Some("RGBA" | "RGBX" | "RGBa" | "CMYK") => {
-            matches!(image, DynamicImage::ImageRgba8(_))
-        }
-        _ => false,
     };
     let ordinary_byte_mode = matches!(
         mode,
@@ -12191,8 +12459,22 @@ fn gpu_projective_nearest_is_exact(
         TransformMethod::Quad | TransformMethod::Mesh => true,
         TransformMethod::Affine => false,
     };
-    if !image_layout_is_valid
-        || (ordinary_byte_mode && !ordinary_projective_geometry_is_admitted)
+    if !matches!(
+        mode,
+        Some(
+            "P" | "1"
+                | "L"
+                | "LA"
+                | "PA"
+                | "RGB"
+                | "HSV"
+                | "YCbCr"
+                | "RGBA"
+                | "RGBX"
+                | "RGBa"
+                | "CMYK"
+        )
+    ) || (ordinary_byte_mode && !ordinary_projective_geometry_is_admitted)
         || (mode == Some("PA") && !palette_alpha_relocation)
         || !matches!(
             method,
@@ -12252,6 +12534,12 @@ fn gpu_projective_nearest_is_exact(
     }
     if matches!(method, TransformMethod::Mesh) && !mesh_is_full_output && *fill_is_none {
         return false;
+    }
+    // The constant filtered proof already checks the complete source window
+    // and exact dyadic arithmetic independently of destination coordinates.
+    // Reusing it avoids an image-sized scan when selecting the uniform path.
+    if filtered_constant {
+        return true;
     }
 
     let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
@@ -12941,14 +13229,9 @@ fn gpu_geometry_host_control_reason(
     f_resize_dyadic_is_exact: bool,
     f_resize_f64_is_exact: bool,
 ) -> Option<&'static str> {
-    // The affine shader is byte-exact for ordinary packed layouts, and its
-    // fixed-point nearest branch additionally owns opaque raw words (CMYK/F)
-    // and PA index/alpha pairs. Non-affine coordinates use a different
-    // arithmetic contract: the corrected CPU path evaluates perspective maps
-    // in f64 at pixel centers, while the shader evaluates raw destination
-    // coordinates in f32. Keep every non-proven projective/quad/mesh transform
-    // on exact host semantic control; the bounded projective helper below
-    // retains only its exhaustive source-selection proof for raw byte samples.
+    // Uniform transforms retain their existing exact source-selection proof.
+    // Arbitrary projective/quad/mesh maps instead carry exact source geometry
+    // into a bounded table and perform all sample arithmetic on the device.
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
@@ -12994,10 +13277,12 @@ fn gpu_geometry_host_control_reason(
                         | TransformMethod::Mesh,
                     ..
                 }
-            ) && !gpu_projective_nearest_is_exact(op, image, mode, dimensions);
+            ) && !gpu_transform_geometry_is_admitted(op, mode, dimensions)
+                && !gpu_projective_nearest_is_exact(op, image, mode, dimensions);
         let typed_transform_needs_control = rotate_needs_typed_control
             && matches!(op, PipelineOp::Transform { .. })
             && !gpu_nearest_affine_is_exact(op, image, mode, dimensions)
+            && !gpu_transform_geometry_is_admitted(op, mode, dimensions)
             && !gpu_projective_nearest_is_exact(op, image, mode, dimensions)
             && !gpu_transform_all_fill_is_exact(op, image, mode, dimensions);
         if thumbnail_needs_control {
@@ -13005,7 +13290,7 @@ fn gpu_geometry_host_control_reason(
         }
         if projective_transform_needs_control {
             return Some(
-                "Transform projective source-selection or filter arithmetic is not proven",
+                "Transform projective sample layout or geometry storage exceeds the native contract",
             );
         }
         if typed_transform_needs_control {
@@ -17253,7 +17538,7 @@ mod tests {
     }
 
     #[test]
-    fn fractional_projective_nearest_host_controls_corrected_cpu() {
+    fn fractional_projective_nearest_native_gpu_preserves_oracle() {
         let width = 9;
         let height = 8;
         let source_bytes: Vec<u8> = (0..height)
@@ -17304,13 +17589,8 @@ mod tests {
             // protects. Other tests may toggle the process-wide telemetry
             // switch while the harness is running, so tolerate a missing or
             // replaced sample in parallel test execution.
-            assert_eq!(telemetry.1, Backend::Cpu);
-            assert_eq!(
-                telemetry.7.as_deref(),
-                Some(
-                    "exact host semantic control: Transform projective source-selection or filter arithmetic is not proven"
-                )
-            );
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }

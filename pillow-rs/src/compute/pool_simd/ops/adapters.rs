@@ -18307,6 +18307,7 @@ fn simd_mesh_transform_bytes(
     height: u32,
     data: &[f64],
     fill: Option<(u8, u8, u8, u8)>,
+    fill_is_none: bool,
     mode: Option<&str>,
 ) -> Result<Option<DynamicImage>, PilError> {
     let Some(channels) = native_affine_nearest_transform_channels(img, mode) else {
@@ -18429,6 +18430,12 @@ fn simd_mesh_transform_bytes(
                             .ok_or_else(|| simd_unsupported("Transform"))?;
                         output[output_start..output_start + channels]
                             .copy_from_slice(&source[source_start..source_start + channels]);
+                    } else if fill_is_none {
+                        // Geometry.c:ImagingGenericTransform clears failed
+                        // samples when fillcolor is omitted, including pixels
+                        // previously written by an overlapping mesh record.
+                        // Explicit fill instead preserves that earlier sample.
+                        output[output_start..output_start + channels].fill(0);
                     }
                 }
                 vector_blocks = vector_blocks.saturating_add(1);
@@ -20369,6 +20376,7 @@ pub fn simd_transform(
         data,
         filter,
         fill,
+        fill_is_none,
         palette_fill: _,
         ..
     } = op
@@ -20434,8 +20442,10 @@ pub fn simd_transform(
             }
             _ => Err(simd_unsupported("Transform")),
         },
-        TransformMethod::Mesh => simd_mesh_transform_bytes(img, *w, *h, data, *fill, mode)?
-            .ok_or_else(|| simd_unsupported("Transform")),
+        TransformMethod::Mesh => {
+            simd_mesh_transform_bytes(img, *w, *h, data, *fill, *fill_is_none, mode)?
+                .ok_or_else(|| simd_unsupported("Transform"))
+        }
     }
 }
 
