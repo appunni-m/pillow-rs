@@ -24,6 +24,8 @@ env:
   CARGO_DENY_VERSION: 0.20.2
   CARGO_AUDIT_VERSION: 0.22.2
   WASM_PACK_VERSION: 0.15.0
+  NODE_VERSION: 22.14.0
+  NPM_VERSION: 11.5.1
 
 jobs:
   # ── Rust: format + clippy + parity build + supply chain ──
@@ -136,7 +138,9 @@ jobs:
         run: cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "20.19.0"
+          node-version: ${{ env.NODE_VERSION }}
+      - name: install the pinned npm version
+        run: npm install --global "npm@$NPM_VERSION"
       - working-directory: pillow-rs-js
         run: npm ci
       - name: build and JS/WASM parity
