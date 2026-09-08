@@ -24,14 +24,14 @@ FONT_NATIVE_ROOT = FIXTURE_ROOT / "inputs" / "font-native"
 ASSETS = FIXTURE_ROOT / "assets"
 
 
-def asset_path(asset: dict[str, Any]) -> Path | None:
+def asset_path(asset: dict[str, Any], *, assets_root: Path = ASSETS) -> Path | None:
     """Map a v0 asset id onto the active deterministic asset tree."""
 
     asset_id = asset.get("id", "")
     if asset_id.startswith("input/fonts/"):
-        return ASSETS / "font" / "fonts" / asset_id.removeprefix("input/fonts/")
+        return assets_root / "font" / "fonts" / asset_id.removeprefix("input/fonts/")
     if asset_id.startswith("input/pilfont/"):
-        return ASSETS / "font" / "pilfont" / asset_id.removeprefix("input/pilfont/")
+        return assets_root / "font" / "pilfont" / asset_id.removeprefix("input/pilfont/")
     return None
 
 

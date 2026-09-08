@@ -392,6 +392,7 @@ generated reports, build outputs, and package installs.
     |-- lint.sh
     |-- migration_parity_inventory.py
     |-- profile_migration_benchmark.py
+    |-- report_migration_changed_line_coverage.py
     |-- report_migration_js_parity_gaps.py
     |-- report_migration_parity_region_coverage.py
     |-- report_migration_pillow_missing.py
@@ -413,6 +414,7 @@ generated reports, build outputs, and package installs.
     |-- run_migration_parity.py
     |-- run_migration_pillow_coverage.py
     |-- run_migration_rust_coverage.py
+    |-- test_coverage_context.py
     |-- test_receipt_state.py
     |-- validate_migration_parity_contract.py
     `-- validate_migration_parity_result.py

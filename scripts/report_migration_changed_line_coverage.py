@@ -25,7 +25,13 @@ def lcov_line_hits(text: str) -> dict[str, dict[int, int]]:
         if line.startswith("SF:"):
             path = Path(line[3:])
             if path.is_absolute():
-                path = path.resolve().relative_to(ROOT)
+                path = path.resolve()
+                try:
+                    path = path.relative_to(ROOT)
+                except ValueError:
+                    # Preserve external records under absolute names. They
+                    # cannot collide with repository-relative changed paths.
+                    pass
             current = files.setdefault(path.as_posix(), {})
         elif line.startswith("DA:") and current is not None:
             number, hits, *_ = line[3:].split(",")

@@ -424,8 +424,59 @@ def parity(result: dict[str, Any]) -> None:
     unique(comparison_ids, "parity.comparisons")
 
 
+def coverage_backend_executions(executions: Any, plans: list[dict[str, Any]], summary: dict[str, int]) -> None:
+    """Validate additive backend evidence without changing the unique-plan scope."""
+    if not isinstance(executions, list) or not executions:
+        raise ValueError("coverage.backend_executions: expected non-empty array")
+    expected = {plan["plan_id"]: plan for plan in plans}
+    totals = {plan_id: {"tests_passed": 0, "tests_failed": 0} for plan_id in expected}
+    backends = []
+    for index, item in enumerate(executions):
+        prefix = f"coverage.backend_executions[{index}]"
+        exact(item, {"backend", "run_id", "status", "summary", "plans", "infrastructure_errors"}, prefix)
+        if item["backend"] not in {"cpu", "simd", "gpu"}:
+            raise ValueError(f"{prefix}.backend: invalid backend")
+        backends.append(item["backend"])
+        string(item["run_id"], f"{prefix}.run_id")
+        if item["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid", "not_ingested"}:
+            raise ValueError(f"{prefix}.status: invalid status")
+        infrastructure_errors(item["infrastructure_errors"])
+        exact(item["summary"], {"plans_selected", "plans_executed", "plans_not_run", "tests_passed", "tests_failed"}, f"{prefix}.summary")
+        for field, value in item["summary"].items():
+            non_negative_int(value, f"{prefix}.summary.{field}")
+        selected = []
+        for plan in item["plans"]:
+            exact(plan, {"plan_id", "selected", "execution"}, f"{prefix}.plans")
+            plan_id = plan["plan_id"]
+            selected.append(plan_id)
+            if plan_id not in expected or plan["selected"] != expected[plan_id]["selected"]:
+                raise ValueError(f"{prefix}: backend selected a different plan/case scope")
+            exact(plan["execution"], {"status", "tests_passed", "tests_failed"}, f"{prefix}.execution")
+            if plan["execution"]["status"] not in {"completed", "failed", "not_run"}:
+                raise ValueError(f"{prefix}.execution.status: invalid status")
+            for field in ("tests_passed", "tests_failed"):
+                non_negative_int(plan["execution"][field], f"{prefix}.execution.{field}")
+                totals[plan_id][field] += plan["execution"][field]
+        unique(selected, f"{prefix}.plans")
+        executed = sum(plan["execution"]["status"] != "not_run" for plan in item["plans"])
+        if set(selected) != set(expected) or (
+            item["summary"]["plans_selected"], item["summary"]["plans_executed"], item["summary"]["plans_not_run"]
+        ) != (len(expected), executed, len(expected) - executed):
+            raise ValueError(f"{prefix}: backend summary disagrees with plan scope")
+        for field in ("tests_passed", "tests_failed"):
+            if item["summary"][field] != sum(plan["execution"][field] for plan in item["plans"]):
+                raise ValueError(f"{prefix}: backend summary disagrees with {field}")
+    unique(backends, "coverage.backend_executions")
+    for field in ("tests_passed", "tests_failed"):
+        if summary[field] != sum(total[field] for total in totals.values()) or any(
+            plan["execution"][field] != totals[plan["plan_id"]][field] for plan in plans
+        ):
+            raise ValueError(f"coverage: merged {field} disagrees with backend executions")
+
+
 def coverage(result: dict[str, Any]) -> None:
-    exact(result, {"schema", "identity", "status", "collector", "summary", "plans", "infrastructure_errors"}, "coverage")
+    required = {"schema", "identity", "status", "collector", "summary", "plans", "infrastructure_errors"}
+    exact(result, required | ({"backend_executions"} if "backend_executions" in result else set()), "coverage")
     if result["schema"] != "migration-parity/coverage-result@1":
         raise ValueError("coverage.schema: unsupported schema")
     if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid", "not_ingested"}:
@@ -443,6 +494,8 @@ def coverage(result: dict[str, Any]) -> None:
     if result["summary"]["plans_executed"] + result["summary"]["plans_not_run"] != result["summary"]["plans_selected"]:
         raise ValueError("coverage.summary: selected must equal executed plus not_run")
     infrastructure_errors(result["infrastructure_errors"])
+    if "backend_executions" in result:
+        coverage_backend_executions(result["backend_executions"], result["plans"], result["summary"])
     plan_ids: list[str] = []
     for index, plan in enumerate(result["plans"]):
         prefix = f"coverage.plans[{index}]"
