@@ -61,6 +61,14 @@ workflow, never on every pull request. The workflow will:
 - mark timing noise or budget violations as review-needed while keeping
   correctness failures blocking.
 
+The measurement design follows the [Rust Performance
+Book](https://nnethercote.github.io/perf-book/benchmarking.html) workload
+guidance and [Criterion's warm-up and sampling
+model](https://bheisler.github.io/criterion.rs/book/analysis.html). Keep
+comparison runs on a stable labeled runner; GitHub-hosted jobs use fresh
+virtual machines as described in the [runner-selection
+reference](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
+
 The repository now has a scheduled/manual workflow at
 [`.github/workflows/benchmark.yml`](../.github/workflows/benchmark.yml). The
 release preflight and guarded publication workflow is at
