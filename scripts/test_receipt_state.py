@@ -3,12 +3,20 @@
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import hashlib
+import io
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
+
+from scripts import profile_migration_benchmark as profile_benchmark
 
 from scripts.run_all_backend_tests import (
     backend_coverage_report,
@@ -2082,6 +2090,58 @@ class ReceiptStateTests(unittest.TestCase):
                 expected_backend="simd",
             )
             self.assertEqual(evidence["status"], "measured")
+
+
+class AdapterProfileTests(unittest.TestCase):
+    def test_adapter_receives_workflow_before_native_profiler_starts(self) -> None:
+        """A native capture must not find the child blocked on fixture input."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            marker = root / "workflow-read.json"
+            child = root / "adapter.py"
+            child.write_text(
+                "import json, pathlib, sys\n"
+                "workflow = json.load(sys.stdin)\n"
+                "pathlib.Path(sys.argv[1]).write_text(json.dumps(workflow))\n"
+                "print(json.dumps({'timings_ns': {'profile-case': [1]}}))\n",
+                encoding="utf-8",
+            )
+            case = {"case_id": "profile-case", "steps": []}
+            workload = {"input": {"kind": "workflow"}}
+            args = argparse.Namespace(
+                backend="pillow", repeat=1, timeout=5, sample_seconds=0,
+                workload_id="profile-workload", output_dir=root / "profiles",
+                python_profile=False,
+            )
+            real_popen = subprocess.Popen
+
+            def start_adapter(_command, **kwargs):
+                return real_popen([sys.executable, str(child), str(marker)], **kwargs)
+
+            def capture_native_profile(*_args, **_kwargs):
+                deadline = time.monotonic() + 2
+                while not marker.is_file() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(marker.is_file(), "adapter has not consumed its workflow")
+                self.assertEqual(json.loads(marker.read_text()), [case])
+                return {"status": "completed", "path": None}
+
+            with (
+                patch.object(profile_benchmark, "ROOT", root),
+                patch.object(profile_benchmark.benchmark, "load_manifest", return_value={}),
+                patch.object(profile_benchmark.benchmark, "load_benchmarks", return_value=({"profile-workload": workload}, {}, {})),
+                patch.object(profile_benchmark.benchmark, "benchmark_workflow_case", return_value=case),
+                patch.object(profile_benchmark.subprocess, "Popen", side_effect=start_adapter),
+                patch.object(profile_benchmark, "run_optional_profiler", side_effect=capture_native_profile),
+                patch.object(profile_benchmark, "git_revision", return_value="test-revision"),
+                patch.object(profile_benchmark, "git_dirty", return_value=False),
+                patch.object(profile_benchmark.sys, "platform", "darwin"),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(profile_benchmark.profile(args), 0)
+            result = json.loads((args.output_dir / "profile-workload-pillow.profile.json").read_text())
+            self.assertEqual(json.loads((root / result["command"]["input"]).read_text()), [case])
+            self.assertEqual(result["runtime"]["heap"]["status"], "completed")
 
 
 if __name__ == "__main__":

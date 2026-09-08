@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import io
 import json
 import os
 from pathlib import Path
 import platform
+import pstats
 import resource
 import subprocess
 import sys
@@ -135,12 +137,18 @@ def profile(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     slug = f"{safe_slug(args.workload_id)}-{args.backend}"
     envelope_path = output_dir / f"{slug}.adapter.json"
+    input_path = output_dir / f"{slug}.input.json"
+    python_profile_path = output_dir / f"{slug}.pstats"
+    python_summary_path = output_dir / f"{slug}.python.txt"
     sample_path = output_dir / f"{slug}.sample.txt"
     heap_path = output_dir / f"{slug}.heap.txt"
     result_path = output_dir / f"{slug}.profile.json"
 
-    command = [
-        sys.executable,
+    command = [sys.executable]
+    if args.python_profile:
+        python_profile_path.unlink(missing_ok=True)
+        command.extend(["-m", "cProfile", "-o", str(python_profile_path)])
+    command.extend([
         str(ROOT / "scripts" / "run_migration_parity.py"),
         "--side",
         side,
@@ -155,7 +163,7 @@ def profile(args: argparse.Namespace) -> int:
         "call",
         "--timeout",
         str(args.timeout),
-    ]
+    ])
     environment = {
         **os.environ,
         "MIGRATION_TARGET_BACKEND": "cpu" if args.backend == "pillow" else args.backend,
@@ -167,16 +175,22 @@ def profile(args: argparse.Namespace) -> int:
     started_at = now()
     before_rusage = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
-    process = subprocess.Popen(
-        command,
-        cwd=ROOT,
-        env=environment,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        **process_group_options(),
-    )
+    # The adapter reads stdin to EOF before executing its workflow. Feeding a
+    # pipe only in communicate(), after the heap/sample calls below, profiles
+    # an adapter blocked on input. A retained input file gives the child its
+    # complete workflow immediately and makes the profile reproducible.
+    input_path.write_text(json.dumps([case], separators=(",", ":")), encoding="utf-8")
+    with input_path.open(encoding="utf-8") as adapter_input:
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            env=environment,
+            stdin=adapter_input,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            **process_group_options(),
+        )
 
     sample_process: subprocess.Popen[str] | None = None
     sample_receipt: dict[str, Any]
@@ -229,7 +243,6 @@ def profile(args: argparse.Namespace) -> int:
 
     try:
         stdout, stderr = process.communicate(
-            input=json.dumps([case], separators=(",", ":")),
             timeout=args.timeout,
         )
         timed_out = False
@@ -264,6 +277,21 @@ def profile(args: argparse.Namespace) -> int:
         except json.JSONDecodeError as exc:
             parse_error = str(exc)
     status = "timed_out" if timed_out else "completed" if process.returncode == 0 and envelope else "failed"
+    python_receipt: dict[str, Any] = {"status": "not_requested", "path": None}
+    if args.python_profile:
+        if python_profile_path.is_file():
+            summary = io.StringIO()
+            pstats.Stats(str(python_profile_path), stream=summary).strip_dirs().sort_stats(
+                "cumulative"
+            ).print_stats(80)
+            python_receipt = {
+                "status": "completed",
+                "path": str(python_profile_path.relative_to(ROOT)),
+                "summary": write_text(python_summary_path, summary.getvalue()),
+                "scope": "complete_adapter_process_including_startup",
+            }
+        else:
+            python_receipt = {"status": "not_written", "path": None}
     profile_result = {
         "schema": "pillow-rs/adapter-profile@1",
         "status": status,
@@ -282,6 +310,7 @@ def profile(args: argparse.Namespace) -> int:
         },
         "command": {
             "argv": command,
+            "input": str(input_path.relative_to(ROOT)),
             "cwd": str(ROOT),
             "repeat": args.repeat,
             "timeout_seconds": args.timeout,
@@ -292,6 +321,7 @@ def profile(args: argparse.Namespace) -> int:
             "child_max_rss_bytes_delta": rss_delta_bytes(before_rusage, after_rusage),
             "sample": sample_receipt,
             "heap": heap_receipt,
+            "python_profile": python_receipt,
         },
         "adapter": {
             "envelope": str(envelope_path.relative_to(ROOT)) if envelope is not None else None,
@@ -314,6 +344,7 @@ def main() -> int:
     parser.add_argument("--repeat", type=int, default=40)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--sample-seconds", type=int, default=5)
+    parser.add_argument("--python-profile", action="store_true", help="Also capture cProfile call costs; diagnostic timings include profiler overhead")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "build" / "migration-parity" / "profiles")
     return profile(parser.parse_args())
 
