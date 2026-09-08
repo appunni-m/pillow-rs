@@ -19324,6 +19324,9 @@ fn simd_resize_f(
     output_height: u32,
     filter: &ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
+    // Pillow's wide FLOAT32 horizontal reducer uses complete 16-tap product
+    // blocks before returning to scalar FMA for the tail.
+    const F_RESIZE_VECTOR_WIDTH: usize = 16;
     // Pillow Image.resize reduces images taller than 100 times their width
     // vertically first. The intermediate F storage rounds to f32, so reversing
     // these passes changes bytes even when both reductions use ordered f64 FMA.
@@ -19424,6 +19427,22 @@ fn simd_resize_f(
                         .map(|lane| horizontal.weights[output_x + lane].len())
                         .max()
                         .unwrap_or(0);
+                    // Pillow's FLOAT32 horizontal kernel switches from scalar
+                    // FMA to separate product/add operations for complete
+                    // 16-tap blocks.  The scalar CPU path keeps that split
+                    // because contraction changes the final f32 ULP for
+                    // cancellation-heavy rows.  Preserve it per lane here:
+                    // edge coefficients in the same SIMD block can have a
+                    // shorter tap span and must retain scalar FMA semantics.
+                    let vector_product_counts: [usize; SIMD_RESIZE_LANES] =
+                        std::array::from_fn(|lane| {
+                            if lane < count {
+                                (horizontal.weights[output_x + lane].len() / F_RESIZE_VECTOR_WIDTH)
+                                    * F_RESIZE_VECTOR_WIDTH
+                            } else {
+                                0
+                            }
+                        });
                     // Keep Pillow's left-to-right f64 reduction order for each
                     // lane. The eight products are still calculated together;
                     // reducing the vector with reassociated adds would create
@@ -19460,9 +19479,22 @@ fn simd_resize_f(
                             );
                             weights[lane] = weight;
                         }
-                        sums = f64x8::new(weights)
+                        let fused = f64x8::new(weights)
                             .mul_add(f64x8::new(values), f64x8::new(sums))
                             .to_array();
+                        // Keep the product out of the add for the wide-row
+                        // lanes. `black_box` prevents LLVM from contracting
+                        // this vector multiply/add back into an FMA.
+                        let products =
+                            std::hint::black_box(f64x8::new(weights) * f64x8::new(values))
+                                .to_array();
+                        for lane in 0..count {
+                            sums[lane] = if tap < vector_product_counts[lane] {
+                                sums[lane] + products[lane]
+                            } else {
+                                fused[lane]
+                            };
+                        }
                     }
                     // Pillow's 32bpc path preserves the sign of zero. Do not
                     // canonicalize a negative cancellation result to +0.0.

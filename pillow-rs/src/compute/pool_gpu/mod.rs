@@ -885,7 +885,7 @@ fn gpu_f64_integer_to_f32(sum: i128, scale_exp: i32) -> Option<u32> {
 /// bounded truncation at the device boundary.
 fn gpu_f64_u128_integer_to_f32(magnitude: u128, negative: bool, scale_exp: i32) -> Option<u32> {
     if magnitude == 0 {
-        return Some(0);
+        return Some(if negative { 0x8000_0000 } else { 0 });
     }
     let bit_length = 128 - magnitude.leading_zeros();
     let mut exponent = scale_exp.checked_add(bit_length as i32 - 1)?;
@@ -1261,33 +1261,108 @@ fn gpu_f_resize_f64_sample_bits(
     (actual == expected).then_some(actual)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum F64OrderedKind {
+    Finite,
+    Infinity,
+    Nan,
+}
+
 #[derive(Clone, Copy)]
 struct F64OrderedState {
-    /// The finite f64 value is `magnitude * 2^exponent`.  A non-zero normal
-    /// f64 has at most 53 significant bits in `magnitude`; zero is represented
-    /// by a zero magnitude and a positive sign.
+    /// A finite f64 value is `magnitude * 2^exponent`. Normal values have at
+    /// most 53 significant bits; subnormal values use `exponent = -1074` and
+    /// the explicit binary64 fraction. Infinity and NaN use the same words
+    /// with `kind` set accordingly.
     magnitude: u128,
     exponent: i32,
     negative: bool,
+    kind: F64OrderedKind,
 }
 
-/// Round an exact signed binary integer to the finite, normal f64 state used
-/// by the ordered FMA proof.  The marker-12 shader performs this same
-/// round-to-nearest-even step after each product+accumulator operation.  The
-/// proof intentionally rejects subnormal/overflowing f64 intermediates: those
-/// need a wider state machine and remain on exact host semantic control.
+fn gpu_f64_round_shift_right(magnitude: u128, shift: u32) -> u128 {
+    if shift == 0 {
+        return magnitude;
+    }
+    if shift > 128 {
+        return 0;
+    }
+    if shift == 128 {
+        return u128::from(magnitude > (1u128 << 127));
+    }
+    let mut rounded = magnitude >> shift;
+    let remainder = magnitude & ((1u128 << shift) - 1);
+    let halfway = 1u128 << (shift - 1);
+    if remainder > halfway || (remainder == halfway && rounded & 1 != 0) {
+        rounded = rounded.saturating_add(1);
+    }
+    rounded
+}
+
+/// Round an exact signed binary integer to the binary64 state used by the
+/// ordered FMA proof. The marker-12 shader performs this same round-to-nearest-
+/// even step after every product+accumulator operation. Subnormal values,
+/// signed infinities, and NaN-producing overflow transitions stay in the
+/// explicit state machine instead of falling back to host execution.
 fn gpu_f64_ordered_round(sum: F64SignedMagnitude, scale_exp: i32) -> Option<F64OrderedState> {
     if sum.magnitude == 0 {
         return Some(F64OrderedState {
             magnitude: 0,
             exponent: 0,
+            // Exact cancellation under round-to-nearest produces +0.0.
+            // Preserve a negative sign only for a nonzero value that
+            // underflows in the subnormal branch below.
             negative: false,
+            kind: F64OrderedKind::Finite,
         });
     }
     let bit_length = 128 - sum.magnitude.leading_zeros();
     let mut exponent = scale_exp.checked_add(bit_length as i32 - 1)?;
-    if !(-1022..=1023).contains(&exponent) {
-        return None;
+    if exponent > 1023 {
+        return Some(F64OrderedState {
+            magnitude: 0,
+            exponent: 0,
+            negative: sum.negative,
+            kind: F64OrderedKind::Infinity,
+        });
+    }
+    if exponent < -1022 {
+        // Binary64 subnormals are integer multiples of 2^-1074. Round the
+        // exact integer directly at that scale; a carry becomes the smallest
+        // normal value and keeps the same representation as every other
+        // finite state.
+        let target_shift = scale_exp.checked_add(1074)?;
+        let mantissa = if target_shift >= 0 {
+            sum.magnitude
+                .checked_shl(u32::try_from(target_shift).ok()?)?
+        } else {
+            gpu_f64_round_shift_right(
+                sum.magnitude,
+                u32::try_from(target_shift.checked_neg()?).ok()?,
+            )
+        };
+        if mantissa == 0 {
+            return Some(F64OrderedState {
+                magnitude: 0,
+                exponent: 0,
+                negative: sum.negative,
+                kind: F64OrderedKind::Finite,
+            });
+        }
+        if mantissa >= (1u128 << 52) {
+            return Some(F64OrderedState {
+                magnitude: 1u128 << 52,
+                exponent: -1074,
+                negative: sum.negative,
+                kind: F64OrderedKind::Finite,
+            });
+        }
+        return Some(F64OrderedState {
+            magnitude: mantissa,
+            exponent: -1074,
+            negative: sum.negative,
+            kind: F64OrderedKind::Finite,
+        });
     }
     let mut mantissa = if bit_length > 53 {
         let shift = bit_length - 53;
@@ -1305,14 +1380,29 @@ fn gpu_f64_ordered_round(sum: F64SignedMagnitude, scale_exp: i32) -> Option<F64O
         mantissa >>= 1;
         exponent = exponent.checked_add(1)?;
         if exponent > 1023 {
-            return None;
+            return Some(F64OrderedState {
+                magnitude: 0,
+                exponent: 0,
+                negative: sum.negative,
+                kind: F64OrderedKind::Infinity,
+            });
         }
     }
     Some(F64OrderedState {
         magnitude: mantissa,
         exponent: exponent - 52,
         negative: sum.negative,
+        kind: F64OrderedKind::Finite,
     })
+}
+
+fn gpu_f64_ordered_nan() -> F64OrderedState {
+    F64OrderedState {
+        magnitude: 0,
+        exponent: 0,
+        negative: false,
+        kind: F64OrderedKind::Nan,
+    }
 }
 
 /// Add one exact f64-coefficient/f32-sample product to a rounded f64 state.
@@ -1328,6 +1418,9 @@ fn gpu_f64_ordered_add_product(
     product_negative: bool,
     separate_product_add: bool,
 ) -> Option<F64OrderedState> {
+    if state.kind == F64OrderedKind::Nan {
+        return Some(state);
+    }
     if product == 0 {
         return Some(state);
     }
@@ -1342,6 +1435,29 @@ fn gpu_f64_ordered_add_product(
     } else {
         None
     };
+    if state.kind == F64OrderedKind::Infinity {
+        if let Some(product) = rounded_product {
+            if product.kind == F64OrderedKind::Nan {
+                return Some(product);
+            }
+            if product.kind == F64OrderedKind::Infinity {
+                return Some(if state.negative == product.negative {
+                    state
+                } else {
+                    gpu_f64_ordered_nan()
+                });
+            }
+        }
+        return Some(state);
+    }
+    if let Some(product) = rounded_product {
+        if product.kind == F64OrderedKind::Nan {
+            return Some(product);
+        }
+        if product.kind == F64OrderedKind::Infinity {
+            return Some(product);
+        }
+    }
     if state.magnitude == 0 {
         return rounded_product.or_else(|| {
             gpu_f64_ordered_round(
@@ -1393,6 +1509,20 @@ fn gpu_f64_ordered_add_product(
     gpu_f64_ordered_round(sum, minimum_exponent)
 }
 
+fn gpu_f64_ordered_state_to_f32(state: F64OrderedState) -> Option<u32> {
+    match state.kind {
+        F64OrderedKind::Finite => {
+            gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)
+        }
+        F64OrderedKind::Infinity => Some(if state.negative {
+            0xff80_0000
+        } else {
+            0x7f80_0000
+        }),
+        F64OrderedKind::Nan => Some(0x7fc0_0000),
+    }
+}
+
 /// Evaluate a bounded f64 coefficient row with Pillow's ordered arm64
 /// semantics. Marker 9 keeps the exact real sum and is necessarily
 /// conservative when an intermediate f64 rounding changes the final f32 word;
@@ -1431,6 +1561,7 @@ fn gpu_f_resize_f64_ordered_sample_bits(
         magnitude: 0,
         exponent: 0,
         negative: false,
+        kind: F64OrderedKind::Finite,
     };
     let mut ordered_accumulator = 0.0f64;
     for (tap, &weight) in weights.iter().enumerate() {
@@ -1480,7 +1611,7 @@ fn gpu_f_resize_f64_ordered_sample_bits(
             separate_product_add,
         )?;
     }
-    let actual = gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)?;
+    let actual = gpu_f64_ordered_state_to_f32(state)?;
     let expected = (ordered_accumulator as f32).to_bits();
     (actual == expected).then_some(actual)
 }
@@ -1579,6 +1710,7 @@ fn gpu_f_resize_compact_box_sample_bits(
         magnitude: 0,
         exponent: 0,
         negative: false,
+        kind: F64OrderedKind::Finite,
     };
     let mut ordered_accumulator = 0.0f64;
     let mut first_nan = None;
@@ -1649,7 +1781,7 @@ fn gpu_f_resize_compact_box_sample_bits(
         let expected = (ordered_accumulator as f32).to_bits();
         return (actual == expected).then_some(actual);
     }
-    let actual = gpu_f64_u128_integer_to_f32(state.magnitude, state.negative, state.exponent)?;
+    let actual = gpu_f64_ordered_state_to_f32(state)?;
     let expected = (ordered_accumulator as f32).to_bits();
     (actual == expected).then_some(actual)
 }
@@ -13516,30 +13648,15 @@ impl GpuPool {
         // Reduce + Resize pair, so postponing this step would leave those
         // vectors with different lengths.
         dispatch_ops = expand_gpu_geometry_ops(&dispatch_ops, img, img.dimensions(), mode);
-        let f_resize_constant_bits = gpu_f_resize_constant_bits(&dispatch_ops, img, mode);
-        let f_resize_box_copy_is_exact = gpu_f_resize_box_copy_is_exact(&dispatch_ops, img, mode);
-        let f_resize_identity_is_exact = gpu_f_resize_identity_is_exact(&dispatch_ops, img, mode);
-        let f_resize_box_average_is_exact =
-            gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
-        let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
-        let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
-        let f_resize_f64_ordered_proof =
-            gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode);
-        let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
-            || f_pad_f64_is_exact
-            || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
-            || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
-        // Marker 12 is selected only when none of the earlier F proofs owns
-        // the operation.  In particular, Box-average/dyadic markers consume
-        // the fixed-point coefficient table, whereas marker 12 requires the
-        // four-word f64 coefficient arena.
-        let f_resize_f64_ordered_is_exact = f_resize_f64_ordered_proof
-            && !f_resize_f64_is_exact
-            && f_resize_constant_bits.is_none()
-            && !f_resize_box_copy_is_exact
-            && !f_resize_identity_is_exact
-            && !f_resize_box_average_is_exact
-            && !f_resize_dyadic_is_exact;
+
+        // A packed dispatch has one logical layout uniform. Operations such
+        // as Grayscale, ExtractBand, and PutAlpha change that layout for the
+        // following node, so they cannot share a dispatch with later work.
+        // F resize chains likewise require materialized FLOAT32 words between
+        // public resize calls: split the chain before deriving proof flags so
+        // each segment inspects the preceding result rather than the original
+        // source. Recursion preserves the same receipt aggregation below for
+        // both mode changes and F resize boundaries.
         if gpu_uniform_blur_can_copy(&dispatch_ops, img) {
             // A normalized blur preserves every channel of a constant image,
             // including the edge samples. Replace only the GPU lowering with
@@ -13549,31 +13666,6 @@ impl GpuPool {
             dispatch_ops = vec![PipelineOp::Duplicate];
         }
         let ops = dispatch_ops.as_slice();
-
-        // Pillow defines both histogram operations as identity operations for
-        // an empty image. There is no valid storage-buffer invocation to
-        // issue for a zero-area image, so complete this already-validated
-        // no-op without entering the device path or manufacturing a CPU
-        // fallback receipt.
-        if (img.width() == 0 || img.height() == 0)
-            && ops
-                .iter()
-                .all(|op| matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize))
-        {
-            crate::compute::record_pipeline_dispatch_count(0);
-            return Ok(img.clone());
-        }
-
-        // A packed dispatch has one logical layout uniform. Operations such
-        // as Grayscale, ExtractBand, and PutAlpha change that layout for the
-        // following node, so they cannot share a dispatch with later work.
-        // Execute the first mode-changing node as the terminal operation of a
-        // GPU segment, convert its packed result back to the public native
-        // image type, and continue with the remaining nodes. Recursion handles
-        // multiple transitions in one pipeline. F resize chains likewise
-        // require materialized FLOAT32 words between public resize calls:
-        // each segment's admission proof must inspect the preceding result,
-        // not the original source. Every segment retains its own CPU guard.
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -13631,6 +13723,45 @@ impl GpuPool {
                 prefix_dispatch.saturating_add(suffix_dispatch),
             );
             return Ok(suffix_result);
+        }
+
+        let f_resize_constant_bits = gpu_f_resize_constant_bits(&dispatch_ops, img, mode);
+        let f_resize_box_copy_is_exact = gpu_f_resize_box_copy_is_exact(&dispatch_ops, img, mode);
+        let f_resize_identity_is_exact = gpu_f_resize_identity_is_exact(&dispatch_ops, img, mode);
+        let f_resize_box_average_is_exact =
+            gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
+        let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
+        let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
+        let f_resize_f64_ordered_proof =
+            gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode);
+        let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
+            || f_pad_f64_is_exact
+            || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
+            || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
+        // Marker 12 is selected only when none of the earlier F proofs owns
+        // the operation.  In particular, Box-average/dyadic markers consume
+        // the fixed-point coefficient table, whereas marker 12 requires the
+        // four-word f64 coefficient arena.
+        let f_resize_f64_ordered_is_exact = f_resize_f64_ordered_proof
+            && !f_resize_f64_is_exact
+            && f_resize_constant_bits.is_none()
+            && !f_resize_box_copy_is_exact
+            && !f_resize_identity_is_exact
+            && !f_resize_box_average_is_exact
+            && !f_resize_dyadic_is_exact;
+
+        // Pillow defines both histogram operations as identity operations for
+        // an empty image. There is no valid storage-buffer invocation to
+        // issue for a zero-area image, so complete this already-validated
+        // no-op without entering the device path or manufacturing a CPU
+        // fallback receipt.
+        if (img.width() == 0 || img.height() == 0)
+            && ops
+                .iter()
+                .all(|op| matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize))
+        {
+            crate::compute::record_pipeline_dispatch_count(0);
+            return Ok(img.clone());
         }
 
         // Geometry operations whose public contract includes a reducing-gap,
@@ -14478,16 +14609,18 @@ mod tests {
     #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
     use super::{
-        GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
-        encode_resize_compact_box_axis, gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed,
-        gpu_contrast_mean, gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu,
-        gpu_dispatch_count, gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
+        F64OrderedKind, F64OrderedState, F64SignedMagnitude, GPU_POLL_BACKOFF,
+        GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, encode_resize_compact_box_axis,
+        gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed, gpu_contrast_mean,
+        gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu, gpu_dispatch_count,
+        gpu_dispatch_dimensions_require_cpu, gpu_f_pad_f64_is_exact,
         gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact,
         gpu_f_resize_compact_box_axis, gpu_f_resize_compact_box_is_exact,
         gpu_f_resize_compact_box_vertical_only_geometry, gpu_f_resize_constant_bits,
         gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_ordered_is_exact,
         gpu_f_resize_identity_is_exact, gpu_f_resize_integer_is_exact, gpu_f_source_constant_bits,
-        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported,
+        gpu_f_thumbnail_constant_is_exact, gpu_f64_integer_to_f32, gpu_f64_ordered_add_product,
+        gpu_f64_ordered_round, gpu_f64_ordered_state_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
         gpu_nearest_affine_is_exact, gpu_operation_requires_image_context, gpu_pad_geometry,
@@ -14508,6 +14641,80 @@ mod tests {
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn ordered_f64_state_covers_subnormal_overflow_and_nan_boundaries() {
+        let smallest = gpu_f64_ordered_round(
+            F64SignedMagnitude {
+                magnitude: 1,
+                negative: true,
+            },
+            -1074,
+        )
+        .expect("smallest binary64 subnormal");
+        assert_eq!(smallest.kind, F64OrderedKind::Finite);
+        assert_eq!(smallest.magnitude, 1);
+        assert_eq!(smallest.exponent, -1074);
+        assert!(smallest.negative);
+        assert_eq!(gpu_f64_ordered_state_to_f32(smallest), Some(1u32 << 31));
+
+        let underflow = gpu_f64_ordered_round(
+            F64SignedMagnitude {
+                magnitude: 1,
+                negative: true,
+            },
+            -1075,
+        )
+        .expect("binary64 underflow");
+        assert_eq!(underflow.kind, F64OrderedKind::Finite);
+        assert_eq!(underflow.magnitude, 0);
+        assert!(underflow.negative);
+        assert_eq!(gpu_f64_ordered_state_to_f32(underflow), Some(1u32 << 31));
+
+        let positive = gpu_f64_ordered_add_product(
+            F64OrderedState {
+                magnitude: 0,
+                exponent: 0,
+                negative: false,
+                kind: F64OrderedKind::Finite,
+            },
+            1,
+            0,
+            false,
+            false,
+        )
+        .expect("positive product");
+        let cancelled = gpu_f64_ordered_add_product(positive, 1, 0, true, false)
+            .expect("opposite product cancellation");
+        assert_eq!(cancelled.kind, F64OrderedKind::Finite);
+        assert_eq!(cancelled.magnitude, 0);
+        assert!(!cancelled.negative);
+        assert_eq!(gpu_f64_ordered_state_to_f32(cancelled), Some(0));
+
+        let positive_infinity = gpu_f64_ordered_add_product(
+            F64OrderedState {
+                magnitude: 0,
+                exponent: 0,
+                negative: false,
+                kind: F64OrderedKind::Finite,
+            },
+            1,
+            1024,
+            false,
+            false,
+        )
+        .expect("binary64 overflow");
+        assert_eq!(positive_infinity.kind, F64OrderedKind::Infinity);
+        assert_eq!(
+            gpu_f64_ordered_state_to_f32(positive_infinity),
+            Some(0x7f80_0000)
+        );
+
+        let nan = gpu_f64_ordered_add_product(positive_infinity, 1, 1024, true, true)
+            .expect("opposite binary64 infinities");
+        assert_eq!(nan.kind, F64OrderedKind::Nan);
+        assert_eq!(gpu_f64_ordered_state_to_f32(nan), Some(0x7fc0_0000));
+    }
 
     #[test]
     fn grayscale_f_prefix_keeps_gpu_suffix_receipt_terminal() {

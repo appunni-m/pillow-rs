@@ -2665,6 +2665,10 @@ class WorkflowBuilder:
                     words = (0x3F800000, 0xFF800000)
                 elif self.edge == "backend-word-pattern-wide-box":
                     words = (0x7F7FFFFF,) + (0x3F800000,) * 15
+                elif self.edge == "backend-f-ordered-subnormal":
+                    words = (0x00000001, 0x80000001, 0x00000002, 0x80000002)
+                elif self.edge == "backend-f-ordered-overflow":
+                    words = (0x7F7FFFFF, 0x7F7FFFFE, 0xFF7FFFFF, 0xFF7FFFFE)
                 elif self.edge == "backend-special-pattern":
                     words = (0x7FC12345, 0xFFC54321, 0x7F800000, 0xFF800000,
                              0x00000000, 0x80000000, 0x00000001, 0xBF800001,
@@ -11687,6 +11691,12 @@ def pipeline_composition_cases(
             ("exponent-span", [struct.unpack("<f", struct.pack("<I", word))[0]
                                for word in ((0x00000001, 0x80000001, 0x7F7FFFFF,
                                              0xFF7FFFFF, 0x3F800001, 0xBF800001) * 17)[:99]]),
+            ("ordered-subnormal", [struct.unpack("<f", struct.pack("<I", word))[0]
+                                   for word in ((0x00000001, 0x80000001, 0x00000002,
+                                                 0x80000002) * 25)[:99]]),
+            ("ordered-overflow", [struct.unpack("<f", struct.pack("<I", word))[0]
+                                  for word in ((0x7F7FFFFF, 0x7F7FFFFE, 0xFF7FFFFF,
+                                                0xFF7FFFFE) * 25)[:99]]),
         ):
             sample_data = b"".join(struct.pack("<f", value) for value in samples)
             cases.append({
@@ -39715,6 +39725,26 @@ def build_nuanced_cases(
             "values": {"size": literal([output, 1]), "resample": literal(2)},
         }
         for output in (1, 2)
+    )
+
+    # Exercise ordered binary64 states at the two finite f64 boundaries. The
+    # subnormal words force the reducer to round in 2^-1074 units; the maximum
+    # finite words force f32 stores and subsequent filtered passes to preserve
+    # signed overflow without replacing the public operation with host data.
+    specs += tuple(
+        {
+            "surface": "PIL.Image.Image", "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"backend-f-ordered-{label}-{resample}",
+            "observe_result": "tobytes", "mode": "F",
+            "edge": f"backend-f-ordered-{label}", "size": size,
+            "values": {"size": literal(output), "resample": literal(resample)},
+        }
+        for label, size, output in (
+            ("subnormal", [17, 9], [7, 3]),
+            ("overflow", [33, 3], [7, 2]),
+        )
+        for resample in (1, 2, 3, 4, 5)
     )
 
     specs += ({

@@ -12,8 +12,8 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::ops::pil_resize::{
-    pil_resize, pil_resize_boxed, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
-    premultiply_alpha, round_up, unpremultiply_alpha,
+    pil_resize, pil_resize_boxed, pillow_sin_f64, precompute_coeffs_f64,
+    precompute_coeffs_f64_boxed, premultiply_alpha, round_up, unpremultiply_alpha,
 };
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
@@ -61,7 +61,7 @@ fn f_kernel_lanczos(x: f64, a: f64) -> f64 {
             1.0
         } else {
             let pix = value * std::f64::consts::PI;
-            pix.sin() / pix
+            pillow_sin_f64(pix) / pix
         }
     };
     sinc(x) * sinc(x / a)
