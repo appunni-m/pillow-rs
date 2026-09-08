@@ -170,11 +170,10 @@ optimized JS/WASM codec matrices pass all 9 rows in the `core` and `extra`
 packages. Formatting, public API boundary validation, the repository map, and
 focused strict Clippy for the core library pass.
 
-The workspace-wide `make clippy` target is not currently green: its
-`--all-targets` policy denies existing `expect`/`expect_err` use throughout
-tests and examples, and the Python binding still has an existing
-`map(...).unwrap_or(...)` violation. These failures are outside the ownership
-move and are recorded rather than suppressed.
+The workspace-wide `make clippy` target now passes with the documented
+deprecation exception. Image-bearing host-input variants are boxed so the
+strict `large_enum_variant` policy remains enabled across the core and both
+bindings without changing their Pillow-facing behavior.
 
 A full `make pillow-rs-test` run also passes the core and image suites. Its only
 remaining failures are three pre-existing FreeType scalar `getlength` parity

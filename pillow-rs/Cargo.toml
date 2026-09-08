@@ -45,8 +45,8 @@ name = "backend_support_matrix"
 required-features = ["test-api"]
 
 [dependencies]
-image-slash-star = { version = "=0.1.0", git = "https://github.com/appunni-m/image-slash-star.git", rev = "d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a", default-features = false }
-fontdone = { version = "=2.14.3-alpha.1", git = "https://github.com/appunni-m/fontdone.git", rev = "95dc33f12790c896f9a5c95571eec4360f22412e" }
+image-slash-star = { version = "=0.1.0", git = "https://github.com/appunni-m/image-slash-star.git", rev = "d390b54855aa53fc6bd33f7b8e649cf48d9625c3", default-features = false }
+fontdone = { version = "=2.14.3-alpha.1", git = "https://github.com/appunni-m/fontdone.git", rev = "54b6f87672d2dcbc8e38fd7177a3fde01563649" }
 log = "0.4"
 thiserror = "2"
 csscolorparser = "0.8"

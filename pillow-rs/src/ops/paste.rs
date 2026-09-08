@@ -16,7 +16,7 @@ fn coordinate_overflow() -> PilError {
 #[derive(Debug, Clone)]
 pub enum PasteSource {
     /// Paste pixels from another image.
-    Image(Image),
+    Image(Box<Image>),
     /// Paste a scalar pixel value.
     Scalar(u8),
     /// Paste a two-band luma/alpha pixel value.
@@ -41,7 +41,7 @@ pub enum PasteSource {
 #[derive(Debug, Clone)]
 pub enum PythonPasteSource {
     /// Another image object.
-    Image(Image),
+    Image(Box<Image>),
     /// A scalar color value before mode-specific validation.
     Scalar(i64),
     /// A floating-point scalar, accepted by Pillow for `F` images.
@@ -60,7 +60,7 @@ pub enum PythonPasteBox {
     /// No second argument was supplied.
     None,
     /// The abbreviated `(image, mask)` form.
-    Image(Image),
+    Image(Box<Image>),
     /// A coordinate list/tuple.
     Values(Vec<i64>),
     /// A value that could not be interpreted as a coordinate sequence.
@@ -78,7 +78,7 @@ pub enum PythonPasteMask {
     /// No mask was supplied.
     None,
     /// An image mask.
-    Image(Image),
+    Image(Box<Image>),
     /// A non-image object.
     Invalid(String),
 }
@@ -99,7 +99,7 @@ impl PasteSource {
     /// used as a solid color source.
     pub fn from_parts(image: Option<Image>, r: u8, g: u8, b: u8, a: u8) -> Self {
         if let Some(img) = image {
-            PasteSource::Image(img)
+            PasteSource::Image(Box::new(img))
         } else {
             PasteSource::Rgba(r, g, b, a)
         }
@@ -261,7 +261,7 @@ impl Image {
     ) -> Result<(), PilError> {
         let destination_mode = self.mode()?;
         let source = match source {
-            PythonPasteSource::Image(image) => PasteSource::from_parts(Some(image), 0, 0, 0, 255),
+            PythonPasteSource::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
             PythonPasteSource::Scalar(value) => paste_scalar_source(value, &destination_mode),
             PythonPasteSource::Float(value) => PasteSource::RawFloat(value),
             PythonPasteSource::Components(values) => match values.as_slice() {
@@ -294,7 +294,7 @@ impl Image {
         };
 
         let abbreviated_mask = match &box_input {
-            PythonPasteBox::Image(mask) => Some(mask.clone()),
+            PythonPasteBox::Image(mask) => Some((**mask).clone()),
             _ => None,
         };
         if abbreviated_mask.is_some() && !matches!(&mask_input, PythonPasteMask::None) {
@@ -307,7 +307,7 @@ impl Image {
         } else {
             match mask_input {
                 PythonPasteMask::None => None,
-                PythonPasteMask::Image(image) => Some(image),
+                PythonPasteMask::Image(image) => Some(*image),
                 PythonPasteMask::Invalid(type_name) => {
                     return Err(PilError::AttributeError(format!(
                         "'{type_name}' object has no attribute 'load'"
@@ -467,7 +467,7 @@ impl Image {
 
         let mut result = background.copy();
         result.alpha_composite(&overlay, (0, 0), (0, 0))?;
-        self.paste(PasteSource::Image(result), Some(box_coords), None)
+        self.paste(PasteSource::Image(Box::new(result)), Some(box_coords), None)
     }
 
     /// Queues a Pillow-style paste into this image.
@@ -582,11 +582,11 @@ impl Image {
                     || (destination_mode == "RGB"
                         && matches!(source_mode.as_str(), "LA" | "RGBA" | "RGBa"))
                 {
-                    image
+                    *image
                 } else if destination_mode == "PA" && source_mode == "P" {
                     // Pillow promotes a P source to opaque PA samples before
                     // pasting, retaining the source index byte verbatim.
-                    let mut promoted = image;
+                    let mut promoted = *image;
                     promoted.putalpha(255)?;
                     promoted
                 } else {

@@ -28,7 +28,7 @@ pub enum ImageOpsMask {
     /// No mask was supplied.
     None,
     /// A mask image extracted by a binding.
-    Image(Image),
+    Image(Box<Image>),
     /// A non-image value was supplied, preserving its host type name for the
     /// same attribute error Pillow raises when it calls ``mask.load()``.
     Invalid(String),
@@ -474,7 +474,7 @@ pub fn autocontrast_with_mask(
                 image,
                 PipelineOp::Autocontrast {
                     cutoff,
-                    mask: Some(Arc::new(mask)),
+                    mask: Some(Arc::new(*mask)),
                 },
             ))
         }

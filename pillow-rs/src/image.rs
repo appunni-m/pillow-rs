@@ -774,7 +774,7 @@ pub enum PutAlphaInput {
     /// 0..255.
     Integer(i64),
     /// An image mask supplied by the caller.
-    Image(Image),
+    Image(Box<Image>),
     /// A value that cannot be interpreted as an integer or image mask.
     Invalid(String),
 }
@@ -6318,6 +6318,7 @@ const fn image_mode_name(mode: ImageMode) -> &'static str {
         ImageMode::L16 => "I;16",
         ImageMode::F32 => "F",
         ImageMode::I32 => "I",
+        _ => "unknown",
     }
 }
 

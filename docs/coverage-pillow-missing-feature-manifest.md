@@ -2,8 +2,8 @@
 
 This is generated evidence from the same public parity corpus. It is not a new test denominator.
 
-- Python lines: 6803/16019 (42.47%)
-- Python branches: 1570/5694 (27.57%)
+- Python lines: 6805/16019 (42.48%)
+- Python branches: 1571/5694 (27.59%)
 - Source files with gaps: 92/97
 - Active public operations with mapped gaps: 55
 
@@ -32,19 +32,19 @@ The JSON contains all active public operations in `feature_manifest`. The table 
 | 17 | `PIL.Image.Image.putalpha` | 37 | 5 | 1 | 510 |
 | 18 | `PIL.Image.Image.getxmp` | 2 | 4 | 3 | 430 |
 | 19 | `PIL.Image.Image.load` | 31 | 4 | 3 | 430 |
-| 20 | `PIL.Image.Image.resize` | 225 | 4 | 2 | 420 |
-| 21 | `PIL.Image.Image.close` | 6 | 3 | 3 | 330 |
-| 22 | `PIL.Image.Image.frombytes` | 19 | 3 | 2 | 320 |
-| 23 | `PIL.Image.Image.tobytes` | 19 | 3 | 2 | 320 |
-| 24 | `PIL.ImageOps.autocontrast` | 167 | 2 | 4 | 240 |
-| 25 | `PIL.ImagePalette.ImagePalette.save` | 1 | 2 | 3 | 230 |
-| 26 | `PIL.Image.Image.putpalette` | 12 | 2 | 2 | 220 |
-| 27 | `PIL.Image.Image.transform` | 434 | 2 | 2 | 220 |
-| 28 | `PIL.ImageDraw.ImageDraw.text` | 65 | 2 | 2 | 220 |
-| 29 | `PIL.ImageOps.fit` | 89 | 2 | 2 | 220 |
-| 30 | `PIL.ImagePalette.ImagePalette.getcolor` | 14 | 2 | 2 | 220 |
-| 31 | `PIL.Image.Image.has_transparency_data` | 4 | 2 | 1 | 210 |
-| 32 | `PIL.Image.Image.putpixel` | 162 | 2 | 1 | 210 |
+| 20 | `PIL.Image.Image.close` | 6 | 3 | 3 | 330 |
+| 21 | `PIL.Image.Image.frombytes` | 19 | 3 | 2 | 320 |
+| 22 | `PIL.Image.Image.tobytes` | 19 | 3 | 2 | 320 |
+| 23 | `PIL.ImageOps.autocontrast` | 167 | 2 | 4 | 240 |
+| 24 | `PIL.ImagePalette.ImagePalette.save` | 1 | 2 | 3 | 230 |
+| 25 | `PIL.Image.Image.putpalette` | 12 | 2 | 2 | 220 |
+| 26 | `PIL.Image.Image.transform` | 731 | 2 | 2 | 220 |
+| 27 | `PIL.ImageDraw.ImageDraw.text` | 65 | 2 | 2 | 220 |
+| 28 | `PIL.ImageOps.fit` | 89 | 2 | 2 | 220 |
+| 29 | `PIL.ImagePalette.ImagePalette.getcolor` | 14 | 2 | 2 | 220 |
+| 30 | `PIL.Image.Image.has_transparency_data` | 4 | 2 | 1 | 210 |
+| 31 | `PIL.Image.Image.putpixel` | 162 | 2 | 1 | 210 |
+| 32 | `PIL.Image.Image.resize` | 317 | 2 | 1 | 210 |
 | 33 | `PIL.ImagePalette.ImagePalette.tobytes` | 1 | 2 | 1 | 210 |
 | 34 | `PIL.ImageDraw.ImageDraw.bitmap` | 78 | 1 | 2 | 120 |
 | 35 | `PIL.ImageFont.FreeTypeFont.set_variation_by_name` | 4 | 1 | 2 | 120 |
@@ -76,7 +76,7 @@ The JSON contains all active public operations in `feature_manifest`. The table 
 | 1 | `PIL/PngImagePlugin.py` | 620 | 290 | 64900 | codec_or_support_module_outside_active_surface |
 | 2 | `PIL/TiffImagePlugin.py` | 604 | 319 | 63590 | codec_or_support_module_outside_active_surface |
 | 3 | `PIL/PdfParser.py` | 548 | 236 | 57160 | pillow_support_module_outside_active_surface |
-| 4 | `PIL/Image.py` | 419 | 225 | 44150 | active_public_module |
+| 4 | `PIL/Image.py` | 417 | 224 | 43940 | active_public_module |
 | 5 | `PIL/GifImagePlugin.py` | 386 | 250 | 41100 | codec_or_support_module_outside_active_surface |
 | 6 | `PIL/ImageCms.py` | 289 | 80 | 29700 | pillow_support_module_outside_active_surface |
 | 7 | `PIL/BlpImagePlugin.py` | 270 | 120 | 28200 | codec_or_support_module_outside_active_surface |

@@ -12,7 +12,7 @@ pub enum ImageAnalysisMask {
     /// No mask was supplied.
     None,
     /// A mask image extracted by a binding.
-    Image(Image),
+    Image(Box<Image>),
     /// A truthy non-image value was supplied, retaining its host type name so
     /// bindings can expose Pillow's attribute error without inspecting host
     /// objects in the core.

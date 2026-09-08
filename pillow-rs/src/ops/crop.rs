@@ -186,7 +186,11 @@ impl Image {
             .map_err(|_| PilError::ValueError("crop offset overflow".into()))?;
         let paste_y = i32::try_from(clip_top - i64::from(top))
             .map_err(|_| PilError::ValueError("crop offset overflow".into()))?;
-        canvas.paste_at(PasteSource::Image(clipped), Some((paste_x, paste_y)), None)?;
+        canvas.paste_at(
+            PasteSource::Image(Box::new(clipped)),
+            Some((paste_x, paste_y)),
+            None,
+        )?;
         Ok(canvas)
     }
 

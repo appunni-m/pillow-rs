@@ -916,14 +916,12 @@ impl DynamicImage {
     /// Convert this DynamicImage into a DecodedImage (flat pixel buffer + ColorType).
     #[must_use]
     pub fn into_decoded(self) -> DecodedImage {
-        DecodedImage {
-            width: self.width(),
-            height: self.height(),
-            pixels: self.as_bytes().to_vec(),
-            color: self.color(),
-            mode: self.color().into(),
-            palette: None,
-        }
+        DecodedImage::new(
+            self.width(),
+            self.height(),
+            self.as_bytes().to_vec(),
+            self.color(),
+        )
     }
 
     /// Create a DynamicImage from a DecodedImage reference.
