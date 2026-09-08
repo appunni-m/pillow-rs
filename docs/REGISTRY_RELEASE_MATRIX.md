@@ -15,10 +15,10 @@ registry publication and the exact-commit CI runs remain external prerequisites.
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release candidate `d390b54855aa53fc6bd33f7b8e649cf48d9625c3`; local verification passes, while the exact 13-path package-surface manifest and push-safe history for the oversized AV1 oracle remain open |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commit `727dd5aea448d3a6a6130fff231ad96f41d20128`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commit `eebe734a58140b3614ba77419b42c81da1c6ef97`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crates; before `pillow-rs` | local archive and consumer checks pass; publish the exact tarball under the `next` tag and verify registry visibility |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crates; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | manifest pins the committed sibling revisions; `RELEASE_CRATES_READY=1` enables the package gate after registry visibility |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
