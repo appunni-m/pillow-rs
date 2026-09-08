@@ -17,8 +17,10 @@ DOC_PATH = Path("docs/REPO_MAP.md")
 ROOT_FILES = {
     ".github/workflows/benchmark.yml",
     ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
     "AGENT.md",
     "AGENTS.md",
+    "CHANGELOG.md",
     "CLAUDE.md",
     "Cargo.lock",
     "Cargo.toml",

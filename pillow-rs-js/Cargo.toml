@@ -3,6 +3,10 @@ name = "pillow-rs-js"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "wasm-bindgen bindings for pillow-rs — Pillow in the browser"
 
 [lib]

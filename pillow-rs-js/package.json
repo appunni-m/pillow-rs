@@ -2,6 +2,11 @@
   "name": "pillow-rs",
   "version": "0.1.0",
   "description": "Pillow drop-in replacement for the browser, powered by Rust/WASM",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appunni-m/pillow-rs.git"
+  },
+  "homepage": "https://github.com/appunni-m/pillow-rs#readme",
   "main": "pkg/core/pillow_rs_js.js",
   "module": "pkg/core/pillow_rs_js.js",
   "types": "pkg/core/pillow_rs_js.d.ts",
@@ -36,6 +41,9 @@
     "rust"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "puppeteer": "22.15.0"
   }

@@ -27,9 +27,9 @@ readme = "../README.md"
 license = { text = "MIT-CMU" }
 
 [project.urls]
-Homepage = "https://github.com/pillow-rs/pillow-rs"
-Repository = "https://github.com/pillow-rs/pillow-rs"
-Documentation = "https://github.com/pillow-rs/pillow-rs#readme"
+Homepage = "https://github.com/appunni-m/pillow-rs"
+Repository = "https://github.com/appunni-m/pillow-rs"
+Documentation = "https://github.com/appunni-m/pillow-rs#readme"
 
 [project.optional-dependencies]
 dev = [
