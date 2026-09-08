@@ -160,31 +160,26 @@ receipt rules unchanged.
   probes are 10/10 finite at four million taps, 20/20 special-value rows, and
   5/5 over-bound host-control rows; focused ordered-F tests are 11/11 and the
   full pool-GPU group is 104/104.
-- [ ] Extend the exact F reducer beyond the currently proven domains,
-  including f64-intermediate overflow boundaries, non-Box filters, and
-  arithmetic-changing chains. Forced generic WGSL f32 convolution still
-  differs from Pillow's ordered host arithmetic by ULPs, so these rows require
-  a separate device proof. The adapter-fitting marker-12 envelope reaches
-  8,388,607 taps; marker 13 now covers finite direct horizontal or vertical
-  integer-ratio Box rows above that bound. Commit `8c92e95d8` closes the
-  binding-size edge for the full table, `d513cfa13` proves the horizontal
-  compact row, and `f5f3c1271` adds the vertical compact row without changing
-  the ABI. Commit `c2cc1b5bf` adds the same marker-13 special-value state
-  machine for compact rows. Tall vertical geometries outside the integer-ratio
-  Box proof, non-Box filters, and arithmetic-changing chains remain exact host
-  semantic control; the broader reducer bucket stays open.
-  Commit `42795f04f` extends the finite proof when a compact horizontal
-  one-pixel Box row is followed by a changed small vertical axis, validating
-  the materialized intermediate with the ordered f64 reducer. Four native
-  Pillow 12.2.0 probes are exact with terminal GPU receipts; special-value
-  chaining and the necessarily tall compact-vertical orientation remain exact
-  host semantic control.
-  The 2026-09-05 working branch now segments pure F resize chains and lowers
-  tall resizes in Pillow's vertical-first order. Each segment is checked
-  against its actual FLOAT32 input. The ten new finite/special chains are
-  exact: five terminal receipts are entirely native GPU, one has a native
-  GPU suffix after host control, and four terminate on host control. The
-  broader overflow/storage/filter proof obligation remains open.
+- [x] Extend the exact F reducer through the previously open f64-intermediate
+  boundaries, non-Box filters, and arithmetic-changing chains. The host and
+  horizontal/vertical WGSL reducers now carry ordered binary64 finite,
+  subnormal, signed-infinity, and NaN state, including exact-cancellation
+  `+0.0`; tiled marker-12 state preserves infinity sign across storage
+  boundaries. Pure-F chains are segmented at each materialized FLOAT32
+  predecessor and checked against that actual intermediate before native
+  admission. Generated direct and chain cases cover all five non-Box filters,
+  subnormal/overflow words, NaN and both infinity signs, tiled coefficient
+  tails, and changed-axis chains. Native Pillow 12.2.0 versus RSPIL probes are
+  exact, including the 20 new ordered direct/chain cases and the four tiled
+  infinity regressions. The regenerated all-backends corpus is 11,345/11,345
+  exact on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU has 7,090 native
+  receipts plus 137 explicit host controls, and every F resize row is native
+  GPU. Rust coverage passes 24/24 plans and 11,325 cases; the all-backend
+  coverage aggregation passes 33,975 cases, with 70/208 measured changed Rust
+  lines covered. WGSL lines are covered by the native dispatch receipt because
+  LLVM does not instrument shaders. Rows outside the proven coefficient,
+  storage, and dimension contracts remain explicit exact host semantic
+  controls.
 - [x] Extend marker-13 compact F Box rows to integer-ratio multi-output
   geometries (`d659a9c7b`, source `0ddeb2f88`). The compact encoder now emits
   one metadata triplet per output row plus one shared `1/tap_count` f64

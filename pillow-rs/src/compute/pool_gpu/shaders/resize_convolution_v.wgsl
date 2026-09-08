@@ -582,18 +582,69 @@ struct F64OrderedState {
     magnitude: U128,
     exponent: i32,
     negative: bool,
-    valid: bool,
+    kind: u32,
+}
+
+const F64_FINITE: u32 = 0u;
+const F64_INFINITY: u32 = 1u;
+const F64_NAN: u32 = 2u;
+
+fn f64_u128_equal(left: U128, right: U128) -> bool {
+    return left.a == right.a && left.b == right.b && left.c == right.c && left.d == right.d;
+}
+
+fn f64_round_shift_right(value: U128, shift: u32) -> U128 {
+    if shift == 0u {
+        return value;
+    }
+    if shift > 128u {
+        return U128(0u, 0u, 0u, 0u);
+    }
+    if shift == 128u {
+        let halfway = U128(0u, 0u, 0x80000000u, 0u);
+        if u128_less(halfway, value) {
+            return U128(1u, 0u, 0u, 0u);
+        }
+        return U128(0u, 0u, 0u, 0u);
+    }
+    var rounded = u128_shr(value, shift);
+    let remainder = u128_low_bits(value, shift);
+    let halfway = u128_shl(U128(1u, 0u, 0u, 0u), shift - 1u);
+    let greater = u128_less(halfway, remainder);
+    let equal = f64_u128_equal(remainder, halfway);
+    if greater || (equal && (rounded.a & 1u) != 0u) {
+        rounded = u128_add(rounded, U128(1u, 0u, 0u, 0u));
+    }
+    return rounded;
 }
 
 fn f64_ordered_round(sum: SignedU128, scale_exp: i32) -> F64OrderedState {
     if sum.magnitude.a == 0u && sum.magnitude.b == 0u
         && sum.magnitude.c == 0u && sum.magnitude.d == 0u {
-        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
+        // Exact cancellation under round-to-nearest produces +0.0.
+        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, F64_FINITE);
     }
     let bit_length = u128_bit_length(sum.magnitude);
     var exponent = scale_exp + i32(bit_length) - 1;
-    if exponent < -1022 || exponent > 1023 {
-        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
+    if exponent > 1023 {
+        return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, sum.negative, F64_INFINITY);
+    }
+    if exponent < -1022 {
+        let target_shift = scale_exp + 1074;
+        var mantissa: U128;
+        if target_shift >= 0 {
+            mantissa = u128_shl(sum.magnitude, u32(target_shift));
+        } else {
+            mantissa = f64_round_shift_right(sum.magnitude, u32(-target_shift));
+        }
+        if mantissa.a == 0u && mantissa.b == 0u && mantissa.c == 0u && mantissa.d == 0u {
+            return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, sum.negative, F64_FINITE);
+        }
+        let minimum_normal = U128(0u, 0x00100000u, 0u, 0u);
+        if !u128_less(mantissa, minimum_normal) {
+            return F64OrderedState(minimum_normal, -1074, sum.negative, F64_FINITE);
+        }
+        return F64OrderedState(mantissa, -1074, sum.negative, F64_FINITE);
     }
     var mantissa: U128;
     if bit_length > 53u {
@@ -615,10 +666,10 @@ fn f64_ordered_round(sum: SignedU128, scale_exp: i32) -> F64OrderedState {
         mantissa = u128_shr(mantissa, 1u);
         exponent = exponent + 1;
         if exponent > 1023 {
-            return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, false);
+            return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, sum.negative, F64_INFINITY);
         }
     }
-    return F64OrderedState(mantissa, exponent - 52, sum.negative, true);
+    return F64OrderedState(mantissa, exponent - 52, sum.negative, F64_FINITE);
 }
 
 fn f64_align_jammed(magnitude: U128, shift: i32) -> U128 {
@@ -640,7 +691,7 @@ fn f64_ordered_add_product(
     product_negative: bool,
     separate_product_add: bool,
 ) -> F64OrderedState {
-    if !state.valid {
+    if state.kind == F64_NAN {
         return state;
     }
     if product.a == 0u && product.b == 0u && product.c == 0u && product.d == 0u {
@@ -650,18 +701,36 @@ fn f64_ordered_add_product(
     var product_exponent = product_exp;
     var product_is_negative = product_negative;
     var product_is_rounded = false;
+    var rounded_product = F64OrderedState(
+        U128(0u, 0u, 0u, 0u), 0, false, F64_FINITE,
+    );
     if separate_product_add {
-        let rounded_product = f64_ordered_round(
+        rounded_product = f64_ordered_round(
             SignedU128(product, product_negative),
             product_exp,
         );
-        if !rounded_product.valid {
-            return rounded_product;
-        }
         product_magnitude = rounded_product.magnitude;
         product_exponent = rounded_product.exponent;
         product_is_negative = rounded_product.negative;
         product_is_rounded = true;
+    }
+    if state.kind == F64_INFINITY {
+        if product_is_rounded && rounded_product.kind == F64_NAN {
+            return rounded_product;
+        }
+        if product_is_rounded && rounded_product.kind == F64_INFINITY {
+            if state.negative == rounded_product.negative {
+                return state;
+            }
+            return F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, F64_NAN);
+        }
+        return state;
+    }
+    if product_is_rounded && rounded_product.kind == F64_NAN {
+        return rounded_product;
+    }
+    if product_is_rounded && rounded_product.kind == F64_INFINITY {
+        return rounded_product;
     }
     if state.magnitude.a == 0u && state.magnitude.b == 0u
         && state.magnitude.c == 0u && state.magnitude.d == 0u {
@@ -670,7 +739,7 @@ fn f64_ordered_add_product(
                 product_magnitude,
                 product_exponent,
                 product_is_negative,
-                true,
+                F64_FINITE,
             );
         }
         return f64_ordered_round(SignedU128(product, product_negative), product_exp);
@@ -747,7 +816,7 @@ fn filtered_f64_ordered_bounded(
             return 0xff800000u;
         }
     }
-    var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, true);
+    var state = F64OrderedState(U128(0u, 0u, 0u, 0u), 0, false, F64_FINITE);
     for (var tap = 0u; tap < count; tap = tap + 1u) {
         // Marker 13 stores one 1/source-height coefficient and repeats it
         // for every Box tap; ordinary marker 12 rows retain one per tap.
@@ -780,8 +849,11 @@ fn filtered_f64_ordered_bounded(
             false,
         );
     }
-    if !state.valid {
-        return 0u;
+    if state.kind == F64_NAN {
+        return 0x7fc00000u;
+    }
+    if state.kind == F64_INFINITY {
+        return select(0x7f800000u, 0xff800000u, state.negative);
     }
     return f64_sum_to_f32(SignedU128(state.magnitude, state.negative), state.exponent);
 }

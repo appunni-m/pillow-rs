@@ -695,6 +695,9 @@ fn js_transform_fill(value: &JsValue) -> Option<pillow_rs::TransformFill> {
     if let Some(value) = value.as_string() {
         return Some(pillow_rs::TransformFill::Name(value));
     }
+    if let Some(value) = value.as_f64() {
+        return Some(pillow_rs::TransformFill::FloatingScalar(value));
+    }
     if let Some(values) = js_integer_array(value) {
         return Some(pillow_rs::TransformFill::Components(values));
     }

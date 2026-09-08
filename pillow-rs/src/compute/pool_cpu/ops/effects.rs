@@ -1226,23 +1226,27 @@ fn sample_transform_f32(
             // Keep the source-type subtraction before the f64 FMA, matching
             // Geometry.c's FLOAT32 BILINEAR macro rather than evaluating four
             // independent f64 products.
-            let top = f64::from(at(floor_x + 1, floor_y) - at(floor_x, floor_y))
-                .mul_add(dx, f64::from(at(floor_x, floor_y)));
-            let bottom = f64::from(at(floor_x + 1, floor_y + 1) - at(floor_x, floor_y + 1))
-                .mul_add(dx, f64::from(at(floor_x, floor_y + 1)));
-            (bottom - top).mul_add(dy, top) as f32
+            let left_top = at(floor_x, floor_y);
+            let right_top = at(floor_x + 1, floor_y);
+            let left_bottom = at(floor_x, floor_y + 1);
+            let right_bottom = at(floor_x + 1, floor_y + 1);
+            let top_delta = f64_from_f32_c(f32_sub_c(right_top, left_top));
+            let bottom_delta = f64_from_f32_c(f32_sub_c(right_bottom, left_bottom));
+            let top = f64_fma_c(top_delta, dx, f64_from_f32_c(left_top));
+            let bottom = f64_fma_c(bottom_delta, dx, f64_from_f32_c(left_bottom));
+            f32_from_f64_c(f64_fma_c(f64_sub_c(bottom, top), dy, top))
         }
         ResampleFilter::Bicubic => {
             #[inline]
             fn horizontal(samples: [f32; 4], distance: f64) -> f64 {
                 let [v1, v2, v3, v4] = samples;
-                let p1 = f64::from(v2);
-                let p2 = f64::from(v3 - v1);
-                let p3 = f64::from((v1 - v2).mul_add(2.0, v3) - v4);
-                let p4 = f64::from((v2 - v1 - v3) + v4);
-                let inner = distance.mul_add(p4, p3);
-                let middle = distance.mul_add(inner, p2);
-                distance.mul_add(middle, p1)
+                let p1 = f64_from_f32_c(v2);
+                let p2 = f64_from_f32_c(f32_sub_c(v3, v1));
+                let p3 = f64_from_f32_c(f32_sub_c(f32_fma_c(f32_sub_c(v1, v2), 2.0, v3), v4));
+                let p4 = f64_from_f32_c(f32_add_c(f32_sub_c(f32_sub_c(v2, v1), v3), v4));
+                let inner = f64_fma_c(distance, p4, p3);
+                let middle = f64_fma_c(distance, inner, p2);
+                f64_fma_c(distance, middle, p1)
             }
 
             let base_x = floor_x - 1;
@@ -1262,12 +1266,14 @@ fn sample_transform_f32(
             }
             let [v1, v2, v3, v4] = rows;
             let p1 = v2;
-            let p2 = -v1 + v3;
-            let p3 = (v1 - v2).mul_add(2.0, v3) - v4;
-            let p4 = -v1 + v2 - v3 + v4;
-            let inner = dy.mul_add(p4, p3);
-            let middle = dy.mul_add(inner, p2);
-            dy.mul_add(middle, p1) as f32
+            // LLVM lowers `-v1 + v3` as `v3 - v1`; retaining that operand
+            // order matters when both rows contain distinct NaN payloads.
+            let p2 = f64_sub_c(v3, v1);
+            let p3 = f64_sub_c(f64_fma_c(f64_sub_c(v1, v2), 2.0, v3), v4);
+            let p4 = f64_add_c(f64_sub_c(f64_add_c(f64_neg_c(v1), v2), v3), v4);
+            let inner = f64_fma_c(dy, p4, p3);
+            let middle = f64_fma_c(dy, inner, p2);
+            f32_from_f64_c(f64_fma_c(dy, middle, p1))
         }
         // The public transform parser accepts only nearest, bilinear, and
         // bicubic. Keep an internal fallback deterministic if a direct Rust
@@ -1282,6 +1288,232 @@ fn sample_transform_f32(
 /// grouping emitted for `perspective_transform`/`quad_transform` in
 /// `src/libImaging/Geometry.c`; only then does the filter apply its 0.5
 /// source-coordinate shift and edge clipping.
+#[inline]
+#[cfg(target_arch = "wasm32")]
+fn quiet_f32_nan(value: f32) -> f32 {
+    f32::from_bits(value.to_bits() | (1 << 22))
+}
+
+#[inline]
+#[cfg(target_arch = "wasm32")]
+fn canonical_f32_nan() -> f32 {
+    f32::from_bits(0x7fc0_0000)
+}
+
+#[inline]
+fn f32_sub_c(left: f32, right: f32) -> f32 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return left - right;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if left.is_nan() {
+            return quiet_f32_nan(left);
+        }
+        if right.is_nan() {
+            return quiet_f32_nan(right);
+        }
+        if left.is_infinite()
+            && right.is_infinite()
+            && left.is_sign_positive() != right.is_sign_positive()
+        {
+            return canonical_f32_nan();
+        }
+        left - right
+    }
+}
+
+#[inline]
+fn f32_add_c(left: f32, right: f32) -> f32 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return left + right;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if left.is_nan() {
+            return quiet_f32_nan(left);
+        }
+        if right.is_nan() {
+            return quiet_f32_nan(right);
+        }
+        if left.is_infinite()
+            && right.is_infinite()
+            && left.is_sign_positive() != right.is_sign_positive()
+        {
+            return canonical_f32_nan();
+        }
+        left + right
+    }
+}
+
+#[inline]
+fn f32_fma_c(left: f32, right: f32, addend: f32) -> f32 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return left.mul_add(right, addend);
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if addend.is_nan() {
+            return quiet_f32_nan(addend);
+        }
+        if left.is_nan() {
+            return quiet_f32_nan(left);
+        }
+        if right.is_nan() {
+            return quiet_f32_nan(right);
+        }
+        if (left == 0.0 && right.is_infinite()) || (left.is_infinite() && right == 0.0) {
+            return canonical_f32_nan();
+        }
+        if left.is_infinite()
+            && right.is_finite()
+            && addend.is_infinite()
+            && (left.is_sign_positive() == right.is_sign_positive()) != addend.is_sign_positive()
+        {
+            return canonical_f32_nan();
+        }
+        left.mul_add(right, addend)
+    }
+}
+
+#[inline]
+fn f64_from_f32_c(value: f32) -> f64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return f64::from(value);
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if !value.is_nan() {
+            return f64::from(value);
+        }
+        let bits = value.to_bits();
+        let payload = u64::from((bits & 0x007f_ffff) | (1 << 22)) << 29;
+        let sign = u64::from(bits & 0x8000_0000) << 32;
+        f64::from_bits(sign | 0x7ff0_0000_0000_0000 | payload)
+    }
+}
+
+#[inline]
+fn f32_from_f64_c(value: f64) -> f32 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return value as f32;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if !value.is_nan() {
+            return value as f32;
+        }
+        let bits = value.to_bits();
+        let payload = ((bits & 0x000f_ffff_ffff_ffff) >> 29) as u32 | (1 << 22);
+        let sign = ((bits >> 32) as u32) & 0x8000_0000;
+        f32::from_bits(sign | 0x7f80_0000 | payload)
+    }
+}
+
+#[inline]
+fn f64_neg_c(value: f64) -> f64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return -value;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if value.is_nan() {
+            // Rust's optimized ARM/WASM lowering keeps the NaN sign through
+            // the unary negation used by the bicubic vertical coefficients.
+            // Preserve that payload/sign instead of applying a raw bitwise
+            // sign flip, which would make WASM differ from the C oracle.
+            value
+        } else {
+            -value
+        }
+    }
+}
+
+#[inline]
+fn f64_sub_c(left: f64, right: f64) -> f64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return left - right;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if left.is_nan() {
+            return left;
+        }
+        if right.is_nan() {
+            return right;
+        }
+        if left.is_infinite()
+            && right.is_infinite()
+            && left.is_sign_positive() != right.is_sign_positive()
+        {
+            return f64::from_bits(0x7ff8_0000_0000_0000);
+        }
+        left - right
+    }
+}
+
+#[inline]
+fn f64_add_c(left: f64, right: f64) -> f64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return left + right;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if left.is_nan() {
+            return left;
+        }
+        if right.is_nan() {
+            return right;
+        }
+        if left.is_infinite()
+            && right.is_infinite()
+            && left.is_sign_positive() != right.is_sign_positive()
+        {
+            return f64::from_bits(0x7ff8_0000_0000_0000);
+        }
+        left + right
+    }
+}
+
+#[inline]
+fn f64_fma_c(left: f64, right: f64, addend: f64) -> f64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return left.mul_add(right, addend);
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if addend.is_nan() {
+            return addend;
+        }
+        if left.is_nan() {
+            return left;
+        }
+        if right.is_nan() {
+            return right;
+        }
+        if (left == 0.0 && right.is_infinite()) || (left.is_infinite() && right == 0.0) {
+            return f64::from_bits(0x7ff8_0000_0000_0000);
+        }
+        let product = left * right;
+        if product.is_infinite()
+            && addend.is_infinite()
+            && product.is_sign_positive() != addend.is_sign_positive()
+        {
+            return f64::from_bits(0x7ff8_0000_0000_0000);
+        }
+        left.mul_add(right, addend)
+    }
+}
+
 fn transform_projective_f32(
     img: &DynamicImage,
     dst_w: u32,
