@@ -9,6 +9,7 @@ PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
 NODE         := node
 CARGO        := cargo
+NPM_CONFIG_CACHE ?= $(CURDIR)/target/npm-cache
 WASM_PACK    := wasm-pack
 WASM_PACK_VERSION ?= 0.15.0
 CARGO_DENY_VERSION ?= 0.20.2
@@ -939,9 +940,11 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 docs-check: repo-map-check migration-parity-inputs-check ## Validate documentation entry points and generated inputs
 	@test -s README.md
 	@test -s CONTRIBUTING.md
+	@test -s CHANGELOG.md
 	@test -s BENCHMARKS.md
 	@test -s docs/DOCUMENTATION_CHECKLIST.md
 	@test -s docs/CI_CD_RELEASE_PLAN.md
+	@test -s docs/REGISTRY_RELEASE_MATRIX.md
 	@test -s docs/BENCHMARKING.md
 	@test -s docs/COVERAGE.md
 
@@ -978,19 +981,25 @@ stubs:
 release-check: build-all ## Build and package every release artifact without publishing
 	$(CARGO) metadata --locked --no-deps --format-version 1 >/dev/null
 	@if test "$(RELEASE_CRATES_READY)" = "1"; then \
-		$(CARGO) package -p $(CORE_SRC) --locked --allow-dirty --no-verify; \
+		test -z "$$(git status --porcelain)" || { \
+			printf "release-check requires a clean worktree when crate dependencies are registry-ready.\n" >&2; \
+			exit 2; \
+		}; \
+		$(CARGO) package -p $(CORE_SRC) --locked; \
 	else \
 		printf "crate package dry-run deferred: publish image-slash-star and fontdone first, then set RELEASE_CRATES_READY=1.\n"; \
 	fi
 	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out dist/release-check
-	cd $(JS_SRC) && npm run test:package
-	cd $(JS_SRC) && npm pack --dry-run --ignore-scripts
+	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
+	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
 
 release-pypi: release-check ## Build + publish to PyPI (requires RELEASE_CONFIRM=1)
+	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
 	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to PyPI.\n" >&2; exit 2; }
 	cd $(PY_SRC) && $(MATURIN) publish --locked
 
 release-npm: release-check ## Build WASM + publish the root npm package (requires RELEASE_CONFIRM=1)
+	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
 	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to npm.\n" >&2; exit 2; }
 	cd $(JS_SRC) && npm publish
 

@@ -12,7 +12,7 @@ latest recorded parity and benchmark artifacts.
 | User of the WASM package | [`README.md`](../README.md) | `pillow-rs-js/package.json`, the package tests, and the published package contents |
 | Contributor | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | [`docs/REPO_MAP.md`](REPO_MAP.md) and the relevant crate docs |
 | Parity maintainer | [`pillow-rs/tests/fixtures/manifest.yaml`](../pillow-rs/tests/fixtures/manifest.yaml) | [`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md) |
-| Release maintainer | [`docs/CI_CD_RELEASE_PLAN.md`](CI_CD_RELEASE_PLAN.md) | `Makefile` release-check targets |
+| Release maintainer | [`docs/CI_CD_RELEASE_PLAN.md`](CI_CD_RELEASE_PLAN.md) | [`docs/REGISTRY_RELEASE_MATRIX.md`](REGISTRY_RELEASE_MATRIX.md) and `Makefile` release-check targets |
 | Benchmark maintainer | [`BENCHMARKS.md`](../BENCHMARKS.md) | [`docs/BENCHMARKING.md`](BENCHMARKING.md) and the JSON artifacts under `build/migration-parity/` |
 | Agent or automation author | [`CLAUDE.md`](../CLAUDE.md) | [`docs/REPO_MAP.md`](REPO_MAP.md) |
 
@@ -21,7 +21,8 @@ latest recorded parity and benchmark artifacts.
 1. `CLAUDE.md`/`AGENTS.md` defines repository constraints.
 2. `Makefile` defines maintained commands and their dependency graph.
 3. `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, Python packaging metadata,
-   and `pillow-rs-js/package-lock.json` define build inputs.
+   `pillow-rs-js/package.json`, and `pillow-rs-js/package-lock.json` define build
+   and release inputs.
 4. `pillow-rs/tests/fixtures/manifest.yaml` defines the public parity,
    coverage, and benchmark contract.
 5. `pillow-rs/tests/fixtures/inputs/` contains input-only generated documents.

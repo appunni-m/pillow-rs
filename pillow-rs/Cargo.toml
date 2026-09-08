@@ -3,7 +3,14 @@ name = "pillow-rs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "Pure Rust image processing — Pillow reimplementation"
+readme = "../README.md"
+keywords = ["image", "pillow", "graphics", "gpu"]
+categories = ["multimedia::images"]
 
 [lib]
 name = "pillow_rs"

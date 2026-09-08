@@ -152,9 +152,11 @@ generated reports, build outputs, and package installs.
 |-- .github/
 |   `-- workflows/
 |       |-- benchmark.yml
-|       `-- ci.yml
+|       |-- ci.yml
+|       `-- release.yml
 |-- AGENT.md
 |-- AGENTS.md
+|-- CHANGELOG.md
 |-- CLAUDE.md
 |-- CONTRIBUTING.md
 |-- Cargo.lock

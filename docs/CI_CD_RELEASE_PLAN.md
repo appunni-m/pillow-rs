@@ -62,6 +62,10 @@ workflow, never on every pull request. The workflow will:
 
 The repository now has a scheduled/manual workflow at
 [`.github/workflows/benchmark.yml`](../.github/workflows/benchmark.yml). The
+release preflight and guarded publication workflow is at
+[`.github/workflows/release.yml`](../.github/workflows/release.yml). The
+registry order, local credential setup, and sibling project follow-up are
+recorded in [`REGISTRY_RELEASE_MATRIX.md`](REGISTRY_RELEASE_MATRIX.md). The
 Pages renderer remains the next delivery step.
 
 ## Release sequence
@@ -77,7 +81,9 @@ Pages renderer remains the next delivery step.
 4. Review parity, coverage, benchmark, security, and changelog evidence.
 5. Create a signed tag and GitHub release after review approval.
 6. Publish each registry from the release workflow with protected environments:
-   crates.io, PyPI, then npm. Record artifact checksums and provenance.
+   crates.io, PyPI, then npm. The root crate remains disabled until the
+   pinned `image-slash-star` and `fontdone` versions are visible. Record
+   artifact checksums and provenance.
 7. Publish documentation and benchmark sites from the same tag; the site build
    consumes validated generated artifacts only.
 

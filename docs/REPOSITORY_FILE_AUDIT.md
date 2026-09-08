@@ -13,7 +13,7 @@ read-only FreeType/parity archive.
 | `pillow-rs-py/` | 21 | Keep active thin PyO3 package and wrappers |
 | `pillow-rs-js/` | 16 | Keep active wasm-bindgen package and package lock |
 | `scripts/` | 40 | Keep active maintained generators, runners, validators, and reports |
-| `docs/` | 115 | Keep current landing/evidence pages; classify dated reports as historical |
+| `docs/` | 116 | Keep current landing/evidence pages; classify dated reports as historical |
 | `deprecated/migration-parity-v0/` | 328 | Retain read-only provenance until mapped live coverage replaces it |
 | `deprecated/imagingft/` | 12 | Retain historical ImagingFT fixtures and migration mapping |
 

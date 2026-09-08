@@ -1,0 +1,300 @@
+# Release publication is manual by design. The default dispatch is a read-only
+# preflight; protected environments and the explicit publish input are both
+# required before any registry write or tag is created.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact synchronized package version (for example 0.1.0)
+        required: true
+        default: 0.1.0
+        type: string
+      dependencies_published:
+        description: image-slash-star, fontdone crates, and fontdone npm are registry-visible
+        required: true
+        default: false
+        type: boolean
+      publish:
+        description: Publish artifacts and create the tag after the preflight succeeds
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ inputs.version || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUST_TOOLCHAIN: 1.96.1
+  WASM_PACK_VERSION: 0.15.0
+  NODE_VERSION: 22.14.0
+  NPM_VERSION: 11.5.1
+  RELEASE_VERSION: ${{ inputs.version }}
+  MIGRATION_WASM_NO_OPT: "1"
+
+jobs:
+  verify:
+    name: Release preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: require the main branch and clean checkout
+        run: |
+          test "$GITHUB_REF_NAME" = main
+          test -z "$(git status --porcelain)"
+      - name: install the locked Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy
+          rustup default "$RUST_TOOLCHAIN"
+          rustup target add wasm32-unknown-unknown
+          rustc --version
+          cargo --version
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: pillow-rs-js/package-lock.json
+      - name: install fixed package tools
+        run: |
+          python -m pip install --requirement requirements-ci.txt
+          cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked
+          npm install --global "npm@$NPM_VERSION"
+          node --version
+          npm --version
+      - name: install locked JavaScript dependencies
+        working-directory: pillow-rs-js
+        run: npm ci
+      - name: verify synchronized package metadata
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import tomllib
+
+          expected = os.environ["RELEASE_VERSION"]
+          if not expected or any(char not in "0123456789.-" for char in expected):
+              raise SystemExit(f"invalid release version: {expected!r}")
+          metadata = json.loads(
+              subprocess.check_output(
+                  ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
+                  text=True,
+              )
+          )
+          cargo_version = next(
+              package["version"]
+              for package in metadata["packages"]
+              if package["name"] == "pillow-rs"
+          )
+          with open("pillow-rs-py/pyproject.toml", "rb") as handle:
+              python_version = tomllib.load(handle)["project"]["version"]
+          with open("pillow-rs-js/package.json", encoding="utf-8") as handle:
+              npm_version = json.load(handle)["version"]
+          actual = {"cargo": cargo_version, "pypi": python_version, "npm": npm_version}
+          if actual != {key: expected for key in actual}:
+              raise SystemExit(f"package versions differ: expected {expected}, got {actual}")
+          print(f"all package versions: {expected}")
+          PY
+      - name: verify dependency registry visibility
+        if: ${{ inputs.dependencies_published }}
+        run: |
+          for package in image-slash-star fontdone; do
+            version="$(DEP_NAME="$package" python -c 'import os,tomllib; d=tomllib.load(open("pillow-rs/Cargo.toml", "rb")); print(d["dependencies"][os.environ["DEP_NAME"]]["version"].lstrip("="))')"
+            cargo info --registry crates-io "$package@$version" >/dev/null
+          done
+          fontdone_version="$(DEP_NAME=fontdone python -c 'import os,tomllib; d=tomllib.load(open("pillow-rs/Cargo.toml", "rb")); print(d["dependencies"][os.environ["DEP_NAME"]]["version"].lstrip("="))')"
+          npm view "fontdone@$fontdone_version" version --registry=https://registry.npmjs.org >/dev/null
+      - name: validate repository contracts
+        run: |
+          make docs-check
+          make migration-parity-evidence-check
+          make fmt
+          make clippy
+          make migration-parity-coverage-receipt-test
+      - name: run the canonical parity campaign
+        run: |
+          make build
+          make migration-parity-test
+      - name: collect source-bound Rust coverage
+        run: make migration-parity-coverage-rust
+      - name: validate generated release evidence
+        run: make migration-parity-evidence-check
+      - name: run the release package preflight
+        env:
+          RELEASE_CRATES_READY: ${{ inputs.dependencies_published && '1' || '0' }}
+        run: make release-check
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: release-preflight-${{ github.run_id }}
+          path: |
+            target/coverage/
+            build/migration-parity/
+          if-no-files-found: warn
+
+  package:
+    name: Package release artifacts
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: require the main branch and clean checkout
+        run: |
+          test "$GITHUB_REF_NAME" = main
+          test -z "$(git status --porcelain)"
+      - name: install the locked Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+          rustup target add wasm32-unknown-unknown
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: pillow-rs-js/package-lock.json
+      - name: install fixed package tools
+        run: |
+          python -m pip install --requirement requirements-ci.txt
+          cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked
+          npm install --global "npm@$NPM_VERSION"
+      - name: create release directories
+        run: mkdir -p dist/release/crate dist/release/python dist/release/npm
+      - name: package the root crate after dependency publication
+        if: ${{ inputs.dependencies_published }}
+        run: |
+          cargo package --locked -p pillow-rs
+          cp "target/package/pillow-rs-$RELEASE_VERSION.crate" dist/release/crate/
+      - name: build the Python wheel
+        run: python -m maturin build --manifest-path pillow-rs-py/Cargo.toml --release --locked --out dist/release/python
+      - name: build and pack the npm package
+        working-directory: pillow-rs-js
+        run: |
+          npm ci
+          npm run build:release
+          npm pack --ignore-scripts --pack-destination ../dist/release/npm
+      - name: write release checksums
+        working-directory: dist/release
+        run: find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-artifacts-${{ github.run_id }}
+          path: dist/release
+          if-no-files-found: error
+
+  publish-crates:
+    name: Publish pillow-rs to crates.io
+    if: ${{ inputs.publish && inputs.dependencies_published }}
+    needs: package
+    runs-on: ubuntu-24.04
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: install the locked Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+      - name: verify the package before authentication
+        run: cargo package --locked -p pillow-rs
+      - name: obtain a short-lived crates.io token
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: publish the root crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked -p pillow-rs
+
+  publish-pypi:
+    name: Publish pillow-rs to PyPI
+    if: ${{ inputs.publish && inputs.dependencies_published }}
+    needs: package
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-artifacts-${{ github.run_id }}
+          path: dist/release
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/release/python/
+          skip-existing: false
+
+  publish-npm:
+    name: Publish pillow-rs to npm
+    if: ${{ inputs.publish && inputs.dependencies_published }}
+    needs: package
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-artifacts-${{ github.run_id }}
+          path: dist/release
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: false
+      - name: install the npm CLI required by trusted publishing
+        run: npm install --global "npm@$NPM_VERSION"
+      - name: publish the npm tarball with provenance
+        run: npm publish "dist/release/npm/pillow-rs-$RELEASE_VERSION.tgz" --access public --provenance
+
+  tag-and-release:
+    name: Tag and create the GitHub release
+    if: ${{ inputs.publish && inputs.dependencies_published }}
+    needs: [publish-crates, publish-pypi, publish-npm]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-artifacts-${{ github.run_id }}
+          path: dist/release
+      - name: create the immutable version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$RELEASE_VERSION"
+          if git show-ref --tags --verify --quiet "refs/tags/$tag"; then
+            echo "tag already exists: $tag" >&2
+            exit 2
+          fi
+          git tag --annotate "$tag" --message "Release $RELEASE_VERSION"
+          git push origin "$tag"
+          gh release create "$tag" --title "$tag" --generate-notes dist/release/SHA256SUMS dist/release/crate/*.crate dist/release/python/*.whl dist/release/npm/*.tgz
