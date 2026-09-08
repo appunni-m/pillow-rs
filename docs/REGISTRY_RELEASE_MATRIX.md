@@ -14,7 +14,7 @@ registry publication and the exact-commit CI runs remain external prerequisites.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release candidate code `d390b54855aa53fc6bd33f7b8e649cf48d9625c3`; package surface is now an exact 170-path contract (`92ee6ed9`), while only the push-safe history for the oversized AV1 oracle remains open |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release candidate code `4bcc611e2fe131495966c0790b0fd092618fd290`; normal checks and the internal nightly coverage probes pass (44/45 coverage tests); the maintained AV1 index sidecars and push-safe history for the oversized oracle remain open |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commit `f328c999a33fcf1d4400b3225e5c2d4824f22343`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
