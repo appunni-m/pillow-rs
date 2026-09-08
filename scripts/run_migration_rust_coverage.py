@@ -34,6 +34,7 @@ DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "coverage-result-rust.json"
 DEFAULT_PYTHON_REPORT = ROOT / "target" / "coverage" / "migration-parity-python.json"
 DEFAULT_LLVM_REPORT = ROOT / "target" / "coverage" / "migration-parity-rust.json"
+DEFAULT_LCOV_REPORT = ROOT / "target" / "coverage" / "migration-parity-rust.lcov"
 DEFAULT_LLVM_PROFILE = (
     ROOT / "target" / "llvm-cov-target" / "pillow-rs-%p-%m.raw"
 )
@@ -122,6 +123,7 @@ def coverage_build_fingerprint() -> str:
 
     digest = hashlib.sha256()
     digest.update(b"toolchain=nightly\n")
+    digest.update(subprocess.check_output(["rustc", "+nightly", "--version", "--verbose"]))
     digest.update(b"rustflags=-Cinstrument-coverage -Zcoverage-options=branch\n")
     digest.update(f"python={sys.executable}\n".encode("utf-8"))
     digest.update(f"python-version={sys.version}\n".encode("utf-8"))
@@ -131,6 +133,56 @@ def coverage_build_fingerprint() -> str:
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def coverage_source_hashes() -> dict[str, str]:
+    """Capture measured source before building, including embedded shaders."""
+
+    paths = set(coverage_build_inputs())
+    for directory in (ROOT / "scripts", ROOT / "pillow-rs-py" / "python"):
+        paths.update(directory.rglob("*.py"))
+    return {
+        path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(paths)
+    }
+
+
+def write_coverage_context(
+    report: Path,
+    source_hashes: dict[str, str],
+    build_id: str,
+    identity: dict[str, Any],
+    summary: dict[str, int],
+    *,
+    full_scope: bool,
+) -> None:
+    """Bind a fresh report to its measured source, build, and execution result.
+
+    Coverage MCP reads this additive sidecar without importing the report.
+    Never attach today's source hashes to an old measurement: the caller
+    captures them before compilation and this guard detects intervening edits.
+    """
+
+    if coverage_source_hashes() != source_hashes:
+        raise RuntimeError("coverage source changed during collection; rerun on stable source")
+    complete = summary["plans_not_run"] == 0 and summary["tests_failed"] == 0
+    context = {
+        "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(),
+        "source_hashes": source_hashes,
+        "build_id": build_id,
+        "recorded_revision": identity["targets"][0]["revision"],
+        "scope": "full" if full_scope else "selected_tests",
+        "test_status": "passed" if complete else "failed",
+        "execution": {
+            "run_id": identity["run_id"],
+            "command": identity["command"],
+            "inputs": identity["inputs"],
+            "summary": summary,
+        },
+    }
+    report.with_name(report.name + ".context.json").write_text(
+        json.dumps(context, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def prepare_llvm_target() -> tuple[str, bool]:
@@ -191,6 +243,7 @@ from run_migration_coverage import (  # noqa: E402
     scope_coverage_plans,
 )
 from run_migration_parity import (  # noqa: E402
+    git_revision,
     load_cases,
     load_manifest,
 )
@@ -311,7 +364,19 @@ def run_locked(args: argparse.Namespace) -> int:
     # fingerprinted cache removes the directory when Rust inputs change, while
     # allowing repeated coverage runs for unchanged code to reuse Cargo's
     # instrumented build.
+    source_hashes = coverage_source_hashes()
+    source_revision = git_revision()
+    input_paths = sorted(
+        set(plan_paths.values()) | {case_inputs[case_id] for case_id in selected_ids}
+    )
+    measured_inputs = [manifest_path, *(FIXTURE_ROOT / path for path in input_paths)]
+    input_hashes = {
+        path: hashlib.sha256(path.read_bytes()).hexdigest() for path in measured_inputs
+    }
     build_fingerprint, build_cache_hit = prepare_llvm_target()
+    # A failed or interrupted rerun must never retain a prior success receipt.
+    for report in (args.llvm_report, args.lcov_report):
+        report.with_name(report.name + ".context.json").unlink(missing_ok=True)
     profile_temp_dir: Path | None = None
     if args.profile == DEFAULT_LLVM_PROFILE:
         profile_temp_dir = Path(tempfile.mkdtemp(prefix="pillow-rs-llvm-", dir="/private/tmp"))
@@ -383,6 +448,9 @@ def run_locked(args: argparse.Namespace) -> int:
             check=True,
         )
         instrumented_artifact = install_instrumented_extension()
+        build_id = hashlib.sha256(
+            build_fingerprint.encode("ascii") + instrumented_artifact.read_bytes()
+        ).hexdigest()
         COVERAGE_BUILD_STAMP.write_text(build_fingerprint + "\n", encoding="utf-8")
         print(
             f"coverage build cache: {'hit' if build_cache_hit else 'miss'} "
@@ -555,6 +623,38 @@ def run_locked(args: argparse.Namespace) -> int:
             check=True,
         )
 
+        # Keep LLVM's full branch/region report and export its same profiles
+        # as LCOV for consumers that need executable-line hit records. Do not
+        # derive line coverage from LLVM segment starts: a segment may span
+        # several source lines. Both formats retain the complete source set.
+        args.lcov_report.resolve().parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                "cargo",
+                "+nightly",
+                "llvm-cov",
+                "report",
+                "--lcov",
+                "--output-path",
+                str(args.lcov_report),
+            ],
+            env={**os.environ, "RUSTUP_TOOLCHAIN": "nightly"},
+            cwd=ROOT,
+            check=True,
+        )
+        # Source review uses repository-relative identifiers. Canonicalize
+        # only SF paths; preserve every record and hit/branch/function count,
+        # including files outside this checkout.
+        lcov_lines = args.lcov_report.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lcov_lines):
+            if line.startswith("SF:"):
+                try:
+                    source = Path(line[3:]).resolve().relative_to(ROOT)
+                except ValueError:
+                    continue
+                lcov_lines[index] = f"SF:{source.as_posix()}"
+        args.lcov_report.write_text("\n".join(lcov_lines) + "\n", encoding="utf-8")
+
         python_report = json.loads(args.python_report.read_text(encoding="utf-8"))
         llvm_report = json.loads(args.llvm_report.read_text(encoding="utf-8"))
         python_files: dict[Path, dict[str, Any]] = {}
@@ -579,10 +679,11 @@ def run_locked(args: argparse.Namespace) -> int:
             for component in manifest["coverage_components"]
             for path in component["paths"]
         }
-        input_paths = sorted(
-            set(plan_paths.values())
-            | {case_inputs[case_id] for case_id in selected_ids}
-        )
+        if any(
+            hashlib.sha256(path.read_bytes()).hexdigest() != digest
+            for path, digest in input_hashes.items()
+        ):
+            raise RuntimeError("coverage inputs changed during collection; rerun on stable inputs")
         command = scoped_coverage_command(
             COMMAND,
             operation=args.operation,
@@ -598,6 +699,7 @@ def run_locked(args: argparse.Namespace) -> int:
         )
         identity["started_at"] = started
         identity["finished_at"] = now()
+        identity["targets"][0]["revision"] = source_revision
         plan_results = []
         for plan in plans:
             child_plan = next(
@@ -636,6 +738,11 @@ def run_locked(args: argparse.Namespace) -> int:
             "infrastructure_errors": [],
         }
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        for report in (args.llvm_report, args.lcov_report):
+            write_coverage_context(
+                report, source_hashes, build_id, identity, result["summary"],
+                full_scope=canonical_full_lane and not args.exclude_case_id,
+            )
         print(json.dumps(result["summary"], sort_keys=True))
     finally:
         if had_extension and restore_path is not None:
@@ -666,6 +773,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--python-report", type=Path, default=DEFAULT_PYTHON_REPORT)
     parser.add_argument("--llvm-report", type=Path, default=DEFAULT_LLVM_REPORT)
+    parser.add_argument("--lcov-report", type=Path, default=DEFAULT_LCOV_REPORT)
     parser.add_argument("--profile", type=Path, default=DEFAULT_LLVM_PROFILE)
     parser.add_argument("--coverage-data", type=Path, default=DEFAULT_COVERAGE_DATA)
     return run(parser.parse_args())
