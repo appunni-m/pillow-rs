@@ -79,10 +79,14 @@ Pages renderer remains the next delivery step.
    and `fontdone` git dependencies have published registry versions; enable it
    only with `RELEASE_CRATES_READY=1` after that prerequisite is met.
 4. Review parity, coverage, benchmark, security, and changelog evidence.
-5. Create a signed tag and GitHub release after review approval.
+5. For the bootstrap, run the guarded manual release dispatch after the
+   dependency crates are visible, then push an annotated `v<version>` tag.
+   That tag creates the GitHub release. Every later release starts from a
+   reviewed commit and uses the same pushed-tag path.
 6. Publish each registry from the release workflow with protected environments:
    crates.io, PyPI, then npm. The root crate remains disabled until the
-   pinned `image-slash-star` and `fontdone` versions are visible. Record
+   pinned `image-slash-star` and `fontdone` versions are visible. Registry
+   steps are idempotent for an already published bootstrap version; record
    artifact checksums and provenance.
 7. Publish documentation and benchmark sites from the same tag; the site build
    consumes validated generated artifacts only.
