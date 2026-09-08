@@ -15,7 +15,7 @@ registry publication and the exact-commit CI runs remain external prerequisites.
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release commit `d390b54855aa53fc6bd33f7b8e649cf48d9625c3`; local release gate passes except the package-surface manifest approval and remote CI evidence |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commits through `54b6f87672d2dcbc8e38fd7177a3fde01563649`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commit `d58ecf2`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | npm | already visible; verify metadata before the crate release | existing package metadata points to `appunni-m/fontdone` and uses the `next` tag |
