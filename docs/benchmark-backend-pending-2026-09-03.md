@@ -1072,3 +1072,32 @@ no DA record stay separate, and WGSL remains uninstrumented. Final full and
 incremental measurements must be taken after integrating the remaining
 runtime changes. Live Pillow equality is verified separately from coverage
 execution.
+
+### Performance diagnostic repair (2026-09-08)
+
+The maintained adapter profiler previously attached `sample` and synchronously
+captured `heap` before supplying workflow JSON to the adapter's stdin. The
+adapter reads stdin to EOF before executing cases, so those captures could
+measure an input wait. The profiler now supplies a retained `.input.json` file
+at process launch. A real subprocess regression test verifies that the child
+consumes its complete workflow before the native profiler is invoked.
+
+`MIGRATION_PROFILE_ARGS='--python-profile'` additionally retains cProfile data
+and a cumulative call-cost summary. Its scope includes adapter startup, and
+its timings include profiler overhead; it is diagnostic evidence only. The
+Pillow-only profile no longer builds an unrelated native extension. In a
+1,000-repeat Pillow constant-image diagnostic, the workflow took 0.821 s,
+including 0.568 s in `PIL._imaging.fill` and 0.120 s in `Image.tobytes`.
+This localizes the dominant oracle cost, but does not establish the cause of
+the older two-run regression or satisfy the performance acceptance gate.
+
+The fixed 11 workload IDs, six measured samples per subject, 5% budget,
+comparison rules, and benchmark corpus remain unchanged. The old two failed
+comparisons remain evidence. The final acceptance pair must run after source
+integration and builds/coverage stop, use the same release installation,
+retain both consecutive runs, and compare all 44 records with the existing
+budget target. Profiler output must not be substituted for either run.
+
+Validation: `make migration-parity-receipt-test` passes 41/41, including the
+new profiler input-order regression. No core or binding behavior changed, so
+no new public parity input is needed for this diagnostic-only repair.

@@ -94,6 +94,7 @@ MIGRATION_RUST_COVERAGE_LLVM_REPORT ?= target/coverage/migration-parity-rust.jso
 MIGRATION_RUST_COVERAGE_LCOV_REPORT ?= target/coverage/migration-parity-rust.lcov
 MIGRATION_COVERAGE_DIFF_BASE ?= HEAD
 MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT ?= build/migration-parity/changed-line-coverage.json
+MIGRATION_PROFILE_ARGS ?=
 MIGRATION_CORE_BENCHMARK_ARGS ?=
 MIGRATION_CORE_BENCHMARK_OUTPUT ?= build/migration-parity/pipeline-core-benchmark.json
 PILLOW_RS_PY_BENCHMARK_ARGS ?=
@@ -127,6 +128,7 @@ help: ## Show this help
 	@printf "$(BOLD)pillow-rs Makefile$(NC)\n"
 	@printf "\n$(BOLD)Setup$(NC)\n"
 	@printf "  $(CYAN)make setup$(NC)          Install all dev dependencies\n"
+	@printf "  $(CYAN)make setup-venv$(NC)     Create an isolated Python build/parity environment\n"
 	@printf "  $(CYAN)make setup-ci$(NC)       Install deps for CI (no virtualenv check)\n"
 	@printf "\n$(BOLD)Build$(NC)\n"
 	@printf "  $(CYAN)make build$(NC)          Build Python package (maturin develop --release)\n"
@@ -254,7 +256,11 @@ help: ## Show this help
 	@printf "  $(CYAN)make stubs$(NC)          Check for missing Rust stubs vs manifest\n"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
-.PHONY: setup setup-ci
+.PHONY: setup setup-ci setup-venv
+
+setup-venv: ## Create an isolated Python build/parity environment for this checkout
+	@test -x .venv/bin/python || $(PYTHON) -m venv .venv
+	.venv/bin/python -m pip install maturin coverage pillow==12.2.0 numpy pyyaml
 
 setup: ## Install all dev dependencies
 	@$(PYTHON) -m pip --version >/dev/null 2>&1 || { echo "Bootstrapping pip..."; $(PYTHON) -m ensurepip --upgrade; }
@@ -559,13 +565,13 @@ migration-parity-pipeline-budget-check: ## Compare compatible benchmark lineages
 		--output "$(MIGRATION_BENCHMARK_BUDGET_OUTPUT)" \
 		--check
 
-migration-parity-profile: build ## Capture one bounded adapter profile without running unit tests
+migration-parity-profile: $(if $(filter pillow,$(MIGRATION_PROFILE_BACKEND)),,build) ## Capture one bounded adapter profile without running unit tests
 	$(PYTHON) scripts/profile_migration_benchmark.py \
 		--workload-id "$(MIGRATION_PROFILE_WORKLOAD_ID)" \
 		--backend "$(MIGRATION_PROFILE_BACKEND)" \
 		--repeat "$(MIGRATION_PROFILE_REPEAT)" \
 		--timeout "$(MIGRATION_PROFILE_TIMEOUT)" \
-		--output-dir "$(MIGRATION_PROFILE_OUTPUT_DIR)"
+		--output-dir "$(MIGRATION_PROFILE_OUTPUT_DIR)" $(MIGRATION_PROFILE_ARGS)
 
 migration-parity-profile-all: ## Capture bounded CPU, SIMD, and GPU adapter profiles
 	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=cpu

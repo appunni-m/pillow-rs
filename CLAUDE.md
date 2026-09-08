@@ -226,6 +226,7 @@ Common root targets:
 ```bash
 make help
 make setup
+make setup-venv
 make build
 make build-dev
 make build-wasm-release
@@ -258,6 +259,17 @@ Use `make migration-parity-changed-line-coverage
 MIGRATION_COVERAGE_DIFF_BASE=<base>` to report measured changed Rust lines.
 Lines without LCOV records and WGSL shader lines remain explicitly unmeasured.
 Verify collector guards with `make migration-parity-coverage-receipt-test`.
+
+`make setup-venv PYTHON=/path/to/python3.12` creates this checkout's isolated
+Python environment for native builds and public parity. It does not install
+the JS toolchain. Use it for worktrees instead of sharing another checkout's
+mutable extension installation.
+
+`make migration-parity-profile MIGRATION_PROFILE_ARGS='--python-profile'`
+adds a Python call-cost profile to the diagnostic artifacts. The retained
+`.input.json` is the exact workflow supplied before native profilers attach.
+These diagnostic timings include profiler overhead and must never serve as
+benchmark acceptance samples.
 
 `make pillow-rs-fixtures-check` regenerates the current imagingft fixtures in a
 temporary directory and requires exact JSON and raw-byte equality. The
