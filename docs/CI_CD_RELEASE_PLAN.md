@@ -13,7 +13,8 @@ turn a benchmark into a release gate before the benchmark budget policy passes.
 | Pillow oracle | manifest and CI, `12.2.0` | live parity and reverse coverage |
 | Python parity runners | CI `3.10`, `3.12` | Pillow 12.2.0 supports these versions |
 | Python wheel ABI | `abi3-py38`, `requires-python >=3.8` | package compatibility floor; parity oracle still runs on 3.10+ |
-| Node.js | CI `20.19.0` | WASM package and browser runner |
+| Node.js | CI/release `22.14.0` | WASM package and browser runner |
+| npm | CI/release `11.5.1` | locked package installation and publication |
 | wasm-pack | CI/Make, `0.15.0` | WASM build |
 | maturin | `requirements-ci.txt`, `1.14.1` | Python extension build |
 | coverage.py | `requirements-ci.txt`, `7.10.7` | managed source coverage |
