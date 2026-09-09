@@ -98,6 +98,10 @@ Git bundles for the three annotated tags, and checksum-bound offline consumer
 checks. This file-backed rehearsal does not contact or mutate crates.io, PyPI,
 npm, GitHub, or any remote Git repository.
 
+Run `make release-local-check` from the root checkout to revalidate the
+artifact list, checksum manifests, benchmark receipts, and complete Git
+histories after copying or rebuilding local release outputs.
+
 Publish the independent package first, then the font engine, then this
 workspace:
 
