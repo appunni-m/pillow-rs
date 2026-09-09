@@ -62,7 +62,8 @@ def _verify_checksums(bundle: Path, checksum_name: str, relative_dir: Path) -> i
             expected, relative_name = line.split(maxsplit=1)
         except ValueError as exc:
             raise ValueError(f"malformed checksum line in {checksum_path}: {line!r}") from exc
-        relative_name = relative_name.removeprefix("./")
+        if relative_name.startswith("./"):
+            relative_name = relative_name[2:]
         if relative_name in seen:
             raise ValueError(f"duplicate checksum entry in {checksum_path}: {relative_name}")
         seen.add(relative_name)
