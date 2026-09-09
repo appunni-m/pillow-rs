@@ -65,6 +65,14 @@ jobs:
           test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
           release_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
           test "$release_commit" = "$(git rev-parse HEAD)"
+      - name: require tag and Cargo version equality
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(cargo metadata --locked --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "pillow-rs") | .version')"
+          test -n "$cargo_version"
+          test "$cargo_version" = "$version"
       - name: require successful CI for this commit
         if: ${{ github.event_name == 'push' }}
         env:
