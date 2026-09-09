@@ -130262,10 +130262,10 @@
   ],
   "provenance": {
     "active_manifest": "pillow-rs/tests/fixtures/manifest.yaml",
-    "active_manifest_sha256": "7fb0ed379ee29f57ed979dde9a20dbc9ab5c8aa957465210eab3f28836428597",
+    "active_manifest_sha256": "75b88a89d5d5f99ababf1369f03f52efa3b1221d73caa7d9381678fbcdd4beb0",
     "coverage_report": "target/coverage/migration-parity-pillow.json",
     "coverage_report_format": 3,
-    "coverage_report_sha256": "e4f98ce0dd2981e131d9ef8d3680840429a792471c9ce31fbe795f23f0001960",
+    "coverage_report_sha256": "b38f80f67816394f64ecd075df1e1fbd37dd14ba6c75ccc4c428d2c90062c5c1",
     "coverage_report_version": "7.15.2",
     "receipt": "build/migration-parity/pillow-oracle-coverage-result.json",
     "receipt_coverage": {
