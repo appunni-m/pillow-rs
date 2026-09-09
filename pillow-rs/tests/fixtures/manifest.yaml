@@ -538,7 +538,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.alpha_composite
-      signature: 'alpha_composite(im1: pillow_rs.image.Image, im2: pillow_rs.image.Image) -> pillow_rs.image.Image'
+      signature: 'alpha_composite(im1: ''Image'', im2: ''Image'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -669,7 +669,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.blend
-      signature: 'blend(im1: pillow_rs.image.Image, im2: pillow_rs.image.Image, alpha: float) -> pillow_rs.image.Image'
+      signature: 'blend(im1: ''Image'', im2: ''Image'', alpha: ''float'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -832,8 +832,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.composite
-      signature: 'composite(image1: pillow_rs.image.Image, image2: pillow_rs.image.Image, mask: pillow_rs.image.Image)
-        -> pillow_rs.image.Image'
+      signature: 'composite(image1: ''Image'', image2: ''Image'', mask: ''Image'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -1015,8 +1014,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.effect_mandelbrot
-      signature: 'effect_mandelbrot(size: tuple[int, int], extent: tuple[float, float, float, float],
-        quality: int) -> pillow_rs.image.Image'
+      signature: 'effect_mandelbrot(size: ''tuple[int, int]'', extent: ''tuple[float, float, float, float]'',
+        quality: ''int'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -1134,7 +1133,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.effect_noise
-      signature: 'effect_noise(size: tuple[int, int], sigma: float) -> pillow_rs.image.Image'
+      signature: 'effect_noise(size: ''tuple[int, int]'', sigma: ''float'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -1252,7 +1251,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.eval
-      signature: 'eval(image: pillow_rs.image.Image, *args)'
+      signature: 'eval(image: ''Image'', *args)'
       support:
         status: supported
     requirements:
@@ -1575,7 +1574,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.frombuffer
-      signature: 'frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = ''raw'', *args)'
+      signature: 'frombuffer(mode: ''str'', size: ''tuple[int, int]'', data, decoder_name: ''str'' = ''raw'',
+        *args)'
       support:
         status: supported
     requirements:
@@ -1914,7 +1914,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.linear_gradient
-      signature: 'linear_gradient(mode: str) -> pillow_rs.image.Image'
+      signature: 'linear_gradient(mode: ''str'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -2024,7 +2024,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.merge
-      signature: 'merge(mode: str, bands)'
+      signature: 'merge(mode: ''str'', bands)'
       support:
         status: supported
     requirements:
@@ -2186,8 +2186,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.new
-      signature: 'new(mode: str, size: Tuple[int, int], color: Union[int, Tuple[int, ...], str, NoneType]
-        = None) -> pillow_rs.image.Image'
+      signature: 'new(mode: ''str'', size: ''Tuple[int, int]'', color: ''Union[int, Tuple[int, ...], str,
+        None]'' = None) -> ''Image'''
       support:
         status: supported
     requirements:
@@ -2494,8 +2494,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.open
-      signature: 'open(fp: Union[str, pathlib.Path, bytes], mode: Optional[str] = None, formats: Optional[list]
-        = None) -> pillow_rs.image.Image'
+      signature: 'open(fp: ''Union[str, Path, bytes]'', mode: ''Optional[str]'' = None, formats: ''Optional[list]''
+        = None) -> ''Image'''
       support:
         status: supported
     requirements:
@@ -2798,7 +2798,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.radial_gradient
-      signature: 'radial_gradient(mode: str) -> pillow_rs.image.Image'
+      signature: 'radial_gradient(mode: ''str'') -> ''Image'''
       support:
         status: supported
     requirements:
@@ -14741,7 +14741,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageDraw.Draw
-      signature: 'Draw(image: pillow_rs.image.Image, mode: str | None = None)'
+      signature: 'Draw(image: ''Image'', mode: ''str | None'' = None)'
       support:
         status: supported
     requirements:
@@ -15832,7 +15832,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageDraw.Draw.ellipse
-      signature: 'ellipse(self, xy, fill=None, outline=None, width: int = 1)'
+      signature: 'ellipse(self, xy, fill=None, outline=None, width: ''int'' = 1)'
       support:
         status: supported
     requirements:
@@ -16128,7 +16128,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageDraw.Draw.line
-      signature: 'line(self, xy, fill=None, width: int = 0, joint: str | None = None)'
+      signature: 'line(self, xy, fill=None, width: ''int'' = 0, joint: ''str | None'' = None)'
       support:
         status: supported
     requirements:
@@ -17453,7 +17453,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageDraw.Draw.polygon
-      signature: 'polygon(self, xy, fill=None, outline=None, width: int = 1)'
+      signature: 'polygon(self, xy, fill=None, outline=None, width: ''int'' = 1)'
       support:
         status: supported
     requirements:
@@ -17669,7 +17669,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageDraw.Draw.rectangle
-      signature: 'rectangle(self, xy, fill=None, outline=None, width: int = 1)'
+      signature: 'rectangle(self, xy, fill=None, outline=None, width: ''int'' = 1)'
       support:
         status: supported
     requirements:
