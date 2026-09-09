@@ -1,4 +1,7 @@
 """Functional API for image operations — Pillow-compatible module-level functions."""
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional, Tuple, Union
 

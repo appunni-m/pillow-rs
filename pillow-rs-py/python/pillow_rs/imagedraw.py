@@ -1,4 +1,7 @@
 """ImageDraw — drawing primitives. Pillow-compatible module."""
+
+from __future__ import annotations
+
 from ._core import ImageDraw as RustDraw
 from ._core import Outline  # public compatibility re-export
 from .image import Image
