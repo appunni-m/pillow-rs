@@ -59,15 +59,15 @@ Retained comparison artifacts may live outside the checkout (for example under
 roadmap report commands preserve those external paths and accept them directly;
 they do not require copying a result into `build/migration-parity/`.
 
-The latest integrated evidence (2026-09-08) contains a fixed 11-workload
-cohort, four primary runs, and three additional repeat runs. Every run selected
-11 workloads, measured 11, produced 44/44 comparable rows, and had 33/33
-requested-to-actual terminal receipts. The primary pair showed 6, 3, and 7
-budget violations; the additional repeats showed 8, 6, and 9. Those are timing
-observations on one arm64 machine, not correctness failures. The zero-violation
-acceptance item remains open under the unchanged five-percent policy. See the
-[pending checklist](benchmark-backend-pending-2026-09-03.md) for run hashes and
-the exact classification.
+The latest integrated evidence (2026-09-10) contains a clean fixed
+11-workload pair at the tagged `v0.1.0` commit. Both runs measured 11/11
+workloads, produced 44/44 comparable rows, and had 33/33 requested-to-actual
+terminal receipts across CPU, SIMD, and GPU. The adjacent budget comparison
+reports nine timing-only violations. Those are observations on one arm64
+machine, not correctness failures; the zero-violation acceptance item remains
+open under the unchanged five-percent policy. Earlier working-tree repeats
+remain historical context. See the [pending checklist](benchmark-backend-pending-2026-09-03.md)
+for run hashes and the exact classification.
 
 ## Interpretation rules
 

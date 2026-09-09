@@ -45,6 +45,16 @@ are likewise verified by installing the exact local wheel and tarballs. The
 full command log and artifact list are retained in
 `dist/release-local/LOCAL_RELEASE_RECEIPT.txt`.
 
+## Benchmark receipt
+
+The bundle also retains a fresh clean fixed-cohort pair under
+`dist/release-local/benchmarks/`. Both runs use the tagged commit, the same
+manifest/input hashes, and the unchanged five-warmup/20-iteration/five-sample
+policy. Native CPU, SIMD, and GPU terminal receipts make 44/44 rows comparable;
+the adjacent budget check reports nine timing-only violations. The result is
+kept as release evidence and leaves the zero-violation acceptance item open;
+no threshold, workload ID, fixture, or receipt rule was changed.
+
 ## Public-release prerequisites
 
 No crates.io, PyPI, npm, GitHub release, or remote Git operation was performed.

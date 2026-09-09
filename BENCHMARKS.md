@@ -29,18 +29,18 @@ the same measurement policy.
 
 ## Latest integrated backend cohort
 
-The 2026-09-08 continuation recorded a fixed 11-workload cohort across four
-primary runs and three repeats:
+The 2026-09-10 clean tagged receipt recorded a fixed 11-workload cohort across
+two consecutive runs:
 
 | Evidence | Selected | Measured | Comparable rows | Terminal receipts | Budget violations |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Primary runs | 11 each | 11 each | 44/44 each | 33/33 each | 6, 3, 7 |
-| Additional repeats | 11 each | 11 each | 44/44 each | 33/33 each | 8, 6, 9 |
+| Clean tagged pair | 11 each | 11 each | 44/44 each | 33/33 each | 9 |
 
 All rows passed the correctness gate and the normalized operation/resource/
 receipt structures matched. The budget violations are timing observations from
 one arm64 machine. They keep the zero-violation acceptance item open under the
-unchanged five-percent policy; the threshold and cohort were not altered.
+unchanged five-percent policy; the threshold and cohort were not altered. The
+exact receipts and checksums are retained in `dist/release-local/benchmarks/`.
 
 The run hashes, environment, and classification are recorded in
 [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).
