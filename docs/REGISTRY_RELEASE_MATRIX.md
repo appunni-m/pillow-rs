@@ -83,6 +83,15 @@ comparison only after the managed coverage command has produced a report whose
 recorded source revision matches the release commit. A report made by another
 revision must be remeasured before it is used as release evidence.
 
+The local first-release rehearsal is already assembled under
+`dist/release-local/`. It stages and verifies the packages in dependency order:
+`image-slash-star`, `fontdone`, `fontdone-c-abi`, `fontdone-wasm`, and finally
+the registry-normalized `pillow-rs` archive. The same bundle contains the
+`pillow-rs` ABI3 wheel, the `pillow-rs` and `fontdone` npm tarballs, complete
+Git bundles for the three annotated tags, and checksum-bound offline consumer
+checks. This file-backed rehearsal does not contact or mutate crates.io, PyPI,
+npm, GitHub, or any remote Git repository.
+
 Publish the independent package first, then the font engine, then this
 workspace:
 
