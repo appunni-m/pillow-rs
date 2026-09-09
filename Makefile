@@ -5,6 +5,7 @@
 
 # ── Variables ─────────────────────────────────────────────────────────────────
 PYTHON       ?= $(shell if [ -x .venv/bin/python ]; then printf '%s' .venv/bin/python; else printf '%s' python3; fi)
+PYTHON_COMPAT ?= $(PYTHON)
 PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
 NODE         := node
@@ -260,6 +261,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make release-npm$(NC)    Build WASM + publish to npm\n"
 	@printf "  $(CYAN)make release-crates$(NC) Publish to crates.io\n"
 	@printf "  $(CYAN)make release-check$(NC)  Build/package dry-run for every release target\n"
+	@printf "  $(CYAN)make python-compat-check$(NC) Verify abi3 facade imports on PYTHON_COMPAT\n"
 	@printf "\n$(BOLD)Stubs$(NC)\n"
 	@printf "  $(CYAN)make stubs$(NC)          Check for missing Rust stubs vs manifest\n"
 
@@ -284,7 +286,7 @@ setup-ci: ## Install dev deps for CI
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all
+.PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all python-compat-check
 
 build: ## Build Python package (release)
 	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --release --locked
@@ -304,6 +306,10 @@ build-wasm-release: ## Build WASM package (release)
 	cd $(JS_SRC) && npm run build:release
 
 build-all: build build-wasm-release ## Build Python + WASM
+
+python-compat-check: build ## Import the abi3 facade under a selected Python interpreter
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$(CURDIR)/target/python-compat-cache" \
+	PYTHONPATH="$(abspath $(PY_SRC)/python)" "$(PYTHON_COMPAT)" scripts/check_python_compatibility.py
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-wasm test-all migration-parity-js-gap-report migration-parity-test-all-backends migration-parity-test-gpu-strict migration-parity-test-simd-strict

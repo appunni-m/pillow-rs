@@ -73,6 +73,7 @@ RUSTC_WRAPPER= make clippy
 RUSTC_WRAPPER= make migration-parity-test
 RUSTC_WRAPPER= make migration-parity-coverage-rust
 RUSTC_WRAPPER= MIGRATION_WASM_NO_OPT=1 make release-check RELEASE_CRATES_READY=0
+PYTHON_COMPAT=python3 make python-compat-check
 ```
 
 Coverage MCP is an evidence reader, not a test runner. Query its gaps or
