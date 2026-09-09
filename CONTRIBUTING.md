@@ -13,7 +13,7 @@ source, fixture, benchmark, or public page.
 | Rust | `1.96.1` from `rust-toolchain.toml` | workspace build, test, fmt, and clippy |
 | Python | 3.10 or 3.12 for parity | Pillow 12.2.0 oracle support |
 | Python package floor | `>=3.8`, `abi3-py38` | published wheel compatibility |
-| Node.js | 20.19.0 in CI | WASM and browser adapter |
+| Node.js | 22.14.0 in CI and release | WASM and browser adapter |
 | maturin | 1.14.1 | PyO3 build |
 | wasm-pack | 0.15.0 | WASM build |
 | Pillow | 12.2.0 | live oracle and reverse coverage |
