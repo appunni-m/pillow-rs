@@ -270,7 +270,7 @@ jobs:
   publish-pypi:
     name: Publish pillow-rs to PyPI
     if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
-    needs: package
+    needs: [package, publish-crates]
     runs-on: ubuntu-24.04
     environment: pypi
     permissions:
@@ -289,7 +289,7 @@ jobs:
   publish-npm:
     name: Publish pillow-rs to npm
     if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
-    needs: package
+    needs: [package, publish-crates]
     runs-on: ubuntu-24.04
     environment: npm
     permissions:
