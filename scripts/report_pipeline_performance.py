@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from report_pipeline_benchmark_coverage import (  # noqa: E402
     DEFAULT_INPUT,
+    display_path,
     report as report_workload_coverage,
 )
 
@@ -200,9 +201,9 @@ def build_report(result_path: Path, baseline_path: Path | None) -> dict[str, Any
     coverage = report_workload_coverage(DEFAULT_INPUT, result_path)
     return {
         "schema": "pillow-rs/pipeline-performance-report@1",
-        "source_result": str(result_path.resolve().relative_to(ROOT.resolve())),
+        "source_result": display_path(result_path),
         "baseline_result": (
-            str(baseline_path.resolve().relative_to(ROOT.resolve()))
+            display_path(baseline_path)
             if baseline_path is not None
             else None
         ),

@@ -26,6 +26,7 @@ DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "pipeline-roadmap-status.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from report_pipeline_benchmark_coverage import (  # noqa: E402
     DEFAULT_INPUT,
+    display_path,
     report as report_workload_coverage,
 )
 
@@ -112,7 +113,7 @@ def build_report(result_path: Path) -> dict[str, Any]:
         "open_ids": [item["id"] for item in items if item["status"] != "closed"],
         "items": items,
         "evidence": {
-            "benchmark_result": str(result_path.relative_to(ROOT))
+            "benchmark_result": display_path(result_path)
             if result_path.is_file()
             else None,
             "benchmark_result_mtime": file_timestamp(result_path),
@@ -161,7 +162,7 @@ def main() -> int:
                 "operation_coverage_percent": (
                     coverage["operation_coverage_percent"] if coverage else None
                 ),
-                "output": str(output_path.relative_to(ROOT)),
+                "output": display_path(output_path),
                 "errors": errors,
             },
             sort_keys=True,

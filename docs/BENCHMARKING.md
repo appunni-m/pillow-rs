@@ -54,6 +54,11 @@ MIGRATION_BENCHMARK_BUDGET_BASELINE=build/migration-parity/baseline.json \
 make migration-parity-pipeline-budget-check
 ```
 
+Retained comparison artifacts may live outside the checkout (for example under
+`/tmp` while a run is being reviewed). The performance, workload-coverage, and
+roadmap report commands preserve those external paths and accept them directly;
+they do not require copying a result into `build/migration-parity/`.
+
 The latest integrated evidence (2026-09-08) contains a fixed 11-workload
 cohort, four primary runs, and three additional repeat runs. Every run selected
 11 workloads, measured 11, produced 44/44 comparable rows, and had 33/33
