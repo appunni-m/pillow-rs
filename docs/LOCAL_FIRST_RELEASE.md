@@ -21,6 +21,13 @@ shasum -a 256 -c SHA256SUMS
 shasum -a 256 -c benchmarks/SHA256SUMS
 ```
 
+The maintained Makefile check validates the same receipt, both checksum
+manifests, every package entry, and all three Git bundles:
+
+```sh
+make release-local-check
+```
+
 ## Local publication order
 
 The staged Cargo source registry follows the dependency order used by the

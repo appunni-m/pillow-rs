@@ -11,6 +11,7 @@ MATURIN      := $(PYTHON) -m maturin
 NODE         := node
 CARGO        := cargo
 NPM_CONFIG_CACHE ?= $(CURDIR)/target/npm-cache
+LOCAL_RELEASE_DIR ?= dist/release-local
 WASM_PACK    := wasm-pack
 WASM_PACK_VERSION ?= 0.15.0
 CARGO_DENY_VERSION ?= 0.20.2
@@ -261,6 +262,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make release-npm$(NC)    Build WASM + publish to npm\n"
 	@printf "  $(CYAN)make release-crates$(NC) Publish to crates.io\n"
 	@printf "  $(CYAN)make release-check$(NC)  Build/package dry-run for every release target\n"
+	@printf "  $(CYAN)make release-local-check$(NC) Verify the local first-release bundle\n"
 	@printf "  $(CYAN)make python-compat-check$(NC) Verify abi3 facade imports on PYTHON_COMPAT\n"
 	@printf "\n$(BOLD)Stubs$(NC)\n"
 	@printf "  $(CYAN)make stubs$(NC)          Check for missing Rust stubs vs manifest\n"
@@ -982,7 +984,7 @@ stubs:
 	@exit 2
 
 # ── Release ───────────────────────────────────────────────────────────────────
-.PHONY: release-check release-pypi release-npm release-crates
+.PHONY: release-check release-local-check release-pypi release-npm release-crates
 
 release-check: build-all ## Build and package every release artifact without publishing
 	$(CARGO) metadata --locked --no-deps --format-version 1 >/dev/null
@@ -1002,6 +1004,9 @@ release-check: build-all ## Build and package every release artifact without pub
 	$(MAKE) python-compat-check PYTHON_COMPAT="$(PYTHON_COMPAT)"
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
+
+release-local-check: ## Verify the file-backed local first-release bundle
+	$(PYTHON) scripts/check_local_release_bundle.py --bundle-dir "$(LOCAL_RELEASE_DIR)"
 
 release-pypi: release-check ## Build + publish to PyPI (requires RELEASE_CONFIRM=1)
 	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
