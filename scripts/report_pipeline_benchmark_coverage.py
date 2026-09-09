@@ -36,6 +36,21 @@ DEFAULT_INPUT = (
 )
 DEFAULT_RESULT = ROOT / "build" / "migration-parity" / "benchmark-result-pipeline-allops-20260812.json"
 
+
+def display_path(path: Path) -> str:
+    """Return a stable repository-relative or absolute artifact path."""
+
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT).as_posix()
+    except ValueError:
+        # Benchmark comparisons may deliberately keep results in /tmp so a
+        # failed run cannot replace the maintained artifact.  Preserve that
+        # external location instead of assuming every evidence file is under
+        # the checkout.
+        return str(resolved)
+
+
 # Some public operations intentionally share one deferred pipeline descriptor.
 # Keep those aliases explicit so the denominator measures PipelineOp variants,
 # rather than counting two public entry points that lower to the same variant
@@ -196,7 +211,7 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
     )
     report: dict[str, object] = {
         "schema": "pillow-rs/pipeline-benchmark-coverage@1",
-        "input": str(path.relative_to(ROOT)),
+        "input": display_path(path),
         "source_pipeline_op_variants": len(source_variants),
         "canonical_pipeline_op_variants": len(canonical_source_variants),
         "benchmark_spec_variants": len(canonical_spec_variants),
@@ -297,7 +312,7 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
                 "incomplete_workload_ids": incomplete_ids,
             }
         report["execution"] = {
-            "artifact": str(result_path.relative_to(ROOT)),
+            "artifact": display_path(result_path),
             "operation_workloads_selected": len(operation_workloads),
             "size_matrix_workloads_selected": len(matrix_workloads),
             "expanded_size_matrix_workloads_selected": len(expanded_matrix_results),

@@ -35,6 +35,13 @@ from scripts.run_migration_parity import (
     write_pipeline_execution_evidence,
 )
 from scripts.run_migration_js_parity import execution_evidence_document
+from scripts.report_pipeline_benchmark_coverage import (
+    DEFAULT_INPUT as PIPELINE_BENCHMARK_INPUT,
+    display_path,
+    report as report_pipeline_coverage,
+)
+from scripts.report_pipeline_performance import build_report as build_performance_report
+from scripts.report_pipeline_roadmap_status import build_report as build_roadmap_report
 from scripts.validate_migration_parity_result import (
     all_backends as validate_all_backends,
     execution_receipt,
@@ -166,6 +173,33 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
             },
         )
         self.assertTrue(suite_subject_is_comparable(oracle, "pillow"))
+
+
+class BenchmarkReportPathTests(unittest.TestCase):
+    """External retained artifacts must remain addressable by report tools."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.result = Path(self.directory.name) / "benchmark.json"
+        self.result.write_text(
+            json.dumps(
+                {
+                    "schema": "migration-parity/benchmark-result@1",
+                    "workloads": [],
+                }
+            )
+        )
+
+    def test_external_path_is_preserved_by_all_report_layers(self) -> None:
+        expected = str(self.result.resolve())
+        self.assertEqual(display_path(self.result), expected)
+        coverage = report_pipeline_coverage(PIPELINE_BENCHMARK_INPUT, self.result)
+        self.assertEqual(coverage["execution"]["artifact"], expected)
+        performance = build_performance_report(self.result, None)
+        self.assertEqual(performance["source_result"], expected)
+        roadmap = build_roadmap_report(self.result)
+        self.assertEqual(roadmap["evidence"]["benchmark_result"], expected)
 
 
 def benchmark_record(*, terminal_complete: bool) -> dict[str, object]:
