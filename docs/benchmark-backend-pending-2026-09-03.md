@@ -2,7 +2,7 @@
 
 Current continuation: ordered F GPU arithmetic, coefficient tiling, general
 projective sampling, and the PA/SIMD fixes are integrated on
-`codex/benchmark-backend-parity-fixes` in `967c40447`. The regenerated
+`codex/benchmark-backend-parity-fixes` at `90e1f5e6b`. The regenerated
 11,345-case replay and managed coverage are recorded below. The only remaining
 acceptance item is the zero-violation benchmark pair; its receipt structure is
 stable while timing violations remain nondeterministic.
@@ -832,6 +832,23 @@ Known environment blocker: `make -C pillow-rs clippy` still requires the
 pinned `libavif 1.4.1` / `dav1d 1.5.3` / `libaom 3.13.2` toolchain.
 
 ## Current performance evidence
+
+- [x] A clean tagged `v0.1.0` pair was rerun on 2026-09-10 using the fixed
+  11-workload cohort and unchanged five-warmup/20-iteration/five-sample
+  policy. Both receipts bind manifest
+  `75b88a89d5d5f99ababf1369f03f52efa3b1221d73caa7d9381678fbcdd4beb0`, input
+  `d7dddc2541560c268375628c470f913b593f2f467658faebf45586ff12bf1634`, and
+  commit `003830605ea81640366988a477c19dd7793d9eb1` with `dirty=false`.
+  Each measured 11/11 workloads, retained 44/44 comparable rows, and proved
+  33/33 requested-to-actual terminal receipts across CPU, SIMD, and GPU. The
+  adjacent unchanged budget check reported nine timing-only violations; the
+  operation, dispatch, and receipt fingerprints matched, so the zero-violation
+  P2 gate remains open. Run hashes are
+  `162c8ce58d3d7e1d0cfc841592f52b871a66c35e1db8f1450dd816d6664b5796` and
+  `a58d69ce391629280d0744a7a55a755e72dcd66889733e44695c80e3ecf18199a`; the
+  budget report hash is
+  `aa26f8696827f4b4d003d166b356a3c669ea3aae8ed90e9e2ddebe5f4c107e2a`.
+  Receipts are retained in `dist/release-local/benchmarks/`.
 
 - [x] Fresh current-HEAD equal-receipt pair (`59dcf26da`): both fixed-11 runs
   measured and passed 11/11 workloads, with 44/44 comparable records and
