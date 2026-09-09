@@ -79,6 +79,12 @@ tag path also requires a successful `ci.yml` run for the exact tagged commit
 before any registry job can publish. The Pages renderer remains the next
 delivery step.
 
+For a review comparison, dispatch the benchmark workflow with the same profile
+and set `baseline_run_id` to a prior successful run whose artifact has matching
+manifest, input, backend, terminal, and measurement receipts. The workflow
+retains the budget report and labels timing violations for review; it does not
+turn a noisy timing result into a correctness failure.
+
 ## Release sequence
 
 1. Update the workspace version in `Cargo.toml`, then verify the Python and npm

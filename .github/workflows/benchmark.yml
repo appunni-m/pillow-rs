@@ -9,11 +9,16 @@ on:
         default: quick
         type: choice
         options: [quick, standard]
+      baseline_run_id:
+        description: Optional prior successful benchmark run ID for budget comparison
+        required: false
+        type: string
   schedule:
     - cron: "17 3 * * 1"
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: benchmark-${{ github.ref }}
@@ -47,6 +52,56 @@ jobs:
         run: |
           make migration-parity-pipeline-report
           make migration-parity-pipeline-roadmap-status
+      - name: download explicit compatible baseline
+        if: ${{ inputs.baseline_run_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.baseline_run_id }}
+          name: benchmark-${{ inputs.baseline_run_id }}
+          path: baseline-artifact
+      - name: compare compatible baseline budget
+        if: ${{ inputs.baseline_run_id != '' }}
+        id: budget
+        shell: bash
+        run: |
+          baseline="$(find baseline-artifact -type f -name benchmark-result.json -print -quit)"
+          test -n "$baseline"
+          set +e
+          MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result.json \
+          MIGRATION_BENCHMARK_BUDGET_BASELINE="$baseline" \
+          MIGRATION_BENCHMARK_BUDGET_OUTPUT=build/migration-parity/pipeline-budget-check.json \
+          make migration-parity-pipeline-budget-check
+          status=$?
+          if test -f build/migration-parity/pipeline-budget-check.json; then
+            if test "$status" -ne 0; then
+              python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("build/migration-parity/pipeline-budget-check.json").read_text())
+          if report.get("schema") != "pillow-rs/pipeline-performance-budget@1":
+              raise SystemExit("budget report schema is invalid")
+          violation_count = report.get("violation_count")
+          if not isinstance(violation_count, int) or violation_count <= 0:
+              raise SystemExit("budget comparison failed without a timing violation")
+          summary = (
+              f"### Benchmark budget comparison\n"
+              f"Comparable rows: {report.get('comparable_count', 0)}; "
+              f"not comparable: {report.get('not_comparable_count', 0)}; "
+              f"violations: {violation_count} (review-needed).\n"
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write(summary)
+          PY
+              exit 0
+            fi
+          elif test "$status" -ne 0; then
+            exit "$status"
+          fi
+          exit "$status"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: benchmark-${{ github.run_id }}
@@ -55,4 +110,5 @@ jobs:
             build/migration-parity/benchmark-parity-result.json
             build/migration-parity/pipeline-performance-report.json
             build/migration-parity/pipeline-roadmap-status.json
+            build/migration-parity/pipeline-budget-check.json
           if-no-files-found: error

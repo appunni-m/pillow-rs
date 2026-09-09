@@ -38,6 +38,14 @@ MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark
 make migration-parity-pipeline-report
 ```
 
+The scheduled/manual GitHub Actions workflow accepts an optional
+`baseline_run_id`. When supplied, it downloads that exact prior benchmark
+artifact, checks manifest/input/backend/terminal compatibility, and records
+the unchanged five-percent budget comparison in the new artifact. A timing
+violation is marked review-needed and retained in the summary; correctness or
+schema failures still fail the job. Leave the input empty for a standalone
+benchmark run.
+
 For a complete standard run:
 
 ```sh
