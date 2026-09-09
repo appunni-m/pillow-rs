@@ -516,6 +516,18 @@ receipt rules unchanged.
   fields remained stable; no threshold or fixture change is justified, so P2
   remains open. A subsequent local rebuild could not prove the GPU subject on
   this host and was discarded as incomplete rather than mixed into the gate.
+  The exact pushed release branch revision `1a88046b1b61fb86a2ae195f91965ef87f7b0f89`
+  was then replayed from a clean clone in two consecutive runs. Both runs
+  selected and measured 11/11 workloads, had 44/44 comparable records, and
+  retained 33/33 terminal requested=actual target receipts with `dirty: false`.
+  The normalized operation/resource/receipt structure was identical between
+  runs. The unchanged budget comparator reported five timing-only violations;
+  result SHA-256 values are
+  `45ea8d45ff4ec9af1ea6061f03510e8d00d21d35d44b6c2bf597bbea9aea8132` and
+  `eaac94d87fbb4d67425ca05a4aed6a9c21870615b9d6b63b4698a90b5353a9d9`, with
+  budget report SHA-256
+  `e65b8fb9b99044bc449125d723665c2d461b250ca0681230630e82dcb748e64e`.
+  P2 remains open because the required zero-violation pair was not obtained.
 
 ## Verified changes already integrated
 
