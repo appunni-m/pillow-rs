@@ -15,7 +15,7 @@ prerequisites.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | pushed release branch commit `a72cf5e8be004c39557e18006879b81f45e48665`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,617/161,467 lines |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | pushed current-main release branch commit `f0ec00657ddd958e3ae9c73db6030ddfff5928be`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | pushed release branch commit `c1a152b586438eecfaac80fb4eed54fd01abc49d`; 20,354/20,354 runnable parity cases, CI, package, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
