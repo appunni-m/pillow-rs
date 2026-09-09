@@ -388,6 +388,7 @@ generated reports, build outputs, and package installs.
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
     |-- check_bindings.py
+    |-- check_local_release_bundle.py
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
