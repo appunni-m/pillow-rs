@@ -9,18 +9,18 @@ that will be tagged.
 ## Current release graph
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
-candidates. The sibling release branches are pushed and locally verified;
-registry publication and the exact-commit hosted CI runs remain external
-prerequisites.
+candidates. The sibling release branches are prepared and locally verified;
+remote branch publication, registry publication, and the exact-commit hosted CI
+runs remain external prerequisites.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | pushed current-main release branch commit `f0ec00657ddd958e3ae9c73db6030ddfff5928be`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | pushed release branch commit `c1a152b586438eecfaac80fb4eed54fd01abc49d`; 20,354/20,354 runnable parity cases, CI, package, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release branch commit `f0ec00657ddd958e3ae9c73db6030ddfff5928be`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release branch commit `c1a152b586438eecfaac80fb4eed54fd01abc49d`; 20,354/20,354 runnable parity cases, CI, package, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crates; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it |
-| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | release branch source revision `10543358ace94bbabb3f46927c2712ce2abc418e`; manifest pins the pushed sibling revisions; the local release preflight builds Python/WASM artifacts, removes stale Python bytecode before wheel packaging, and the wheel imports on Python 3.9, while the all-target Clippy gate currently reports 6,325 errors under Rust 1.96.1 and registry visibility is still required before package verification |
+| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | release branch source revision `10543358ace94bbabb3f46927c2712ce2abc418e`; manifest pins the prepared sibling revisions; the local release preflight builds Python/WASM artifacts, removes stale Python bytecode before wheel packaging, and the wheel imports on Python 3.9, while the all-target Clippy gate currently reports 6,325 errors under Rust 1.96.1 and registry visibility is still required before package verification |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
@@ -119,9 +119,10 @@ Keep `contents: read` at workflow scope. The tag/release job alone receives
 
 ## Sibling project follow-up
 
-The sibling release files now have clean pushed release branches with
-tag-driven workflows, pinned toolchains, successful local checks, checksummed
-archives, and registry trusted-publisher jobs. Fontdone still needs the five
+The sibling release files now have clean release branches with tag-driven
+workflows, pinned toolchains, successful local checks, checksummed archives,
+and registry trusted-publisher jobs. Remote branch publication and hosted CI
+remain external prerequisites. Fontdone still needs the five
 target bundles and an owner decision on benchmark budgets. Image-slash-star
 still needs its strict source-coverage gate to pass before a registry upload.
 These are release blockers rather than reasons to weaken the package or parity
