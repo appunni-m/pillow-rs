@@ -999,6 +999,7 @@ release-check: build-all ## Build and package every release artifact without pub
 	# tree; never include those generated files in a publishable wheel.
 	find $(PY_SRC)/python -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out dist/release-check
+	$(MAKE) python-compat-check PYTHON_COMPAT="$(PYTHON_COMPAT)"
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
 
