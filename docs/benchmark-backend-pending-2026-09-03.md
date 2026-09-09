@@ -1321,3 +1321,15 @@ and `make migration-parity-fixtures-check` passed. The final combined corpus
 replay and changed-Rust-line coverage are recorded in the final continuation
 above. WGSL receipts establish shader dispatch, not source-line or branch
 coverage.
+
+### Current local GPU adapter probe (2026-09-10)
+
+The exact tagged `v0.1.0` checkout was rerun on this host with
+`WGPU_BACKEND=metal`. `system_profiler` reports an Apple M3 Pro with Metal
+support, but the benchmark target ended with `python-gpu` status `failed`,
+execution status `not_proven`, and no `actual_backend` or terminal receipt.
+The bounded GPU profile also produced no terminal execution record. This is a
+host adapter-initialization limitation, not parity or timing evidence. These
+outputs are therefore excluded from the retained native-GPU pair and cannot
+close the zero-violation benchmark gate; a runner that can obtain a native
+adapter is required for the next acceptance pair.
