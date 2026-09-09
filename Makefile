@@ -989,6 +989,9 @@ release-check: build-all ## Build and package every release artifact without pub
 	else \
 		printf "crate package dry-run deferred: publish image-slash-star and fontdone first, then set RELEASE_CRATES_READY=1.\n"; \
 	fi
+	# Development imports can leave bytecode caches inside the Python source
+	# tree; never include those generated files in a publishable wheel.
+	find $(PY_SRC)/python -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out dist/release-check
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
