@@ -391,6 +391,7 @@ generated reports, build outputs, and package installs.
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
+    |-- check_python_compatibility.py
     |-- check_repo_map.py
     |-- codex-worktree-setup.sh
     |-- generate_migration_parity_docs.py
