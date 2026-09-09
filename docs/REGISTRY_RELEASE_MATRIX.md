@@ -9,13 +9,14 @@ that will be tagged.
 ## Current release graph
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
-candidates. The sibling release commits are committed and locally verified;
-registry publication and the exact-commit CI runs remain external prerequisites.
+candidates. The sibling release branches are pushed and locally verified;
+registry publication and the exact-commit hosted CI runs remain external
+prerequisites.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release candidate code `4bcc611e2fe131495966c0790b0fd092618fd290`; normal checks and the internal nightly coverage probes pass (44/45 coverage tests); the maintained AV1 index sidecars and push-safe history for the oversized oracle remain open |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release commit `f328c999a33fcf1d4400b3225e5c2d4824f22343`; local parity/package/npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | pushed release branch commit `a72cf5e8be004c39557e18006879b81f45e48665`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,617/161,467 lines |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | pushed release branch commit `c1a152b586438eecfaac80fb4eed54fd01abc49d`; 20,354/20,354 runnable parity cases, CI, package, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crates; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it |
@@ -117,14 +118,13 @@ Keep `contents: read` at workflow scope. The tag/release job alone receives
 
 ## Sibling project follow-up
 
-The sibling release files need one clean release commit before they can be
-published. `fontdone` and `image-slash-star` now both have tag-driven release
-workflows with pinned toolchains, successful-CI checks, checksummed archives,
-and registry trusted-publisher jobs. Fontdone still needs the five target
-bundles and an owner decision on benchmark budgets. Image-slash-star now has
-the exact Cargo package-surface manifest; it still needs a push-safe history
-for the oversized generated AV1 oracle. These are release blockers rather than
-reasons to weaken the package or parity checks.
+The sibling release files now have clean pushed release branches with
+tag-driven workflows, pinned toolchains, successful local checks, checksummed
+archives, and registry trusted-publisher jobs. Fontdone still needs the five
+target bundles and an owner decision on benchmark budgets. Image-slash-star
+still needs its strict source-coverage gate to pass before a registry upload.
+These are release blockers rather than reasons to weaken the package or parity
+checks.
 
 Do not stage or discard those active sibling changes from this checkout. The
 release audit must be repeated against the final release commits, with package
