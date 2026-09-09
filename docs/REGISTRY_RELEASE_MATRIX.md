@@ -11,7 +11,9 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The sibling release branches are prepared and locally verified;
 remote branch publication, registry publication, and the exact-commit hosted CI
-runs remain external prerequisites.
+runs remain external prerequisites. The local-only bootstrap bundle is recorded
+under `dist/release-local/` and is verified separately from the tracked source
+tree.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
@@ -20,7 +22,7 @@ runs remain external prerequisites.
 | fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crates; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it |
-| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | release candidate commit `50367d992ea18250678617e316995ca52a82546c`; documentation/input checks, all-target Clippy, and the external-artifact benchmark-report regression checks pass, the locked release preflight builds the Python/WASM artifacts, and the staged local crate verifies with registry-style dependencies plus offline Cargo/Python/Node consumers; public crate packaging still waits for the image-slash-star and fontdone registry versions |
+| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | local tag `v0.1.0` at `003830605ea81640366988a477c19dd7793d9eb1`; package candidate `50367d992ea18250678617e316995ca52a82546c` is byte-identical for packaged source, documentation/input checks, all-target Clippy, and external-artifact benchmark-report regression checks pass, and the staged local crate verifies with registry-style dependencies plus offline Cargo/Python/Node consumers; public crate packaging still waits for the image-slash-star and fontdone registry versions |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
