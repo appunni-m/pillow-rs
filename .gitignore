@@ -17,6 +17,13 @@ coverage/report.json
 .coverage-mcp/
 .report.json
 .python-version
+
+# Codex-local worktree settings and probes are generated outside the source
+# package and must not make a release checkout appear dirty.
+/.cargo/
+/.codex/
+/round
+
 .codex-subagents/
 .worktrees/
 /worktree/
