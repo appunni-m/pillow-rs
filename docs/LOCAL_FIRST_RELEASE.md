@@ -115,6 +115,14 @@ nine and five timing-only violations. Running the same release check with
 `fontdone` version is not yet present in the crates.io index. This is the
 expected external dependency gate, not a package or parity failure.
 
+The branch then advanced to `7a8a50a64e6186d20791625d3cfcad34505fbe9d` after
+five additional complete release-profile runs on the same fixed cohort. Each
+run retained 44/44 comparable rows and 33/33 terminal requested=actual CPU,
+SIMD, and native Metal GPU receipts; adjacent budget comparisons reported
+five, five, three, and five timing-only violations. The local first-release
+bundle remains bound to its original tagged commit and is unchanged by these
+later benchmark receipts.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
