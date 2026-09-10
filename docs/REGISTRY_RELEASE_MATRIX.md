@@ -61,7 +61,7 @@ immutable local bundle or close the zero-violation gate.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`17e6b8818a0e63e6192c38dad576ca5581b3d3b5`; its immutable local release tag
+`67fcf1deb3f84cae27432a11f029fef8dd2d8d50`; its immutable local release tag
 `v2.14.3-alpha.2` remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`.
 The pillow-rs release-prep branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the
