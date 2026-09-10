@@ -11,6 +11,11 @@ MATURIN      := $(PYTHON) -m maturin
 NODE         := node
 CARGO        := cargo
 NPM_CONFIG_CACHE ?= $(CURDIR)/target/npm-cache
+# Keep uv's build cache inside this checkout.  This makes local wheel and
+# release checks work across worktrees without depending on a shared cache's
+# ownership or permissions; callers may override it when desired.
+UV_CACHE_DIR ?= $(CURDIR)/target/uv-cache
+export UV_CACHE_DIR
 LOCAL_RELEASE_DIR ?= dist/release-local
 WASM_PACK    := wasm-pack
 WASM_PACK_VERSION ?= 0.15.0
