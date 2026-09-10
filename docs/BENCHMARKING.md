@@ -98,6 +98,17 @@ These are observations on one arm64 machine, not correctness failures; the
 zero-violation acceptance item remains open under the unchanged five-percent
 policy.
 
+A fresh clean pair at branch head
+`13ea3dc177baa44a5d76ed7d86240aee53402ca8` selected and measured 11/11
+workloads, with 44/44 comparable rows and 33/33 terminal requested=actual
+CPU/SIMD/native-Metal-GPU receipts in each run. Result SHA-256 values are
+`e7d59eacb8af90e3995a5ff22e38b5db1a16c2b6f4684c9bde9bd8c7b2e77ca8` and
+`1bc65d682852064f71b74dcfb3becb243cc00d01f74bf17164368cbda0653115`.
+The unchanged budget report
+`13f1649a545ebafbe17623931bd9a14e6e5a4eb2861f8871975a1b3f1c94551e`
+reports 12 statistically credible timing-only violations; the zero-violation
+acceptance item remains open.
+
 The release-candidate dependency-pin replay at source commit
 `031edd3f5425df2c6931939deb0ad0d93dad376c` (captured before the current
 documentation updates; runtime and fixture inputs are unchanged) selected and measured the same

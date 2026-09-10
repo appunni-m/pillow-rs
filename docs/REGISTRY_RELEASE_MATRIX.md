@@ -50,6 +50,14 @@ the zero-violation gate therefore remains open. These generated results are
 additional evidence and are not substituted for the immutable bundle's
 tagged artifacts.
 
+A fresh clean pair at current branch head
+`13ea3dc177baa44a5d76ed7d86240aee53402ca8` again measured 11/11 workloads
+with 44/44 comparable rows and 33/33 terminal requested=actual target receipts
+per run. The unchanged budget report
+`13f1649a545ebafbe17623931bd9a14e6e5a4eb2861f8871975a1b3f1c94551e` reports
+12 timing-only violations; this is additional evidence and does not alter the
+immutable local bundle or close the zero-violation gate.
+
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
