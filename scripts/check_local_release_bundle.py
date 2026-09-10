@@ -28,7 +28,7 @@ PACKAGE_FILES = (
     "pillow-rs/npm/pillow-rs-0.1.0.tgz",
 )
 GIT_BUNDLES = (
-    "git/fontdone-v2.14.3-alpha.1.bundle",
+    "git/fontdone-v2.14.3-alpha.2.bundle",
     "git/image-slash-star-v0.1.0.bundle",
     "git/pillow-rs-v0.1.0.bundle",
 )
