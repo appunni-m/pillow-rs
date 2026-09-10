@@ -36,6 +36,8 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Keep hosted release jobs self-contained; local sccache is optional.
+  RUSTC_WRAPPER: ""
   RUST_TOOLCHAIN: 1.96.1
   WASM_PACK_VERSION: 0.15.0
   NODE_VERSION: 22.14.0
