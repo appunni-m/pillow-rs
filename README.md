@@ -111,6 +111,8 @@ Run the complete standard workload set with
 `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark`. A timing
 number is publishable only when the workload passed its correctness gate and
 the manifest, input, runtime, and backend identities match the comparison.
+Use `MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark` for
+the fixed 11-workload release acceptance cohort.
 `BENCHMARKS.md` is a landing page; the JSON result is the evidence record.
 
 ## Architecture

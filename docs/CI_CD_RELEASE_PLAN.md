@@ -55,6 +55,7 @@ workflow, never on every pull request. The workflow will:
 
 - build with the pinned toolchain and lockfile;
 - run the quick cohort as a smoke check and the standard cohort on schedule;
+- expose the fixed 11-workload release cohort for an explicit acceptance run;
 - upload immutable JSON, environment, manifest/input hashes, and Markdown
   summaries;
 - compare only compatible baselines with the five-percent budget checker; and

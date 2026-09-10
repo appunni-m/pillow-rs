@@ -21,8 +21,14 @@ Use the maintained targets:
 ```sh
 MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark
 MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark
+MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark
 make migration-parity-pipeline-report
 ```
+
+The `release` profile is the fixed 11-workload acceptance cohort. It selects
+the IDs maintained in the root `Makefile` and preserves each workload's
+declared repeat policy; it is the profile to use when producing the two
+consecutive release-comparison runs.
 
 The JSON output under `build/migration-parity/` is the evidence record. A
 benchmark comparison is valid only when both sides have compatible manifest and

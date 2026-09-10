@@ -117,8 +117,24 @@ MIGRATION_BENCHMARK_QUICK_WORKLOADS := \
 	pipeline.quick.gaussianblur-invert.rgb-1024 \
 	pipeline.quick.multiply-screen.rgb-1024 \
 	pipeline.quick.invert-mirror.rgb-1024
+# Keep the release acceptance cohort in one maintained target.  These IDs are
+# deliberately selected from the generated benchmark input; their declared
+# warmup/iteration/sample policy remains authoritative in that input.
+MIGRATION_BENCHMARK_RELEASE_WORKLOADS := \
+	pipeline-chain.simd-constant.1024x768 \
+	pipeline-chain.terminal-read.analysis-masked-rgb-1024x768 \
+	pipeline-chain.terminal-read.imagestat.cmyk-1024x768 \
+	pipeline-matrix.expanded.autocontrast.32x32 \
+	pipeline-chain.matrix-002 \
+	pipeline-chain.matrix-020 \
+	pipeline-chain.metadata-cache.extractband-rgba \
+	pipeline-chain.reviewed.draw-filter-invert \
+	pipeline-chain.reviewed.resize-rotate-crop \
+	pipeline-matrix.expanded.brightness.256x256 \
+	pipeline-chain.reviewed.draw-batch-rgb-shapes
 MIGRATION_BENCHMARK_PROFILE_ARGS_standard :=
 MIGRATION_BENCHMARK_PROFILE_ARGS_quick := $(foreach workload,$(MIGRATION_BENCHMARK_QUICK_WORKLOADS),--workload-id $(workload))
+MIGRATION_BENCHMARK_PROFILE_ARGS_release := $(foreach workload,$(MIGRATION_BENCHMARK_RELEASE_WORKLOADS),--workload-id $(workload))
 MIGRATION_BENCHMARK_PROFILE_ARGS_pipeline := --pipeline
 MIGRATION_BENCHMARK_PROFILE_ARGS := $(MIGRATION_BENCHMARK_PROFILE_ARGS_$(MIGRATION_BENCHMARK_PROFILE))
 MIGRATION_STATUS_OUTPUT ?= build/migration-parity/status-report.json
@@ -160,6 +176,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Compare Pillow vs CPU, SIMD, and GPU\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark$(NC) Run the representative four-workload smoke benchmark\n"
+	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark$(NC) Run the fixed 11-workload release acceptance cohort\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=pipeline make migration-parity-benchmark$(NC) Run every PipelineOp and public composition workload\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
@@ -600,8 +617,8 @@ migration-parity-profile-all: ## Capture bounded CPU, SIMD, and GPU adapter prof
 	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=gpu
 
 migration-parity-benchmark: build ## Build release, then run correctness-gated benchmark workloads
-	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
-		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', or 'pipeline'.\n" >&2; \
+	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
+		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
 		exit 2; \
 	}
 	set +e; \
