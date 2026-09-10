@@ -77,13 +77,14 @@ backend mismatch; the unchanged zero-violation gate remains open.
 The clean `fontdone` `main` branch is now present on `origin` at
 `25f3c10c8dd89c91a24f5bbb99f590c369fbacf3`; its immutable local release tag
 `v2.14.3-alpha.2` remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`.
-The pillow-rs `main` branch is now present on `origin` at
-`a91d241afc1927d0dfc2887616e7c1e6d233da2b`; it contains the exact-CI
-release-preparation commit
-`8b94fe0d216ca979d47d86881dafdc6bea2479e8`, followed by a documentation-only
-receipt correction at the current head. The exact-head local CI gate passed on
-`1ac376e11446c48c146e1192c39bfe5893a48b79`, while the benchmark
-zero-violation item remains open.
+The pillow-rs `main` branch is synchronized with the release-preparation
+history. The current PyO3 and supply-chain fix is
+`b76578c42c27cf7a8ccca8c576156a79b67d897a` and was built from the exact source
+tree exercised by the full local CI run at `e1638ce7c11b270ac16540b25dc0fb5c1cb4a72a`:
+all 11,345 parity cases passed on the CPU, SIMD, GPU, Node WASM, and browser
+WASM lanes, and managed coverage completed all 24 plans with 11,325 passing
+checks. The aggregate backend result still reports the intentional SIMD/GPU
+host-control partition. The benchmark zero-violation item remains open.
 The image-slash-star clean-history candidate is present on `origin` at
 `8d8ecdfe8699329ae166541be8040b1bc3b253e7`; its current tree matches the
 release checkout and its package verification passes. `origin/main` still

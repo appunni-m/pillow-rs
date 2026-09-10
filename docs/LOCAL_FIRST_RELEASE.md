@@ -123,15 +123,17 @@ five, five, three, and five timing-only violations. The local first-release
 bundle remains bound to its original tagged commit and is unchanged by these
 later benchmark receipts.
 
-The exact-CI implementation commit is
-`8b94fe0d216ca979d47d86881dafdc6bea2479e8`; the current branch adds only a
-release-receipt documentation correction. The root `make ci` gate passed on the
-immediately preceding clean head `1ac376e11446c48c146e1192c39bfe5893a48b79`:
-all 11,345 parity cases passed on the CPU, SIMD, GPU, Node WASM, and browser
-WASM lanes, and managed coverage completed all 24 plans with 11,325 passing
-checks. The aggregate backend result still reports the intentional SIMD/GPU
-host-control partition, and the zero-violation benchmark item remains open
-under the unchanged budget policy.
+The current PyO3 and supply-chain fix is
+`b76578c42c27cf7a8ccca8c576156a79b67d897a`. The full root `make ci` gate ran
+against the identical source tree immediately before that commit, at
+`e1638ce7c11b270ac16540b25dc0fb5c1cb4a72a`: all 11,345 parity cases passed on
+the CPU, SIMD, GPU, Node WASM, and browser WASM lanes, and managed coverage
+completed all 24 plans with 11,325 passing checks. The PyO3 0.29.2 migration
+preserves Pillow's byte-sample list shape, while cargo-deny now uses its 0.20
+configuration and records the transitive unmaintained `paste` exception. The
+aggregate backend result still reports the intentional SIMD/GPU host-control
+partition, and the zero-violation benchmark item remains open under the
+unchanged budget policy.
 
 ## Public-release prerequisites
 
