@@ -17,7 +17,7 @@ tree.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release branch commit `7a53a343d7217ba40448c9b97af0afbd81a09793`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release branch commit `dcc4fb06ef195c473f8aacc13af07576f27b3ed5`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,602/161,450 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | before `pillow-rs` | local tag commit `d56dded7a63b8632c580cfb7f6761314b1f4c5ea`; 20,354/20,354 runnable parity cases, CI, package, C SDK, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
 | fontdone | native C SDK archive | `2.14.3-alpha.1` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crate; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it; raw `fontdone-wasm` remains an internal build target |
