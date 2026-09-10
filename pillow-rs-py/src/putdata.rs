@@ -49,7 +49,7 @@ fn putdata_value_from_python(
         return value.extract::<f64>().map(PutDataValue::Number);
     }
 
-    let Ok(tuple) = value.downcast::<PyTuple>() else {
+    let Ok(tuple) = value.cast::<PyTuple>() else {
         return Err(PyTypeError::new_err("color must be int or tuple"));
     };
     let tuple_len = tuple.len();
@@ -95,7 +95,7 @@ fn putdata_bulk(
     // Pillow's I;16 bytes fast path copies the supplied bytes into the raw
     // two-byte sample buffer. It does not coerce each byte into a separate
     // numeric sample as the generic sequence path does.
-    if let Ok(bytes) = data.downcast::<PyBytes>() {
+    if let Ok(bytes) = data.cast::<PyBytes>() {
         let consumed = slf
             .try_borrow_mut()?
             .inner
@@ -143,11 +143,10 @@ fn putdata_bulk(
 
 fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValueKind) -> bool {
     let is_number = |item: Bound<'_, PyAny>| {
-        item.downcast_exact::<PyInt>().is_ok()
-            || item.downcast_exact::<pyo3::types::PyFloat>().is_ok()
+        item.cast_exact::<PyInt>().is_ok() || item.cast_exact::<pyo3::types::PyFloat>().is_ok()
     };
-    let is_integer = |item: Bound<'_, PyAny>| item.downcast_exact::<PyInt>().is_ok();
-    if let Ok(list) = data.downcast_exact::<PyList>() {
+    let is_integer = |item: Bound<'_, PyAny>| item.cast_exact::<PyInt>().is_ok();
+    if let Ok(list) = data.cast_exact::<PyList>() {
         return match kind {
             // Multiband `putdata` treats an integer as a packed pixel but
             // rejects a scalar float.  A mixed exact list therefore cannot
@@ -157,7 +156,7 @@ fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValue
             PutDataValueKind::Numeric => list.iter().all(is_number),
         };
     }
-    if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
+    if let Ok(tuple) = data.cast_exact::<PyTuple>() {
         return match kind {
             PutDataValueKind::Components { .. } => tuple.iter().all(is_integer),
             PutDataValueKind::Numeric => tuple.iter().all(is_number),
@@ -194,7 +193,7 @@ fn putdata_exact_sequence(
     // CPython's PySequence_Fast retains exact lists and tuples instead of
     // copying them. Read each exact-list item only when its pixel is due so
     // coercing an earlier item can replace a later one, as Pillow exposes.
-    if let Ok(list) = data.downcast_exact::<PyList>() {
+    if let Ok(list) = data.cast_exact::<PyList>() {
         for pixel_index in 0..entry_count {
             write_item(
                 slf,
@@ -207,7 +206,7 @@ fn putdata_exact_sequence(
         }
         return Ok(true);
     }
-    if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
+    if let Ok(tuple) = data.cast_exact::<PyTuple>() {
         for pixel_index in 0..entry_count {
             write_item(
                 slf,
@@ -235,7 +234,7 @@ fn putdata_generic_sequence(
     // generic sequence items first, map iteration failures to its fixed
     // error, then process only the count reported by the original sequence.
     let iterator = data
-        .iter()
+        .try_iter()
         .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
     let mut items = Vec::new();
     for item in iterator {

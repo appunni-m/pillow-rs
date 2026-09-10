@@ -7,7 +7,7 @@
 #   Enforces:
 #     - No known CVEs (deny)
 #     - No yanked crate versions (deny)
-#     - No unmaintained crates (warn)
+#     - Report unmaintained crates in every dependency scope for review
 #     - No multiple versions of the same crate (deny, with exceptions)
 #     - License compliance (allowlist)
 #     - No unknown registries or git sources
@@ -16,14 +16,17 @@
 # ============================================================================
 
 [advisories]
-# AS PER DESIGN: Known vulnerabilities are HARD ERRORS.
-vulnerability = "deny"
-# Unmaintained crates get manual review.
-unmaintained = "warn"
+# cargo-deny 0.20 scopes unmaintained advisories by dependency graph rather
+# than accepting a severity string. Keep every scope visible for manual review.
+unmaintained = "all"
 # Yanked crates indicate a known defect.
 yanked = "deny"
-# CVEs with no fix available yet (add RUSTSEC IDs here to temporarily allow).
-ignore = []
+# `paste` is pulled in by wgpu's Apple Metal backend. The RustSec advisory
+# has no safe upgrade; keep the exception explicit so cargo-deny still reports
+# it and the dependency path remains reviewable.
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "transitive wgpu Metal dependency; RustSec reports no safe upgrade" },
+]
 
 [bans]
 # AS PER DESIGN: Duplicate crate versions are denied (to prevent the
@@ -33,7 +36,13 @@ multiple-versions = "deny"
 # Exceptions: crates that exist in two versions during migration.
 # Add explicit entries with a trail issue/PR link.
 skip = [
-    # { crate = "png", version = "=0.17.16" },           # TODO: unskip when migration complete
+    # These versions are required by the pinned wgpu 24 graph and are kept
+    # explicit so a future dependency update can revisit each duplicate.
+    { crate = "bitflags@1.3.2", reason = "core-graphics-types used by wgpu's Metal backend" },
+    { crate = "hashbrown@0.15.5", reason = "gpu-descriptor uses this line while naga uses 0.17" },
+    { crate = "syn@2.0.119", reason = "proc-macro ecosystem versions cannot be unified without breaking dependents" },
+    { crate = "thiserror@1.0.69", reason = "gpu-allocator remains on this major while workspace crates use thiserror 2" },
+    { crate = "thiserror-impl@1.0.69", reason = "paired with gpu-allocator's thiserror 1 dependency" },
 ]
 
 # AS PER DESIGN: Ban specific crates if they're superseded or dangerous.
@@ -55,20 +64,18 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "BSL-1.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "FTL",
+    "IJG",
+    "MIT-CMU",
 ]
-# Copyleft licenses that are incompatible with MIT-CMU.
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-3.0",
-    "LGPL-2.0",
-    "LGPL-3.0",
-]
-copyleft = "deny"
-allow-osi-fsf-free = "neither"
+# Licenses outside the explicit allowlist remain rejected by the license check.
 
 [sources]
-# AS PER DESIGN: Only crates.io is allowed. No git deps, no private registries.
+# Only crates.io and the two intentional, pinned project git sources are allowed.
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = []
+allow-git = [
+    "https://github.com/appunni-m/fontdone.git",
+    "https://github.com/appunni-m/image-slash-star.git",
+]
