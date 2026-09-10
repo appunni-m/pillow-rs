@@ -2,7 +2,7 @@
 
 Current continuation: ordered F GPU arithmetic, coefficient tiling, general
 projective sampling, and the PA/SIMD fixes are integrated on
-`codex/benchmark-backend-parity-fixes` at `90e1f5e6b`. The regenerated
+`codex/benchmark-backend-parity-fixes` at `967c40447`. The regenerated
 11,345-case replay and managed coverage are recorded below. The only remaining
 acceptance item is the zero-violation benchmark pair; its receipt structure is
 stable while timing violations remain nondeterministic.
