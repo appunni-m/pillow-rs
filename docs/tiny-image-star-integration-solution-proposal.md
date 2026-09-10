@@ -47,9 +47,9 @@ in a Worker, and discard results whose revision is no longer current. Do not
 claim that Worker isolation is cancellation: a synchronous WASM call already
 running in a Worker cannot be interrupted by ordinary event-loop code.
 
-## Finding review
+## Findings at the review revision
 
-| Area | Status at current checkout | Priority | Proposed direction |
+| Area | Status at the historical review revision | Priority | Proposed direction |
 | --- | --- | --- | --- |
 | JS binding API drift | Confirmed. `quantize`, `reduce`, `colorize`, and `getColor` no longer match the core signatures or return types. | P0 | Synchronize the binding adapter with the core contract, then make both WASM feature lanes compile in CI before producing packages. |
 | Format-selectable output | Confirmed. Core has `Image::encode(format)`, while WASM `save()` is zero-argument PNG and `toBytesEncoded()` is the raw-byte encoder. | P0 | Add a distinct `encode(format, options)` binding surface; keep `save()` as a documented PNG compatibility alias only if existing consumers require it. |
