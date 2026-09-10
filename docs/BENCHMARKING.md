@@ -128,6 +128,15 @@ violations; the result and budget hashes are recorded in the [pending
 checklist](benchmark-backend-pending-2026-09-03.md). This remains host timing
 evidence, and the zero-violation acceptance item is still open.
 
+The current head `8811d524b2e0c8b3e2c94be2d2044ac0cf0d3c1f` was also measured in
+two immediate fixed-ID runs under macOS utility QoS with native Metal GPU
+access. Both runs measured 11/11 workloads, 44/44 comparable rows, and 33/33
+terminal requested-to-actual CPU, SIMD, and GPU receipts. The unchanged
+five-percent comparator reported seven timing-only violations; the result and
+budget hashes are recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md).
+This remains host timing evidence, and the zero-violation acceptance item is
+still open.
+
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a
