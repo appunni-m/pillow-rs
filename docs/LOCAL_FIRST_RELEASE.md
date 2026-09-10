@@ -10,7 +10,7 @@ does not publish to a public registry or write to a remote Git repository.
 | --- | --- | --- | --- |
 | `image-slash-star` | `0.1.0` | `v0.1.0` | `dcc4fb06ef195c473f8aacc13af07576f27b3ed5` |
 | `fontdone` | `2.14.3-alpha.1` | `v2.14.3-alpha.1` | `d56dded7a63b8632c580cfb7f6761314b1f4c5ea` |
-| `pillow-rs` | `0.1.0` | `v0.1.0` | `003830605ea81640366988a477c19dd7793d9eb1` |
+| `pillow-rs` | `0.1.0` | `v0.1.0` | `38e7281954154f3cc8cd62767b462b55a4475003` |
 
 The tags and complete Git bundles are under `dist/release-local/` in the
 working checkout. The bundle's `SHA256SUMS` is the authority for every package
