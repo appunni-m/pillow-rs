@@ -123,16 +123,23 @@ five, five, three, and five timing-only violations. The local first-release
 bundle remains bound to its original tagged commit and is unchanged by these
 later benchmark receipts.
 
+The branch is now at `78d83f6a8690b8d24cbeec918a5ca67cee5bfd36`. The current
+root `make ci` gate passed on this exact commit: all 11,345 parity cases passed
+on the CPU, SIMD, GPU, Node WASM, and browser WASM lanes, and managed coverage
+completed all 24 plans with 11,325 passing checks. The aggregate backend result
+still reports the intentional SIMD/GPU host-control partition, and the
+zero-violation benchmark item remains open under the unchanged budget policy.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.2` tag remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`;
 the current `fontdone` `main` branch is pushed at
-`ea40b2a2623797fb442fde43d0c8638a7367faa9`; its source-bound parity evidence
-now records 20,355 / 20,355 runnable comparisons with 3 safety-extension cases
-pending. Hosted fast and MSRV gates are currently recorded only for its previous
-commit `50a1d7eec2b996cc394512dd39a3318629a61e2f`.
+`25f3c10c8dd89c91a24f5bbb99f590c369fbacf3`; its source-bound parity evidence
+records 20,355 / 20,355 runnable comparisons with 3 safety-extension cases
+pending, and the current local `make ci` gate passes. Hosted thorough C-ABI
+bundles and the complete contract gate are still required for publication.
 The clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
