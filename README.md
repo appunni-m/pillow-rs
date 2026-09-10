@@ -27,7 +27,7 @@ Pillow API, platform, or GPU adapter is supported.
 | --- | --- | --- |
 | Rust core | [`pillow-rs/`](pillow-rs/) | `pillow_rs` |
 | Python extension | [`pillow-rs-py/`](pillow-rs-py/) | `from RSPIL import Image` |
-| WebAssembly package | [`pillow-rs-js/`](pillow-rs-js/) | `import { Image } from "pillow-rs"` |
+| WebAssembly package | [`pillow-rs-js/README.md`](pillow-rs-js/README.md) | `import { Image } from "pillow-rs"` |
 
 The Python wheel uses the `abi3-py38` boundary and declares `requires-python >=3.8`.
 The parity oracle is Pillow 12.2.0, which requires Python 3.10 or newer, so CI

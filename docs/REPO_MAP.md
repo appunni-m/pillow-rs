@@ -351,6 +351,8 @@ generated reports, build outputs, and package installs.
 |           `-- manifest.yaml
 |-- pillow-rs-js/
 |   |-- Cargo.toml
+|   |-- LICENSE
+|   |-- README.md
 |   |-- package-lock.json
 |   |-- package.json
 |   `-- src/

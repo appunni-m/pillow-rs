@@ -35,7 +35,8 @@ The setup target creates an isolated environment and installs the fixed parity
 tools. Use Python 3.10 or newer for the full oracle suite; a wheel may still be
 consumed by Python 3.8 through its ABI3 boundary.
 
-Build and inspect the WASM package with:
+Build and inspect the WASM package described in
+[`pillow-rs-js/README.md`](pillow-rs-js/README.md) with:
 
 ```sh
 make build-wasm-release

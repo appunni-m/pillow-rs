@@ -1,6 +1,6 @@
 # Repository file audit
 
-Reviewed 2026-09-08 from `git ls-files`, the active manifest, the Makefile, and
+Reviewed 2026-09-11 from `git ls-files`, the active manifest, the Makefile, and
 the repository map. The repository contains one active Rust workspace and one
 read-only FreeType/parity archive.
 
@@ -11,7 +11,7 @@ read-only FreeType/parity archive.
 | Root control and package files | 16 | Keep active; versions and commands are authoritative |
 | `pillow-rs/` core crate | 412 | Keep active pure-Rust implementation and tests |
 | `pillow-rs-py/` | 21 | Keep active thin PyO3 package and wrappers |
-| `pillow-rs-js/` | 16 | Keep active wasm-bindgen package and package lock |
+| `pillow-rs-js/` | 18 | Keep active wasm-bindgen package, package metadata, legal text, and package lock |
 | `scripts/` | 40 | Keep active maintained generators, runners, validators, and reports |
 | `docs/` | 116 | Keep current landing/evidence pages; classify dated reports as historical |
 | `deprecated/migration-parity-v0/` | 328 | Retain read-only provenance until mapped live coverage replaces it |
