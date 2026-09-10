@@ -74,8 +74,15 @@ changed.
 
 ## Public-release prerequisites
 
-No crates.io, PyPI, npm, GitHub release, or remote Git operation was performed.
-Before enabling public publication, the owner must provide or configure:
+The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
+release, or push a release tag. After it was assembled, the clean `fontdone`
+`main` branch was pushed at `07c31a552bfc1dc498f45d4bf7f666291f1b864b`, and
+the clean pillow-rs release-prep branch was pushed at
+`d5a49a351fede4b0bdbb007064a88681b9c98efb`. The image-slash-star `main` push
+was rejected by GitHub because its earlier history contains generated AV1
+blobs above the hosting limit; its local release commit remains
+`fef4acd6b45541e7e36980f67255f83a1c56bd04`. Before enabling public registry
+publication, the owner must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
   `image-slash-star`, `fontdone`, and `pillow-rs`;
