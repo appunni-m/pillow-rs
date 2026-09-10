@@ -38,6 +38,17 @@ HEAD `de571ae57` retained 11/11 measured workloads, 44/44 comparable rows, and
 reported 12 timing-only violations. The exact result and budget hashes are in
 the pending checklist.
 
+## Branch publication status
+
+The clean `fontdone` `main` branch is now present on `origin` at
+`07c31a552bfc1dc498f45d4bf7f666291f1b864b`. The pillow-rs release-prep branch
+`codex/benchmark-backend-parity-fixes` is present on `origin` at
+`d5a49a351fede4b0bdbb007064a88681b9c98efb`. The image-slash-star `main` push
+remains pending: GitHub rejects the branch pack because older generated AV1
+fixture blobs exceed its 100 MB file limit; the exact history-only blocker and
+current regeneratable fixture set are recorded in that repository's release
+checklist.
+
 The root workflow accepts a guarded manual dispatch for the first publication.
 After that bootstrap, pushing an annotated `v<version>` tag runs the same
 preflight, publishes only missing registry versions, and creates the
