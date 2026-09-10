@@ -94,6 +94,13 @@ CPU/SIMD/Metal-GPU receipts per run. The unchanged budget report
 12 timing-only violations, so the zero-violation acceptance item remains open;
 the immutable bundle is unchanged.
 
+A foreground-scheduled cohort at the current clean commit measured the same
+11 workloads in four runs with identical 44/44 comparable rows and 33/33
+terminal receipts. The first adjacent comparison was zero-violation; the next
+two reported 10 and 10 timing-only violations. These runs are retained as
+additional evidence and do not close the required two-consecutive comparison
+gate.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub

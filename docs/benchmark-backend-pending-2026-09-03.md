@@ -1421,3 +1421,24 @@ reports 16. The operation, resource, backend, and terminal receipt
 fingerprints remain identical, so no source, fixture, threshold, or receipt
 change is justified. The zero-violation acceptance item remains open pending
 a stable low-load runner.
+
+### Foreground-scheduled release cohort (2026-09-10)
+
+The current clean commit `06dcbf845d7974c76ee04cced94ab41a0eb5a2e6` was
+measured in four additional fixed-ID runs under the same macOS utility QoS
+policy. Each run selected and measured 11/11 workloads, retained 44/44
+comparable rows, and recorded 33/33 terminal requested=actual CPU, SIMD, and
+Metal GPU receipts with the same manifest hash and target revision. The first
+two runs form one zero-violation adjacent comparison (run 5 versus run 4);
+its result hash is `e0ae41a6110c27da82ffc937892fc0821535d85d2cf1a4af49ca1d78454b90ac`.
+The next two comparisons reported 10 and 10 timing-only violations, with
+result hashes `a08ed29add0ae8b80d3159908f97ab28ec9f1db66068f65281f489a1b5564972`
+and `7b16b1325dc7d84c7df72696c1760e66449197f1a600b871145b5ae3766952fa`.
+The four benchmark result hashes, in run order, are
+`81608129c762cb985b5c6af75953f4087cfbb7b20f4b096f8d10973cc5c9c3a3`,
+`0e717933f58194472a1a7c3fb577a936ed419c7492f4b24eb7407f73397f4725`,
+`91024998eb470b9b7616c14b2c0f85cc89201d0a16ba9bdf515996533c24295e`, and
+`88b9537be619181f0aa0b27a7dba70d2729acdc625ce58f892177b4ab15f7351`.
+The differing timing rows with unchanged execution fingerprints confirm that
+the host remains noisy; the two-consecutive zero-violation acceptance gate is
+therefore still open and no threshold or workload change is justified.
