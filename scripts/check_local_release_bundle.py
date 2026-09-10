@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import re
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 
@@ -34,6 +37,26 @@ RECEIPT_FILES = (
     "README.md",
     "release-manifest.txt",
     "cargo-registry-config.toml",
+)
+CARGO_PACKAGE_SURFACES = (
+    (
+        "image-slash-star",
+        "0.1.0",
+        "image-slash-star/image-slash-star-0.1.0.crate",
+        "im/ag/image-slash-star",
+    ),
+    (
+        "fontdone",
+        "2.14.3-alpha.1",
+        "fontdone/fontdone-2.14.3-alpha.1.crate",
+        "fo/nt/fontdone",
+    ),
+    (
+        "pillow-rs",
+        "0.1.0",
+        "pillow-rs/pillow-rs-0.1.0.crate",
+        "pi/ll/pillow-rs",
+    ),
 )
 
 
@@ -93,6 +116,122 @@ def _verify_bundle(path: Path) -> None:
         raise ValueError(f"git bundle verification failed for {path}: {detail}")
 
 
+def _release_revisions(manifest: str) -> dict[str, str]:
+    revisions: dict[str, str] = {}
+    pattern = re.compile(r"^([a-z0-9-]+): ([0-9a-f]{40})$", re.MULTILINE)
+    for name, revision in pattern.findall(manifest):
+        if name in revisions:
+            raise ValueError(f"release manifest lists {name} more than once")
+        revisions[name] = revision
+    expected_names = {surface[0] for surface in CARGO_PACKAGE_SURFACES}
+    if set(revisions) != expected_names:
+        missing = sorted(expected_names - set(revisions))
+        extra = sorted(set(revisions) - expected_names)
+        raise ValueError(f"release manifest revision set mismatch: missing={missing}, extra={extra}")
+    return revisions
+
+
+def _archive_member_text(path: Path, suffix: str) -> str:
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            members = [member for member in archive.getmembers() if member.name.endswith(suffix)]
+            if len(members) != 1:
+                raise ValueError(f"{path} must contain exactly one {suffix} member")
+            stream = archive.extractfile(members[0])
+            if stream is None:
+                raise ValueError(f"cannot read {suffix} from {path}")
+            return stream.read().decode("utf-8")
+    except (OSError, tarfile.TarError, UnicodeDecodeError) as exc:
+        raise ValueError(f"cannot inspect Cargo archive {path}: {exc}") from exc
+
+
+def _archive_revision(path: Path) -> str:
+    try:
+        metadata = json.loads(_archive_member_text(path, "/.cargo_vcs_info.json"))
+        revision = metadata["git"]["sha1"]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cargo archive has invalid VCS metadata: {path}") from exc
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError(f"Cargo archive has invalid VCS revision: {path}")
+    return revision
+
+
+def _archive_lock_checksums(path: Path, names: set[str]) -> dict[str, str]:
+    lockfile = _archive_member_text(path, "/Cargo.lock")
+    checksums: dict[str, str] = {}
+    for block in lockfile.split("[[package]]"):
+        name_match = re.search(r'^name = "([^"]+)"$', block, re.MULTILINE)
+        if not name_match or name_match.group(1) not in names:
+            continue
+        checksum_match = re.search(r'^checksum = "([0-9a-f]{64})"$', block, re.MULTILINE)
+        if checksum_match:
+            checksums[name_match.group(1)] = checksum_match.group(1)
+    missing = sorted(names - set(checksums))
+    if missing:
+        raise ValueError(f"Cargo archive lockfile has no registry checksum for {missing}: {path}")
+    return checksums
+
+
+def _verify_registry_index(
+    bundle: Path,
+    name: str,
+    version: str,
+    index_relative: str,
+    expected_checksum: str,
+) -> None:
+    index_path = bundle / "cargo-registry" / "index" / index_relative
+    if not index_path.is_file():
+        raise ValueError(f"missing local registry index entry: {index_path}")
+    matches = []
+    for raw_line in index_path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(raw_line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON in local registry index: {index_path}") from exc
+        if entry.get("name") == name and entry.get("vers") == version:
+            matches.append(entry)
+    if len(matches) != 1:
+        raise ValueError(
+            f"local registry index must contain one {name} {version} entry, found {len(matches)}"
+        )
+    if matches[0].get("cksum") != expected_checksum:
+        raise ValueError(
+            f"local registry checksum drift for {name} {version}: "
+            f"{matches[0].get('cksum')} != {expected_checksum}"
+        )
+
+
+def _verify_cargo_surfaces(bundle: Path, manifest: str) -> None:
+    revisions = _release_revisions(manifest)
+    digests: dict[str, str] = {}
+    for name, version, relative_name, index_relative in CARGO_PACKAGE_SURFACES:
+        public_archive = bundle / relative_name
+        registry_archive = bundle / "cargo-registry" / f"{name}-{version}.crate"
+        if not registry_archive.is_file():
+            raise ValueError(f"missing local registry archive: {registry_archive}")
+        if public_archive.read_bytes() != registry_archive.read_bytes():
+            raise ValueError(f"public and local registry archives differ for {name} {version}")
+        digest = hashlib.sha256(public_archive.read_bytes()).hexdigest()
+        digests[name] = digest
+        _verify_registry_index(bundle, name, version, index_relative, digest)
+        actual_revision = _archive_revision(public_archive)
+        if actual_revision != revisions[name]:
+            raise ValueError(
+                f"Cargo archive revision drift for {name}: {actual_revision} != {revisions[name]}"
+            )
+
+    lock_checksums = _archive_lock_checksums(
+        bundle / "pillow-rs/pillow-rs-0.1.0.crate",
+        {"fontdone", "image-slash-star"},
+    )
+    for name in ("fontdone", "image-slash-star"):
+        if lock_checksums[name] != digests[name]:
+            raise ValueError(
+                f"pillow-rs Cargo.lock checksum drift for {name}: "
+                f"{lock_checksums[name]} != {digests[name]}"
+            )
+
+
 def verify(bundle: Path) -> tuple[int, int, int]:
     if not bundle.is_dir():
         raise ValueError(f"local release bundle does not exist: {bundle}")
@@ -114,6 +253,8 @@ def verify(bundle: Path) -> tuple[int, int, int]:
         path = bundle / relative_name
         if not path.is_file():
             raise ValueError(f"release artifact is missing: {path}")
+
+    _verify_cargo_surfaces(bundle, manifest)
 
     for relative_name in GIT_BUNDLES:
         _verify_bundle(bundle / relative_name)

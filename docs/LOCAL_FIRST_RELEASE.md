@@ -22,7 +22,9 @@ shasum -a 256 -c benchmarks/SHA256SUMS
 ```
 
 The maintained Makefile check validates the same receipt, both checksum
-manifests, every package entry, and all three Git bundles:
+manifests, every package entry, all three Git bundles, and the Cargo release
+identity: each public archive must match its local-registry copy, index
+checksum, tagged VCS revision, and embedded dependency checksums:
 
 ```sh
 make release-local-check
