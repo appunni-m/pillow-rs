@@ -88,7 +88,7 @@ the clean pillow-rs release-prep branch was pushed at
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at
-`d60b4ae40a443a37a28379444262a3b49f0f3b93`. Before enabling public registry
+`eb3fc54ca4bb2f78fce9cc1c9f1f60692832f818`. Before enabling public registry
 publication, the owner must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
