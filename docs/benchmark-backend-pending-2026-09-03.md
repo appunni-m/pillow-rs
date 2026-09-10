@@ -1333,3 +1333,14 @@ host adapter-initialization limitation, not parity or timing evidence. These
 outputs are therefore excluded from the retained native-GPU pair and cannot
 close the zero-violation benchmark gate; a runner that can obtain a native
 adapter is required for the next acceptance pair.
+
+### Benchmark identity correction (2026-09-10)
+
+- [x] The current 744-workload run exposed a result-envelope bookkeeping gap:
+  parity preflight selected only `python-cpu` for the public operation cases,
+  while the timed benchmark still invoked CPU, SIMD, and GPU subjects. The
+  benchmark writer now supplements sparse preflight identity with every timed
+  profile. A one-workload maintained smoke result lists all three profiles and
+  passes the strict benchmark validator. This changes no workload, threshold,
+  receipt, or budget policy, and the retained native-GPU pair remains the
+  release evidence.

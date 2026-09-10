@@ -850,7 +850,12 @@ def identity(
         ],
         "assets": assets,
         "oracles": parity_identity["oracles"],
-        "targets": parity_identity["targets"],
+        # The parity preflight may select only the profiles declared by the
+        # public operation (currently many cases are CPU-only).  Timing still
+        # runs every benchmark subject, so the result identity must retain all
+        # timed backend profiles instead of silently inheriting a partial
+        # preflight target list.
+        "targets": benchmark_target_identities(parity_identity),
         "command": {
             "command_id": "benchmark",
             "argv": ["make", "migration-parity-benchmark"],
@@ -885,6 +890,27 @@ def execution_identity() -> dict[str, Any]:
             for backend in TARGET_BACKENDS
         ],
     }
+
+
+def benchmark_target_identities(
+    parity_identity: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return identities for every backend timed by this benchmark.
+
+    A parity preflight is allowed to cover a subset of target profiles.  The
+    benchmark adapter nevertheless invokes CPU, SIMD, and GPU independently,
+    so its envelope must name each of those subjects.  Preserve any matching
+    preflight record (which carries the exact child identity) and fill missing
+    profiles from the local execution identity.
+    """
+
+    records = {
+        item["target_profile"]: item for item in execution_identity()["targets"]
+    }
+    records.update(
+        {item["target_profile"]: item for item in parity_identity.get("targets", [])}
+    )
+    return [records[profile] for profile in TARGET_PROFILES]
 
 
 def benchmark_workflow_case(
