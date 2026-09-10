@@ -58,6 +58,13 @@ per run. The unchanged budget report
 12 timing-only violations; this is additional evidence and does not alter the
 immutable local bundle or close the zero-violation gate.
 
+A further foreground-scheduled cohort at the current clean commit measured
+11/11 workloads in four runs with 44/44 comparable rows and 33/33 terminal
+requested=actual receipts per run. Its first adjacent comparison had zero
+violations; the next two had 10 and 10 timing-only violations. The unchanged
+budget policy and execution fingerprints are retained, so the required
+two-consecutive zero-violation gate remains open.
+
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
