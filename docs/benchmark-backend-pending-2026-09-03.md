@@ -1369,3 +1369,19 @@ zero-violation acceptance pair.
   passes the strict benchmark validator. This changes no workload, threshold,
   receipt, or budget policy, and the retained native-GPU pair remains the
   release evidence.
+
+### Release-tagged dependency-pin replay (2026-09-10)
+
+The root release commit `031edd3f5425df2c6931939deb0ad0d93dad376c` was
+benchmarked with the unchanged fixed 11-workload input selection and sample
+policy. Both runs selected and measured 11/11 workloads, retained 44/44
+comparable rows, and recorded 33/33 terminal requested=actual receipts across
+CPU, SIMD, and native Metal GPU. The maintained five-percent comparator
+reported nine timing-only violations; the execution and receipt fingerprints
+remained complete. Result SHA-256 values are
+`7803b09b8ed1b58c7b570b130bdaea26058ee4442afe96679b3152274bdd8c1c` and
+`ef8f7c3b52155731c3380b6ab92e998c26c62f663188610a880ab9a220dd8139`; the
+budget receipt is
+`b4d164aaa0915dc34139de89814320838576dec8662340811e41017b724f1d29`.
+These are timing observations on the local arm64 host, not correctness
+failures; the zero-violation acceptance gate remains open.
