@@ -9,7 +9,7 @@ does not publish to a public registry or write to a remote Git repository.
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
 | `image-slash-star` | `0.1.0` | `v0.1.0` | `35dd72808e6b2a8488b98caf685a3d48e4c97468` |
-| `fontdone` | `2.14.3-alpha.1` | `v2.14.3-alpha.1` | `50316c1e00d87746206c12368eb75ca317005f87` |
+| `fontdone` | `2.14.3-alpha.1` | `v2.14.3-alpha.1` | `11e31c621000b0d2e6b93419d2022639cd92f0d5` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | `38e7281954154f3cc8cd62767b462b55a4475003` |
 
 The tags and complete Git bundles are under `dist/release-local/` in the
