@@ -15,6 +15,11 @@ runs remain external prerequisites. The local-only bootstrap bundle is recorded
 under `dist/release-local/` and is verified separately from the tracked source
 tree.
 
+The root Makefile's maintained `build/fontdone-src` parity checkout is pinned to
+the same `ec58b10c29fae9b9ca4c622568bc1410596608fd` revision used by the
+`pillow-rs` Cargo dependency and the public `fontdone` release. Root parity and
+release evidence therefore exercise the exact fontdone source being packaged.
+
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local release tag and the pushed clean-history candidate `codex/release-image-slash-star-clean` are `8d8ecdfe8699329ae166541be8040b1bc3b253e7` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
