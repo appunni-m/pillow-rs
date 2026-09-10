@@ -9,7 +9,7 @@ does not publish to a public registry or write to a remote Git repository.
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
 | `image-slash-star` | `0.1.0` | `v0.1.0` | `35dd72808e6b2a8488b98caf685a3d48e4c97468` |
-| `fontdone` | `2.14.3-alpha.2` | `v2.14.3-alpha.2` | `ac6e7b8e9300663afca809ad10423ab441e13798` |
+| `fontdone` | `2.14.3-alpha.2` | `v2.14.3-alpha.2` | `ec58b10c29fae9b9ca4c622568bc1410596608fd` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
 
 The tags and complete Git bundles are under `dist/release-local/` in the
@@ -81,7 +81,7 @@ changed.
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. After it was assembled, the clean `fontdone`
-`main` branch was pushed at `ac6e7b8e9300663afca809ad10423ab441e13798`, and
+`main` branch was pushed at `ec58b10c29fae9b9ca4c622568bc1410596608fd`, and
 the clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
