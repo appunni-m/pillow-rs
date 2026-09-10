@@ -1531,3 +1531,18 @@ The unchanged five-percent budget comparison has SHA-256
 reports six timing-only violations. The normalized execution and terminal
 receipt structure remains complete; P2 therefore stays open without changing
 workloads, thresholds, fixtures, or receipt policy.
+
+### Utility-QoS release-profile reruns on the current head (2026-09-11)
+
+At `8811d524b2e0c8b3e2c94be2d2044ac0cf0d3c1f`, two immediate runs used the
+same fixed 11-workload release cohort under macOS utility QoS with native Metal
+GPU access. Each run measured 11/11 workloads, retained 44/44 comparable rows,
+and recorded 33/33 terminal requested=actual CPU, SIMD, and Metal GPU receipts.
+The result SHA-256 values are
+`871a722331d748d345f8aacc7963ceb742952ccf49b8f787a1af63f7f1af114d` and
+`4e35fdb8d25f80a0f94092caeb1ae2b60bb4c787ff7e9d047fdd16568acc52a4`.
+The unchanged budget comparison has SHA-256
+`d2825a9100f92f33309be233d4fc83d6a17c63a1096af141189a42e13e37747b` and
+reports seven timing-only violations. The normalized execution and terminal
+receipt structure remains complete; P2 remains open without changing the
+benchmark contract.
