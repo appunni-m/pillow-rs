@@ -10,7 +10,7 @@ The indexed workloads live in
 `pillow-rs/tests/fixtures/inputs/benchmark/` and are generated from
 `pillow-rs/tests/fixtures/manifest.yaml`. A workload names its public
 requirement, input case or workflow, target subjects, measurement boundary,
-cache state, and repeat policy. The current standard policy is:
+cache state, and repeat policy. The reference standard policy is:
 
 | Field | Value |
 | --- | --- |
@@ -22,6 +22,13 @@ cache state, and repeat policy. The current standard policy is:
 | metrics | latency and throughput |
 | correctness gate | `parity_pass` for parity-backed inputs; `successful_execution` for benchmark-only workflows |
 | target subjects | Pillow oracle, `python-cpu`, `python-simd`, `python-gpu` |
+
+Each workload keeps its own declared policy in the generated input. The fixed
+11-workload release-acceptance cohort intentionally uses one warmup, three
+measurement iterations, and two samples (six timed executions per subject),
+so its receipts must not be described as five warmups, 20 iterations, and five
+samples. The reference policy above applies to the standard rows that declare
+it; the runner never silently overrides a workload's input policy.
 
 The benchmark runner records setup, pipeline, terminal, dispatch, fallback,
 resource, and timing data where the adapter exposes them. A result is usable
@@ -71,11 +78,13 @@ The latest host-access evidence (2026-09-10) contains five complete fixed
 11-workload runs at revision `a5a678401`. Every run measured 11/11 workloads,
 produced 44/44 comparable rows, and had 33/33 requested-to-actual terminal
 receipts across CPU, SIMD, and native Metal GPU. Adjacent comparisons report
-3, 7, 5, and 5 timing-only violations with identical execution structure.
+3, 7, 5, and 5 timing-only violations with identical execution structure. A
+fresh two-run replay at current HEAD `de571ae57` retained the same receipt
+invariants and reported 12 timing-only violations; its result hashes are
+recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md).
 These are observations on one busy arm64 machine, not correctness failures;
 the zero-violation acceptance item remains open under the unchanged
-five-percent policy. See the [pending checklist](benchmark-backend-pending-2026-09-03.md)
-for run hashes and classification.
+five-percent policy.
 
 ## Interpretation rules
 

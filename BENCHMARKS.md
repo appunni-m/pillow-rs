@@ -10,9 +10,11 @@ their run identity and correctness evidence.
 The manifest currently indexes 744 standard workloads. Each workload records
 its input case or workflow, target subjects, build profile, mode and dimensions,
 cache state, measurement boundary, warmup, iterations, samples, metrics, and
-correctness gate. The standard repeat policy is 5 warmup iterations, 20
-measurement iterations, 5 samples, and one concurrent worker (100 timed
-executions).
+correctness gate. The reference standard repeat policy is 5 warmup iterations,
+20 measurement iterations, 5 samples, and one concurrent worker (100 timed
+executions). Workloads retain their declared policy; the fixed 11-workload
+release cohort uses 1 warmup, 3 measurement iterations, and 2 samples (6 timed
+executions), which the runner preserves in each receipt.
 
 Use the maintained targets:
 
@@ -41,6 +43,10 @@ receipt structures matched. The budget violations are timing observations from
 one arm64 machine. They keep the zero-violation acceptance item open under the
 unchanged five-percent policy; the threshold and cohort were not altered. The
 exact receipts and checksums are retained in `dist/release-local/benchmarks/`.
+The current-HEAD replay at `de571ae57` also measured 11/11 workloads with
+44/44 comparable rows and 33/33 terminal receipts in both runs; its unchanged
+budget comparison reported 12 timing-only violations. See the pending
+checklist for the immutable result and budget hashes.
 
 The run hashes, environment, and classification are recorded in
 [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).

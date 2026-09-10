@@ -60,14 +60,17 @@ full command log and artifact list are retained in
 
 The bundle retains a clean tagged fixed-cohort pair under
 `dist/release-local/benchmarks/`. Both runs use the tagged commit, the same
-manifest/input hashes, and the unchanged five-warmup/20-iteration/five-sample
-policy. Native CPU, SIMD, and GPU terminal receipts make 44/44 rows comparable;
-the adjacent budget check reports nine timing-only violations. A newer
-host-access run at the current root revision completed five identical
-fixed-cohort runs; its adjacent comparisons reported 3, 7, 5, and 5
-timing-only violations. Both sets remain release evidence and leave the
-zero-violation acceptance item open; no threshold, workload ID, fixture, or
-receipt rule was changed.
+manifest/input hashes, and each workload's declared repeat policy. The retained
+11-workload cohort uses one warmup, three measurement iterations, and two
+samples (six timed executions per subject). Native CPU, SIMD, and GPU terminal
+receipts make 44/44 rows comparable; the adjacent budget check reports nine
+timing-only violations. A newer host-access run at the current root revision
+completed five identical fixed-cohort runs; its adjacent comparisons reported
+3, 7, 5, and 5 timing-only violations. A further current-HEAD pair at
+`de571ae57` retained the same receipt invariants and reported 12 timing-only
+violations. All sets remain release evidence and leave the zero-violation
+acceptance item open; no threshold, workload ID, fixture, or receipt rule was
+changed.
 
 ## Public-release prerequisites
 
