@@ -9,7 +9,9 @@ that will be tagged.
 ## Current release graph
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
-candidates. The sibling release branches are prepared and locally verified;
+candidates. The fontdone npm row separately records an already-visible
+immutable version whose contents predate the current checkout. The sibling
+release branches are prepared and locally verified;
 remote branch publication, registry publication, and the exact-commit hosted CI
 runs remain external prerequisites. The local-only bootstrap bundle is recorded
 under `dist/release-local/` and is verified separately from the tracked source
@@ -20,7 +22,7 @@ tree.
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release tag commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`; the current checkout adds housekeeping commit `a1122349b1ca16bde2db3541184aae7af3af36ac` only to ignore local worktree settings, so the staged public archive remains bound to the immutable tag; format, release metadata, tests, and package audit pass; strict source coverage remains an explicit release blocker at 95,602/161,450 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | before `pillow-rs` | local tag commit `ad5e771aa0621d6e699260d23fbbb35e2a081e82`; the current checkout adds documentation-only commits after that tag, so the staged public archive remains bound to the immutable tag; 20,354/20,354 runnable parity cases plus fast CI, package, C SDK, and npm gates pass; full release verification still needs the five-platform contract bundles and reviewed benchmark thresholds |
 | fontdone | native C SDK archive | `2.14.3-alpha.1` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crate; before `pillow-rs` | local npm archive and consumer are verified; the exact version remains unpublished until the guarded first release; raw `fontdone-wasm` remains an internal build target |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crate; before `pillow-rs` | npm already serves this immutable version from an earlier artifact; the current checkout's archive has different extracted bytes, so a new synchronized prerelease is required; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | local tag `v0.1.0` at `7d39bb7da7d4fdc5ece66d6a973f32760c1392ad`; package candidate `d0cedc8c47bbe3a437aa3e6d051a54d612aa0b9b2345856f9109d62d45cc1520` is built from that exact tag, uses the matching tagged image-slash-star and fontdone archives in the staged source registry, and passes documentation/input checks, all-target Clippy, external-artifact benchmark-report regression checks, and offline Cargo/Python/Node consumer checks; public crate packaging still waits for the image-slash-star and fontdone registry versions |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
@@ -131,8 +133,10 @@ workspace:
    `cargo publish --locked` and verify the exact version with `cargo info`.
 2. In a clean `fontdone` release checkout, run `make fontdone-ci` and the
    package audit. Publish the single `fontdone` crate, build the native C SDK
-   archive, and build/test `fontdone-wasm/npm`; publish the npm package with
-   the intended `next` tag. Attach the C SDK archive to the GitHub release.
+   archive, and build/test `fontdone-wasm/npm`; publish a new npm package
+   version with the intended `next` tag. The workflow compares an already
+   visible version's extracted files with the reviewed archive and stops on a
+   mismatch. Attach the C SDK archive to the GitHub release.
 3. In this checkout, rerun `make release-check RELEASE_CRATES_READY=1` after
    the exact dependency versions are visible. Publish the root crate, then
    build/upload the PyPI wheel, then build/upload the npm tarball. Create the
