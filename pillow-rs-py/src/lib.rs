@@ -6,14 +6,13 @@
 
 use pillow_rs::Image as RsImage;
 use pillow_rs::PilError;
-use pyo3::ToPyObject;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::exceptions::{PyOverflowError, PyTypeError, PyUserWarning, PyValueError};
 use pyo3::prelude::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
 use pyo3::prelude::PyErr;
 use pyo3::prelude::PyModule;
-use pyo3::prelude::PyObject;
 use pyo3::prelude::PyRef;
 use pyo3::prelude::PyRefMut;
 use pyo3::prelude::PyResult;
@@ -42,6 +41,11 @@ use std::ffi::CString;
 use std::path::PathBuf;
 
 mod putdata;
+
+// PyO3 0.29 removed the deprecated `PyObject` alias. Keep the binding's
+// existing host-facing signatures explicit while migrating conversions to
+// `IntoPyObjectExt`.
+type PyObject = Py<PyAny>;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
 pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
@@ -282,7 +286,7 @@ fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> 
     if let Ok(path) = value.extract::<PathBuf>() {
         return Ok(Some(path));
     }
-    let Ok(bytes) = value.downcast::<PyBytes>() else {
+    let Ok(bytes) = value.cast::<PyBytes>() else {
         return Ok(None);
     };
     if bytes.as_bytes().contains(&0) {
@@ -312,7 +316,7 @@ fn map_open_path_error(
         // Pillow keeps a bytes path as a bytes object in the public OSError
         // tuple. Preserve that host representation while Rust owns the actual
         // filesystem lookup.
-        let filename: PyObject = if let Ok(bytes) = original.downcast::<PyBytes>() {
+        let filename: PyObject = if let Ok(bytes) = original.cast::<PyBytes>() {
             PyBytes::new(py, bytes.as_bytes()).into()
         } else {
             PyString::new(py, &path.to_string_lossy()).into()
@@ -535,7 +539,7 @@ fn centering_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::CenteringInput 
 fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
     value.getattr("_rust_image").ok().and_then(|inner| {
         inner
-            .downcast::<PyImage>()
+            .cast::<PyImage>()
             .ok()
             .map(|image| image.borrow().inner.clone())
     })
@@ -549,7 +553,7 @@ fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
 /// `image_merge_inputs`.
 fn merge_inputs_from_python(values: &Bound<'_, PyAny>) -> PyResult<Vec<pillow_rs::MergeInput>> {
     values
-        .iter()?
+        .try_iter()?
         .map(|item| {
             let obj = item?;
             Ok(match image_from_python(&obj) {
@@ -629,7 +633,7 @@ fn open_formats_input_from_python(
     let Some(value) = value else {
         return Ok(pillow_rs::PythonOpenFormatsInput::None);
     };
-    if value.downcast::<PyList>().is_err() && value.downcast::<PyTuple>().is_err() {
+    if value.cast::<PyList>().is_err() && value.cast::<PyTuple>().is_err() {
         return Ok(pillow_rs::PythonOpenFormatsInput::Invalid(
             value.get_type().name()?.to_string(),
         ));
@@ -682,17 +686,17 @@ fn ops_validate_deform_resample(value: Option<&Bound<'_, PyAny>>) -> PyResult<()
 fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
     use pillow_rs::StatValue;
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let dict = pyo3::types::PyDict::new(py);
         macro_rules! set {
             ($key:expr, $field:ident) => {
                 let value = match &result.$field {
-                    StatValue::Int(value) => value.to_object(py),
-                    StatValue::Float(value) => value.to_object(py),
-                    StatValue::IntList(value) => value.to_object(py),
-                    StatValue::FloatList(value) => value.to_object(py),
-                    StatValue::ExtremaSingle(value) => value.to_object(py),
-                    StatValue::ExtremaList(value) => value.to_object(py),
+                    StatValue::Int(value) => value.into_py_any(py)?,
+                    StatValue::Float(value) => value.into_py_any(py)?,
+                    StatValue::IntList(value) => value.into_py_any(py)?,
+                    StatValue::FloatList(value) => value.into_py_any(py)?,
+                    StatValue::ExtremaSingle(value) => value.into_py_any(py)?,
+                    StatValue::ExtremaList(value) => value.into_py_any(py)?,
                 };
                 dict.set_item($key, value)?;
             };
@@ -706,7 +710,7 @@ fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
         set!("var", var);
         set!("stddev", stddev);
         set!("extrema", extrema);
-        Ok(dict.to_object(py))
+        Ok(dict.into_py_any(py)?)
     })
 }
 
@@ -795,16 +799,16 @@ impl PyImage {
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
             let bytes = py
-                .allow_threads(|| std::fs::read(&path))
+                .detach(|| std::fs::read(&path))
                 .map_err(|error| map_open_path_error(py, fp, &path, error))?;
             let img = py
-                .allow_threads(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
+                .detach(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })
         } else {
             let bytes = fp.call_method0("read")?.extract::<Vec<u8>>()?;
             let img = py
-                .allow_threads(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
+                .detach(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })
         }
@@ -812,7 +816,7 @@ impl PyImage {
 
     #[classmethod]
     fn validate_open_source(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<()> {
-        if let Ok(bytes) = fp.downcast::<PyBytes>() {
+        if let Ok(bytes) = fp.cast::<PyBytes>() {
             pillow_rs::validate_python_open_source_bytes(bytes.as_bytes()).map_err(map_error)?;
         }
         Ok(())
@@ -863,10 +867,10 @@ impl PyImage {
         let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
             .map_err(map_error)?;
         let encoded = py
-            .allow_threads(|| self.inner.encode(&format))
+            .detach(|| self.inner.encode(&format))
             .map_err(map_error)?;
         if let Some(path) = path {
-            py.allow_threads(|| std::fs::write(path, &encoded))
+            py.detach(|| std::fs::write(path, &encoded))
                 .map_err(|error| map_error(error.into()))
         } else {
             fp.call_method1("write", (PyBytes::new(fp.py(), &encoded),))?;
@@ -884,14 +888,14 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let resample = resample_input_from_python(resample)?;
         let rs = py
-            .allow_threads(|| self.inner.resize(size, resample, box_coords))
+            .detach(|| self.inner.resize(size, resample, box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn crop(&self, box_coords: Option<(f64, f64, f64, f64)>, py: Python<'_>) -> PyResult<PyImage> {
         let rs = py
-            .allow_threads(|| self.inner.crop_float(box_coords))
+            .detach(|| self.inner.crop_float(box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -913,7 +917,7 @@ impl PyImage {
         let resample = rotate_resample_input_from_python(resample)?;
         let fillcolor = imageops_color_from_python(fillcolor);
         let rs = py
-            .allow_threads(|| {
+            .detach(|| {
                 self.inner
                     .rotate_with_input(angle, resample, expand, center, translate, fillcolor)
             })
@@ -924,7 +928,7 @@ impl PyImage {
     fn transpose(&self, method: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let input = transpose_input_from_python(method)?;
         let rs = py
-            .allow_threads(|| self.inner.transpose_with_input(input))
+            .detach(|| self.inner.transpose_with_input(input))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -954,7 +958,7 @@ impl PyImage {
         let mode = convert_mode_input_from_python(mode)?;
         let palette = convert_palette_input_from_python(palette)?;
         let rs = py
-            .allow_threads(|| {
+            .detach(|| {
                 self.inner
                     .convert_with_input(mode, matrix, dither, palette, colors)
             })
@@ -973,12 +977,12 @@ impl PyImage {
         let source = paste_source_from_python(im);
         let box_coords = paste_box_from_python(box_coords)?;
         let mask = paste_mask_from_python(mask)?;
-        py.allow_threads(|| self.inner.paste_with_input(source, box_coords, mask))
+        py.detach(|| self.inner.paste_with_input(source, box_coords, mask))
             .map_err(map_error)
     }
 
     fn split(&self, py: Python<'_>) -> PyResult<Vec<PyImage>> {
-        let bands = py.allow_threads(|| self.inner.split()).map_err(map_error)?;
+        let bands = py.detach(|| self.inner.split()).map_err(map_error)?;
         Ok(bands
             .into_iter()
             .map(|img| PyImage { inner: img })
@@ -1020,7 +1024,7 @@ impl PyImage {
 
     fn filter_name(&self, filter_type: &str, py: Python<'_>) -> PyResult<PyImage> {
         let filter_type = filter_type.to_owned();
-        py.allow_threads(|| self.inner.filter(&filter_type))
+        py.detach(|| self.inner.filter(&filter_type))
             .map(|inner| PyImage { inner })
             .map_err(map_error)
     }
@@ -1038,7 +1042,7 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let rs = py
-            .allow_threads(|| self.inner.kernel_filter(kernel, scale, offset, size))
+            .detach(|| self.inner.kernel_filter(kernel, scale, offset, size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1050,7 +1054,7 @@ impl PyImage {
     }
 
     fn tobytes_unpacked(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
-        py.allow_threads(|| self.inner.tobytes_unpacked())
+        py.detach(|| self.inner.tobytes_unpacked())
             .map_err(map_error)
     }
 
@@ -1063,7 +1067,7 @@ impl PyImage {
     ) -> PyResult<Vec<u8>> {
         let mode = mode.to_owned();
         let encoder_name = encoder_name.to_owned();
-        py.allow_threads(|| self.inner.tobytes_encoded(&mode, &encoder_name, &args))
+        py.detach(|| self.inner.tobytes_encoded(&mode, &encoder_name, &args))
             .map_err(map_error)
     }
 
@@ -1091,7 +1095,7 @@ impl PyImage {
             .getpalette_with_input(rawmode.as_deref())
             .map_err(map_error)?;
         match palette {
-            Some(values) => Ok(PyList::new(py, values)?.to_object(py)),
+            Some(values) => Ok(PyList::new(py, values)?.into_py_any(py)?),
             None => Ok(py.None()),
         }
     }
@@ -1109,14 +1113,14 @@ impl PyImage {
     }
 
     fn apply_transparency(&mut self, py: Python<'_>) -> PyResult<()> {
-        py.allow_threads(|| self.inner.apply_transparency())
+        py.detach(|| self.inner.apply_transparency())
             .map_err(map_error)
     }
 
     #[pyo3(signature = (data, rawmode="RGB"))]
     fn putpalette(&mut self, data: Vec<u8>, rawmode: &str, py: Python<'_>) -> PyResult<()> {
         let rawmode = rawmode.to_owned();
-        py.allow_threads(|| self.inner.putpalette(&data, &rawmode))
+        py.detach(|| self.inner.putpalette(&data, &rawmode))
             .map_err(map_error)
     }
 
@@ -1154,7 +1158,7 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<()> {
         let resample = resample_input_from_python(resample)?;
-        py.allow_threads(|| self.inner.thumbnail(size, resample))
+        py.detach(|| self.inner.thumbnail(size, resample))
             .map_err(map_error)
     }
 
@@ -1176,7 +1180,7 @@ impl PyImage {
                 }),
         };
         let rs = py
-            .allow_threads(|| {
+            .detach(|| {
                 self.inner
                     .quantize_with_input(colors, method, kmeans, palette, dither)
             })
@@ -1190,45 +1194,48 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<Option<(u32, u32, u32, u32)>> {
         let alpha_only = alpha_only.unwrap_or(true);
-        py.allow_threads(|| self.inner.getbbox(alpha_only))
+        py.detach(|| self.inner.getbbox(alpha_only))
             .map_err(map_error)
     }
 
     /// Return extrema formatted as PIL expects.
     fn getextrema_formatted(&self, py: Python<'_>) -> PyResult<PyObject> {
         let formatted = py
-            .allow_threads(|| self.inner.getextrema_formatted())
+            .detach(|| self.inner.getextrema_formatted())
             .map_err(map_error)?;
-        Python::with_gil(|py| match formatted {
+        Python::attach(|py| match formatted {
             pillow_rs::FormattedExtrema::Empty => Ok(py.None()),
             pillow_rs::FormattedExtrema::EmptyMultiple(bands) => {
                 let values: Vec<PyObject> = (0..bands).map(|_| py.None()).collect();
-                Ok(PyTuple::new(py, values)?.to_object(py))
+                Ok(PyTuple::new(py, values)?.into_py_any(py)?)
             }
             pillow_rs::FormattedExtrema::Single((minimum, maximum)) => {
-                Ok((minimum, maximum).to_object(py))
+                Ok((minimum, maximum).into_py_any(py)?)
             }
             pillow_rs::FormattedExtrema::Multiple(values) => {
                 let tuples: Vec<PyObject> = values
                     .into_iter()
-                    .map(|(minimum, maximum)| (minimum, maximum).to_object(py))
-                    .collect();
-                Ok(PyTuple::new(py, tuples)?.to_object(py))
+                    .map(|(minimum, maximum)| (minimum, maximum).into_py_any(py))
+                    .collect::<PyResult<_>>()?;
+                Ok(PyTuple::new(py, tuples)?.into_py_any(py)?)
             }
             pillow_rs::FormattedExtrema::Integer((minimum, maximum)) => {
-                Ok((minimum, maximum).to_object(py))
+                Ok((minimum, maximum).into_py_any(py)?)
             }
             pillow_rs::FormattedExtrema::Float((minimum, maximum)) => {
-                Ok((minimum, maximum).to_object(py))
+                Ok((minimum, maximum).into_py_any(py)?)
             }
         })
     }
     /// Band names for the active image, delegated to the Rust core.
     fn getbands(&self) -> PyResult<PyObject> {
         let bands = self.inner.getbands().map_err(map_error)?;
-        Python::with_gil(|py| {
-            let objs: Vec<PyObject> = bands.iter().map(|band| band.to_object(py)).collect();
-            Ok(PyTuple::new(py, objs)?.to_object(py))
+        Python::attach(|py| {
+            let objs: Vec<PyObject> = bands
+                .iter()
+                .map(|band| band.into_py_any(py))
+                .collect::<PyResult<_>>()?;
+            Ok(PyTuple::new(py, objs)?.into_py_any(py)?)
         })
     }
 
@@ -1240,7 +1247,7 @@ impl PyImage {
     ) -> PyResult<PyObject> {
         let mask = imageops_mask_from_python(mask)?;
         let result = py
-            .allow_threads(|| self.inner.stat_formatted_with_mask(mask))
+            .detach(|| self.inner.stat_formatted_with_mask(mask))
             .map_err(map_error)?;
         stat_result_to_python(&result)
     }
@@ -1252,7 +1259,7 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<Vec<u32>> {
         let mask = image_analysis_mask_from_python(mask)?;
-        py.allow_threads(|| self.inner.histogram_with_input(mask))
+        py.detach(|| self.inner.histogram_with_input(mask))
             .map_err(map_error)
     }
 
@@ -1264,7 +1271,7 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
         let rs = py
-            .allow_threads(|| {
+            .detach(|| {
                 if radius_x == radius_y {
                     self.inner.gaussian_blur(radius_x as f32)
                 } else {
@@ -1287,7 +1294,7 @@ impl PyImage {
         let percent = percent.unwrap_or(150);
         let threshold = threshold.unwrap_or(3);
         let rs = py
-            .allow_threads(|| self.inner.unsharp_mask(radius, percent, threshold))
+            .detach(|| self.inner.unsharp_mask(radius, percent, threshold))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1295,7 +1302,7 @@ impl PyImage {
     fn max_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
         let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rs = py
-            .allow_threads(|| self.inner.max_filter(size))
+            .detach(|| self.inner.max_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1303,7 +1310,7 @@ impl PyImage {
     fn min_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
         let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rs = py
-            .allow_threads(|| self.inner.min_filter(size))
+            .detach(|| self.inner.min_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1311,7 +1318,7 @@ impl PyImage {
     fn median_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
         let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rs = py
-            .allow_threads(|| self.inner.median_filter(size))
+            .detach(|| self.inner.median_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1320,7 +1327,7 @@ impl PyImage {
     fn box_blur(&self, radius: Option<&Bound<'_, PyAny>>, py: Python<'_>) -> PyResult<PyImage> {
         let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
         let rs = py
-            .allow_threads(|| self.inner.box_blur_xy(radius_x as f32, radius_y as f32))
+            .detach(|| self.inner.box_blur_xy(radius_x as f32, radius_y as f32))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1328,7 +1335,7 @@ impl PyImage {
     fn mode_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
         let size = filter_size_from_python(size.unwrap_or(3), true)?;
         let rs = py
-            .allow_threads(|| self.inner.mode_filter(size))
+            .detach(|| self.inner.mode_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1342,7 +1349,7 @@ impl PyImage {
         let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rank = filter_rank_from_python(rank.unwrap_or(0))?;
         let rs = py
-            .allow_threads(|| self.inner.rank_filter(size, rank))
+            .detach(|| self.inner.rank_filter(size, rank))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1359,7 +1366,7 @@ impl PyImage {
             pillow_rs::prepare_color3dlut(table, size, channels.unwrap_or(3)).map_err(map_error)?;
         let target_mode = target_mode.map(str::to_owned);
         let rs = py
-            .allow_threads(|| self.inner.color3dlut(input, target_mode.as_deref()))
+            .detach(|| self.inner.color3dlut(input, target_mode.as_deref()))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1373,13 +1380,13 @@ impl PyImage {
             pillow_rs::ChannelSelector::Invalid(channel.get_type().name()?.to_string())
         };
         let rs = py
-            .allow_threads(|| self.inner.getchannel_selector(selector))
+            .detach(|| self.inner.getchannel_selector(selector))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn load(&mut self, py: Python<'_>) -> PyResult<()> {
-        py.allow_threads(|| self.inner.load()).map_err(map_error)
+        py.detach(|| self.inner.load()).map_err(map_error)
     }
 
     fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
@@ -1390,7 +1397,7 @@ impl PyImage {
         } else {
             pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
         };
-        py.allow_threads(|| self.inner.putalpha_with_input(input))
+        py.detach(|| self.inner.putalpha_with_input(input))
             .map_err(map_error)
     }
 
@@ -1403,7 +1410,7 @@ impl PyImage {
         let factor = reduce_factor_from_python(factor)?;
         let box_coords = box_coords.map(reduce_box_from_python).transpose()?;
         let rs = py
-            .allow_threads(|| self.inner.reduce_public(factor, box_coords))
+            .detach(|| self.inner.reduce_public(factor, box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1435,7 +1442,7 @@ impl PyImage {
                 )
             },
         );
-        py.allow_threads(|| {
+        py.detach(|| {
             self.inner
                 .alpha_composite_public(&source_image, dest, source_box)
         })
@@ -1450,25 +1457,25 @@ impl PyImage {
     ) -> PyResult<Option<PyObject>> {
         let maxcolors = maxcolors.unwrap_or(256);
         let formatted = py
-            .allow_threads(|| self.inner.getcolors_formatted(maxcolors))
+            .detach(|| self.inner.getcolors_formatted(maxcolors))
             .map_err(map_error)?;
-        Python::with_gil(|py| match formatted {
+        Python::attach(|py| match formatted {
             None => Ok(None),
             Some(results) => {
                 let out = pyo3::types::PyList::empty(py);
                 for (count, color) in results {
                     let color_value = match color {
-                        pillow_rs::FormattedPixelValue::Scalar(value) => value.to_object(py),
-                        pillow_rs::FormattedPixelValue::Integer(value) => value.to_object(py),
-                        pillow_rs::FormattedPixelValue::Float(value) => value.to_object(py),
+                        pillow_rs::FormattedPixelValue::Scalar(value) => value.into_py_any(py)?,
+                        pillow_rs::FormattedPixelValue::Integer(value) => value.into_py_any(py)?,
+                        pillow_rs::FormattedPixelValue::Float(value) => value.into_py_any(py)?,
                         pillow_rs::FormattedPixelValue::Components(values) => {
-                            PyTuple::new(py, values)?.to_object(py)
+                            PyTuple::new(py, values)?.into_py_any(py)?
                         }
                     };
-                    let entry = PyTuple::new(py, [count.to_object(py), color_value])?;
+                    let entry = PyTuple::new(py, [count.into_py_any(py)?, color_value])?;
                     out.append(entry)?;
                 }
-                Ok(Some(out.to_object(py)))
+                Ok(Some(out.into_py_any(py)?))
             }
         })
     }
@@ -1476,32 +1483,40 @@ impl PyImage {
     /// Return getdata formatted as PIL expects.
     fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<PyObject> {
         let formatted = py
-            .allow_threads(|| self.inner.getdata_formatted(band))
+            .detach(|| self.inner.getdata_formatted(band))
             .map_err(map_error)?;
-        Python::with_gil(|py| match formatted {
+        Python::attach(|py| match formatted {
             pillow_rs::FormattedImageData::Scalars(values) if band.is_some() => {
                 let out = pyo3::types::PyList::empty(py);
                 for value in values {
                     out.append(value)?;
                 }
-                Ok(out.to_object(py))
+                Ok(out.into_py_any(py)?)
             }
-            pillow_rs::FormattedImageData::Scalars(values) => Ok(values.to_object(py)),
-            pillow_rs::FormattedImageData::IntegerScalars(values) => Ok(values.to_object(py)),
-            pillow_rs::FormattedImageData::FloatScalars(values) => Ok(values.to_object(py)),
+            // Keep Pillow's byte-sample result as a Python list.  PyO3 0.29
+            // specializes `Vec<u8>` conversion to `bytes`, while the former
+            // `ToPyObject` conversion used by this binding produced a list.
+            pillow_rs::FormattedImageData::Scalars(values) => {
+                let out = pyo3::types::PyList::empty(py);
+                for value in values {
+                    out.append(value)?;
+                }
+                Ok(out.into_py_any(py)?)
+            }
+            pillow_rs::FormattedImageData::IntegerScalars(values) => Ok(values.into_py_any(py)?),
+            pillow_rs::FormattedImageData::FloatScalars(values) => Ok(values.into_py_any(py)?),
             pillow_rs::FormattedImageData::Components(values) => {
                 let out = pyo3::types::PyList::empty(py);
                 for value in values {
                     out.append(PyTuple::new(py, value)?)?;
                 }
-                Ok(out.to_object(py))
+                Ok(out.into_py_any(py)?)
             }
         })
     }
 
     fn getprojection(&mut self, py: Python<'_>) -> PyResult<(Vec<u32>, Vec<u32>)> {
-        py.allow_threads(|| self.inner.getprojection())
-            .map_err(map_error)
+        py.detach(|| self.inner.getprojection()).map_err(map_error)
     }
 
     #[pyo3(signature = (mask=None))]
@@ -1511,13 +1526,12 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<f64> {
         let mask = image_analysis_mask_from_python(mask)?;
-        py.allow_threads(|| self.inner.entropy_with_input(mask))
+        py.detach(|| self.inner.entropy_with_input(mask))
             .map_err(map_error)
     }
 
     fn seek(&mut self, frame: u32, py: Python<'_>) -> PyResult<()> {
-        py.allow_threads(|| self.inner.seek(frame))
-            .map_err(map_error)
+        py.detach(|| self.inner.seek(frame)).map_err(map_error)
     }
 
     fn tell(&self) -> u32 {
@@ -1551,7 +1565,7 @@ impl PyImage {
                     input.extract::<Vec<f64>>()?
                 };
                 return py
-                    .allow_threads(|| pillow_rs::image_eval_float(&self.inner, &lut))
+                    .detach(|| pillow_rs::image_eval_float(&self.inner, &lut))
                     .map(|i| PyImage { inner: i })
                     .map_err(map_error);
             }
@@ -1564,9 +1578,7 @@ impl PyImage {
             ) {
                 let (scale, offset) = point_transform_from_python(input, py)?;
                 return py
-                    .allow_threads(|| {
-                        pillow_rs::image_eval_point_transform(&self.inner, scale, offset)
-                    })
+                    .detach(|| pillow_rs::image_eval_point_transform(&self.inner, scale, offset))
                     .map(|i| PyImage { inner: i })
                     .map_err(map_error);
             }
@@ -1588,13 +1600,13 @@ impl PyImage {
         }
 
         let lut = input.extract::<Vec<u8>>()?;
-        py.allow_threads(|| pillow_rs::image_eval_validated(&self.inner, &lut))
+        py.detach(|| pillow_rs::image_eval_validated(&self.inner, &lut))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
 
     fn effect_spread(&self, distance: u32, py: Python<'_>) -> PyResult<PyImage> {
-        py.allow_threads(|| pillow_rs::image_effect_spread(&self.inner, distance))
+        py.detach(|| pillow_rs::image_effect_spread(&self.inner, distance))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -1614,7 +1626,7 @@ impl PyImage {
         let fillcolor = transform_fill_from_python(fillcolor)?;
         let resample = resample.unwrap_or(0);
         let fill = fill.unwrap_or(1);
-        py.allow_threads(|| {
+        py.detach(|| {
             self.inner
                 .transform_public(size, method, data, resample, fill, fillcolor)
         })
@@ -1633,7 +1645,7 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let mode = mode.to_owned();
         let decoder_name = decoder_name.to_owned();
-        py.allow_threads(|| pillow_rs::image_frombytes(&mode, size, &data, &decoder_name))
+        py.detach(|| pillow_rs::image_frombytes(&mode, size, &data, &decoder_name))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -1646,7 +1658,7 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let remapped = py
-            .allow_threads(|| match source_palette.as_deref() {
+            .detach(|| match source_palette.as_deref() {
                 None => self.inner.remap_palette(&dest_map),
                 Some(source_palette) => self
                     .inner
@@ -1658,8 +1670,7 @@ impl PyImage {
     }
 
     fn tobitmap(&mut self, py: Python<'_>) -> PyResult<Vec<u8>> {
-        py.allow_threads(|| self.inner.tobitmap())
-            .map_err(map_error)
+        py.detach(|| self.inner.tobitmap()).map_err(map_error)
     }
 
     fn close(&self) -> PyResult<()> {
@@ -1668,47 +1679,47 @@ impl PyImage {
     }
 
     fn verify(&self, py: Python<'_>) -> PyResult<()> {
-        py.allow_threads(|| self.inner.verify()).map_err(map_error)
+        py.detach(|| self.inner.verify()).map_err(map_error)
     }
 
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_brightness(factor)))
+        let rs = Python::attach(|py| py.detach(|| inner.enhance_brightness(factor)))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_contrast(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_contrast(factor)))
-            .map_err(map_error)?;
+        let rs =
+            Python::attach(|py| py.detach(|| inner.enhance_contrast(factor))).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_color(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_color(factor)))
-            .map_err(map_error)?;
+        let rs =
+            Python::attach(|py| py.detach(|| inner.enhance_color(factor))).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_sharpness(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_sharpness(factor)))
+        let rs = Python::attach(|py| py.detach(|| inner.enhance_sharpness(factor)))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn getpixel_formatted(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<PyObject> {
         let value = py
-            .allow_threads(|| self.inner.getpixel_formatted(xy.0, xy.1))
+            .detach(|| self.inner.getpixel_formatted(xy.0, xy.1))
             .map_err(map_error)?;
-        Python::with_gil(|py| match value {
-            pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.to_object(py)),
-            pillow_rs::FormattedPixelValue::Integer(value) => Ok(value.to_object(py)),
-            pillow_rs::FormattedPixelValue::Float(value) => Ok(value.to_object(py)),
+        Python::attach(|py| match value {
+            pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.into_py_any(py)?),
+            pillow_rs::FormattedPixelValue::Integer(value) => Ok(value.into_py_any(py)?),
+            pillow_rs::FormattedPixelValue::Float(value) => Ok(value.into_py_any(py)?),
             pillow_rs::FormattedPixelValue::Components(values) => {
-                Ok(PyTuple::new(py, values)?.to_object(py))
+                Ok(PyTuple::new(py, values)?.into_py_any(py)?)
             }
         })
     }
@@ -2078,7 +2089,7 @@ fn array_interface_bytes(value: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResu
 
 fn array_interface_descriptor(value: &Bound<'_, PyAny>) -> PyResult<(Vec<usize>, String)> {
     let interface = value.getattr("__array_interface__")?;
-    let interface = interface.downcast::<PyDict>()?;
+    let interface = interface.cast::<PyDict>()?;
     let shape = interface
         .get_item("shape")?
         .ok_or_else(|| PyValueError::new_err("__array_interface__ has no shape"))?
@@ -2128,12 +2139,12 @@ fn image_info_value_to_python(
     value: pillow_rs::ImageInfoValue,
 ) -> PyResult<PyObject> {
     match value {
-        pillow_rs::ImageInfoValue::Integer(value) => Ok(value.to_object(py)),
-        pillow_rs::ImageInfoValue::Float(value) => Ok(value.to_object(py)),
-        pillow_rs::ImageInfoValue::String(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::Integer(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::ImageInfoValue::Float(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::ImageInfoValue::String(value) => Ok(value.into_py_any(py)?),
         pillow_rs::ImageInfoValue::Bytes(value) => Ok(PyBytes::new(py, &value).into()),
-        pillow_rs::ImageInfoValue::IntegerList(value) => Ok(value.to_object(py)),
-        pillow_rs::ImageInfoValue::FloatList(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::IntegerList(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::ImageInfoValue::FloatList(value) => Ok(value.into_py_any(py)?),
         pillow_rs::ImageInfoValue::IntegerTuple(value) => Ok(PyTuple::new(py, value)?.into()),
         pillow_rs::ImageInfoValue::Object(fields) => {
             let result = PyDict::new(py);
@@ -2299,10 +2310,13 @@ pub struct PyFont {
     inner: pillow_rs::FreeTypeFont,
 }
 
-fn font_bbox_value_to_python(py: Python<'_>, value: pillow_rs::ImageFontBBoxValue) -> PyObject {
+fn font_bbox_value_to_python(
+    py: Python<'_>,
+    value: pillow_rs::ImageFontBBoxValue,
+) -> PyResult<PyObject> {
     match value {
-        pillow_rs::ImageFontBBoxValue::Integer(value) => value.to_object(py),
-        pillow_rs::ImageFontBBoxValue::Float(value) => value.to_object(py),
+        pillow_rs::ImageFontBBoxValue::Integer(value) => value.into_py_any(py),
+        pillow_rs::ImageFontBBoxValue::Float(value) => value.into_py_any(py),
     }
 }
 
@@ -2310,14 +2324,14 @@ fn font_bbox_value_to_python(py: Python<'_>, value: pillow_rs::ImageFontBBoxValu
 fn imagefont_normalize_bbox(
     py: Python<'_>,
     bbox: (f64, f64, f64, f64),
-) -> (PyObject, PyObject, PyObject, PyObject) {
+) -> PyResult<(PyObject, PyObject, PyObject, PyObject)> {
     let values = pillow_rs::normalize_font_bbox(bbox);
-    (
-        font_bbox_value_to_python(py, values[0]),
-        font_bbox_value_to_python(py, values[1]),
-        font_bbox_value_to_python(py, values[2]),
-        font_bbox_value_to_python(py, values[3]),
-    )
+    Ok((
+        font_bbox_value_to_python(py, values[0])?,
+        font_bbox_value_to_python(py, values[1])?,
+        font_bbox_value_to_python(py, values[2])?,
+        font_bbox_value_to_python(py, values[3])?,
+    ))
 }
 
 #[pyfunction]
@@ -2376,7 +2390,7 @@ fn imagefont_source_from_python(
 fn imagefont_text_input_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageFontTextInput> {
-    if let Ok(bytes) = value.downcast::<PyBytes>() {
+    if let Ok(bytes) = value.cast::<PyBytes>() {
         return Ok(pillow_rs::ImageFontTextInput::Bytes(
             bytes.as_bytes().to_vec(),
         ));
@@ -2389,7 +2403,7 @@ fn imagefont_text_input_from_python(
 fn imagefont_variation_name_input_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageFontVariationNameInput> {
-    if let Ok(bytes) = value.downcast::<PyBytes>() {
+    if let Ok(bytes) = value.cast::<PyBytes>() {
         return Ok(pillow_rs::ImageFontVariationNameInput::Bytes(
             bytes.as_bytes().to_vec(),
         ));
@@ -2748,7 +2762,7 @@ impl PyFont {
     }
 
     fn get_variation_axes(&self) -> PyResult<Vec<PyObject>> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             pillow_rs::imagefont_get_variation_axes(&self.inner)
                 .map_err(map_error)
                 .and_then(|axes| variation_axes_to_python(py, axes))
@@ -2764,7 +2778,7 @@ impl PyFont {
     }
 
     fn getvaraxes(&self) -> PyResult<Vec<PyObject>> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             pillow_rs::imagefont_native_getvaraxes(&self.inner)
                 .map_err(map_error)
                 .and_then(|axes| variation_axes_to_python(py, axes))
@@ -2784,7 +2798,7 @@ impl PyFont {
     }
 
     fn set_variation_by_axes(&mut self, axes: &Bound<'_, PyAny>) -> PyResult<()> {
-        let input = if axes.downcast::<PyList>().is_ok() {
+        let input = if axes.cast::<PyList>().is_ok() {
             axes.extract::<Vec<f32>>().map_or(
                 pillow_rs::ImageFontVariationAxesInput::Invalid,
                 pillow_rs::ImageFontVariationAxesInput::Values,
@@ -3683,8 +3697,8 @@ fn ops_autocontrast(
     let inner = image.borrow().inner.clone();
     let c = cutoff.unwrap_or(0.0);
     let mask = imageops_mask_from_python(mask)?;
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_autocontrast_with_mask(&inner, c, mask))
+    let rs = Python::attach(|py| {
+        py.detach(|| pillow_rs::imageops_autocontrast_with_mask(&inner, c, mask))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3694,43 +3708,41 @@ fn ops_autocontrast(
 fn ops_equalize(image: &Bound<'_, PyImage>, mask: Option<&Bound<'_, PyAny>>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let mask = imageops_mask_from_python(mask)?;
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_equalize_with_mask(&inner, mask))
-    })
-    .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::imageops_equalize_with_mask(&inner, mask)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_invert(&inner)))
-        .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::imageops_invert(&inner))).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_flip(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_flip(&inner)))
-        .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::imageops_flip(&inner))).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_mirror(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_mirror(&inner)))
-        .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::imageops_mirror(&inner))).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_posterize(&inner, bits)))
-            .map_err(map_error)?;
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_posterize(&inner, bits)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -3738,7 +3750,7 @@ fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
 fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let t = threshold.unwrap_or(128);
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_solarize(&inner, t)))
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_solarize(&inner, t)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -3746,7 +3758,7 @@ fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<P
 #[pyfunction]
 fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_grayscale(&inner)))
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_grayscale(&inner)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -3766,8 +3778,8 @@ fn ops_colorize(
     let black = parse_colorize_color(black)?;
     let white = parse_colorize_color(white)?;
     let mid = mid.map(parse_colorize_color).transpose()?;
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| {
+    let rs = Python::attach(|py| {
+        py.detach(|| {
             pillow_rs::imageops_colorize(
                 &inner, black, white, mid, blackpoint, midpoint, whitepoint,
             )
@@ -3802,8 +3814,8 @@ fn ops_contain(
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_contain_with_input(&inner, size.0, size.1, filter))
+    let rs = Python::attach(|py| {
+        py.detach(|| pillow_rs::imageops_contain_with_input(&inner, size.0, size.1, filter))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3817,8 +3829,8 @@ fn ops_cover(
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_cover_with_input(&inner, size.0, size.1, filter))
+    let rs = Python::attach(|py| {
+        py.detach(|| pillow_rs::imageops_cover_with_input(&inner, size.0, size.1, filter))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3835,8 +3847,8 @@ fn ops_fit(
     let filter = resample_input_from_python(filter)?;
     let centering = centering_from_python(centering);
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| {
+    let rs = Python::attach(|py| {
+        py.detach(|| {
             pillow_rs::imageops_fit_with_input(
                 &inner,
                 size.0,
@@ -3864,8 +3876,8 @@ fn ops_pad(
     let color = imageops_color_from_python(color);
 
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| {
+    let rs = Python::attach(|py| {
+        py.detach(|| {
             pillow_rs::imageops_pad_with_input(&inner, size.0, size.1, filter, color, centering)
         })
     })
@@ -3888,8 +3900,8 @@ fn ops_scale(
         resample_input_from_python(filter)?
     };
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_scale_with_input(&inner, factor, filter))
+    let rs = Python::attach(|py| {
+        py.detach(|| pillow_rs::imageops_scale_with_input(&inner, factor, filter))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3928,17 +3940,16 @@ fn ops_expand(
     };
 
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_expand(&inner, border_val, fill_val))
-    })
-    .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::imageops_expand(&inner, border_val, fill_val)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_crop(&inner, border)))
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_crop(&inner, border)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -3947,10 +3958,9 @@ fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage>
 #[pyo3(signature = (image, in_place=false))]
 fn ops_exif_transpose(image: &Bound<'_, PyImage>, in_place: bool) -> PyResult<Option<PyImage>> {
     let inner = image.borrow().inner.clone();
-    let result = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_exif_transpose(&inner, in_place))
-    })
-    .map_err(map_error)?;
+    let result =
+        Python::attach(|py| py.detach(|| pillow_rs::imageops_exif_transpose(&inner, in_place)))
+            .map_err(map_error)?;
 
     if in_place {
         if let Some(transposed) = result {
@@ -3974,9 +3984,8 @@ fn chops_add(
 ) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_add(&b1, &b2, scale, offset)))
-            .map_err(map_error)?;
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::chops_add(&b1, &b2, scale, offset)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -3990,10 +3999,8 @@ fn chops_subtract(
 ) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::chops_subtract(&b1, &b2, scale, offset))
-    })
-    .map_err(map_error)?;
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::chops_subtract(&b1, &b2, scale, offset)))
+        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -4001,7 +4008,7 @@ fn chops_subtract(
 fn chops_multiply(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_multiply(&b1, &b2)))
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::chops_multiply(&b1, &b2)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -4010,8 +4017,8 @@ fn chops_multiply(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> P
 fn chops_screen(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_screen(&b1, &b2)))
-        .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::chops_screen(&b1, &b2))).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -4019,8 +4026,8 @@ fn chops_screen(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyR
 fn chops_darker(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_darker(&b1, &b2)))
-        .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::chops_darker(&b1, &b2))).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -4028,8 +4035,8 @@ fn chops_darker(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyR
 fn chops_lighter(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_lighter(&b1, &b2)))
-        .map_err(map_error)?;
+    let rs =
+        Python::attach(|py| py.detach(|| pillow_rs::chops_lighter(&b1, &b2))).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -4037,7 +4044,7 @@ fn chops_lighter(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> Py
 fn chops_difference(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_difference(&b1, &b2)))
+    let rs = Python::attach(|py| py.detach(|| pillow_rs::chops_difference(&b1, &b2)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -4242,11 +4249,11 @@ fn image_effect_mandelbrot(
 #[pyfunction]
 fn getrgb(color: &str) -> PyResult<PyObject> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(map_error)?;
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         if pillow_rs::color_has_explicit_alpha(color) {
-            Ok((r, g, b, a).to_object(py))
+            Ok((r, g, b, a).into_py_any(py)?)
         } else {
-            Ok((r, g, b).to_object(py))
+            Ok((r, g, b).into_py_any(py)?)
         }
     })
 }
@@ -4275,12 +4282,12 @@ fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
 fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(map_error)?;
     let result = pillow_rs::getcolor(r, g, b, a, mode).map_err(map_error)?;
-    Python::with_gil(|py| match result {
-        pillow_rs::ColorValue::Gray(value) => Ok(value.to_object(py)),
-        pillow_rs::ColorValue::GrayAlpha(gray, alpha) => Ok((gray, alpha).to_object(py)),
-        pillow_rs::ColorValue::Rgb(r, g, b) => Ok((r, g, b).to_object(py)),
-        pillow_rs::ColorValue::Rgba(r, g, b, a) => Ok((r, g, b, a).to_object(py)),
-        pillow_rs::ColorValue::Hsv(h, s, v) => Ok((h, s, v).to_object(py)),
+    Python::attach(|py| match result {
+        pillow_rs::ColorValue::Gray(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::ColorValue::GrayAlpha(gray, alpha) => Ok((gray, alpha).into_py_any(py)?),
+        pillow_rs::ColorValue::Rgb(r, g, b) => Ok((r, g, b).into_py_any(py)?),
+        pillow_rs::ColorValue::Rgba(r, g, b, a) => Ok((r, g, b, a).into_py_any(py)?),
+        pillow_rs::ColorValue::Hsv(h, s, v) => Ok((h, s, v).into_py_any(py)?),
     })
 }
 
@@ -4296,7 +4303,7 @@ fn palette_getcolor_validate(
 ) -> PyResult<(Vec<u8>, usize)> {
     let mut pal = palette;
     let repr = color.repr()?.to_string();
-    let input = if color.downcast::<PyTuple>().is_ok() || color.downcast::<PyList>().is_ok() {
+    let input = if color.cast::<PyTuple>().is_ok() || color.cast::<PyList>().is_ok() {
         color.extract::<Vec<u8>>().map_or(
             pillow_rs::PaletteColorInput::Invalid(repr),
             pillow_rs::PaletteColorInput::Components,
