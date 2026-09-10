@@ -17,7 +17,7 @@ tree.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local release tag and the pushed clean-history candidate `codex/release-image-slash-star-clean` are `eb3fc54ca4bb2f78fce9cc1c9f1f60692832f818` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local release tag and the pushed clean-history candidate `codex/release-image-slash-star-clean` are `72fa0322cdb86805acfc73d6eaad16c2697fbb82` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.2` | crates.io | before `pillow-rs` | local tag commit `ec58b10c29fae9b9ca4c622568bc1410596608fd`; `main` has source-matched 20,354/20,354 runnable parity, complete `ci-fast`, package, C SDK, and npm gates; full release verification still has unresolved C-ABI route/error debt (C01.1 182/218, C01.7 13,572/18,098, C08.2 2,756/3,745, C08.3 15,829/20,355), five-platform contract bundles including the Windows import library, and benchmark review |
 | fontdone | native C SDK archive | `2.14.3-alpha.2` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.2` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the same `main` commit; the earlier immutable `2.14.3-alpha.1` npm artifact remains historical evidence; raw `fontdone-wasm` remains an internal build target |
@@ -44,7 +44,7 @@ The clean `fontdone` `main` branch is now present on `origin` at
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the
 documented release-preparation commits pushed.
 The image-slash-star clean-history candidate is present on `origin` at
-`eb3fc54ca4bb2f78fce9cc1c9f1f60692832f818`; its current tree matches the
+`72fa0322cdb86805acfc73d6eaad16c2697fbb82`; its current tree matches the
 release checkout and its package verification passes. `origin/main` still
 contains the historical oversized AV1 blobs and is unchanged pending explicit
 authorization for the coordinated history rewrite.
