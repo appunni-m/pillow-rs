@@ -92,7 +92,7 @@ The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.2` tag remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`;
 the current `fontdone` `main` branch is pushed at
-`fd35a7974e66254b99671e7c74213f4de7da5a01` with the hosted fast and MSRV gates
+`17e6b8818a0e63e6192c38dad576ca5581b3d3b5` with the hosted fast and MSRV gates
 passing. The clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
