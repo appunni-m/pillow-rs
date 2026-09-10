@@ -58,6 +58,7 @@ CARGO_PACKAGE_SURFACES = (
         "pi/ll/pillow-rs",
     ),
 )
+INTERNAL_FONTDONE_PACKAGES = ("fontdone-c-abi", "fontdone-wasm")
 
 
 def _checksum_file(path: Path, expected: str) -> None:
@@ -203,6 +204,22 @@ def _verify_registry_index(
 
 def _verify_cargo_surfaces(bundle: Path, manifest: str) -> None:
     revisions = _release_revisions(manifest)
+    registry = bundle / "cargo-registry"
+    # The C ABI and raw-WASM Cargo packages are build targets only.  Their
+    # public surfaces are the native SDK archive and npm tarball; neither may
+    # accidentally become a second Cargo registry release.
+    for internal_name in INTERNAL_FONTDONE_PACKAGES:
+        leaked_archives = sorted(registry.glob(f"{internal_name}-*.crate"))
+        leaked_index = sorted(
+            path
+            for path in (registry / "index").rglob(internal_name)
+            if path.is_file()
+        )
+        if leaked_archives or leaked_index:
+            raise ValueError(
+                f"internal fontdone package leaked into public Cargo registry: "
+                f"{internal_name}"
+            )
     digests: dict[str, str] = {}
     for name, version, relative_name, index_relative in CARGO_PACKAGE_SURFACES:
         public_archive = bundle / relative_name
