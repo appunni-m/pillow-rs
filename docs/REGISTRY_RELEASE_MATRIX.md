@@ -78,7 +78,7 @@ The clean `fontdone` `main` branch is now present on `origin` at
 `25f3c10c8dd89c91a24f5bbb99f590c369fbacf3`; its immutable local release tag
 `v2.14.3-alpha.2` remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`.
 The pillow-rs `main` branch is now present on `origin` at
-`1a6963ace16ccc4bbc5d29da7d1b259aa715036e`; it contains the exact-CI
+`a91d241afc1927d0dfc2887616e7c1e6d233da2b`; it contains the exact-CI
 release-preparation commit
 `8b94fe0d216ca979d47d86881dafdc6bea2479e8`, followed by a documentation-only
 receipt correction at the current head. The exact-head local CI gate passed on
