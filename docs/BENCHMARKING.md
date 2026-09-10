@@ -87,8 +87,8 @@ the zero-violation acceptance item remains open under the unchanged
 five-percent policy.
 
 The release-candidate dependency-pin replay at source commit
-`031edd3f5425df2c6931939deb0ad0d93dad376c` (the parent of this
-documentation-only update) selected and measured the same
+`031edd3f5425df2c6931939deb0ad0d93dad376c` (captured before the current
+documentation updates; runtime and fixture inputs are unchanged) selected and measured the same
 11-workload cohort twice. Each run produced 44/44 comparable rows and 33/33
 terminal requested-to-actual receipts across CPU, SIMD, and native Metal GPU.
 The unchanged five-percent comparison reported nine timing-only violations;
