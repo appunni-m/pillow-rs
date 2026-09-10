@@ -23,9 +23,9 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local release tag and the pushed clean-history candidate `codex/release-image-slash-star-clean` are `8d8ecdfe8699329ae166541be8040b1bc3b253e7` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.2` | crates.io | before `pillow-rs` | immutable local tag commit `ec58b10c29fae9b9ca4c622568bc1410596608fd`; current `main` commit `50a1d7eec2b996cc394512dd39a3318629a61e2f` has source-matched 20,354/20,354 runnable parity and hosted fast/MSRV gates passing in CI run `34498485522`; the generated C-ABI scorecard is 6/12 categories with unresolved debt (C01.1 175/218, C01.7 13,572/18,098, C06.1 22/23, C07.1 19/20, C08.2 2,552/3,745, C08.3 15,829/20,355), five-platform contract bundles including the Windows import library, and benchmark review |
+| fontdone | `fontdone` | `2.14.3-alpha.2` | crates.io | before `pillow-rs` | immutable local tag commit `ec58b10c29fae9b9ca4c622568bc1410596608fd`; the current pushed `main` commit `c401523d2856036fbbdf889eea09eb2ed2f1e890` contains the sbix error-parity fix and refreshed evidence (20,354/20,354 runnable cases, 4 pending), while hosted fast/MSRV CI still covers the prior commit `50a1d7eec2b996cc394512dd39a3318629a61e2f`; the generated C-ABI scorecard is 6/12 with unresolved debt (C01.1 176/218, C01.7 13,572/18,098, C06.1 22/23, C07.1 19/20, C08.2 2,652/3,745, C08.3 15,829/20,355), five fresh platform bundles including the Windows import library, and benchmark review still required |
 | fontdone | native C SDK archive | `2.14.3-alpha.2` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
-| fontdone | `fontdone` | `2.14.3-alpha.2` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the same `main` commit; the earlier immutable `2.14.3-alpha.1` npm artifact remains historical evidence; raw `fontdone-wasm` remains an internal build target |
+| fontdone | `fontdone` | `2.14.3-alpha.2` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.2` tag; the newer `main` fix requires a new version before publication; the earlier immutable `2.14.3-alpha.1` npm artifact remains historical evidence; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | the local `v0.1.0` candidate is rebuilt from the synchronized alpha.2 dependency pin; its exact tagged commit, archive checksum, and staged registry entry are recorded in `dist/release-local/release-manifest.txt` and `SHA256SUMS`; public crate packaging still waits for the image-slash-star and fontdone registry versions |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
@@ -61,7 +61,7 @@ immutable local bundle or close the zero-violation gate.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`50a1d7eec2b996cc394512dd39a3318629a61e2f`; its immutable local release tag
+`c401523d2856036fbbdf889eea09eb2ed2f1e890`; its immutable local release tag
 `v2.14.3-alpha.2` remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`.
 The pillow-rs release-prep branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the
