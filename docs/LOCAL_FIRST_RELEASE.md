@@ -8,7 +8,7 @@ does not publish to a public registry or write to a remote Git repository.
 
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
-| `image-slash-star` | `0.1.0` | `v0.1.0` | `35dd72808e6b2a8488b98caf685a3d48e4c97468` |
+| `image-slash-star` | `0.1.0` | `v0.1.0` | `eb3fc54ca4bb2f78fce9cc1c9f1f60692832f818` |
 | `fontdone` | `2.14.3-alpha.2` | `v2.14.3-alpha.2` | `ec58b10c29fae9b9ca4c622568bc1410596608fd` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
 
