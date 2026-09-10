@@ -100,8 +100,8 @@ publication, the owner must provide or configure:
 
 The public release gates remain visible rather than being bypassed: the image
 project still has an incomplete strict LLVM source-coverage denominator,
-fontdone still lacks five fresh cross-platform C-ABI bundles including the
-Windows import library, and the root benchmark checklist still requires two
+fontdone still has unresolved C-ABI route/error debt and lacks five fresh
+cross-platform C-ABI bundles including the Windows import library, and the root benchmark checklist still requires two
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
 repository now has a pushed clean-history candidate at
 `codex/release-image-slash-star-clean`; updating `main` still requires explicit
