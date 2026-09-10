@@ -123,7 +123,7 @@ five, five, three, and five timing-only violations. The local first-release
 bundle remains bound to its original tagged commit and is unchanged by these
 later benchmark receipts.
 
-The branch is now at `78d83f6a8690b8d24cbeec918a5ca67cee5bfd36`. The current
+The branch is now at `8b94fe0d216ca979d47d86881dafdc6bea2479e8`. The current
 root `make ci` gate passed on this exact commit: all 11,345 parity cases passed
 on the CPU, SIMD, GPU, Node WASM, and browser WASM lanes, and managed coverage
 completed all 24 plans with 11,325 passing checks. The aggregate backend result

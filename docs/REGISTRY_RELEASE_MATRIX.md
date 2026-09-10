@@ -80,7 +80,7 @@ The clean `fontdone` `main` branch is now present on `origin` at
 The pillow-rs release-prep branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` and contains the
 documented release-preparation commit
-`78d83f6a8690b8d24cbeec918a5ca67cee5bfd36`; the exact-head local CI gate
+`8b94fe0d216ca979d47d86881dafdc6bea2479e8`; the exact-head local CI gate
 passes, while the benchmark zero-violation item remains open.
 The image-slash-star clean-history candidate is present on `origin` at
 `8d8ecdfe8699329ae166541be8040b1bc3b253e7`; its current tree matches the
