@@ -58,13 +58,16 @@ full command log and artifact list are retained in
 
 ## Benchmark receipt
 
-The bundle also retains a fresh clean fixed-cohort pair under
+The bundle retains a clean tagged fixed-cohort pair under
 `dist/release-local/benchmarks/`. Both runs use the tagged commit, the same
 manifest/input hashes, and the unchanged five-warmup/20-iteration/five-sample
 policy. Native CPU, SIMD, and GPU terminal receipts make 44/44 rows comparable;
-the adjacent budget check reports nine timing-only violations. The result is
-kept as release evidence and leaves the zero-violation acceptance item open;
-no threshold, workload ID, fixture, or receipt rule was changed.
+the adjacent budget check reports nine timing-only violations. A newer
+host-access run at the current root revision completed five identical
+fixed-cohort runs; its adjacent comparisons reported 3, 7, 5, and 5
+timing-only violations. Both sets remain release evidence and leave the
+zero-violation acceptance item open; no threshold, workload ID, fixture, or
+receipt rule was changed.
 
 ## Public-release prerequisites
 

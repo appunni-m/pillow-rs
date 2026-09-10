@@ -25,11 +25,14 @@ tree.
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
-The local tagged benchmark receipt pair measured the fixed 11-workload cohort
-with 44/44 comparable rows and 33/33 terminal CPU/SIMD/GPU receipts. Its
-unchanged five-percent comparison reports nine timing-only violations, so the
-performance gate remains review-needed; the local package rehearsal does not
-silently promote that result to a release pass.
+The immutable local bundle retains a tagged benchmark receipt pair for the
+fixed 11-workload cohort with 44/44 comparable rows and 33/33 terminal
+CPU/SIMD/GPU receipts. Its unchanged five-percent comparison reports nine
+timing-only violations. A newer host-access run at the current root revision
+has five complete runs with identical execution structure and adjacent
+comparisons reporting 3, 7, 5, and 5 timing-only violations. The performance
+gate remains review-needed; the local package rehearsal does not silently
+promote either result to a release pass.
 
 The root workflow accepts a guarded manual dispatch for the first publication.
 After that bootstrap, pushing an annotated `v<version>` tag runs the same
