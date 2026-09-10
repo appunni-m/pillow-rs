@@ -25,9 +25,10 @@ tree.
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
-The immutable local bundle retains a benchmark pair for the release-tagged
-root commit `031edd3f5425df2c6931939deb0ad0d93dad376c`. Both runs selected and
-measured the fixed 11-workload cohort, with 44/44 comparable rows and 33/33
+The immutable local bundle retains a benchmark pair for the release-candidate
+source commit `031edd3f5425df2c6931939deb0ad0d93dad376c`, the parent of the
+final documentation-only update. Both runs selected and measured the fixed
+11-workload cohort, with 44/44 comparable rows and 33/33
 terminal CPU/SIMD/GPU receipts; the unchanged five-percent comparison reports
 nine timing-only violations. Earlier host-access series at `a5a678401` and
 `de571ae57` remain historical evidence with adjacent comparisons reporting
