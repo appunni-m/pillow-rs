@@ -59,6 +59,17 @@ For a complete standard run:
 MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark
 ```
 
+For the fixed release-acceptance cohort:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark
+```
+
+This profile selects the maintained 11 workload IDs from the root `Makefile`
+and leaves each generated workload's warmup, iteration, and sample policy
+unchanged. Use the same profile and source checkout for both runs in a budget
+comparison.
+
 Compare two compatible result artifacts with an explicit baseline. The budget
 checker uses the repository's five-percent policy; timing variance is recorded
 as a violation rather than hidden by changing the threshold:

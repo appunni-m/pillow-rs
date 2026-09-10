@@ -8,7 +8,7 @@ on:
         required: true
         default: quick
         type: choice
-        options: [quick, standard]
+        options: [quick, standard, release]
       baseline_run_id:
         description: Optional prior successful benchmark run ID for budget comparison
         required: false
