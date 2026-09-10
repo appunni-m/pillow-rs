@@ -87,9 +87,11 @@ checklist; the immutable bundle contents above remain unchanged.
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
-release, or push a release tag. After it was assembled, the clean `fontdone`
-`main` branch was pushed at `ec58b10c29fae9b9ca4c622568bc1410596608fd`, and
-the clean pillow-rs release-prep branch is present on `origin`. The
+release, or push a release tag. The immutable local `fontdone`
+`v2.14.3-alpha.2` tag remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`;
+the current `fontdone` `main` branch is pushed at
+`fd35a7974e66254b99671e7c74213f4de7da5a01` with the hosted fast and MSRV gates
+passing. The clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
