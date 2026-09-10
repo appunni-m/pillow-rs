@@ -18,10 +18,9 @@ tree.
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release branch commit `7a53a343d7217ba40448c9b97af0afbd81a09793`; format, lint, tests, package audit, and 45-case matrix pass; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | root crate before facades; before `pillow-rs` | release branch commit `df7ac49b8df3f8f8be96fdb6d1a5c2588f840f74`; 20,354/20,354 runnable parity cases, CI, package, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
-| fontdone | `fontdone-c-abi` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
-| fontdone | `fontdone-wasm` | `2.14.3-alpha.1` | crates.io | after `fontdone` is visible | workspace facade; publish only from the same release commit |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crates; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | before `pillow-rs` | local tag commit `d56dded7a63b8632c580cfb7f6761314b1f4c5ea`; 20,354/20,354 runnable parity cases, CI, package, C SDK, and npm gates pass; cross-platform contract and reviewed benchmark thresholds remain external gates |
+| fontdone | native C SDK archive | `2.14.3-alpha.1` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crate; before `pillow-rs` | exact version is already visible under the `next` and `latest` tags; the tag workflow verifies and preserves it; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | local tag `v0.1.0` at `003830605ea81640366988a477c19dd7793d9eb1`; package candidate `50367d992ea18250678617e316995ca52a82546c` is byte-identical for packaged source, documentation/input checks, all-target Clippy, and external-artifact benchmark-report regression checks pass, and the staged local crate verifies with registry-style dependencies plus offline Cargo/Python/Node consumers; public crate packaging still waits for the image-slash-star and fontdone registry versions |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
@@ -91,12 +90,13 @@ revision must be remeasured before it is used as release evidence.
 
 The local first-release rehearsal is already assembled under
 `dist/release-local/`. It stages and verifies the packages in dependency order:
-`image-slash-star`, `fontdone`, `fontdone-c-abi`, `fontdone-wasm`, and finally
-the registry-normalized `pillow-rs` archive. The same bundle contains the
-`pillow-rs` ABI3 wheel, the `pillow-rs` and `fontdone` npm tarballs, complete
-Git bundles for the three annotated tags, and checksum-bound offline consumer
-checks. This file-backed rehearsal does not contact or mutate crates.io, PyPI,
-npm, GitHub, or any remote Git repository.
+`image-slash-star`, the public `fontdone` crate, the native fontdone C SDK,
+`fontdone` npm package, and finally the registry-normalized `pillow-rs`
+archive. Internal C and raw-WASM Cargo archives are retained only as package
+audit evidence. The same bundle contains the `pillow-rs` ABI3 wheel, the
+`pillow-rs` npm tarball, complete Git bundles for the three annotated tags, and
+checksum-bound offline consumer checks. This file-backed rehearsal does not
+contact or mutate crates.io, PyPI, npm, GitHub, or any remote Git repository.
 
 Run `make release-local-check` from the root checkout to revalidate the
 artifact list, checksum manifests, benchmark receipts, and complete Git
@@ -109,13 +109,14 @@ workspace:
    lint, package, and license checks. Publish `image-slash-star` with
    `cargo publish --locked` and verify the exact version with `cargo info`.
 2. In a clean `fontdone` release checkout, run `make fontdone-ci` and the
-   package audit. Publish `fontdone`, wait for crates.io indexing, then publish
-   `fontdone-c-abi` and `fontdone-wasm`. Build and test `fontdone-wasm/npm`,
-   then publish it with the intended `next` tag.
+   package audit. Publish the single `fontdone` crate, build the native C SDK
+   archive, and build/test `fontdone-wasm/npm`; publish the npm package with
+   the intended `next` tag. Attach the C SDK archive to the GitHub release.
 3. In this checkout, rerun `make release-check RELEASE_CRATES_READY=1` after
    the exact dependency versions are visible. Publish the root crate, then
    build/upload the PyPI wheel, then build/upload the npm tarball. Create the
-   Git tag and GitHub release only after all three uploads succeed.
+   Git tag and GitHub release only after the crate, PyPI, and npm uploads
+   succeed; attach the native C SDK archive to the GitHub release.
 
 If an upload times out, query the registry for the exact version before
 retrying. Registry versions are immutable; do not change a version merely to
