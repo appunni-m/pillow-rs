@@ -101,6 +101,20 @@ two reported 10 and 10 timing-only violations. These runs are retained as
 additional evidence and do not close the required two-consecutive comparison
 gate.
 
+## Follow-up verification on the release-preparation branch
+
+On 2026-09-11 the pushed branch advanced to
+`1023670636d299e98fe15c3e7cf86b7d23b88b86` for the benchmark documentation
+update. `make release-local-check` and the registry-independent
+`MIGRATION_WASM_NO_OPT=1 make release-check RELEASE_CRATES_READY=0` gate both
+passed on that commit. Four additional complete release-profile benchmark runs
+(runs 20–23) retained 44/44 comparable rows and 33/33 terminal requested=actual
+CPU, SIMD, and Metal GPU receipts per run; the adjacent comparisons reported
+nine and five timing-only violations. Running the same release check with
+`RELEASE_CRATES_READY=1` reached Cargo packaging and stopped because the exact
+`fontdone` version is not yet present in the crates.io index. This is the
+expected external dependency gate, not a package or parity failure.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
