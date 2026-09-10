@@ -9,7 +9,7 @@ does not publish to a public registry or write to a remote Git repository.
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
 | `image-slash-star` | `0.1.0` | `v0.1.0` | `7a53a343d7217ba40448c9b97af0afbd81a09793` |
-| `fontdone` | `2.14.3-alpha.1` | `v2.14.3-alpha.1` | `df7ac49b8df3f8f8be96fdb6d1a5c2588f840f74` |
+| `fontdone` | `2.14.3-alpha.1` | `v2.14.3-alpha.1` | `d56dded7a63b8632c580cfb7f6761314b1f4c5ea` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | `003830605ea81640366988a477c19dd7793d9eb1` |
 
 The tags and complete Git bundles are under `dist/release-local/` in the
@@ -30,19 +30,21 @@ make release-local-check
 
 ## Local publication order
 
-The staged Cargo source registry follows the dependency order used by the
-public release workflows:
+The staged local artifacts follow the dependency order used by the public
+release workflows:
 
 1. `image-slash-star-0.1.0.crate`
-2. `fontdone-2.14.3-alpha.1.crate`
-3. `fontdone-c-abi-2.14.3-alpha.1.crate`
-4. `fontdone-wasm-2.14.3-alpha.1.crate`
+2. the public `fontdone-2.14.3-alpha.1.crate`
+3. the native `fontdone-c-abi-2.14.3-alpha.1-aarch64-apple-darwin.tar.gz` SDK
+4. the `fontdone@2.14.3-alpha.1` browser npm archive
 5. the registry-normalized `pillow-rs-0.1.0.crate`
 
-The same bundle contains the `pillow-rs` ABI3 wheel and the `pillow-rs` and
-`fontdone` npm tarballs. A local Cargo consumer was resolved offline with Rust
-1.96.1, including the C-ABI and raw-WASM facade crates. Fresh Python wheel and
-npm consumers also imported the packaged artifacts successfully. Image package
+The same bundle contains the `pillow-rs` ABI3 wheel, the native fontdone C SDK
+archive, and the `pillow-rs` and `fontdone` npm tarballs. A local Cargo
+consumer was resolved offline with Rust 1.96.1 against the public `fontdone`
+crate and `image-slash-star`; the internal C and raw-WASM facade archives were
+also compiled by the fontdone package audit. Fresh Python wheel and npm
+consumers imported the packaged artifacts successfully. Image package
 verification and the fontdone release dry-run passed from the exact tagged
 checkouts.
 
@@ -68,8 +70,7 @@ No crates.io, PyPI, npm, GitHub release, or remote Git operation was performed.
 Before enabling public publication, the owner must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
-  `image-slash-star`, `fontdone`, `fontdone-c-abi`, `fontdone-wasm`, and
-  `pillow-rs`;
+  `image-slash-star`, `fontdone`, and `pillow-rs`;
 - PyPI ownership or the `pypi` Trusted Publisher for `pillow-rs`;
 - npm ownership, two-factor authentication, and the `npm` Trusted Publisher
   for `fontdone` and `pillow-rs`; and
