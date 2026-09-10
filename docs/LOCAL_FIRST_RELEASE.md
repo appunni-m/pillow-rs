@@ -86,6 +86,14 @@ per run. Its adjacent budget comparisons reported two and 16 timing-only
 violations. These newer generated results are documented in the pending
 checklist; the immutable bundle contents above remain unchanged.
 
+A fresh clean pair at current branch head
+`13ea3dc177baa44a5d76ed7d86240aee53402ca8` measured the same 11-workload
+cohort with 44/44 comparable rows and 33/33 terminal requested=actual
+CPU/SIMD/Metal-GPU receipts per run. The unchanged budget report
+`13f1649a545ebafbe17623931bd9a14e6e5a4eb2861f8871975a1b3f1c94551e` reported
+12 timing-only violations, so the zero-violation acceptance item remains open;
+the immutable bundle is unchanged.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub

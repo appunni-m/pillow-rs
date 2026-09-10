@@ -2,7 +2,10 @@
 
 Current continuation: ordered F GPU arithmetic, coefficient tiling, general
 projective sampling, and the PA/SIMD fixes are integrated on
-`codex/benchmark-backend-parity-fixes` at `967c40447`. The regenerated
+`codex/benchmark-backend-parity-fixes` at source commit
+`519226b62b545717c2169be7cbef9141754de91e`, with the current branch head
+`13ea3dc177baa44a5d76ed7d86240aee53402ca8` containing release-documentation
+updates. The regenerated
 11,345-case replay and managed coverage are recorded below. The only remaining
 acceptance item is the zero-violation benchmark pair; its receipt structure is
 stable while timing violations remain nondeterministic.
@@ -541,6 +544,19 @@ receipt rules unchanged.
   operation, resource, backend, and terminal receipt structure is identical;
   the zero-violation gate therefore remains open without a source, fixture,
   threshold, or receipt change.
+
+  A fresh clean pair at current branch head
+  `13ea3dc177baa44a5d76ed7d86240aee53402ca8` again selected and measured
+  11/11 workloads, with 44/44 comparable rows and 33/33 terminal
+  requested=actual CPU/SIMD/Metal-GPU receipts in each run. The result
+  SHA-256 values are
+  `e7d59eacb8af90e3995a5ff22e38b5db1a16c2b6f4684c9bde9bd8c7b2e77ca8` and
+  `1bc65d682852064f71b74dcfb3becb243cc00d01f74bf17164368cbda0653115`;
+  the unchanged budget report
+  `13f1649a545ebafbe17623931bd9a14e6e5a4eb2861f8871975a1b3f1c94551e`
+  reports 12 statistically credible timing-only violations. The normalized
+  operation, resource, backend, and terminal receipt structure remains
+  compatible, so P2 stays open under the unchanged five-percent policy.
 
 ## Verified changes already integrated
 
