@@ -32,7 +32,11 @@ timing-only violations. A newer host-access run at the current root revision
 has five complete runs with identical execution structure and adjacent
 comparisons reporting 3, 7, 5, and 5 timing-only violations. The performance
 gate remains review-needed; the local package rehearsal does not silently
-promote either result to a release pass.
+promote either result to a release pass. A further two-run replay at current
+HEAD `de571ae57` retained 11/11 measured workloads, 44/44 comparable rows, and
+33/33 terminal requested=actual receipts in each run; its unchanged comparison
+reported 12 timing-only violations. The exact result and budget hashes are in
+the pending checklist.
 
 The root workflow accepts a guarded manual dispatch for the first publication.
 After that bootstrap, pushing an annotated `v<version>` tag runs the same

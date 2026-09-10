@@ -529,6 +529,19 @@ receipt rules unchanged.
   `e65b8fb9b99044bc449125d723665c2d461b250ca0681230630e82dcb748e64e`.
   P2 remains open because the required zero-violation pair was not obtained.
 
+  Two additional clean current-HEAD runs at `de571ae57` retained the same
+  11/11 selected and measured workloads, 44/44 comparable rows, and 33/33
+  terminal requested=actual CPU/SIMD/Metal-GPU receipts in each run. Their
+  result SHA-256 values are
+  `807d478cd9a82e813f16b1ddc2dc25945b2c843ebe77ca61edce1d37c7d42c5e` and
+  `9e539d74165359bae7a1e3584a39e9932a762603f780ec1a0e1627523aa6d691`.
+  The unchanged budget report
+  `15aa0ab483e1c6329109cd192e002ce0f80f566f40a967c3983c6046d92b3b68`
+  reports 12 timing-only violations. After removing timing summaries, the
+  operation, resource, backend, and terminal receipt structure is identical;
+  the zero-violation gate therefore remains open without a source, fixture,
+  threshold, or receipt change.
+
 ## Verified changes already integrated
 
 - [x] Degenerate thumbnail control flow (`b0c154b33`, source `dc6085f81`):
