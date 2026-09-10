@@ -19,8 +19,8 @@ tree.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release tag commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`; the current checkout adds housekeeping commit `a1122349b1ca16bde2db3541184aae7af3af36ac` only to ignore local worktree settings, so the staged public archive remains bound to the immutable tag; format, release metadata, tests, and package audit pass; strict source coverage remains an explicit release blocker at 95,602/161,450 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | before `pillow-rs` | local tag commit `ad5e771aa0621d6e699260d23fbbb35e2a081e82`; the current checkout adds documentation-only commits after that tag, so the staged public archive remains bound to the immutable tag; 20,354/20,354 runnable parity cases plus fast CI, package, C SDK, and npm gates pass; full release verification still needs the five-platform contract bundles and reviewed benchmark thresholds |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | release tag commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`; the pushed clean-history candidate `codex/release-image-slash-star-clean` is `d60b4ae40a443a37a28379444262a3b49f0f3b93` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| fontdone | `fontdone` | `2.14.3-alpha.1` | crates.io | before `pillow-rs` | local tag commit `ad5e771aa0621d6e699260d23fbbb35e2a081e82`; current `main` is `2afb921f8a5464724f30427e7167b7ef4aaea0d4` with source-matched 20,354/20,354 runnable parity, complete `ci-fast`, package, C SDK, and npm gates; the staged first-release archive remains bound to the immutable tag, while full release verification still needs the five-platform contract bundles and reviewed benchmark thresholds |
 | fontdone | native C SDK archive | `2.14.3-alpha.1` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.1` | npm | after the Cargo crate; before `pillow-rs` | npm already serves this immutable version from an earlier artifact; the current checkout's archive has different extracted bytes, so a new synchronized prerelease is required; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | local tag `v0.1.0` at `7d39bb7da7d4fdc5ece66d6a973f32760c1392ad`; package candidate `d0cedc8c47bbe3a437aa3e6d051a54d612aa0b9b2345856f9109d62d45cc1520` is built from that exact tag, uses the matching tagged image-slash-star and fontdone archives in the staged source registry, and passes documentation/input checks, all-target Clippy, external-artifact benchmark-report regression checks, and offline Cargo/Python/Node consumer checks; public crate packaging still waits for the image-slash-star and fontdone registry versions |
@@ -43,13 +43,14 @@ the pending checklist.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`07c31a552bfc1dc498f45d4bf7f666291f1b864b`. The pillow-rs release-prep branch
+`2afb921f8a5464724f30427e7167b7ef4aaea0d4`. The pillow-rs release-prep branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` at
-`d5a49a351fede4b0bdbb007064a88681b9c98efb`. The image-slash-star `main` push
-remains pending: GitHub rejects the branch pack because older generated AV1
-fixture blobs exceed its 100 MB file limit; the exact history-only blocker and
-current regeneratable fixture set are recorded in that repository's release
-checklist.
+`5127a682a598a2a2165da16b8e8b064eaae2a7c9`.
+The image-slash-star clean-history candidate is present on `origin` at
+`d60b4ae40a443a37a28379444262a3b49f0f3b93`; its current tree matches the
+release checkout and its package verification passes. `origin/main` still
+contains the historical oversized AV1 blobs and is unchanged pending explicit
+authorization for the coordinated history rewrite.
 
 The root workflow accepts a guarded manual dispatch for the first publication.
 After that bootstrap, pushing an annotated `v<version>` tag runs the same

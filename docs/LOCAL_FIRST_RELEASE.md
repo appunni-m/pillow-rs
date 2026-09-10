@@ -82,12 +82,13 @@ changed.
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. After it was assembled, the clean `fontdone`
-`main` branch was pushed at `07c31a552bfc1dc498f45d4bf7f666291f1b864b`, and
+`main` branch was pushed at `2afb921f8a5464724f30427e7167b7ef4aaea0d4`, and
 the clean pillow-rs release-prep branch was pushed at
-`d5a49a351fede4b0bdbb007064a88681b9c98efb`. The image-slash-star `main` push
+`5127a682a598a2a2165da16b8e8b064eaae2a7c9`. The image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
-blobs above the hosting limit; its local release commit remains
-`fef4acd6b45541e7e36980f67255f83a1c56bd04`. Before enabling public registry
+blobs above the hosting limit; its verified clean-history candidate is
+`codex/release-image-slash-star-clean` at
+`d60b4ae40a443a37a28379444262a3b49f0f3b93`. Before enabling public registry
 publication, the owner must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
@@ -101,7 +102,10 @@ The public release gates remain visible rather than being bypassed: the image
 project still has an incomplete strict LLVM source-coverage denominator,
 fontdone still lacks five fresh cross-platform C-ABI bundles including the
 Windows import library, and the root benchmark checklist still requires two
-consecutive fixed-ID comparisons with zero timing-budget violations.
+consecutive fixed-ID comparisons with zero timing-budget violations. The image
+repository now has a pushed clean-history candidate at
+`codex/release-image-slash-star-clean`; updating `main` still requires explicit
+authorization because it rewrites historical Git objects.
 
 After those prerequisites are satisfied, the release workflows publish only
 from a clean reviewed commit and create later releases from an immutable
