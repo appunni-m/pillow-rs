@@ -85,17 +85,18 @@ Retained comparison artifacts may live outside the checkout (for example under
 roadmap report commands preserve those external paths and accept them directly;
 they do not require copying a result into `build/migration-parity/`.
 
-The latest host-access evidence (2026-09-10) contains five complete fixed
-11-workload runs at revision `a5a678401`. Every run measured 11/11 workloads,
-produced 44/44 comparable rows, and had 33/33 requested-to-actual terminal
-receipts across CPU, SIMD, and native Metal GPU. Adjacent comparisons report
-3, 7, 5, and 5 timing-only violations with identical execution structure. A
-fresh two-run replay at current HEAD `de571ae57` retained the same receipt
-invariants and reported 12 timing-only violations; its result hashes are
-recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md).
-These are observations on one busy arm64 machine, not correctness failures;
-the zero-violation acceptance item remains open under the unchanged
-five-percent policy.
+The latest release-profile evidence (2026-09-10) contains three complete fixed
+11-workload runs at source revision
+`519226b62b545717c2169be7cbef9141754de91e`. Every run measured 11/11
+workloads, produced 44/44 comparable rows, and had 33/33 requested-to-actual
+terminal receipts across CPU, SIMD, and native Metal GPU. The first adjacent
+comparison reports two timing-only violations and the next reports 16, with
+identical execution structure. The result and budget hashes are recorded in
+the [pending checklist](benchmark-backend-pending-2026-09-03.md). Earlier
+host-access series at `a5a678401` and `de571ae57` remain historical evidence.
+These are observations on one arm64 machine, not correctness failures; the
+zero-violation acceptance item remains open under the unchanged five-percent
+policy.
 
 The release-candidate dependency-pin replay at source commit
 `031edd3f5425df2c6931939deb0ad0d93dad376c` (captured before the current
