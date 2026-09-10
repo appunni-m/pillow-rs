@@ -23,6 +23,7 @@ from scripts.run_all_backend_tests import (
     pipeline_execution_evidence,
 )
 from scripts.run_migration_benchmark import (
+    benchmark_target_identities,
     execution_result,
     suite_subject_is_comparable,
 )
@@ -173,6 +174,29 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
             },
         )
         self.assertTrue(suite_subject_is_comparable(oracle, "pillow"))
+
+
+class BenchmarkIdentityTests(unittest.TestCase):
+    """Benchmark envelopes identify every backend they time."""
+
+    def test_sparse_parity_preflight_is_expanded_to_all_timed_profiles(self) -> None:
+        cpu_identity = {
+            "target_profile": "python-cpu",
+            "target_id": "pillow-rs-python",
+            "revision": "preflight-revision",
+            "dirty": False,
+            "runtime": "CPython 3.12",
+            "backend": "cpu",
+            "features": ["all-features"],
+        }
+
+        identities = benchmark_target_identities({"targets": [cpu_identity]})
+
+        self.assertEqual(
+            [item["target_profile"] for item in identities],
+            ["python-cpu", "python-simd", "python-gpu"],
+        )
+        self.assertEqual(identities[0], cpu_identity)
 
 
 class BenchmarkReportPathTests(unittest.TestCase):
