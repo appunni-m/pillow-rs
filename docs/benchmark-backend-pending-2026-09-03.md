@@ -1370,11 +1370,11 @@ zero-violation acceptance pair.
   receipt, or budget policy, and the retained native-GPU pair remains the
   release evidence.
 
-### Release-tagged dependency-pin replay (2026-09-10)
+### Release-candidate dependency-pin replay (2026-09-10)
 
-The root release commit `031edd3f5425df2c6931939deb0ad0d93dad376c` was
-benchmarked with the unchanged fixed 11-workload input selection and sample
-policy. Both runs selected and measured 11/11 workloads, retained 44/44
+The source commit `031edd3f5425df2c6931939deb0ad0d93dad376c`, immediately
+before this documentation-only update, was benchmarked with the unchanged
+fixed 11-workload input selection and sample policy. Both runs selected and measured 11/11 workloads, retained 44/44
 comparable rows, and recorded 33/33 terminal requested=actual receipts across
 CPU, SIMD, and native Metal GPU. The maintained five-percent comparator
 reported nine timing-only violations; the execution and receipt fingerprints
