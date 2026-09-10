@@ -1,11 +1,9 @@
 # Active parity/backend checklist — 2026-09-03 (focused)
 
 Current continuation: ordered F GPU arithmetic, coefficient tiling, general
-projective sampling, and the PA/SIMD fixes are integrated on
-`codex/benchmark-backend-parity-fixes` at source commit
-`519226b62b545717c2169be7cbef9141754de91e`, with the current branch head
-`13ea3dc177baa44a5d76ed7d86240aee53402ca8` containing release-documentation
-updates. The regenerated
+projective sampling, PA/SIMD fixes, and the release package metadata fixes are
+integrated on `codex/benchmark-backend-parity-fixes` at source commit
+`bd4da3477c79a5dd2241ac54b47896679717d328`. The regenerated
 11,345-case replay and managed coverage are recorded below. The only remaining
 acceptance item is the zero-violation benchmark pair; its receipt structure is
 stable while timing violations remain nondeterministic.
@@ -1442,3 +1440,27 @@ The four benchmark result hashes, in run order, are
 The differing timing rows with unchanged execution fingerprints confirm that
 the host remains noisy; the two-consecutive zero-violation acceptance gate is
 therefore still open and no threshold or workload change is justified.
+
+### Current release-profile reruns (2026-09-11)
+
+At the current pushed source commit
+`bd4da3477c79a5dd2241ac54b47896679717d328`, five fresh runs used the unchanged
+release profile and fixed 11-workload input selection. Every run selected and
+measured 11/11 workloads, with 44/44 comparable rows and 33/33 terminal
+requested=actual CPU, SIMD, and Metal GPU receipts. The result SHA-256 values,
+in run order, are
+`e6d51f2efe2cde068a4d3c21c97cc5c097b9eed70ea0fed393fd500760fc0b2e`,
+`af95fb0ed4573674f60187793022e6a85cfdb63f0fad093807401cd2f5127b8d`,
+`64e2b899865e6cfd930ceecea818d58a716ab54be05a92fedc5ad62a579aba84`,
+`93805c1d95568544e7f1dece10c924428e01d9f35a4d19b573cd51e9b4ba5944`, and
+`daa3cfb37b2bfd67c1b9939b2ea6db1720debb76cb399aadd7aeba06b64daaa5`.
+Adjacent unchanged budget comparisons reported 7, 1, 7, and 8 timing-only
+violations. Their budget receipt SHA-256 values, in order, are
+`f95695c1dc1850c56af80a57cc61c2cd4ad4934991ec62a0c59b54c48c93be49`,
+`9428b8006cded074bb0cda104d0467f364ce5249899ed9ed3a73905820ef807f`,
+`4049393abdcabeb7bff4068136bd78ef72347cb48a274a6430c0757f21c615a3`, and
+`710c3d4484b2d7d3d543c76eb3395cf5c0c241a55c4428b11e8e4639055d9b3a`.
+The normalized operation, resource, backend, and terminal receipt fingerprints
+remain equal across the runs; only host timing varies. These complete receipts
+therefore keep P2 open without justifying a threshold, workload, fixture, or
+receipt-policy change.
