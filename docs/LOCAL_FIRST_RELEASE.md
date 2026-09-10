@@ -121,7 +121,7 @@ The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.2` tag remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`;
 the current `fontdone` `main` branch is pushed at
-`d63b3ce1a0b68cada1871bc1ddaffc91ed15b8ab`; its source-bound parity evidence
+`ea40b2a2623797fb442fde43d0c8638a7367faa9`; its source-bound parity evidence
 now records 20,355 / 20,355 runnable comparisons with 3 safety-extension cases
 pending. Hosted fast and MSRV gates are currently recorded only for its previous
 commit `50a1d7eec2b996cc394512dd39a3318629a61e2f`.
