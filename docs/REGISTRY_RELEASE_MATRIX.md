@@ -101,7 +101,8 @@ contact or mutate crates.io, PyPI, npm, GitHub, or any remote Git repository.
 Run `make release-local-check` from the root checkout to revalidate the
 artifact list, checksum manifests, benchmark receipts, and complete Git
 histories after copying or rebuilding local release outputs. The check also
-rejects `fontdone-c-abi` and `fontdone-wasm` if either internal facade appears
+rejects `fontdone-c-abi` and `fontdone-wasm` if either internal workspace
+package appears
 in the staged public Cargo registry.
 
 Publish the independent package first, then the font engine, then this
