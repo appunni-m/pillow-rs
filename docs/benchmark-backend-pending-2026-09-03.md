@@ -1515,3 +1515,19 @@ normalized operation, resource, backend, and terminal receipt fingerprints
 remain equal across all four runs; only host timing varies. These complete
 receipts keep P2 open without justifying a threshold, workload, fixture, or
 receipt-policy change.
+
+### Release-profile reruns on the current documentation commit (2026-09-11)
+
+At the current release-preparation commit
+`027c1e7710b8ac99ea1eb9ccbcc41566b6260cd2`, an elevated native-GPU run and
+an immediately repeated run used the unchanged release profile and fixed
+11-workload input selection. Each run selected and measured 11/11 workloads,
+retained 44/44 comparable rows, and recorded 33/33 terminal requested=actual
+CPU, SIMD, and Metal GPU receipts. The result SHA-256 values are
+`8da4d7f53abf26940bb4a050fa9da9a88cb83f66aade43e773a90d6da9bd5216` and
+`747bd338fccd0b1b83140f8a94e579fb143584b24dd7165021787a0d87aa6106`.
+The unchanged five-percent budget comparison has SHA-256
+`4902bdbe11d6fd4db1623b75bcc537fa221632c580b2165e868f6274194afb76` and
+reports six timing-only violations. The normalized execution and terminal
+receipt structure remains complete; P2 therefore stays open without changing
+workloads, thresholds, fixtures, or receipt policy.
