@@ -50,6 +50,12 @@ consumers imported the packaged artifacts successfully. Image package
 verification and the fontdone release dry-run passed from the exact tagged
 checkouts.
 
+The local `fontdone@2.14.3-alpha.1` tarball is retained as reproducible build
+evidence, but it is not eligible for publication: npm already serves that
+immutable version from an earlier artifact, and the current checkout's
+extracted package bytes differ. A new synchronized fontdone prerelease is
+required before the browser package can be published.
+
 The local Cargo registry is intentionally a read-only source registry for
 consumer verification, not a fake crates.io upload endpoint. Python and npm
 are likewise verified by installing the exact local wheel and tarballs. The
