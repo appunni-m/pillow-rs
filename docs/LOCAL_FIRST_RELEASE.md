@@ -84,7 +84,7 @@ The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. After it was assembled, the clean `fontdone`
 `main` branch was pushed at `2afb921f8a5464724f30427e7167b7ef4aaea0d4`, and
 the clean pillow-rs release-prep branch was pushed at
-`39a70f3fb`. The image-slash-star `main` push
+`dd80d21fc`. The image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at

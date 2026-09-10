@@ -45,7 +45,7 @@ the pending checklist.
 The clean `fontdone` `main` branch is now present on `origin` at
 `2afb921f8a5464724f30427e7167b7ef4aaea0d4`. The pillow-rs release-prep branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` at
-`39a70f3fb`.
+`dd80d21fc`.
 The image-slash-star clean-history candidate is present on `origin` at
 `eb3fc54ca4bb2f78fce9cc1c9f1f60692832f818`; its current tree matches the
 release checkout and its package verification passes. `origin/main` still
