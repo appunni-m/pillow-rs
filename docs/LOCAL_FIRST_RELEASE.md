@@ -77,6 +77,13 @@ violations. All sets remain release evidence and leave the zero-violation
 acceptance item open; no threshold, workload ID, fixture, or receipt rule was
 changed.
 
+A separate release-profile probe at source revision
+`519226b62b545717c2169be7cbef9141754de91e` completed three identical
+11-workload runs with 44/44 comparable rows and 33/33 terminal target receipts
+per run. Its adjacent budget comparisons reported two and 16 timing-only
+violations. These newer generated results are documented in the pending
+checklist; the immutable bundle contents above remain unchanged.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub

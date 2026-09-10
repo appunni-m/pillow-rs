@@ -1386,3 +1386,22 @@ budget receipt is
 `b4d164aaa0915dc34139de89814320838576dec8662340811e41017b724f1d29`.
 These are timing observations on the local arm64 host, not correctness
 failures; the zero-violation acceptance gate remains open.
+
+### Current release-profile probe (2026-09-10)
+
+At the current release-preparation revision
+`519226b62b545717c2169be7cbef9141754de91e`, the maintained release profile
+selected and measured 11/11 workloads in each of three runs. Every run had
+44/44 comparable rows and 33/33 terminal requested=actual CPU, SIMD, and
+native Metal GPU receipts. The result SHA-256 values, in run order, are
+`045ba9de23b4155e103d26072ad1a547256df491800642e8506014f0bacb3d5c`,
+`f478662217c9e9cb7a8fb11d05d5bf8090e4b1e21bf9adc65f02822d64d4c832`, and
+`3e8dcfe990475d9c79abc37276ab19c522602a552775fb11090367ee9fac7386`.
+The first adjacent budget report has SHA-256
+`e1746f6b2cda23f03b1e464b42d9ff026ac8d1883f3c7bc3fb29a01d0a0d6d70` and
+reports two timing-only violations; the second has SHA-256
+`dfd4a725cf884a86a387aedbb0674a65d8332c0a8b4f40ea4f7b50acf87b46cb` and
+reports 16. The operation, resource, backend, and terminal receipt
+fingerprints remain identical, so no source, fixture, threshold, or receipt
+change is justified. The zero-violation acceptance item remains open pending
+a stable low-load runner.

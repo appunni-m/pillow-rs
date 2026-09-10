@@ -42,6 +42,14 @@ review-needed; the local package rehearsal does not silently promote any
 timing result to a release pass. Exact current result and budget hashes are in
 the pending checklist.
 
+A newer release-profile probe at source revision
+`519226b62b545717c2169be7cbef9141754de91e` completed three identical
+11-workload runs with 44/44 comparable rows and 33/33 terminal target receipts
+per run. The adjacent comparisons report two and 16 timing-only violations;
+the zero-violation gate therefore remains open. These generated results are
+additional evidence and are not substituted for the immutable bundle's
+tagged artifacts.
+
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at

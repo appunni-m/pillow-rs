@@ -37,22 +37,23 @@ the same measurement policy.
 
 ## Latest integrated backend cohort
 
-The 2026-09-10 clean tagged receipt recorded a fixed 11-workload cohort across
-two consecutive runs:
+The latest release-profile probe at source revision `519226b62b545717c2169be7cbef9141754de91e`
+recorded a fixed 11-workload cohort across two consecutive runs:
 
 | Evidence | Selected | Measured | Comparable rows | Terminal receipts | Budget violations |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Clean tagged pair | 11 each | 11 each | 44/44 each | 33/33 each | 9 |
+| Current release-profile pair | 11 each | 11 each | 44/44 each | 33/33 each | 2 |
 
 All rows passed the correctness gate and the normalized operation/resource/
 receipt structures matched. The budget violations are timing observations from
 one arm64 machine. They keep the zero-violation acceptance item open under the
-unchanged five-percent policy; the threshold and cohort were not altered. The
-exact receipts and checksums are retained in `dist/release-local/benchmarks/`.
-The current-HEAD replay at `de571ae57` also measured 11/11 workloads with
-44/44 comparable rows and 33/33 terminal receipts in both runs; its unchanged
-budget comparison reported 12 timing-only violations. See the pending
-checklist for the immutable result and budget hashes.
+unchanged five-percent policy; the threshold and cohort were not altered. A
+third run at the same revision retained the same 11/11, 44/44, and 33/33
+receipt invariants; comparing it with the second run reported 16 timing-only
+violations. The run and budget hashes are recorded in the pending checklist.
+The older clean tagged pair retained in `dist/release-local/benchmarks/`
+reported nine violations; it remains historical release evidence rather than
+the latest profile run.
 
 The run hashes, environment, and classification are recorded in
 [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).
