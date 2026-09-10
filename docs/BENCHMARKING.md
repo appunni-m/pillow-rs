@@ -119,6 +119,15 @@ the result, parity receipts, and budget receipt are retained with the local
 first-release bundle. This current-commit evidence also leaves the
 zero-violation acceptance item open.
 
+The current release-preparation commit
+`027c1e7710b8ac99ea1eb9ccbcc41566b6260cd2` was then measured in two immediate
+fixed-ID runs with native Metal GPU access. Both runs measured 11/11 workloads,
+44/44 comparable rows, and 33/33 terminal requested-to-actual CPU, SIMD, and
+GPU receipts. The unchanged five-percent comparator reported six timing-only
+violations; the result and budget hashes are recorded in the [pending
+checklist](benchmark-backend-pending-2026-09-03.md). This remains host timing
+evidence, and the zero-violation acceptance item is still open.
+
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a
