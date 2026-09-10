@@ -21,7 +21,9 @@
     }
   },
   "files": [
-    "pkg/"
+    "pkg/",
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "scripts": {
@@ -40,7 +42,7 @@
     "wasm",
     "rust"
   ],
-  "license": "MIT",
+  "license": "MIT-CMU",
   "publishConfig": {
     "access": "public"
   },

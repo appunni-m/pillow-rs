@@ -47,6 +47,8 @@ INCLUDED_EXACT = {
     "docs/REPO_MAP.md",
     "pillow-rs/Cargo.toml",
     "pillow-rs-js/Cargo.toml",
+    "pillow-rs-js/LICENSE",
+    "pillow-rs-js/README.md",
     "pillow-rs-js/package.json",
     "pillow-rs-js/package-lock.json",
     "pillow-rs-py/Cargo.toml",
