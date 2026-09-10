@@ -9,7 +9,7 @@ does not publish to a public registry or write to a remote Git repository.
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
 | `image-slash-star` | `0.1.0` | `v0.1.0` | `35dd72808e6b2a8488b98caf685a3d48e4c97468` |
-| `fontdone` | `2.14.3-alpha.1` | `v2.14.3-alpha.1` | `ad5e771aa0621d6e699260d23fbbb35e2a081e82` |
+| `fontdone` | `2.14.3-alpha.2` | `v2.14.3-alpha.2` | `ac6e7b8e9300663afca809ad10423ab441e13798` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | `7d39bb7da7d4fdc5ece66d6a973f32760c1392ad` |
 
 The tags and complete Git bundles are under `dist/release-local/` in the
@@ -36,9 +36,9 @@ The staged local artifacts follow the dependency order used by the public
 release workflows:
 
 1. `image-slash-star-0.1.0.crate`
-2. the public `fontdone-2.14.3-alpha.1.crate`
-3. the native `fontdone-c-abi-2.14.3-alpha.1-aarch64-apple-darwin.tar.gz` SDK
-4. the `fontdone@2.14.3-alpha.1` browser npm archive
+2. the public `fontdone-2.14.3-alpha.2.crate`
+3. the native `fontdone-c-abi-2.14.3-alpha.2-aarch64-apple-darwin.tar.gz` SDK
+4. the `fontdone@2.14.3-alpha.2` browser npm archive
 5. the registry-normalized `pillow-rs-0.1.0.crate`
 
 The same bundle contains the `pillow-rs` ABI3 wheel, the native fontdone C SDK
@@ -50,11 +50,10 @@ consumers imported the packaged artifacts successfully. Image package
 verification and the fontdone release dry-run passed from the exact tagged
 checkouts.
 
-The local `fontdone@2.14.3-alpha.1` tarball is retained as reproducible build
-evidence, but it is not eligible for publication: npm already serves that
-immutable version from an earlier artifact, and the current checkout's
-extracted package bytes differ. A new synchronized fontdone prerelease is
-required before the browser package can be published.
+The local `fontdone@2.14.3-alpha.2` tarball is the synchronized candidate
+built from the pushed fontdone `main` commit. The earlier npm
+`2.14.3-alpha.1` archive remains immutable historical evidence and is not
+used by the current release bundle.
 
 The local Cargo registry is intentionally a read-only source registry for
 consumer verification, not a fake crates.io upload endpoint. Python and npm
@@ -82,7 +81,7 @@ changed.
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. After it was assembled, the clean `fontdone`
-`main` branch was pushed at `2afb921f8a5464724f30427e7167b7ef4aaea0d4`, and
+`main` branch was pushed at `ac6e7b8e9300663afca809ad10423ab441e13798`, and
 the clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1

@@ -20,9 +20,9 @@ from pathlib import Path
 
 PACKAGE_FILES = (
     "image-slash-star/image-slash-star-0.1.0.crate",
-    "fontdone/fontdone-2.14.3-alpha.1.crate",
-    "fontdone/fontdone-c-abi-2.14.3-alpha.1-aarch64-apple-darwin.tar.gz",
-    "fontdone/fontdone-2.14.3-alpha.1.tgz",
+    "fontdone/fontdone-2.14.3-alpha.2.crate",
+    "fontdone/fontdone-c-abi-2.14.3-alpha.2-aarch64-apple-darwin.tar.gz",
+    "fontdone/fontdone-2.14.3-alpha.2.tgz",
     "pillow-rs/pillow-rs-0.1.0.crate",
     "pillow-rs/python/pillow_rs-0.1.0-cp38-abi3-macosx_11_0_arm64.whl",
     "pillow-rs/npm/pillow-rs-0.1.0.tgz",
@@ -47,8 +47,8 @@ CARGO_PACKAGE_SURFACES = (
     ),
     (
         "fontdone",
-        "2.14.3-alpha.1",
-        "fontdone/fontdone-2.14.3-alpha.1.crate",
+        "2.14.3-alpha.2",
+        "fontdone/fontdone-2.14.3-alpha.2.crate",
         "fo/nt/fontdone",
     ),
     (
