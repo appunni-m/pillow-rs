@@ -280,7 +280,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 [[package]]
 name = "fontdone"
 version = "2.14.3-alpha.1"
-source = "git+https://github.com/appunni-m/fontdone.git?rev=c1a152b586438eecfaac80fb4eed54fd01abc49d#c1a152b586438eecfaac80fb4eed54fd01abc49d"
+source = "git+https://github.com/appunni-m/fontdone.git?rev=ad5e771aa0621d6e699260d23fbbb35e2a081e82#ad5e771aa0621d6e699260d23fbbb35e2a081e82"
 dependencies = [
  "bzip2-rs",
  "flate2",
@@ -452,7 +452,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 [[package]]
 name = "image-slash-star"
 version = "0.1.0"
-source = "git+https://github.com/appunni-m/image-slash-star.git?rev=f0ec00657ddd958e3ae9c73db6030ddfff5928be#f0ec00657ddd958e3ae9c73db6030ddfff5928be"
+source = "git+https://github.com/appunni-m/image-slash-star.git?rev=35dd72808e6b2a8488b98caf685a3d48e4c97468#35dd72808e6b2a8488b98caf685a3d48e4c97468"
 dependencies = [
  "bytemuck",
  "wide",
