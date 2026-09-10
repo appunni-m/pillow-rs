@@ -8,7 +8,7 @@ does not publish to a public registry or write to a remote Git repository.
 
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
-| `image-slash-star` | `0.1.0` | `v0.1.0` | `72fa0322cdb86805acfc73d6eaad16c2697fbb82` |
+| `image-slash-star` | `0.1.0` | `v0.1.0` | `8d8ecdfe8699329ae166541be8040b1bc3b253e7` |
 | `fontdone` | `2.14.3-alpha.2` | `v2.14.3-alpha.2` | `ec58b10c29fae9b9ca4c622568bc1410596608fd` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
 
@@ -87,7 +87,7 @@ image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at
-`72fa0322cdb86805acfc73d6eaad16c2697fbb82`. Before enabling public registry
+`8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Before enabling public registry
 publication, the owner must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
