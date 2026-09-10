@@ -100,8 +100,9 @@ The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.2` tag remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`;
 the current `fontdone` `main` branch is pushed at
-`50a1d7eec2b996cc394512dd39a3318629a61e2f` with the hosted fast and MSRV gates
-passing. The clean pillow-rs release-prep branch is present on `origin`. The
+`c401523d2856036fbbdf889eea09eb2ed2f1e890`; hosted fast and MSRV gates are
+currently recorded only for its previous commit `50a1d7eec2b996cc394512dd39a3318629a61e2f`.
+The clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
