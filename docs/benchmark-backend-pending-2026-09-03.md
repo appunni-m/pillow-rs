@@ -1322,17 +1322,29 @@ replay and changed-Rust-line coverage are recorded in the final continuation
 above. WGSL receipts establish shader dispatch, not source-line or branch
 coverage.
 
-### Current local GPU adapter probe (2026-09-10)
+### Current local GPU adapter and fixed-cohort probe (2026-09-10)
 
-The exact tagged `v0.1.0` checkout was rerun on this host with
-`WGPU_BACKEND=metal`. `system_profiler` reports an Apple M3 Pro with Metal
-support, but the benchmark target ended with `python-gpu` status `failed`,
-execution status `not_proven`, and no `actual_backend` or terminal receipt.
-The bounded GPU profile also produced no terminal execution record. This is a
-host adapter-initialization limitation, not parity or timing evidence. These
-outputs are therefore excluded from the retained native-GPU pair and cannot
-close the zero-violation benchmark gate; a runner that can obtain a native
-adapter is required for the next acceptance pair.
+The first sandboxed probe on this host could not initialize an adapter. A
+host-access rerun with `WGPU_BACKEND=metal` obtained the native Apple GPU and
+completed all five retained fixed-cohort runs at revision `a5a678401`. Each run
+selected and measured 11/11 workloads, produced 44/44 comparable rows, and
+recorded 33/33 terminal requested=actual target receipts. The normalized
+operation/resource/receipt structure was identical across all five runs. The
+result SHA-256 values are `bbfb405852471109a328c19c4d323f371214ec6527af898720ba40cf4a9c86a9`,
+`e9b7ec6b216c4faa64fb84d879b92f343eb7cf29084be019307cc23c7eb38287`,
+`ec16142a5f610e1edd92d8726af72729a2d830f192da37c82706c09bf2120b9e`,
+`86e640de69af4d841a5443339df3f767b8dc20de5137780c4594306e9e6e22d7`, and
+`3c2cd16866988c0fd51500f4b71cfe78ed907029a358e5236be62380c0130047`.
+Adjacent unchanged budget comparisons reported 3, 7, 5, and 5 timing-only
+violations; their report hashes are
+`f93e9f3cf9b2d702f43f1c697ab14c94af172e2c305c520bd4b977db59edc5a8`,
+`ca6d868adf167662e8487d85921039ef41ad0681e2eb9d6fedfa7ad8b7a50de2`,
+`df0e27d0e4de203cc955fdcd64970ba1de02bb4c43d5ee4d09a16eb73461b25e`, and
+`5d0f8d0b7154a4b7b091750496f954d173f7f5a763c4282349f3e55cab29ea7d`.
+The rows move between Pillow and target subjects while the execution
+fingerprint stays fixed, so no source, fixture, threshold, or receipt change
+is justified. A dedicated low-load runner is still required for the
+zero-violation acceptance pair.
 
 ### Benchmark identity correction (2026-09-10)
 
