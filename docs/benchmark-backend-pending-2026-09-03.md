@@ -2,8 +2,8 @@
 
 Current continuation: ordered F GPU arithmetic, coefficient tiling, general
 projective sampling, PA/SIMD fixes, and the release package metadata fixes are
-integrated on `codex/benchmark-backend-parity-fixes` at source commit
-`7ffeff1a432ae3ae7ded515ed608b0acfd01e0d2` (implementation changes landed in
+integrated on `codex/benchmark-backend-parity-fixes`, whose current head is
+`612311214bfdff426a9f186f374392d2994449c7` (implementation changes landed in
 `bd4da3477c79a5dd2241ac54b47896679717d328`). The regenerated
 11,345-case replay and managed coverage are recorded below. The only remaining
 acceptance item is the zero-violation benchmark pair; its receipt structure is
@@ -1466,7 +1466,7 @@ remain equal across the runs; only host timing varies. These complete receipts
 therefore keep P2 open without justifying a threshold, workload, fixture, or
 receipt-policy change.
 
-### Current release-profile reruns (2026-09-11)
+### Release-profile reruns on the package-metadata commit (2026-09-11)
 
 At the current pushed source commit
 `7ffeff1a432ae3ae7ded515ed608b0acfd01e0d2`, six further runs used the unchanged
@@ -1494,3 +1494,24 @@ The normalized operation, resource, backend, and terminal receipt fingerprints
 remain equal across all six runs; only host timing varies. These complete
 receipts therefore keep P2 open without justifying a threshold, workload,
 fixture, or receipt-policy change.
+
+### Release-profile reruns on the release-preparation commit (2026-09-11)
+
+At the release-preparation commit
+`1023670636d299e98fe15c3e7cf86b7d23b88b86`, four further runs used the
+unchanged release profile and fixed 11-workload input selection. Every run
+selected and measured 11/11 workloads, with 44/44 comparable rows and 33/33
+terminal requested=actual CPU, SIMD, and Metal GPU receipts. The result
+SHA-256 values, in run order, are
+`686fd384b2762969ec2acdd6ca8de54997b4f299a0bef120a634088a60a19043`,
+`a86bf8e8c02d2f422728bda0556c40d6f04cd2f60a3b050a25fc41d347ecd5b5`,
+`2f79bd2084a6c15e5df6841f8e71056d34132aa00275efa2d866bd8b193335cd`, and
+`33105cd41658998a692e04a5ad889beda23ed635931154af0b80cb45707f7330`.
+
+The adjacent run-21-vs-run-20 budget receipt reported nine timing-only
+violations and has SHA-256 `c2b55dbfd95357d02736c2a57259cc8f182a7e54b1c7b9bdbe79fee437c805ed`. The run-23-vs-run-22 receipt
+reported five timing-only violations and has SHA-256 `6af6f4a020dd4f2576cb5d30f0a3d59655ba892836932a9d9a147c2c874cd3c4`. The
+normalized operation, resource, backend, and terminal receipt fingerprints
+remain equal across all four runs; only host timing varies. These complete
+receipts keep P2 open without justifying a threshold, workload, fixture, or
+receipt-policy change.
