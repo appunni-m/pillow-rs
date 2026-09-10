@@ -343,7 +343,7 @@ backend-support-matrix: ## Emit registry-derived CPU/SIMD/GPU support JSON
 	$(MAKE) -C $(CORE_SRC) backend-support-matrix
 
 test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages and run the same public corpus through Node and browser WASM
-	cd $(JS_SRC) && npm run test:package
+	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	set +e; \
 	$(PYTHON) scripts/run_migration_js_parity.py \
 		--host node \
