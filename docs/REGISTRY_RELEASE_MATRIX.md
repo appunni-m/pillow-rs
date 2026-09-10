@@ -9,11 +9,11 @@ that will be tagged.
 ## Current release graph
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
-candidates. The sibling release branches are prepared and locally verified;
-remote branch publication, registry publication, and the exact-commit hosted CI
-runs remain external prerequisites. The local-only bootstrap bundle is recorded
-under `dist/release-local/` and is verified separately from the tracked source
-tree.
+candidates. The prepared pillow-rs history is now fast-forwarded to `origin/main`
+and locally verified; registry publication and the exact-commit hosted CI run
+remain external prerequisites. The sibling release branches are recorded below.
+The local-only bootstrap bundle is under `dist/release-local/` and is verified
+separately from the tracked source tree.
 
 The root Makefile's maintained `build/fontdone-src` parity checkout is pinned to
 the same `ec58b10c29fae9b9ca4c622568bc1410596608fd` revision used by the
@@ -77,9 +77,9 @@ backend mismatch; the unchanged zero-violation gate remains open.
 The clean `fontdone` `main` branch is now present on `origin` at
 `25f3c10c8dd89c91a24f5bbb99f590c369fbacf3`; its immutable local release tag
 `v2.14.3-alpha.2` remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`.
-The pillow-rs release-prep branch
-`codex/benchmark-backend-parity-fixes` is present on `origin` and contains the
-the exact-CI release-preparation commit
+The pillow-rs `main` branch is now present on `origin` at
+`1a6963ace16ccc4bbc5d29da7d1b259aa715036e`; it contains the exact-CI
+release-preparation commit
 `8b94fe0d216ca979d47d86881dafdc6bea2479e8`, followed by a documentation-only
 receipt correction at the current head. The exact-head local CI gate passed on
 `1ac376e11446c48c146e1192c39bfe5893a48b79`, while the benchmark
