@@ -137,6 +137,14 @@ budget hashes are recorded in the [pending checklist](benchmark-backend-pending-
 This remains host timing evidence, and the zero-violation acceptance item is
 still open.
 
+The current clean head `47ded27dc76fbf11d12c609d2a0874706b0dc29b` was then
+measured in five complete release-profile runs using the same fixed 11-workload
+cohort. Each run retained 44/44 comparable rows and 33/33 terminal
+requested-to-actual CPU, SIMD, and native Metal GPU receipts. Adjacent
+comparisons reported five, five, three, and five timing-only violations. The
+result and budget hashes are recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md);
+the zero-violation acceptance item remains open under the unchanged policy.
+
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a

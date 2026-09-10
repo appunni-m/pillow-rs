@@ -1495,6 +1495,32 @@ remain equal across all six runs; only host timing varies. These complete
 receipts therefore keep P2 open without justifying a threshold, workload,
 fixture, or receipt-policy change.
 
+### Release-profile reruns after the coverage receipt update (2026-09-11)
+
+At the current clean source commit
+`47ded27dc76fbf11d12c609d2a0874706b0dc29b`, five further runs used the
+unchanged release profile and fixed 11-workload input selection. Every run
+selected and measured 11/11 workloads, retained 44/44 comparable rows, and
+recorded 33/33 terminal requested=actual CPU, SIMD, and Metal GPU receipts.
+The result SHA-256 values, in run order, are
+`bdfc82c703bf3e9caa6a62e735563cc8e751f0942715cbff019d192f747065d5`,
+`0865812a26456fa7237cd4d4cf29ff1c5b68a0e85f09fabd3c944de81adf946d`,
+`13ab2eca18722de72294d9fcb319bc6ad141380a086e57bc30144669e443cae7`,
+`b3c20640583a87d5bda8f74125c6b6b06526ef40cf459d180e5f6dd8b82486d5`, and
+`173e5110aecd1e93f6f62f07b606ff5d8d2c262c2b2cdf07eacec95764dbe704`.
+
+The adjacent unchanged five-percent budget comparisons reported five, five,
+three, and five timing-only violations. Their receipt SHA-256 values, in
+order, are
+`d066154fbbba14bac0fac241e9d3afa630dc65945f9a61560a915c9aaa62a1b9`,
+`975b7a24baca0a5b0a6e27a7142ab68fce8bdddabb05f5c8b3d4a3422cf74f24`,
+`c92d14e9a2a277cf94fef9eb90734be206ff435a785a844eca7d2de542ba23aa`, and
+`1a657c9ff333bd62dd0d997cba581963968234c68f39413c848b077417396408`.
+The normalized operation, resource, backend, and terminal receipt fingerprints
+remain equal across all five runs; only host timing varies. These complete
+receipts therefore keep P2 open without justifying a threshold, workload,
+fixture, or receipt-policy change.
+
 ### Release-profile reruns on the release-preparation commit (2026-09-11)
 
 At the release-preparation commit
