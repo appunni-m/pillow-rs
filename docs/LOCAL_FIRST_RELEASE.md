@@ -51,9 +51,11 @@ verification and the fontdone release dry-run passed from the exact tagged
 checkouts.
 
 The local `fontdone@2.14.3-alpha.2` tarball is the synchronized candidate
-built from the pushed fontdone `main` commit. The earlier npm
-`2.14.3-alpha.1` archive remains immutable historical evidence and is not
-used by the current release bundle.
+built from the exact local `v2.14.3-alpha.2` tag commit
+`ec58b10c29fae9b9ca4c622568bc1410596608fd`. The current pushed `main` branch
+contains follow-up CI and receipt fixes; it needs a new version and tag before
+those changes are published. The earlier npm `2.14.3-alpha.1` archive remains
+immutable historical evidence and is not used by the current release bundle.
 
 The local Cargo registry is intentionally a read-only source registry for
 consumer verification, not a fake crates.io upload endpoint. Python and npm
