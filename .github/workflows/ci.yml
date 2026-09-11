@@ -98,13 +98,13 @@ jobs:
 
       - name: build + Python parity
         run: |
-          make build
-          make migration-parity-inputs-check
-          make migration-parity-inventory-check
-          make migration-parity-test
+          make PYTHON=.venv/bin/python build
+          make PYTHON=.venv/bin/python migration-parity-inputs-check
+          make PYTHON=.venv/bin/python migration-parity-inventory-check
+          make PYTHON=.venv/bin/python migration-parity-test
 
       - name: coverage
-        run: make migration-parity-coverage
+        run: make PYTHON=.venv/bin/python migration-parity-coverage
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -156,4 +156,4 @@ jobs:
       - working-directory: pillow-rs-js
         run: npm ci
       - name: build and JS/WASM parity
-        run: make test-wasm
+        run: make PYTHON=.venv/bin/python test-wasm
