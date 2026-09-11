@@ -204,6 +204,15 @@ pub fn resolve_array_layout(
             return Err(PilError::IndexError("tuple index out of range".to_string()));
         }
     };
+    // Pillow's ``fromarray`` resolves the image size in ``frombuffer`` before
+    // it asks an array-interface object for a host buffer.  Keep that ordering
+    // in the shared core so Python versions without PEP 688's ``__buffer__``
+    // hook still report the public OverflowError for an oversized dimension
+    // instead of leaking the later buffer-protocol TypeError.
+    u32::try_from(width)
+        .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
+    u32::try_from(height)
+        .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
     let mode_reinterprets_dtype = mode != entry.mode && !entry.color_modes.contains(&mode);
     Ok(ArrayLayout {
         mode: mode.to_string(),
