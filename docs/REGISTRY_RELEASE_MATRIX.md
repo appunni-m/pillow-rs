@@ -9,9 +9,11 @@ that will be tagged.
 ## Current release graph
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
-candidates. The prepared pillow-rs history is now fast-forwarded to `origin/main`
-and locally verified; registry publication and the exact-commit hosted CI run
-remain external prerequisites. The sibling release branches are recorded below.
+candidates. The prepared pillow-rs release branch
+`codex/benchmark-backend-parity-fixes` is locally verified at
+`738e600ce598867395166d7f1d3323f25eae2b1d`; registry publication and the
+exact-commit hosted CI run remain external prerequisites. The sibling release
+branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
@@ -22,10 +24,10 @@ release evidence therefore exercise the exact fontdone source being packaged.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local release tag and the pushed clean-history candidate `codex/release-image-slash-star-clean` are `8d8ecdfe8699329ae166541be8040b1bc3b253e7` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit and current pushed `main` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; this synchronized candidate contains the sbix error-parity, image-cache input, source-bound evidence, generated-inventory, and release-layout fixes with 20,355/20,355 runnable cases and 3 safety-extension cases pending; the current local `make ci` gate passes, while the hosted thorough C-ABI evidence is still required; the generated C-ABI scorecard is 6/12 with unresolved debt (C01.1 176/218, C01.7 13,572/18,098, C06.1 22/23, C07.1 19/20, C08.2 2,652/3,745, C08.3 15,829/20,355), five fresh platform bundles including the Windows import library, and benchmark review still required |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local `v0.1.0` tag is `8d8ecdfe8699329ae166541be8040b1bc3b253e7`; pushed clean-history candidate `codex/release-image-slash-star-clean` is `7a2f7afe39594d59652b30c41f58e114b43db92a` with no historical blob at or above 100 MB and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit is `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; current pushed `main` is `29122e4092433eb46d031f386d7379740c4d4589` and contains follow-up parity-oracle, ABI test-support, and release-documentation corrections outside the public root archive. The synchronized candidate has 20,355/20,355 runnable cases and 3 safety-extension cases pending; the current local `make ci` gate and one-crate/C-SDK/npm dry-run pass, while hosted thorough C-ABI evidence is still required. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review are still required |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag and current `main`; the earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | the local `v0.1.0` candidate is rebuilt from the synchronized alpha.3 dependency pin; its exact candidate commit, archive checksum, and staged registry entry are recorded in `dist/release-local/release-manifest.txt` and `SHA256SUMS`; public crate packaging still waits for the image-slash-star and fontdone registry versions |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
@@ -75,8 +77,8 @@ backend mismatch; the unchanged zero-violation gate remains open.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; its immutable local release tag
-`v2.14.3-alpha.3` points to the same commit. The older `v2.14.3-alpha.2`
+`29122e4092433eb46d031f386d7379740c4d4589`; its immutable local release tag
+`v2.14.3-alpha.3` remains at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
 The pillow-rs `main` branch is synchronized with the release-preparation
 history. The current PyO3 and supply-chain fix is
@@ -87,7 +89,8 @@ WASM lanes, and managed coverage completed all 24 plans with 11,325 passing
 checks. The aggregate backend result still reports the intentional SIMD/GPU
 host-control partition. The benchmark zero-violation item remains open.
 The image-slash-star clean-history candidate is present on `origin` at
-`8d8ecdfe8699329ae166541be8040b1bc3b253e7`; its current tree matches the
+`7a2f7afe39594d59652b30c41f58e114b43db92a`; its local `v0.1.0` tag remains at
+`8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Its current tree matches the
 release checkout and its package verification passes. `origin/main` still
 contains the historical oversized AV1 blobs and is unchanged pending explicit
 authorization for the coordinated history rewrite.
