@@ -98,6 +98,7 @@ MIGRATION_BENCHMARK_ROADMAP_STATUS_OUTPUT ?= build/migration-parity/pipeline-roa
 MIGRATION_BENCHMARK_BUDGET_OUTPUT ?= build/migration-parity/pipeline-budget-check.json
 MIGRATION_BENCHMARK_BUDGET_BASELINE ?=
 MIGRATION_BENCHMARK_PROFILE ?= standard
+MIGRATION_BENCHMARK_TASKPOLICY_ARGS ?= -c utility -b
 MIGRATION_PROFILE_WORKLOAD_ID ?= pipeline.quick.gaussianblur-invert.rgb-1024
 MIGRATION_PROFILE_BACKEND ?= cpu
 MIGRATION_PROFILE_REPEAT ?= 40
@@ -175,6 +176,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-case-review$(NC) Verify duplicate selection and nuanced cases\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Compare Pillow vs CPU, SIMD, and GPU\n"
+	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark-low-load$(NC) Run the fixed cohort with macOS utility/background scheduling\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark$(NC) Run the representative four-workload smoke benchmark\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark$(NC) Run the fixed 11-workload release acceptance cohort\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=pipeline make migration-parity-benchmark$(NC) Run every PipelineOp and public composition workload\n"
@@ -412,7 +414,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -632,6 +634,14 @@ migration-parity-benchmark: build ## Build release, then run correctness-gated b
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-benchmark-low-load: ## Run a fixed benchmark under a stable low-load task policy when available
+	@if command -v taskpolicy >/dev/null 2>&1 && taskpolicy $(MIGRATION_BENCHMARK_TASKPOLICY_ARGS) true >/dev/null 2>&1; then \
+		taskpolicy $(MIGRATION_BENCHMARK_TASKPOLICY_ARGS) $(MAKE) migration-parity-benchmark; \
+	else \
+		printf "taskpolicy unavailable or not permitted; running the benchmark with the native scheduler.\n"; \
+		$(MAKE) migration-parity-benchmark; \
+	fi
 
 migration-parity-pipeline-core-benchmark: ## Run the direct pure-Rust pipeline boundary benchmark
 	@mkdir -p "$(dir $(MIGRATION_CORE_BENCHMARK_OUTPUT))"

@@ -70,6 +70,17 @@ and leaves each generated workload's warmup, iteration, and sample policy
 unchanged. Use the same profile and source checkout for both runs in a budget
 comparison.
 
+On macOS, rerun the fixed cohort with the maintained low-load entry point when
+the host scheduler is noisy:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark-low-load
+```
+
+This applies Darwin utility QoS and background I/O policy through `taskpolicy`
+when that command is available. Other hosts use their native scheduler. The
+workload IDs, repeat policy, timing budget, and receipt contract are unchanged.
+
 Compare two compatible result artifacts with an explicit baseline. The budget
 checker uses the repository's five-percent policy; timing variance is recorded
 as a violation rather than hidden by changing the threshold:
