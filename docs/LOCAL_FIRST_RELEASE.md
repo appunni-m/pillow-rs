@@ -110,15 +110,15 @@ gate.
 
 ## Current hosted CI status
 
-The latest pushed root release-preparation commit is
-`da2ac3e3556f6bfb58ed0dc250532a479d7789f`. Its CI adds a run-summary tail for
+The branch includes the CI diagnostic update from
+`da2ac3e3556f6bfb58ed0dc250532a479d7789f`, which adds a run-summary tail for
 Python build failures so a hosted compiler or packaging error remains
-reviewable even when the job log cannot be downloaded. The preceding run
-`34623343821` is still in progress: Rust and documentation checks passed,
-Python 3.10 completed with one parity mismatch in
-`PIL.Image.Image.quantize.nuanced.palette-image-empty`, Python 3.12 failed in
-the build step before parity, and the WASM job was still running at the last
-API check. The new run for `da2ac3e` is queued behind it. A clean local Python
+reviewable even when the job log cannot be downloaded. Receipt commit
+`31acfcc5d` triggered hosted run `34626881477`; the run was queued behind the
+previous job at the time of this record. That previous run was cancelled by
+the new push after Rust and documentation checks passed, Python 3.10 recorded
+one parity mismatch in `PIL.Image.Image.quantize.nuanced.palette-image-empty`,
+and Python 3.12 failed in the build step before parity. A clean local Python
 3.10 replay with the same serial batch settings passed all 11,345/11,345
 comparisons, so no fixture or expected-output change was made for the hosted
 observation.
@@ -195,9 +195,10 @@ inputs, publication must use a newly versioned synchronized tag after the
 alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
-The clean pillow-rs release-prep branch is present on `origin` at the
-diagnostic commit `da2ac3e3556f6bfb58ed0dc250532a479d7789f`; the receipt
-evidence remains bound to the earlier implementation-base commits. The
+The clean pillow-rs release-prep branch is present on `origin` with the
+diagnostic commit `da2ac3e3556f6bfb58ed0dc250532a479d7789f` and subsequent
+receipt updates; the evidence remains bound to the earlier implementation
+base commits. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
