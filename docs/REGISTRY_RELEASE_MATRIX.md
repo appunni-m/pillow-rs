@@ -10,14 +10,14 @@ that will be tagged.
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
-`codex/benchmark-backend-parity-fixes` is pushed at
-`da2ac3e3556f6bfb58ed0dc250532a479d7789f`; its latest hosted run is queued
-after the diagnostic workflow update. The preceding run
-`34623343821` has passing Rust and documentation jobs, one hosted Python 3.10
-parity mismatch, a Python 3.12 build failure, and a WASM job that was still in
-progress at the last API check. A clean local Python 3.10 replay of the same
-serial batch settings passes all 11,345 cases. Registry publication and an
-exact-commit hosted CI pass remain external prerequisites.
+`codex/benchmark-backend-parity-fixes` includes the CI diagnostic update
+`da2ac3e3556f6bfb58ed0dc250532a479d7789f` and its receipt follow-up. Hosted
+run `34626881477` was queued for that follow-up; the preceding run
+`34623343821` was cancelled after Rust and documentation jobs passed, Python
+3.10 recorded one parity mismatch, and Python 3.12 failed in the build step.
+A clean local Python 3.10 replay of the same serial batch settings passes all
+11,345 cases. Registry publication and an exact-commit hosted CI pass remain
+external prerequisites.
 The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
@@ -93,9 +93,10 @@ The clean `fontdone` `main` branch is now present on `origin` at
 tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
 The clean pillow-rs release-preparation branch
-`codex/benchmark-backend-parity-fixes` is present on `origin` at
-`da2ac3e3556f6bfb58ed0dc250532a479d7789f`; the earlier source-fix and
-implementation-base commits remain historical receipt references.
+`codex/benchmark-backend-parity-fixes` is present on `origin` with the
+diagnostic commit `da2ac3e3556f6bfb58ed0dc250532a479d7789f` and subsequent
+receipt updates; the earlier source-fix and implementation-base commits remain
+historical receipt references.
 `origin/main` remains at
 `b4b91cb8a8bb85be861c0ea9e4f62dfbf7e8e0b9` pending review of the candidate
 history. The current PyO3 and supply-chain fix is
