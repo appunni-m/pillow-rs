@@ -383,10 +383,10 @@ def _validate_comparison(value: Any, path: str) -> None:
             raise _error(f"{path}.comparison.reason", "transforms require a reason")
     elif kind == "image":
         _exact(comparison, {"kind", "pixel_mode", "maximum_channel_delta", "metadata_mode", "reason"}, f"{path}.comparison")
-        if comparison["pixel_mode"] not in {"exact", "bounded_delta"}:
+        if comparison["pixel_mode"] not in {"exact", "bounded_delta", "nondeterministic"}:
             raise _error(f"{path}.comparison.pixel_mode", "unsupported pixel policy")
         delta = comparison["maximum_channel_delta"]
-        if type(delta) is not int or delta < 0 or (comparison["pixel_mode"] == "exact" and delta != 0) or (comparison["pixel_mode"] == "bounded_delta" and delta <= 0):
+        if type(delta) is not int or delta < 0 or (comparison["pixel_mode"] in {"exact", "nondeterministic"} and delta != 0) or (comparison["pixel_mode"] == "bounded_delta" and delta <= 0):
             raise _error(f"{path}.comparison.maximum_channel_delta", "invalid image delta")
         if comparison["metadata_mode"] not in {"exact", "declared_only", "ignored"}:
             raise _error(f"{path}.comparison.metadata_mode", "unsupported metadata policy")
@@ -747,7 +747,15 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
     _reject_output_fields(document, relative)
     for index, case in enumerate(_list(document["cases"], f"{relative}.cases")):
         path = f"{relative}.cases[{index}]"
-        case = _exact(case, {"case_id", "surface", "operation", "covers", "target_profiles", "assets", "steps", "observations"}, path)
+        case = _optional_exact(
+            case,
+            {"case_id", "surface", "operation", "covers", "target_profiles", "assets", "steps", "observations", "comparisons"},
+            path,
+        )
+        required_case_keys = {"case_id", "surface", "operation", "covers", "target_profiles", "assets", "steps", "observations"}
+        missing_case_keys = required_case_keys - set(case)
+        if missing_case_keys:
+            raise _error(path, f"missing required keys {sorted(missing_case_keys)}")
         case_id = _string(case["case_id"], f"{path}.case_id")
         if case_id in item_ids:
             raise _error(f"{path}.case_id", "duplicate executable item ID")
@@ -810,6 +818,12 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
         primary_observed = [step_id for step_id in observations if step_map[step_id]["surface"] == surface and step_map[step_id]["operation"] == operation]
         if not primary_observed:
             raise _error(f"{path}.observations", "primary operation must be observed")
+        comparisons = case.get("comparisons", {})
+        comparisons = _mapping(comparisons, f"{path}.comparisons")
+        for step_id, comparison in comparisons.items():
+            if step_id not in observations:
+                raise _error(f"{path}.comparisons", f"comparison override must target an observed step: {step_id!r}")
+            _validate_comparison(comparison, f"{path}.comparisons.{step_id}")
         for requirement_id in covers:
             matching_operations = [
                 key

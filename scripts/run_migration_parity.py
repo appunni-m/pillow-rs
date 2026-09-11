@@ -2777,8 +2777,14 @@ def run_side_subprocess(
 
 
 def comparison_policy(
-    operation_index: dict[tuple[str, str], dict[str, Any]], step: dict[str, Any]
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    step: dict[str, Any],
+    case: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if case is not None:
+        overrides = case.get("comparisons", {})
+        if step["step_id"] in overrides:
+            return overrides[step["step_id"]]
     result = operation_definition(operation_index, step["surface"], step["operation"])["source"]["result"]
     observations = result.get("observations", [])
     return observations[0].get("comparison", {"kind": "exact"}) if observations else {"kind": "exact"}
@@ -2816,7 +2822,28 @@ def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -
             return []
         return [_diff(path, "bytes_mismatch", source, target, "exact byte value mismatch")]
     if kind == "image":
+        pixel_mode = policy.get("pixel_mode", "exact")
         metadata_mode = policy.get("metadata_mode", "exact")
+        if pixel_mode == "nondeterministic":
+            if not isinstance(source, dict) or not isinstance(target, dict):
+                return [_diff(path, "image_mismatch", source, target, "nondeterministic image comparison requires image records")]
+            if metadata_mode != "ignored":
+                source_metadata = {key: value for key, value in source.items() if key != "bytes"}
+                target_metadata = {key: value for key, value in target.items() if key != "bytes"}
+                if source_metadata != target_metadata:
+                    return [_diff(path, "image_metadata_mismatch", source, target, "stable image metadata mismatch")]
+            source_bytes = source.get("bytes")
+            target_bytes = target.get("bytes")
+            if not isinstance(source_bytes, str) or not isinstance(target_bytes, str):
+                return [_diff(path, "image_mismatch", source, target, "nondeterministic image comparison requires encoded bytes")]
+            try:
+                source_length = len(base64.b64decode(source_bytes, validate=True))
+                target_length = len(base64.b64decode(target_bytes, validate=True))
+            except (ValueError, binascii.Error):
+                return [_diff(path, "image_mismatch", source_bytes, target_bytes, "nondeterministic image comparison requires valid encoded bytes")]
+            if source_length != target_length:
+                return [_diff(path, "image_size_mismatch", source_bytes, target_bytes, "stable image byte lengths differ")]
+            return []
         if metadata_mode == "ignored" and isinstance(source, dict) and isinstance(target, dict):
             left = source.get("bytes")
             right = target.get("bytes")
@@ -2883,7 +2910,14 @@ def compare_case(
         if left["status"] == "error":
             diffs.extend(compare_error(left["error"], right["error"], opdef, step_id))
         else:
-            diffs.extend(compare_value(left.get("value"), right.get("value"), comparison_policy(operation_index, step), f"{step_id}.value"))
+            diffs.extend(
+                compare_value(
+                    left.get("value"),
+                    right.get("value"),
+                    comparison_policy(operation_index, step, case),
+                    f"{step_id}.value",
+                )
+            )
     return ("pass" if not diffs else "fail"), diffs
 
 
