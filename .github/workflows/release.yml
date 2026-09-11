@@ -263,19 +263,47 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
       - name: verify the package before authentication
         run: cargo package --locked -p pillow-rs
+      - name: check immutable crates.io artifact
+        id: cargo-check
+        shell: bash
+        run: |
+          version="${RELEASE_VERSION#v}"
+          archive="target/package/pillow-rs-${version}.crate"
+          response="$(curl --silent --show-error --location \
+            --header 'Accept: application/json' \
+            --write-out '\n__STATUS__%{http_code}' \
+            "https://crates.io/api/v1/crates/pillow-rs/${version}")"
+          http_status="${response##*__STATUS__}"
+          metadata="${response%__STATUS__*}"
+          metadata="${metadata%$'\n'}"
+          if [ "$http_status" = "404" ]; then
+            echo "pillow-rs@${version} is not visible"
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          elif [ "$http_status" != "200" ]; then
+            echo "crates.io lookup returned HTTP ${http_status}" >&2
+            exit 1
+          else
+            registry_checksum="$(printf '%s' "$metadata" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"].get("checksum", ""))')"
+            test -n "$registry_checksum"
+            local_checksum="$(sha256sum "$archive" | cut -d' ' -f1)"
+            if [ "$local_checksum" != "$registry_checksum" ]; then
+              echo "crates.io artifact mismatch for pillow-rs@${version}" >&2
+              echo "local=${local_checksum} registry=${registry_checksum}" >&2
+              exit 1
+            fi
+            echo "pillow-rs@${version} is visible and matches the immutable archive"
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: obtain a short-lived crates.io token
+        if: steps.cargo-check.outputs.missing == 'true'
         id: auth
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
       - name: publish the root crate
+        if: steps.cargo-check.outputs.missing == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
-          version="${RELEASE_VERSION#v}"
-          if cargo info --registry crates-io "pillow-rs@$version" >/dev/null 2>&1; then
-            echo "pillow-rs@$version is already visible; keeping the immutable registry artifact"
-          else
-            cargo publish --locked -p pillow-rs
-          fi
+          cargo publish --locked -p pillow-rs
 
   publish-pypi:
     name: Publish pillow-rs to PyPI
@@ -291,10 +319,55 @@ jobs:
         with:
           name: release-artifacts-${{ github.run_id }}
           path: dist/release
+      - name: check immutable PyPI artifact
+        id: pypi-check
+        shell: bash
+        run: |
+          version="${RELEASE_VERSION#v}"
+          archive="$(find dist/release/python -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$archive"
+          python3 - "$archive" "$version" <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import sys
+          import urllib.error
+          import urllib.request
+
+          archive = Path(sys.argv[1])
+          version = sys.argv[2]
+          url = f"https://pypi.org/pypi/pillow-rs/{version}/json"
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                      output.write("missing=true\n")
+                  print(f"pillow-rs=={version} is not visible")
+                  raise SystemExit(0)
+              raise
+
+          filename = archive.name
+          matches = [item for item in payload.get("urls", []) if item.get("filename") == filename]
+          if len(matches) != 1:
+              raise SystemExit(f"PyPI does not expose exactly one {filename} for pillow-rs=={version}")
+          registry_checksum = matches[0].get("digests", {}).get("sha256")
+          local_checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+          if not registry_checksum or local_checksum != registry_checksum:
+              raise SystemExit(
+                  f"PyPI artifact mismatch for pillow-rs=={version}: "
+                  f"local={local_checksum} registry={registry_checksum}"
+              )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("missing=false\n")
+          print(f"pillow-rs=={version} is visible and matches the immutable wheel")
+          PY
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        if: steps.pypi-check.outputs.missing == 'true'
         with:
           packages-dir: dist/release/python/
-          skip-existing: true
 
   publish-npm:
     name: Publish pillow-rs to npm
@@ -315,16 +388,45 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
           cache: false
+      - name: check immutable npm artifact
+        id: npm-check
+        shell: bash
+        run: |
+          version="${RELEASE_VERSION#v}"
+          archive="dist/release/npm/pillow-rs-${version}.tgz"
+          test -f "$archive"
+          response="$(curl --silent --show-error --location \
+            --header 'Accept: application/json' \
+            --write-out '\n__STATUS__%{http_code}' \
+            "https://registry.npmjs.org/pillow-rs/${version}")"
+          http_status="${response##*__STATUS__}"
+          metadata="${response%__STATUS__*}"
+          metadata="${metadata%$'\n'}"
+          if [ "$http_status" = "404" ]; then
+            echo "pillow-rs@${version} is not visible"
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          elif [ "$http_status" != "200" ]; then
+            echo "npm registry lookup returned HTTP ${http_status}" >&2
+            exit 1
+          else
+            registry_integrity="$(printf '%s' "$metadata" | node --input-type=module -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).dist?.integrity ?? ""))')"
+            test -n "$registry_integrity"
+            local_integrity="sha512-$(sha512sum "$archive" | cut -d' ' -f1 | xxd -r -p | base64 -w0)"
+            if [ "$local_integrity" != "$registry_integrity" ]; then
+              echo "npm registry artifact mismatch for pillow-rs@${version}" >&2
+              echo "local=${local_integrity} registry=${registry_integrity}" >&2
+              exit 1
+            fi
+            echo "pillow-rs@${version} is visible and matches the immutable archive"
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: install the npm CLI required by trusted publishing
         run: npm install --global "npm@$NPM_VERSION"
       - name: publish the npm tarball with provenance
+        if: steps.npm-check.outputs.missing == 'true'
         run: |
           version="${RELEASE_VERSION#v}"
-          if npm view "pillow-rs@$version" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
-            echo "pillow-rs@$version is already visible; keeping the immutable registry artifact"
-          else
-            npm publish "dist/release/npm/pillow-rs-$version.tgz" --access public --provenance
-          fi
+          npm publish "dist/release/npm/pillow-rs-$version.tgz" --access public --provenance
 
   tag-and-release:
     name: Create the GitHub release for the pushed tag

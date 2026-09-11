@@ -125,10 +125,12 @@ preflight, publishes only missing registry versions, and creates the
 immutable GitHub release for that tag.
 
 The root release workflow checks that Cargo, PyPI, and npm all report the same
-version before it creates an artifact. It is manual and defaults to a
-non-publishing preflight. The publish input is intentionally separate from
-the dependency input, so a preflight can be reviewed before any registry
-write.
+version before it creates an artifact. When a version already exists, the
+publish jobs compare the crates.io SHA-256, PyPI wheel SHA-256, or npm
+`dist.integrity` value with the exact local artifact before skipping it; a
+mismatch fails the release. It is manual and defaults to a non-publishing
+preflight. The publish input is intentionally separate from the dependency
+input, so a preflight can be reviewed before any registry write.
 
 ## Local credential setup
 
