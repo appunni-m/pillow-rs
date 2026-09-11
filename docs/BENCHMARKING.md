@@ -166,6 +166,17 @@ eight timing-only violations; the result and budget hashes are recorded in the
 the remaining issue is host timing variance, and the zero-violation acceptance
 item remains open without changing the benchmark contract.
 
+The maintained `migration-parity-benchmark-low-load` target now probes
+Darwin's utility QoS/background policy before delegating to the existing fixed
+cohort. At clean source commit `a524b5c378e2c4efa5bf3f4cc803bfd70561bf1a`,
+two runs retained 11/11 workloads, 44/44 comparable rows, and 33/33 terminal
+requested-to-actual receipts for CPU, SIMD, and native Metal GPU. The first
+adjacent comparison reported four timing-only violations and the next six;
+the exact hashes and policy details are retained in the [pending
+checklist](benchmark-backend-pending-2026-09-03.md). The entry point improves
+host scheduling control while leaving workloads, repeat policy, thresholds, and
+receipt semantics unchanged.
+
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a

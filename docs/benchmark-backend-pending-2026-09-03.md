@@ -1587,3 +1587,27 @@ The unchanged five-percent budget comparison has SHA-256
 reports eight timing-only violations. The normalized execution and terminal
 receipt structure remains complete; P2 stays open without changing workloads,
 thresholds, fixtures, or receipt policy.
+
+### Maintained low-load runner (2026-09-11)
+
+- [x] Added `migration-parity-benchmark-low-load` to the root Makefile. On
+  macOS it probes and applies `taskpolicy -c utility -b` before delegating to
+  the existing benchmark target; when that policy is unavailable or not
+  permitted, it reports the fallback and uses the native scheduler. The
+  workload IDs, six-sample release policy, five-percent budget, and receipt
+  schema are unchanged. The quick cohort passed through the new entry point.
+  A clean fixed-ID release pair at source commit
+  `a524b5c378e2c4efa5bf3f4cc803bfd70561bf1a` retained 11/11 workloads,
+  44/44 comparable rows, and 33/33 terminal requested=actual CPU, SIMD, and
+  Metal GPU receipts in each run. Result hashes are
+  `5cca8c7606753429f8c19f0573add4b681143fe89b50896622f3ee0c5741e3f3` and
+  `16b9964fad72d35abae4092cb21c5409fddf84d850c0cf74b045f5c2e126e14b`;
+  the adjacent budget report
+  `bc217cb77c8e8639161be0862fa7d33741daf0292d7abc3a49dd1775c18a8244`
+  reports four timing-only violations. The next clean run
+  (`7d5d1bb6a861f2289bdb65b6119c88cfd70f93404023e183e98ee672e8e35674`)
+  and its adjacent report
+  `3f2c651fa4229d5a46e15929e74d635b5e75278fd0876f223b2b9d3f9f28022c`
+  report six. The runner improves scheduling control but does not close the
+  required two-consecutive zero-violation acceptance pair; no benchmark
+  contract change is justified.
