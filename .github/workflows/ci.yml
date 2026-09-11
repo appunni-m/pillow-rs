@@ -74,9 +74,10 @@ jobs:
     name: Python ${{ matrix.python-version }}
     needs: rust
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      matrix:
+      timeout-minutes: 45
+      strategy:
+        fail-fast: false
+        matrix:
         # Pillow 12.2.0 is the versioned oracle and requires Python >=3.10.
         python-version: ["3.10", "3.12"]
     steps:
@@ -97,12 +98,19 @@ jobs:
       - name: check Python binding rules
         run: .venv/bin/python scripts/check_bindings.py
 
-      - name: build + Python parity
-        run: |
-          make PYTHON=.venv/bin/python build
-          make PYTHON=.venv/bin/python migration-parity-inputs-check
-          make PYTHON=.venv/bin/python migration-parity-inventory-check
-          make PYTHON=.venv/bin/python migration-parity-test
+      - name: build Python package
+        env:
+          PYO3_PYTHON: ${{ github.workspace }}/.venv/bin/python
+        run: make PYTHON=.venv/bin/python build
+
+      - name: verify parity inputs
+        run: make PYTHON=.venv/bin/python migration-parity-inputs-check
+
+      - name: verify parity inventory
+        run: make PYTHON=.venv/bin/python migration-parity-inventory-check
+
+      - name: run Python parity
+        run: make PYTHON=.venv/bin/python migration-parity-test
 
       - name: coverage
         run: make PYTHON=.venv/bin/python migration-parity-coverage
