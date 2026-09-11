@@ -108,6 +108,21 @@ two reported 10 and 10 timing-only violations. These runs are retained as
 additional evidence and do not close the required two-consecutive comparison
 gate.
 
+## Current hosted CI status
+
+The latest pushed root release-preparation commit is
+`da2ac3e3556f6bfb58ed0dc250532a479d7789f`. Its CI adds a run-summary tail for
+Python build failures so a hosted compiler or packaging error remains
+reviewable even when the job log cannot be downloaded. The preceding run
+`34623343821` is still in progress: Rust and documentation checks passed,
+Python 3.10 completed with one parity mismatch in
+`PIL.Image.Image.quantize.nuanced.palette-image-empty`, Python 3.12 failed in
+the build step before parity, and the WASM job was still running at the last
+API check. The new run for `da2ac3e` is queued behind it. A clean local Python
+3.10 replay with the same serial batch settings passed all 11,345/11,345
+comparisons, so no fixture or expected-output change was made for the hosted
+observation.
+
 ## Follow-up verification on the release-preparation branch
 
 On 2026-09-11 the pushed branch advanced to
@@ -181,13 +196,13 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
 The clean pillow-rs release-prep branch is present on `origin` at the
-source-fix commit `73625bdd930f`; the receipt evidence remains bound to the
-implementation base `a4083c9d22aff8c404d0e4bfbc2cb60ec227c5aa`. The
+diagnostic commit `da2ac3e3556f6bfb58ed0dc250532a479d7789f`; the receipt
+evidence remains bound to the earlier implementation-base commits. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at
-`3c15acae363540cfbfa2579ef7df8fe3f1568d1f`. The local `v0.1.0` tag remains at
+`77aad12007e55a2c4b450407ab2d8d92b9b57871`. The local `v0.1.0` tag remains at
 `8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Before enabling public registry
 publication, the owner must provide or configure:
 
