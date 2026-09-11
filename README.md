@@ -139,6 +139,10 @@ and follows the configured fallback policy.
 | [`docs/CI_CD_RELEASE_PLAN.md`](docs/CI_CD_RELEASE_PLAN.md) | Fixed inputs, CI stages, release sequence, and Pages plan |
 | [`docs/LOCAL_FIRST_RELEASE.md`](docs/LOCAL_FIRST_RELEASE.md) | Exact local bootstrap tags, package order, evidence, and public prerequisites |
 | [`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md) | Local registry setup, dependency order, and guarded publication runbook |
+| [`RELEASING.md`](RELEASING.md) | Root artifact order, bootstrap rehearsal, and tag-driven releases |
+| [`SECURITY.md`](SECURITY.md) | Private vulnerability reporting and disclosure scope |
+| [`SUPPORT.md`](SUPPORT.md) | Reproducible bug reports and parity support |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contribution and project-space conduct |
 | [`docs/REPO_MAP.md`](docs/REPO_MAP.md) | Maintained ownership map and generated source tree |
 | [`docs/COVERAGE.md`](docs/COVERAGE.md) | Current coverage evidence landing page |
 | [`BENCHMARKS.md`](BENCHMARKS.md) | Current benchmark evidence landing page |
