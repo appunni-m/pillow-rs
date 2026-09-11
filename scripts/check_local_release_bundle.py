@@ -20,15 +20,15 @@ from pathlib import Path
 
 PACKAGE_FILES = (
     "image-slash-star/image-slash-star-0.1.0.crate",
-    "fontdone/fontdone-2.14.3-alpha.2.crate",
-    "fontdone/fontdone-c-abi-2.14.3-alpha.2-aarch64-apple-darwin.tar.gz",
-    "fontdone/fontdone-2.14.3-alpha.2.tgz",
+    "fontdone/fontdone-2.14.3-alpha.3.crate",
+    "fontdone/fontdone-c-abi-2.14.3-alpha.3-aarch64-apple-darwin.tar.gz",
+    "fontdone/fontdone-2.14.3-alpha.3.tgz",
     "pillow-rs/pillow-rs-0.1.0.crate",
     "pillow-rs/python/pillow_rs-0.1.0-cp38-abi3-macosx_11_0_arm64.whl",
     "pillow-rs/npm/pillow-rs-0.1.0.tgz",
 )
 GIT_BUNDLES = (
-    "git/fontdone-v2.14.3-alpha.2.bundle",
+    "git/fontdone-v2.14.3-alpha.3.bundle",
     "git/image-slash-star-v0.1.0.bundle",
     "git/pillow-rs-v0.1.0.bundle",
 )
@@ -47,8 +47,8 @@ CARGO_PACKAGE_SURFACES = (
     ),
     (
         "fontdone",
-        "2.14.3-alpha.2",
-        "fontdone/fontdone-2.14.3-alpha.2.crate",
+        "2.14.3-alpha.3",
+        "fontdone/fontdone-2.14.3-alpha.3.crate",
         "fo/nt/fontdone",
     ),
     (

@@ -16,17 +16,17 @@ The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
 The root Makefile's maintained `build/fontdone-src` parity checkout is pinned to
-the same `ec58b10c29fae9b9ca4c622568bc1410596608fd` revision used by the
+the same `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` revision used by the
 `pillow-rs` Cargo dependency and the public `fontdone` release. Root parity and
 release evidence therefore exercise the exact fontdone source being packaged.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local release tag and the pushed clean-history candidate `codex/release-image-slash-star-clean` are `8d8ecdfe8699329ae166541be8040b1bc3b253e7` with the identical current tree, no historical blob at or above 100 MB, and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.2` | crates.io | before `pillow-rs` | immutable local tag commit `ec58b10c29fae9b9ca4c622568bc1410596608fd`; the current pushed `main` commit `25f3c10c8dd89c91a24f5bbb99f590c369fbacf3` contains the sbix error-parity, image-cache input, source-bound evidence, and generated-inventory fixes with 20,355/20,355 runnable cases and 3 safety-extension cases pending; the current local `make ci` gate passes, while the hosted thorough C-ABI evidence is still required; the generated C-ABI scorecard is 6/12 with unresolved debt (C01.1 176/218, C01.7 13,572/18,098, C06.1 22/23, C07.1 19/20, C08.2 2,652/3,745, C08.3 15,829/20,355), five fresh platform bundles including the Windows import library, and benchmark review still required |
-| fontdone | native C SDK archive | `2.14.3-alpha.2` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
-| fontdone | `fontdone` | `2.14.3-alpha.2` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.2` tag; the newer `main` fix requires a new version before publication; the earlier immutable `2.14.3-alpha.1` npm artifact remains historical evidence; raw `fontdone-wasm` remains an internal build target |
-| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | the local `v0.1.0` candidate is rebuilt from the synchronized alpha.2 dependency pin; its exact tagged commit, archive checksum, and staged registry entry are recorded in `dist/release-local/release-manifest.txt` and `SHA256SUMS`; public crate packaging still waits for the image-slash-star and fontdone registry versions |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit and current pushed `main` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; this synchronized candidate contains the sbix error-parity, image-cache input, source-bound evidence, generated-inventory, and release-layout fixes with 20,355/20,355 runnable cases and 3 safety-extension cases pending; the current local `make ci` gate passes, while the hosted thorough C-ABI evidence is still required; the generated C-ABI scorecard is 6/12 with unresolved debt (C01.1 176/218, C01.7 13,572/18,098, C06.1 22/23, C07.1 19/20, C08.2 2,652/3,745, C08.3 15,829/20,355), five fresh platform bundles including the Windows import library, and benchmark review still required |
+| fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag and current `main`; the earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
+| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | the local `v0.1.0` candidate is rebuilt from the synchronized alpha.3 dependency pin; its exact tagged commit, archive checksum, and staged registry entry are recorded in `dist/release-local/release-manifest.txt` and `SHA256SUMS`; public crate packaging still waits for the image-slash-star and fontdone registry versions |
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
@@ -75,8 +75,9 @@ backend mismatch; the unchanged zero-violation gate remains open.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`25f3c10c8dd89c91a24f5bbb99f590c369fbacf3`; its immutable local release tag
-`v2.14.3-alpha.2` remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`.
+`5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; its immutable local release tag
+`v2.14.3-alpha.3` points to the same commit. The older `v2.14.3-alpha.2`
+tag remains as superseded local history.
 The pillow-rs `main` branch is synchronized with the release-preparation
 history. The current PyO3 and supply-chain fix is
 `b76578c42c27cf7a8ccca8c576156a79b67d897a` and was built from the exact source

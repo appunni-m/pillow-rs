@@ -1,6 +1,6 @@
 # Local first-release receipt
 
-This receipt records the coordinated local bootstrap prepared on 2026-09-10.
+This receipt records the coordinated local bootstrap prepared on 2026-09-11.
 It is a file-backed rehearsal for the first versions of the three projects; it
 does not publish to a public registry or write to a remote Git repository.
 
@@ -9,7 +9,7 @@ does not publish to a public registry or write to a remote Git repository.
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
 | `image-slash-star` | `0.1.0` | `v0.1.0` | `8d8ecdfe8699329ae166541be8040b1bc3b253e7` |
-| `fontdone` | `2.14.3-alpha.2` | `v2.14.3-alpha.2` | `ec58b10c29fae9b9ca4c622568bc1410596608fd` |
+| `fontdone` | `2.14.3-alpha.3` | `v2.14.3-alpha.3` | `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
 
 The tags and complete Git bundles are under `dist/release-local/` in the
@@ -36,9 +36,9 @@ The staged local artifacts follow the dependency order used by the public
 release workflows:
 
 1. `image-slash-star-0.1.0.crate`
-2. the public `fontdone-2.14.3-alpha.2.crate`
-3. the native `fontdone-c-abi-2.14.3-alpha.2-aarch64-apple-darwin.tar.gz` SDK
-4. the `fontdone@2.14.3-alpha.2` browser npm archive
+2. the public `fontdone-2.14.3-alpha.3.crate`
+3. the native `fontdone-c-abi-2.14.3-alpha.3-aarch64-apple-darwin.tar.gz` SDK
+4. the `fontdone@2.14.3-alpha.3` browser npm archive
 5. the registry-normalized `pillow-rs-0.1.0.crate`
 
 The same bundle contains the `pillow-rs` ABI3 wheel, the native fontdone C SDK
@@ -50,12 +50,12 @@ consumers imported the packaged artifacts successfully. Image package
 verification and the fontdone release dry-run passed from the exact tagged
 checkouts.
 
-The local `fontdone@2.14.3-alpha.2` tarball is the synchronized candidate
-built from the exact local `v2.14.3-alpha.2` tag commit
-`ec58b10c29fae9b9ca4c622568bc1410596608fd`. The current pushed `main` branch
-contains follow-up CI and receipt fixes; it needs a new version and tag before
-those changes are published. The earlier npm `2.14.3-alpha.1` archive remains
-immutable historical evidence and is not used by the current release bundle.
+The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
+built from the exact local `v2.14.3-alpha.3` tag commit
+`5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, which is also the current pushed
+`main` commit. The earlier `2.14.3-alpha.1` and superseded `2.14.3-alpha.2`
+artifacts remain immutable historical evidence and are not used by the current
+release bundle.
 
 The local Cargo registry is intentionally a read-only source registry for
 consumer verification, not a fake crates.io upload endpoint. Python and npm
@@ -139,9 +139,8 @@ unchanged budget policy.
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
-`v2.14.3-alpha.2` tag remains at `ec58b10c29fae9b9ca4c622568bc1410596608fd`;
-the current `fontdone` `main` branch is pushed at
-`25f3c10c8dd89c91a24f5bbb99f590c369fbacf3`; its source-bound parity evidence
+`v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
+which is also the current pushed `fontdone` `main` commit; its source-bound parity evidence
 records 20,355 / 20,355 runnable comparisons with 3 safety-extension cases
 pending, and the current local `make ci` gate passes. Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
