@@ -121,6 +121,21 @@ jobs:
           path: target/ci-diagnostics/python-build.log
           if-no-files-found: warn
 
+      - name: summarize Python build failure
+        if: failure()
+        run: |
+          if [ -s target/ci-diagnostics/python-build.log ]; then
+            {
+              echo "### Python build log (last 80 lines)"
+              echo
+              echo '```text'
+              tail -n 80 target/ci-diagnostics/python-build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Python build failed before producing target/ci-diagnostics/python-build.log" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: verify parity inputs
         run: make PYTHON=.venv/bin/python migration-parity-inputs-check
 
