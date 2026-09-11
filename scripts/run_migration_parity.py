@@ -19,6 +19,7 @@ import base64
 import binascii
 from concurrent.futures import ThreadPoolExecutor
 import datetime as _dt
+import gzip
 import hashlib
 import importlib
 import io
@@ -3053,6 +3054,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
             "infrastructure_errors": [{"scope": "runner", "id": None, "kind": "adapter_failure", "message": str(exc)}],
         }
         write_result(args.output, result)
+        write_summary_sidecar(args.output, result["summary"])
         print(json.dumps(result["summary"], sort_keys=True))
         return 2
     if source_handshake.get("version") != ORACLE_VERSION:
@@ -3079,6 +3081,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         "infrastructure_errors": [],
     }
     write_result(args.output, result)
+    write_summary_sidecar(args.output, result["summary"])
     print(json.dumps(result["summary"], sort_keys=True))
     return 0 if failed == 0 and not_run == 0 else 1
 
@@ -3137,15 +3140,21 @@ def run_orchestrator_batched(
     started = now_rfc3339()
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
+    temporary_fd, temporary_name = tempfile.mkstemp(
         dir=output.parent,
         prefix=f".{output.name}.",
         suffix=".tmp",
-        delete=False,
     )
-    temporary_path = Path(temporary.name)
+    os.close(temporary_fd)
+    temporary_path = Path(temporary_name)
+    # Hosted parity can produce a very large, highly repetitive JSON envelope.
+    # Keep the default plain JSON for local consumers, while allowing CI to
+    # stream the same schema through gzip without changing any comparison.
+    temporary = (
+        gzip.open(temporary_path, "wt", encoding="utf-8")
+        if output.name.endswith(".gz")
+        else temporary_path.open("w", encoding="utf-8")
+    )
     source_handshake: dict[str, Any] | None = None
     target_handshake: dict[str, Any] | None = None
     comparisons = 0
@@ -3263,6 +3272,7 @@ def run_orchestrator_batched(
         temporary.write("}\n")
         temporary.close()
         os.replace(temporary_path, output)
+        write_summary_sidecar(output, summary)
     print(json.dumps(summary, sort_keys=True))
     if infrastructure_errors:
         return 2
@@ -3272,7 +3282,26 @@ def run_orchestrator_batched(
 def write_result(path: Path, result: dict[str, Any]) -> None:
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            json.dump(result, handle, indent=2, sort_keys=False)
+            handle.write("\n")
+    else:
+        path.write_text(
+            json.dumps(result, indent=2, sort_keys=False) + "\n", encoding="utf-8"
+        )
+
+
+def write_summary_sidecar(path: Path, summary: dict[str, Any]) -> None:
+    """Write a small CI-readable summary beside a compressed result."""
+
+    if not path.name.endswith(".gz"):
+        return
+    plain = Path(str(path.resolve())[:-3])
+    sidecar = plain.with_name(f"{plain.stem}.summary.json")
+    sidecar.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def write_gpu_shader_coverage(

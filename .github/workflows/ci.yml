@@ -117,17 +117,24 @@ jobs:
           # runners while preserving the exact public parity corpus.
           MIGRATION_PARITY_BATCH_SIZE: "256"
           MIGRATION_PARITY_SERIAL: "1"
+          # The full result is highly repetitive and can exceed the hosted
+          # runner's free-disk budget when retained as plain JSON.  Compression
+          # changes storage only; the validator still checks the same schema.
+          MIGRATION_PARITY_OUTPUT: build/migration-parity/parity-result.json.gz
         run: make PYTHON=.venv/bin/python migration-parity-test
 
       - name: report Python parity result
         if: always()
         run: |
-          result="build/migration-parity/parity-result.json"
+          result="build/migration-parity/parity-result.json.gz"
+          summary_result="build/migration-parity/parity-result.summary.json"
           level=notice
           if [ "${{ steps.python-parity.outcome }}" != "success" ]; then level=error; fi
-          if [ -f "$result" ]; then
-            summary="$(awk '/\"summary\": \{/{found=1} found {print; count++} found && count >= 8 {exit}' "$result" | tr '\n' ' ' | cut -c1-1800)"
+          if [ -f "$summary_result" ]; then
+            summary="$(tr '\n' ' ' < "$summary_result" | cut -c1-1800)"
             echo "::$level title=Python parity summary::$summary"
+          elif [ -f "$result" ]; then
+            echo "::$level title=Python parity summary::compressed result was written without its summary sidecar"
           else
             echo "::warning title=Python parity summary::No parity result was written"
           fi
@@ -189,6 +196,9 @@ jobs:
         run: npm install --global "npm@$NPM_VERSION"
       - working-directory: pillow-rs-js
         run: npm ci
+      - name: install the pinned Chromium headless shell
+        working-directory: pillow-rs-js
+        run: npx --no-install puppeteer browsers install chrome-headless-shell
       - name: build and JS/WASM parity
         id: wasm-parity
         continue-on-error: true
@@ -197,6 +207,11 @@ jobs:
           # cannot provision Binaryen on every hosted runner, while the
           # parity lane only needs the generated wasm and its JS boundary.
           MIGRATION_WASM_NO_OPT: "1"
+          # Stream one bounded source/target chunk at a time and retain the
+          # unchanged result schema in a compact gzip envelope.
+          MIGRATION_JS_STREAM_OUTPUT: "1"
+          MIGRATION_JS_PARITY_OUTPUT: build/migration-parity/js-wasm-parity-result.json.gz
+          MIGRATION_BROWSER_PARITY_OUTPUT: build/migration-parity/browser-wasm-parity-result.json.gz
         run: make PYTHON=.venv/bin/python test-wasm
 
       - name: report WASM parity result
@@ -205,10 +220,15 @@ jobs:
           found=0
           level=notice
           if [ "${{ steps.wasm-parity.outcome }}" != "success" ]; then level=error; fi
-          for result in build/migration-parity/js-wasm-parity-result.json build/migration-parity/browser-wasm-parity-result.json; do
+          for result in build/migration-parity/js-wasm-parity-result.json.gz build/migration-parity/browser-wasm-parity-result.json.gz; do
             if [ -f "$result" ]; then
               found=1
-              summary="$(awk '/\"summary\": \{/{found=1} found {print; count++} found && count >= 8 {exit}' "$result" | tr '\n' ' ' | cut -c1-1800)"
+              summary_result="${result%.gz}.summary.json"
+              if [ -f "$summary_result" ]; then
+                summary="$(tr '\n' ' ' < "$summary_result" | cut -c1-1800)"
+              else
+                summary="compressed result was written without its summary sidecar"
+              fi
               echo "::$level title=WASM parity summary::$summary"
             fi
           done

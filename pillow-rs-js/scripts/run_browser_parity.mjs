@@ -96,6 +96,31 @@ function browserExecutablePath() {
         }
     }
 
+    // Puppeteer's pinned browser downloads live under a different cache
+    // layout than Playwright's.  Look there explicitly so a clean hosted
+    // runner does not depend on Puppeteer's internal executable-path lookup.
+    const puppeteerRoot = process.env.PUPPETEER_CACHE_DIR
+        ? resolve(process.env.PUPPETEER_CACHE_DIR)
+        : resolve(homedir(), '.cache', 'puppeteer');
+    const puppeteerBrowserDir = resolve(puppeteerRoot, 'chrome-headless-shell');
+    if (existsSync(puppeteerBrowserDir)) {
+        const cachePlatform = process.platform === 'darwin'
+            ? process.arch === 'arm64' ? 'mac_arm' : 'mac_x64'
+            : process.platform === 'win32' ? 'win64' : 'linux';
+        for (const entry of readdirSync(puppeteerBrowserDir).sort().reverse()) {
+            const candidate = resolve(
+                puppeteerBrowserDir,
+                entry,
+                cachePlatform,
+                platformDir,
+                'chrome-headless-shell',
+            );
+            if (existsSync(candidate)) {
+                return candidate;
+            }
+        }
+    }
+
     const installedCandidates = process.platform === 'darwin'
         ? [
             '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
