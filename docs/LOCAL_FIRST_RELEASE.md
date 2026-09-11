@@ -142,6 +142,16 @@ aggregate backend result still reports the intentional SIMD/GPU host-control
 partition, and the zero-violation benchmark item remains open under the
 unchanged budget policy.
 
+The local checkout then added the hosted-parity diagnostics and bounded-memory
+execution path through `bf821bc67` (with `f2f990785` as its parent). The Python
+CI job now runs the exact 11,345-case corpus in serial batches of 256, while
+the local default remains one-shot. A full local bounded replay passed
+11,345/11,345 comparisons and the strict result validator; `make docs-check`
+and the coverage receipt tests also pass. The WASM CI job disables only the
+optional `wasm-opt` packaging step and uses Chromium's shared-memory flag; its
+local Node/browser parity remains 11,345/11,345. These changes are committed
+locally and await the branch push needed for a fresh hosted CI result.
+
 ## Public-release prerequisites
 
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
