@@ -139,6 +139,16 @@ jobs:
             echo "::warning title=Python parity summary::No parity result was written"
           fi
 
+      - name: upload Python parity evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: parity-py${{ matrix.python-version }}
+          path: |
+            build/migration-parity/parity-result.json.gz
+            build/migration-parity/parity-result.summary.json
+          if-no-files-found: warn
+
       - name: stop after Python parity failure
         if: steps.python-parity.outcome != 'success'
         run: exit 1
@@ -235,6 +245,18 @@ jobs:
           if [ "$found" -eq 0 ]; then
             echo "::warning title=WASM parity summary::No WASM parity result was written"
           fi
+
+      - name: upload WASM parity evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: parity-wasm
+          path: |
+            build/migration-parity/js-wasm-parity-result.json.gz
+            build/migration-parity/js-wasm-parity-result.summary.json
+            build/migration-parity/browser-wasm-parity-result.json.gz
+            build/migration-parity/browser-wasm-parity-result.summary.json
+          if-no-files-found: warn
 
       - name: stop after WASM parity failure
         if: steps.wasm-parity.outcome != 'success'
