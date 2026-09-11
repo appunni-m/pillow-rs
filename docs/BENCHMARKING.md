@@ -177,6 +177,16 @@ checklist](benchmark-backend-pending-2026-09-03.md). The entry point improves
 host scheduling control while leaving workloads, repeat policy, thresholds, and
 receipt semantics unchanged.
 
+At source revision `cc3c763d4d2b2b05f0fec54933c63a0b56a3cabc`, two adjacent
+low-load pairs used the same fixed 11-workload release cohort with native
+Metal GPU access. Every run selected and measured 11/11 workloads, retained
+44/44 comparable rows, and recorded 33/33 terminal requested-to-actual CPU,
+SIMD, and GPU receipts. The first pair reported two timing-only GPU
+violations; the second reported three. The normalized receipt structure stayed
+equal while the affected rows changed, so the zero-violation acceptance item
+remains open under the unchanged five-percent policy. Exact result and budget
+hashes are retained in the [pending checklist](benchmark-backend-pending-2026-09-03.md).
+
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a

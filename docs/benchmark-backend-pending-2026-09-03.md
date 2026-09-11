@@ -1635,3 +1635,25 @@ the same normalized fingerprint
 The differing rows are therefore timing-only host observations; the required
 two-consecutive zero-violation gate remains open without a source, fixture,
 threshold, or receipt-policy change.
+
+### Current-head low-load reruns after release-documentation update (2026-09-11)
+
+At source revision `cc3c763d4d2b2b05f0fec54933c63a0b56a3cabc`, two adjacent
+runs used the unchanged `release` profile through
+`migration-parity-benchmark-low-load` with native Metal GPU access. Each run
+selected and measured 11/11 workloads, retained 44/44 comparable rows, and
+recorded 33/33 terminal requested=actual CPU, SIMD, and GPU receipts. The
+result SHA-256 values are
+`303bcac047c30ac0600769cea1503d8dd438a5809535cb606d5c29d70c9bf068` and
+`1f2de5b5c7308a758b6c8270283eb4c43b3626ded6d83b322909937415221066`.
+The unchanged five-percent budget comparison has SHA-256
+`dad74e6daccc992addc1b67c84bcb74b6080f9f79bf5ecdfc529d87fce700b0e` and
+reports two timing-only GPU violations. A second adjacent pair produced
+result hashes
+`aa2ebfd773bf4ba6eb1c4b1136031a0455178731d3206d329c0d4a84c9bd54e2` and
+`a9e15eb0f66338aea55c96698496ca10f455ca8704c5483b3842c67740afde13`, with
+budget SHA-256
+`8dfb99c36a4b12cebae54ef1b47b019f63debc818a3b75877958ba69b3555c17` and
+three timing-only violations. All four runs retained the same terminal
+receipt structure; the affected rows changed between pairs, so P2 remains a
+host-timing observation and no benchmark contract change is justified.
