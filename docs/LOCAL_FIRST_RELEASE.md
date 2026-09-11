@@ -56,11 +56,13 @@ The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The current pushed `fontdone`
 `main` is `29122e4092433eb46d031f386d7379740c4d4589`, which contains the
-follow-up parity-oracle and ABI test-support corrections; those changes are
-outside the public root crate archive and do not change the alpha.3 package
-bytes. The earlier `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts
-remain immutable historical evidence and are not used by the current release
-bundle.
+follow-up parity-oracle, ABI test-support, and release-documentation
+corrections. The parity and ABI changes are outside the public root crate
+archive; the README and changelog corrections are package inputs, so the
+current main tree is a follow-on candidate rather than the immutable alpha.3
+package. The earlier `2.14.3-alpha.1` and superseded `2.14.3-alpha.2`
+artifacts remain immutable historical evidence and are not used by the current
+release bundle.
 
 The local Cargo registry is intentionally a read-only source registry for
 consumer verification, not a fake crates.io upload endpoint. Python and npm
@@ -148,7 +150,10 @@ release, or push a release tag. The immutable local `fontdone`
 the current pushed `fontdone` `main` is `29122e4092433eb46d031f386d7379740c4d4589`.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
-passes. Hosted thorough C-ABI
+passes. Because the follow-on documentation commit changes Cargo package
+inputs, publication must use a newly versioned synchronized tag after the
+alpha.3 tag is either deliberately released from its exact bytes or retired.
+Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
 The clean pillow-rs release-prep branch is present on `origin`. The
 image-slash-star `main` push
