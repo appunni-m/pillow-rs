@@ -1657,3 +1657,27 @@ budget SHA-256
 three timing-only violations. All four runs retained the same terminal
 receipt structure; the affected rows changed between pairs, so P2 remains a
 host-timing observation and no benchmark contract change is justified.
+
+### Current-head controlled scheduler probes (2026-09-11)
+
+At the current pushed head `adfb97a254fa7e93eec3e39dfecc36df62f00750`, two
+immediate runs through the maintained low-load entry point used the default
+`taskpolicy -c utility -b` policy. Each selected and measured 11/11 workloads,
+retained 44/44 comparable rows, and recorded 33/33 terminal requested=actual
+CPU, SIMD, and Metal GPU receipts. Result SHA-256 values were
+`865e5155bb3e03f30d1c15ae8a398bd432285bf4a88d7d79b81fbae0a86f1c59` and
+`f90bfdaeb3ffd71e360d061c8d962c949ebc0941fda0bb182b3511610a5f42fd`. The
+unchanged budget comparison has SHA-256
+`5ecaf8e77a5001cf4e5fcc7454ae8741b41840d8d5a10b339e87c4c49d1dac8c` and
+reports 14 timing-only violations.
+
+Four follow-up runs used the same fixed cohort and utility QoS clamp without
+background throttling (`MIGRATION_BENCHMARK_TASKPOLICY_ARGS='-c utility'`).
+The adjacent comparisons reported 4 and 7 timing-only violations; their
+budget receipt SHA-256 values are
+`a1d503813526cbd151feb85c00ee0671b836f61f6142cff3d7a8d6f112127f61` and
+`e006de8f0ad34007a596eab6e0c3cdbbf8397907141c36f1cfd5d502d46b10f1`.
+Every run passed the benchmark schema and retained complete terminal receipts.
+The differing rows and large changes in sub-millisecond workloads across
+unchanged execution fingerprints confirm host scheduler variance; P2 remains
+open without changing workload IDs, thresholds, fixtures, or receipt policy.
