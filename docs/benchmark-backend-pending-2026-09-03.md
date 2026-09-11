@@ -1611,3 +1611,27 @@ thresholds, fixtures, or receipt policy.
   report six. The runner improves scheduling control but does not close the
   required two-consecutive zero-violation acceptance pair; no benchmark
   contract change is justified.
+
+### Current-head low-load follow-up (2026-09-11)
+
+At the current clean head `7e23cec9a19a2def28bb0f96687f4c47ff92f24c`, four
+immediate runs used the unchanged `release` profile and the maintained
+`migration-parity-benchmark-low-load` entry point. Every run selected and
+measured 11/11 workloads, retained 44/44 comparable records, and recorded
+33/33 terminal requested=actual CPU, SIMD, and Metal GPU receipts with empty
+fallback/error state. The result SHA-256 values, in order, were
+`ee665a51e0cd7f71a70499a5a566bcd60aa312965b41a6ba5e305c0d1b0b3bd9`,
+`0d8bc2ad3f483beb3c193e91c31e6128af39bf73b780bd14bbc9f2cbcc72cc7e`,
+`de610083ed376b51a1115de2f3d863a6d8c6d89608bca8cf96ae0ffd36b63b0a`, and
+`2adda2ea10b98b65082d8128bcfa382df88da371bf682af46435d6267e2fc7e6`.
+The unchanged five-percent budget comparisons reported four, five, and six
+timing-only violations; their receipt SHA-256 values were
+`d0d3d414ff08f2a2502fbc6e019f6d47e9d45612f949ecaaf5bbd532b084893c`,
+`863756642af4030462e7e38866f848d963a05ab623ee0d53e11f7a6890044901`, and
+`cbf0f649c52520e348455ff802dcd6318c3921d5f50630585e88e44706ec22d9`.
+After timing fields were removed, all four workload execution structures had
+the same normalized fingerprint
+`b7f0f993ebee01d00c333ffdb1a421799a625c1713c9f183a8386fd1ef615d83`.
+The differing rows are therefore timing-only host observations; the required
+two-consecutive zero-violation gate remains open without a source, fixture,
+threshold, or receipt-policy change.
