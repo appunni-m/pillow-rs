@@ -22,6 +22,12 @@ The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
+The latest registry probes (2026-09-11) found `image-slash-star@0.1.0` and
+`fontdone@2.14.3-alpha.3` absent from crates.io, `pillow-rs` absent from PyPI
+and npm, and only `fontdone@2.14.3-alpha.1` visible on npm under both
+`latest` and `next`. These probes are discovery evidence; they do not replace
+the clean-checkout release gates or authorize a publication.
+
 Fontdone has one public Cargo release unit: the root `fontdone` package. The
 workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
 targets (`publish = false`) for the native C SDK and the raw WASM input to the
