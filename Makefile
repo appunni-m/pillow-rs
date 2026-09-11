@@ -373,14 +373,16 @@ test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages 
 		--host node \
 		--output "$(MIGRATION_JS_PARITY_OUTPUT)" \
 		--chunk-size "$(MIGRATION_JS_PARITY_CHUNK_SIZE)" \
-		$(MIGRATION_JS_PARITY_CASE_ARGS); \
-	node_status=$$?; \
+		$(MIGRATION_JS_PARITY_CASE_ARGS) & \
+	node_pid=$$!; \
 	$(PYTHON) scripts/run_migration_js_parity.py \
 		--host browser \
 		--output "$(MIGRATION_BROWSER_PARITY_OUTPUT)" \
 		--chunk-size "$(MIGRATION_BROWSER_PARITY_CHUNK_SIZE)" \
-		$(MIGRATION_JS_PARITY_CASE_ARGS); \
-	browser_status=$$?; \
+		$(MIGRATION_JS_PARITY_CASE_ARGS) & \
+	browser_pid=$$!; \
+	wait $$node_pid; node_status=$$?; \
+	wait $$browser_pid; browser_status=$$?; \
 	if [ $$node_status -ne 0 ]; then exit $$node_status; fi; \
 	exit $$browser_status
 
