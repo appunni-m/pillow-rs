@@ -173,8 +173,9 @@ inputs, publication must use a newly versioned synchronized tag after the
 alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
-The clean pillow-rs release-prep branch is present on `origin` at
-`78f2d967a228c3eef1d7978565a8013d95a3a808`. The
+The clean pillow-rs release-prep branch is present on `origin` at the
+implementation base `a4083c9d22aff8c404d0e4bfbc2cb60ec227c5aa`; the diagnostic
+follow-up is the current local commit and awaits its push. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
