@@ -152,6 +152,13 @@ WASM CI job disables only the optional `wasm-opt` packaging step, installs the
 pinned Chromium headless shell, and uses Chromium's shared-memory flag; its
 local Node/browser parity remains 11,345/11,345.
 
+The shared array-layout resolver now validates 32-bit dimensions before it
+requests a host buffer. This preserves Pillow's `OverflowError` on Python
+3.10, where the fixture object does not expose the newer buffer protocol.
+After the fix, full local Python 3.10 and 3.12 replays each passed 11,345 of
+11,345 comparisons with no infrastructure errors. The fix is pushed as
+`73625bdd930f`; hosted run `34620597934` is the corresponding pending run.
+
 Hosted run `34612798832` for `a4083c9d2` is retained as external evidence. At
 the time of this receipt, the Rust and documentation jobs passed, Python 3.10
 failed before producing a parity result, Python 3.12 produced a bounded result
@@ -174,8 +181,8 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
 The clean pillow-rs release-prep branch is present on `origin` at the
-implementation base `a4083c9d22aff8c404d0e4bfbc2cb60ec227c5aa`; the diagnostic
-follow-up is the current local commit and awaits its push. The
+source-fix commit `73625bdd930f`; the receipt evidence remains bound to the
+implementation base `a4083c9d22aff8c404d0e4bfbc2cb60ec227c5aa`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
