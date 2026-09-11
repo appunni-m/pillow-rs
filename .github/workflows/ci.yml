@@ -25,6 +25,9 @@ env:
   # sccache, but CI does not install that optional wrapper.
   RUSTC_WRAPPER: ""
   RUST_TOOLCHAIN: 1.96.1
+  # A fresh hosted runner may need to retry a registry or git-dependency
+  # request.  Retries do not change the final build result or hide failures.
+  CARGO_NET_RETRY: "3"
   CARGO_DENY_VERSION: 0.20.2
   CARGO_AUDIT_VERSION: 0.22.2
   WASM_PACK_VERSION: 0.15.0
@@ -101,7 +104,18 @@ jobs:
       - name: build Python package
         env:
           PYO3_PYTHON: ${{ github.workspace }}/.venv/bin/python
-        run: make PYTHON=.venv/bin/python build
+        run: |
+          mkdir -p target/ci-diagnostics
+          set -o pipefail
+          make PYTHON=.venv/bin/python build 2>&1 | tee target/ci-diagnostics/python-build.log
+
+      - name: upload Python build diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: python-build-${{ matrix.python-version }}
+          path: target/ci-diagnostics/python-build.log
+          if-no-files-found: warn
 
       - name: verify parity inputs
         run: make PYTHON=.venv/bin/python migration-parity-inputs-check
@@ -137,6 +151,30 @@ jobs:
             echo "::$level title=Python parity summary::compressed result was written without its summary sidecar"
           else
             echo "::warning title=Python parity summary::No parity result was written"
+          fi
+          if [ -f "$result" ]; then
+            .venv/bin/python - "$result" <<'PY'
+          import gzip
+          import json
+          import sys
+
+          path = sys.argv[1]
+          with gzip.open(path, "rt", encoding="utf-8") as handle:
+              result = json.load(handle)
+          comparisons = result.get("comparisons", [])
+          failed = [item for item in comparisons if item.get("outcome") == "fail"]
+          failed_ids = [item.get("case_id", "?") for item in failed[:40]]
+          if failed_ids:
+              print(
+                  "::error title=Python parity failed case IDs::"
+                  f"count={len(failed)} first="
+                  + ",".join(failed_ids)
+              )
+          errors = result.get("infrastructure_errors", [])
+          for error in errors[:5]:
+              message = str(error.get("message", "")).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::error title=Python parity infrastructure error::{message[:1800]}")
+          PY
           fi
 
       - name: upload Python parity evidence

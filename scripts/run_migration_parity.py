@@ -3172,33 +3172,51 @@ def run_orchestrator_batched(
         temporary.write('{"schema":"migration-parity/parity-result@1","comparisons":[')
         for start in range(0, len(cases), batch_size):
             batch = cases[start : start + batch_size]
-            if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
-                batch_source_handshake, source_results = run_side_subprocess(
-                    "source", manifest_path, batch, args.timeout
-                )
-                batch_target_handshake, target_results = run_side_subprocess(
-                    "target", manifest_path, batch, target_timeout
-                )
-            else:
-                with ThreadPoolExecutor(
-                    max_workers=2, thread_name_prefix="parity-side"
-                ) as executor:
-                    source_future = executor.submit(
-                        run_side_subprocess,
-                        "source",
-                        manifest_path,
-                        batch,
-                        args.timeout,
+            try:
+                if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
+                    batch_source_handshake, source_results = run_side_subprocess(
+                        "source", manifest_path, batch, args.timeout
                     )
-                    target_future = executor.submit(
-                        run_side_subprocess,
-                        "target",
-                        manifest_path,
-                        batch,
-                        target_timeout,
+                    batch_target_handshake, target_results = run_side_subprocess(
+                        "target", manifest_path, batch, target_timeout
                     )
-                    batch_source_handshake, source_results = source_future.result()
-                    batch_target_handshake, target_results = target_future.result()
+                else:
+                    with ThreadPoolExecutor(
+                        max_workers=2, thread_name_prefix="parity-side"
+                    ) as executor:
+                        source_future = executor.submit(
+                            run_side_subprocess,
+                            "source",
+                            manifest_path,
+                            batch,
+                            args.timeout,
+                        )
+                        target_future = executor.submit(
+                            run_side_subprocess,
+                            "target",
+                            manifest_path,
+                            batch,
+                            target_timeout,
+                        )
+                        batch_source_handshake, source_results = source_future.result()
+                        batch_target_handshake, target_results = target_future.result()
+            except RuntimeError as exc:
+                # One malformed or crashing input must not hide the remainder
+                # of the corpus.  Each batch starts fresh adapter processes,
+                # so record this bounded infrastructure gap and continue with
+                # later batches.  The incomplete result remains
+                # ``infrastructure_failed`` and the strict caller still
+                # fails; continuing only makes the next divergent IDs
+                # reviewable.
+                infrastructure_errors.append(
+                    {
+                        "scope": "runner",
+                        "id": batch[0]["case_id"] if batch else None,
+                        "kind": "adapter_failure",
+                        "message": str(exc),
+                    }
+                )
+                continue
             if source_handshake is None:
                 source_handshake = batch_source_handshake
                 target_handshake = batch_target_handshake
@@ -3239,7 +3257,7 @@ def run_orchestrator_batched(
                 first_comparison = False
                 comparisons += 1
             del source_results, target_results
-        status = "completed"
+        status = "completed" if not infrastructure_errors else "infrastructure_failed"
     except RuntimeError as exc:
         status = "infrastructure_failed"
         infrastructure_errors.append(
