@@ -165,4 +165,9 @@ jobs:
       - working-directory: pillow-rs-js
         run: npm ci
       - name: build and JS/WASM parity
+        env:
+          # wasm-opt is an optional packaging optimization.  wasm-pack 0.15.0
+          # cannot provision Binaryen on every hosted runner, while the
+          # parity lane only needs the generated wasm and its JS boundary.
+          MIGRATION_WASM_NO_OPT: "1"
         run: make PYTHON=.venv/bin/python test-wasm
