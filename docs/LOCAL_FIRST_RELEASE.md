@@ -55,7 +55,7 @@ checkouts.
 The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The current pushed `fontdone`
-`main` is `29122e4092433eb46d031f386d7379740c4d4589`, which contains the
+`main` is `2cefcd103ab0e441182113eceac7d9e6a2343c71`, which contains the
 follow-up parity-oracle, ABI test-support, and release-documentation
 corrections. The parity and ABI changes are outside the public root crate
 archive; the README and changelog corrections are package inputs, so the
@@ -147,7 +147,7 @@ unchanged budget policy.
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
-the current pushed `fontdone` `main` is `29122e4092433eb46d031f386d7379740c4d4589`.
+the current pushed `fontdone` `main` is `2cefcd103ab0e441182113eceac7d9e6a2343c71`.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
@@ -160,7 +160,7 @@ image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at
-`7a2f7afe39594d59652b30c41f58e114b43db92a`. The local `v0.1.0` tag remains at
+`3c15acae363540cfbfa2579ef7df8fe3f1568d1f`. The local `v0.1.0` tag remains at
 `8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Before enabling public registry
 publication, the owner must provide or configure:
 
