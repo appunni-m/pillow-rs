@@ -81,7 +81,10 @@ The clean `fontdone` `main` branch is now present on `origin` at
 `v2.14.3-alpha.3` remains at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, so the
 tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
-The pillow-rs `main` branch is synchronized with the release-preparation
+The clean pillow-rs release-preparation branch
+`codex/benchmark-backend-parity-fixes` is present on `origin` at
+`31f925d6af6184c68330a8bf211d14f6b2dbe8fd`; `origin/main` remains at
+`b4b91cb8a8bb85be861c0ea9e4f62dfbf7e8e0b9` pending review of the candidate
 history. The current PyO3 and supply-chain fix is
 `b76578c42c27cf7a8ccca8c576156a79b67d897a` and was built from the exact source
 tree exercised by the full local CI run at `e1638ce7c11b270ac16540b25dc0fb5c1cb4a72a`:
