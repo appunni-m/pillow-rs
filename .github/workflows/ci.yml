@@ -112,6 +112,11 @@ jobs:
       - name: run Python parity
         id: python-parity
         continue-on-error: true
+        env:
+          # Keep the large source/target result envelopes bounded on hosted
+          # runners while preserving the exact public parity corpus.
+          MIGRATION_PARITY_BATCH_SIZE: "256"
+          MIGRATION_PARITY_SERIAL: "1"
         run: make PYTHON=.venv/bin/python migration-parity-test
 
       - name: report Python parity result

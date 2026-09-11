@@ -39,6 +39,12 @@ packaging optimization and wasm-pack cannot provision Binaryen consistently on
 the supported hosted runners. Chromium also uses `--disable-dev-shm-usage` so
 the large input-only result envelope does not exhaust the runner's small
 shared-memory mount.
+The hosted Python parity step sets `MIGRATION_PARITY_BATCH_SIZE=256` and
+`MIGRATION_PARITY_SERIAL=1`. The adapter envelopes contain the full public
+image observations and can exceed a standard runner's memory budget when all
+cases are decoded at once. Bounded batches preserve the same input corpus,
+comparisons, and result schema while keeping each subprocess envelope small;
+the local default remains one-shot for developer throughput.
 
 ## Pull-request pipeline
 
