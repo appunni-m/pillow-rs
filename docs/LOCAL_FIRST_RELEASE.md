@@ -166,7 +166,7 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
 The clean pillow-rs release-prep branch is present on `origin` at
-`d624a73d8b2b40b10cd96689921d8f6c71b075da`. The
+`b79ba8ca5ae8dee547238d3dbbe6f456e20e3fa5`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
