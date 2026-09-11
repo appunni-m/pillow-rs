@@ -41,7 +41,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local `v0.1.0` tag is `8d8ecdfe8699329ae166541be8040b1bc3b253e7`; pushed clean-history candidate `codex/release-image-slash-star-clean` is `892fa567c6fb1bef5d74d374fc7bf0b2e68191b5` with no historical blob at or above 100 MB and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | historical candidate commit is `8d8ecdfe8699329ae166541be8040b1bc3b253e7`, but no `v0.1.0` release tag is currently pushed; clean-history candidate `codex/release-image-slash-star-clean` is `892fa567c6fb1bef5d74d374fc7bf0b2e68191b5` with no historical blob at or above 100 MB and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit is `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; current pushed `main` is `ff06132f3dfbd10ea1136e9ba8def970b84c365f` and contains the malformed-face parity fixes, refreshed release evidence, repository inventory, and the exact Cargo registry checksum guard. Because the immutable alpha.3 tag points to an earlier package tree, current `main` is a follow-on candidate rather than the exact alpha.3 package. The synchronized candidate has 20,355/20,355 runnable cases and 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, and npm checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review are still required |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
@@ -113,8 +113,9 @@ WASM lanes, and managed coverage completed all 24 plans with 11,325 passing
 checks. The aggregate backend result still reports the intentional SIMD/GPU
 host-control partition. The benchmark zero-violation item remains open.
 The image-slash-star clean-history candidate is present on `origin` at
-`892fa567c6fb1bef5d74d374fc7bf0b2e68191b5`; its local `v0.1.0` tag remains at
-`8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Its current tree matches the
+`892fa567c6fb1bef5d74d374fc7bf0b2e68191b5`; the historical candidate commit
+`8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained in its history, but no
+`v0.1.0` release tag is currently pushed. Its current tree matches the
 release checkout and its package verification passes. `origin/main` still
 contains the historical oversized AV1 blobs and is unchanged pending explicit
 authorization for the coordinated history rewrite.

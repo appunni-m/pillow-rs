@@ -8,7 +8,7 @@ does not publish to a public registry or write to a remote Git repository.
 
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
-| `image-slash-star` | `0.1.0` | `v0.1.0` | `8d8ecdfe8699329ae166541be8040b1bc3b253e7` |
+| `image-slash-star` | `0.1.0` | pending | `8d8ecdfe8699329ae166541be8040b1bc3b253e7` (historical candidate commit) |
 | `fontdone` | `2.14.3-alpha.3` | `v2.14.3-alpha.3` | `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
 
@@ -204,8 +204,9 @@ was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at
 `892fa567c6fb1bef5d74d374fc7bf0b2e68191b5` (the clean-history candidate's
-release-checklist receipt commit). The local `v0.1.0` tag remains at
-`8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Before enabling public registry
+release-checklist receipt commit). No `v0.1.0` release tag is currently pushed;
+`8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained as the historical
+candidate commit. Before enabling public registry
 publication, the owner must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
