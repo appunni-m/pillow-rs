@@ -502,14 +502,14 @@ def test_parity(fixture_file):
         assertion = out_cases[case["id"]]["assert"]
 
         try:
-            result = CALL_STYLE[call_style](rspil, img, img2, op["target"], params)
+            result = CALL_STYLE.get(call_style)(rspil, img, img2, op["target"], params)
         except Exception as e:
             if assertion["method"] == "error":
-                assert ASSERT["error"](assertion, e), f"[{case['id']}] error mismatch"
+                assert ASSERT.get("error")(assertion, e), f"[{case['id']}] error mismatch"
                 continue
             raise
 
-        assert ASSERT[assertion["method"]](assertion, result), \
+        assert ASSERT.get(assertion["method"])(assertion, result), \
             f"[{case['id']}] {assertion['method']} mismatch"
 ```
 
@@ -552,7 +552,7 @@ def generate(input_path, output_path):
         img = create_input(pil, case["mode"], case.get("input"))
         img2 = create_input(pil, case["mode"], case.get("input2"))
         params = dict(case.get("params", {}))
-        result = CALL_STYLE[call_style](pil, img, img2, op["target"], params)
+        result = CALL_STYLE.get(call_style)(pil, img, img2, op["target"], params)
 
         stem = input_path.stem
         cid = case["id"]

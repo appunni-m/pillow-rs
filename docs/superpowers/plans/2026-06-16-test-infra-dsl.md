@@ -358,19 +358,19 @@ import sys; sys.path.insert(0, 'tests')
 from engine import ASSERT
 
 # Test exact assertion
-assert ASSERT['exact']({'value': 42}, 42) == True
-assert ASSERT['exact']({'value': 42}, 43) == False
+assert ASSERT.get('exact')({'value': 42}, 42) == True
+assert ASSERT.get('exact')({'value': 42}, 43) == False
 print('exact: OK')
 
 # Test float assertion
-assert ASSERT['float']({'value': 3.14, 'tolerance': 0.01}, 3.14159) == True
-assert ASSERT['float']({'value': 3.14, 'tolerance': 0.001}, 3.20) == False
+assert ASSERT.get('float')({'value': 3.14, 'tolerance': 0.01}, 3.14159) == True
+assert ASSERT.get('float')({'value': 3.14, 'tolerance': 0.001}, 3.20) == False
 print('float: OK')
 
 # Test error assertion
 class ValueError(Exception): pass
-assert ASSERT['error']({'exception': 'ValueError'}, ValueError('bad')) == True
-assert ASSERT['error']({'exception': 'TypeError'}, ValueError('bad')) == False
+assert ASSERT.get('error')({'exception': 'ValueError'}, ValueError('bad')) == True
+assert ASSERT.get('error')({'exception': 'TypeError'}, ValueError('bad')) == False
 print('error: OK')
 
 print('All assertion smoke tests passed')
@@ -434,14 +434,14 @@ def test_parity(fixture_file):
         assertion = out_cases[cid]["assert"]
 
         try:
-            result = CALL_STYLE[call_style](rspil, img, img2, op["target"], params)
+            result = CALL_STYLE.get(call_style)(rspil, img, img2, op["target"], params)
         except Exception as e:
             if assertion["method"] == "error":
-                assert ASSERT["error"](assertion, e), f"[{cid}] error mismatch"
+                assert ASSERT.get("error")(assertion, e), f"[{cid}] error mismatch"
                 continue
             raise
 
-        assert ASSERT[assertion["method"]](assertion, result), \
+        assert ASSERT.get(assertion["method"])(assertion, result), \
             f"[{cid}] {assertion['method']} mismatch"
 ```
 
@@ -532,7 +532,7 @@ def generate_one(input_path):
         img = create_input(pil, mode, case.get("input"))
         img2 = create_input(pil, mode, case.get("input2"))
         params = dict(case.get("params", {}))
-        result = CALL_STYLE[call_style](pil, img, img2, op["target"], params)
+        result = CALL_STYLE.get(call_style)(pil, img, img2, op["target"], params)
 
         # ── Determine result type and produce assertion ──
         if hasattr(result, 'tobytes') or hasattr(result, 'save'):
@@ -920,6 +920,6 @@ python3 -m pytest tests/test_parity.py -v --timeout=180 --tb=short 2>&1 | tail -
 3. **Type consistency:**
    - `get_call_style(module, target) -> str` — consistent across engine, test, generator
    - `create_input(backend, mode, spec) -> Image|None` — consistent signature
-   - `CALL_STYLE[style](backend, img, img2, target, params) -> result` — uniform signature
-   - `ASSERT[method](case, result) -> bool` — uniform signature
+   - `CALL_STYLE.get(style)(backend, img, img2, target, params) -> result` — uniform signature
+   - `ASSERT.get(method)(case, result) -> bool` — uniform signature
    - Case `id` field used consistently for input→output zipping
