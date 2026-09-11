@@ -74,10 +74,10 @@ jobs:
     name: Python ${{ matrix.python-version }}
     needs: rust
     runs-on: ubuntu-latest
-      timeout-minutes: 45
-      strategy:
-        fail-fast: false
-        matrix:
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
         # Pillow 12.2.0 is the versioned oracle and requires Python >=3.10.
         python-version: ["3.10", "3.12"]
     steps:
