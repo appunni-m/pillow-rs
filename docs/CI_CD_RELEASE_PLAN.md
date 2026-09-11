@@ -34,7 +34,11 @@ The hosted Python and WASM jobs create a checkout-local `.venv`, install the
 locked requirements into it, and pass `PYTHON=.venv/bin/python` to every Make
 target that runs Python. This keeps maturin, Pillow, NumPy, and the input
 checkers on the same interpreter instead of relying on the runner's global
-`python3`.
+`python3`. The WASM parity step sets `MIGRATION_WASM_NO_OPT=1`: `wasm-opt` is a
+packaging optimization and wasm-pack cannot provision Binaryen consistently on
+the supported hosted runners. Chromium also uses `--disable-dev-shm-usage` so
+the large input-only result envelope does not exhaust the runner's small
+shared-memory mount.
 
 ## Pull-request pipeline
 

@@ -119,6 +119,10 @@ async function main() {
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
+                // GitHub-hosted Linux runners expose a small /dev/shm.  The
+                // parity envelope is intentionally large, so keep Chromium
+                // from crashing while materializing the public result.
+                '--disable-dev-shm-usage',
                 '--enable-unsafe-webgpu',
                 '--enable-features=Vulkan',
             ],
