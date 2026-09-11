@@ -23,12 +23,15 @@ import base64
 import collections
 import copy
 import datetime as _dt
+import gzip
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 try:
@@ -668,7 +671,14 @@ def run_browser(
 
 def write_result(path: Path, result: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            json.dump(result, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    else:
+        path.write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
 
 def execution_evidence_document(
@@ -814,12 +824,379 @@ def execution_evidence_document(
     }
 
 
+def _execution_batches(
+    cases: list[dict[str, Any]], chunk_size: int
+) -> list[tuple[int, list[dict[str, Any]]]]:
+    """Partition cases without sharing a JS host across RNG-consuming cases."""
+
+    batches: list[tuple[int, list[dict[str, Any]]]] = []
+    index = 0
+    while index < len(cases):
+        if uses_process_global_state(cases[index]):
+            batches.append((index, [cases[index]]))
+            index += 1
+            continue
+        end = min(index + chunk_size, len(cases))
+        stateful_index = next(
+            (
+                candidate
+                for candidate in range(index, end)
+                if uses_process_global_state(cases[candidate])
+            ),
+            end,
+        )
+        if stateful_index == index:
+            batches.append((index, [cases[index]]))
+            index += 1
+        else:
+            batches.append((index, cases[index:stateful_index]))
+            index = stateful_index
+    return batches
+
+
+def _compact_execution_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Retain only status/error fields needed by pipeline classification."""
+
+    observations: list[dict[str, Any]] = []
+    for observation in result.get("observations", []):
+        if not isinstance(observation, dict):
+            continue
+        status = observation.get("status")
+        step_id = observation.get("step_id")
+        if not isinstance(step_id, str) or status not in {"ok", "error", "not_run"}:
+            continue
+        compact = {"step_id": step_id, "status": status}
+        if status == "error":
+            compact["error"] = observation.get("error")
+        elif status == "not_run":
+            compact["reason"] = observation.get("reason", "")
+        observations.append(compact)
+    execution_errors = [
+        {
+            "step_id": error.get("step_id"),
+            "error": error.get("error"),
+        }
+        for error in result.get("execution_errors", [])
+        if isinstance(error, dict) and isinstance(error.get("step_id"), str)
+    ]
+    compact_result: dict[str, Any] = {
+        "case_id": result.get("case_id"),
+        "status": result.get("status"),
+        "observations": observations,
+    }
+    if execution_errors:
+        compact_result["execution_errors"] = execution_errors
+    return compact_result
+
+
+class _StreamingResult:
+    """Write a parity result without retaining its comparison envelope."""
+
+    def __init__(self, output: Path) -> None:
+        self.output = output.resolve()
+        self.output.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=self.output.parent,
+            prefix=f".{self.output.name}.",
+            suffix=".tmp",
+        )
+        os.close(descriptor)
+        self.temporary_path = Path(temporary_name)
+        self.handle = (
+            gzip.open(self.temporary_path, "wt", encoding="utf-8")
+            if self.output.name.endswith(".gz")
+            else self.temporary_path.open("w", encoding="utf-8")
+        )
+        self.first = True
+        self.handle.write('{"comparisons":[')
+
+    def write_comparison(self, comparison: dict[str, Any]) -> None:
+        if not self.first:
+            self.handle.write(",")
+        json.dump(comparison, self.handle, separators=(",", ":"))
+        self.first = False
+
+    def finish(self, metadata: dict[str, Any]) -> None:
+        self.handle.write("],")
+        for index, (key, value) in enumerate(metadata.items()):
+            if index:
+                self.handle.write(",")
+            json.dump(key, self.handle, separators=(",", ":"))
+            self.handle.write(":")
+            json.dump(value, self.handle, separators=(",", ":"))
+        self.handle.write("}\n")
+        self.handle.close()
+        os.replace(self.temporary_path, self.output)
+
+    def discard(self) -> None:
+        self.handle.close()
+        self.temporary_path.unlink(missing_ok=True)
+
+
+def _summary_path_for_compressed_result(output: Path) -> Path | None:
+    if not output.name.endswith(".gz"):
+        return None
+    plain = Path(str(output)[:-3])
+    return plain.with_name(f"{plain.stem}.summary.json")
+
+
+def run_streaming(args: argparse.Namespace, output: Path) -> int:
+    """Run JS/WASM parity in bounded source/target batches.
+
+    The default runner keeps its historical in-memory result for local
+    diagnostics.  CI enables this path so the exact full corpus is retained
+    on disk while only one source/target batch and compact receipt metadata
+    remain live at a time.
+    """
+
+    manifest_path = args.manifest.resolve()
+    manifest = load_manifest(manifest_path)
+    requested = set(args.case_id or [])
+    cases, _case_inputs = load_cases(
+        manifest, case_ids=requested or None, surface=args.surface
+    )
+    if args.limit is not None:
+        cases = cases[: args.limit]
+    if not cases:
+        raise ValueError("no active parity cases selected")
+    if args.chunk_size <= 0:
+        raise ValueError("JS/WASM chunk size must be positive")
+    operation_index = build_operation_index(manifest)
+    diagnostic_hints: collections.Counter[str] = collections.Counter()
+    for case in cases:
+        reason = compatible_case(case, operation_index)
+        if reason is not None:
+            diagnostic_hints[reason] += 1
+
+    target_profile = (
+        "browser-wasm-core" if args.host == "browser" else "javascript-wasm-core"
+    )
+    run_target = run_browser if args.host == "browser" else run_node
+    started_at = now()
+    source_identity: dict[str, Any] | None = None
+    js_identity: dict[str, Any] | None = None
+    host_capabilities: dict[str, Any] | None = None
+    execution_identity: dict[str, Any] | None = None
+    target_execution: dict[str, list[dict[str, Any]]] = {}
+    evidence_results: dict[str, dict[str, Any]] = {}
+    infrastructure_errors: list[dict[str, Any]] = []
+    comparisons = passed = failed = 0
+    stream = _StreamingResult(output)
+
+    def record_target_batch(
+        batch: list[dict[str, Any]],
+        start: int,
+        root: int,
+        source_results: dict[str, dict[str, Any]],
+    ) -> None:
+        nonlocal js_identity, host_capabilities, execution_identity
+        nonlocal comparisons, passed, failed
+        if not batch:
+            return
+        case_ids = [case["case_id"] for case in batch]
+        try:
+            target_batch, target_assets = js_asset_payload(batch)
+            (
+                batch_identity,
+                js_results,
+                batch_capabilities,
+                batch_execution,
+            ) = run_target(
+                target_batch, operation_index, args.timeout, target_assets
+            )
+        except RuntimeError as exc:
+            if len(batch) > 1:
+                midpoint = len(batch) // 2
+                record_target_batch(batch[:midpoint], start, root, source_results)
+                record_target_batch(
+                    batch[midpoint:], start + midpoint, root, source_results
+                )
+                return
+            infrastructure_errors.append(
+                {
+                    "scope": "runner",
+                    "id": None,
+                    "kind": "adapter_failure",
+                    "message": (
+                        f"JS/WASM chunk {root // args.chunk_size + 1} "
+                        f"(1 case; index={start}; case={case_ids[0]!r}): {exc}"
+                    ),
+                }
+            )
+            return
+        if js_identity is None:
+            js_identity = batch_identity
+        elif batch_identity != js_identity:
+            infrastructure_errors.append(
+                {
+                    "scope": "runner",
+                    "id": None,
+                    "kind": "identity_changed",
+                    "message": "WASM adapter identity changed between chunks",
+                }
+            )
+            return
+        if host_capabilities is None and batch_capabilities is not None:
+            host_capabilities = batch_capabilities
+        if execution_identity is None and batch_execution is not None:
+            execution_identity = batch_identity
+        if batch_execution is not None:
+            for case_id, receipts in batch_execution.items():
+                if isinstance(case_id, str) and isinstance(receipts, list):
+                    target_execution[case_id] = receipts
+        for case in batch:
+            case_id = case["case_id"]
+            target_result = js_results[case_id]
+            public_target = {
+                key: value
+                for key, value in target_result.items()
+                if key != "execution_errors"
+            }
+            outcome, diffs = compare_case(
+                case,
+                source_results[case_id],
+                public_target,
+                operation_index,
+            )
+            stream.write_comparison(
+                {
+                    "case_id": case_id,
+                    "target_profile": target_profile,
+                    "requirements": case.get("covers", []),
+                    "source": source_results[case_id],
+                    "target": public_target,
+                    "outcome": outcome,
+                    "diffs": diffs,
+                }
+            )
+            compact = _compact_execution_result(target_result)
+            evidence_results[case_id] = compact
+            comparisons += 1
+            if outcome == "pass":
+                passed += 1
+            elif outcome == "fail":
+                failed += 1
+
+    try:
+        for start, batch in _execution_batches(cases, args.chunk_size):
+            try:
+                batch_source_identity, source_results = run_side_subprocess(
+                    "source", manifest_path, batch, args.timeout
+                )
+            except RuntimeError as exc:
+                infrastructure_errors.append(
+                    {
+                        "scope": "oracle",
+                        "id": None,
+                        "kind": "source_failure",
+                        "message": f"Pillow oracle failed for chunk at index {start}: {exc}",
+                    }
+                )
+                break
+            if source_identity is None:
+                source_identity = batch_source_identity
+            elif batch_source_identity != source_identity:
+                infrastructure_errors.append(
+                    {
+                        "scope": "oracle",
+                        "id": None,
+                        "kind": "identity_changed",
+                        "message": "Pillow oracle identity changed between chunks",
+                    }
+                )
+                break
+            record_target_batch(batch, start, start, source_results)
+            del source_results
+    except BaseException as exc:
+        infrastructure_errors.append(
+            {
+                "scope": "runner",
+                "id": None,
+                "kind": "streaming_failure",
+                "message": str(exc),
+            }
+        )
+
+    summary = {
+        "selected": len(cases),
+        "executed": comparisons,
+        "passed": passed,
+        "failed": failed,
+        "not_run": len(cases) - comparisons,
+        "infrastructure_errors": len(infrastructure_errors),
+    }
+    result_metadata = {
+        "schema": "migration-parity/js-wasm-parity-result@1",
+        "status": "completed" if not infrastructure_errors else "infrastructure_failed",
+        "started_at": started_at,
+        "finished_at": now(),
+        "identity": {
+            "manifest": str(manifest_path.relative_to(ROOT)),
+            "source": source_identity,
+            "target": js_identity,
+        },
+        "scope": {
+            "kind": "public-parity-corpus",
+            "selected": len(cases),
+            "executed": comparisons,
+            "pending": summary["not_run"],
+            "pending_definition": "summary.not_run: selected cases without a completed target comparison",
+            "case_ids_sha256": case_digest(cases),
+            "filter": sorted(requested) if requested else None,
+            "diagnostics": {
+                "kind": "static-adapter-hints",
+                "does_not_filter_or_change_execution": True,
+                "not_pending": True,
+                "hints": dict(sorted(diagnostic_hints.items())),
+            },
+        },
+        "summary": summary,
+        "infrastructure_errors": infrastructure_errors,
+        "shader_coverage": {
+            "status": "not_measured",
+            "reason": (
+                "The browser WASM package is currently built without the core GPU "
+                "feature and the browser adapter reports capability separately; "
+                "no WGSL dispatch is claimed."
+                if args.host == "browser"
+                else "The Node WASM package does not expose a GPU adapter or WGSL "
+                "instrumentation; shader coverage remains a separate GPU/WGSL lane."
+            ),
+        },
+        "capabilities": host_capabilities
+        or {
+            "webgpu": {
+                "api": "not_measured",
+                "adapter": "not_measured",
+                "device": "not_measured",
+                "shader_dispatch": "not_measured",
+                "reason": "no WASM workflow batch completed",
+            }
+        },
+        "execution_evidence": execution_evidence_document(
+            cases, execution_identity, target_execution, evidence_results
+        ),
+    }
+    try:
+        stream.finish(result_metadata)
+    except BaseException:
+        stream.discard()
+        raise
+    summary_path = _summary_path_for_compressed_result(output)
+    if summary_path is not None:
+        write_result(summary_path, summary)
+    print(json.dumps(summary, sort_keys=True))
+    return 1 if infrastructure_errors or failed else 0
+
+
 def run(args: argparse.Namespace) -> int:
     output = (
         args.output
         if args.output is not None
         else DEFAULT_BROWSER_OUTPUT if args.host == "browser" else DEFAULT_OUTPUT
     )
+    if os.environ.get("MIGRATION_JS_STREAM_OUTPUT") == "1":
+        return run_streaming(args, output)
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     requested = set(args.case_id or [])

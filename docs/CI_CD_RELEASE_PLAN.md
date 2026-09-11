@@ -39,12 +39,22 @@ packaging optimization and wasm-pack cannot provision Binaryen consistently on
 the supported hosted runners. Chromium also uses `--disable-dev-shm-usage` so
 the large input-only result envelope does not exhaust the runner's small
 shared-memory mount.
-The hosted Python parity step sets `MIGRATION_PARITY_BATCH_SIZE=256` and
-`MIGRATION_PARITY_SERIAL=1`. The adapter envelopes contain the full public
-image observations and can exceed a standard runner's memory budget when all
-cases are decoded at once. Bounded batches preserve the same input corpus,
-comparisons, and result schema while keeping each subprocess envelope small;
-the local default remains one-shot for developer throughput.
+The hosted Python parity step sets `MIGRATION_PARITY_BATCH_SIZE=256`,
+`MIGRATION_PARITY_SERIAL=1`, and writes `parity-result.json.gz` with a small
+`parity-result.summary.json` sidecar. The adapter envelopes contain the full
+public image observations and can exceed a standard runner's memory or disk
+budget when all cases are decoded at once. Bounded batches preserve the same
+input corpus, comparisons, and result schema while keeping each subprocess
+envelope small; the validator reads the gzip result transparently and the
+local default remains one-shot for developer throughput.
+
+The hosted Node and browser WASM parity lanes set
+`MIGRATION_JS_STREAM_OUTPUT=1`. They execute one bounded source/target chunk at
+a time, stream each completed comparison into the unchanged
+`migration-parity/js-wasm-parity-result@1` envelope, and retain only compact
+execution evidence in memory. Their result envelopes are gzip-compressed with
+the same summary sidecars. CI installs the pinned Puppeteer headless shell so
+the browser lane does not depend on an undocumented system Chrome install.
 
 ## Pull-request pipeline
 

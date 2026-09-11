@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import re
 from pathlib import Path
@@ -1193,7 +1194,11 @@ def main() -> int:
     parser.add_argument("lane", choices=("parity", "coverage", "all_backends", "benchmark", "status"))
     parser.add_argument("result", type=Path)
     args = parser.parse_args()
-    result = json.loads(args.result.read_text(encoding="utf-8"))
+    if args.result.name.endswith(".gz"):
+        with gzip.open(args.result, "rt", encoding="utf-8") as handle:
+            result = json.load(handle)
+    else:
+        result = json.loads(args.result.read_text(encoding="utf-8"))
     {"parity": parity, "coverage": coverage, "all_backends": all_backends, "benchmark": benchmark, "status": status_report}[args.lane](result)
     print(f"{args.lane} result schema valid")
     return 0
