@@ -11,7 +11,7 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is locally verified at
-`48474577db1887645088e86e0a8ac258c5c15525`; registry publication and the
+`80816d59e3f65e2bdc53158b16af6f7af8bc9ccf`; registry publication and the
 exact-commit hosted CI run remain external prerequisites. The sibling release
 branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
@@ -83,7 +83,7 @@ tag and current main are intentionally distinct package revisions. The older `v2
 tag remains as superseded local history.
 The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` at
-`31f925d6af6184c68330a8bf211d14f6b2dbe8fd`; `origin/main` remains at
+`80816d59e3f65e2bdc53158b16af6f7af8bc9ccf`; `origin/main` remains at
 `b4b91cb8a8bb85be861c0ea9e4f62dfbf7e8e0b9` pending review of the candidate
 history. The current PyO3 and supply-chain fix is
 `b76578c42c27cf7a8ccca8c576156a79b67d897a` and was built from the exact source
