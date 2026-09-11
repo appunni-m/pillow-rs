@@ -55,6 +55,12 @@ a time, stream each completed comparison into the unchanged
 execution evidence in memory. Their result envelopes are gzip-compressed with
 the same summary sidecars. CI installs the pinned Puppeteer headless shell so
 the browser lane does not depend on an undocumented system Chrome install.
+The Python job also retains its package-build log on every outcome and emits the
+first failed case IDs plus infrastructure messages from a written result. A
+failed or incomplete batch is recorded with its first case ID and later bounded
+batches continue; the result remains `infrastructure_failed` and still fails
+the job. These diagnostics only make the first divergence reviewable when
+hosted logs are unavailable.
 
 ## Pull-request pipeline
 

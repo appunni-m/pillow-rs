@@ -143,14 +143,22 @@ partition, and the zero-violation benchmark item remains open under the
 unchanged budget policy.
 
 The local checkout then added the hosted-parity diagnostics and bounded-memory
-execution path through `bf821bc67` (with `f2f990785` as its parent). The Python
-CI job now runs the exact 11,345-case corpus in serial batches of 256, while
-the local default remains one-shot. A full local bounded replay passed
-11,345/11,345 comparisons and the strict result validator; `make docs-check`
-and the coverage receipt tests also pass. The WASM CI job disables only the
-optional `wasm-opt` packaging step and uses Chromium's shared-memory flag; its
-local Node/browser parity remains 11,345/11,345. These changes are committed
-locally and await the branch push needed for a fresh hosted CI result.
+execution path through `7b30cdbac`, followed by the always-run evidence upload
+in `a4083c9d2`. The Python CI job now runs the exact 11,345-case corpus in
+serial batches of 256, while the local default remains one-shot. A full local
+bounded replay passed 11,345/11,345 comparisons and the strict result
+validator; `make docs-check` and the coverage receipt tests also pass. The
+WASM CI job disables only the optional `wasm-opt` packaging step, installs the
+pinned Chromium headless shell, and uses Chromium's shared-memory flag; its
+local Node/browser parity remains 11,345/11,345.
+
+Hosted run `34612798832` for `a4083c9d2` is retained as external evidence. At
+the time of this receipt, the Rust and documentation jobs passed, Python 3.10
+failed before producing a parity result, Python 3.12 produced a bounded result
+with 6,656 executed cases (108 failed, one infrastructure error, and 4,689
+not-run), and the WASM job was still running. The release status remains
+unverified until a completed hosted run passes or its retained evidence leads
+to a source fix.
 
 ## Public-release prerequisites
 
@@ -166,7 +174,7 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
 The clean pillow-rs release-prep branch is present on `origin` at
-`b79ba8ca5ae8dee547238d3dbbe6f456e20e3fa5`. The
+`78f2d967a228c3eef1d7978565a8013d95a3a808`. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
