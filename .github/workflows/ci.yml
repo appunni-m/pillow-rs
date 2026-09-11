@@ -279,6 +279,12 @@ jobs:
           MIGRATION_JS_STREAM_OUTPUT: "1"
           MIGRATION_JS_PARITY_OUTPUT: build/migration-parity/js-wasm-parity-result.json.gz
           MIGRATION_BROWSER_PARITY_OUTPUT: build/migration-parity/browser-wasm-parity-result.json.gz
+          # A streamed chunk starts one source and one host process.  The
+          # default local chunks (128/512) make this combined hosted lane
+          # exceed its timeout; 2,048-case chunks keep the same corpus and
+          # comparison policy while reducing process-launch overhead.
+          MIGRATION_JS_PARITY_CHUNK_SIZE: "2048"
+          MIGRATION_BROWSER_PARITY_CHUNK_SIZE: "2048"
         run: make PYTHON=.venv/bin/python test-wasm
 
       - name: report WASM parity result
