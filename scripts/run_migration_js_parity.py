@@ -589,6 +589,9 @@ def run_host(
         result = json.loads(stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{host_name} WASM adapter emitted malformed JSON") from exc
+    # The adapter envelope contains the serialized public corpus and can be
+    # very large.  Release the raw text before retaining parsed case records.
+    del stdout
     if not isinstance(result, dict) or not {"identity", "results"}.issubset(result):
         raise RuntimeError(f"{host_name} WASM adapter emitted an invalid handshake envelope")
     unexpected = set(result) - {"identity", "results", "capabilities", "execution"}

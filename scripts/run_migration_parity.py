@@ -2631,6 +2631,10 @@ def _run_side_subprocess_batch(
         result = json.loads(stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{side} adapter emitted malformed JSON") from exc
+    # The adapter envelope contains the complete serialized public corpus and
+    # can exceed a gigabyte.  Release the raw text before retaining the parsed
+    # case records so constrained CI runners do not keep both representations.
+    del stdout
     if set(result) != {"identity", "results"}:
         raise RuntimeError(f"{side} adapter emitted invalid handshake envelope")
     results = result["results"]
@@ -2988,6 +2992,25 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         raise ValueError("no active parity cases selected")
     operation_index = build_operation_index(manifest)
     target_timeout = effective_adapter_timeout(args.timeout)
+    batch_size = parity_batch_size(len(cases))
+    sidecar_requested = bool(
+        os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
+        or os.environ.get("MIGRATION_GPU_WGSL_COVERAGE_OUTPUT")
+    )
+    # The execution and WGSL writers intentionally bind one receipt to the
+    # complete selected corpus. Keep those diagnostic lanes on their existing
+    # one-shot path until their aggregate writer is made batch-aware; the
+    # hosted Python parity job does not request either sidecar.
+    if batch_size < len(cases) and not sidecar_requested:
+        return run_orchestrator_batched(
+            args,
+            manifest_path,
+            cases,
+            case_inputs,
+            operation_index,
+            target_timeout,
+            batch_size,
+        )
     command = {"command_id": "parity", "argv": ["make", "migration-parity-test"], "cwd": ".", "timeout_seconds": target_timeout}
     identity = build_identity(
         manifest_path,
@@ -3000,19 +3023,26 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     started = now_rfc3339()
     try:
         # The adapters are already isolated processes with independent
-        # temporary directories. Run them together so the canonical parity
-        # lane spends one adapter duration in wall time instead of the sum of
-        # source and target durations; comparison remains strictly ordered
-        # below and therefore produces the same artifact.
-        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="parity-side") as executor:
-            source_future = executor.submit(
-                run_side_subprocess, "source", manifest_path, cases, args.timeout
+        # temporary directories. Keep the historical concurrent path for
+        # developer runs, but allow CI to serialize the two large envelopes so
+        # their child and parent representations never peak simultaneously.
+        if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
+            source_handshake, source_results = run_side_subprocess(
+                "source", manifest_path, cases, args.timeout
             )
-            target_future = executor.submit(
-                run_side_subprocess, "target", manifest_path, cases, target_timeout
+            target_handshake, target_results = run_side_subprocess(
+                "target", manifest_path, cases, target_timeout
             )
-            source_handshake, source_results = source_future.result()
-            target_handshake, target_results = target_future.result()
+        else:
+            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="parity-side") as executor:
+                source_future = executor.submit(
+                    run_side_subprocess, "source", manifest_path, cases, args.timeout
+                )
+                target_future = executor.submit(
+                    run_side_subprocess, "target", manifest_path, cases, target_timeout
+                )
+                source_handshake, source_results = source_future.result()
+                target_handshake, target_results = target_future.result()
     except RuntimeError as exc:
         result = {
             "schema": "migration-parity/parity-result@1",
@@ -3051,6 +3081,192 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     write_result(args.output, result)
     print(json.dumps(result["summary"], sort_keys=True))
     return 0 if failed == 0 and not_run == 0 else 1
+
+
+def parity_batch_size(total: int) -> int:
+    """Return the optional low-memory adapter batch size.
+
+    The default keeps the historical one-shot envelope.  CI can select a
+    smaller positive value because a complete serialized image corpus is much
+    larger in memory after both adapter sides are decoded than on disk.
+    """
+
+    raw = os.environ.get("MIGRATION_PARITY_BATCH_SIZE")
+    if raw is None or not raw.strip():
+        return total
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError("MIGRATION_PARITY_BATCH_SIZE must be an integer") from exc
+    if value <= 0:
+        raise ValueError("MIGRATION_PARITY_BATCH_SIZE must be positive")
+    return min(value, total)
+
+
+def run_orchestrator_batched(
+    args: argparse.Namespace,
+    manifest_path: Path,
+    cases: list[dict[str, Any]],
+    case_inputs: dict[str, str],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    target_timeout: int,
+    batch_size: int,
+) -> int:
+    """Run parity in bounded batches and stream the unchanged result schema.
+
+    Each batch still executes the complete public workflow on both sides and
+    compares exact observations.  Only the already-compared batch is released
+    before the next one starts; the output remains the same full evidence
+    envelope, but the orchestrator no longer retains every parsed image twice.
+    """
+
+    command = {
+        "command_id": "parity",
+        "argv": ["make", "migration-parity-test"],
+        "cwd": ".",
+        "timeout_seconds": target_timeout,
+    }
+    identity = build_identity(
+        manifest_path,
+        sorted(set(case_inputs.values())),
+        command,
+        cases,
+        case_inputs,
+        target_dirty=git_dirty(),
+    )
+    started = now_rfc3339()
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=output.parent,
+        prefix=f".{output.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    temporary_path = Path(temporary.name)
+    source_handshake: dict[str, Any] | None = None
+    target_handshake: dict[str, Any] | None = None
+    comparisons = 0
+    passed = 0
+    failed = 0
+    not_run = 0
+    infrastructure_errors: list[dict[str, Any]] = []
+    first_comparison = True
+    status = "infrastructure_failed"
+    try:
+        # Keep the small identity object at the end of the stream so its
+        # timestamps and final status are accurate even when a later batch
+        # fails. JSON object key order is intentionally irrelevant to the
+        # versioned result validator.
+        temporary.write('{"schema":"migration-parity/parity-result@1","comparisons":[')
+        for start in range(0, len(cases), batch_size):
+            batch = cases[start : start + batch_size]
+            if os.environ.get("MIGRATION_PARITY_SERIAL") == "1":
+                batch_source_handshake, source_results = run_side_subprocess(
+                    "source", manifest_path, batch, args.timeout
+                )
+                batch_target_handshake, target_results = run_side_subprocess(
+                    "target", manifest_path, batch, target_timeout
+                )
+            else:
+                with ThreadPoolExecutor(
+                    max_workers=2, thread_name_prefix="parity-side"
+                ) as executor:
+                    source_future = executor.submit(
+                        run_side_subprocess,
+                        "source",
+                        manifest_path,
+                        batch,
+                        args.timeout,
+                    )
+                    target_future = executor.submit(
+                        run_side_subprocess,
+                        "target",
+                        manifest_path,
+                        batch,
+                        target_timeout,
+                    )
+                    batch_source_handshake, source_results = source_future.result()
+                    batch_target_handshake, target_results = target_future.result()
+            if source_handshake is None:
+                source_handshake = batch_source_handshake
+                target_handshake = batch_target_handshake
+                if source_handshake.get("version") != ORACLE_VERSION:
+                    raise RuntimeError(
+                        "oracle identity handshake did not pin Pillow 12.2.0"
+                    )
+            elif (
+                batch_source_handshake != source_handshake
+                or batch_target_handshake != target_handshake
+            ):
+                raise RuntimeError("adapter identity changed between parity batches")
+            for case in batch:
+                outcome, diffs = compare_case(
+                    case,
+                    source_results[case["case_id"]],
+                    target_results[case["case_id"]],
+                    operation_index,
+                )
+                if outcome == "pass":
+                    passed += 1
+                elif outcome == "fail":
+                    failed += 1
+                else:
+                    not_run += 1
+                comparison = {
+                    "case_id": case["case_id"],
+                    "target_profile": target_profile_for_backend(TARGET_BACKEND),
+                    "requirements": case.get("covers", []),
+                    "source": source_results[case["case_id"]],
+                    "target": target_results[case["case_id"]],
+                    "outcome": outcome,
+                    "diffs": diffs,
+                }
+                if not first_comparison:
+                    temporary.write(",")
+                json.dump(comparison, temporary, separators=(",", ":"))
+                first_comparison = False
+                comparisons += 1
+            del source_results, target_results
+        status = "completed"
+    except RuntimeError as exc:
+        status = "infrastructure_failed"
+        infrastructure_errors.append(
+            {
+                "scope": "runner",
+                "id": None,
+                "kind": "adapter_failure",
+                "message": str(exc),
+            }
+        )
+    finally:
+        identity["started_at"] = started
+        identity["finished_at"] = now_rfc3339()
+        summary = {
+            "selected": len(cases),
+            "executed": comparisons,
+            "passed": passed,
+            "failed": failed,
+            "not_run": not_run + len(cases) - comparisons,
+            "infrastructure_errors": len(infrastructure_errors),
+        }
+        temporary.write("],\"identity\":")
+        json.dump(identity, temporary, separators=(",", ":"))
+        temporary.write(',"status":')
+        json.dump(status, temporary)
+        temporary.write(',"summary":')
+        json.dump(summary, temporary, separators=(",", ":"))
+        temporary.write(',"infrastructure_errors":')
+        json.dump(infrastructure_errors, temporary, separators=(",", ":"))
+        temporary.write("}\n")
+        temporary.close()
+        os.replace(temporary_path, output)
+    print(json.dumps(summary, sort_keys=True))
+    if infrastructure_errors:
+        return 2
+    return 0 if failed == 0 and not_run == 0 and comparisons == len(cases) else 1
 
 
 def write_result(path: Path, result: dict[str, Any]) -> None:
