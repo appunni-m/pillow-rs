@@ -6560,6 +6560,7 @@ def build_parity_case(
     scenario_observe_stat_properties: bool = False,
     scenario_outline_curve: bool = False,
     scenario_outline_empty: bool = False,
+    scenario_comparisons: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -6610,7 +6611,7 @@ def build_parity_case(
         scenario_outline_empty=scenario_outline_empty,
     )
     assets, steps, observations = builder.build()
-    return {
+    case = {
         "case_id": case_id or canonical_case_id,
         "surface": surface,
         "operation": operation["id"],
@@ -6620,6 +6621,9 @@ def build_parity_case(
         "steps": steps,
         "observations": observations,
     }
+    if scenario_comparisons:
+        case["comparisons"] = copy.deepcopy(scenario_comparisons)
+    return case
 
 
 def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -32958,6 +32962,19 @@ def build_nuanced_cases(
             "name": "palette-image-empty",
             "mode": "RGB",
             "chain": "quantize-palette-empty",
+            "comparisons": {
+                "call": {
+                    "kind": "image",
+                    "pixel_mode": "nondeterministic",
+                    "maximum_channel_delta": 0,
+                    "metadata_mode": "exact",
+                    "reason": (
+                        "Pillow's empty palette mapping leaves the output pixel "
+                        "buffer uninitialized; compare stable image metadata and "
+                        "the deterministic byte length only."
+                    ),
+                }
+            },
         },
         {
             "surface": "PIL.Image.Image",
@@ -39814,6 +39831,7 @@ def build_nuanced_cases(
                 ),
                 scenario_outline_curve=spec.get("outline_curve", False),
                 scenario_outline_empty=spec.get("outline_empty", False),
+                scenario_comparisons=spec.get("comparisons"),
             )
         )
     cases.extend(benchmark_pipeline_cases(surface_id))

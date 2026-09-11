@@ -538,6 +538,13 @@ If source output is nondeterministic:
 - include a deterministic secondary validation if possible;
 - do not store one generated output as truth.
 
+When nondeterminism belongs to one workflow rather than the whole endpoint,
+keep the operation's normal exact comparison and add a generated parity-case
+`comparisons` map for the affected observed step. The override must name the
+unstable field, require a reason, compare every stable field, and retain a
+deterministic secondary check such as the encoded byte length. This keeps the
+exception input-declared and prevents a case-specific branch in the runner.
+
 Example:
 
 ```yaml
