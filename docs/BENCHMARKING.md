@@ -145,6 +145,16 @@ comparisons reported five, five, three, and five timing-only violations. The
 result and budget hashes are recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md);
 the zero-violation acceptance item remains open under the unchanged policy.
 
+The current pushed head `71e0b7214918bc8db4a7a9a606046b8a7fe8b1b2` was also
+measured in two immediate release-profile runs under macOS utility QoS with
+native Metal GPU access. Both runs selected and measured 11/11 workloads,
+retained 44/44 comparable rows, and recorded 33/33 terminal requested-to-actual
+CPU, SIMD, and GPU receipts. The unchanged five-percent comparison reported
+eight timing-only violations; the result and budget hashes are recorded in the
+[pending checklist](benchmark-backend-pending-2026-09-03.md). This confirms
+the remaining issue is host timing variance, and the zero-violation acceptance
+item remains open without changing the benchmark contract.
+
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a
