@@ -11,7 +11,7 @@ turn a benchmark into a release gate before the benchmark budget policy passes.
 | Rust toolchain | `rust-toolchain.toml`, `1.96.1` | all workspace builds and checks |
 | Cargo resolution | `Cargo.lock` with `--locked` CI commands | exact Rust dependency graph |
 | Pillow oracle | manifest and CI, `12.2.0` | live parity and reverse coverage |
-| Python parity runners | CI `3.10`, `3.12` | Pillow 12.2.0 supports these versions |
+| Python parity runners | CI `macos-14` ARM64, Python `3.10`, `3.12` | Pillow 12.2.0 supports these versions; the ARM64 runner matches the generated native corpus |
 | Python wheel ABI | `abi3-py38`, `requires-python >=3.8` | package compatibility floor; parity oracle still runs on 3.10+ |
 | Node.js | CI/release `22.14.0` | WASM package and browser runner |
 | npm | CI/release `11.5.1` | locked package installation and publication |
@@ -30,7 +30,11 @@ published library; CI and release packaging always use the committed lockfile
 and `--locked`. Python and npm development inputs are exact versions in the
 checked-in constraints/lock files.
 
-The hosted Python and WASM jobs create a checkout-local `.venv`, install the
+The hosted Python parity matrix runs on GitHub's pinned `macos-14` ARM64
+runner, matching the architecture used to generate the native Pillow corpus
+and avoiding platform-specific codec arithmetic being classified as a parity
+failure. The Rust and WASM jobs retain Linux coverage. The hosted Python and
+WASM jobs create a checkout-local `.venv`, install the
 locked requirements into it, and pass `PYTHON=.venv/bin/python` to every Make
 target that runs Python. This keeps maturin, Pillow, NumPy, and the input
 checkers on the same interpreter instead of relying on the runner's global

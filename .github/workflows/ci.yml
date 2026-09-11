@@ -76,7 +76,11 @@ jobs:
   python:
     name: Python ${{ matrix.python-version }}
     needs: rust
-    runs-on: ubuntu-latest
+    # The committed Pillow corpus and its native codec/oracle measurements are
+    # generated on Apple ARM64.  Keep both parity adapters on the same
+    # architecture so platform-specific C/Pillow arithmetic is not reported as
+    # a migration mismatch; Linux remains covered by the Rust and WASM jobs.
+    runs-on: macos-14
     timeout-minutes: 45
     strategy:
       fail-fast: false
