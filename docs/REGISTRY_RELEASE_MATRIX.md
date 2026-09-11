@@ -11,10 +11,9 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is locally verified at
-the bounded implementation tip `bf821bc67`; the current local commits after
-that are documentation receipts, while `origin` currently ends at
-`d7cb61df9`. Registry publication and the exact-commit hosted CI run remain
-external prerequisites.
+`d624a73d8b2b40b10cd96689921d8f6c71b075da`, and that exact commit is now
+present on its matching `origin` branch. Registry publication and the exact-
+commit hosted CI run remain external prerequisites.
 The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
@@ -27,7 +26,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | local `v0.1.0` tag is `8d8ecdfe8699329ae166541be8040b1bc3b253e7`; pushed clean-history candidate `codex/release-image-slash-star-clean` is `3c15acae363540cfbfa2579ef7df8fe3f1568d1f` with no historical blob at or above 100 MB and a passing `make package-verify`; `origin/main` remains at `8675feb31d274879aaec1d23cdb0458451eea1ea` until the coordinated history update is authorized; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit is `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; current pushed `main` is `2cefcd103ab0e441182113eceac7d9e6a2343c71` and contains the verified oracle-download fallback, clean parity evidence, and the refreshed C-ABI contract snapshot. The parity and ABI changes are outside the public root archive, while README/changelog edits are package inputs, so main is a follow-on candidate rather than the exact alpha.3 package. The synchronized candidate has 20,355/20,355 runnable cases and 3 safety-extension cases pending; local `make ci-fast` and one-crate/C-SDK/npm dry-run pass, and the current hosted fast gate passed. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review are still required |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit is `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; current pushed `main` is `8526f7fbb4ef96cc6d2d1cb9aba1ddef46acc121` and contains the malformed-face parity fixes plus refreshed evidence. Because the immutable alpha.3 tag points to an earlier package tree, current `main` is a follow-on candidate rather than the exact alpha.3 package. The synchronized candidate has 20,355/20,355 runnable cases and 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, and npm checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review are still required |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | the local `v0.1.0` candidate is rebuilt from the synchronized alpha.3 dependency pin; its exact candidate commit, archive checksum, and staged registry entry are recorded in `dist/release-local/release-manifest.txt` and `SHA256SUMS`; public crate packaging still waits for the image-slash-star and fontdone registry versions |
@@ -79,14 +78,14 @@ backend mismatch; the unchanged zero-violation gate remains open.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`2cefcd103ab0e441182113eceac7d9e6a2343c71`; its immutable local release tag
+`8526f7fbb4ef96cc6d2d1cb9aba1ddef46acc121`; its immutable local release tag
 `v2.14.3-alpha.3` remains at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, so the
 tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
 The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` at
-`d7cb61df9`; the local checkout has the verified bounded implementation and
-its documentation receipts after that base, none pushed yet.
+`d624a73d8b2b40b10cd96689921d8f6c71b075da`; its local checkout is clean and
+matches that pushed revision.
 `origin/main` remains at
 `b4b91cb8a8bb85be861c0ea9e4f62dfbf7e8e0b9` pending review of the candidate
 history. The current PyO3 and supply-chain fix is
