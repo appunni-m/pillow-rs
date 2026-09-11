@@ -203,7 +203,8 @@ image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit; its verified clean-history candidate is
 `codex/release-image-slash-star-clean` at
-`77aad12007e55a2c4b450407ab2d8d92b9b57871`. The local `v0.1.0` tag remains at
+`892fa567c6fb1bef5d74d374fc7bf0b2e68191b5` (the clean-history candidate's
+release-checklist receipt commit). The local `v0.1.0` tag remains at
 `8d8ecdfe8699329ae166541be8040b1bc3b253e7`. Before enabling public registry
 publication, the owner must provide or configure:
 
