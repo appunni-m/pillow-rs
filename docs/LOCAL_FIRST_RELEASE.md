@@ -12,9 +12,11 @@ does not publish to a public registry or write to a remote Git repository.
 | `fontdone` | `2.14.3-alpha.3` | `v2.14.3-alpha.3` | `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` |
 | `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
 
-The tags and complete Git bundles are under `dist/release-local/` in the
-working checkout. The bundle's `SHA256SUMS` is the authority for every package
-archive and Git bundle; verify it from that directory with:
+The sibling tags and complete Git bundles are under `dist/release-local/` in
+the working checkout. The current `pillow-rs` package candidate is bound to
+the source commit recorded in `release-manifest.txt`; its older local `v0.1.0`
+tag remains historical. The bundle's `SHA256SUMS` is the authority for every
+package archive and Git bundle; verify it from that directory with:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
@@ -24,7 +26,7 @@ shasum -a 256 -c benchmarks/SHA256SUMS
 The maintained Makefile check validates the same receipt, both checksum
 manifests, every package entry, all three Git bundles, and the Cargo release
 identity: each public archive must match its local-registry copy, index
-checksum, tagged VCS revision, and embedded dependency checksums:
+checksum, recorded VCS revision, and embedded dependency checksums:
 
 ```sh
 make release-local-check
