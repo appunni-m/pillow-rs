@@ -4,6 +4,11 @@ This receipt records the coordinated local bootstrap prepared on 2026-09-11.
 It is a file-backed rehearsal for the first versions of the three projects; it
 does not publish to a public registry or write to a remote Git repository.
 
+The identities in the table below describe the staged rehearsal bundle. The
+image package was subsequently rebuilt from the current clean-history release
+candidate; that candidate is recorded separately below so the historical
+bundle remains byte-for-byte reproducible.
+
 ## Release identities
 
 | Project | Version | Annotated tag | Exact commit |
@@ -204,7 +209,8 @@ image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
 blobs above the hosting limit. A new clean-history release branch
 `codex/release-image-slash-star-clean-current` is now pushed at
-`4c47b587` and carries the current readiness record while preserving `main`.
+`5113bb3381ab3780353668ae75a5e6a979f9a9d5` and carries the current readiness
+record while preserving `main`.
 The earlier clean-history candidate remains at
 `codex/release-image-slash-star-clean`; no `v0.1.0` release tag is currently
 pushed, and `8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained as the historical
@@ -224,7 +230,8 @@ fontdone still has unresolved C-ABI route/error debt and lacks five fresh
 cross-platform C-ABI bundles including the Windows import library, and the root benchmark checklist still requires two
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
 repository now has a pushed clean-history candidate at
-`codex/release-image-slash-star-clean-current` (`4c47b587`); updating `main`
+`codex/release-image-slash-star-clean-current`
+(`5113bb3381ab3780353668ae75a5e6a979f9a9d5`); updating `main`
 still requires explicit authorization because it rewrites historical Git
 objects.
 
@@ -232,8 +239,11 @@ After those prerequisites are satisfied, the release workflows publish only
 from a clean reviewed commit and create later releases from an immutable
 annotated `v<version>` tag.
 
-The current local `image-slash-star` `0.1.0` archive was rebuilt at
-`be4918b0a9677f61c5e6623208e9afe9f40bf719` and passed its package, cross-target,
-doctest, and clean-consumer checks. Its archive SHA-256 is
-`6d98579356a07600ca28a1b869dcb91ba0ac52234f36fbff84dede4f6c492cbd`; this
-local result does not change the remote-history or strict-coverage blockers.
+The staged local `image-slash-star` `0.1.0` archive remains bound to the
+historical rehearsal commit `8d8ecdfe8699329ae166541be8040b1bc3b253e7` and its
+recorded checksum. The current clean-history candidate was rebuilt at
+`5113bb3381ab3780353668ae75a5e6a979f9a9d5` and passed its package,
+cross-target, doctest, and clean-consumer checks; its archive SHA-256 is
+`2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. The
+candidate remains blocked by the strict coverage denominator and the absence
+of a successful exact-commit hosted release gate.
