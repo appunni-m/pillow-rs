@@ -1077,36 +1077,62 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
             elif outcome == "fail":
                 failed += 1
 
+    def record_source_batch(
+        batch: list[dict[str, Any]],
+        start: int,
+        root: int,
+    ) -> None:
+        """Run the Pillow oracle, bisecting failures before target execution.
+
+        A single source-side crash must not discard every later case in the
+        streamed corpus.  Smaller retries preserve all unaffected source
+        results and leave only the failing input explicitly unrecorded, just
+        as target-side adapter failures are isolated above.
+        """
+
+        nonlocal source_identity
+        if not batch:
+            return
+        case_ids = [case["case_id"] for case in batch]
+        try:
+            batch_source_identity, source_results = run_side_subprocess(
+                "source", manifest_path, batch, args.timeout
+            )
+        except RuntimeError as exc:
+            if len(batch) > 1:
+                midpoint = len(batch) // 2
+                record_source_batch(batch[:midpoint], start, root)
+                record_source_batch(batch[midpoint:], start + midpoint, root)
+                return
+            infrastructure_errors.append(
+                {
+                    "scope": "oracle",
+                    "id": None,
+                    "kind": "source_failure",
+                    "message": (
+                        f"Pillow oracle failed for chunk {root // args.chunk_size + 1} "
+                        f"(1 case; index={start}; case={case_ids[0]!r}): {exc}"
+                    ),
+                }
+            )
+            return
+        if source_identity is None:
+            source_identity = batch_source_identity
+        elif batch_source_identity != source_identity:
+            infrastructure_errors.append(
+                {
+                    "scope": "oracle",
+                    "id": None,
+                    "kind": "identity_changed",
+                    "message": "Pillow oracle identity changed between chunks",
+                }
+            )
+            return
+        record_target_batch(batch, start, root, source_results)
+
     try:
         for start, batch in _execution_batches(cases, args.chunk_size):
-            try:
-                batch_source_identity, source_results = run_side_subprocess(
-                    "source", manifest_path, batch, args.timeout
-                )
-            except RuntimeError as exc:
-                infrastructure_errors.append(
-                    {
-                        "scope": "oracle",
-                        "id": None,
-                        "kind": "source_failure",
-                        "message": f"Pillow oracle failed for chunk at index {start}: {exc}",
-                    }
-                )
-                break
-            if source_identity is None:
-                source_identity = batch_source_identity
-            elif batch_source_identity != source_identity:
-                infrastructure_errors.append(
-                    {
-                        "scope": "oracle",
-                        "id": None,
-                        "kind": "identity_changed",
-                        "message": "Pillow oracle identity changed between chunks",
-                    }
-                )
-                break
-            record_target_batch(batch, start, start, source_results)
-            del source_results
+            record_source_batch(batch, start, start)
     except BaseException as exc:
         infrastructure_errors.append(
             {
