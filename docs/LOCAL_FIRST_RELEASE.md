@@ -61,7 +61,7 @@ The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The currently pushed `fontdone`
 `main` is `28344c1f77087ab5819a7aa5b2bc946f3aac3a28`; the local checkout is at
-`f655ae9193d818525a1b2babfde7522b39b9de7d`, two documentation commits ahead.
+`ff146161f32d8f3e7a86bfef4572e7e86b45badf`, three documentation commits ahead.
 The follow-up parity-oracle, ABI test-support, and release-documentation
 corrections are outside the immutable alpha.3 package archive, so the current
 main tree is a follow-on candidate rather than the alpha.3 package. The
@@ -193,7 +193,7 @@ release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
 the currently pushed `fontdone` `main` is
 `28344c1f77087ab5819a7aa5b2bc946f3aac3a28`; the local checkout is at
-`f655ae9193d818525a1b2babfde7522b39b9de7d`.
+`ff146161f32d8f3e7a86bfef4572e7e86b45badf`.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
