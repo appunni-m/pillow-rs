@@ -202,11 +202,12 @@ receipt updates; the evidence remains bound to the earlier implementation
 base commits. The
 image-slash-star `main` push
 was rejected by GitHub because its earlier history contains generated AV1
-blobs above the hosting limit; its verified clean-history candidate is
-`codex/release-image-slash-star-clean` at
-`213f312b51b791d1eb9200abc0d8d49cccb8ac6f` (the clean-history candidate's
-release-checklist receipt commit). No `v0.1.0` release tag is currently pushed;
-`8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained as the historical
+blobs above the hosting limit. A new clean-history release branch
+`codex/release-image-slash-star-clean-current` is now pushed at
+`4c47b587` and carries the current readiness record while preserving `main`.
+The earlier clean-history candidate remains at
+`codex/release-image-slash-star-clean`; no `v0.1.0` release tag is currently
+pushed, and `8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained as the historical
 candidate commit. Before enabling public registry
 publication, the owner must provide or configure:
 
@@ -223,8 +224,9 @@ fontdone still has unresolved C-ABI route/error debt and lacks five fresh
 cross-platform C-ABI bundles including the Windows import library, and the root benchmark checklist still requires two
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
 repository now has a pushed clean-history candidate at
-`codex/release-image-slash-star-clean`; updating `main` still requires explicit
-authorization because it rewrites historical Git objects.
+`codex/release-image-slash-star-clean-current` (`4c47b587`); updating `main`
+still requires explicit authorization because it rewrites historical Git
+objects.
 
 After those prerequisites are satisfied, the release workflows publish only
 from a clean reviewed commit and create later releases from an immutable
