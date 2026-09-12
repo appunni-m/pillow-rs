@@ -31,6 +31,11 @@ targets (`publish = false`) for the native C SDK and the raw WASM input to the
 `fontdone` npm package. They are audited and archived where needed, but neither
 is a second crates.io package.
 
+The 2026-09-12 maintained fontdone release rehearsal passed both
+`make release-dry-run` and the Cargo publish helper's `--dry-run` mode. The
+helper's publication list contains only `fontdone`; the C ABI and raw-WASM
+archives were inspected and compiled as internal build artifacts.
+
 The root Makefile's maintained `build/fontdone-src` parity checkout is pinned to
 the same `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` revision used by the
 `pillow-rs` Cargo dependency and the public `fontdone` release. Root parity and

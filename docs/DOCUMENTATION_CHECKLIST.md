@@ -1,7 +1,7 @@
 # Documentation checklist
 
 This is the active documentation contract for pillow-rs. It was reviewed on
-2026-09-08 against the pinned manifest, Makefile, package manifests, and the
+2026-09-12 against the pinned manifest, Makefile, package manifests, and the
 latest recorded parity and benchmark artifacts.
 
 ## Audience paths
