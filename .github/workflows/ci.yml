@@ -314,6 +314,35 @@ jobs:
           else
             echo "::warning title=WASM parity summary::No WASM parity result was written"
           fi
+          if [ -f "$result" ]; then
+            .venv/bin/python - "$result" <<'PY'
+          import gzip
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          opener = gzip.open if path.name.endswith(".gz") else open
+          with opener(path, "rt", encoding="utf-8") as handle:
+              result = json.load(handle)
+          comparisons = result.get("comparisons", [])
+          failed = [item for item in comparisons if item.get("outcome") == "fail"]
+          failed_ids = [item.get("case_id", "?") for item in failed[:40]]
+          if failed_ids:
+              print(
+                  "::error title=${{ matrix.host }} WASM parity failed case IDs::"
+                  f"count={len(failed)} first="
+                  + ",".join(failed_ids)
+              )
+          for error in result.get("infrastructure_errors", [])[:5]:
+              message = str(error.get("message", ""))
+              message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(
+                  "::error title=${{ matrix.host }} WASM parity infrastructure error::"
+                  + message[:1800]
+              )
+          PY
+          fi
 
       - name: upload WASM parity evidence
         if: always()
