@@ -25,14 +25,14 @@ and npm, and only `fontdone@2.14.3-alpha.1` visible on npm under both
 `latest` and `next`. These probes are discovery evidence; they do not replace
 the clean-checkout release gates or authorize a publication.
 
-The hosted root CI run `34699644231` for the current release branch is still
-`in_progress` when checked on 2026-09-12. Rust, documentation, Python 3.12,
-and Node WASM jobs have passed; Python 3.10 failed in the package-build step
-with exit code 2, and the browser WASM job is still running. The public
-GitHub API exposes no stderr for that failed step; a clean local build with
-the pinned requirements succeeds, so this observation does not justify a
-source or workflow change. The run remains external evidence rather than a
-release approval.
+The hosted root CI run `34701828160` for the explicit-virtualenv correction
+was still `in_progress` when checked on 2026-09-12. Rust and documentation
+jobs had passed; Python 3.10 again failed in the package-build step with exit
+code 2, while Python 3.12 and both WASM jobs were still running. The public
+GitHub API exposes no stderr for that failed step; an isolated Python 3.10
+build with the pinned requirements succeeds, so this observation does not
+justify a source or fixture change. The run remains external evidence rather
+than a release approval.
 
 Fontdone has one public Cargo release unit: the root `fontdone` package. The
 workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
