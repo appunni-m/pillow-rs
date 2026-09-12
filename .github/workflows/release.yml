@@ -15,7 +15,7 @@ on:
         default: 0.1.0
         type: string
       dependencies_published:
-        description: image-slash-star, fontdone crates, and fontdone npm are registry-visible
+        description: image-slash-star and the single public fontdone crate, plus the fontdone npm package, are registry-visible
         required: true
         default: false
         type: boolean
