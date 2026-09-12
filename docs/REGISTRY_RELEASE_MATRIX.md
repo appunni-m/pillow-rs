@@ -12,7 +12,7 @@ The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` now includes the Apple ARM64 parity
 runner correction and release-state documentation at
-`4c7c299f8e486da66c95891aa7506991e2e5103`. Hosted CI is running for the
+`feb543b06f071325e0264fa8f558843c2b25d4a4`. Hosted CI is running for the
 updated branch; local Python and JS/WASM replays pass their full selected
 corpus. Registry publication and a successful exact-commit hosted CI run remain
 external prerequisites.
@@ -98,7 +98,7 @@ tag and current main are intentionally distinct package revisions. The older `v2
 tag remains as superseded local history.
 The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` at
-`4c7c299f8e486da66c95891aa7506991e2e5103`, with the earlier source-fix,
+`feb543b06f071325e0264fa8f558843c2b25d4a4`, with the earlier source-fix,
 implementation-base, and receipt commits retained as historical references.
 `origin/main` remains at
 `b4b91cb8a8bb85be861c0ea9e4f62dfbf7e8e0b9` pending review of the candidate
