@@ -30,11 +30,11 @@ published library; CI and release packaging always use the committed lockfile
 and `--locked`. Python and npm development inputs are exact versions in the
 checked-in constraints/lock files.
 
-The hosted Python parity matrix runs on GitHub's pinned `macos-14` ARM64
-runner, matching the architecture used to generate the native Pillow corpus
-and avoiding platform-specific codec arithmetic being classified as a parity
-failure. The Rust and WASM jobs retain Linux coverage. The hosted Python and
-WASM jobs create a checkout-local `.venv`, install the
+The hosted Python and JS/WASM parity matrices run on GitHub's pinned
+`macos-14` ARM64 runner, matching the architecture used to generate the native
+Pillow corpus and avoiding platform-specific codec arithmetic being classified
+as a parity failure. The Rust build and supply-chain matrix retains Linux
+coverage. The hosted Python and WASM jobs create a checkout-local `.venv`, install the
 locked requirements into it, and pass `PYTHON=.venv/bin/python` to every Make
 target that runs Python. This keeps maturin, Pillow, NumPy, and the input
 checkers on the same interpreter instead of relying on the runner's global
