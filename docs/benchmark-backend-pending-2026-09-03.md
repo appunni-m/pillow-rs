@@ -557,6 +557,21 @@ receipt rules unchanged.
   operation, resource, backend, and terminal receipt structure remains
   compatible, so P2 stays open under the unchanged five-percent policy.
 
+  A low-load pair at the current documentation revision
+  `fafa33825fc0bb45d7ac5345066eab33a655b099` again selected and measured
+  11/11 workloads with 44/44 comparable rows and 33/33 terminal
+  requested=actual target receipts in each run. Run IDs were
+  `migration-benchmark-ac856afca20b4d2ea87611bc3cbab86f` and
+  `migration-benchmark-d1c37e29e31740f8a5a3ffa67da2167d`; result SHA-256
+  values were `4b986b136aa50720dc39922d4fc9d9bc4f3e7e7be48dd4c59db833cf0be38f0b`
+  and `ec6e3d3a01fcd2a787aa7c6f3ab8fe29100ddf27de579f5ae0ec7be1038923f6`.
+  The unchanged budget report
+  `3f9276347b90c2e6e6e9629fd3a4a104ee95c252ad36600c465d48bfc61568d8`
+  reports five statistically credible timing-only violations, all on SIMD
+  rows. The non-timing execution, resource, backend, and terminal receipt
+  structures are identical after removing timing summaries; P2 therefore
+  remains open without a source, fixture, threshold, or receipt change.
+
 ## Verified changes already integrated
 
 - [x] Degenerate thumbnail control flow (`b0c154b33`, source `dc6085f81`):
