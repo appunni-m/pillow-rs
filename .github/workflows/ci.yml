@@ -242,7 +242,11 @@ jobs:
     # on Apple ARM64. Keep the JS/WASM source/target comparison on that same
     # architecture; the Rust matrix above continues to cover Linux builds.
     runs-on: macos-14
-    timeout-minutes: 60
+    # The browser adapter intentionally isolates process-global RNG cases and
+    # runs the complete public corpus.  Hosted macOS runners can need more
+    # than an hour even though the local ARM64 replay is exact; keep the full
+    # corpus and give the lane a bounded two-hour window.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
