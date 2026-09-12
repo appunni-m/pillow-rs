@@ -1801,3 +1801,21 @@ The unchanged five-percent comparison against the preceding release run
 reported nine timing-only violations. The normalized execution and terminal
 receipt structures remain complete, so P2 stays open without changing
 workloads, thresholds, fixtures, or receipt policy.
+
+### Current-head elevated low-load follow-up (2026-09-12)
+
+At source revision `3a3ae28b20b0d86eebc1dddb45234f2da65af6b7` (a
+documentation-only follow-up to the preceding benchmark head), one more
+release-profile run used the same fixed 11-workload cohort with native Metal
+GPU access. It selected and measured 11/11 workloads, retained 44/44
+comparable rows, and recorded 33/33 terminal requested=actual CPU, SIMD, and
+GPU receipts. The result, parity sidecar, and budget report SHA-256 values are
+`50431a65122edb1341a5ac2253a515b4992a0dfd95dd57dc7778fe2d06eebba7`,
+`61a2250fd0dcac5c8bdf08b1a78678c3d632ec047497b5c613d5464374d77050`, and
+`3e85f936dfe56a06b9ea3f6128d09dfdd2400dadddc2e6de634cc83327ff4b97`.
+The unchanged five-percent comparison against the preceding elevated run
+reported three timing-only violations (`python-simd` draw-batch RGB shapes,
+`python-cpu` SIMD-constant 1024x768, and Pillow terminal-read CMYK). The
+normalized execution and terminal receipt structures remain complete; the
+required zero-violation pair therefore remains open without changing the
+benchmark contract.
