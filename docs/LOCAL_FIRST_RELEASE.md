@@ -229,3 +229,9 @@ authorization because it rewrites historical Git objects.
 After those prerequisites are satisfied, the release workflows publish only
 from a clean reviewed commit and create later releases from an immutable
 annotated `v<version>` tag.
+
+The current local `image-slash-star` `0.1.0` archive was rebuilt at
+`be4918b0a9677f61c5e6623208e9afe9f40bf719` and passed its package, cross-target,
+doctest, and clean-consumer checks. Its archive SHA-256 is
+`6d98579356a07600ca28a1b869dcb91ba0ac52234f36fbff84dede4f6c492cbd`; this
+local result does not change the remote-history or strict-coverage blockers.
