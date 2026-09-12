@@ -41,6 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
+      # Keep the other fixed toolchain lanes observable when one hosted
+      # runner setup fails; every lane remains required for a green run.
+      fail-fast: false
       matrix:
         task: [fmt-clippy, parity-build, supply-chain]
     steps:
