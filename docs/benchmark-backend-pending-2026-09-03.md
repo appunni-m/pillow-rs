@@ -1786,3 +1786,18 @@ reports two statistically credible timing-only violations:
 receipt structures remain unchanged, so the required zero-violation pair is
 still open without changing workloads, thresholds, fixtures, or receipt
 policy.
+
+### Current-head elevated low-load rerun (2026-09-12)
+
+At source revision `1d70e0c421217faacb9112bc19c12cf661eb9507`, one elevated
+release-profile run used the unchanged fixed 11-workload cohort with native
+Metal GPU access. It selected and measured 11/11 workloads, retained 44/44
+comparable rows, and recorded 33/33 terminal requested=actual CPU, SIMD, and
+GPU receipts. The result, parity sidecar, and budget report SHA-256 values are
+`242ba2cd37d9a38fe9ebea606d24858b7dc5644c681798355cf2dcf70032eedc`,
+`88fab6f3d959aba40e2999f9ac0689022041df5a294782a8380e4e7515a8ccc3`, and
+`80d624e5d7b03c200c3f5f57e773e3e4af6704aceb40fcbf9b360f2878a524a9`.
+The unchanged five-percent comparison against the preceding release run
+reported nine timing-only violations. The normalized execution and terminal
+receipt structures remain complete, so P2 stays open without changing
+workloads, thresholds, fixtures, or receipt policy.

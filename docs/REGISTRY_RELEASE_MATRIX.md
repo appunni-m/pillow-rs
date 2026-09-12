@@ -102,6 +102,19 @@ run-21-vs-run-20 comparison reported nine timing-only violations and the
 run-23-vs-run-22 comparison reported five. These receipts add no execution or
 backend mismatch; the unchanged zero-violation gate remains open.
 
+An additional elevated run at source revision `1d70e0c421217faacb9112bc19c12cf661eb9507`
+used the same fixed 11-workload cohort with native Metal access. It selected and
+measured 11/11 workloads, retained 44/44 comparable rows, and recorded 33/33
+terminal requested=actual CPU, SIMD, and GPU receipts. The result, parity
+sidecar, and budget report hashes are respectively
+`242ba2cd37d9a38fe9ebea606d24858b7dc5644c681798355cf2dcf70032eedc`,
+`88fab6f3d959aba40e2999f9ac0689022041df5a294782a8380e4e7515a8ccc3`, and
+`80d624e5d7b03c200c3f5f57e773e3e4af6704aceb40fcbf9b360f2878a524a9`.
+Compared with the preceding release run, the unchanged five-percent checker
+reported nine timing-only violations; the normalized execution and receipt
+structures remained complete. This is additional host-timing evidence and
+does not close the zero-violation gate or justify changing its policy.
+
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
