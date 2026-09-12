@@ -97,7 +97,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: create the project virtualenv
-        run: python -m venv .venv
+        run: |
+          python -m venv .venv
+          # Maturin uses VIRTUAL_ENV to select the interpreter for `develop`.
+          # Export the freshly created environment instead of relying on its
+          # project-directory fallback, which differs across Python versions.
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
       - name: install locked Python tools
         run: .venv/bin/python -m pip install --requirement requirements-ci.txt
