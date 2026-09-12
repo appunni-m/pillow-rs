@@ -55,10 +55,11 @@ checkouts.
 The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The current pushed `fontdone`
-`main` is `ff06132f3dfbd10ea1136e9ba8def970b84c365f`, which contains the
+`main` is `185ae7314969a96bb26b228c7f63db2865226ac2`, which contains the
 follow-up parity-oracle, ABI test-support, and release-documentation
 corrections. The parity and ABI changes are outside the public root crate
-archive; the README and changelog corrections are package inputs, so the
+archive; the README, changelog, and workflow corrections are package or
+release inputs, so the
 current main tree is a follow-on candidate rather than the immutable alpha.3
 package. The earlier `2.14.3-alpha.1` and superseded `2.14.3-alpha.2`
 artifacts remain immutable historical evidence and are not used by the current
@@ -187,7 +188,7 @@ to a source fix.
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
-the current pushed `fontdone` `main` is `ff06132f3dfbd10ea1136e9ba8def970b84c365f`.
+the current pushed `fontdone` `main` is `185ae7314969a96bb26b228c7f63db2865226ac2`.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
