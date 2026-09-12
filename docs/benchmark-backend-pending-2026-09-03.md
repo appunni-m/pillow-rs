@@ -1696,3 +1696,33 @@ Every run passed the benchmark schema and retained complete terminal receipts.
 The differing rows and large changes in sub-millisecond workloads across
 unchanged execution fingerprints confirm host scheduler variance; P2 remains
 open without changing workload IDs, thresholds, fixtures, or receipt policy.
+
+### Current-head elevated low-load reruns (2026-09-12)
+
+At the pushed head `181c0bd501e6a1d1ea4a62114f438494c3570ce1`, eight adjacent
+release-profile runs used the fixed 11-workload cohort. The sandbox could not
+enumerate a Metal adapter, so the first run was retained only as a diagnostic;
+the seven elevated runs used native Metal GPU access and each selected and
+measured 11/11 workloads, retained 44/44 comparable rows, and recorded 33/33
+terminal requested=actual CPU, SIMD, and GPU receipts. The valid adjacent
+budget comparisons reported 15, 4, 2, 6, 1, and 3 timing-only violations.
+Result hashes for the valid runs (B through I) are
+`e3930a4a99870cfedf4cce6463ded64c3e6593f08b7188f727863be84f5d3673`,
+`15c3c6b1af0fa4ccf36385882b6e79de474b82133fa9a578a0088667f8a404ca`,
+`3161ab82b225ac658bc35d6a967b23dc243dbd76eef335cc627b3b5855fd23ac`,
+`f4d8652b7238a6dccdefcf85ea344c2bd375bc8307ca57053ebf46869a69258b`,
+`07c033250f03790d41269bc7dbdad0165b8fc014958e859342371d2a61ffbc57`,
+`fee774de012aa6ce8f1fbecb35c67023e20faa2f284c92c8d909a79b3435d9bd`,
+`9bba03910c401bc900d9db353cd2f7cda38ea55e297b53723e6c6f8c190a5d2f`, and
+`3cadf61b9407d5ad07912088d568203c520d80bb71ff02ee58956f85bfb33862`.
+The corresponding budget hashes are
+`fefb563b435d4c1ab926b2451a2dd6c5b1ba3634c7e92fa2008fde6e5608525e`,
+`7fa5f153164251391675130417e25c043b85a7be808b87c9f106b7f2c0c7d1ea`,
+`c4a94dc7cc672caf00cb5a8811e582908debab57b0f6fb932a409f79b2596f41`,
+`35bd12dd3da0ff09817bccdfda07cfdd9f6bc071b7d29e8dd17143552ed70f45e`,
+`36c7ef7cb6c4fcbec5496f25f06fae25012b5ace93712db1c11a82e3b0f5f72d`, and
+`eaa1a9fcac13e28a096deada3400bb89ad2020dd20c8c6e96b5b88ae048cd826`.
+Removing timing fields produces the same normalized execution/receipt
+fingerprint for every run; the violations move between rows and remain timing
+only. The required two-consecutive zero-violation pair is still open without
+changing workload IDs, thresholds, fixtures, or receipt policy.
