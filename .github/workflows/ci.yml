@@ -238,7 +238,10 @@ jobs:
   wasm:
     name: WASM (${{ matrix.host }})
     needs: rust
-    runs-on: ubuntu-latest
+    # The live Pillow oracle and committed native parity corpus are measured
+    # on Apple ARM64. Keep the JS/WASM source/target comparison on that same
+    # architecture; the Rust matrix above continues to cover Linux builds.
+    runs-on: macos-14
     timeout-minutes: 60
     strategy:
       fail-fast: false
