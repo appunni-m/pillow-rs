@@ -115,6 +115,16 @@ reported nine timing-only violations; the normalized execution and receipt
 structures remained complete. This is additional host-timing evidence and
 does not close the zero-violation gate or justify changing its policy.
 
+A further elevated run at source revision `3a3ae28b20b0d86eebc1dddb45234f2da65af6b7`
+used the same 11-workload cohort with native Metal access and retained 44/44
+comparable rows plus 33/33 terminal requested=actual CPU, SIMD, and GPU
+receipts. Its result, parity, and budget hashes are
+`50431a65122edb1341a5ac2253a515b4992a0dfd95dd57dc7778fe2d06eebba7`,
+`61a2250fd0dcac5c8bdf08b1a78678c3d632ec047497b5c613d5464374d77050`, and
+`3e85f936dfe56a06b9ea3f6128d09dfdd2400dadddc2e6de634cc83327ff4b97`; the
+unchanged checker reported three timing-only violations. This reinforces the
+host-timing classification and leaves the zero-violation gate open.
+
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
