@@ -11,10 +11,11 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` now includes the Apple ARM64 parity
-runner correction at `5cc7377cd8a7f2b55f2b95c1da13512d5c2c6467`. Hosted run
-`34670109917` is the first CI run for that commit; local Python and JS/WASM
-replays pass their full selected corpus. Registry publication and a successful
-exact-commit hosted CI run remain external prerequisites.
+runner correction and release-state documentation at
+`9ef1f45c5f059955c08f139274ca1287ec0682ed`. Hosted CI is running for the
+updated branch; local Python and JS/WASM replays pass their full selected
+corpus. Registry publication and a successful exact-commit hosted CI run remain
+external prerequisites.
 The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
@@ -96,10 +97,9 @@ The clean `fontdone` `main` branch is now present on `origin` at
 tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
 The clean pillow-rs release-preparation branch
-`codex/benchmark-backend-parity-fixes` is present on `origin` with the
-diagnostic commit `da2ac3e3556f6bfb58ed0dc250532a479d7789f` and subsequent
-receipt updates; the earlier source-fix and implementation-base commits remain
-historical receipt references.
+`codex/benchmark-backend-parity-fixes` is present on `origin` at
+`9ef1f45c5f059955c08f139274ca1287ec0682ed`, with the earlier source-fix,
+implementation-base, and receipt commits retained as historical references.
 `origin/main` remains at
 `b4b91cb8a8bb85be861c0ea9e4f62dfbf7e8e0b9` pending review of the candidate
 history. The current PyO3 and supply-chain fix is
