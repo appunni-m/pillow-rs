@@ -572,6 +572,49 @@ receipt rules unchanged.
   structures are identical after removing timing summaries; P2 therefore
   remains open without a source, fixture, threshold, or receipt change.
 
+  Ten additional clean low-load runs at the current pushed revision
+  `90588bd58ae82a196e14c5a2ef3a5c5b81c3574d` retained 11/11 selected and
+  measured workloads, 44/44 comparable rows, and 33/33 terminal
+  requested=actual CPU/SIMD/Metal-GPU receipts. Adjacent budget comparisons
+  reported 8, 7, 3, 4, 2, 5, 5, 3, 2, and 3 timing-only violations for
+  `J-I` through `S-R`; all normalized operation, resource, backend, and
+  receipt structures remained identical after removing timing fields. The
+  run IDs were `migration-benchmark-729091149bfb4b06bb9d42ddd51d9916`,
+  `migration-benchmark-04d2ee4b850a455a867156eb84133e25`,
+  `migration-benchmark-8bb444a560c143ef9f742b22a023c151`,
+  `migration-benchmark-c848e423f1fe4fae99dd9ea713d5c084`,
+  `migration-benchmark-beb68ad723d441fd8d637242c8c8444c`,
+  `migration-benchmark-d787f5c4725f47d7a019f8ed697d8a65`,
+  `migration-benchmark-0590714ca8cf434399cce6a7010db6f8`,
+  `migration-benchmark-6f5ffa468a1d43c2a0000442af44dd60`,
+  `migration-benchmark-1c9f3572d97644d9a3c9f6e9330bb6a2`, and
+  `migration-benchmark-1e419ae469fe40ab96701938c912a93d`. Their result
+  artifact hashes were, in order,
+  `7eae26f1303e46c0e085c54aa4e0c1e639dcbf830fe2a51c8d3add06a96bcb1e`,
+  `642d146a6e46819c6edaf862354def1e885724dd932302318eb9726cd50b8c09`,
+  `c2fc736fc2b6fa3373a81962d8f797707d16b6e250c9e66cc6041c4cc8e25683`,
+  `fc77e33286c3591af56c1e5b2cb758cc3619080d937da36fb6a94b68412628ef`,
+  `3a7f43664784b4eaaca5f27e73516714259fdf3867955407af9816c06eeb1561`,
+  `fc4ad2d08b3943f98e6ef367eeb3abb04d4fb64e4a3983dc8867c3535ff593c3`,
+  `3d576510ce23ac324319a30a5730ba875f784ead50e0cac26c83306a17787857`,
+  `33d1919911b98fa321563386c7d2d278ba187d566beb8cd00827dcfcd4122583`,
+  `425e97d29db0c2dd186ca153f3d485d92afc69de0010352fd24ce3a691d9defc`, and
+  `7bdac0dfba7ff7819b46104691ce6aad44341ac3cbb76d61154826f349819b41`.
+  The corresponding budget report hashes were
+  `ab9c139a5a057917584aca578f1f92af7df4b30addac72b4539f2f4ffed734f7`,
+  `c2ae577b5d943ef73c1db4331005c5c82aea24d75a3e79011d2eaa4fad94029f`,
+  `0f51c9f10b6f722118256a147ed48042cd0464668ee7b084802bb9c30c3728ba`,
+  `4b20aae94d6e9a0e595e3f4df8b0dc261b029179fddf8f47c7ea6b76b71113cd`,
+  `adb3e83d8226818a05414f0bce7dc0ac52c51f722b6a448156986d619e2c024a`,
+  `0439dcabdb8de7661e27786a335268a8fbf43d8136bc3294e315bbb618e37f1d`,
+  `85cfc2318f4723c5fb7fdfad5e9bf0179f45d7605b06c339336ecff6a1275adc`,
+  `1876ecef0c7fe26118c556e3575d4a1701adf5f00b43d853b7d01070b3f25916`,
+  `6f230756dd22c48b091865bd70fcaf724a87e90e92605270c58cd68335c436f9`, and
+  `86051d746ea86e80f3fb92eb4a899c3881c5a77d70d411361b8a47360dfbdc28`.
+  The required two-consecutive zero-violation pair remains open; no source,
+  fixture, threshold, or receipt change is justified by these timing-only
+  results.
+
 ## Verified changes already integrated
 
 - [x] Degenerate thumbnail control flow (`b0c154b33`, source `dc6085f81`):
