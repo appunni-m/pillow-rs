@@ -25,11 +25,11 @@ and npm, and only `fontdone@2.14.3-alpha.1` visible on npm under both
 `latest` and `next`. These probes are discovery evidence; they do not replace
 the clean-checkout release gates or authorize a publication.
 
-The hosted root CI run `34695331087` for the current release branch was still
+The hosted root CI run `34699644231` for the current release branch is still
 `in_progress` when checked on 2026-09-12. Rust, documentation, Python 3.12,
-and Node WASM jobs had passed; Python 3.10 had failed in the package-build
-step with exit code 2, and the browser WASM job was still running. The public
-GitHub API exposed no stderr for that failed step; a clean local build with
+and Node WASM jobs have passed; Python 3.10 failed in the package-build step
+with exit code 2, and the browser WASM job is still running. The public
+GitHub API exposes no stderr for that failed step; a clean local build with
 the pinned requirements succeeds, so this observation does not justify a
 source or workflow change. The run remains external evidence rather than a
 release approval.
