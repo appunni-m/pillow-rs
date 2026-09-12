@@ -1769,3 +1769,20 @@ Removing timing fields produces the same normalized execution/receipt
 fingerprint for every run; the violations move between rows and remain timing
 only. The required two-consecutive zero-violation pair is still open without
 changing workload IDs, thresholds, fixtures, or receipt policy.
+
+### Current-head elevated low-load rerun continuation (2026-09-12)
+
+Two further elevated runs at source revision
+`00391c41ebd63d90cd46c544c09b838b6d1078db` retained 11/11 selected and
+measured workloads, 44/44 comparable rows, and 33/33 terminal requested=actual
+CPU, SIMD, and Metal GPU receipts. Their result SHA-256 values are
+`7fb7b7b02c8c0abb377b129cf409b22723c2759d64c3728c9dbf154ae90584d1` and
+`1ab116cc1ae39b9ed7bcb9ad06fc90a0e2118ef104e16d9fd5cc523aa6a08b4d`.
+The unchanged five-percent comparison has SHA-256
+`687133aa90534c324bff035242eb084cb19a72e1d4c779f46e82a216a93932d6` and
+reports two statistically credible timing-only violations:
+`pipeline-chain.reviewed.draw-filter-invert` on GPU and
+`pipeline-chain.terminal-read.imagestat.cmyk-1024x768` on CPU. Execution and
+receipt structures remain unchanged, so the required zero-violation pair is
+still open without changing workloads, thresholds, fixtures, or receipt
+policy.
