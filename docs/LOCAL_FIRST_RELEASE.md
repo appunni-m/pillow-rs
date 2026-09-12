@@ -59,16 +59,14 @@ checkouts.
 
 The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
-`5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The current pushed `fontdone`
-`main` is `3ebb6021e8eb1ad5fc70d39d6828cf7d26558f84`, which contains the
-follow-up parity-oracle, ABI test-support, and release-documentation
-corrections. The parity and ABI changes are outside the public root crate
-archive; the README, changelog, and workflow corrections are package or
-release inputs, so the
-current main tree is a follow-on candidate rather than the immutable alpha.3
-package. The earlier `2.14.3-alpha.1` and superseded `2.14.3-alpha.2`
-artifacts remain immutable historical evidence and are not used by the current
-release bundle.
+`5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The currently pushed `fontdone`
+`main` is `28344c1f77087ab5819a7aa5b2bc946f3aac3a28`; the local checkout is at
+`f655ae9193d818525a1b2babfde7522b39b9de7d`, two documentation commits ahead.
+The follow-up parity-oracle, ABI test-support, and release-documentation
+corrections are outside the immutable alpha.3 package archive, so the current
+main tree is a follow-on candidate rather than the alpha.3 package. The
+earlier `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain
+immutable historical evidence and are not used by the current release bundle.
 
 The local Cargo registry is intentionally a read-only source registry for
 consumer verification, not a fake crates.io upload endpoint. Python and npm
@@ -193,7 +191,9 @@ to a source fix.
 The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
-the current pushed `fontdone` `main` is `3ebb6021e8eb1ad5fc70d39d6828cf7d26558f84`.
+the currently pushed `fontdone` `main` is
+`28344c1f77087ab5819a7aa5b2bc946f3aac3a28`; the local checkout is at
+`f655ae9193d818525a1b2babfde7522b39b9de7d`.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
