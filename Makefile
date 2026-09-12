@@ -170,6 +170,8 @@ help: ## Show this help
 	@printf "  $(CYAN)make test$(NC)           Run shared CPU/SIMD/GPU/WGSL + JS/WASM parity and reverse Pillow coverage\n"
 	@printf "  $(CYAN)MIGRATION_GPU_FULL=0 make test$(NC) Keep the GPU smoke gate but mark full GPU parity not proven\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run the same public parity corpus through Node WASM and browser WASM\n"
+	@printf "  $(CYAN)make test-wasm-node$(NC) Run the public parity corpus through Node WASM\n"
+	@printf "  $(CYAN)make test-wasm-browser$(NC) Run the public parity corpus through browser WASM\n"
 	@printf "  $(CYAN)make migration-parity-js-gap-report$(NC)  Group actual Node/browser WASM failures; pending means summary.not_run\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify the fixed manifest and indexed inputs\n"
 	@printf "  $(CYAN)make migration-parity-crash-quarantine-check$(NC) Verify isolated crash inputs without executing them\n"
@@ -338,7 +340,7 @@ python-compat-check: build ## Import the abi3 facade under a selected Python int
 	PYTHONPATH="$(abspath $(PY_SRC)/python)" "$(PYTHON_COMPAT)" scripts/check_python_compatibility.py
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-wasm test-all migration-parity-js-gap-report migration-parity-test-all-backends migration-parity-test-gpu-strict migration-parity-test-simd-strict
+.PHONY: test test-wasm test-wasm-node test-wasm-browser test-all migration-parity-js-gap-report migration-parity-test-all-backends migration-parity-test-gpu-strict migration-parity-test-simd-strict
 .PHONY: backend-support-matrix
 
 test: migration-parity-fixtures-check ## Run shared target parity, JS/WASM parity, and reverse Pillow coverage
@@ -385,6 +387,22 @@ test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages 
 	wait $$browser_pid; browser_status=$$?; \
 	if [ $$node_status -ne 0 ]; then exit $$node_status; fi; \
 	exit $$browser_status
+
+test-wasm-node: build-wasm-core build-wasm-extra ## Build the declared WASM packages and run the public corpus through Node WASM
+	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
+	$(PYTHON) scripts/run_migration_js_parity.py \
+		--host node \
+		--output "$(MIGRATION_JS_PARITY_OUTPUT)" \
+		--chunk-size "$(MIGRATION_JS_PARITY_CHUNK_SIZE)" \
+		$(MIGRATION_JS_PARITY_CASE_ARGS)
+
+test-wasm-browser: build-wasm-core build-wasm-extra ## Build the declared WASM packages and run the public corpus through browser WASM
+	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
+	$(PYTHON) scripts/run_migration_js_parity.py \
+		--host browser \
+		--output "$(MIGRATION_BROWSER_PARITY_OUTPUT)" \
+		--chunk-size "$(MIGRATION_BROWSER_PARITY_CHUNK_SIZE)" \
+		$(MIGRATION_JS_PARITY_CASE_ARGS)
 
 migration-parity-js-gap-report: ## Group actual Node/browser WASM failures without loading 1+ GiB artifacts into memory
 	$(PYTHON) scripts/report_migration_js_parity_gaps.py \

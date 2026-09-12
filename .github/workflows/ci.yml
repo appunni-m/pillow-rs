@@ -234,12 +234,16 @@ jobs:
         run: python -m pip install "pyyaml==6.0.3"
       - run: make docs-check
 
-  # ── WASM: build sanity ──
+  # ── WASM: build sanity and host parity ──
   wasm:
-    name: WASM build
+    name: WASM (${{ matrix.host }})
     needs: rust
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [node, browser]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
       - name: install the locked Rust toolchain
@@ -264,6 +268,7 @@ jobs:
       - working-directory: pillow-rs-js
         run: npm ci
       - name: install the pinned Chromium headless shell
+        if: matrix.host == 'browser'
         working-directory: pillow-rs-js
         run: npx --no-install puppeteer browsers install chrome-headless-shell
       - name: build and JS/WASM parity
@@ -280,32 +285,33 @@ jobs:
           MIGRATION_JS_PARITY_OUTPUT: build/migration-parity/js-wasm-parity-result.json.gz
           MIGRATION_BROWSER_PARITY_OUTPUT: build/migration-parity/browser-wasm-parity-result.json.gz
           # A streamed chunk starts one source and one host process.  The
-          # default local chunks (128/512) make this combined hosted lane
-          # exceed its timeout; 2,048-case chunks keep the same corpus and
-          # comparison policy while reducing process-launch overhead.
+          # default local chunks (128/512) make the hosted lanes exceed their
+          # timeout; 2,048-case chunks keep the same corpus and comparison
+          # policy while reducing process-launch overhead.  Node and browser
+          # run on separate matrix runners so either host gets a full budget.
           MIGRATION_JS_PARITY_CHUNK_SIZE: "2048"
           MIGRATION_BROWSER_PARITY_CHUNK_SIZE: "2048"
-        run: make PYTHON=.venv/bin/python test-wasm
+        run: make PYTHON=.venv/bin/python test-wasm-${{ matrix.host }}
 
       - name: report WASM parity result
         if: always()
         run: |
-          found=0
           level=notice
           if [ "${{ steps.wasm-parity.outcome }}" != "success" ]; then level=error; fi
-          for result in build/migration-parity/js-wasm-parity-result.json.gz build/migration-parity/browser-wasm-parity-result.json.gz; do
-            if [ -f "$result" ]; then
-              found=1
-              summary_result="${result%.gz}.summary.json"
-              if [ -f "$summary_result" ]; then
-                summary="$(tr '\n' ' ' < "$summary_result" | cut -c1-1800)"
-              else
-                summary="compressed result was written without its summary sidecar"
-              fi
-              echo "::$level title=WASM parity summary::$summary"
+          if [ "${{ matrix.host }}" = "node" ]; then
+            result=build/migration-parity/js-wasm-parity-result.json.gz
+          else
+            result=build/migration-parity/browser-wasm-parity-result.json.gz
+          fi
+          if [ -f "$result" ]; then
+            summary_result="${result%.gz}.summary.json"
+            if [ -f "$summary_result" ]; then
+              summary="$(tr '\n' ' ' < "$summary_result" | cut -c1-1800)"
+            else
+              summary="compressed result was written without its summary sidecar"
             fi
-          done
-          if [ "$found" -eq 0 ]; then
+            echo "::$level title=${{ matrix.host }} WASM parity summary::$summary"
+          else
             echo "::warning title=WASM parity summary::No WASM parity result was written"
           fi
 
@@ -313,12 +319,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: parity-wasm
+          name: parity-wasm-${{ matrix.host }}
           path: |
-            build/migration-parity/js-wasm-parity-result.json.gz
-            build/migration-parity/js-wasm-parity-result.summary.json
-            build/migration-parity/browser-wasm-parity-result.json.gz
-            build/migration-parity/browser-wasm-parity-result.summary.json
+            build/migration-parity/${{ matrix.host == 'node' && 'js-wasm-parity-result.json.gz' || 'browser-wasm-parity-result.json.gz' }}
+            build/migration-parity/${{ matrix.host == 'node' && 'js-wasm-parity-result.summary.json' || 'browser-wasm-parity-result.summary.json' }}
           if-no-files-found: warn
 
       - name: stop after WASM parity failure
