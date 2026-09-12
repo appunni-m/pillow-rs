@@ -12,7 +12,7 @@ The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` now includes the Apple ARM64 parity
 runner correction and release-state documentation at
-`9ef1f45c5f059955c08f139274ca1287ec0682ed`. Hosted CI is running for the
+`4ee26098b4d8632c8e4f87cf50ce78a2ede358ce`. Hosted CI is running for the
 updated branch; local Python and JS/WASM replays pass their full selected
 corpus. Registry publication and a successful exact-commit hosted CI run remain
 external prerequisites.
@@ -39,7 +39,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | remote `main` is now the clean-history snapshot at `53a86b7e5748650d91adcda9dc7dc29d4fe7fe39`, with the validated CI runner fixes and no newly introduced blob at or above 100 MB; no `v0.1.0` registry publication has been made; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | remote `main` remains at `be4918b0a9677f61c5e6623208e9afe9f40bf719` and retains the historical AV1 blobs rejected by GitHub; the clean-history candidate branch `codex/release-ci-arm64-clean` is pushed at `13d8d7176d8b6e0d01974e4187dfa438ce72f7ee` with the Apple ARM64 runner and full-history checkout fixes; no `v0.1.0` registry publication has been made; strict source coverage remains an explicit release blocker at 95,603/161,451 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | immutable local tag commit is `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`; current pushed `main` is `ff06132f3dfbd10ea1136e9ba8def970b84c365f` and contains the malformed-face parity fixes, refreshed release evidence, repository inventory, and the exact Cargo registry checksum guard. Because the immutable alpha.3 tag points to an earlier package tree, current `main` is a follow-on candidate rather than the exact alpha.3 package. The synchronized candidate has 20,355/20,355 runnable cases and 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, and npm checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review are still required |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
@@ -109,13 +109,13 @@ all 11,345 parity cases passed on the CPU, SIMD, GPU, Node WASM, and browser
 WASM lanes, and managed coverage completed all 24 plans with 11,325 passing
 checks. The aggregate backend result still reports the intentional SIMD/GPU
 host-control partition. The benchmark zero-violation item remains open.
-The image-slash-star clean-history snapshot and subsequent CI correction are
-present on remote `main` at
-`53a86b7e5748650d91adcda9dc7dc29d4fe7fe39`; the historical candidate commit
-`8d8ecdfe8699329ae166541be8040b1bc3b253e7` remains in its ancestry. Its
-current tree matches the release checkout and `make package-verify` passes.
-No `v0.1.0` registry publication or release tag has been made; the strict
-source-coverage gate remains open.
+The image-slash-star remote `main` remains at
+`be4918b0a9677f61c5e6623208e9afe9f40bf719` and still contains the historical
+oversized AV1 blobs, so a direct push is rejected. The clean-history candidate
+branch `codex/release-ci-arm64-clean` is present at
+`13d8d7176d8b6e0d01974e4187dfa438ce72f7ee`; its local verifier and package
+consumer pass, while the strict source-coverage gate remains open. No `v0.1.0`
+registry publication or release tag has been made.
 
 The root workflow accepts a guarded manual dispatch for the first publication.
 After that bootstrap, pushing an annotated `v<version>` tag runs the same
