@@ -49,7 +49,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | published from local tag `v0.1.0` commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`, crates.io checksum `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178`. The clean-history branch remains at `2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`; promotion to historical remote `main` at `53a86b7e5748650d91adcda9dc7dc29d4fe7fe39` was rejected as a non-fast-forward, so no history rewrite was attempted. The published archive passed Cargo verification; the current branch archive has SHA-256 `2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. Strict source coverage remains an explicit future release blocker at 95,603/161,451 lines |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | published from local tag `v0.1.0` commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`, crates.io checksum `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178`. The clean-history branch remains at `2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`; promotion to historical remote `main` at `53a86b7e5748650d91adcda9dc7dc29d4fe7fe39` was rejected as a non-fast-forward, so no history rewrite was attempted. The published archive passed Cargo verification; the current branch archive has SHA-256 `2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. Hosted run `34735319851` completed with dependencies and format/lint/parity green; strict source coverage failed on the known incomplete denominator, which remains an explicit future release blocker at 95,603/161,451 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | published from immutable local tag `v2.14.3-alpha.3` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, crates.io checksum `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c`. Current pushed `main` is `af758012a32a9e362fb7b7c41fc64ad88f68c604`, and hosted commit CI run `34735539764` is still in progress after the inventory refresh. The published package is the immutable alpha.3 tag; current main is a follow-on candidate. The synchronized local candidate has 20,355/20,355 runnable cases with 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, npm, and Cargo dry-run checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review remain required for the next tagged release |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
@@ -146,9 +146,9 @@ The image-slash-star remote `main` remains at
 oversized AV1 blobs. Promotion of the clean-history release branch was
 rejected as a non-fast-forward; the branch remains available at
 `2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`, and its local verifier and package
-consumer pass. Hosted run `34735319851` is still running its format/parity and
-strict coverage jobs; the prior completed coverage run failed on the known
-incomplete denominator.
+consumer pass. Hosted run `34735319851` completed with dependencies and
+format/lint/parity green; strict coverage failed on the known incomplete
+denominator.
 The `v0.1.0` Cargo version is published; no PyPI/npm upload or GitHub release
 tag has been made.
 
