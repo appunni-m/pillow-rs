@@ -221,8 +221,9 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI bundles and the complete contract gate remain required
 for the next tagged fontdone release. The clean pillow-rs release-prep branch
 is now promoted to `origin/main` at
-`ab89505ea90811cb3134179d5c10d46a6ef44a11`; hosted run `34735825134` is still
-running. The evidence remains bound to the current source inputs. The
+`c5a4e2700994bb113022ff221dab5b5f1e1ea454`; the hosted run triggered by this commit is tracked in GitHub
+Actions and remains external evidence until it completes. The evidence remains
+bound to the current source inputs. The
 image-slash-star `main` promotion was rejected as a
 non-fast-forward because its earlier history contains generated AV1 blobs above
 the hosting limit. A new clean-history release branch
