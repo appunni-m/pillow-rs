@@ -681,6 +681,7 @@ class BrowserWorker:
             **process_group_options(),
         )
         self.closed = False
+        self.failure_detail = ""
 
     def _stop(self) -> None:
         if self.closed:
@@ -716,6 +717,17 @@ class BrowserWorker:
             "\n", " "
         )[-1200:]
 
+    def _failure_suffix(self) -> str:
+        """Capture the worker status and any available stderr tail."""
+        details = []
+        returncode = self.process.returncode
+        if returncode is not None:
+            details.append(f"exit={returncode}")
+        stderr = self._stderr_tail()
+        if stderr:
+            details.append(f"stderr: {stderr}")
+        return f": {' | '.join(details)}" if details else ""
+
     def run(
         self,
         cases: list[dict[str, Any]],
@@ -729,10 +741,13 @@ class BrowserWorker:
         dict[str, list[dict[str, Any]]] | None,
     ]:
         if self.closed:
-            raise RuntimeError("browser WASM worker exited before receiving a batch")
+            suffix = f": {self.failure_detail}" if self.failure_detail else ""
+            raise RuntimeError(
+                f"browser WASM worker exited before receiving a batch{suffix}"
+            )
         if self.process.poll() is not None:
-            details = self._stderr_tail()
-            suffix = f": {details}" if details else ""
+            suffix = self._failure_suffix()
+            self.failure_detail = suffix[2:] if suffix.startswith(": ") else suffix
             raise RuntimeError(
                 f"browser WASM worker exited before receiving a batch{suffix}"
             )
@@ -760,9 +775,9 @@ class BrowserWorker:
         finally:
             selector.close()
         if not line:
-            details = self._stderr_tail()
+            suffix = self._failure_suffix()
+            self.failure_detail = suffix[2:] if suffix.startswith(": ") else suffix
             self._stop()
-            suffix = f": {details}" if details else ""
             raise RuntimeError(f"browser WASM worker exited without a response{suffix}")
         try:
             result = json.loads(line)
