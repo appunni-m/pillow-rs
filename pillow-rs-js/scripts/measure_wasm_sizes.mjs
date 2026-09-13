@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const rows = ['core', 'extra'].map((variant) => {
-    const packageDir = join(root, 'pkg', variant);
+const packageDir = join(root, 'pkg', 'core');
+const rows = [{ variant: 'web', packageDir }].map(({ variant, packageDir }) => {
     const path = join(packageDir, 'pillow_rs_js_bg.wasm');
     const bytes = readFileSync(path);
     const packageBytes = readdirSync(packageDir)
@@ -34,6 +34,10 @@ const report = {
     schema: 1,
     build: 'wasm-pack --target web --release',
     debug_hooks: false,
+    package_entrypoints: {
+        browser: './pkg/core/pillow_rs_js.js',
+        node: './node.js',
+    },
     variants: rows,
 };
 const output = `${JSON.stringify(report, null, 2)}\n`;

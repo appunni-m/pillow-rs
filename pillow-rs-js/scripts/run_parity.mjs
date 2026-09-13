@@ -1,13 +1,10 @@
-import { readFileSync } from 'node:fs';
-import * as wasm from '../pkg/core/pillow_rs_js.js';
+import * as wasm from '../node.js';
 import { runWorkflow } from './parity_workflow.mjs';
 
 // The Python side sends the same workflow documents used by the Pillow
 // oracle. This host adapter only initializes Node's WASM package; workflow
 // dispatch is shared with the browser host in parity_workflow.mjs.
-wasm.initSync({
-    module: readFileSync(new URL('../pkg/core/pillow_rs_js_bg.wasm', import.meta.url)),
-});
+await wasm.default();
 
 async function readStdin() {
     const chunks = [];

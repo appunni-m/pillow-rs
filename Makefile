@@ -316,7 +316,7 @@ setup-ci: ## Install dev deps for CI
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-parity build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all python-compat-check
+.PHONY: build build-parity build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
 
 build: ## Build Python package (release)
 	$(MATURIN) develop $(MATURIN_DEVELOP_FLAGS) --manifest-path $(PY_SRC)/Cargo.toml --release --locked
@@ -329,11 +329,8 @@ build-dev: ## Build Python package (debug, faster compile)
 
 build-wasm: build-wasm-core ## Build the default core WASM package (dev)
 
-build-wasm-core: ## Build all-codec core WASM package (dev)
+build-wasm-core: ## Build the single all-codec WASM package and Node adapter (dev)
 	cd $(JS_SRC) && npm run build:core
-
-build-wasm-extra: ## Build Rust-codec extra WASM package (dev)
-	cd $(JS_SRC) && npm run build:extra
 
 build-wasm-release: ## Build WASM package (release)
 	cd $(JS_SRC) && npm run build:release
@@ -373,7 +370,7 @@ test: migration-parity-fixtures-check ## Run shared target parity, JS/WASM parit
 backend-support-matrix: ## Emit registry-derived CPU/SIMD/GPU support JSON
 	$(MAKE) -C $(CORE_SRC) backend-support-matrix
 
-test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages and run the same public corpus through Node and browser WASM
+test-wasm: build-wasm-core ## Build the single WASM package and run the same public corpus through Node and browser WASM
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	set +e; \
 	$(PYTHON) scripts/run_migration_js_parity.py \
@@ -393,7 +390,7 @@ test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages 
 	if [ $$node_status -ne 0 ]; then exit $$node_status; fi; \
 	exit $$browser_status
 
-test-wasm-node: build-wasm-core build-wasm-extra ## Build the declared WASM packages and run the public corpus through Node WASM
+test-wasm-node: build-wasm-core ## Build the single WASM package and run the public corpus through Node WASM
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	$(PYTHON) scripts/run_migration_js_parity.py \
 		--host node \
@@ -401,7 +398,7 @@ test-wasm-node: build-wasm-core build-wasm-extra ## Build the declared WASM pack
 		--chunk-size "$(MIGRATION_JS_PARITY_CHUNK_SIZE)" \
 		$(MIGRATION_JS_PARITY_CASE_ARGS)
 
-test-wasm-browser: build-wasm-core build-wasm-extra ## Build the declared WASM packages and run the public corpus through browser WASM
+test-wasm-browser: build-wasm-core ## Build the single WASM package and run the public corpus through browser WASM
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	$(PYTHON) scripts/run_migration_js_parity.py \
 		--host browser \

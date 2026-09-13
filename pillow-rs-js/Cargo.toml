@@ -7,7 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "wasm-bindgen bindings for pillow-rs — Pillow in the browser"
+description = "wasm-bindgen bindings for pillow-rs — Pillow in browsers and Node.js"
 
 [lib]
 crate-type = ["cdylib"]
