@@ -66,8 +66,14 @@ jobs:
       - name: require the immutable release tag
         if: ${{ github.event_name == 'push' }}
         run: |
-          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
-          release_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          # actions/checkout resolves an event tag to its commit SHA in the
+          # local refs/tags namespace. Fetch the original tag object into a
+          # scratch namespace before checking that the pushed ref is annotated.
+          release_ref="refs/release-check/tags/${GITHUB_REF_NAME}"
+          git fetch --no-tags origin \
+            "refs/tags/${GITHUB_REF_NAME}:${release_ref}"
+          test "$(git cat-file -t "$release_ref")" = tag
+          release_commit="$(git rev-parse "${release_ref}^{commit}")"
           test "$release_commit" = "$(git rev-parse HEAD)"
       - name: require tag and Cargo version equality
         if: ${{ github.event_name == 'push' }}
@@ -200,8 +206,14 @@ jobs:
       - name: require the immutable release tag
         if: ${{ github.event_name == 'push' }}
         run: |
-          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
-          release_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          # actions/checkout resolves an event tag to its commit SHA in the
+          # local refs/tags namespace. Fetch the original tag object into a
+          # scratch namespace before checking that the pushed ref is annotated.
+          release_ref="refs/release-check/tags/${GITHUB_REF_NAME}"
+          git fetch --no-tags origin \
+            "refs/tags/${GITHUB_REF_NAME}:${release_ref}"
+          test "$(git cat-file -t "$release_ref")" = tag
+          release_commit="$(git rev-parse "${release_ref}^{commit}")"
           test "$release_commit" = "$(git rev-parse HEAD)"
       - name: install the locked Rust toolchain
         run: |
