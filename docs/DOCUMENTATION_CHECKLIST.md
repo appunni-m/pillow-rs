@@ -7,7 +7,7 @@ latest recorded parity and benchmark artifacts.
 ## Open Source audit receipt
 
 On 2026-09-13 the Open Source documentation auditor was run against clean
-tracked trees at the release-preparation revisions below. The root checkout
+tracked trees at the audited source revisions below. The root checkout
 was audited from a `git archive` export so ignored local worktrees, virtual
 environments, and build output could not affect the result. A review finding is
 an inspection prompt from the auditor; it is not an accuracy failure.
@@ -142,3 +142,6 @@ ignored worktrees, virtual environments, and build trees, so that raw finding
 count is not an active-document denominator. The tracked active pages above
 are the review scope; archived and generated pages are classified rather than
 silently treated as current guidance.
+
+Release branches may advance after an audit receipt; rerun the auditor from
+the final tagged trees before publishing a release.
