@@ -81,5 +81,5 @@ Reference for algorithms already validated:
 
 ### Reference Files
 
-- **`references/debug-patterns.md`** — Patterns for debugging hash/value mismatches, including how to compare RSPIL vs PIL output pixel-by-pixel
+- **`references/debug-patterns.md`** — Patterns for debugging hash/value mismatches, including how to compare the source Pillow `PIL` package with the checkout's public `PIL` facade pixel-by-pixel
 - **`references/proven-fixes.md`** — Archive of all fixes applied, with PIL source locations and Rust implementations

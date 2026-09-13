@@ -1,36 +1,30 @@
 # Debug Patterns for PIL Parity Tests
 
-## Compare RSPIL vs PIL Output
+## Compare source Pillow and target `PIL` output
 
-When a test xfails with a hash mismatch, compare the outputs directly:
+The source and replacement intentionally use the same public module path.
+Never import both implementations in one interpreter: whichever package is
+loaded first owns `sys.modules["PIL"]`. The maintained runner starts an
+isolated source process and an isolated target process, then compares their
+serialized observations:
 
 ```bash
-python3 -c "
-from PIL import Image as PILImage, ImageFilter as PILF
-from pillow_rs import Image, ImageFilter as RSPILF
-import json, hashlib
-
-with open('tests/fixtures/<FixtureName>.json') as f: fx = json.load(f)
-raw = bytes.fromhex(fx['input']['bytes'])
-mode = fx['input']['mode']
-size = tuple(fx['input']['size'])
-
-pil = PILImage.frombytes(mode, size, raw).filter(PILF.<FILTER>)
-rs = Image.frombytes(mode, size, raw).filter(RSPILF.<FILTER>)
-
-ph = hashlib.sha256(pil.tobytes()).hexdigest()
-rh = hashlib.sha256(rs.tobytes()).hexdigest()
-diffs = sum(1 for a,b in zip(pil.tobytes(), rs.tobytes()) if a!=b)
-print(f'PIL={ph[:12]} RSPIL={rh[:12]} match={ph==rh} diffs={diffs}')
-
-# Find first 5 different pixels
-for i, (a,b) in enumerate(zip(pil.tobytes(), rs.tobytes())):
-    if a != b:
-        y, x = divmod(i, size[0])
-        print(f'  ({x},{y}): PIL={a} RSPIL={b}')
-        if sum(1 for _ in zip(pil.tobytes(), rs.tobytes()) if _[0]!=_[1]) > 5: break
-"
+make migration-parity-case MIGRATION_PARITY_CASE="<case_id>"
 ```
+
+For a focused algorithm probe, run the identical script twice. The first
+process uses the installed Pillow package; the second prepends the checkout
+facade, so both scripts still say `from PIL import ...`:
+
+```bash
+python3 probe.py > /tmp/pil-source.json
+PYTHONPATH="$PWD/pillow-rs-py/python" python3 probe.py > /tmp/pil-target.json
+diff -u /tmp/pil-source.json /tmp/pil-target.json
+```
+
+`probe.py` should print the output hash and the first differing byte or pixel.
+Do not import `pillow_rs` in the probe to stand in for the public target; use
+the same `PIL` import that downstream applications use.
 
 ## Classify Differences
 
@@ -52,7 +46,7 @@ python3 -c "from PIL import ImageFilter as PILF; print(PILF.<FILTER>.filterargs)
 To test if kernel ordering matches PIL's C code:
 
 1. Create a simple test image with a single bright pixel
-2. Apply the filter in both PIL and RSPIL
+2. Apply the filter in both isolated `PIL` processes
 3. Compare the output pattern — if the pattern is flipped, the kernel orientation is wrong
 
 PIL C code applies kernels bottom-to-top (ky=0 maps to row y+1). The filterargs kernel values are stored in the order PIL expects for this bottom-to-top application.
