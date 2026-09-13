@@ -50,6 +50,10 @@ function errorEnvelope(error) {
 }
 
 function serveStatic(request, response) {
+    // Navigating between streamed batches can abort an in-flight module or
+    // WASM fetch. Ignore that expected disconnect instead of allowing an
+    // asynchronous response error to terminate the worker.
+    response.on('error', () => {});
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
     if (requestUrl.pathname === '/__pillow_rs_parity_input__') {
         response.writeHead(200, {
@@ -68,12 +72,18 @@ function serveStatic(request, response) {
         return;
     }
     try {
+        const body = readFileSync(path);
+        if (response.destroyed) return;
         response.writeHead(200, {
             'Content-Type': contentType(path),
             'Cache-Control': 'no-store',
         });
-        response.end(readFileSync(path));
+        response.end(body);
     } catch (error) {
+        if (response.headersSent || response.destroyed) {
+            response.destroy();
+            return;
+        }
         const status = error?.code === 'ENOENT' ? 404 : 500;
         response.writeHead(status);
         response.end(status === 404 ? 'not found' : String(error?.message ?? error));
