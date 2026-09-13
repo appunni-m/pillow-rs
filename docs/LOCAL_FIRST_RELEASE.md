@@ -60,8 +60,9 @@ checkouts.
 The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The currently pushed `fontdone`
-`main` is `28344c1f77087ab5819a7aa5b2bc946f3aac3a28`; the local checkout
-contains follow-on release-documentation commits beyond that remote head.
+`main` is `d5cb5b9389f806ef6d7aba06ede944ba38ced100`; hosted commit CI run
+`34733646046` passed. The local checkout contains the follow-on inventory
+correction beyond the immutable tag.
 The follow-up parity-oracle, ABI test-support, and release-documentation
 corrections are outside the immutable alpha.3 package archive, so the current
 main tree is a follow-on candidate rather than the alpha.3 package. The
@@ -192,8 +193,9 @@ The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
 release, or push a release tag. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
 the currently pushed `fontdone` `main` is
-`28344c1f77087ab5819a7aa5b2bc946f3aac3a28`; the local checkout contains
-follow-on release-documentation commits beyond that remote head.
+`d5cb5b9389f806ef6d7aba06ede944ba38ced100`, and hosted commit CI run
+`34733646046` passed. The local checkout contains the follow-on inventory
+correction beyond the immutable tag.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
@@ -201,13 +203,12 @@ inputs, publication must use a newly versioned synchronized tag after the
 alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI
 bundles and the complete contract gate are still required for publication.
-The clean pillow-rs release-prep branch is present on `origin` with the
-diagnostic commit `da2ac3e3556f6bfb58ed0dc250532a479d7789f` and subsequent
-receipt updates; the evidence remains bound to the earlier implementation
-base commits. The
-image-slash-star `main` push
-was rejected by GitHub because its earlier history contains generated AV1
-blobs above the hosting limit. A new clean-history release branch
+The clean pillow-rs release-prep branch is now promoted to `origin/main` at
+`22b9782bd`; hosted run `34733486072` is still running with all completed lanes
+green and only browser WASM parity active. The evidence remains bound to the
+current source inputs. The image-slash-star `main` promotion was rejected as a
+non-fast-forward because its earlier history contains generated AV1 blobs above
+the hosting limit. A new clean-history release branch
 `codex/release-image-slash-star-clean-current` is now pushed at
 `5113bb3381ab3780353668ae75a5e6a979f9a9d5` and carries the current readiness
 record while preserving `main`.
@@ -231,9 +232,9 @@ cross-platform C-ABI bundles including the Windows import library, and the root 
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
 repository now has a pushed clean-history candidate at
 `codex/release-image-slash-star-clean-current`
-(`5113bb3381ab3780353668ae75a5e6a979f9a9d5`); updating `main`
-still requires explicit authorization because it rewrites historical Git
-objects.
+(`5113bb3381ab3780353668ae75a5e6a979f9a9d5`); updating `main` would require
+an explicit history-rewrite decision, so the safe non-fast-forward push was
+left rejected.
 
 After those prerequisites are satisfied, the release workflows publish only
 from a clean reviewed commit and create later releases from an immutable
