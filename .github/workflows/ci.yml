@@ -117,9 +117,14 @@ jobs:
       - name: build Python package
         env:
           PYO3_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          # Keep maturin's active environment explicit in every matrix lane;
+          # setup-python's interpreter selection alone is not sufficient for
+          # `maturin develop`, especially on the Python 3.10 macOS runner.
+          VIRTUAL_ENV: ${{ github.workspace }}/.venv
         run: |
           mkdir -p target/ci-diagnostics
           set -o pipefail
+          .venv/bin/python -c 'import sys; print(f"python={sys.executable} version={sys.version}")'
           make PYTHON=.venv/bin/python build 2>&1 | tee target/ci-diagnostics/python-build.log
 
       - name: upload Python build diagnostics
