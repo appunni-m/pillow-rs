@@ -13,7 +13,7 @@ measurements belong in generated result documents.
 
 - Repository scope: `pillow-rs` only.
 - Oracle: Pillow `12.2.0`.
-- Intended target: the public `pillow_rs` facade backed by the Rust
+- Intended target: the public `PIL` facade backed by the Rust
   implementation.
 - Inventory authority to migrate: the deprecated project-wide
   `manifest.yaml` version `0.2.0`.
@@ -217,7 +217,7 @@ and locked by tests.
 | --- | --- |
 | DEC-001 | Whether the authority denominator is the 199 expanded legacy rows or a corrected public inventory that also includes missing workflow constructors/factories. |
 | DEC-002 | How duplicate legacy identities such as `Image.open/new` versus `ImageModule.open/new` map to canonical public paths without double-counting behavior. |
-| DEC-003 | Whether the parity target is the public Python-compatible `pillow_rs` facade, the lower-level Rust crate API, or two separate targets. Current evidence mixes both. |
+| DEC-003 | Whether the parity target is the public Python-compatible `PIL` facade, the lower-level Rust crate API, or two separate targets. Current evidence mixes both. |
 | DEC-004 | Which target profiles are contractually required: Rust CPU, GPU, WASM, Python facade, and/or JavaScript facade. |
 | DEC-005 | The fixed representation of deterministic non-JSON test values required by callback/object-taking Pillow endpoints. |
 | DEC-006 | Which legacy suite-two cases are distinct requirements versus duplicates of suite zero. |

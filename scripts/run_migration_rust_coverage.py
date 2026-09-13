@@ -614,6 +614,7 @@ def run_locked(args: argparse.Namespace) -> int:
         run_env = os.environ.copy()
         target_python = str(ROOT / "pillow-rs-py" / "python")
         run_env["PYTHONPATH"] = target_python + os.pathsep + run_env.get("PYTHONPATH", "")
+        run_env["PYTHONDONTWRITEBYTECODE"] = "1"
         run_env["LLVM_PROFILE_FILE"] = str(args.profile)
         # The full lane keeps its maintained public native supplements;
         # scoped lanes only include explicitly selected supplement commands.
@@ -673,10 +674,14 @@ def run_locked(args: argparse.Namespace) -> int:
 
         combined_summary, combined_plans, backend_executions = aggregate_backend_coverage(plans, child_results)
 
+        combined_python_sources = [
+            str((ROOT / "pillow-rs-py" / "python" / "PIL").resolve()),
+            str((ROOT / "pillow-rs-py" / "python" / "pillow_rs").resolve()),
+        ]
         combined_python = coverage.Coverage(
             data_file=str(args.coverage_data.resolve()),
             branch=True,
-            source=[str((ROOT / "pillow-rs-py" / "python" / "pillow_rs").resolve())],
+            source=combined_python_sources,
         )
         combined_python.erase()
         combined_python.combine(

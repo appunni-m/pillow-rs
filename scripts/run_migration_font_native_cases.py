@@ -36,7 +36,7 @@ def asset_path(asset: dict[str, Any], *, assets_root: Path = ASSETS) -> Path | N
 
 
 def load_font(params: dict[str, Any], assets: dict[str, Any]) -> Any:
-    from pillow_rs import ImageFont
+    from PIL import ImageFont
 
     size = params.get("size", 20)
     asset = next(iter(assets.values()), {})
@@ -72,8 +72,9 @@ def case_text(params: dict[str, Any]) -> str | bytes:
 def run_case(case: dict[str, Any]) -> str:
     """Execute one font-native case; returns 'pass' or 'skip'."""
 
-    from pillow_rs import _core, ImageFont
-    from pillow_rs.imagefont import TransposedFont
+    from pillow_rs import _core
+    from PIL import ImageFont
+    from PIL.ImageFont import TransposedFont
 
     operation = str(case.get("operation", "")).removeprefix("font.")
     params = case.get("inputs", {}).get("params", {})
@@ -97,8 +98,8 @@ def run_case(case: dict[str, Any]) -> str:
             getattr(font, method)(font_text)
         return "pass"
     if operation == "draw_text":
-        from pillow_rs import Image as PILImage
-        from pillow_rs import ImageDraw
+        from PIL import Image as PILImage
+        from PIL import ImageDraw
 
         canvas = PILImage.new(
             params.get("mode", "RGBA"),

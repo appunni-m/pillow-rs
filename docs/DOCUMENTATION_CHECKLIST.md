@@ -31,6 +31,16 @@ release receipts below.
 
 ## Audience paths
 
+### Python namespace migration
+
+The supported application import is `from PIL import Image`. `pillow_rs` is
+the internal binding namespace and `RSPIL` is retained only as a deprecated
+compatibility alias. The parity oracle and replacement can both use `PIL`
+without ambiguity because the runner starts isolated processes: the source
+process has only the installed Pillow path, while the target process prepends
+`pillow-rs-py/python` and verifies the checkout paths in its identity
+handshake. No comparison imports both implementations into one process.
+
 | Reader | Start here | Then read |
 | --- | --- | --- |
 | User of the Python package | [`README.md`](../README.md) | Pillow's API reference and the package release notes |

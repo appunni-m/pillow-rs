@@ -1,12 +1,10 @@
-"""The documented Pillow-compatible import namespace for pillow-rs."""
+"""Deprecated compatibility alias for the public :mod:`PIL` namespace.
 
-from pillow_rs import *
-from pillow_rs import Image as _Image
-from pillow_rs import __all__ as _pillow_rs_all
-from pillow_rs import active_backends, available_backends
+Use ``from PIL import Image`` for new code.  This package remains a small
+source-level bridge for applications that still use the pre-0.1.0 name.
+"""
 
-# Pillow exposes ``Image`` as a module, so ``Image.Image`` annotations remain
-# valid when callers import Image from RSPIL.
-_Image.Image = _Image
+from PIL import *
+from PIL import __all__ as _pil_all
 
-__all__ = list(_pillow_rs_all) + ["active_backends", "available_backends"]
+__all__ = list(_pil_all)

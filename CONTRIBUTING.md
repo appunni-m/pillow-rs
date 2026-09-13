@@ -28,8 +28,13 @@ committed `Cargo.lock`. Normal build commands use the root Makefile.
 ```sh
 make setup-venv PYTHON=python3.12
 make build
-python -c "from RSPIL import Image; print(Image.new('RGB', (10, 10)))"
+python -c "from PIL import Image; print(Image.new('RGB', (10, 10)))"
 ```
+
+Use `from PIL import Image` in examples and tests.  `make build-parity` builds
+the replacement in place without installing its `PIL` package over the
+Pillow oracle used by parity tests; `make build` installs the local replacement
+for application use.
 
 The setup target creates an isolated environment and installs the fixed parity
 tools. Use Python 3.10 or newer for the full oracle suite; a wheel may still be

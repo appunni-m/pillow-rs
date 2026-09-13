@@ -41,6 +41,8 @@ dev = [
 
 [tool.maturin]
 python-source = "python"
-python-packages = ["pillow_rs", "RSPIL"]
+# ``PIL`` is the drop-in public namespace.  Keep ``pillow_rs`` for the thin
+# implementation binding and ``RSPIL`` as a deprecated source-level alias.
+python-packages = ["pillow_rs", "PIL", "RSPIL"]
 module-name = "pillow_rs._core"
 features = ["pyo3/extension-module"]

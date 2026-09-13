@@ -1,4 +1,4 @@
-# Test Infrastructure Audit — PIL vs RSPIL Parity
+# Test Infrastructure Audit — Pillow oracle vs target PIL facade
 
 > Historical audit snapshot. The active input-only parity and coverage
 > contract is maintained by the manifest and
@@ -41,7 +41,10 @@ allocation and lifetime implementation.
 
 ## Purpose
 
-This audit reviews every test in the pillow-rs test suite to verify that each test genuinely compares RSPIL Rust code against PIL Python output. It identifies hardcoded stubs, weak assertions, and gaps where Rust code paths are never exercised.
+This audit reviews every test in the pillow-rs test suite to verify that each
+test genuinely compares the Rust-backed `PIL` facade against the installed
+Pillow `PIL` oracle. It identifies hardcoded stubs, weak assertions, and gaps
+where Rust code paths are never exercised.
 
 ## Architecture Overview
 
@@ -55,13 +58,14 @@ manifest.yaml ──→ ops_registry.py ──→ generate_fixtures.py ──→
                      └──── test_fixture_parity.py ←─────────────────┘
                               │
                          [rspil_backend.py]
-                         RSPIL executes op
+                         target PIL facade executes op
                          compares hash to fixture
 ```
 
 The expected flow:
 1. Fixture generator runs PIL backend → PIL executes operation → captures SHA-256 hash of output
-2. Test runs RSPIL backend → RSPIL executes operation → compares hash to fixture
+2. Test runs the target PIL facade → the Rust implementation executes the
+   operation → compares the observation with the Pillow oracle
 3. `rspil_backend.py` dispatches to actual `pillow_rs` Rust code
 
 ## 🔴 CRITICAL: Tests that bypass Rust code entirely
@@ -109,8 +113,9 @@ if target == "getfont":
     return glyph_img.tobytes()
 ```
 
-- **Uses PIL to render the glyph**, not RSPIL
-- This is a PIL-vs-PIL comparison, not RSPIL-vs-PIL
+- **Uses the Pillow oracle to render the glyph**, not the target facade
+- This is an oracle-vs-target comparison; both processes use the public `PIL`
+  path but have different `PYTHONPATH` values
 - Rust `Font::load_default()` + `render_text()` code path: **0% fixture coverage**
 
 ### textlength / textbbox (`rspil_backend.py:292`)
@@ -225,7 +230,11 @@ for k in keys:
 ```
 Converts int fills to tuples for text on LA, CMYK, 1, P modes.
 
-**Impact**: For P-mode text, PIL receives `fill=200` (int, direct palette index) while RSPIL receives `fill=(200,200,200,255)` (tuple). The Rust text_compose_direct code strips `fill.0` to get 200. **Works by coincidence** — the fill value maps to the same palette index. Change the fill and it could diverge.
+**Impact**: For P-mode text, the Pillow oracle receives `fill=200` (int,
+direct palette index) while the target PIL facade receives
+`fill=(200,200,200,255)` (tuple). The Rust text_compose_direct code strips
+`fill.0` to get 200. **Works by coincidence** — the fill value maps to the
+same palette index. Change the fill and it could diverge.
 
 ### bitmap convert("1") diverges
 
@@ -267,7 +276,7 @@ UNKNOWN op 'Image.has_transparency_data' in @covers
 
 `getcolor` is defined at `pillow-rs-py/src/lib.rs:1800` but **never registered** with `m.add_function()`. `getrgb` IS registered at L823. The Python `ImageColor.getcolor()` crashes because `_core.getcolor` doesn't exist.
 
-## 🟢 VERIFIED: Genuine RSPIL-vs-PIL tests
+## 🟢 VERIFIED: Genuine target-PIL-vs-Pillow tests
 
 These operation categories genuinely exercise Rust code against PIL output:
 
@@ -306,7 +315,7 @@ Replace each stub with actual dispatch to pillow_rs:
 | `if target == "getcolor": return 0` | Call `ImagePalette` method |
 | `if target == "getdata": return ['RGB', '']` | Call `ImagePalette` method |
 | `return (0, 0, 50, 15)` | Call `font.textbbox(text)` or `font.textlength(text)` |
-| PIL glyph rendering for getfont | Use `ImageFont.load_default()` from RSPIL, render with RSPIL Draw |
+| PIL glyph rendering for getfont | Use `ImageFont.load_default()` from the target PIL facade, render with target `ImageDraw` |
 
 ### 3. Strengthen weak assertions
 

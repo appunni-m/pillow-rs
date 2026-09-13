@@ -9,7 +9,7 @@ import os
 from statistics import median
 import time
 
-from pillow_rs import Image, ImageFilter, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 
 SAMPLES = max(3, int(os.environ.get("PILLOW_RS_BENCH_SAMPLES", "5")))
@@ -108,7 +108,7 @@ def main():
         "schema": "pillow-rs-py/release-binding-benchmark@1",
         "status": "completed",
         "boundary": {
-            "build": "make build",
+            "build": "make build-parity",
             "parity": False,
             "unit_tests": False,
             "gpu": False,

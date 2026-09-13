@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from pillow_rs import Image, ImageSequence
+from PIL import Image, ImageSequence
 
 
 def json_dump(value: dict[str, int]) -> str:

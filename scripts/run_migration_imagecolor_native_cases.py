@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 
-from pillow_rs import ImageColor
+from PIL import ImageColor
 
 
 def json_dump(value: dict[str, int]) -> str:

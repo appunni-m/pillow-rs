@@ -3,7 +3,8 @@
 
 This is a deterministic migration aid for the initial manifest@2 conversion.
 It joins the frozen deprecated authority inventory with the pinned Pillow
-12.2.0 public signatures and the current public pillow_rs facade signatures.
+12.2.0 public signatures and the current public PIL facade signatures backed
+by the internal pillow_rs binding.
 It writes specification only: no test outcomes, counts, percentages, timings,
 coverage observations, or current target revision.
 """
@@ -80,6 +81,8 @@ ALLOWED_VALUE_TYPES = {
 
 COMPONENTS: dict[str, tuple[str, ...]] = {
     "image-core": (
+        "pillow-rs-py/python/PIL/__init__.py",
+        "pillow-rs-py/python/PIL/Image.py",
         "pillow-rs-py/python/pillow_rs/image.py",
         "pillow-rs-py/python/pillow_rs/operations.py",
         "pillow-rs/src/image.rs",
@@ -425,6 +428,11 @@ def source_object(endpoint: Endpoint) -> Any | None:
 
 
 def target_candidates(endpoint: Endpoint) -> list[str]:
+    # Manifest target candidates intentionally use the internal binding path so
+    # source (Pillow) and target (pillow-rs) signatures can be inspected in one
+    # generator process.  Runtime parity executes the public ``PIL`` facade in
+    # isolated source/target subprocesses and therefore never conflates these
+    # imports.
     surface = endpoint.surface
     operation = endpoint.operation
     if surface == "PIL.Image":
@@ -1127,16 +1135,20 @@ def command(
 
 
 def build_manifest() -> dict[str, Any]:
-    if str(PYTHON_FACADE_ROOT) not in sys.path:
-        sys.path.insert(0, str(PYTHON_FACADE_ROOT))
+    # Load the installed Pillow oracle before adding the checkout path.  The
+    # target now provides its own ``PIL`` package, so inserting the facade path
+    # first would silently make manifest generation inspect the replacement as
+    # its source oracle.
     import PIL
-    import pillow_rs
 
     if PIL.__version__ != EXPECTED_PILLOW_VERSION:
         raise ValueError(
             f"manifest build requires Pillow {EXPECTED_PILLOW_VERSION}, "
             f"observed {PIL.__version__}"
         )
+    if str(PYTHON_FACADE_ROOT) not in sys.path:
+        sys.path.insert(0, str(PYTHON_FACADE_ROOT))
+    import pillow_rs
     if not isinstance(pillow_rs.__version__, str):
         raise ValueError("pillow_rs public identity has no string version")
 
@@ -1211,11 +1223,11 @@ def build_manifest() -> dict[str, Any]:
             {
                 "id": TARGET_ID,
                 "name": "pillow-rs",
-                "runtime": "CPython public pillow_rs facade backed by Rust",
+                "runtime": "CPython public PIL facade backed by Rust",
                 "identity_command_id": "target-identity",
                 "contract": (
                     "Public Pillow-compatible image and font behavior through "
-                    "the pillow_rs package"
+                    "the PIL package supplied by pillow-rs"
                 ),
             }
         ],

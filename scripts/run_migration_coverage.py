@@ -525,10 +525,14 @@ def run(args: argparse.Namespace) -> int:
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
     operation_index = build_operation_index(manifest)
     args.coverage_report.resolve().parent.mkdir(parents=True, exist_ok=True)
+    python_sources = [
+        str((ROOT / "pillow-rs-py" / "python" / "PIL").resolve()),
+        str((ROOT / "pillow-rs-py" / "python" / "pillow_rs").resolve()),
+    ]
     cov = coverage.Coverage(
         data_file=str(args.coverage_data.resolve()),
         branch=True,
-        source=[str((ROOT / "pillow-rs-py" / "python" / "pillow_rs").resolve())],
+        source=python_sources,
     )
     started = now()
     case_results: dict[str, dict[str, Any]] = {}

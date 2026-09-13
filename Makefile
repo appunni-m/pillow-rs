@@ -8,6 +8,7 @@ PYTHON       ?= $(shell if [ -x .venv/bin/python ]; then printf '%s' .venv/bin/p
 PYTHON_COMPAT ?= $(PYTHON)
 PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
+MATURIN_DEVELOP_FLAGS ?=
 NODE         := node
 CARGO        := cargo
 NPM_CONFIG_CACHE ?= $(CURDIR)/target/npm-cache
@@ -162,6 +163,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make setup-ci$(NC)       Install deps for CI (no virtualenv check)\n"
 	@printf "\n$(BOLD)Build$(NC)\n"
 	@printf "  $(CYAN)make build$(NC)          Build Python package (maturin develop --release)\n"
+	@printf "  $(CYAN)make build-parity$(NC)   Build the checkout facade without installing over Pillow\n"
 	@printf "  $(CYAN)make build-dev$(NC)      Build Python package (debug, faster compile)\n"
 	@printf "  $(CYAN)make build-wasm$(NC)     Build WASM package (dev)\n"
 	@printf "  $(CYAN)make build-wasm-release$(NC) Build WASM package (release)\n"
@@ -314,10 +316,13 @@ setup-ci: ## Install dev deps for CI
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all python-compat-check
+.PHONY: build build-parity build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all python-compat-check
 
 build: ## Build Python package (release)
-	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --release --locked
+	$(MATURIN) develop $(MATURIN_DEVELOP_FLAGS) --manifest-path $(PY_SRC)/Cargo.toml --release --locked
+
+build-parity: MATURIN_DEVELOP_FLAGS=--skip-install
+build-parity: build ## Build the checkout facade without installing the PIL namespace
 
 build-dev: ## Build Python package (debug, faster compile)
 	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --locked
@@ -335,7 +340,7 @@ build-wasm-release: ## Build WASM package (release)
 
 build-all: build build-wasm-release ## Build Python + WASM
 
-python-compat-check: build ## Import the abi3 facade under a selected Python interpreter
+python-compat-check: build-parity ## Import the public PIL facade under a selected Python interpreter
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$(CURDIR)/target/python-compat-cache" \
 	PYTHONPATH="$(abspath $(PY_SRC)/python)" "$(PYTHON_COMPAT)" scripts/check_python_compatibility.py
 
@@ -511,7 +516,7 @@ migration-parity-target-identity: ## Verify the public pillow-rs target identity
 
 migration-parity-coverage: ## Run target coverage from indexed coverage plans
 	set +e; \
-	$(PYTHON) scripts/run_migration_coverage.py \
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$(abspath $(PY_SRC)/python):$$PYTHONPATH" $(PYTHON) scripts/run_migration_coverage.py \
 		--output $(MIGRATION_COVERAGE_OUTPUT) \
 		--coverage-report $(MIGRATION_COVERAGE_REPORT) \
 		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
@@ -667,8 +672,9 @@ migration-parity-pipeline-core-benchmark: ## Run the direct pure-Rust pipeline b
 	@mkdir -p "$(dir $(MIGRATION_CORE_BENCHMARK_OUTPUT))"
 	$(CARGO) run --manifest-path $(CORE_SRC)/Cargo.toml --release --locked --example pipeline_layers -- $(MIGRATION_CORE_BENCHMARK_ARGS) > "$(MIGRATION_CORE_BENCHMARK_OUTPUT)"
 
-pillow-rs-py-binding-benchmark: build ## Run the release-only PyO3 boundary benchmark
+pillow-rs-py-binding-benchmark: build-parity ## Run the release-only PyO3 boundary benchmark
 	@mkdir -p "$(dir $(PILLOW_RS_PY_BENCHMARK_OUTPUT))"
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$(abspath $(PY_SRC)/python):$$PYTHONPATH" \
 	$(PYTHON) pillow-rs-py/bench/release_benchmark.py $(PILLOW_RS_PY_BENCHMARK_ARGS) > "$(PILLOW_RS_PY_BENCHMARK_OUTPUT)"
 
 migration-parity-aggregate: ## Join compatible parity, coverage, and benchmark evidence

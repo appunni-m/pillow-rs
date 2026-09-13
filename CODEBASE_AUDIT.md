@@ -1,5 +1,8 @@
 # pillow-rs Comprehensive Codebase Audit
 
+> This historical audit predates the public namespace migration.  References
+> to the old RSPIL name mean the current `pillow-rs` `PIL` facade.
+
 > **Historical snapshot (2026-09-08).** This audit records findings from an
 > earlier implementation state. It is retained for provenance; it is not the
 > active issue list. Use [`docs/REPOSITORY_FILE_AUDIT.md`](docs/REPOSITORY_FILE_AUDIT.md),
@@ -666,7 +669,7 @@ None of the remaining crates set: `repository`, `homepage`, `documentation`,
 
 **Location:** `engine.py:338-354`
 
-**Description:** `_file_open` creates temporary files for `Image.open`/`Image.save` tests and explicitly does not delete them ("RSPIL may lazily load image data"). Each test run leaves orphaned temp files.
+**Description:** `_file_open` creates temporary files for `Image.open`/`Image.save` tests and explicitly does not delete them (the target PIL facade may lazily load image data). Each test run leaves orphaned temp files.
 
 **Recommendation:** Register temp files for cleanup in a pytest fixture `teardown` or use `tempfile.TemporaryDirectory` with a known lifetime.
 
