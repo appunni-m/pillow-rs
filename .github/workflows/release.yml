@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact synchronized package version (for example 0.1.0)
+        description: Exact synchronized package version (for example 0.1.1)
         required: true
-        default: 0.1.0
+        default: 0.1.1
         type: string
       dependencies_published:
         description: image-slash-star and the single public fontdone crate, plus the fontdone npm package, are registry-visible

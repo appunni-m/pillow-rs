@@ -1,6 +1,6 @@
 {
   "name": "pillow-rs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pillow drop-in replacement for the browser, powered by Rust/WASM",
   "repository": {
     "type": "git",

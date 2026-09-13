@@ -8,7 +8,7 @@ that will be tagged.
 
 ## Current release graph
 
-The exact Cargo, PyPI, and root npm versions below are the first-release
+The exact Cargo, PyPI, and root npm versions below are the current release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is now promoted to `origin/main`; it
 includes the Apple ARM64 parity runner correction and release-state
@@ -20,11 +20,12 @@ The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
 The latest successful registry probes (2026-09-13) found
-`image-slash-star@0.1.0`, `fontdone@2.14.3-alpha.3`, and `pillow-rs@0.1.0`
-visible on crates.io. PyPI and npm still have no `pillow-rs@0.1.0` upload; npm
-still exposes only the historical `fontdone@2.14.3-alpha.1` artifact. Registry
-visibility is recorded separately from the remaining coverage and platform
-gates.
+`image-slash-star@0.1.0`, `fontdone@2.14.3-alpha.3`, and the historical
+`pillow-rs@0.1.0` are visible on crates.io. The current synchronized
+`pillow-rs@0.1.1` candidate has not been uploaded to crates.io, PyPI, or npm;
+npm still exposes only the historical `fontdone@2.14.3-alpha.1` artifact.
+Registry visibility is recorded separately from the remaining coverage and
+platform gates.
 
 The hosted root CI run triggered by the promoted `main` head is tracked in
 GitHub Actions. Documentation, parity-build, and
@@ -53,9 +54,10 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | published from immutable local tag `v2.14.3-alpha.3` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, crates.io checksum `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c`. The preceding inventory commit `af758012a32a9e362fb7b7c41fc64ad88f68c604` passed hosted CI run `34735539764`; current pushed `main` is `d87a504d2005bd9fbd4b2b43ec58ca87713b82f6`. Hosted push run `34752632194` passed its fast and MSRV gates; the thorough matrix is intentionally skipped for push events and remains required through the documented manual gate before tagging. The published package is the immutable alpha.3 tag; current main is a follow-on candidate. The synchronized local candidate has 20,355/20,355 runnable cases with 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, npm, and Cargo dry-run checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review remain required for the next tagged release |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
-| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05`; the registry-ready preflight passed against both dependency versions |
-| pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
-| pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
+| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | historical artifact; current release follows at `0.1.1` | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
+| pillow-rs | `pillow-rs` | `0.1.1` | crates.io | after image-slash-star and fontdone versions are visible | current synchronized candidate; publish from the exact reviewed `v0.1.1` tag after hosted CI passes |
+| pillow-rs | `pillow-rs` | `0.1.1` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
+| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
 The local root `v0.1.0` tag is historical: it targets
 `519226b62b545717c2169be7cbef9141754de91e`, while the published

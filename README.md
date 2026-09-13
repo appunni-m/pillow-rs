@@ -2,7 +2,7 @@
 
 pillow-rs is a Rust image-processing library with Python and WebAssembly
 bindings. It follows Pillow's public behavior through a manifest-driven,
-input-only parity suite. The project is still version `0.1.0`; compatibility is
+input-only parity suite. The current source release is version `0.1.1`; compatibility is
 measured per operation and backend rather than advertised as a complete Pillow
 replacement.
 
