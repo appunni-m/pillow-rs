@@ -22,7 +22,10 @@ bundle remains byte-for-byte reproducible.
 The sibling tags and complete Git bundles are under `dist/release-local/` in
 the working checkout. The current `pillow-rs` package candidate is bound to
 the source commit recorded in `release-manifest.txt`; its older local `v0.1.0`
-tag remains historical. The bundle's `SHA256SUMS` is the authority for every
+tag remains historical and targets `519226b62b545717c2169be7cbef9141754de91e`,
+not the published archive revision. Do not push or reuse it; create a new
+immutable tag from the exact reviewed commit after the hosted gates pass. The
+bundle's `SHA256SUMS` is the authority for every
 package archive and Git bundle; verify it from that directory with:
 
 ```sh
