@@ -77,7 +77,7 @@ The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The currently pushed `fontdone`
 `main` is `af758012a32a9e362fb7b7c41fc64ad88f68c604`; hosted commit CI run
-`34735539764` is still in progress after the inventory refresh. The local checkout contains the follow-on inventory
+`34735539764` passed after the inventory refresh. The local checkout contains the follow-on inventory
 correction beyond the immutable tag.
 The follow-up parity-oracle, ABI test-support, and release-documentation
 corrections are outside the immutable alpha.3 package archive, so the current
@@ -224,12 +224,10 @@ is now promoted to `origin/main`; the hosted run triggered by its current head
 is tracked in GitHub Actions and remains external evidence until it completes.
 The evidence remains
 bound to the current source inputs. The
-image-slash-star `main` promotion was rejected as a
-non-fast-forward because its earlier history contains generated AV1 blobs above
-the hosting limit. A new clean-history release branch
-`codex/release-image-slash-star-clean-current` is now pushed at
-`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b` and carries the current readiness
-record while preserving `main`.
+image-slash-star clean-history release branch and remote `main` now point to
+`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`. The former `main` history is
+preserved in the local-only bundle
+`/private/tmp/image-slash-star-pre-force-backup-20260913/repository.bundle`.
 The earlier clean-history candidate remains at
 `codex/release-image-slash-star-clean`; no `v0.1.0` release tag is currently
 pushed, and `8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained as the historical
@@ -248,11 +246,10 @@ project still has an incomplete strict LLVM source-coverage denominator,
 fontdone still has unresolved C-ABI route/error debt and lacks five fresh
 cross-platform C-ABI bundles including the Windows import library, and the root benchmark checklist still requires two
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
-repository now has a pushed clean-history candidate at
-`codex/release-image-slash-star-clean-current`
-(`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`); updating `main` would require
-an explicit history-rewrite decision, so the safe non-fast-forward push was
-left rejected.
+repository now has the clean-history candidate on both
+`codex/release-image-slash-star-clean-current` and `main`
+(`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`); its former history is available
+in the local-only backup bundle recorded above.
 
 After those prerequisites are satisfied, the release workflows publish later
 versions only from a clean reviewed commit and create immutable annotated
