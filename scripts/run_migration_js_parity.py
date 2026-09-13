@@ -693,6 +693,12 @@ class BrowserWorker:
             self.process.wait(timeout=10)
         self.closed = True
 
+    def _stderr_tail(self) -> str:
+        """Return diagnostics only after the worker pipe has reached EOF."""
+        if self.process.stderr is None or self.process.poll() is None:
+            return ""
+        return self.process.stderr.read().strip().replace("\n", " ")[-1200:]
+
     def run(
         self,
         cases: list[dict[str, Any]],
@@ -705,8 +711,14 @@ class BrowserWorker:
         dict[str, Any] | None,
         dict[str, list[dict[str, Any]]] | None,
     ]:
-        if self.closed or self.process.poll() is not None:
+        if self.closed:
             raise RuntimeError("browser WASM worker exited before receiving a batch")
+        if self.process.poll() is not None:
+            details = self._stderr_tail()
+            suffix = f": {details}" if details else ""
+            raise RuntimeError(
+                f"browser WASM worker exited before receiving a batch{suffix}"
+            )
         payload = _host_payload(cases, operation_index, assets)
         try:
             assert self.process.stdin is not None
@@ -731,9 +743,7 @@ class BrowserWorker:
         finally:
             selector.close()
         if not line:
-            details = ""
-            if self.process.poll() is not None and self.process.stderr is not None:
-                details = self.process.stderr.read().strip().replace("\n", " ")[-1200:]
+            details = self._stderr_tail()
             self._stop()
             suffix = f": {details}" if details else ""
             raise RuntimeError(f"browser WASM worker exited without a response{suffix}")
