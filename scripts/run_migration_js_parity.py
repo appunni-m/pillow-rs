@@ -694,10 +694,27 @@ class BrowserWorker:
         self.closed = True
 
     def _stderr_tail(self) -> str:
-        """Return diagnostics only after the worker pipe has reached EOF."""
+        """Drain available diagnostics without waiting on orphaned descendants."""
         if self.process.stderr is None or self.process.poll() is None:
             return ""
-        return self.process.stderr.read().strip().replace("\n", " ")[-1200:]
+        try:
+            os.set_blocking(self.process.stderr.fileno(), False)
+        except (OSError, ValueError):
+            return ""
+        chunks: list[bytes] = []
+        while sum(len(chunk) for chunk in chunks) < 64 * 1024:
+            try:
+                chunk = os.read(self.process.stderr.fileno(), 64 * 1024)
+            except BlockingIOError:
+                break
+            except OSError:
+                break
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8", errors="replace").strip().replace(
+            "\n", " "
+        )[-1200:]
 
     def run(
         self,
