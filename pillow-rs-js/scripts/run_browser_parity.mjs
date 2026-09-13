@@ -149,16 +149,17 @@ function browserExecutablePath() {
     return installedCandidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 
-async function runPayload(browser, port, payload) {
-    // The server endpoint is batch-scoped. Updating this reference before a
-    // page is created lets worker mode keep one Chromium process while each
-    // batch still receives an independent WASM page/instance.
+async function runPayload(browser, port, payload, reusablePage = null) {
+    // The server endpoint is batch-scoped. Updating this reference before the
+    // document is loaded lets worker mode keep one Chromium process while each
+    // batch still receives an independent WASM page instance after navigation.
     input = payload;
-    const page = await browser.newPage();
+    const page = reusablePage ?? await browser.newPage();
+    const pageErrors = [];
+    const onPageError = (error) => pageErrors.push(String(error?.stack ?? error));
     try {
         page.setDefaultNavigationTimeout(timeoutSeconds * 1000);
-        const pageErrors = [];
-        page.on('pageerror', (error) => pageErrors.push(String(error?.stack ?? error)));
+        page.on('pageerror', onPageError);
         const pageUrl = new URL(
             `http://127.0.0.1:${port}/scripts/browser_parity.html`,
         );
@@ -186,7 +187,8 @@ async function runPayload(browser, port, payload) {
         }
         return result;
     } finally {
-        await page.close().catch(() => {});
+        page.off('pageerror', onPageError);
+        if (reusablePage === null) await page.close().catch(() => {});
     }
 }
 
@@ -216,25 +218,36 @@ async function main() {
         const port = await listen(server);
         browser = await launchBrowser();
         if (process.env.MIGRATION_BROWSER_WORKER === '1') {
-            // Worker mode is used by the streamed parity lane.  It keeps the
-            // expensive Chromium process alive, but creates/closes a page for
+            // Worker mode is used by the streamed parity lane. It keeps the
+            // expensive Chromium process alive, but fully reloads one page for
             // every request so process-global RNG semantics remain isolated.
+            // Reusing the page also avoids a headless-shell lifecycle bug on
+            // some hosted macOS images where closing many short-lived pages
+            // can terminate the browser process.
+            const page = await browser.newPage();
+            // Create the readline consumer only after the reusable page is
+            // ready.  Creating it first can consume a caller's already
+            // buffered first line before the async iterator is attached.
             const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
-            for await (const line of lines) {
-                if (!line.trim()) continue;
-                let payload;
-                try {
-                    payload = JSON.parse(line);
-                } catch (error) {
-                    process.stdout.write(`${JSON.stringify(errorEnvelope(error))}\n`);
-                    continue;
+            try {
+                for await (const line of lines) {
+                    if (!line.trim()) continue;
+                    let payload;
+                    try {
+                        payload = JSON.parse(line);
+                    } catch (error) {
+                        process.stdout.write(`${JSON.stringify(errorEnvelope(error))}\n`);
+                        continue;
+                    }
+                    try {
+                        const result = await runPayload(browser, port, payload, page);
+                        process.stdout.write(`${JSON.stringify(result)}\n`);
+                    } catch (error) {
+                        process.stdout.write(`${JSON.stringify(errorEnvelope(error))}\n`);
+                    }
                 }
-                try {
-                    const result = await runPayload(browser, port, payload);
-                    process.stdout.write(`${JSON.stringify(result)}\n`);
-                } catch (error) {
-                    process.stdout.write(`${JSON.stringify(errorEnvelope(error))}\n`);
-                }
+            } finally {
+                await page.close().catch(() => {});
             }
         } else {
             input = JSON.parse(await readInput());
