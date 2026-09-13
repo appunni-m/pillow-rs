@@ -1,8 +1,10 @@
 # Local first-release receipt
 
 This receipt records the coordinated local bootstrap prepared on 2026-09-11.
-It is a file-backed rehearsal for the first versions of the three projects; it
-does not publish to a public registry or write to a remote Git repository.
+The file-backed rehearsal remains immutable and does not itself write to a
+registry or remote Git repository. The owner-authorized manual bootstrap was
+completed separately on 2026-09-13; its exact registry checksums are recorded
+below.
 
 The identities in the table below describe the staged rehearsal bundle. The
 image package was subsequently rebuilt from the current clean-history release
@@ -13,9 +15,9 @@ bundle remains byte-for-byte reproducible.
 
 | Project | Version | Annotated tag | Exact commit |
 | --- | --- | --- | --- |
-| `image-slash-star` | `0.1.0` | pending | `8d8ecdfe8699329ae166541be8040b1bc3b253e7` (historical candidate commit) |
+| `image-slash-star` | `0.1.0` | `v0.1.0` | `35dd72808e6b2a8488b98caf685a3d48e4c97468` |
 | `fontdone` | `2.14.3-alpha.3` | `v2.14.3-alpha.3` | `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` |
-| `pillow-rs` | `0.1.0` | `v0.1.0` | see `dist/release-local/release-manifest.txt` |
+| `pillow-rs` | `0.1.0` | pending | `fededefbf1b484727b4ba04424b96bb19f2e96cc` |
 
 The sibling tags and complete Git bundles are under `dist/release-local/` in
 the working checkout. The current `pillow-rs` package candidate is bound to
@@ -56,6 +58,20 @@ also compiled by the fontdone package audit. Fresh Python wheel and npm
 consumers imported the packaged artifacts successfully. Image package
 verification and the fontdone release dry-run passed from the exact tagged
 checkouts.
+
+## Manual Cargo bootstrap outcome
+
+The three public Cargo versions are now visible and consumer-verified:
+
+| Package | Published source | Registry checksum (SHA-256) |
+| --- | --- | --- |
+| `image-slash-star@0.1.0` | local `v0.1.0` at `35dd72808e6b2a8488b98caf685a3d48e4c97468` | `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178` |
+| `fontdone@2.14.3-alpha.3` | local `v2.14.3-alpha.3` at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` | `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c` |
+| `pillow-rs@0.1.0` | `main` at `fededefbf1b484727b4ba04424b96bb19f2e96cc` | `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
+
+The image and fontdone package dry-runs and the registry-ready root
+preflight passed before upload. No PyPI wheel, npm tarball, GitHub release, or
+release tag was created; those remain guarded by the GitHub workflows.
 
 The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
@@ -189,8 +205,9 @@ to a source fix.
 
 ## Public-release prerequisites
 
-The rehearsal itself did not publish to crates.io, PyPI, npm, create a GitHub
-release, or push a release tag. The immutable local `fontdone`
+The file-backed rehearsal did not publish to crates.io, PyPI, npm, create a
+GitHub release, or push a release tag. The later owner-authorized bootstrap
+published the three Cargo packages listed above. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
 the currently pushed `fontdone` `main` is
 `d5cb5b9389f806ef6d7aba06ede944ba38ced100`, and hosted commit CI run
@@ -201,12 +218,12 @@ with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
 inputs, publication must use a newly versioned synchronized tag after the
 alpha.3 tag is either deliberately released from its exact bytes or retired.
-Hosted thorough C-ABI
-bundles and the complete contract gate are still required for publication.
-The clean pillow-rs release-prep branch is now promoted to `origin/main` at
-`22b9782bd`; hosted run `34733486072` is still running with all completed lanes
-green and only browser WASM parity active. The evidence remains bound to the
-current source inputs. The image-slash-star `main` promotion was rejected as a
+Hosted thorough C-ABI bundles and the complete contract gate remain required
+for the next tagged fontdone release. The clean pillow-rs release-prep branch
+is now promoted to `origin/main` at
+`fededefbf1b484727b4ba04424b96bb19f2e96cc`; hosted run `34734417599` is still
+running. The evidence remains bound to the current source inputs. The
+image-slash-star `main` promotion was rejected as a
 non-fast-forward because its earlier history contains generated AV1 blobs above
 the hosting limit. A new clean-history release branch
 `codex/release-image-slash-star-clean-current` is now pushed at
@@ -215,8 +232,8 @@ record while preserving `main`.
 The earlier clean-history candidate remains at
 `codex/release-image-slash-star-clean`; no `v0.1.0` release tag is currently
 pushed, and `8d8ecdfe8699329ae166541be8040b1bc3b253e7` is retained as the historical
-candidate commit. Before enabling public registry
-publication, the owner must provide or configure:
+candidate commit. Before enabling the later automated registry jobs, the owner
+must provide or configure:
 
 - crates.io ownership or the `crates-io` Trusted Publisher for
   `image-slash-star`, `fontdone`, and `pillow-rs`;
@@ -225,7 +242,7 @@ publication, the owner must provide or configure:
   for `fontdone` and `pillow-rs`; and
 - GitHub push access plus protected `crates-io`, `pypi`, and `npm` environments.
 
-The public release gates remain visible rather than being bypassed: the image
+The public release gates remain visible after the manual bootstrap: the image
 project still has an incomplete strict LLVM source-coverage denominator,
 fontdone still has unresolved C-ABI route/error debt and lacks five fresh
 cross-platform C-ABI bundles including the Windows import library, and the root benchmark checklist still requires two
@@ -236,9 +253,9 @@ repository now has a pushed clean-history candidate at
 an explicit history-rewrite decision, so the safe non-fast-forward push was
 left rejected.
 
-After those prerequisites are satisfied, the release workflows publish only
-from a clean reviewed commit and create later releases from an immutable
-annotated `v<version>` tag.
+After those prerequisites are satisfied, the release workflows publish later
+versions only from a clean reviewed commit and create immutable annotated
+`v<version>` tags.
 
 The staged local `image-slash-star` `0.1.0` archive remains bound to the
 historical rehearsal commit `8d8ecdfe8699329ae166541be8040b1bc3b253e7` and its
