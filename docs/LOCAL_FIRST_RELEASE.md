@@ -225,7 +225,7 @@ is tracked in GitHub Actions and remains external evidence until it completes.
 The evidence remains
 bound to the current source inputs. The
 image-slash-star clean-history release branch and remote `main` now point to
-`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`. The former `main` history is
+`9177cf8f1f324b49d431613696b43eb77fb61043`. The former `main` history is
 preserved in the local-only bundle
 `/private/tmp/image-slash-star-pre-force-backup-20260913/repository.bundle`.
 The earlier clean-history candidate remains at
@@ -248,7 +248,7 @@ cross-platform C-ABI bundles including the Windows import library, and the root 
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
 repository now has the clean-history candidate on both
 `codex/release-image-slash-star-clean-current` and `main`
-(`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`); its former history is available
+(`9177cf8f1f324b49d431613696b43eb77fb61043`); its former history is available
 in the local-only backup bundle recorded above.
 
 After those prerequisites are satisfied, the release workflows publish later
@@ -258,8 +258,8 @@ versions only from a clean reviewed commit and create immutable annotated
 The staged local `image-slash-star` `0.1.0` archive remains bound to the
 historical rehearsal commit `8d8ecdfe8699329ae166541be8040b1bc3b253e7` and its
 recorded checksum. The current clean-history candidate was rebuilt at
-`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b` and passed its package,
+`9177cf8f1f324b49d431613696b43eb77fb61043` and passed its package,
 cross-target, doctest, and clean-consumer checks; its archive SHA-256 is
-`2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. The
+`fa6d6b73a73443304a8151430afa7b9bb57a0c24fdefd96ad90299f4e37381e7`. The
 candidate remains blocked by the strict coverage denominator and the absence
 of a successful exact-commit hosted release gate.
