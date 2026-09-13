@@ -659,10 +659,10 @@ def run_host(
 
 
 class BrowserWorker:
-    """Keep Chromium alive while giving every parity batch a fresh page.
+    """Keep Chromium alive while giving every parity batch a fresh document.
 
     Process-global Pillow/Rust RNG state still requires one WASM instance per
-    isolated batch.  Reusing only the outer Chromium process removes the
+    isolated batch.  Reusing the browser and reloading one page removes the
     hosted-runner startup cost without changing that semantic boundary.
     """
 
