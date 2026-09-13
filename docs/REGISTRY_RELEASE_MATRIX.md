@@ -11,7 +11,7 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is now promoted to `origin/main` at
-`b01fb959f609e09cf40d4383672909c881b9647f`; it includes the Apple ARM64
+`ab89505ea90811cb3134179d5c10d46a6ef44a11`; it includes the Apple ARM64
 parity runner correction and release-state documentation. The three Cargo packages have been bootstrapped
 to crates.io from their exact local release tags/commit; PyPI and npm remain
 pending their GitHub trusted-publisher jobs.
@@ -26,8 +26,8 @@ still exposes only the historical `fontdone@2.14.3-alpha.1` artifact. Registry
 visibility is recorded separately from the remaining coverage and platform
 gates.
 
-The hosted root CI run `34735344172` is running for `main` commit
-`b01fb959f609e09cf40d4383672909c881b9647f` (checked on 2026-09-13).
+The hosted root CI run `34735825134` is running for `main` commit
+`ab89505ea90811cb3134179d5c10d46a6ef44a11` (checked on 2026-09-13).
 Documentation, parity-build, and fmt/clippy are green; supply-chain and the
 remaining lanes are still completing. The run is external evidence until all
 jobs complete successfully.
@@ -135,8 +135,8 @@ The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the latest
 release-preparation correction, with the earlier source-fix,
 implementation-base, and receipt commits retained as historical references.
-`origin/main` is now at `b01fb959f609e09cf40d4383672909c881b9647f` and hosted
-run `34735344172` is still in progress. Local Python and JS/WASM replays pass
+`origin/main` is now at `ab89505ea90811cb3134179d5c10d46a6ef44a11` and hosted
+run `34735825134` is still in progress. Local Python and JS/WASM replays pass
 their selected corpus. The aggregate backend result still reports the
 intentional SIMD/GPU host-control partition, and the benchmark zero-violation
 item remains open.
