@@ -161,7 +161,9 @@ jobs:
           make migration-parity-coverage-receipt-test
       - name: run the canonical parity campaign
         run: |
-          make build
+          # Build the target facade in place so the installed Pillow oracle
+          # remains available to the source-side parity process.
+          make build-parity
           make migration-parity-test
       - name: collect source-bound Rust coverage
         run: make migration-parity-coverage-rust

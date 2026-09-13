@@ -35,9 +35,9 @@ oracles:
 targets:
 - id: pillow-rs-python
   name: pillow-rs
-  runtime: CPython public pillow_rs facade backed by Rust
+  runtime: CPython public PIL facade backed by Rust
   identity_command_id: target-identity
-  contract: Public Pillow-compatible image and font behavior through the pillow_rs package
+  contract: Public Pillow-compatible image and font behavior through the PIL package supplied by pillow-rs
 target_profiles:
 - id: python-cpu
   target_id: pillow-rs-python
@@ -258,6 +258,8 @@ coverage_components:
 - id: image-core
   target_profile: python-cpu
   paths:
+  - pillow-rs-py/python/PIL/__init__.py
+  - pillow-rs-py/python/PIL/Image.py
   - pillow-rs-py/python/pillow_rs/image.py
   - pillow-rs-py/python/pillow_rs/operations.py
   - pillow-rs/src/image.rs

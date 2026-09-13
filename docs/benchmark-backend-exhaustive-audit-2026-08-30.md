@@ -2,6 +2,10 @@
 
 Date: 2026-08-30
 
+This historical audit uses the former RSPIL label for the Rust target. Current
+users import the target as `PIL`; the measurement claims and counts are
+unchanged by that namespace rename.
+
 Repository: `/Users/lazytrot/work/pillow-rs`
 
 Audit revision: `e97fab9fdc68bf4555669d227b5a66fca9d9a369` (`dirty: true`)

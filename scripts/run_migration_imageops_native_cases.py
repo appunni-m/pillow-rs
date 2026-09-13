@@ -18,7 +18,8 @@ import json
 import struct
 from typing import Any
 
-from pillow_rs import _core, Image
+from pillow_rs import _core
+from PIL import Image
 
 
 def json_dump(value: dict[str, int]) -> str:

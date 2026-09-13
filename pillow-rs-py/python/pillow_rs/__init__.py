@@ -1,6 +1,7 @@
-"""
-pillow-rs — Pillow drop-in replacement powered by Rust.
-Import as: from RSPIL import Image
+"""Internal Python binding for the public :mod:`PIL` replacement namespace.
+
+Applications should import ``Image`` from ``PIL``.  The ``pillow_rs`` module
+remains an implementation namespace for the binding and parity harness.
 """
 
 from . import imagechops as ImageChops

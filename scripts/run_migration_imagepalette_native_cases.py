@@ -15,8 +15,9 @@ import json
 import os
 import tempfile
 
-from pillow_rs import Image
-from pillow_rs.imagepalette import ImagePalette
+from PIL import Image, ImagePalette as _ImagePaletteModule
+
+ImagePalette = _ImagePaletteModule.ImagePalette
 
 
 def json_dump(value: dict[str, int]) -> str:

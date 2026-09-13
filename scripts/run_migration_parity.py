@@ -8,8 +8,9 @@ artifact.  It deliberately does not read deprecated fixtures or expected
 outputs.
 
 The side runner is invoked in a fresh Python process for each implementation.
-That keeps source and target object graphs, imports, temporary files, and
-exceptions independent while retaining one shared public workflow definition.
+The source process imports the installed Pillow package and the target process
+imports the checkout's ``PIL`` facade; both therefore exercise the exact public
+import path without sharing object graphs, temporary files, or exceptions.
 """
 
 from __future__ import annotations
@@ -318,7 +319,10 @@ class DeformerValue:
 def decode_outline(value: dict[str, Any], *, side: str) -> Any:
     """Construct an Outline through each side's public ImageDraw surface."""
 
-    module_name = "PIL.ImageDraw" if side == "source" else "pillow_rs.imagedraw"
+    # Both sides expose the public ``PIL`` path.  The subprocess environment
+    # selects which implementation owns that path, so an outline is decoded
+    # through the same import a downstream application uses.
+    module_name = "PIL.ImageDraw"
     outline = getattr(importlib.import_module(module_name), "Outline")()
     for command in value["commands"]:
         method = getattr(outline, command["name"])
@@ -492,42 +496,46 @@ SOURCE_MODULES = {
 }
 
 TARGET_MODULES = {
-    "PIL.Image": "pillow_rs",
-    "PIL.ImageChops": "pillow_rs.imagechops",
-    "PIL.ImageColor": "pillow_rs.imagecolor",
-    "PIL.ImageDraw": "pillow_rs.imagedraw",
-    "PIL.ImageEnhance": "pillow_rs.imageenhance",
-    "PIL.ImageFilter": "pillow_rs.imagefilter",
-    "PIL.ImageFont": "pillow_rs.imagefont",
-    "PIL.ImageOps": "pillow_rs.imageops",
-    "PIL.ImagePalette": "pillow_rs.imagepalette",
-    "PIL.ImageSequence": "pillow_rs.imagesequence",
-    "PIL.ImageStat": "pillow_rs.imagestat",
+    # The oracle and replacement intentionally share the public module names.
+    # ``_run_side_subprocess_batch`` gives only the target process the
+    # checkout's ``python/`` path, so these imports cannot resolve to the
+    # target while the Pillow oracle is running.
+    "PIL.Image": "PIL.Image",
+    "PIL.ImageChops": "PIL.ImageChops",
+    "PIL.ImageColor": "PIL.ImageColor",
+    "PIL.ImageDraw": "PIL.ImageDraw",
+    "PIL.ImageEnhance": "PIL.ImageEnhance",
+    "PIL.ImageFilter": "PIL.ImageFilter",
+    "PIL.ImageFont": "PIL.ImageFont",
+    "PIL.ImageOps": "PIL.ImageOps",
+    "PIL.ImagePalette": "PIL.ImagePalette",
+    "PIL.ImageSequence": "PIL.ImageSequence",
+    "PIL.ImageStat": "PIL.ImageStat",
 }
 
 TARGET_TYPES = {
-    "PIL.Image.Image": ("pillow_rs", "Image"),
-    "PIL.ImageDraw.ImageDraw": ("pillow_rs.imagedraw", "Draw"),
-    "PIL.ImageEnhance.Brightness": ("pillow_rs.imageenhance", "Brightness"),
-    "PIL.ImageEnhance.Color": ("pillow_rs.imageenhance", "Color"),
-    "PIL.ImageEnhance.Contrast": ("pillow_rs.imageenhance", "Contrast"),
-    "PIL.ImageEnhance.Sharpness": ("pillow_rs.imageenhance", "Sharpness"),
-    "PIL.ImageFilter.BoxBlur": ("pillow_rs.imagefilter", "BoxBlur"),
-    "PIL.ImageFilter.Color3DLUT": ("pillow_rs.imagefilter", "Color3DLUT"),
-    "PIL.ImageFilter.GaussianBlur": ("pillow_rs.imagefilter", "GaussianBlur"),
-    "PIL.ImageFilter.Kernel": ("pillow_rs.imagefilter", "Kernel"),
-    "PIL.ImageFilter.MaxFilter": ("pillow_rs.imagefilter", "MaxFilter"),
-    "PIL.ImageFilter.MedianFilter": ("pillow_rs.imagefilter", "MedianFilter"),
-    "PIL.ImageFilter.MinFilter": ("pillow_rs.imagefilter", "MinFilter"),
-    "PIL.ImageFilter.ModeFilter": ("pillow_rs.imagefilter", "ModeFilter"),
-    "PIL.ImageFilter.RankFilter": ("pillow_rs.imagefilter", "RankFilter"),
-    "PIL.ImageFilter.UnsharpMask": ("pillow_rs.imagefilter", "UnsharpMask"),
-    "PIL.ImageFont.FreeTypeFont": ("pillow_rs.imagefont", "FreeTypeFont"),
-    "PIL.ImageFont.ImageFont": ("pillow_rs.imagefont", "ImageFont"),
-    "PIL.ImageFont.TransposedFont": ("pillow_rs.imagefont", "TransposedFont"),
-    "PIL.ImagePalette.ImagePalette": ("pillow_rs.imagepalette", "ImagePalette"),
-    "PIL.ImageSequence.Iterator": ("pillow_rs.imagesequence", "Iterator"),
-    "PIL.ImageStat.Stat": ("pillow_rs.imagestat", "Stat"),
+    "PIL.Image.Image": ("PIL.Image", "Image"),
+    "PIL.ImageDraw.ImageDraw": ("PIL.ImageDraw", "Draw"),
+    "PIL.ImageEnhance.Brightness": ("PIL.ImageEnhance", "Brightness"),
+    "PIL.ImageEnhance.Color": ("PIL.ImageEnhance", "Color"),
+    "PIL.ImageEnhance.Contrast": ("PIL.ImageEnhance", "Contrast"),
+    "PIL.ImageEnhance.Sharpness": ("PIL.ImageEnhance", "Sharpness"),
+    "PIL.ImageFilter.BoxBlur": ("PIL.ImageFilter", "BoxBlur"),
+    "PIL.ImageFilter.Color3DLUT": ("PIL.ImageFilter", "Color3DLUT"),
+    "PIL.ImageFilter.GaussianBlur": ("PIL.ImageFilter", "GaussianBlur"),
+    "PIL.ImageFilter.Kernel": ("PIL.ImageFilter", "Kernel"),
+    "PIL.ImageFilter.MaxFilter": ("PIL.ImageFilter", "MaxFilter"),
+    "PIL.ImageFilter.MedianFilter": ("PIL.ImageFilter", "MedianFilter"),
+    "PIL.ImageFilter.MinFilter": ("PIL.ImageFilter", "MinFilter"),
+    "PIL.ImageFilter.ModeFilter": ("PIL.ImageFilter", "ModeFilter"),
+    "PIL.ImageFilter.RankFilter": ("PIL.ImageFilter", "RankFilter"),
+    "PIL.ImageFilter.UnsharpMask": ("PIL.ImageFilter", "UnsharpMask"),
+    "PIL.ImageFont.FreeTypeFont": ("PIL.ImageFont", "FreeTypeFont"),
+    "PIL.ImageFont.ImageFont": ("PIL.ImageFont", "ImageFont"),
+    "PIL.ImageFont.TransposedFont": ("PIL.ImageFont", "TransposedFont"),
+    "PIL.ImagePalette.ImagePalette": ("PIL.ImagePalette", "ImagePalette"),
+    "PIL.ImageSequence.Iterator": ("PIL.ImageSequence", "Iterator"),
+    "PIL.ImageStat.Stat": ("PIL.ImageStat", "Stat"),
 }
 
 
@@ -2564,18 +2572,41 @@ def side_identity(side: str) -> dict[str, Any]:
         version = str(getattr(pil, "__version__", ""))
         if version != ORACLE_VERSION:
             raise RuntimeError(f"Pillow oracle version {version!r}, expected {ORACLE_VERSION}")
-        return {"side": "source", "implementation": "Pillow", "version": version}
+        oracle_path = Path(pil.__file__).resolve()
+        expected_root = (ROOT / "pillow-rs-py" / "python").resolve()
+        if expected_root in oracle_path.parents:
+            raise RuntimeError(f"Pillow oracle imported from target checkout: {oracle_path}")
+        return {
+            "side": "source",
+            "implementation": "Pillow",
+            "version": version,
+            "path": str(oracle_path),
+            "public_module": "PIL",
+        }
     backend_state = configure_target_backend()
     target = importlib.import_module("pillow_rs")
     target_path = Path(target.__file__).resolve()
     expected_root = (ROOT / "pillow-rs-py" / "python").resolve()
     if expected_root not in target_path.parents:
         raise RuntimeError(f"target imported outside checkout: {target_path}")
+    public = importlib.import_module("PIL")
+    public_path = Path(public.__file__).resolve()
+    if expected_root not in public_path.parents:
+        raise RuntimeError(f"target public PIL imported outside checkout: {public_path}")
+    public_version = str(getattr(public, "__version__", ""))
+    target_version = str(getattr(target, "__version__", "unknown"))
+    if public_version != target_version:
+        raise RuntimeError(
+            f"target public PIL version {public_version!r} differs from "
+            f"pillow_rs version {target_version!r}"
+        )
     return {
         "side": "target",
         "implementation": "pillow-rs",
-        "version": str(getattr(target, "__version__", "unknown")),
+        "version": target_version,
         "path": str(target_path),
+        "public_module": "PIL",
+        "public_path": str(public_path),
         "backend": TARGET_BACKEND,
         "backend_state": backend_state,
     }
@@ -2599,13 +2630,32 @@ def _run_side_subprocess_batch(
         str(manifest_path),
     ]
     env = os.environ.copy()
+    # Parity workers import the checkout package directly.  Keep interpreter
+    # caches out of that source tree so a later wheel build contains only
+    # tracked package files.
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     for key, value in (environment or {}).items():
         if value is None:
             env.pop(key, None)
         else:
             env[key] = value
-    target_python = str(ROOT / "pillow-rs-py" / "python")
-    env["PYTHONPATH"] = target_python + os.pathsep + env.get("PYTHONPATH", "")
+    target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
+    inherited_pythonpath = env.get("PYTHONPATH", "")
+    if side == "target":
+        env["PYTHONPATH"] = target_python + os.pathsep + inherited_pythonpath
+    else:
+        # A caller may have exported the target checkout path for an identity
+        # or coverage command.  Remove exactly that path from the oracle
+        # process so ``import PIL`` resolves to the installed Pillow package.
+        retained = [
+            item
+            for item in inherited_pythonpath.split(os.pathsep)
+            if item and str(Path(item).resolve()) != target_python
+        ]
+        if retained:
+            env["PYTHONPATH"] = os.pathsep.join(retained)
+        else:
+            env.pop("PYTHONPATH", None)
     popen_kwargs: dict[str, Any] = {
         "stdin": subprocess.PIPE,
         "stdout": subprocess.PIPE,

@@ -18,8 +18,7 @@ import json
 
 import pillow_rs
 import pillow_rs._core as _core
-from pillow_rs import Image
-from pillow_rs import ImageEnhance
+from PIL import Image, ImageEnhance
 
 
 def json_dump(value: dict[str, int]) -> str:
@@ -84,55 +83,55 @@ def run_native_cases() -> tuple[int, int, int]:
 
     probes: list[tuple[str, callable]] = [
         # Image constructor variants.
-        ("default-image-constructor", lambda: pillow_rs.Image()),
-        ("transpose-from-int-fallback", lambda: pillow_rs.Image.Transpose.from_int(99)),
+        ("default-image-constructor", lambda: Image.Image()),
+        ("transpose-from-int-fallback", lambda: Image.Transpose.from_int(99)),
         (
             "image-enhance-empty-buffer",
             lambda: ImageEnhance.Brightness(Image.new("L", (0, 0)))
             .enhance(1.0)
             .tobytes(),
         ),
-        ("new-list-color", lambda: pillow_rs.Image.new("RGB", (4, 4), [255, 0, 0])),
-        ("new-bytes-color", lambda: pillow_rs.Image.new("L", (4, 4), b"\x00")),
-        ("blend-module", lambda: pillow_rs.blend(pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4)), 0.5)),
+        ("new-list-color", lambda: Image.new("RGB", (4, 4), [255, 0, 0])),
+        ("new-bytes-color", lambda: Image.new("L", (4, 4), b"\x00")),
+        ("blend-module", lambda: pillow_rs.blend(Image.new("L", (4, 4)), Image.new("L", (4, 4)), 0.5)),
         (
             "blend-size-mismatch",
             lambda: pillow_rs.blend(
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("L", (5, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("L", (5, 4)),
                 0.5,
             ),
         ),
         (
             "composite-module",
             lambda: pillow_rs.composite(
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("L", (4, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("L", (4, 4)),
             ),
         ),
         (
             "composite-mask-mismatch",
             lambda: pillow_rs.composite(
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("L", (2, 2)),
+                Image.new("L", (4, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("L", (2, 2)),
             ),
         ),
         (
             "composite-bad-mask-mode",
             lambda: pillow_rs.composite(
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("CMYK", (4, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("CMYK", (4, 4)),
             ),
         ),
         (
             "composite-mode-convert",
             lambda: pillow_rs.composite(
-                pillow_rs.Image.new("L", (4, 4)),
-                pillow_rs.Image.new("RGB", (4, 4)),
-                pillow_rs.Image.new("L", (4, 4)),
+                Image.new("L", (4, 4)),
+                Image.new("RGB", (4, 4)),
+                Image.new("L", (4, 4)),
             ),
         ),
         (
@@ -143,88 +142,88 @@ def run_native_cases() -> tuple[int, int, int]:
             "merge-module",
             lambda: pillow_rs.merge(
                 "RGB",
-                [pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4))],
+                [Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4))],
             ),
         ),
-        ("fromarray-classmethod", lambda: pillow_rs.Image.fromarray([[1, 2], [3, 4]])),
-        ("linear-gradient-classmethod", lambda: pillow_rs.Image.linear_gradient("L")),
-        ("radial-gradient-classmethod", lambda: pillow_rs.Image.radial_gradient("L")),
+        ("fromarray-classmethod", lambda: Image.fromarray([[1, 2], [3, 4]])),
+        ("linear-gradient-classmethod", lambda: Image.linear_gradient("L")),
+        ("radial-gradient-classmethod", lambda: Image.radial_gradient("L")),
         (
             "effect-mandelbrot-classmethod",
-            lambda: pillow_rs.Image.effect_mandelbrot((4, 4), [-1, -1, 1, 1], 1),
+            lambda: Image.effect_mandelbrot((4, 4), [-1, -1, 1, 1], 1),
         ),
         (
             "frombuffer-classmethod",
-            lambda: pillow_rs.Image.frombuffer("L", (2, 2), b"\x00\x01\x02\x03"),
+            lambda: Image.frombuffer("L", (2, 2), b"\x00\x01\x02\x03"),
         ),
-        ("eval-classmethod", lambda: pillow_rs.Image.eval(pillow_rs.Image.new("L", (4, 4)), lambda v: v)),
+        ("eval-classmethod", lambda: Image.eval(Image.new("L", (4, 4)), lambda v: v)),
         # LUT callable clamping: Pillow's _imaging.c::_point saturates function
         # outputs to [0, 255] (CLIP8); out-of-range values exercise that arm.
-        ("eval-clamp-high", lambda: pillow_rs.Image.eval(pillow_rs.Image.new("L", (4, 4)), lambda v: v + 100)),
-        ("point-clamp-low", lambda: pillow_rs.Image.new("L", (4, 4)).point(lambda v: v - 100)),
+        ("eval-clamp-high", lambda: Image.eval(Image.new("L", (4, 4)), lambda v: v + 100)),
+        ("point-clamp-low", lambda: Image.new("L", (4, 4)).point(lambda v: v - 100)),
         ("point-callable-raises", lambda: _point_callable_raises()),
         ("point-callable-non-integer", lambda: _point_callable_non_integer()),
         # save error surfaces.
-        ("save-path-object", lambda: pillow_rs.Image.new("RGB", (4, 4)).save("/tmp/imagecore-save2.png", format="PNG")),
-        ("save-bad-format", lambda: pillow_rs.Image.new("RGB", (4, 4)).save("/tmp/x.png", format="NOT_A_FORMAT")),
-        ("close-twice", lambda: _close_twice(pillow_rs.Image.new("L", (4, 4)))),
+        ("save-path-object", lambda: Image.new("RGB", (4, 4)).save("/tmp/imagecore-save2.png", format="PNG")),
+        ("save-bad-format", lambda: Image.new("RGB", (4, 4)).save("/tmp/x.png", format="NOT_A_FORMAT")),
+        ("close-twice", lambda: _close_twice(Image.new("L", (4, 4)))),
         # Pixel access and equality surfaces.
-        ("pixel-access", lambda: _pixel_access(pillow_rs.Image.new("L", (4, 4)))),
-        ("image-eq", lambda: pillow_rs.Image.new("L", (2, 2)) == pillow_rs.Image.new("L", (2, 2))),
-        ("image-repr", lambda: repr(pillow_rs.Image.new("L", (2, 2)))),
+        ("pixel-access", lambda: _pixel_access(Image.new("L", (4, 4)))),
+        ("image-eq", lambda: Image.new("L", (2, 2)) == Image.new("L", (2, 2))),
+        ("image-repr", lambda: repr(Image.new("L", (2, 2)))),
         # putpixel error and string paths.
-        ("putpixel-string-single", lambda: pillow_rs.Image.new("L", (4, 4)).putpixel((1, 1), "red")),
-        ("putpixel-string-multi", lambda: pillow_rs.Image.new("RGB", (4, 4)).putpixel((1, 1), "red")),
-        ("putpixel-bad-type", lambda: pillow_rs.Image.new("L", (4, 4)).putpixel((1, 1), 1.5)),
+        ("putpixel-string-single", lambda: Image.new("L", (4, 4)).putpixel((1, 1), "red")),
+        ("putpixel-string-multi", lambda: Image.new("RGB", (4, 4)).putpixel((1, 1), "red")),
+        ("putpixel-bad-type", lambda: Image.new("L", (4, 4)).putpixel((1, 1), 1.5)),
         ("alpha-composite-explicit-none-boxes", lambda: _alpha_composite_none_boxes()),
-        ("putalpha-int", lambda: pillow_rs.Image.new("RGBA", (4, 4)).putalpha(128)),
+        ("putalpha-int", lambda: Image.new("RGBA", (4, 4)).putalpha(128)),
         (
             "putalpha-l-mask-promotes-rgb",
-            lambda: pillow_rs.Image.new("RGB", (4, 4), (10, 20, 30)).putalpha(
-                pillow_rs.Image.new("L", (4, 4), 100)
+            lambda: Image.new("RGB", (4, 4), (10, 20, 30)).putalpha(
+                Image.new("L", (4, 4), 100)
             ),
         ),
         (
             "putalpha-l-mask-promotes-p",
-            lambda: pillow_rs.Image.new("P", (4, 4), 5).putalpha(
-                pillow_rs.Image.new("L", (4, 4), 128)
+            lambda: Image.new("P", (4, 4), 5).putalpha(
+                Image.new("L", (4, 4), 128)
             ),
         ),
         (
             "putalpha-one-mask",
-            lambda: pillow_rs.Image.new("RGBA", (4, 4), (10, 20, 30, 40)).putalpha(
-                pillow_rs.Image.new("1", (4, 4), 1)
+            lambda: Image.new("RGBA", (4, 4), (10, 20, 30, 40)).putalpha(
+                Image.new("1", (4, 4), 1)
             ),
         ),
         (
             "putalpha-bad-mask-mode",
-            lambda: pillow_rs.Image.new("RGBA", (4, 4)).putalpha(
-                pillow_rs.Image.new("RGB", (4, 4))
+            lambda: Image.new("RGBA", (4, 4)).putalpha(
+                Image.new("RGB", (4, 4))
             ),
         ),
         # tobytes/thumbnail/reduce/getdata/palette paths.
-        ("tobytes-encoder-args", lambda: pillow_rs.Image.new("RGB", (2, 2)).tobytes("raw", "RGB")),
+        ("tobytes-encoder-args", lambda: Image.new("RGB", (2, 2)).tobytes("raw", "RGB")),
         ("tobytes-bgr", lambda: Image.new("RGB", (1, 1), (1, 2, 3)).tobytes("raw", "BGR")),
         ("tobytes-bgra", lambda: Image.new("RGBA", (1, 1), (1, 2, 3, 4)).tobytes("raw", "BGRA")),
-        ("thumbnail-int-resample", lambda: _thumbnail_int(pillow_rs.Image.new("RGB", (8, 8)))),
+        ("thumbnail-int-resample", lambda: _thumbnail_int(Image.new("RGB", (8, 8)))),
         ("resize-stringified-resample", lambda: _resize_stringified_resample()),
         ("rotate-stringified-resample", lambda: _rotate_stringified_resample()),
         ("rotate-explicit-none-expand", lambda: _rotate_explicit_none_expand()),
         ("rotate-truthy-expand-object", lambda: _rotate_truthy_expand_object()),
-        ("reduce-bad-factor", lambda: pillow_rs.Image.new("RGB", (8, 8)).reduce((2, 3))),
-        ("getdata-single-band", lambda: list(pillow_rs.Image.new("L", (2, 2)).getdata())),
-        ("getpalette-default-rawmode", lambda: pillow_rs.Image.new("P", (2, 2)).getpalette()),
-        ("info-transparency", lambda: pillow_rs.Image.new("L", (2, 2)).info),
+        ("reduce-bad-factor", lambda: Image.new("RGB", (8, 8)).reduce((2, 3))),
+        ("getdata-single-band", lambda: list(Image.new("L", (2, 2)).getdata())),
+        ("getpalette-default-rawmode", lambda: Image.new("P", (2, 2)).getpalette()),
+        ("info-transparency", lambda: Image.new("L", (2, 2)).info),
         # transform MESH and string-method error.
         (
             "transform-mesh",
-            lambda: pillow_rs.Image.new("RGB", (8, 8)).transform(
+            lambda: Image.new("RGB", (8, 8)).transform(
                 (8, 8), 4, [[[0, 0, 8, 8], [0, 0, 0, 8, 8, 8, 8, 0]]]
             ),
         ),
         (
             "transform-bad-method-name",
-            lambda: pillow_rs.Image.new("RGB", (8, 8)).transform((8, 8), "AFFINE", [1, 0, 0, 0, 1, 0]),
+            lambda: Image.new("RGB", (8, 8)).transform((8, 8), "AFFINE", [1, 0, 0, 0, 1, 0]),
         ),
         # Module-level operation wrappers.
         ("resize-module", lambda: pillow_rs.resize(Image.new("RGB", (8, 8)), (4, 4))),
@@ -346,18 +345,18 @@ def run_native_cases() -> tuple[int, int, int]:
         ("effect-mandelbrot-bad-extent", lambda: pillow_rs.effect_mandelbrot((4, 4), (1, 2), 1)),
         ("effect-noise", lambda: pillow_rs.effect_noise((4, 4), 16)),
         # new-image wrapper mode error translation.
-        ("new-image-bad-mode", lambda: pillow_rs.Image.new("BOGUS", (4, 4))),
+        ("new-image-bad-mode", lambda: Image.new("BOGUS", (4, 4))),
         # Quantize internals need high-diversity inputs; the parity corpus
         # deliberately uses low-diversity images because the method/kmeans/
         # palette/dither arguments are a documented ledger divergence.
-        ("quantize-rgb-gradient-16", lambda: pillow_rs.Image.linear_gradient("L").convert("RGB").quantize(16)),
-        ("quantize-rgb-gradient-2", lambda: pillow_rs.Image.linear_gradient("L").convert("RGB").quantize(2)),
-        ("quantize-rgb-gradient-256", lambda: pillow_rs.Image.linear_gradient("L").convert("RGB").quantize(256)),
+        ("quantize-rgb-gradient-16", lambda: Image.linear_gradient("L").convert("RGB").quantize(16)),
+        ("quantize-rgb-gradient-2", lambda: Image.linear_gradient("L").convert("RGB").quantize(2)),
+        ("quantize-rgb-gradient-256", lambda: Image.linear_gradient("L").convert("RGB").quantize(256)),
         ("quantize-rgba-gradient-16", lambda: _rgba_gradient().quantize(16)),
         ("quantize-rgba-gradient-256", lambda: _rgba_gradient().quantize(256)),
-        ("quantize-bad-colors-zero", lambda: pillow_rs.Image.new("RGB", (4, 4)).quantize(0)),
-        ("quantize-bad-colors-high", lambda: pillow_rs.Image.new("RGB", (4, 4)).quantize(257)),
-        ("quantize-p-mode", lambda: pillow_rs.Image.new("P", (8, 8)).quantize(16)),
+        ("quantize-bad-colors-zero", lambda: Image.new("RGB", (4, 4)).quantize(0)),
+        ("quantize-bad-colors-high", lambda: Image.new("RGB", (4, 4)).quantize(257)),
+        ("quantize-p-mode", lambda: Image.new("P", (8, 8)).quantize(16)),
         # Diverse pixel populations exercise the median-cut split and octree
         # sorting internals that low-diversity inputs short-circuit.
         ("quantize-rgb-noise-32", lambda: _noise_rgb(32, 32, 7).quantize(32)),
@@ -730,7 +729,7 @@ def _backend_image() -> None:
 
     if pillow_rs.enable_backend("cpu"):
         try:
-            pillow_rs.Image.new("L", (4, 4)).point(lambda v: v).tobytes()
+            Image.new("L", (4, 4)).point(lambda v: v).tobytes()
         finally:
             pillow_rs.disable_backend("cpu")
 

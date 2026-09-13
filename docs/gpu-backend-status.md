@@ -57,7 +57,9 @@ Single WGSL file per op with mode as uniform parameter (not 4 files per mode). E
 - **5-binding support**: Extended `build_pipeline()` from max-4 to max-5 bindings. Added `buf_img3` for mask images. Works for Paste, Composite, CompositeModule.
 - **LUT storage buffer**: 4-binding variant where `@binding(3)` is `storage, read` instead of uniform. Eval/PointOp LUTs (1024 bytes) fit without the 16-byte stride waste that uniform buffers impose.
 - **Dynamic dimension tracking**: `execute_batch_impl` tracks `(cur_w, cur_h)` through size-changing ops (Resize, Crop, Reduce, Scale). Readback uses final dimensions.
-- **gpu_log! macro**: Writes to `/tmp/gpu_debug.log` when `RSPIL_GPU_DEBUG=1` is set. Every pipeline step is logged with immediate flush. This was essential for debugging.
+- **gpu_log! macro**: Emits `compute::gpu` debug records. Enable them with the
+  normal Rust logger filter (for example `RUST_LOG=compute::gpu=debug`) when a
+  target `PIL` facade run needs GPU diagnostics. Every pipeline step is logged.
 
 ### Same-input GPU/WGSL coverage
 

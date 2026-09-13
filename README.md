@@ -26,7 +26,7 @@ Pillow API, platform, or GPU adapter is supported.
 | Target | Source | Import/use |
 | --- | --- | --- |
 | Rust core | [`pillow-rs/`](pillow-rs/) | `pillow_rs` |
-| Python extension | [`pillow-rs-py/`](pillow-rs-py/) | `from RSPIL import Image` |
+| Python extension | [`pillow-rs-py/`](pillow-rs-py/) | `from PIL import Image` |
 | WebAssembly package | [`pillow-rs-js/README.md`](pillow-rs-js/README.md) | `import { Image } from "pillow-rs"` |
 
 The Python wheel uses the `abi3-py38` boundary and declares `requires-python >=3.8`.
@@ -41,8 +41,25 @@ Use an isolated Python 3.10+ environment for the parity tools:
 ```sh
 make setup-venv PYTHON=python3.12
 make build
-python -c "from RSPIL import Image; print(Image.new('RGB', (10, 10)))"
+python -c "from PIL import Image; print(Image.new('RGB', (10, 10)))"
 ```
+
+The Python package uses Pillow's normal `PIL` import path.  `make build` is a
+local replacement install; for parity work, use `make build-parity` so the
+checkout facade is available on `PYTHONPATH` while the separately installed
+Pillow oracle remains intact.
+
+### Migrating from RSPIL
+
+Replace the old package import directly:
+
+```python
+from PIL import Image
+```
+
+The public `PIL` modules are backed by the Rust extension.  `pillow_rs` is an
+internal binding namespace, and `RSPIL` remains only as a deprecated import
+bridge for older applications.
 
 Build the WASM package and run its package check with:
 

@@ -1,5 +1,9 @@
 # Active parity/backend checklist — 2026-09-03 (focused)
 
+The target named in the historical measurements below is now the public
+`PIL` facade supplied by pillow-rs. The oracle remains Pillow 12.2.0. They use
+the same import path only inside separate source and target processes.
+
 Current continuation: ordered F GPU arithmetic, coefficient tiling, general
 projective sampling, PA/SIMD fixes, and the release package metadata fixes are
 integrated on `codex/benchmark-backend-parity-fixes`; the implementation
@@ -40,7 +44,7 @@ receipt rules unchanged.
   the four-tap clipped Horner path, including RGBX's non-alpha padding byte.
   Image.transform also preserves Pillow's exact errors for the known
   resize-only filters (LANCZOS, BOX, HAMMING) and unknown codes. Native
-  Pillow 12.2.0 versus RSPIL probes are 2,400/2,400 affine and 1,920/1,920
+  Pillow 12.2.0 versus the target PIL facade probes are 2,400/2,400 affine and 1,920/1,920
   projective/Quad cases exact across L/LA/RGB/RGBA/RGBX/CMYK; the maintained
   migration parity replay is 10,952/10,952 exact. Filtered GPU alpha and
   broader arithmetic admissions remain on exact host semantic control.
@@ -52,7 +56,7 @@ receipt rules unchanged.
   transforms (`f36e1d1a7`). The CPU path mirrors Pillow Geometry.c's
   center/FMA map evaluation and FLOAT32 filter ordering, including overlapping
   mesh records and the omitted-versus-explicit `fillcolor` contract. Native
-  Pillow 12.2.0 versus RSPIL is exact for the 60,000 finite/special projective
+  Pillow 12.2.0 versus the target PIL facade is exact for the 60,000 finite/special projective
   probes, 10,000 overlapping Mesh probes, and fresh mixed typed/byte matrices;
   scalar and one-item tuple float fills are accepted only for mode F.
 - [x] Keep fractional Rotate angles on Pillow's affine path and reproduce the
@@ -91,7 +95,7 @@ receipt rules unchanged.
   ordered-add blocks, scalar FMA tail; vertical remains FMA). The deterministic
   scalar FMA tail; vertical remains FMA. The former 48-tap Lanczos cancellation
   divergence is now exact after matching Pillow's x/a-then-pi coefficient
-  order. Native Pillow-vs-RSPIL direct F probes are 600/600 CPU and GPU exact,
+  order. Native Pillow-vs-the target PIL facade direct F probes are 600/600 CPU and GPU exact,
   with 266 native GPU receipts; chained cases are 15/15 exact. Additional
   heterogeneous 65/96/128/192/256-tap rows, a two-axis row, and wide cancellation
   are exact with terminal native GPU receipts; a 257-tap row remains host-controlled.
@@ -113,7 +117,7 @@ receipt rules unchanged.
 - [x] Extend the ordered F reducer through the proven 32768-tap marker-12
   envelope (`5eb257096`, source `e975f6831`) while retaining Pillow's
   vertical-first FLOAT32 intermediate for very tall F resizes. Native Pillow
-  12.2.0 versus RSPIL direct boundary probes are 250/250 CPU and 250/250 GPU
+  12.2.0 versus the target PIL facade direct boundary probes are 250/250 CPU and 250/250 GPU
   exact across 16385/16386/32768/32769 rows, two-axis shapes, all five
   non-nearest filters, finite/signed-zero/subnormal/largest-finite/special
   words; 180 rows through 32768 use native GPU receipts and 70 rows at 32769
@@ -131,7 +135,7 @@ receipt rules unchanged.
   envelope (`33535ab5d`, source `526515c81`). The host proof and both WGSL
   guards now cover direct rows through 262144 taps while preserving Pillow's
   ordered f64/FMA and FLOAT32-store semantics. Native Pillow 12.2.0 versus
-  RSPIL direct probes are 160/160 exact across 262144/262145 boundary shapes,
+  the target PIL facade direct probes are 160/160 exact across 262144/262145 boundary shapes,
   all five non-nearest filters, and finite/special words; 100 rows at 262144
   use native GPU receipts, 35 remain exact host semantic control, and at
   262145 the marker-9/host split is 20/20. Arithmetic-changing chains are
@@ -141,7 +145,7 @@ receipt rules unchanged.
   envelope (`f77fbbc29`, source `cbfda102a`). The host proof and both WGSL
   guards now cover direct rows through 524288 taps while preserving Pillow's
   ordered f64/FMA and FLOAT32-store semantics. Native Pillow 12.2.0 versus
-  RSPIL direct probes are 160/160 exact across 524288/524289 boundary shapes,
+  the target PIL facade direct probes are 160/160 exact across 524288/524289 boundary shapes,
   all five non-nearest filters, and finite/special words; 125 rows use native
   GPU receipts and 35 remain exact host semantic control. Arbitrary
   finite/extreme/cancellation probes are 45/45 exact, and arithmetic-changing
@@ -171,7 +175,7 @@ receipt rules unchanged.
   predecessor and checked against that actual intermediate before native
   admission. Generated direct and chain cases cover all five non-Box filters,
   subnormal/overflow words, NaN and both infinity signs, tiled coefficient
-  tails, and changed-axis chains. Native Pillow 12.2.0 versus RSPIL probes are
+  tails, and changed-axis chains. Native Pillow 12.2.0 versus the target PIL facade probes are
   exact, including the 20 new ordered direct/chain cases and the four tiled
   infinity regressions. The regenerated all-backends corpus is 11,345/11,345
   exact on CPU, SIMD, GPU, Node WASM, and browser WASM; GPU has 7,090 native
@@ -186,7 +190,7 @@ receipt rules unchanged.
   geometries (`d659a9c7b`, source `0ddeb2f88`). The compact encoder now emits
   one metadata triplet per output row plus one shared `1/tap_count` f64
   coefficient, and the host proof checks every row before native admission.
-  Native Pillow 12.2.0 versus RSPIL is 6/6 byte-exact for finite horizontal
+  Native Pillow 12.2.0 versus the target PIL facade is 6/6 byte-exact for finite horizontal
   and vertical rows with differentiated output values plus Inf and NaN row
   placements; receipts are terminal native GPU with no fallback. Focused
   compact tests are 5/5 and the serial pool-GPU group is 113/113. Non-divisible
@@ -202,7 +206,7 @@ receipt rules unchanged.
   remains exact host semantic control.
 - [x] Admit proof-certified constant integer nearest Quad/Mesh maps
   (`8b13f0c9b`, source `bff7976fa`) for packed byte modes and PA. Native
-  Pillow 12.2.0 versus RSPIL is 180/180 exact with native GPU receipts,
+  Pillow 12.2.0 versus the target PIL facade is 180/180 exact with native GPU receipts,
   including 90/90 fill-boundary cases; interpolation is bypassed only after
   the exhaustive source-selection proof. Filtered, fractional, scaled,
   nonconstant-denominator maps without the source-selection proof,
@@ -251,14 +255,14 @@ receipt rules unchanged.
   (`a0fb33394`): the WGSL path now mirrors Pillow's premultiplied La/RGBa
   round trip for integral source samples and lowers non-square direct/axis
   Quad relocations to exact integer coordinates. Native Pillow 12.2.0 versus
-  RSPIL probes are 224/224 exact across LA/RGBA Perspective, Quad, and Mesh
+  the target PIL facade probes are 224/224 exact across LA/RGBA Perspective, Quad, and Mesh
   cases with varied alpha/fill values; the focused pool-GPU group is 93/93,
   and fractional/scaled/non-dyadic maps remain exact host semantic control.
 - [x] Admit signed unit-axis Perspective nearest relocations
   (`8caddc219`, source `423ebf445`): the WGSL path mirrors Pillow's
   center-plus-`COORD` truncation for reflected and axis-swapped unit maps,
   including palette-alpha index/alpha pairs. Native Pillow 12.2.0 versus
-  RSPIL probes are 4,392/4,392 exact with terminal actual=GPU receipts,
+  the target PIL facade probes are 4,392/4,392 exact with terminal actual=GPU receipts,
   one dispatch, and no fallback. Fractional boundaries outside the proof,
   scaled maps outside the integer proof, nonconstant-denominator maps without
   the source-selection proof, filtered, partial, and multi-record maps remain
@@ -267,7 +271,7 @@ receipt rules unchanged.
   (`a735a563f`, source `51a5e110`): the WGSL path mirrors centered destination
   coordinates and Pillow `COORD` truncation for proof-certified integer
   scale/shear/reflection/translation maps with `g=h=0`. Native Pillow 12.2.0
-  versus RSPIL probes are 160/160 exact with terminal requested=actual GPU
+  versus the target PIL facade probes are 160/160 exact with terminal requested=actual GPU
   receipts; fractional, nonconstant-denominator maps without the proof,
   filtered, and arithmetic-changing maps remain exact host semantic control.
 - [x] Admit constant half-pixel filtered projective maps
@@ -293,7 +297,7 @@ receipt rules unchanged.
 - [x] Extend the interior-integer Bilinear proof to raw packed modes
   (`23b920fa1`, source `4242808f4`): CMYK, HSV, YCbCr, RGBX, and RGBa now use
   the same Geometry.c operation-order proof after their native physical
-  channel layouts are checked. Native Pillow 12.2.0 versus RSPIL is exact for
+  channel layouts are checked. Native Pillow 12.2.0 versus the target PIL facade is exact for
   36,015 exhaustive 2x2 cases (seven-value tiles across five modes and three
   projective methods) plus 1,080 varied-size/coordinate cases, all with
   terminal requested=actual GPU receipts. Edge, fractional, and non-Bilinear
@@ -311,14 +315,14 @@ receipt rules unchanged.
   `547ccba56703d87240cd0d7815c22f17a9384585`): finite direct mode-F one-pixel
   horizontal Box rows above 8,388,607 taps transport one repeated f64
   coefficient, preserving ordered accumulation and FLOAT32 storage. Native
-  Pillow 12.2.0 versus RSPIL is 3/3 exact with actual GPU receipts and no
+  Pillow 12.2.0 versus the target PIL facade is 3/3 exact with actual GPU receipts and no
   fallback; vertical/tall, non-finite/extreme, and adapter-limit rows remain
   exact host semantic control.
 - [x] Add the compact over-limit vertical F Box proof (`f5f3c1271`, source
   `4c00216c0`): finite direct mode-F one-pixel vertical Box rows above
   8,388,607 taps reuse the repeated f64 coefficient and skip the unchanged
   horizontal identity pass, keeping the dispatch grid within adapter limits.
-  Native Pillow 12.2.0 versus RSPIL is exact for 5/5 finite direct probes
+  Native Pillow 12.2.0 versus the target PIL facade is exact for 5/5 finite direct probes
   (including a width-2 capacity-bound vertical row and the existing horizontal
   row), with actual GPU receipts, one dispatch for vertical rows, and no
   fallback. Non-finite compact rows are covered separately below; non-Box,
@@ -327,7 +331,7 @@ receipt rules unchanged.
   (`c2cc1b5bf`, source `0346d21f1`): the horizontal and vertical WGSL kernels
   now scan compact rows for first-NaN payloads and signed-infinity
   cancellation before entering the ordered finite reducer. Native Pillow
-  12.2.0 versus RSPIL is 4/4 exact for horizontal/vertical NaN and opposite-
+  12.2.0 versus the target PIL facade is 4/4 exact for horizontal/vertical NaN and opposite-
   infinity rows at 8,388,608 taps, with terminal actual GPU receipts and no
   fallback; serial pool-GPU tests are 111/111. Special rows outside this
   compact integer-ratio proof remain exact host semantic control.
@@ -653,7 +657,7 @@ receipt rules unchanged.
   rounded-zero contain axes now raise Pillow's exact
   `ValueError("height and width must be > 0")` instead of being clamped to
   one, while empty-width sources that retain their height preserve Pillow's
-  valid empty resize/pad behavior. Native Pillow 12.2.0 versus RSPIL is exact
+  valid empty resize/pad behavior. Native Pillow 12.2.0 versus the target PIL facade is exact
   across 3,000 zero-dimension/rounded-zero cases in L/LA/RGB/RGBA/F; focused
   ImageOps tests are 6/6 and serial pool-GPU tests are 114/114. The GPU
   geometry preflight leaves invalid zero axes on exact host semantic control.
@@ -662,7 +666,7 @@ receipt rules unchanged.
   target height zero now raises Pillow's `ZeroDivisionError` before filter
   validation, rounded-zero output axes raise the resize `ValueError` after
   filter validation, and an empty-width source remains valid only when its
-  contain height is unchanged. Native Pillow 12.2.0 versus RSPIL is exact for
+  contain height is unchanged. Native Pillow 12.2.0 versus the target PIL facade is exact for
   3,500/3,500 cases across L/LA/RGB/RGBA/F and seven filters, with the
   heterogeneous byte subset 256/256 exact; focused ImageOps tests are 8/8,
   serial pool-GPU tests are 114/114, and migration parity remains
@@ -672,7 +676,7 @@ receipt rules unchanged.
   or target heights and positive-width/empty-source divisions now raise the
   same `ZeroDivisionError` as Pillow, same-size empty-width copies remain
   valid, and zero resize axes are no longer clamped. Native Pillow 12.2.0
-  versus RSPIL is exact for 4,000/4,000 edge cases across L/LA/RGB/RGBA/F and
+  versus the target PIL facade is exact for 4,000/4,000 edge cases across L/LA/RGB/RGBA/F and
   eight filters plus 2,240/2,240 heterogeneous byte cases; focused ImageOps
   tests are 9/9, serial pool-GPU tests are 114/114, and migration parity is
   10,952/10,952. Invalid dimensions remain exact host semantic control.
@@ -680,7 +684,7 @@ receipt rules unchanged.
   isolation as `7646e88d6`): Pillow's eager live/output aspect-ratio
   divisions, filter-error ordering, out-of-range centering normalization, and
   zero-width source/target resize contract are mirrored in the public, CPU,
-  and SIMD paths. Native Pillow 12.2.0 versus RSPIL is exact for 4,000/4,000
+  and SIMD paths. Native Pillow 12.2.0 versus the target PIL facade is exact for 4,000/4,000
   zero/positive dimension cases and 56,000/56,000 bleed/centering stress
   cases across L/LA/RGB/RGBA/F; focused ImageOps tests are 11/11, serial
   pool-GPU tests are 114/114, and the receipt/evidence contracts pass. Invalid
@@ -723,7 +727,7 @@ receipt rules unchanged.
 - [x] Mesh unit-relocation GPU routing (`413ed65ef`, source `10c9a49fd`):
   full-output one-record unit-scale direct/axis-swapped integer translations
   are admitted for L/LA/RGB/RGBA only after exhaustive source-selection proof.
-  Native Pillow 12.2.0 versus RSPIL is 256/256 exact across four modes, four
+  Native Pillow 12.2.0 versus the target PIL facade is 256/256 exact across four modes, four
   source sizes, four output shapes, and identity/positive/negative/axis-swap
   maps; every receipt is terminal requested=actual GPU with one dispatch and
   no fallback. Scaled, fractional, filtered, partial, and multi-record Mesh
@@ -731,7 +735,7 @@ receipt rules unchanged.
 - [x] Proof-certified Quad/Mesh nearest GPU routing (`ecac88ac1`, source
   `de38b9cd7`): ordinary packed L/LA/RGB/RGBA direct and translated Quad plus
   complete one-record Mesh maps now use the exhaustive source-selection and
-  finite-coordinate guards. Native Pillow 12.2.0 versus RSPIL is 24/24 exact;
+  finite-coordinate guards. Native Pillow 12.2.0 versus the target PIL facade is 24/24 exact;
   two bounded varied/f32-boundary sweeps are 20,000/20,000 exact, with 3,517
   native GPU receipts and the remainder exact host semantic control. Filtered,
   partial, multi-record, and proof-failing arithmetic remains host-controlled.
@@ -790,7 +794,7 @@ receipt rules unchanged.
   two-axis resize, and alternating wide cancellation. The 257-tap boundary
   remains exact host semantic control; mixed special/subnormal/overflow and
   arithmetic-changing chains remain pending. Focused GPU tests are 87/87 and
-  Pillow 12.2.0 versus RSPIL CPU probes are 6/6 exact. No fixtures,
+  Pillow 12.2.0 versus the target PIL facade CPU probes are 6/6 exact. No fixtures,
   thresholds, IDs, denominators, policy, or receipt taxonomy changed.
 
 - [x] Ordered F Resize reducer through 32768 taps (`5eb257096`, source
@@ -803,14 +807,14 @@ receipt rules unchanged.
 - [x] Ordered F Resize reducer through 131072 taps (`cc780e7b9`, source
   `8be644570`): the host proof and both WGSL guards now cover direct rows
   through 131072 taps while preserving Pillow's ordered f64/FMA and
-  FLOAT32-store semantics. Native Pillow 12.2.0 versus RSPIL probes are
+  FLOAT32-store semantics. Native Pillow 12.2.0 versus the target PIL facade probes are
   180/180 exact; 131073 remains exact host semantic control. Focused
   ordered-F tests are 10/10 and release/build-dev/format gates pass.
 
 - [x] Ordered F Resize reducer through 262144 taps (`33535ab5d`, source
   `526515c81`): the host proof and both WGSL guards now cover direct rows
   through 262144 taps while preserving Pillow's ordered f64/FMA and
-  FLOAT32-store semantics. Native Pillow 12.2.0 versus RSPIL probes are
+  FLOAT32-store semantics. Native Pillow 12.2.0 versus the target PIL facade probes are
   160/160 exact across 262144/262145 boundary shapes, all five non-nearest
   filters, and finite/special words; 100 rows at 262144 use native GPU
   receipts, 35 remain exact host semantic control, and the 262145 marker-9/
@@ -820,7 +824,7 @@ receipt rules unchanged.
 
 - [x] Ordered F Resize reducer through 524288 taps (`f77fbbc29`, source
   `cbfda102a`): both WGSL guards and the host ordered proof now cover direct
-  rows through 524288 taps. Native Pillow 12.2.0 versus RSPIL probes are
+  rows through 524288 taps. Native Pillow 12.2.0 versus the target PIL facade probes are
   160/160 exact across 524288/524289 boundary shapes, all five non-nearest
   filters, and finite/special words; the receipt matrix has 125 native GPU
   rows and 35 exact host semantic-control rows. Arbitrary
@@ -846,14 +850,14 @@ receipt rules unchanged.
   Quad/Mesh/PA nearest routing (`549bc3e08`, source `51a5e110`): the existing
   exhaustive per-output host f64 versus shader f32 source-selection proof now
   admits safe fractional Perspective maps and constant-coordinate Quad/Mesh
-  and palette-alpha cases. Native Pillow 12.2.0 versus RSPIL probes are
+  and palette-alpha cases. Native Pillow 12.2.0 versus the target PIL facade probes are
   1,280/1,280 exact with terminal requested=actual GPU receipts; unsafe
   boundaries, filtered maps, and broader records remain exact host semantic
   control.
 - [x] Proof-certified nonconstant-denominator Perspective nearest routing
   (`00696f1fb`, source `6f2a50886`): ordinary packed L/LA/RGB/RGBA nearest
   maps use the exhaustive source-selection proof without requiring `g=h=0`.
-  Native Pillow 12.2.0 versus RSPIL is 12/12 exact across three matrices, and
+  Native Pillow 12.2.0 versus the target PIL facade is 12/12 exact across three matrices, and
   a bounded random stress sweep is 500/500 exact (179 native GPU, 321 exact
   host semantic control). The f32 non-finite-intermediate guard keeps
   overflow/NaN boundaries host-controlled; filtered, Quad/Mesh, palette, and

@@ -1,14 +1,6 @@
-"""Python Image class that wraps the Rust pillow-rs implementation."""
+"""Internal Python Image class that wraps the Rust implementation."""
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
-
-try:
-    # Keep the Rust image recognizable by consumers such as torchvision's
-    # PIL transforms when Pillow is present.  RSPIL itself remains usable
-    # without Pillow; the fallback preserves the Rust-only package surface.
-    from PIL.Image import Image as _PILImageBase
-except ImportError:
-    _PILImageBase = object
 
 from . import _core
 from ._core import Image as RustImage
@@ -77,8 +69,14 @@ class _ClosedImage:
         raise ValueError("Operation on closed image")
 
 
-class Image(_PILImageBase):
-    """A high-performance image class backed by Rust. Pillow-compatible API."""
+class Image:
+    """A high-performance image class backed by Rust.
+
+    The public ``PIL.Image.Image`` facade aliases this class.  Keeping the
+    implementation independent of an installed Pillow package prevents the
+    target facade from importing the oracle namespace while it is being
+    initialized.
+    """
 
     # Resampling constants matching PIL.Image.<name> access pattern
     NEAREST = Resampling.NEAREST

@@ -28,7 +28,7 @@ Use skills instead of repeating long procedure in this file.
 - `.claude/skills/freetype-parity`: any external `fontdone` parity, fixture,
   harness, native TrueType, autohinter, rasterizer, metrics, bbox/cbox, or
   subagent-split task.
-- `.claude/skills/fix-pil-parity`: PIL/RSPIL fixture parity outside the
+- `.claude/skills/fix-pil-parity`: Pillow/PIL facade fixture parity outside the
   FreeType-specific harness.
 - `.claude/skills/compute-backend`: GPU/CPU backend, shader, or compute path
   work.

@@ -361,6 +361,9 @@ generated reports, build outputs, and package installs.
 |   |-- Cargo.toml
 |   |-- pyproject.toml
 |   |-- python/
+|   |   |-- PIL/
+|   |   |   |-- Image.py
+|   |   |   `-- __init__.py
 |   |   |-- RSPIL/
 |   |   |   `-- __init__.py
 |   |   `-- pillow_rs/
