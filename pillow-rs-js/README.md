@@ -1,17 +1,27 @@
 # pillow-rs
 
-`pillow-rs` provides the `pillow-rs` Rust image API in browsers through
-wasm-bindgen. The package contains two import paths:
+`pillow-rs` provides the Rust image API through one npm package. Its package
+exports select the browser/WASM entry for browser bundlers and a Node entry
+for Node.js. Both entries use the same complete codec surface and the same
+WASM module.
 
 ```js
 import init, { Image } from 'pillow-rs';
-import initExtra, { Image as ExtraImage } from 'pillow-rs/extra';
+await init();
+
+const image = new Image('RGB', 2, 2, 0, 0, 0, 255);
 ```
 
-Both paths expose the same image and font operations and the same complete
-codec surface. The `extra` path is retained as a compatibility alias for
-applications that used the earlier split bundle. Each generated module must
-be initialized before calling its exported operations.
+In a browser, `init()` fetches the package's `pillow_rs_js_bg.wasm` asset
+relative to the generated module. In Node.js, the conditional `node` export
+reads that same bundled asset from disk, so the no-argument initializer works
+without a `file://` fetch. `initSync()` is also available in Node.js for code
+that needs synchronous setup. Pass an explicit URL, `Response`, bytes, or
+compiled module to `init()` when an application owns the browser asset path.
+
+The former `pillow-rs/extra` subpath is not part of the release contract. A
+fresh build produces one publishable WASM payload and one package entrypoint
+per environment.
 
 The package is generated from the Rust workspace. `pkg/` is build output and
 is intentionally absent from source control. The supported local checks are:

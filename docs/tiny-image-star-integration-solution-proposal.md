@@ -54,10 +54,10 @@ running in a Worker cannot be interrupted by ordinary event-loop code.
 | JS binding API drift | Confirmed. `quantize`, `reduce`, `colorize`, and `getColor` no longer match the core signatures or return types. | P0 | Synchronize the binding adapter with the core contract, then make both WASM feature lanes compile in CI before producing packages. |
 | Format-selectable output | Confirmed. Core has `Image::encode(format)`, while WASM `save()` is zero-argument PNG and `toBytesEncoded()` is the raw-byte encoder. | P0 | Add a distinct `encode(format, options)` binding surface; keep `save()` as a documented PNG compatibility alias only if existing consumers require it. |
 | AVIF | Confirmed capability gap, not solved by enabling a Cargo feature. The locked `image-slash-star` revision describes AVIF as native-only; its WASM encoder path is unavailable. | P0 if the product requires AVIF; otherwise P1 | Keep AVIF out of the browser promise. If full browser AVIF is required, first land and pin a WASM-capable codec, then add a separately tested `wasm-avif` lane. |
-| WASM core/extra split | Confirmed documentation/manifest mismatch. The packaging record describes PNG-only `core` plus codec-rich `extra`, but the current JS features map `wasm-core`, `wasm-extra`, and `wasm-all` to the same `image-codecs-all` surface. | P1 | Either restore a real PNG-only/core versus extra split, or remove the split and document one complete artifact. Rebuild the capability, size, and fixture matrices from the chosen contract. |
+| WASM core/extra split | Resolved in the current release contract. The old `core`/`extra` output described by this historical review was never a real capability split: both feature lanes exposed `image-codecs-all`. | P1 | Keep one complete `pillow-rs` npm package. Browser bundlers use the generated web entry and Node.js uses a conditional adapter that reads the same WASM asset. The retired `pillow-rs/extra` export and stale output are rejected by the package check. |
 | Progress/cancellation | Confirmed binding gap. The locked codec revision has no public cancellation token surface; the newer sibling checkout does, but it is not the revision in `Cargo.lock` and is not threaded through `pillow-rs`. | P1 | Use Worker revision fencing now. Later thread a pinned codec token through core materialization/encoding and expose cancellation as cooperative, with documented checkpoints and limits. |
-| npm identity | Confirmed contract mismatch. `package.json` says `pillow-rs`; README and CONTRIBUTING say `@pillow-rs/wasm`; generated variant manifests say `pillow-rs-js`. | P1 | Select one public npm name and one import contract. The existing scoped documentation suggests `@pillow-rs/wasm`, subject to npm name availability; otherwise update all documentation to `pillow-rs`. |
-| npm release location | Confirmed release-script defect. `make release-npm` publishes from `pillow-rs-js/pkg`, but that directory has no root `package.json`; the publishable manifest is at `pillow-rs-js/package.json`. | P1 | Build both variants, validate from the JS package root, and publish that root or an explicit staging directory. |
+| npm identity | Resolved. The public package name is `pillow-rs`; the package-level README, declarations, and release workflow use the same unscoped import. | P1 | Keep `pillow-rs` as the only npm package identity and test its conditional Node/browser exports from a packed tarball. |
+| npm release location | Resolved. `make release-npm` and the release workflow build and publish from the `pillow-rs-js/` package root. | P1 | Keep `pkg/` generated and ignored; package checks inspect the dry-run manifest and reject retired split output. |
 | `fontdone` source dependency | Confirmed. `pillow-rs/Cargo.toml` references `../../fontdone`; a clean checkout cannot resolve it and `cargo package` rejects the missing version requirement. | P1 | Publish a versioned `fontdone` crate and use a registry requirement for release builds. Keep sibling development through a local, uncommitted Cargo patch, or use a pinned source distribution until the registry release exists. |
 | Ignored generated `pkg` | Not intrinsically a defect. Ignoring generated WASM is safe when CI or npm publication regenerates it; it is a defect if the app expects the directory to exist after cloning the source repository. | P1 conditional | Make the app consume a versioned npm artifact, or make the CI artifact handoff explicit. Do not make a local ignored directory the app's undocumented source dependency. |
 | Initialization | Confirmed usability risk. The generated web module has async default initialization; `Image.open(bytes)` is synchronous only after initialization. | P2 | Hide initialization in one app adapter with a single `ready()` promise, then expose synchronous image operations behind that boundary. |
@@ -117,8 +117,9 @@ The preferred release topology is:
   is not required by a clean clone.
 - `image-slash-star` remains pinned to a reviewed revision; any revision change
   is accompanied by the codec feature and WASM capability matrix.
-- `pillow-rs-js/package.json` is the npm package manifest and owns the `.` and
-  `./extra` exports.
+- `pillow-rs-js/package.json` is the one npm package manifest. Its root export
+  selects the generated browser module under the `browser`/`import` conditions
+  and `node.js` under the Node.js condition; there is no `./extra` export.
 - `pkg/` remains generated and ignored; CI builds it, tests the npm dry-run
   manifest, and publishes from the intended package root.
 
@@ -126,10 +127,10 @@ Before publishing, test from a checkout that contains only this repository:
 
 1. Install the documented Rust toolchain and WASM target.
 2. Run Cargo metadata and the WASM check with `--locked`.
-3. Build both generated package variants.
-4. Run `npm pack --dry-run` and inspect the file list.
-5. Install the resulting tarball in a temporary consumer and exercise both
-   import paths.
+3. Build the one generated browser package and Node adapter.
+4. Run `npm pack --dry-run` and inspect the file list for one WASM payload.
+5. Install the resulting tarball in a temporary consumer and exercise the
+   package root in Node.js; run the browser parity lane for the web condition.
 
 This clean-checkout test is the gate that catches both the relative `fontdone`
 path and the wrong npm publish directory.
@@ -204,7 +205,8 @@ The proposal is ready to implement when all of these are agreed:
 - [ ] The explicit WASM feature lane passes the same check.
 - [ ] `npm run build:release` and `npm run test:package` pass on fresh output.
 - [ ] `npm pack --dry-run` contains the documented package name, entry points,
-  both WASM variants, declarations, license, and required notices.
+  the browser WASM payload, Node adapter, declarations, license, and required
+  notices.
 - [ ] Installing the tarball works without a sibling `fontdone` checkout.
 - [ ] Every promised output format passes magic-byte, decode, dimension, mode,
   and pixel checks.

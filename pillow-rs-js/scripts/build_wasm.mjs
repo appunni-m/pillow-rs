@@ -1,12 +1,19 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 const [variant, profile = 'dev'] = process.argv.slice(2);
-if (!['core', 'extra'].includes(variant) || !['dev', 'release'].includes(profile)) {
-    throw new Error('usage: build_wasm.mjs <core|extra> <dev|release>');
+if (variant !== 'core' || !['dev', 'release'].includes(profile)) {
+    throw new Error('usage: build_wasm.mjs core <dev|release>');
 }
 
 const root = resolve(new URL('..', import.meta.url).pathname);
+
+// The package has one WASM payload. Remove output from the retired split
+// package before every build so a stale checkout can never publish a second
+// variant through the broad `pkg/` files list.
+rmSync(join(root, 'pkg', 'extra'), { force: true, recursive: true });
+
 const args = [
     'build',
     '--target',

@@ -4,9 +4,9 @@
 > and benchmark status is maintained in the manifest and
 > [`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md).
 
-Status: native backend migration, lazy-loading correctness, and JS/WASM
-core-extra codec packaging are implemented. Broader binding runtime parity
-remains separate work.
+Status: native backend migration, lazy-loading correctness, and the single
+all-codec JavaScript/WASM package are implemented. Broader binding runtime
+parity remains separate work.
 
 The normative design and acceptance criteria live in
 `../image-slash-star/docs/image-backend-migration-spec.md`. This file records
@@ -165,10 +165,11 @@ cargo clippy -p pillow-rs --lib --all-features -- -A deprecated
 The 68-test core library lane and pinned live Pillow font oracle pass. The
 8-test migration lane, 23-test exact backend parity lane, and reduced-feature
 error lane pass, including all eight codecs, exact structured errors, feature
-forwarding, lifecycle/cache behavior, and all 19 palette operation rows. Both
-optimized JS/WASM codec matrices pass all 9 rows in the `core` and `extra`
-packages. Formatting, public API boundary validation, the repository map, and
-focused strict Clippy for the core library pass.
+forwarding, lifecycle/cache behavior, and all 19 palette operation rows. The
+optimized JS/WASM codec matrix passes all 9 rows through the single
+`pillow-rs` package, with Node.js and browser entry points exercising the same
+WASM payload. Formatting, public API boundary validation, the repository map,
+and focused strict Clippy for the core library pass.
 
 The workspace-wide `make clippy` target now passes with the documented
 deprecation exception. Image-bearing host-input variants are boxed so the
@@ -187,6 +188,6 @@ The upstream `image-slash-star` acceptance is Coverage MCP run
 
 The native workspace and zero-codec core compile. The prior `fontdone` wasm32
 width blocker is resolved with a target-scoped internal arithmetic feature that
-matches the standalone export layer's explicit 64-bit compatibility ABI. Both
-optimized JS/WASM variants compile and pass the fixture codec matrix; exact
+matches the standalone export layer's explicit 64-bit compatibility ABI. The
+optimized JS/WASM package compiles and passes the fixture codec matrix; exact
 sizes and commands are recorded in `docs/wasm-core-extra-packaging.md`.

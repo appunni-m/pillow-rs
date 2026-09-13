@@ -238,6 +238,7 @@ jobs:
         run: |
           npm ci
           npm run build:release
+          npm run test:package
           npm pack --ignore-scripts --pack-destination ../dist/release/npm
       - name: write release checksums
         working-directory: dist/release
