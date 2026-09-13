@@ -428,7 +428,12 @@ jobs:
         if: steps.npm-check.outputs.missing == 'true'
         run: |
           version="${RELEASE_VERSION#v}"
-          npm publish "dist/release/npm/pillow-rs-$version.tgz" --access public --provenance
+          dist_tag=latest
+          if [[ "$version" == *-* ]]; then
+            dist_tag=next
+          fi
+          npm publish "dist/release/npm/pillow-rs-$version.tgz" \
+            --access public --tag "$dist_tag" --provenance
 
   tag-and-release:
     name: Create the GitHub release for the pushed tag

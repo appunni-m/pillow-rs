@@ -1,8 +1,33 @@
 # Documentation checklist
 
 This is the active documentation contract for pillow-rs. It was reviewed on
-2026-09-12 against the pinned manifest, Makefile, package manifests, and the
+2026-09-13 against the pinned manifest, Makefile, package manifests, and the
 latest recorded parity and benchmark artifacts.
+
+## Open Source audit receipt
+
+On 2026-09-13 the Open Source documentation auditor was run against clean
+tracked trees at the release-preparation revisions below. The root checkout
+was audited from a `git archive` export so ignored local worktrees, virtual
+environments, and build output could not affect the result. A review finding is
+an inspection prompt from the auditor; it is not an accuracy failure.
+
+| Repository | Revision | Errors | Review prompts | Result |
+| --- | --- | ---: | ---: | --- |
+| `pillow-rs` | `dcb22a1d948055e0f52e702ec204e12b5ee040ac` | 0 | 87 | pass; prompts are historical plans/specs and unlabeled fences |
+| `fontdone` | `af758012a32a9e362fb7b7c41fc64ad88f68c604` | 0 | 0 | pass |
+| `image-slash-star` | `9177cf8f1f324b49d431613696b43eb77fb61043` | 0 | 0 | pass |
+
+Using the installed Open Source skill, run:
+
+```sh
+python3 /path/to/opensource-documentation/scripts/audit_documentation.py <tracked-checkout> --format text
+```
+
+The audit checks documentation structure and evidence inventory. It does not
+prove API behavior, parity, coverage, benchmark validity, external links, or
+registry configuration; those claims remain governed by the project gates and
+release receipts below.
 
 ## Audience paths
 
@@ -111,8 +136,9 @@ make clippy
 make release-check
 ```
 
-The Open Source documentation audit was run against the checkout. Its default
-recursive mode also visits ignored worktrees, virtual environments, and build
-trees, so its raw finding count is not an active-document denominator. The
-tracked active pages above are the review scope; archived and generated pages
-are classified rather than silently treated as current guidance.
+The Open Source documentation audit is run against a clean tracked export for
+release receipts. Running it directly in a development checkout also visits
+ignored worktrees, virtual environments, and build trees, so that raw finding
+count is not an active-document denominator. The tracked active pages above
+are the review scope; archived and generated pages are classified rather than
+silently treated as current guidance.
