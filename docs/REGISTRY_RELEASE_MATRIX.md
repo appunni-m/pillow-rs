@@ -126,7 +126,7 @@ host-timing classification and leaves the zero-violation gate open.
 
 The clean `fontdone` `main` branch is now present on `origin` at
 `af758012a32a9e362fb7b7c41fc64ad88f68c604`; its hosted commit CI run
-`34735539764` is still in progress after the inventory refresh. Its immutable local release tag
+`34735539764` completed successfully after the inventory refresh. Its immutable local release tag
 `v2.14.3-alpha.3` remains at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, so the
 tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
@@ -262,6 +262,23 @@ names and trusted publishers before enabling publication:
 | `crates-io` | crates.io | trusted publisher for this repository/workflow and package owner |
 | `pypi` | PyPI | trusted publisher matching the exact repository, workflow, and environment |
 | `npm` | npm | trusted publisher/provenance enabled for the package owner |
+
+Use these exact trusted-publisher identities; the workflow file is the path
+relative to each repository root:
+
+| Registry project | Owner/repository | Workflow | Environment | Package |
+| --- | --- | --- | --- | --- |
+| crates.io | `appunni-m/image-slash-star` | `.github/workflows/release.yml` | `crates-io` | `image-slash-star` |
+| crates.io | `appunni-m/fontdone` | `.github/workflows/release.yml` | `crates-io` | `fontdone` |
+| crates.io | `appunni-m/pillow-rs` | `.github/workflows/release.yml` | `crates-io` | `pillow-rs` |
+| PyPI | `appunni-m/pillow-rs` | `.github/workflows/release.yml` | `pypi` | `pillow-rs` |
+| npm | `appunni-m/fontdone` | `.github/workflows/release.yml` | `npm` | `fontdone` |
+| npm | `appunni-m/pillow-rs` | `.github/workflows/release.yml` | `npm` | `pillow-rs` |
+
+Create the matching GitHub environments and require reviewer approval for
+publication. Registry-side trusted publishers must use the same owner,
+repository, workflow, and environment values; do not create a long-lived
+registry token in repository secrets.
 
 Keep `contents: read` at workflow scope. The tag/release job alone receives
 `contents: write`; no registry token is stored in repository secrets.

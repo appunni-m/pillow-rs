@@ -34,6 +34,11 @@ registry credentials or trusted publishers for crates.io, PyPI, and npm. The
 release workflows use short-lived OIDC credentials behind protected GitHub
 environments; no registry token belongs in the repository.
 
+The npm job selects the `latest` dist-tag for a stable version and `next` for
+any version containing a prerelease suffix such as `-alpha.1`. This keeps a
+prerelease out of the stable npm channel without requiring a workflow edit for
+each version bump.
+
 ## Subsequent releases
 
 After the bootstrap, update all authoritative versions and changelog entries,
