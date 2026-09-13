@@ -88,9 +88,8 @@ jobs:
           test -n "$run_id"
       - name: install the locked Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
-          rustup target add wasm32-unknown-unknown
           rustc --version
           cargo --version
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
@@ -206,9 +205,8 @@ jobs:
           test "$release_commit" = "$(git rev-parse HEAD)"
       - name: install the locked Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
-          rustup target add wasm32-unknown-unknown
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
           python-version: "3.12"
@@ -264,7 +262,7 @@ jobs:
           persist-credentials: false
       - name: install the locked Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
       - name: verify the package before authentication
         run: cargo package --locked -p pillow-rs
