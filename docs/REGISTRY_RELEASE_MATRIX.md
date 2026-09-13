@@ -10,9 +10,9 @@ that will be tagged.
 
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
-`codex/benchmark-backend-parity-fixes` is now promoted to `origin/main` at
-`c5a4e2700994bb113022ff221dab5b5f1e1ea454`; it includes the Apple ARM64
-parity runner correction and release-state documentation. The three Cargo packages have been bootstrapped
+`codex/benchmark-backend-parity-fixes` is now promoted to `origin/main`; it
+includes the Apple ARM64 parity runner correction and release-state
+documentation. The three Cargo packages have been bootstrapped
 to crates.io from their exact local release tags/commit; PyPI and npm remain
 pending their GitHub trusted-publisher jobs.
 The sibling release branches are recorded below.
@@ -26,8 +26,8 @@ still exposes only the historical `fontdone@2.14.3-alpha.1` artifact. Registry
 visibility is recorded separately from the remaining coverage and platform
 gates.
 
-The hosted root CI run triggered by the promoted `main` commit
-`c5a4e2700994bb113022ff221dab5b5f1e1ea454` is tracked in GitHub Actions. Documentation, parity-build, and
+The hosted root CI run triggered by the promoted `main` head is tracked in
+GitHub Actions. Documentation, parity-build, and
 fmt/clippy were green on the preceding run; the current run remains external
 evidence until all jobs complete successfully.
 
@@ -134,8 +134,9 @@ The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the latest
 release-preparation correction, with the earlier source-fix,
 implementation-base, and receipt commits retained as historical references.
-`origin/main` is now at `c5a4e2700994bb113022ff221dab5b5f1e1ea454`; the hosted run triggered by this commit is
-tracked in GitHub Actions and remains external evidence until it completes.
+`origin/main` contains the latest release-preparation correction; the hosted
+run triggered by this head is tracked in GitHub Actions and remains external
+evidence until it completes.
 Local Python and JS/WASM replays pass
 their selected corpus. The aggregate backend result still reports the
 intentional SIMD/GPU host-control partition, and the benchmark zero-violation
