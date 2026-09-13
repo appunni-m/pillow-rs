@@ -128,7 +128,9 @@ jobs:
           mkdir -p target/ci-diagnostics
           set -o pipefail
           .venv/bin/python -c 'import sys; print(f"python={sys.executable} version={sys.version}")'
-          make PYTHON=.venv/bin/python build 2>&1 | tee target/ci-diagnostics/python-build.log
+          printf 'RUSTC_WRAPPER=<%s>\n' "${RUSTC_WRAPPER-<unset>}"
+          if command -v sccache >/dev/null 2>&1; then sccache --version; else echo 'sccache=unavailable'; fi
+          RUSTC_WRAPPER= make PYTHON=.venv/bin/python build 2>&1 | tee target/ci-diagnostics/python-build.log
 
       - name: upload Python build diagnostics
         if: always()

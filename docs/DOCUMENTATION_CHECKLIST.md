@@ -14,7 +14,7 @@ an inspection prompt from the auditor; it is not an accuracy failure.
 
 | Repository | Revision | Errors | Review prompts | Result |
 | --- | --- | ---: | ---: | --- |
-| `pillow-rs` | `c649c207b7c23d100f5a943f0e98ca856086fa43` | 0 | 87 | pass; prompts are historical plans/specs and unlabeled fences |
+| `pillow-rs` | `d95f6c6025d57474770a111b650e11effc99195b` | 0 | 87 | pass; prompts are historical plans/specs and unlabeled fences |
 | `fontdone` | `d87a504d2005bd9fbd4b2b43ec58ca87713b82f6` | 0 | 0 | pass |
 | `image-slash-star` | `9177cf8f1f324b49d431613696b43eb77fb61043` | 0 | 0 | pass |
 
