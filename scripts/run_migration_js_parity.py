@@ -29,6 +29,7 @@ import json
 import math
 import os
 from pathlib import Path
+import selectors
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,8 @@ try:
         load_manifest,
         receipt_is_meaningful,
         receipt_terminal_complete,
+        kill_process_group,
+        process_group_options,
         run_side_subprocess,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
@@ -58,6 +61,8 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
         load_manifest,
         receipt_is_meaningful,
         receipt_terminal_complete,
+        kill_process_group,
+        process_group_options,
         run_side_subprocess,
     )
 
@@ -540,21 +545,12 @@ def operation_payload(
     return payload
 
 
-def run_host(
+def _host_payload(
     cases: list[dict[str, Any]],
     operation_index: dict[tuple[str, str], dict[str, Any]],
-    timeout_seconds: int,
-    *,
-    runner: Path,
-    host_name: str,
     assets: dict[str, dict[str, Any]],
-) -> tuple[
-    dict[str, Any],
-    dict[str, dict[str, Any]],
-    dict[str, Any] | None,
-    dict[str, list[dict[str, Any]]] | None,
-]:
-    payload = json.dumps(
+) -> str:
+    return json.dumps(
         js_json_value(
             {
                 "cases": cases,
@@ -565,36 +561,23 @@ def run_host(
         allow_nan=False,
         separators=(",", ":"),
     )
-    process = subprocess.Popen(
-        ["node", str(runner)],
-        cwd=ROOT,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        stdout, stderr = process.communicate(input=payload, timeout=timeout_seconds)
-    except subprocess.TimeoutExpired as exc:
-        process.kill()
-        stdout, stderr = process.communicate()
-        detail = (stderr or stdout).strip().replace("\n", " ")[-800:]
-        raise RuntimeError(f"{host_name} WASM adapter timed out: {detail}") from exc
-    if process.returncode != 0:
-        details = []
-        if stderr.strip():
-            details.append(f"stderr: {stderr.strip().replace(chr(10), ' ')[-1200:]}")
-        if stdout.strip():
-            details.append(f"stdout: {stdout.strip().replace(chr(10), ' ')[-1200:]}")
-        detail = " | ".join(details) or "no adapter diagnostics"
-        raise RuntimeError(f"{host_name} WASM adapter exited {process.returncode}: {detail}")
-    try:
-        result = json.loads(stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"{host_name} WASM adapter emitted malformed JSON") from exc
-    # The adapter envelope contains the serialized public corpus and can be
-    # very large.  Release the raw text before retaining parsed case records.
-    del stdout
+
+
+def _parse_host_result(
+    result: Any,
+    cases: list[dict[str, Any]],
+    host_name: str,
+) -> tuple[
+    dict[str, Any],
+    dict[str, dict[str, Any]],
+    dict[str, Any] | None,
+    dict[str, list[dict[str, Any]]] | None,
+]:
+    if isinstance(result, dict) and isinstance(result.get("error"), dict):
+        error = result["error"]
+        error_class = str(error.get("class", "Error"))
+        message = str(error.get("message", "unknown adapter error"))
+        raise RuntimeError(f"{host_name} WASM adapter failed: {error_class}: {message}")
     if not isinstance(result, dict) or not {"identity", "results"}.issubset(result):
         raise RuntimeError(f"{host_name} WASM adapter emitted an invalid handshake envelope")
     unexpected = set(result) - {"identity", "results", "capabilities", "execution"}
@@ -625,6 +608,154 @@ def run_host(
                     f"{host_name} WASM adapter execution evidence has invalid case receipts"
                 )
     return result["identity"], by_id, capabilities, execution
+
+
+def run_host(
+    cases: list[dict[str, Any]],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    timeout_seconds: int,
+    *,
+    runner: Path,
+    host_name: str,
+    assets: dict[str, dict[str, Any]],
+) -> tuple[
+    dict[str, Any],
+    dict[str, dict[str, Any]],
+    dict[str, Any] | None,
+    dict[str, list[dict[str, Any]]] | None,
+]:
+    payload = _host_payload(cases, operation_index, assets)
+    process = subprocess.Popen(
+        ["node", str(runner)],
+        cwd=ROOT,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        stdout, stderr = process.communicate(input=payload, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        stdout, stderr = process.communicate()
+        detail = (stderr or stdout).strip().replace("\n", " ")[-800:]
+        raise RuntimeError(f"{host_name} WASM adapter timed out: {detail}") from exc
+    if process.returncode != 0:
+        details = []
+        if stderr.strip():
+            details.append(f"stderr: {stderr.strip().replace(chr(10), ' ')[-1200:]}")
+        if stdout.strip():
+            details.append(f"stdout: {stdout.strip().replace(chr(10), ' ')[-1200:]}")
+        detail = " | ".join(details) or "no adapter diagnostics"
+        raise RuntimeError(f"{host_name} WASM adapter exited {process.returncode}: {detail}")
+    try:
+        result = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{host_name} WASM adapter emitted malformed JSON") from exc
+    # The adapter envelope contains the serialized public corpus and can be
+    # very large.  Release the raw text before retaining parsed case records.
+    del stdout
+    return _parse_host_result(result, cases, host_name)
+
+
+class BrowserWorker:
+    """Keep Chromium alive while giving every parity batch a fresh page.
+
+    Process-global Pillow/Rust RNG state still requires one WASM instance per
+    isolated batch.  Reusing only the outer Chromium process removes the
+    hosted-runner startup cost without changing that semantic boundary.
+    """
+
+    def __init__(self) -> None:
+        environment = os.environ.copy()
+        environment["MIGRATION_BROWSER_WORKER"] = "1"
+        self.process = subprocess.Popen(
+            ["node", str(BROWSER_RUNNER)],
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            env=environment,
+            **process_group_options(),
+        )
+        self.closed = False
+
+    def _stop(self) -> None:
+        if self.closed:
+            return
+        kill_process_group(self.process)
+        try:
+            self.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=10)
+        self.closed = True
+
+    def run(
+        self,
+        cases: list[dict[str, Any]],
+        operation_index: dict[tuple[str, str], dict[str, Any]],
+        timeout_seconds: int,
+        assets: dict[str, dict[str, Any]],
+    ) -> tuple[
+        dict[str, Any],
+        dict[str, dict[str, Any]],
+        dict[str, Any] | None,
+        dict[str, list[dict[str, Any]]] | None,
+    ]:
+        if self.closed or self.process.poll() is not None:
+            raise RuntimeError("browser WASM worker exited before receiving a batch")
+        payload = _host_payload(cases, operation_index, assets)
+        try:
+            assert self.process.stdin is not None
+            assert self.process.stdout is not None
+            self.process.stdin.write(payload)
+            self.process.stdin.write("\n")
+            self.process.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            self._stop()
+            raise RuntimeError(f"browser WASM worker input failed: {exc}") from exc
+
+        selector = selectors.DefaultSelector()
+        try:
+            selector.register(self.process.stdout, selectors.EVENT_READ)
+            events = selector.select(timeout_seconds)
+            if not events:
+                self._stop()
+                raise RuntimeError(
+                    f"browser WASM adapter timed out after {timeout_seconds}s"
+                )
+            line = self.process.stdout.readline()
+        finally:
+            selector.close()
+        if not line:
+            details = ""
+            if self.process.poll() is not None and self.process.stderr is not None:
+                details = self.process.stderr.read().strip().replace("\n", " ")[-1200:]
+            self._stop()
+            suffix = f": {details}" if details else ""
+            raise RuntimeError(f"browser WASM worker exited without a response{suffix}")
+        try:
+            result = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("browser WASM worker emitted malformed JSON") from exc
+        return _parse_host_result(result, cases, "browser")
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        try:
+            if self.process.stdin is not None:
+                self.process.stdin.close()
+            self.process.wait(timeout=30)
+        except (BrokenPipeError, OSError):
+            self._stop()
+        except subprocess.TimeoutExpired:
+            self._stop()
+        finally:
+            self.closed = True
 
 
 def run_node(
@@ -971,7 +1102,36 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
     target_profile = (
         "browser-wasm-core" if args.host == "browser" else "javascript-wasm-core"
     )
-    run_target = run_browser if args.host == "browser" else run_node
+    browser_worker: BrowserWorker | None = None
+
+    def execute_target(
+        cases_for_batch: list[dict[str, Any]],
+        operation_index_for_batch: dict[tuple[str, str], dict[str, Any]],
+        timeout_seconds: int,
+        assets_for_batch: dict[str, dict[str, Any]],
+    ) -> tuple[
+        dict[str, Any],
+        dict[str, dict[str, Any]],
+        dict[str, Any] | None,
+        dict[str, list[dict[str, Any]]] | None,
+    ]:
+        nonlocal browser_worker
+        if args.host == "browser":
+            if browser_worker is None:
+                browser_worker = BrowserWorker()
+            return browser_worker.run(
+                cases_for_batch,
+                operation_index_for_batch,
+                timeout_seconds,
+                assets_for_batch,
+            )
+        return run_node(
+            cases_for_batch,
+            operation_index_for_batch,
+            timeout_seconds,
+            assets_for_batch,
+        )
+
     started_at = now()
     source_identity: dict[str, Any] | None = None
     js_identity: dict[str, Any] | None = None
@@ -1001,7 +1161,7 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
                 js_results,
                 batch_capabilities,
                 batch_execution,
-            ) = run_target(
+            ) = execute_target(
                 target_batch, operation_index, args.timeout, target_assets
             )
         except RuntimeError as exc:
@@ -1142,6 +1302,9 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
                 "message": str(exc),
             }
         )
+    finally:
+        if browser_worker is not None:
+            browser_worker.close()
 
     summary = {
         "selected": len(cases),
