@@ -11,8 +11,8 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the first-release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is now promoted to `origin/main` at
-`fededefbf`; it includes the Apple ARM64 parity runner correction and
-release-state documentation. The three Cargo packages have been bootstrapped
+`b01fb959f609e09cf40d4383672909c881b9647f`; it includes the Apple ARM64
+parity runner correction and release-state documentation. The three Cargo packages have been bootstrapped
 to crates.io from their exact local release tags/commit; PyPI and npm remain
 pending their GitHub trusted-publisher jobs.
 The sibling release branches are recorded below.
@@ -26,10 +26,11 @@ still exposes only the historical `fontdone@2.14.3-alpha.1` artifact. Registry
 visibility is recorded separately from the remaining coverage and platform
 gates.
 
-The hosted root CI run `34734417599` is running for `main` commit
-`fededefbf` (checked on 2026-09-13). Documentation is green; the Rust,
-supply-chain, Python, and WASM lanes are still completing. The run is external
-evidence until all jobs complete successfully.
+The hosted root CI run `34735344172` is running for `main` commit
+`b01fb959f609e09cf40d4383672909c881b9647f` (checked on 2026-09-13).
+Documentation, parity-build, and fmt/clippy are green; supply-chain and the
+remaining lanes are still completing. The run is external evidence until all
+jobs complete successfully.
 
 Fontdone has one public Cargo release unit: the root `fontdone` package. The
 workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
@@ -49,8 +50,8 @@ release evidence therefore exercise the exact fontdone source being packaged.
 
 | Project | Artifact | Version | Registry | Prerequisite/order | Current state |
 | --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | published from local tag `v0.1.0` commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`, crates.io checksum `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178`. The clean-history branch remains at `5113bb3381ab3780353668ae75a5e6a979f9a9d5`; promotion to historical remote `main` at `53a86b7e5748650d91adcda9dc7dc29d4fe7fe39` was rejected as a non-fast-forward, so no history rewrite was attempted. The published archive passed Cargo verification; the current branch archive has SHA-256 `2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. Strict source coverage remains an explicit future release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | published from immutable local tag `v2.14.3-alpha.3` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, crates.io checksum `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c`. Current pushed `main` is `d5cb5b9389f806ef6d7aba06ede944ba38ced100`, and hosted commit CI run `34733646046` passed. The published package is the immutable alpha.3 tag; current main is a follow-on candidate. The synchronized local candidate has 20,355/20,355 runnable cases with 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, npm, and Cargo dry-run checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review remain required for the next tagged release |
+| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | published from local tag `v0.1.0` commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`, crates.io checksum `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178`. The clean-history branch remains at `2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`; promotion to historical remote `main` at `53a86b7e5748650d91adcda9dc7dc29d4fe7fe39` was rejected as a non-fast-forward, so no history rewrite was attempted. The published archive passed Cargo verification; the current branch archive has SHA-256 `2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. Strict source coverage remains an explicit future release blocker at 95,603/161,451 lines |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | published from immutable local tag `v2.14.3-alpha.3` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, crates.io checksum `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c`. Current pushed `main` is `af758012a32a9e362fb7b7c41fc64ad88f68c604`, and hosted commit CI run `34735539764` is still in progress after the inventory refresh. The published package is the immutable alpha.3 tag; current main is a follow-on candidate. The synchronized local candidate has 20,355/20,355 runnable cases with 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, npm, and Cargo dry-run checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review remain required for the next tagged release |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | after image-slash-star and fontdone versions are visible | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05`; the registry-ready preflight passed against both dependency versions |
@@ -125,8 +126,8 @@ host-timing classification and leaves the zero-violation gate open.
 ## Branch publication status
 
 The clean `fontdone` `main` branch is now present on `origin` at
-`d5cb5b9389f806ef6d7aba06ede944ba38ced100`; its hosted commit CI run
-`34733646046` passed. Its immutable local release tag
+`af758012a32a9e362fb7b7c41fc64ad88f68c604`; its hosted commit CI run
+`34735539764` is still in progress after the inventory refresh. Its immutable local release tag
 `v2.14.3-alpha.3` remains at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, so the
 tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
 tag remains as superseded local history.
@@ -134,8 +135,8 @@ The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the latest
 release-preparation correction, with the earlier source-fix,
 implementation-base, and receipt commits retained as historical references.
-`origin/main` is now at `fededefbf1b484727b4ba04424b96bb19f2e96cc` and hosted
-run `34734417599` is still in progress. Local Python and JS/WASM replays pass
+`origin/main` is now at `b01fb959f609e09cf40d4383672909c881b9647f` and hosted
+run `34735344172` is still in progress. Local Python and JS/WASM replays pass
 their selected corpus. The aggregate backend result still reports the
 intentional SIMD/GPU host-control partition, and the benchmark zero-violation
 item remains open.
@@ -143,9 +144,10 @@ The image-slash-star remote `main` remains at
 `53a86b7e5748650d91adcda9dc7dc29d4fe7fe39` and still contains the historical
 oversized AV1 blobs. Promotion of the clean-history release branch was
 rejected as a non-fast-forward; the branch remains available at
-`5113bb3381ab3780353668ae75a5e6a979f9a9d5`, and its local verifier and package
-consumer pass. Hosted run `34681945885` passed dependencies, format/lint, and
-parity but its strict coverage lane failed on the known incomplete denominator.
+`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`, and its local verifier and package
+consumer pass. Hosted run `34735319851` is still running its format/parity and
+strict coverage jobs; the prior completed coverage run failed on the known
+incomplete denominator.
 The `v0.1.0` Cargo version is published; no PyPI/npm upload or GitHub release
 tag has been made.
 

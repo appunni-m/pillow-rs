@@ -76,8 +76,8 @@ release tag was created; those remain guarded by the GitHub workflows.
 The local `fontdone@2.14.3-alpha.3` tarball is the synchronized candidate
 built from the exact local `v2.14.3-alpha.3` tag commit
 `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`. The currently pushed `fontdone`
-`main` is `d5cb5b9389f806ef6d7aba06ede944ba38ced100`; hosted commit CI run
-`34733646046` passed. The local checkout contains the follow-on inventory
+`main` is `af758012a32a9e362fb7b7c41fc64ad88f68c604`; hosted commit CI run
+`34735539764` is still in progress after the inventory refresh. The local checkout contains the follow-on inventory
 correction beyond the immutable tag.
 The follow-up parity-oracle, ABI test-support, and release-documentation
 corrections are outside the immutable alpha.3 package archive, so the current
@@ -210,8 +210,8 @@ GitHub release, or push a release tag. The later owner-authorized bootstrap
 published the three Cargo packages listed above. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
 the currently pushed `fontdone` `main` is
-`d5cb5b9389f806ef6d7aba06ede944ba38ced100`, and hosted commit CI run
-`34733646046` passed. The local checkout contains the follow-on inventory
+`af758012a32a9e362fb7b7c41fc64ad88f68c604`, and hosted commit CI run
+`34735539764` is still in progress after the inventory refresh. The local checkout contains the follow-on inventory
 correction beyond the immutable tag.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
@@ -221,13 +221,13 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI bundles and the complete contract gate remain required
 for the next tagged fontdone release. The clean pillow-rs release-prep branch
 is now promoted to `origin/main` at
-`fededefbf1b484727b4ba04424b96bb19f2e96cc`; hosted run `34734417599` is still
+`b01fb959f609e09cf40d4383672909c881b9647f`; hosted run `34735344172` is still
 running. The evidence remains bound to the current source inputs. The
 image-slash-star `main` promotion was rejected as a
 non-fast-forward because its earlier history contains generated AV1 blobs above
 the hosting limit. A new clean-history release branch
 `codex/release-image-slash-star-clean-current` is now pushed at
-`5113bb3381ab3780353668ae75a5e6a979f9a9d5` and carries the current readiness
+`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b` and carries the current readiness
 record while preserving `main`.
 The earlier clean-history candidate remains at
 `codex/release-image-slash-star-clean`; no `v0.1.0` release tag is currently
@@ -249,7 +249,7 @@ cross-platform C-ABI bundles including the Windows import library, and the root 
 consecutive fixed-ID comparisons with zero timing-budget violations. The image
 repository now has a pushed clean-history candidate at
 `codex/release-image-slash-star-clean-current`
-(`5113bb3381ab3780353668ae75a5e6a979f9a9d5`); updating `main` would require
+(`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b`); updating `main` would require
 an explicit history-rewrite decision, so the safe non-fast-forward push was
 left rejected.
 
@@ -260,7 +260,7 @@ versions only from a clean reviewed commit and create immutable annotated
 The staged local `image-slash-star` `0.1.0` archive remains bound to the
 historical rehearsal commit `8d8ecdfe8699329ae166541be8040b1bc3b253e7` and its
 recorded checksum. The current clean-history candidate was rebuilt at
-`5113bb3381ab3780353668ae75a5e6a979f9a9d5` and passed its package,
+`2a2d776b297eeba98d5e121f0a0fed8db2c1a16b` and passed its package,
 cross-target, doctest, and clean-consumer checks; its archive SHA-256 is
 `2abe24938150e6466c9c5f432d866bfe05cbe2d6a56d422f81f505c3dedbe2e1`. The
 candidate remains blocked by the strict coverage denominator and the absence
