@@ -167,6 +167,24 @@ mismatch fails the release. It is manual and defaults to a non-publishing
 preflight. The publish input is intentionally separate from the dependency
 input, so a preflight can be reviewed before any registry write.
 
+## Latest local release-gate probes
+
+The 2026-09-13 probes used the clean pushed trees and did not alter source or
+fixtures. The root documentation and release-bundle checks passed. Fontdone's
+`make release-verify` completed parity, package, C consumer, WASM consumer, npm,
+and benchmark work, then stopped at the required platform-contract gate:
+configured `5/5`, runtime evidence `1/5`, and Windows import-library evidence
+`0/1`. Image-slash-star's `make release-verify` stopped at its strict LLVM
+coverage verifier with `95,603/161,451` lines. These are release gates, not
+documentation-audit failures, and neither workflow should be tagged until its
+gate has fresh passing evidence.
+
+The latest public registry probes still show the three Cargo packages, but no
+`pillow-rs==0.1.0` on PyPI, no `pillow-rs@0.1.0` on npm, and no synchronized
+`fontdone@2.14.3-alpha.3` on npm. The existing Cargo tags are immutable; the
+next registry publication must use the exact reviewed tag and version selected
+after these gates are closed.
+
 ## Local credential setup
 
 Install the versions committed by the repository before authenticating:
