@@ -209,10 +209,12 @@ The file-backed rehearsal did not publish to crates.io, PyPI, npm, create a
 GitHub release, or push a release tag. The later owner-authorized bootstrap
 published the three Cargo packages listed above. The immutable local `fontdone`
 `v2.14.3-alpha.3` tag points to `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`,
-the currently pushed `fontdone` `main` is
-`af758012a32a9e362fb7b7c41fc64ad88f68c604`, and hosted commit CI run
-`34735539764` completed successfully after the inventory refresh. The local
-checkout contains the follow-on inventory correction beyond the immutable tag.
+the currently pushed `fontdone` `main` is the follow-on documentation/workflow
+commit `2811724826c51ef2cd02bbc58e8960bc72bc4289`. Its preceding inventory commit
+`af758012a32a9e362fb7b7c41fc64ad88f68c604` completed hosted commit CI run
+`34735539764` successfully. The new follow-on commit must have its own hosted
+checks confirmed before tagging; the local checkout contains the follow-on
+inventory correction beyond the immutable tag.
 Its source-bound parity evidence records 20,355 / 20,355 runnable comparisons
 with 3 safety-extension cases pending, and the current local `make ci` gate
 passes. Because the follow-on documentation commit changes Cargo package
