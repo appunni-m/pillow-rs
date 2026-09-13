@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { extname, resolve, sep } from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
@@ -36,6 +37,16 @@ async function readInput() {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
     return Buffer.concat(chunks).toString('utf8');
+}
+
+function errorEnvelope(error) {
+    return {
+        error: {
+            class: error?.name ?? 'Error',
+            message: String(error?.message ?? error),
+            stack: String(error?.stack ?? ''),
+        },
+    };
 }
 
 function serveStatic(request, response) {
@@ -138,29 +149,13 @@ function browserExecutablePath() {
     return installedCandidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 
-async function main() {
-    const server = createServer(serveStatic);
-    let browser;
+async function runPayload(browser, port, payload) {
+    // The server endpoint is batch-scoped. Updating this reference before a
+    // page is created lets worker mode keep one Chromium process while each
+    // batch still receives an independent WASM page/instance.
+    input = payload;
+    const page = await browser.newPage();
     try {
-        input = JSON.parse(await readInput());
-        const port = await listen(server);
-        const executablePath = browserExecutablePath();
-        const launchOptions = {
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                // GitHub-hosted Linux runners expose a small /dev/shm.  The
-                // parity envelope is intentionally large, so keep Chromium
-                // from crashing while materializing the public result.
-                '--disable-dev-shm-usage',
-                '--enable-unsafe-webgpu',
-                '--enable-features=Vulkan',
-            ],
-        };
-        if (executablePath) launchOptions.executablePath = executablePath;
-        browser = await puppeteer.launch(launchOptions);
-        const page = await browser.newPage();
         page.setDefaultNavigationTimeout(timeoutSeconds * 1000);
         const pageErrors = [];
         page.on('pageerror', (error) => pageErrors.push(String(error?.stack ?? error)));
@@ -189,7 +184,63 @@ async function main() {
             const detail = pageErrors.length ? `: ${pageErrors.join(' | ')}` : '';
             throw new Error(`browser parity adapter emitted an invalid envelope${detail}`);
         }
-        process.stdout.write(JSON.stringify(result));
+        return result;
+    } finally {
+        await page.close().catch(() => {});
+    }
+}
+
+async function launchBrowser() {
+    const executablePath = browserExecutablePath();
+    const launchOptions = {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            // GitHub-hosted Linux runners expose a small /dev/shm.  The
+            // parity envelope is intentionally large, so keep Chromium
+            // from crashing while materializing the public result.
+            '--disable-dev-shm-usage',
+            '--enable-unsafe-webgpu',
+            '--enable-features=Vulkan',
+        ],
+    };
+    if (executablePath) launchOptions.executablePath = executablePath;
+    return puppeteer.launch(launchOptions);
+}
+
+async function main() {
+    const server = createServer(serveStatic);
+    let browser;
+    try {
+        const port = await listen(server);
+        browser = await launchBrowser();
+        if (process.env.MIGRATION_BROWSER_WORKER === '1') {
+            // Worker mode is used by the streamed parity lane.  It keeps the
+            // expensive Chromium process alive, but creates/closes a page for
+            // every request so process-global RNG semantics remain isolated.
+            const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+            for await (const line of lines) {
+                if (!line.trim()) continue;
+                let payload;
+                try {
+                    payload = JSON.parse(line);
+                } catch (error) {
+                    process.stdout.write(`${JSON.stringify(errorEnvelope(error))}\n`);
+                    continue;
+                }
+                try {
+                    const result = await runPayload(browser, port, payload);
+                    process.stdout.write(`${JSON.stringify(result)}\n`);
+                } catch (error) {
+                    process.stdout.write(`${JSON.stringify(errorEnvelope(error))}\n`);
+                }
+            }
+        } else {
+            input = JSON.parse(await readInput());
+            const result = await runPayload(browser, port, input);
+            process.stdout.write(JSON.stringify(result));
+        }
     } finally {
         if (browser) await browser.close();
         await new Promise((resolveClose) => server.close(() => resolveClose()));
