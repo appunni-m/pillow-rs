@@ -117,6 +117,9 @@ jobs:
       - name: build Python package
         env:
           PYO3_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          # Cargo's checkout config enables sccache for local development;
+          # hosted runners must bypass it explicitly for the PyO3 build.
+          RUSTC_WRAPPER: ""
           # Keep maturin's active environment explicit in every matrix lane;
           # setup-python's interpreter selection alone is not sufficient for
           # `maturin develop`, especially on the Python 3.10 macOS runner.
