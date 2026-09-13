@@ -57,6 +57,14 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | pillow-rs | `pillow-rs` | `0.1.0` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
 | pillow-rs | `pillow-rs` | `0.1.0` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
 
+The local root `v0.1.0` tag is historical: it targets
+`519226b62b545717c2169be7cbef9141754de91e`, while the published
+`pillow-rs@0.1.0` archive was built from `fededefbf1b484727b4ba04424b96bb19f2e96cc`.
+Do not push or reuse that local tag. Create a new immutable tag from the exact
+reviewed commit only after the root hosted CI and dependency gates pass. The
+image and fontdone local tags do target their published Cargo archives, but
+they are also intentionally not on `origin` until their release gates pass.
+
 The immutable local bundle retains a benchmark pair for release-candidate
 source commit `031edd3f5425df2c6931939deb0ad0d93dad376c`, before the current
 documentation updates. Both runs selected and measured the fixed
