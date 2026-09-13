@@ -221,7 +221,7 @@ alpha.3 tag is either deliberately released from its exact bytes or retired.
 Hosted thorough C-ABI bundles and the complete contract gate remain required
 for the next tagged fontdone release. The clean pillow-rs release-prep branch
 is now promoted to `origin/main` at
-`b01fb959f609e09cf40d4383672909c881b9647f`; hosted run `34735344172` is still
+`ab89505ea90811cb3134179d5c10d46a6ef44a11`; hosted run `34735825134` is still
 running. The evidence remains bound to the current source inputs. The
 image-slash-star `main` promotion was rejected as a
 non-fast-forward because its earlier history contains generated AV1 blobs above
