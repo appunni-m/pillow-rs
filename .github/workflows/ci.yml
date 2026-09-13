@@ -128,6 +128,7 @@ jobs:
           mkdir -p target/ci-diagnostics
           set -o pipefail
           .venv/bin/python -c 'import sys; print(f"python={sys.executable} version={sys.version}")'
+          .venv/bin/python -m maturin --version
           printf 'RUSTC_WRAPPER=<%s>\n' "${RUSTC_WRAPPER-<unset>}"
           if command -v sccache >/dev/null 2>&1; then sccache --version; else echo 'sccache=unavailable'; fi
           # Keep Pillow installed for the oracle process.  The checkout's
@@ -153,6 +154,11 @@ jobs:
               tail -n 80 target/ci-diagnostics/python-build.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            diagnostic="$(tail -n 80 target/ci-diagnostics/python-build.log | tr '\n' ' ' | cut -c1-1800)"
+            diagnostic="${diagnostic//'%'/'%25'}"
+            diagnostic="${diagnostic//$'\r'/'%0D'}"
+            diagnostic="${diagnostic//$'\n'/'%0A'}"
+            echo "::error title=Python build diagnostics::$diagnostic"
           else
             echo "Python build failed before producing target/ci-diagnostics/python-build.log" >> "$GITHUB_STEP_SUMMARY"
           fi
