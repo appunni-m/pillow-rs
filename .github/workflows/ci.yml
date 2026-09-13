@@ -312,6 +312,10 @@ jobs:
           MIGRATION_JS_STREAM_OUTPUT: "1"
           MIGRATION_JS_PARITY_OUTPUT: build/migration-parity/js-wasm-parity-result.json.gz
           MIGRATION_BROWSER_PARITY_OUTPUT: build/migration-parity/browser-wasm-parity-result.json.gz
+          # The browser package is CPU/fallback-only. Keep capability probing
+          # bounded per isolated batch so a hosted runner without a WebGPU
+          # adapter cannot add two ten-second waits to every Chromium launch.
+          MIGRATION_BROWSER_GPU_PROBE_TIMEOUT_MS: "250"
           # A streamed chunk starts one source and one host process.  The
           # default local chunks (128/512) make the hosted lanes exceed their
           # timeout; 2,048-case chunks keep the same corpus and comparison

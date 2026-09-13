@@ -7,10 +7,16 @@ import puppeteer from 'puppeteer';
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const timeoutSeconds = Number(process.env.MIGRATION_BROWSER_TIMEOUT ?? 3600);
+const gpuProbeTimeoutMilliseconds = Number(
+    process.env.MIGRATION_BROWSER_GPU_PROBE_TIMEOUT_MS ?? 10000,
+);
 let input;
 
 if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
     throw new Error('MIGRATION_BROWSER_TIMEOUT must be a positive number');
+}
+if (!Number.isFinite(gpuProbeTimeoutMilliseconds) || gpuProbeTimeoutMilliseconds <= 0) {
+    throw new Error('MIGRATION_BROWSER_GPU_PROBE_TIMEOUT_MS must be a positive number');
 }
 
 function contentType(path) {
@@ -158,7 +164,14 @@ async function main() {
         page.setDefaultNavigationTimeout(timeoutSeconds * 1000);
         const pageErrors = [];
         page.on('pageerror', (error) => pageErrors.push(String(error?.stack ?? error)));
-        await page.goto(`http://127.0.0.1:${port}/scripts/browser_parity.html`, {
+        const pageUrl = new URL(
+            `http://127.0.0.1:${port}/scripts/browser_parity.html`,
+        );
+        pageUrl.searchParams.set(
+            'gpu_probe_timeout_ms',
+            String(gpuProbeTimeoutMilliseconds),
+        );
+        await page.goto(pageUrl, {
             waitUntil: 'load',
             timeout: timeoutSeconds * 1000,
         });

@@ -1,6 +1,17 @@
 import * as wasm from '/pkg/core/pillow_rs_js.js';
 import { runWorkflow } from '/scripts/parity_workflow.mjs';
 
+// The browser runner supplies a bounded deadline for this optional capability
+// probe. Parity itself remains independent of WebGPU because this package
+// variant uses the CPU/fallback WASM path.
+const configuredGpuProbeTimeout = Number(
+    new URL(document.baseURI).searchParams.get('gpu_probe_timeout_ms'),
+);
+const gpuProbeTimeoutMilliseconds = Number.isFinite(configuredGpuProbeTimeout) &&
+    configuredGpuProbeTimeout > 0
+    ? configuredGpuProbeTimeout
+    : 10000;
+
 async function withTimeout(promise, milliseconds) {
     let timer;
     try {
@@ -30,7 +41,7 @@ async function probeWebGpu() {
     try {
         adapter = await withTimeout(
             navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }),
-            10000,
+            gpuProbeTimeoutMilliseconds,
         );
     } catch (error) {
         return {
@@ -52,7 +63,7 @@ async function probeWebGpu() {
     }
     let device;
     try {
-        device = await withTimeout(adapter.requestDevice(), 10000);
+        device = await withTimeout(adapter.requestDevice(), gpuProbeTimeoutMilliseconds);
     } catch (error) {
         return {
             api: 'available',
