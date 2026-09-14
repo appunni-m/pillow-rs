@@ -30,10 +30,9 @@ the GitHub release workflow runs. npm still exposes only the historical
 `fontdone@2.14.3-alpha.1` artifact. Registry visibility is recorded separately
 from the remaining coverage and platform gates.
 
-The hosted root CI run triggered by the promoted `main` head is tracked in
-GitHub Actions. Documentation, parity-build, and
-fmt/clippy were green on the preceding run; the current run remains external
-evidence until all jobs complete successfully.
+The hosted root CI run `34838826898` for the promoted `main` head completed
+successfully on 2026-09-14. Its documentation, parity-build, formatting/lint,
+supply-chain, Python 3.10/3.12, Node WASM, and browser WASM jobs all passed.
 
 Fontdone has one public Cargo release unit: the root `fontdone` package. The
 workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
@@ -150,10 +149,9 @@ The clean pillow-rs release-preparation branch
 `codex/benchmark-backend-parity-fixes` is present on `origin` with the latest
 release-preparation correction, with the earlier source-fix,
 implementation-base, and receipt commits retained as historical references.
-`origin/main` contains the latest release-preparation correction; the hosted
-run triggered by this head is tracked in GitHub Actions and remains external
-evidence until it completes.
-Local Python and JS/WASM replays pass
+`origin/main` contains the latest release-preparation correction; hosted run
+`34838826898` for this head completed successfully. Local Python and JS/WASM
+replays pass
 their selected corpus. The aggregate backend result still reports the
 intentional SIMD/GPU host-control partition, and the benchmark zero-violation
 item remains open.
