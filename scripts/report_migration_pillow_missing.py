@@ -11,6 +11,7 @@ visible when they are not represented by the current public surface.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 from pathlib import Path
@@ -80,7 +81,27 @@ def compact_summary(value: dict[str, Any] | None) -> dict[str, Any] | None:
         "percent_branches_covered",
         "num_partial_branches",
     )
-    return {field: value[field] for field in fields if field in value}
+    summary = {field: value[field] for field in fields if field in value}
+
+    # coverage.py 7.10's JSON report keeps aggregate percentages under the
+    # generic ``percent_covered`` key.  Older reports exposed separate line
+    # and branch percentages.  Preserve the stable manifest schema by
+    # deriving the two explicit values whenever the newer report omits them.
+    if "percent_statements_covered" not in summary:
+        covered = summary.get("covered_lines")
+        total = summary.get("num_statements")
+        if isinstance(covered, (int, float)) and isinstance(total, (int, float)):
+            summary["percent_statements_covered"] = (
+                100.0 * covered / total if total else 100.0
+            )
+    if "percent_branches_covered" not in summary:
+        covered = summary.get("covered_branches")
+        total = summary.get("num_branches")
+        if isinstance(covered, (int, float)) and isinstance(total, (int, float)):
+            summary["percent_branches_covered"] = (
+                100.0 * covered / total if total else 100.0
+            )
+    return summary
 
 
 def summary_priority(summary: dict[str, Any]) -> int:
@@ -153,8 +174,29 @@ def coverage_symbol(
 
 
 def missing_function_records(
-    functions: dict[str, Any], classes: dict[str, Any]
+    functions: dict[str, Any],
+    classes: dict[str, Any],
+    source_path: Path | None = None,
 ) -> list[dict[str, Any]]:
+    symbol_start_lines: dict[tuple[str, str], int] = {}
+    if source_path is not None and source_path.exists():
+        try:
+            tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            tree = None
+        if tree is not None:
+            def visit(node: ast.AST, prefix: str = "") -> None:
+                for child in ast.iter_child_nodes(node):
+                    if isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                        qualified = f"{prefix}.{child.name}" if prefix else child.name
+                        kind = "class" if isinstance(child, ast.ClassDef) else "function"
+                        symbol_start_lines[(kind, qualified)] = child.lineno
+                        visit(child, qualified)
+                    else:
+                        visit(child, prefix)
+
+            visit(tree)
+
     records: list[dict[str, Any]] = []
     for kind, collection in (("function", functions), ("class", classes)):
         for name, value in collection.items():
@@ -169,10 +211,28 @@ def missing_function_records(
                 "missing_lines", 0
             ) and not summary.get("missing_branches", 0):
                 continue
+            start_line = value.get("start_line")
+            if not isinstance(start_line, int):
+                start_line = symbol_start_lines.get((kind, name))
+            if not isinstance(start_line, int) and not name:
+                # coverage.py's module-level pseudo-symbol is anchored at the
+                # beginning of the source file in the legacy report format.
+                start_line = 1
+            if not isinstance(start_line, int):
+                # coverage.py 7.10 no longer emits ``start_line`` for symbol
+                # records.  The first measured line is a deterministic and
+                # useful anchor for the retained gap manifest.
+                measured_lines = [
+                    line
+                    for key in ("executed_lines", "missing_lines", "excluded_lines")
+                    for line in value.get(key, [])
+                    if isinstance(line, int)
+                ]
+                start_line = min(measured_lines) if measured_lines else None
             record = {
                 "kind": kind,
                 "name": name,
-                "start_line": value.get("start_line"),
+                "start_line": start_line,
                 "summary": compact_summary(summary),
                 "missing_lines": missing_lines,
                 "missing_branches": missing_branches,
@@ -314,7 +374,11 @@ def build_manifest(
             "summary": compact_summary(summary),
             "missing_lines": file_data.get("missing_lines", []),
             "missing_branches": file_data.get("missing_branches", []),
-            "missing_symbols": missing_function_records(functions, classes),
+            "missing_symbols": missing_function_records(
+                functions,
+                classes,
+                source_path=Path(report_key),
+            ),
             "public_operations": operation_records,
             "public_operations_with_gaps": [
                 operation["operation_id"] for operation in public_gaps
@@ -392,7 +456,7 @@ def build_manifest(
             "operation_count": sum(len(value) for value in operations_by_file.values()),
             "input_files": sorted(set(case_input_by_id.values())),
         },
-        "totals": totals,
+        "totals": compact_summary(totals) or totals,
         "summary": {
             "source_files": len(entries),
             "source_files_with_gaps": sum(entry["gap_status"] == "missing" for entry in entries),
