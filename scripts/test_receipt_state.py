@@ -17,6 +17,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from scripts import run_all_backend_tests as all_backends_runner
 from scripts import profile_migration_benchmark as profile_benchmark
 from scripts import run_migration_benchmark as benchmark_runner
 
@@ -226,6 +227,24 @@ class BenchmarkIdentityTests(unittest.TestCase):
             (Path(__file__).resolve().parents[1] / "pillow-rs-py" / "python").resolve()
         )
         self.assertNotIn(target_python, environment.get("PYTHONPATH", "").split(os.pathsep))
+
+    def test_all_backend_wasm_lane_streams_large_result_envelopes(self) -> None:
+        """The combined local runner must use the bounded WASM writer."""
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(
+                all_backends_runner,
+                "run_command",
+                return_value=(1, "", "synthetic failure", False),
+            ) as run_command:
+                all_backends_runner.run_js_lane(
+                    output_dir=Path(directory),
+                    timeout_seconds=1,
+                    case_ids=[],
+                    scope={},
+                )
+
+        environment = run_command.call_args.kwargs["env"]
+        self.assertEqual(environment["MIGRATION_JS_STREAM_OUTPUT"], "1")
 
     def test_sparse_parity_preflight_is_expanded_to_all_timed_profiles(self) -> None:
         cpu_identity = {

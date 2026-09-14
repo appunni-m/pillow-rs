@@ -1193,6 +1193,11 @@ def run_js_lane(
         command,
         env={
             "MIGRATION_WASM_NO_OPT": "1",
+            # The full browser corpus is large enough to exceed a gigabyte
+            # when held as one parsed envelope.  Use the bounded streaming
+            # writer here, matching the hosted CI lane, so local all-backend
+            # runs cannot stall while buffering the browser result.
+            "MIGRATION_JS_STREAM_OUTPUT": "1",
             "NPM_CONFIG_CACHE": "/tmp/pillow-rs-npm-cache",
             "MIGRATION_JS_PARITY_OUTPUT": str(node_artifact),
             "MIGRATION_BROWSER_PARITY_OUTPUT": str(browser_artifact),
