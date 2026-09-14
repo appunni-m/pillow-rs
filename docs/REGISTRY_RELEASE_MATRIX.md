@@ -11,21 +11,24 @@ that will be tagged.
 The exact Cargo, PyPI, and root npm versions below are the current release
 candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is now promoted to `origin/main`; it
-includes the Apple ARM64 parity runner correction and release-state
-documentation. The three Cargo packages have been bootstrapped
-to crates.io from their exact local release tags/commit; PyPI and npm remain
-pending their GitHub trusted-publisher jobs.
+includes the Apple ARM64 parity runner correction, bounded WASM output, and
+coverage-report compatibility fixes. The two dependency Cargo packages are
+visible on crates.io; the root `pillow-rs@0.1.1` upload is still pending after
+two transient crates.io HTTP 503 responses. The PyPI upload remains a GitHub
+trusted-publisher job, and the local root npm bootstrap is ready but currently
+requires the npm account's one-time-password challenge.
 The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
-The latest successful registry probes (2026-09-13) found
+The latest successful registry probes (2026-09-14) found
 `image-slash-star@0.1.0`, `fontdone@2.14.3-alpha.3`, and the historical
 `pillow-rs@0.1.0` are visible on crates.io. The current synchronized
-`pillow-rs@0.1.1` candidate has not been uploaded to crates.io, PyPI, or npm;
-npm still exposes only the historical `fontdone@2.14.3-alpha.1` artifact.
-Registry visibility is recorded separately from the remaining coverage and
-platform gates.
+`pillow-rs@0.1.1` candidate has passed the local release package preflight but
+has not yet become visible on crates.io or npm; PyPI remains unattempted until
+the GitHub release workflow runs. npm still exposes only the historical
+`fontdone@2.14.3-alpha.1` artifact. Registry visibility is recorded separately
+from the remaining coverage and platform gates.
 
 The hosted root CI run triggered by the promoted `main` head is tracked in
 GitHub Actions. Documentation, parity-build, and
@@ -55,9 +58,9 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | historical artifact; current release follows at `0.1.1` | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
-| pillow-rs | `pillow-rs` | `0.1.1` | crates.io | after image-slash-star and fontdone versions are visible | current synchronized candidate; publish from the exact reviewed `v0.1.1` tag after hosted CI passes |
+| pillow-rs | `pillow-rs` | `0.1.1` | crates.io | after image-slash-star and fontdone versions are visible | local package preflight passes; upload returned HTTP 503 twice and the version remains absent, so retry the same immutable archive after the registry recovers |
 | pillow-rs | `pillow-rs` | `0.1.1` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
-| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | package is built from `pillow-rs-js` with Node 22.14.0/npm 11.5.1 |
+| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | package is built and tested from `pillow-rs-js` with Node 22.14.0/npm 11.5.1; local publish is pending the account OTP challenge |
 
 The local root `v0.1.0` tag is historical: it targets
 `519226b62b545717c2169be7cbef9141754de91e`, while the published
