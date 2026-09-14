@@ -4,6 +4,23 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
+## 0.1.2 - 2026-09-14
+
+### Changed
+
+- Synchronized the Cargo, Python, and WebAssembly package metadata for the
+  next patch release.
+- Corrected release and parity tooling so installed Pillow remains the source
+  oracle, large WASM envelopes stream safely, and current coverage reports are
+  accepted without changing measured thresholds.
+
+### Compatibility and release notes
+
+- The public Python namespace remains `PIL`; `RSPIL` stays a deprecated
+  compatibility bridge.
+- GPU and browser capability gaps, benchmark budget review, and source
+  coverage limitations remain explicit release evidence.
+
 ## 0.1.1 - 2026-09-13
 
 ### Changed
