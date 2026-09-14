@@ -13,10 +13,11 @@ candidates. The prepared pillow-rs release branch
 `codex/benchmark-backend-parity-fixes` is now promoted to `origin/main`; it
 includes the Apple ARM64 parity runner correction, bounded WASM output, and
 coverage-report compatibility fixes. The two dependency Cargo packages are
-visible on crates.io; the root `pillow-rs@0.1.1` upload is still pending after
-two transient crates.io HTTP 503 responses. The PyPI upload remains a GitHub
-trusted-publisher job, and the local root npm bootstrap is ready but currently
-requires the npm account's one-time-password challenge.
+visible on crates.io; the root `pillow-rs@0.1.1` Cargo upload is still pending
+after two transient crates.io HTTP 503 responses. The PyPI upload remains a
+GitHub trusted-publisher job. The root npm bootstrap succeeded locally: npm
+now exposes `pillow-rs@0.1.1` under both the `next` and `latest` dist-tags, and
+the npm trusted publisher is configured for subsequent GitHub tag releases.
 The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
@@ -24,11 +25,12 @@ separately from the tracked source tree.
 The latest successful registry probes (2026-09-14) found
 `image-slash-star@0.1.0`, `fontdone@2.14.3-alpha.3`, and the historical
 `pillow-rs@0.1.0` are visible on crates.io. The current synchronized
-`pillow-rs@0.1.1` candidate has passed the local release package preflight but
-has not yet become visible on crates.io or npm; PyPI remains unattempted until
-the GitHub release workflow runs. npm still exposes only the historical
-`fontdone@2.14.3-alpha.1` artifact. Registry visibility is recorded separately
-from the remaining coverage and platform gates.
+`pillow-rs@0.1.1` candidate has passed the local release package preflight;
+the Cargo version remains absent while npm now exposes `pillow-rs@0.1.1`
+with the reviewed archive. PyPI remains unattempted until the GitHub release
+workflow runs. npm still exposes only the historical `fontdone@2.14.3-alpha.1`
+artifact. Registry visibility is recorded separately from the remaining
+coverage and platform gates.
 
 The hosted root CI run `34850823072` for the current promoted `main` head
 (`336479252e26ac7a0ecf9345cf0269a1bb07e740`) completed successfully on
@@ -61,7 +63,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | historical artifact; current release follows at `0.1.1` | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
 | pillow-rs | `pillow-rs` | `0.1.1` | crates.io | after image-slash-star and fontdone versions are visible | local package preflight passes; upload returned HTTP 503 twice and the version remains absent, so retry the same immutable archive after the registry recovers |
 | pillow-rs | `pillow-rs` | `0.1.1` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
-| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | package is built and tested from `pillow-rs-js`; the authorized local publish was retried after a transient EPIPE and is currently stopped by the account's `auth-and-writes` OTP challenge; the version remains absent |
+| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | published locally from `pillow-rs-js` with `next` and `latest` dist-tags. npm `dist.shasum` is `94cf5054b92b03ec91cbf3136582f7a7f6a16f47`; `dist.integrity` is `sha512-w5rnZLk/UQI+BOxH50Q3hk/BapGKBZdapOtkvcUItOXRm0ncoX7qVQEjbF2ksDAfkK2jGNnmoBRz1ABnPiyRUQ==`. The npm trusted publisher is configured for future GitHub tag releases |
 
 The local root `v0.1.0` tag is historical: it targets
 `519226b62b545717c2169be7cbef9141754de91e`, while the published
@@ -193,10 +195,11 @@ documentation-audit failures, and neither workflow should be tagged until its
 gate has fresh passing evidence.
 
 The latest public registry probes still show the three Cargo packages, but no
-`pillow-rs==0.1.0` on PyPI, no `pillow-rs@0.1.0` on npm, and no synchronized
-`fontdone@2.14.3-alpha.3` on npm. The existing Cargo tags are immutable; the
-next registry publication must use the exact reviewed tag and version selected
-after these gates are closed.
+`pillow-rs==0.1.0` on PyPI and no synchronized `fontdone@2.14.3-alpha.3` on
+npm. The published root npm package is `pillow-rs@0.1.1`; the root Cargo
+`0.1.1` and PyPI uploads remain pending. The existing Cargo tags are
+immutable; the next registry publication must use the exact reviewed tag and
+version selected after these gates are closed.
 
 ## Local credential setup
 
@@ -321,8 +324,9 @@ Keep `contents: read` at workflow scope. The tag/release job alone receives
 
 The sibling release files now have clean release branches with tag-driven
 workflows, pinned toolchains, successful local checks, checksummed archives,
-and registry trusted-publisher jobs. The first Cargo versions are published;
-PyPI/npm trusted-publisher jobs and later tags remain external prerequisites.
+and registry trusted-publisher jobs. The first Cargo versions and the root
+`pillow-rs@0.1.1` npm package are published; PyPI, fontdone npm, and later
+tag-driven releases remain external prerequisites.
 Fontdone still needs its unresolved C-ABI route/error debt closed, the five
 target bundles including Windows import library evidence, and an owner decision
 on benchmark budgets. Image-slash-star still needs its strict source-coverage
