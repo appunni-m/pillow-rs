@@ -1635,6 +1635,29 @@ reports seven timing-only violations. The normalized execution and terminal
 receipt structure remains complete; P2 remains open without changing the
 benchmark contract.
 
+### Current-head native-GPU recheck — 2026-09-14
+
+Five additional runs used the fixed 11-workload release cohort at source
+revision `99193433bee835dd561a764986e8e9c5a4b94dbb`, with native Metal access
+and the unchanged workload, six-sample measurement, receipt, and five-percent
+budget policies. Each run selected and measured 11/11 workloads, retained
+44/44 comparable rows, and recorded 33/33 terminal requested=actual CPU, SIMD,
+and GPU receipts. The result SHA-256 values, in order, are
+`0dcd7f80872f0d1112f74f437df567555d9e9f9b6adfa4a9d56df01b06e21b3b`,
+`271bed3045f19a16a03d1075aa994f6c8c785a31aca4b45daa0b4822303df54c`,
+`3082ac163d268eae79bcbd486b527e120c5f73f2cb514428192e306048fe0512`,
+`af5ddf5afb6428520d02282de4d5465bd992db0980fcae1e1e4259020144e331`, and
+`2eff0a186ed39081654ec4cd2e90b810d278432b22534c7066056686c36e6b90`. The
+adjacent unchanged budget comparisons reported 1, 5, 3, and 5 timing-only
+violations; their report SHA-256 values are
+`e5cd9cce9b51187316e168b3bc38f486abd38a0f354ff85c4b96d2a6e411838d`,
+`6c9b18afda9ebf734b4b024eb74e75dd34c57a6fd93da7a221157ddf1364d96c`,
+`81ef9c80f107323fb1d80e571110d98c1a26832538d0ab34ae1a115ce3bb363f`, and
+`e0f75118b7cab445f185fa88a5c52baa71f75540b77643e51635b28b190eb663`. The
+violations moved between subjects while normalized execution and terminal
+receipt fingerprints stayed equal; the zero-violation acceptance pair remains
+open without a source, fixture, threshold, or policy change.
+
 ### Utility-QoS release-profile reruns on the current pushed head (2026-09-11)
 
 At `71e0b7214918bc8db4a7a9a606046b8a7fe8b1b2`, two immediate runs used the
