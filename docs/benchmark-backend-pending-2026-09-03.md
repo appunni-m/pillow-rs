@@ -1658,6 +1658,21 @@ violations moved between subjects while normalized execution and terminal
 receipt fingerprints stayed equal; the zero-violation acceptance pair remains
 open without a source, fixture, threshold, or policy change.
 
+### Current-head native-GPU adjacent pair — 2026-09-14
+
+Two further runs used the fixed 11-workload release cohort at the current clean
+source revision `336479252e26ac7a0ecf9345cf0269a1bb07e740`, through the maintained
+low-load runner with native Metal access. Both selected and measured 11/11
+workloads, retained 44/44 comparable rows, and recorded 33/33 terminal
+requested=actual CPU, SIMD, and GPU receipts. The result SHA-256 values are
+`fbeaad896f146a04a5fb61398b7d3f574789be0281e9d8bda46a2954ba9a748c` and
+`bd0b904b4dd378e3e96809983cd72f539712d0df0ef06da5ac8f8696213bc9f7`. The
+unchanged five-percent budget report has SHA-256
+`78505ff4aea87c143b4ee25b7cd524b5d602ab7fee5904b6ab3b0f5757db027d` and
+reports seven timing-only violations. Execution and terminal receipt
+fingerprints remain complete and equal; the required zero-violation pair stays
+open without changing workload IDs, thresholds, fixtures, or receipt policy.
+
 ### Utility-QoS release-profile reruns on the current pushed head (2026-09-11)
 
 At `71e0b7214918bc8db4a7a9a606046b8a7fe8b1b2`, two immediate runs used the

@@ -30,9 +30,11 @@ the GitHub release workflow runs. npm still exposes only the historical
 `fontdone@2.14.3-alpha.1` artifact. Registry visibility is recorded separately
 from the remaining coverage and platform gates.
 
-The hosted root CI run `34838826898` for the promoted `main` head completed
-successfully on 2026-09-14. Its documentation, parity-build, formatting/lint,
-supply-chain, Python 3.10/3.12, Node WASM, and browser WASM jobs all passed.
+The hosted root CI run `34850823072` for the current promoted `main` head
+(`336479252e26ac7a0ecf9345cf0269a1bb07e740`) completed successfully on
+2026-09-14. Its documentation, parity-build, formatting/lint, supply-chain,
+Python 3.10/3.12, Node WASM, and browser WASM jobs all passed. The earlier
+`34838826898` run remains valid evidence for its preceding source revision.
 
 Fontdone has one public Cargo release unit: the root `fontdone` package. The
 workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
@@ -59,7 +61,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | historical artifact; current release follows at `0.1.1` | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
 | pillow-rs | `pillow-rs` | `0.1.1` | crates.io | after image-slash-star and fontdone versions are visible | local package preflight passes; upload returned HTTP 503 twice and the version remains absent, so retry the same immutable archive after the registry recovers |
 | pillow-rs | `pillow-rs` | `0.1.1` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel |
-| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | package is built and tested from `pillow-rs-js` with Node 22.14.0/npm 11.5.1; local publish is pending the account OTP challenge |
+| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | package is built and tested from `pillow-rs-js`; the authorized local publish was retried after a transient EPIPE and is currently stopped by the account's `auth-and-writes` OTP challenge; the version remains absent |
 
 The local root `v0.1.0` tag is historical: it targets
 `519226b62b545717c2169be7cbef9141754de91e`, while the published
