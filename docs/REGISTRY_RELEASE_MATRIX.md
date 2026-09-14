@@ -21,21 +21,24 @@ The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
-The latest successful registry probes (2026-09-14) found
-`image-slash-star@0.1.0`, `fontdone@2.14.3-alpha.3`, and the historical
-`pillow-rs@0.1.0` are visible on crates.io. The synchronized `pillow-rs@0.1.2`
-candidate has passed the local release package preflight; its Cargo, PyPI, and
-npm registry versions remain absent while the bootstrap `pillow-rs@0.1.1`
-remains visible on npm. PyPI remains unattempted until the GitHub release
-workflow runs. npm still exposes only the historical `fontdone@2.14.3-alpha.1`
-artifact. Registry visibility is recorded separately from the remaining
-coverage and platform gates.
+The current release candidate is commit `82bac508a` and hosted CI run
+`34862236282` completed successfully on 2026-09-14 across all eight jobs. No
+`v0.1.2` tag has been pushed, so the tag-driven release workflow has not run.
+The candidate passed the local package preflight and release-bundle checks;
+registry publication is waiting on the dependency and trusted-publisher gates
+listed below.
 
-The hosted root CI run `34850823072` for the current promoted `main` head
-(`336479252e26ac7a0ecf9345cf0269a1bb07e740`) completed successfully on
-2026-09-14. Its documentation, parity-build, formatting/lint, supply-chain,
-Python 3.10/3.12, Node WASM, and browser WASM jobs all passed. The earlier
-`34838826898` run remains valid evidence for its preceding source revision.
+The latest successful registry probes (2026-09-14) found
+`image-slash-star@0.1.0` and `fontdone@2.14.3-alpha.3` visible on crates.io.
+The synchronized root `pillow-rs@0.1.2` candidate is absent from crates.io,
+PyPI, and npm; the bootstrap `pillow-rs@0.1.1` remains visible on npm. The
+local Cargo token was rejected with HTTP 403 because it lacks publish
+permission. The verified `fontdone@2.14.3-alpha.3` npm tarball is available at
+`/tmp/fontdone-2.14.3-alpha.3.tgz` (SHA-256
+`63cac70e9a5665c550abfd26a88031013f075f5b88c9ea87375a3e8c304b5902`), but
+npm rejected the local upload with `EOTP` under the account's
+`auth-and-writes` policy. Registry visibility is recorded separately from the
+remaining coverage and platform gates.
 
 Fontdone has one public Cargo release unit: the root `fontdone` package. The
 workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
@@ -58,7 +61,7 @@ release evidence therefore exercise the exact fontdone source being packaged.
 | image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | published from local tag `v0.1.0` commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`, crates.io checksum `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178`. The clean-history branch and remote `main` are at `9177cf8f1f324b49d431613696b43eb77fb61043`; a local-only pre-promotion bundle preserves the former `main` history at `/private/tmp/image-slash-star-pre-force-backup-20260913/repository.bundle`. The published archive passed Cargo verification; the current branch archive has SHA-256 `fa6d6b73a73443304a8151430afa7b9bb57a0c24fdefd96ad90299f4e37381e7`. Hosted run `34735319851` completed with dependencies and format/lint/parity green; strict source coverage failed on the known incomplete denominator, which remains an explicit future release blocker at 95,603/161,451 lines |
 | fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | published from immutable local tag `v2.14.3-alpha.3` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, crates.io checksum `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c`. The preceding inventory commit `af758012a32a9e362fb7b7c41fc64ad88f68c604` passed hosted CI run `34735539764`; current pushed `main` is `d87a504d2005bd9fbd4b2b43ec58ca87713b82f6`. Hosted push run `34752632194` passed its fast and MSRV gates; the thorough matrix is intentionally skipped for push events and remains required through the documented manual gate before tagging. The published package is the immutable alpha.3 tag; current main is a follow-on candidate. The synchronized local candidate has 20,355/20,355 runnable cases with 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, npm, and Cargo dry-run checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review remain required for the next tagged release |
 | fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | synchronized local candidate built from the immutable `v2.14.3-alpha.3` tag; current `main` carries audit-only parity and ABI test-support corrections outside the npm package inputs. The earlier immutable `2.14.3-alpha.1` and superseded `2.14.3-alpha.2` artifacts remain historical evidence; raw `fontdone-wasm` remains an internal build target |
+| fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | verified immutable-tag tarball (`63cac70e9a5665c550abfd26a88031013f075f5b88c9ea87375a3e8c304b5902`) is retained at `/tmp/fontdone-2.14.3-alpha.3.tgz`; local publication is blocked by npm `auth-and-writes` OTP. The registry currently exposes only `2.14.3-alpha.1`, so the root tag gate remains closed; raw `fontdone-wasm` remains an internal build target |
 | pillow-rs | `pillow-rs` | `0.1.0` | crates.io | historical artifact; current release follows at `0.1.2` | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
 | pillow-rs | `pillow-rs` | `0.1.1` | crates.io | superseded candidate; current release follows at `0.1.2` | immutable tag `v0.1.1` points to the earlier release-tooling commit; the Cargo version was never published |
 | pillow-rs | `pillow-rs` | `0.1.1` | PyPI | superseded candidate; current release follows at `0.1.2` | maturin preflight passed, but no PyPI upload was attempted |
@@ -196,12 +199,13 @@ coverage verifier with `95,603/161,451` lines. These are release gates, not
 documentation-audit failures, and neither workflow should be tagged until its
 gate has fresh passing evidence.
 
-The latest public registry probes still show the three Cargo packages, but no
-`pillow-rs==0.1.0` on PyPI and no synchronized `fontdone@2.14.3-alpha.3` on
-npm. The published root npm bootstrap is `pillow-rs@0.1.1`; the synchronized
-`0.1.2` Cargo, PyPI, and npm artifacts remain pending. The existing Cargo tags
-are immutable; the next registry publication must use the exact reviewed
-`v0.1.2` tag after the hosted gates are closed.
+The latest public registry probes still show the three dependency Cargo
+packages, but no `pillow-rs==0.1.2` on PyPI and no synchronized
+`fontdone@2.14.3-alpha.3` on npm. The published root npm bootstrap is
+`pillow-rs@0.1.1`; the synchronized `0.1.2` Cargo, PyPI, and npm artifacts
+remain pending. The local `v0.1.1` Cargo tag is immutable, and no `v0.1.2`
+tag exists; the next registry publication must use a newly created annotated
+`v0.1.2` tag only after the dependency and trusted-publisher gates are closed.
 
 ## Local credential setup
 
