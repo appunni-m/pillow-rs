@@ -8,6 +8,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts import profile_migration_benchmark as profile_benchmark
+from scripts import run_migration_benchmark as benchmark_runner
 
 from scripts.run_all_backend_tests import (
     backend_coverage_report,
@@ -178,6 +180,52 @@ class BenchmarkSuiteComparabilityTests(unittest.TestCase):
 
 class BenchmarkIdentityTests(unittest.TestCase):
     """Benchmark envelopes identify every backend they time."""
+
+    def test_benchmark_build_keeps_the_pinned_pillow_oracle_installed(self) -> None:
+        """The benchmark prerequisite must use the non-installing parity build.
+
+        ``make build`` installs the public ``PIL`` facade into the active
+        environment.  The benchmark's source adapter must continue to import
+        the pinned Pillow distribution, so the maintained Makefile target has
+        to depend on ``build-parity`` instead.
+        """
+        makefile = Path(__file__).resolve().parents[1] / "Makefile"
+        benchmark_rule = next(
+            line
+            for line in makefile.read_text(encoding="utf-8").splitlines()
+            if line.startswith("migration-parity-benchmark:")
+        )
+        self.assertIn("migration-parity-benchmark: build-parity", benchmark_rule)
+
+    def test_source_adapter_does_not_prepend_target_pythonpath(self) -> None:
+        payload = {
+            "identity": {"side": "source", "implementation": "Pillow"},
+            "results": [],
+            "timings_ns": [],
+            "telemetry": {},
+            "execution": {},
+        }
+        with patch.object(
+            benchmark_runner,
+            "run_process",
+            return_value=(0, json.dumps(payload), ""),
+        ) as run_process:
+            benchmark_runner.run_timed_side(
+                "source",
+                Path("manifest.json"),
+                [],
+                1,
+                1,
+                backend="cpu",
+                timing_boundary="pipeline",
+                timing_steps=[],
+            )
+
+        environment = run_process.call_args.kwargs["env"]
+        target_python = str(
+            (Path(__file__).resolve().parents[1] / "pillow-rs-py" / "python").resolve()
+        )
+        self.assertNotIn(target_python, environment.get("PYTHONPATH", "").split(os.pathsep))
 
     def test_sparse_parity_preflight_is_expanded_to_all_timed_profiles(self) -> None:
         cpu_identity = {

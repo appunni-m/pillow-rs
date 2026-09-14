@@ -440,19 +440,42 @@ def run_timed_side(
         return command
 
     def execute(child_cases: list[dict[str, Any]], child_repeat: int) -> dict[str, Any]:
+        adapter_environment = {
+            **os.environ,
+            "MIGRATION_TARGET_BACKEND": backend,
+            "MIGRATION_STRICT_TARGET_BACKEND": "1",
+        }
+        if side == "target":
+            target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
+            inherited_pythonpath = adapter_environment.get("PYTHONPATH", "")
+            adapter_environment["PYTHONPATH"] = (
+                target_python
+                + os.pathsep
+                + inherited_pythonpath
+                if inherited_pythonpath
+                else target_python
+            )
+        else:
+            # Keep the source adapter on the separately installed Pillow
+            # oracle.  Supplying the checkout's ``python`` directory here
+            # makes ``import PIL`` resolve to the target facade instead.
+            target_python = str((ROOT / "pillow-rs-py" / "python").resolve())
+            inherited_pythonpath = adapter_environment.get("PYTHONPATH", "")
+            retained = [
+                item
+                for item in inherited_pythonpath.split(os.pathsep)
+                if item and str(Path(item).resolve()) != target_python
+            ]
+            if retained:
+                adapter_environment["PYTHONPATH"] = os.pathsep.join(retained)
+            else:
+                adapter_environment.pop("PYTHONPATH", None)
         returncode, stdout, stderr = run_process(
             command_for(child_repeat),
             input_text=json.dumps(child_cases, separators=(",", ":")),
             timeout=effective_timeout,
             label=f"{backend if side == 'target' else 'Pillow'} benchmark adapter",
-            env={
-                **os.environ,
-                "MIGRATION_TARGET_BACKEND": backend,
-                "MIGRATION_STRICT_TARGET_BACKEND": "1",
-                "PYTHONPATH": str(ROOT / "pillow-rs-py" / "python")
-                + os.pathsep
-                + os.environ.get("PYTHONPATH", ""),
-            },
+            env=adapter_environment,
         )
         if returncode != 0:
             detail = stderr.strip().replace("\n", " ")[-800:]
