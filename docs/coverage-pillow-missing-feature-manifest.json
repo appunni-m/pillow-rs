@@ -106049,6 +106049,10 @@
           368
         ],
         [
+          426,
+          -426
+        ],
+        [
           504,
           505
         ],
@@ -106162,6 +106166,10 @@
               368
             ],
             [
+              426,
+              -426
+            ],
+            [
               504,
               505
             ],
@@ -106233,15 +106241,15 @@
           "name": "",
           "start_line": 1,
           "summary": {
-            "covered_branches": 132,
-            "covered_lines": 266,
-            "missing_branches": 22,
+            "covered_branches": 133,
+            "covered_lines": 267,
+            "missing_branches": 23,
             "missing_lines": 18,
-            "num_branches": 154,
-            "num_partial_branches": 10,
-            "num_statements": 284,
-            "percent_branches_covered": 85.71428571428571,
-            "percent_statements_covered": 93.66197183098592
+            "num_branches": 156,
+            "num_partial_branches": 11,
+            "num_statements": 285,
+            "percent_branches_covered": 85.25641025641026,
+            "percent_statements_covered": 93.6842105263158
           }
         },
         {
@@ -106450,6 +106458,29 @@
           "kind": "function",
           "missing_branches": [
             [
+              426,
+              -426
+            ]
+          ],
+          "missing_lines": [],
+          "name": "",
+          "start_line": 1,
+          "summary": {
+            "covered_branches": 1,
+            "covered_lines": 30,
+            "missing_branches": 1,
+            "missing_lines": 0,
+            "num_branches": 2,
+            "num_partial_branches": 1,
+            "num_statements": 30,
+            "percent_branches_covered": 50.0,
+            "percent_statements_covered": 100.0
+          }
+        },
+        {
+          "kind": "function",
+          "missing_branches": [
+            [
               366,
               368
             ]
@@ -106471,7 +106502,7 @@
         }
       ],
       "next_action": "Prioritize public operation gaps whose mapped function/class has missing lines or branches; classify remaining module-internal arcs before adding inputs.",
-      "priority": 2020,
+      "priority": 2030,
       "public_operations": [
         {
           "case_count": 167,
@@ -107775,15 +107806,15 @@
       "report_file": ".venv/lib/python3.12/site-packages/PIL/ImageOps.py",
       "source_file": "PIL/ImageOps.py",
       "summary": {
-        "covered_branches": 132,
-        "covered_lines": 266,
-        "missing_branches": 22,
+        "covered_branches": 133,
+        "covered_lines": 267,
+        "missing_branches": 23,
         "missing_lines": 18,
-        "num_branches": 154,
-        "num_partial_branches": 10,
-        "num_statements": 284,
-        "percent_branches_covered": 85.71428571428571,
-        "percent_statements_covered": 93.66197183098592
+        "num_branches": 156,
+        "num_partial_branches": 11,
+        "num_statements": 285,
+        "percent_branches_covered": 85.25641025641026,
+        "percent_statements_covered": 93.6842105263158
       }
     },
     {
@@ -130262,32 +130293,28 @@
   ],
   "provenance": {
     "active_manifest": "pillow-rs/tests/fixtures/manifest.yaml",
-    "active_manifest_sha256": "75b88a89d5d5f99ababf1369f03f52efa3b1221d73caa7d9381678fbcdd4beb0",
+    "active_manifest_sha256": "87c72ef021853c67e68f6f282040bdb1dac0b1332564041bebe0be7d7f70e4d3",
     "coverage_report": "target/coverage/migration-parity-pillow.json",
     "coverage_report_format": 3,
-    "coverage_report_sha256": "37fb87ecc03300be8b1fc5a8b8f2223b707897eb56da3d9f763d3583072309f4",
-    "coverage_report_version": "7.15.2",
+    "coverage_report_sha256": "320efd45bcb1f786906e75fe3483f4f94ea46329bcbc4022a9b7edc20f2d0b66",
+    "coverage_report_version": "7.10.7",
     "receipt": "build/migration-parity/pillow-oracle-coverage-result.json",
     "receipt_coverage": {
       "collector": "coverage.py",
       "report": "target/coverage/migration-parity-pillow.json",
       "totals": {
-        "covered_branches": 1571,
-        "covered_lines": 6805,
-        "excluded_lines": 123,
-        "missing_branches": 4123,
+        "covered_branches": 1572,
+        "covered_lines": 6806,
+        "excluded_lines": 116,
+        "missing_branches": 4124,
         "missing_lines": 9214,
-        "num_branches": 5694,
-        "num_partial_branches": 513,
-        "num_statements": 16019,
-        "percent_branches_covered": 27.590446083596767,
-        "percent_branches_covered_display": "28",
-        "percent_covered": 38.57596831391332,
-        "percent_covered_display": "39",
-        "percent_statements_covered": 42.48080404519633,
-        "percent_statements_covered_display": "42"
+        "num_branches": 5696,
+        "num_partial_branches": 514,
+        "num_statements": 16020,
+        "percent_covered": 38.57984895929269,
+        "percent_covered_display": "39"
       },
-      "version": "7.15.2"
+      "version": "7.10.7"
     },
     "receipt_execution": {
       "cases_executed": 11345,
@@ -130311,19 +130338,14 @@
     "unmapped_gap_modules": 84
   },
   "totals": {
-    "covered_branches": 1571,
-    "covered_lines": 6805,
-    "excluded_lines": 123,
-    "missing_branches": 4123,
+    "covered_branches": 1572,
+    "covered_lines": 6806,
+    "missing_branches": 4124,
     "missing_lines": 9214,
-    "num_branches": 5694,
-    "num_partial_branches": 513,
-    "num_statements": 16019,
-    "percent_branches_covered": 27.590446083596767,
-    "percent_branches_covered_display": "28",
-    "percent_covered": 38.57596831391332,
-    "percent_covered_display": "39",
-    "percent_statements_covered": 42.48080404519633,
-    "percent_statements_covered_display": "42"
+    "num_branches": 5696,
+    "num_partial_branches": 514,
+    "num_statements": 16020,
+    "percent_branches_covered": 27.598314606741575,
+    "percent_statements_covered": 42.484394506866415
   }
 }

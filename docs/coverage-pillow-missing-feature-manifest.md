@@ -2,8 +2,8 @@
 
 This is generated evidence from the same public parity corpus. It is not a new test denominator.
 
-- Python lines: 6805/16019 (42.48%)
-- Python branches: 1571/5694 (27.59%)
+- Python lines: 6806/16020 (42.48%)
+- Python branches: 1572/5696 (27.60%)
 - Source files with gaps: 92/97
 - Active public operations with mapped gaps: 55
 
@@ -141,7 +141,7 @@ The JSON contains all active public operations in `feature_manifest`. The table 
 | 66 | `PIL/MpegImagePlugin.py` | 22 | 6 | 2260 | codec_or_support_module_outside_active_surface |
 | 67 | `PIL/McIdasImagePlugin.py` | 21 | 8 | 2180 | codec_or_support_module_outside_active_surface |
 | 68 | `PIL/PaletteFile.py` | 20 | 8 | 2080 | pillow_support_module_outside_active_surface |
-| 69 | `PIL/ImageOps.py` | 18 | 22 | 2020 | active_public_module |
+| 69 | `PIL/ImageOps.py` | 18 | 23 | 2030 | active_public_module |
 | 70 | `PIL/CurImagePlugin.py` | 19 | 10 | 2000 | codec_or_support_module_outside_active_surface |
 | 71 | `PIL/XVThumbImagePlugin.py` | 17 | 6 | 1760 | codec_or_support_module_outside_active_surface |
 | 72 | `PIL/ImtImagePlugin.py` | 16 | 13 | 1730 | codec_or_support_module_outside_active_surface |

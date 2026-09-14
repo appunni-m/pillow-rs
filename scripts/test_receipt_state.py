@@ -46,6 +46,10 @@ from scripts.report_pipeline_benchmark_coverage import (
 )
 from scripts.report_pipeline_performance import build_report as build_performance_report
 from scripts.report_pipeline_roadmap_status import build_report as build_roadmap_report
+from scripts.report_migration_pillow_missing import (
+    compact_summary,
+    missing_function_records,
+)
 from scripts.validate_migration_parity_result import (
     all_backends as validate_all_backends,
     execution_receipt,
@@ -264,6 +268,91 @@ class BenchmarkIdentityTests(unittest.TestCase):
             ["python-cpu", "python-simd", "python-gpu"],
         )
         self.assertEqual(identities[0], cpu_identity)
+
+
+class PillowCoverageReportCompatibilityTests(unittest.TestCase):
+    """Reverse-coverage evidence remains stable across coverage.py JSON versions."""
+
+    def test_compact_summary_derives_explicit_percentages(self) -> None:
+        summary = compact_summary(
+            {
+                "covered_lines": 3,
+                "num_statements": 4,
+                "covered_branches": 1,
+                "num_branches": 2,
+            }
+        )
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary["percent_statements_covered"], 75.0)
+        self.assertEqual(summary["percent_branches_covered"], 50.0)
+
+    def test_compact_summary_treats_empty_denominators_as_vacuously_covered(self) -> None:
+        summary = compact_summary(
+            {
+                "covered_lines": 0,
+                "num_statements": 0,
+                "covered_branches": 0,
+                "num_branches": 0,
+            }
+        )
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary["percent_statements_covered"], 100.0)
+        self.assertEqual(summary["percent_branches_covered"], 100.0)
+
+    def test_missing_symbol_uses_first_measured_line_when_start_is_omitted(self) -> None:
+        records = missing_function_records(
+            {
+                "decode": {
+                    "executed_lines": [42],
+                    "missing_lines": [45],
+                    "excluded_lines": [],
+                    "summary": {
+                        "covered_lines": 1,
+                        "num_statements": 2,
+                        "missing_lines": 1,
+                        "covered_branches": 0,
+                        "num_branches": 1,
+                        "missing_branches": 1,
+                    },
+                }
+            },
+            {},
+        )
+
+        self.assertEqual(records[0]["start_line"], 42)
+
+    def test_missing_symbol_uses_ast_definition_line_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.py"
+            source.write_text(
+                "\n\nclass Decoder:\n    def decode(self):\n        return 1\n",
+                encoding="utf-8",
+            )
+            records = missing_function_records(
+                {
+                    "Decoder.decode": {
+                        "executed_lines": [],
+                        "missing_lines": [5],
+                        "excluded_lines": [],
+                        "summary": {
+                            "covered_lines": 0,
+                            "num_statements": 1,
+                            "missing_lines": 1,
+                            "covered_branches": 0,
+                            "num_branches": 0,
+                            "missing_branches": 0,
+                        },
+                    }
+                },
+                {},
+                source_path=source,
+            )
+
+        self.assertEqual(records[0]["start_line"], 4)
 
 
 class BenchmarkReportPathTests(unittest.TestCase):
