@@ -10,7 +10,7 @@ Acceptance requires a successful publishing job and the exact registry artifact.
 | Order | Repository | Candidate | Registry artifacts | GitHub assets |
 |---|---|---|---|---|
 | 1 | `appunni-m/fontdone` | `2.14.3-alpha.10` | Cargo `fontdone`; npm `fontdone` under `next` | Native C SDK, crate, npm archive, checksums |
-| 2 | `appunni-m/image-slash-star` | `0.1.1` | Cargo `image-slash-star` | Crate, checksums |
+| 2 | `appunni-m/image-slash-star` | `0.1.2` | Cargo `image-slash-star` | Crate, checksums |
 | 3 | `appunni-m/pillow-rs` | `0.1.2` | Cargo, PyPI, npm, all named `pillow-rs` | Crate, Python wheels/sdist, npm archive, checksums |
 
 Fontdone has exactly one public Cargo crate. Its C ABI and raw WASM workspace
@@ -51,12 +51,12 @@ is the reference: its release succeeded and crates.io records GitHub
 read-only validation, verified artifacts, a separate OIDC job, registry identity
 checks, and a final GitHub release with attestations.
 
-The 2026-09-15 audit found these repository defects before OIDC authentication:
+The 2026-09-15 audit distinguishes repository defects from publisher authentication:
 
 | Repository | Failure before this release | Correction and acceptance |
 |---|---|---|
-| fontdone | Earlier platform/oracle defects are fixed. Alpha.9 then passed complete tag CI and published Cargo through OIDC, but npm interpreted its relative tarball path as a GitHub repository and failed before authentication. | [Alpha.9 tag CI](https://github.com/appunni-m/fontdone/actions/runs/34996142187) is green; [its release run](https://github.com/appunni-m/fontdone/actions/runs/34996142115) is recorded in crates.io `trustpub_data`. Alpha.10 uses an absolute archive path and exercises the same command in an offline npm 11.5.1 dry-run. The alpha.9 Cargo artifact remains immutable. Full local parity is 20,357/20,357, with three named undefined-C inputs pending; the external C audit passes 218 functions and 1,496 cases. Cross-host equality for unspecified SBit fields remains unproven. |
-| image-slash-star | Every coverage test passed, then Python 3.14 rejected an unescaped percent sign in the verifier's CLI help | Candidate `c30253c9` fixes the CLI, adds a regression, pins Python 3.12.10 (available on all required runners), and retains failed CI evidence. Fresh local coverage passes all four existing alpha floors; [exact main CI](https://github.com/appunni-m/image-slash-star/actions/runs/34974261464) is green for quality, coverage, and dependencies. |
+| fontdone | Earlier platform/oracle defects are fixed. Alpha.9 passed complete tag CI and published Cargo through OIDC, but npm interpreted its relative tarball path as a GitHub repository. | **Released:** [alpha.10 release](https://github.com/appunni-m/fontdone/actions/runs/35002120087) and [complete tag CI](https://github.com/appunni-m/fontdone/actions/runs/35002119892) passed. Cargo `trustpub_data` and npm provenance identify this exact run and commit `cb90d41a863f8569335d8ed775a4038d23c79dc5`; registry archives match the GitHub checksums. The absolute npm archive path is covered by an offline CLI dry-run. Local parity is 20,357/20,357, with three named undefined-C inputs pending; the external C audit passes 218 functions and 1,496 cases. Cross-host equality for unspecified SBit fields remains unproven. |
+| image-slash-star | The earlier coverage CLI formatting defect is fixed and exact main CI passed. Version 0.1.1 then uploaded through OIDC, but its download verification requested JSON and received a URL descriptor instead of the crate. | [The 0.1.1 release](https://github.com/appunni-m/image-slash-star/actions/runs/35005559487) is recorded in crates.io `trustpub_data`; the published checksum matches the exact candidate. Version 0.1.2 requests binary archive content and keeps JSON metadata requests. Eight release-tool tests cover negotiation, checksum rejection, authorization, and coverage guards; read-only live verification of 0.1.1 passes. The original tag and upload remain immutable. |
 | pillow-rs | Unreleased dependencies, Windows FreeType integer-width compilation, self-including checksums, generic Linux wheels, and recovery without successful registry jobs blocked publication | Candidate 0.1.2 pins the corrected dependencies, converts native font integers at the Rust boundary, adds three generator-owned parity cases, and checks Windows compilation on main. It builds portable wheels and requires successful registry evidence before recovery. Actual OIDC acceptance is established only by the new tag run. |
 
 Historical Cargo uploads without GitHub `trustpub_data` do not prove the newly
@@ -71,7 +71,16 @@ reproduced the Git lookup with the former argument and passed with the resolved
 path. This follows npm's documented
 [package specifier rules](https://docs.npmjs.com/cli/v11/using-npm/package-spec/).
 Pillow-rs also uses an explicit local prefix and retains bounded npm failure
-annotations. This does not establish npm OIDC acceptance until its upload succeeds.
+annotations. Fontdone alpha.10 establishes npm OIDC acceptance for fontdone;
+Pillow-rs acceptance still requires its own successful upload.
+
+Image-slash-star's archive download must send `Accept: application/octet-stream`.
+With `application/json`, the crates.io download endpoint returns a JSON object
+containing the archive URL; hashing that response correctly fails archive
+verification. The binary request follows the redirect to the actual crate.
+The 0.1.1 crate SHA-256 is
+`de07cb0b4fc08e5e20130339ae17f0db2d09013815897ff7ac4114d587eba120`.
+This was a post-upload verifier defect, not a rejected trusted publisher.
 
 The crates.io metadata check also needs a descriptive HTTP `User-Agent` with
 the repository contact URL. The local default-curl request returned HTTP 403;
