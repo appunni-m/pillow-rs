@@ -346,6 +346,7 @@ jobs:
           version="${RELEASE_VERSION#v}"
           archive="target/package/pillow-rs-${version}.crate"
           response="$(curl --silent --show-error --location \
+            --user-agent 'pillow-rs-release-verifier/1 (+https://github.com/appunni-m/pillow-rs)' \
             --header 'Accept: application/json' \
             --write-out '\n__STATUS__%{http_code}' \
             "https://crates.io/api/v1/crates/pillow-rs/${version}")"

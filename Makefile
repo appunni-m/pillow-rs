@@ -29,7 +29,7 @@ PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
 FONTDONE_REPO ?= https://github.com/appunni-m/fontdone.git
-FONTDONE_REF ?= 4ae25addc48653a81d6a9fa317023b71d1a591a4
+FONTDONE_REF ?= a6efc67049943bb8e934e7b6c0790e2be52ab109
 FONTDONE_SRC ?= build/fontdone-src
 IMAGE_SLASH_STAR_SRC := $(abspath ../image-slash-star)
 IMAGE_SLASH_STAR_AVIF_LIB_DIR ?= $(shell p="$$(find "$(IMAGE_SLASH_STAR_SRC)/.oracle-venv" -name 'libavif*' -type f -print -quit 2>/dev/null)"; if [ -n "$$p" ]; then dirname "$$p"; fi)
