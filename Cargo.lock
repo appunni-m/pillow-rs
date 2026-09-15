@@ -451,8 +451,8 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "image-slash-star"
-version = "0.1.1"
-source = "git+https://github.com/appunni-m/image-slash-star.git?rev=c30253c9882741f37fdd5ebb3e570115c57f821e#c30253c9882741f37fdd5ebb3e570115c57f821e"
+version = "0.1.2"
+source = "git+https://github.com/appunni-m/image-slash-star.git?rev=70190214a0711223302c76ab58e76c097288d80b#70190214a0711223302c76ab58e76c097288d80b"
 dependencies = [
  "bytemuck",
  "wide",
