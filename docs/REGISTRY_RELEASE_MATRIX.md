@@ -9,7 +9,7 @@ Acceptance requires a successful publishing job and the exact registry artifact.
 
 | Order | Repository | Candidate | Registry artifacts | GitHub assets |
 |---|---|---|---|---|
-| 1 | `appunni-m/fontdone` | `2.14.3-alpha.9` | Cargo `fontdone`; npm `fontdone` under `next` | Native C SDK, crate, npm archive, checksums |
+| 1 | `appunni-m/fontdone` | `2.14.3-alpha.10` | Cargo `fontdone`; npm `fontdone` under `next` | Native C SDK, crate, npm archive, checksums |
 | 2 | `appunni-m/image-slash-star` | `0.1.1` | Cargo `image-slash-star` | Crate, checksums |
 | 3 | `appunni-m/pillow-rs` | `0.1.2` | Cargo, PyPI, npm, all named `pillow-rs` | Crate, Python wheels/sdist, npm archive, checksums |
 
@@ -55,7 +55,7 @@ The 2026-09-15 audit found these repository defects before OIDC authentication:
 
 | Repository | Failure before this release | Correction and acceptance |
 |---|---|---|
-| fontdone | Native C-width compilation, cross-linker/proc-macro lookup, Windows header/symbol parsing, and a linker probe overwriting the measured DLL blocked successive candidates. The aggregate then exposed a silently disabled bzip2 reference and three unspecified Linux SBit field comparisons. | Alpha.9 at `a6efc670` preserves native C widths, repairs the audit tools, requires the enabled bzip2 reference, and uses the documented canonical macOS host for full comparisons. [Candidate CI](https://github.com/appunni-m/fontdone/actions/runs/34994548421) requires all five native/QEMU contracts plus their aggregate report. Fresh local parity is 20,357/20,357 with three named undefined-C inputs pending; the external C audit passes 218 functions and 1,496 cases. Eight tooling regressions cover export detection, artifact identity, and missing BZip2. Cross-host equality for unspecified SBit fields remains unproven. |
+| fontdone | Earlier platform/oracle defects are fixed. Alpha.9 then passed complete tag CI and published Cargo through OIDC, but npm interpreted its relative tarball path as a GitHub repository and failed before authentication. | [Alpha.9 tag CI](https://github.com/appunni-m/fontdone/actions/runs/34996142187) is green; [its release run](https://github.com/appunni-m/fontdone/actions/runs/34996142115) is recorded in crates.io `trustpub_data`. Alpha.10 uses an absolute archive path and exercises the same command in an offline npm 11.5.1 dry-run. The alpha.9 Cargo artifact remains immutable. Full local parity is 20,357/20,357, with three named undefined-C inputs pending; the external C audit passes 218 functions and 1,496 cases. Cross-host equality for unspecified SBit fields remains unproven. |
 | image-slash-star | Every coverage test passed, then Python 3.14 rejected an unescaped percent sign in the verifier's CLI help | Candidate `c30253c9` fixes the CLI, adds a regression, pins Python 3.12.10 (available on all required runners), and retains failed CI evidence. Fresh local coverage passes all four existing alpha floors; [exact main CI](https://github.com/appunni-m/image-slash-star/actions/runs/34974261464) is green for quality, coverage, and dependencies. |
 | pillow-rs | Unreleased dependencies, Windows FreeType integer-width compilation, self-including checksums, generic Linux wheels, and recovery without successful registry jobs blocked publication | Candidate 0.1.2 pins the corrected dependencies, converts native font integers at the Rust boundary, adds three generator-owned parity cases, and checks Windows compilation on main. It builds portable wheels and requires successful registry evidence before recovery. Actual OIDC acceptance is established only by the new tag run. |
 
@@ -63,6 +63,15 @@ Historical Cargo uploads without GitHub `trustpub_data` do not prove the newly
 configured OIDC publisher is wrong. A skipped publish job has not attempted
 authentication. Report a configuration blocker only when the actual OIDC job
 rejects the claimed repository/workflow/environment.
+
+The npm failure is distinct from trusted-publisher setup: npm 11.5.1 parses
+`release-bundle/fontdone-<version>.tgz` as GitHub shorthand. Its parser treats an
+absolute path or `./release-bundle/...` as a local file. A real offline dry-run
+reproduced the Git lookup with the former argument and passed with the resolved
+path. This follows npm's documented
+[package specifier rules](https://docs.npmjs.com/cli/v11/using-npm/package-spec/).
+Pillow-rs also uses an explicit local prefix and retains bounded npm failure
+annotations. This does not establish npm OIDC acceptance until its upload succeeds.
 
 The crates.io metadata check also needs a descriptive HTTP `User-Agent` with
 the repository contact URL. The local default-curl request returned HTTP 403;
