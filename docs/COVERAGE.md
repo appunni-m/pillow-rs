@@ -36,3 +36,34 @@ lines remain unmeasured until shader instrumentation is available.
 The latest integrated parity/coverage counts and backend classification are
 maintained in
 [`docs/benchmark-backend-pending-2026-09-03.md`](benchmark-backend-pending-2026-09-03.md).
+
+## 0.1.2 Windows font-boundary verification
+
+The 2026-09-15 release candidate adds three generator-owned inputs for Unicode
+bearings, fractional metrics, and embedded bitmap bounds. All three match live
+Pillow in Python, Node, and browser WASM. The full Python parity corpus passes
+11,348/11,348 cases. The separate full Rust coverage run executes 24 plans and
+11,328 target tests with zero failures.
+
+Against base `fcfb956d172d744238a86f30129233eb00ca8b8e`, all **25 measured
+changed Rust lines** in `pillow-rs/src/font/imagingft.rs` have hits. Seven added
+comment, attribute, or blank lines have no LCOV records and receive no coverage
+credit. This is native macOS coverage; Windows compilation is checked separately
+and release wheels still require installation tests on their actual hosts.
+
+Reproduce the report after collecting fresh coverage:
+
+```sh
+make migration-parity-coverage-rust \
+  MIGRATION_RUST_COVERAGE_OUTPUT=build/migration-parity/release-0.1.2-publish-coverage.json \
+  MIGRATION_RUST_COVERAGE_LLVM_REPORT=target/coverage/release-0.1.2-publish-rust.json \
+  MIGRATION_RUST_COVERAGE_LCOV_REPORT=target/coverage/release-0.1.2-publish-rust.lcov
+make migration-parity-changed-line-coverage \
+  MIGRATION_COVERAGE_DIFF_BASE=fcfb956d172d744238a86f30129233eb00ca8b8e \
+  MIGRATION_RUST_COVERAGE_LCOV_REPORT=target/coverage/release-0.1.2-publish-rust.lcov \
+  MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT=build/migration-parity/release-0.1.2-publish-changed-lines.json
+```
+
+The original measured LCOV SHA-256 is
+`843077eefc939e59c393f8392f4cbe487c8b2d27965d11c93a736ed9633afcfc`.
+Keep its `.context.json` sidecar; never attach it to a regenerated report.

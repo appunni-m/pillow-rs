@@ -28,6 +28,8 @@ from typing import Any
 
 import coverage
 
+COVERAGE_TOOLCHAIN = os.environ.get("MIGRATION_RUST_COVERAGE_TOOLCHAIN", "nightly-2026-07-16")
+
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
@@ -122,8 +124,8 @@ def coverage_build_fingerprint() -> str:
     """Hash the instrumented Rust inputs, including coverage build settings."""
 
     digest = hashlib.sha256()
-    digest.update(b"toolchain=nightly\n")
-    digest.update(subprocess.check_output(["rustc", "+nightly", "--version", "--verbose"]))
+    digest.update(f"toolchain={COVERAGE_TOOLCHAIN}\n".encode())
+    digest.update(subprocess.check_output(["rustc", f"+{COVERAGE_TOOLCHAIN}", "--version", "--verbose"]))
     digest.update(b"rustflags=-Cinstrument-coverage -Zcoverage-options=branch\n")
     digest.update(f"python={sys.executable}\n".encode("utf-8"))
     digest.update(f"python-version={sys.version}\n".encode("utf-8"))
@@ -578,7 +580,7 @@ def run_locked(args: argparse.Namespace) -> int:
 
     try:
         build_env = os.environ.copy()
-        build_env["RUSTUP_TOOLCHAIN"] = "nightly"
+        build_env["RUSTUP_TOOLCHAIN"] = COVERAGE_TOOLCHAIN
         build_env["RUSTFLAGS"] = "-Cinstrument-coverage -Zcoverage-options=branch"
         build_env["LLVM_PROFILE_FILE"] = str(args.profile)
         args.profile.resolve().parent.mkdir(parents=True, exist_ok=True)
@@ -694,7 +696,7 @@ def run_locked(args: argparse.Namespace) -> int:
         )
 
         llvm_version = subprocess.run(
-            ["cargo", "+nightly", "llvm-cov", "--version"],
+            ["cargo", f"+{COVERAGE_TOOLCHAIN}", "llvm-cov", "--version"],
             capture_output=True,
             text=True,
             check=True,
@@ -703,7 +705,7 @@ def run_locked(args: argparse.Namespace) -> int:
         subprocess.run(
             [
                 "cargo",
-                "+nightly",
+                f"+{COVERAGE_TOOLCHAIN}",
                 "llvm-cov",
                 "report",
                 "--branch",
@@ -714,7 +716,7 @@ def run_locked(args: argparse.Namespace) -> int:
             # cargo-llvm-cov's default target root is ``target/llvm-cov-target``;
             # setting CARGO_TARGET_DIR here would make it append that directory
             # a second time while locating the freshly emitted profiles.
-            env={**os.environ, "RUSTUP_TOOLCHAIN": "nightly"},
+            env={**os.environ, "RUSTUP_TOOLCHAIN": COVERAGE_TOOLCHAIN},
             cwd=ROOT,
             check=True,
         )
@@ -727,14 +729,14 @@ def run_locked(args: argparse.Namespace) -> int:
         subprocess.run(
             [
                 "cargo",
-                "+nightly",
+                f"+{COVERAGE_TOOLCHAIN}",
                 "llvm-cov",
                 "report",
                 "--lcov",
                 "--output-path",
                 str(args.lcov_report),
             ],
-            env={**os.environ, "RUSTUP_TOOLCHAIN": "nightly"},
+            env={**os.environ, "RUSTUP_TOOLCHAIN": COVERAGE_TOOLCHAIN},
             cwd=ROOT,
             check=True,
         )

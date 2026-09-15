@@ -494,14 +494,14 @@ pub(crate) fn get_transposed_mask(
 
 pub(crate) fn getmetrics(font: &FreeTypeFont) -> (u32, u32) {
     (
-        pixel(font.engine.metrics.ascender) as u32,
-        (-pixel(font.engine.metrics.descender)) as u32,
+        pixel(native_long_to_i64(font.engine.metrics.ascender)) as u32,
+        (-pixel(native_long_to_i64(font.engine.metrics.descender))) as u32,
     )
 }
 
 /// Return whether the loaded face exposes OpenType or Type 1 variation axes.
 pub(crate) fn has_variations(font: &FreeTypeFont) -> bool {
-    font.engine.face.face_flags & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0
+    native_long_to_i64(font.engine.face.face_flags) & ffi::FT_FACE_FLAG_MULTIPLE_MASTERS != 0
 }
 
 pub(crate) fn font_variant(
@@ -835,14 +835,15 @@ pub(crate) fn native_face_info(font: &FreeTypeFont) -> ImageFontFaceInfo<'_> {
     ImageFontFaceInfo {
         family: font.engine.family_name.as_deref(),
         style: font.engine.style_name.as_deref(),
-        ascent: pixel(metrics.ascender) as u32,
-        descent: (-pixel(metrics.descender)) as u32,
-        height: pixel(metrics.height) as u32,
+        ascent: pixel(native_long_to_i64(metrics.ascender)) as u32,
+        descent: (-pixel(native_long_to_i64(metrics.descender))) as u32,
+        height: pixel(native_long_to_i64(metrics.height)) as u32,
         x_ppem: u32::from(metrics.x_ppem),
         y_ppem: u32::from(metrics.y_ppem),
-        glyphs: font.engine.face.num_glyphs,
+        glyphs: native_long_to_i64(font.engine.face.num_glyphs),
         format: ffi::FT_Get_Font_Format(Some(&font.engine.face)).unwrap_or("Unknown"),
-        is_scalable: font.engine.face.face_flags & ffi::FT_FACE_FLAG_SCALABLE != 0,
+        is_scalable: native_long_to_i64(font.engine.face.face_flags) & ffi::FT_FACE_FLAG_SCALABLE
+            != 0,
     }
 }
 
@@ -1060,8 +1061,8 @@ fn anchored_bbox(
         return Err(bad_anchor_error(anchor));
     }
     let width = right - left;
-    let ascent = pixel(font.engine.metrics.ascender);
-    let descent = -pixel(font.engine.metrics.descender);
+    let ascent = pixel(native_long_to_i64(font.engine.metrics.ascender));
+    let descent = -pixel(native_long_to_i64(font.engine.metrics.descender));
     let x_shift = match anchor.as_bytes()[0] {
         b'l' => 0,
         b'm' => -((width + 1) / 2),
@@ -1128,8 +1129,16 @@ const RDR: i32 = 4; // FT_LOAD_RENDER
 const TGT_NORM: i32 = 0; // FT_LOAD_TARGET_NORMAL
 const TGT_MONO: i32 = 2 << 16; // FT_LOAD_TARGET_MONO
 
+// `_imagingft.c` receives native FreeType `long` records: LLP64 Windows and
+// 32-bit targets use 32 bits, while LP64 hosts use 64. Widen signed values at
+// this boundary before the existing Pillow rounding and advance arithmetic.
+#[allow(clippy::useless_conversion)] // FT_Long is already i64 on LP64 hosts.
+fn native_long_to_i64(value: ffi::FT_Long) -> i64 {
+    i64::from(value)
+}
+
 fn gid(face: &ffi::FT_Face, ch: char) -> u32 {
-    ffi::FT_Get_Char_Index(face, ch as u64)
+    ffi::FT_Get_Char_Index(face, ch as ffi::FT_ULong)
 }
 
 fn kern_26dot6(face: &ffi::FT_Face, l: u32, r: u32) -> i32 {
@@ -1218,7 +1227,7 @@ fn glyph_run(ttf: &FreeTypeFont, text: &str, load_flags: i32) -> Result<GlyphRun
         // Match Pillow's BASIC layout order: load the current glyph first,
         // then adjust the preceding advance with pixel-rounded kerning.
         let slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
-        validate_advance_26_6(slot.advance.x)?;
+        validate_advance_26_6(native_long_to_i64(slot.advance.x))?;
         if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
@@ -1276,10 +1285,10 @@ fn bbox_from_glyph_run(
         x_max = x_max.max(px).max(advanced);
 
         let cbox = g.layout_cbox;
-        let glyph_x_min = px + floor26(cbox.xMin);
-        let glyph_x_max = px + ceil26(cbox.xMax);
-        let glyph_y_min = floor26(cbox.yMin);
-        let glyph_y_max = ceil26(cbox.yMax);
+        let glyph_x_min = px + floor26(native_long_to_i64(cbox.xMin));
+        let glyph_x_max = px + ceil26(native_long_to_i64(cbox.xMax));
+        let glyph_y_min = floor26(native_long_to_i64(cbox.yMin));
+        let glyph_y_max = ceil26(native_long_to_i64(cbox.yMax));
 
         x_min = x_min.min(glyph_x_min);
         x_max = x_max.max(glyph_x_max);
@@ -1288,7 +1297,7 @@ fn bbox_from_glyph_run(
     }
 
     x_max = x_max.max(round26(run.max_pen));
-    let y_anchor = pixel(ttf.engine.metrics.ascender);
+    let y_anchor = pixel(native_long_to_i64(ttf.engine.metrics.ascender));
     Ok((x_min, y_anchor - y_max, x_max, y_anchor - y_min))
 }
 
@@ -1299,10 +1308,12 @@ fn glyph_layout_cbox(slot: &ffi::FT_GlyphSlot) -> ffi::FT_BBox {
         // is an embedded bitmap strike. Bitmap-only SBIT glyph slots have no
         // outline cbox, so using `outline_cbox` here collapses the mask even
         // though the render pass has pixels.
-        let x_min = i64::from(slot.bitmap_left) * 64;
-        let x_max = (i64::from(slot.bitmap_left) + i64::from(bitmap.width)) * 64;
-        let y_min = (i64::from(slot.bitmap_top) - i64::from(bitmap.rows)) * 64;
-        let y_max = i64::from(slot.bitmap_top) * 64;
+        // FreeType `ftglyph.c::ft_bitmap_glyph_bbox` multiplies C int
+        // bearings and unsigned dimensions before converting to FT_Pos.
+        let x_min = slot.bitmap_left.wrapping_mul(64) as ffi::FT_Pos;
+        let x_max = x_min.wrapping_add(bitmap.width.wrapping_mul(64) as ffi::FT_Pos);
+        let y_max = slot.bitmap_top.wrapping_mul(64) as ffi::FT_Pos;
+        let y_min = y_max.wrapping_sub(bitmap.rows.wrapping_mul(64) as ffi::FT_Pos);
         return ffi::FT_BBox {
             xMin: x_min,
             yMin: y_min,
