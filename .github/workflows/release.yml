@@ -431,7 +431,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
-          cache: false
+          package-manager-cache: false
       - name: Verify complete release bundle
         run: (cd dist/release && sha256sum --check SHA256SUMS)
       - name: check immutable npm artifact

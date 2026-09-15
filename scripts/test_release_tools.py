@@ -1,12 +1,35 @@
-"""Regression tests for immutable Python publication and release recovery."""
+"""Regression tests for release configuration and immutable publication."""
 from __future__ import annotations
 import copy
 import hashlib
 from pathlib import Path
 import tempfile
 import unittest
+import yaml
 from check_release_recovery import REQUIRED_JOBS, validate
 from prepare_pypi_release import missing_files
+
+
+class WorkflowInputTests(unittest.TestCase):
+    def test_setup_node_cache_selects_a_supported_package_manager(self) -> None:
+        # setup-node v5's cache input selects npm/yarn/pnpm. Its separate
+        # package-manager-cache input disables automatic detection. A boolean
+        # cache value becomes the unsupported manager "false" on the runner.
+        # Contract: actions/setup-node@a0853c2/action.yml and cache-restore.ts.
+        workflows = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+        checked = 0
+        for path in sorted(workflows.glob("*.yml")):
+            document = yaml.safe_load(path.read_text())
+            for job_name, job in document.get("jobs", {}).items():
+                for step in job.get("steps", []):
+                    if step.get("uses", "").split("@", 1)[0] != "actions/setup-node":
+                        continue
+                    checked += 1
+                    cache = step.get("with", {}).get("cache", "")
+                    with self.subTest(workflow=path.name, job=job_name):
+                        self.assertIsInstance(cache, str)
+                        self.assertIn(cache.strip(), ("", "npm", "yarn", "pnpm"))
+        self.assertGreater(checked, 0, "no setup-node actions were checked")
 
 
 class RecoveryTests(unittest.TestCase):
