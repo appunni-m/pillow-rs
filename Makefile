@@ -1003,7 +1003,7 @@ repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
 
-docs-check: repo-map-check migration-parity-inputs-check ## Validate documentation entry points and generated inputs
+docs-check: repo-map-check migration-parity-inputs-check release-tools-test ## Validate documentation, inputs, and release configuration
 	@test -s README.md
 	@test -s CONTRIBUTING.md
 	@test -s CHANGELOG.md
@@ -1072,7 +1072,7 @@ release-pypi release-npm release-crates: ## Publication uses only the tag-trigge
 
 .PHONY: release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
 RELEASE_WHEEL_DIR ?= dist/python-wheel
-release-tools-test: ## Verify PyPI artifact identity and GitHub recovery guards
+release-tools-test: ## Verify action inputs, PyPI artifact identity, and GitHub recovery guards
 	$(PYTHON) -m unittest discover -s scripts -p 'test_release_tools.py' -v
 
 .PHONY: release-platform-check

@@ -11,7 +11,7 @@ Acceptance requires a successful publishing job and the exact registry artifact.
 |---|---|---|---|---|
 | 1 | `appunni-m/fontdone` | `2.14.3-alpha.10` | Cargo `fontdone`; npm `fontdone` under `next` | Native C SDK, crate, npm archive, checksums |
 | 2 | `appunni-m/image-slash-star` | `0.1.2` | Cargo `image-slash-star` | Crate, checksums |
-| 3 | `appunni-m/pillow-rs` | `0.1.2` | Cargo, PyPI, npm, all named `pillow-rs` | Crate, Python wheels/sdist, npm archive, checksums |
+| 3 | `appunni-m/pillow-rs` | `0.1.3` | Cargo, PyPI, npm, all named `pillow-rs` | Crate, Python wheels/sdist, npm archive, checksums |
 
 Fontdone has exactly one public Cargo crate. Its C ABI and raw WASM workspace
 members remain private Cargo packages. Image-slash-star has no npm or PyPI
@@ -56,13 +56,21 @@ The 2026-09-15 audit distinguishes repository defects from publisher authenticat
 | Repository | Failure before this release | Correction and acceptance |
 |---|---|---|
 | fontdone | Earlier platform/oracle defects are fixed. Alpha.9 passed complete tag CI and published Cargo through OIDC, but npm interpreted its relative tarball path as a GitHub repository. | **Released:** [alpha.10 release](https://github.com/appunni-m/fontdone/actions/runs/35002120087) and [complete tag CI](https://github.com/appunni-m/fontdone/actions/runs/35002119892) passed. Cargo `trustpub_data` and npm provenance identify this exact run and commit `cb90d41a863f8569335d8ed775a4038d23c79dc5`; registry archives match the GitHub checksums. The absolute npm archive path is covered by an offline CLI dry-run. Local parity is 20,357/20,357, with three named undefined-C inputs pending; the external C audit passes 218 functions and 1,496 cases. Cross-host equality for unspecified SBit fields remains unproven. |
-| image-slash-star | The earlier coverage CLI formatting defect is fixed and exact main CI passed. Version 0.1.1 then uploaded through OIDC, but its download verification requested JSON and received a URL descriptor instead of the crate. | [The 0.1.1 release](https://github.com/appunni-m/image-slash-star/actions/runs/35005559487) is recorded in crates.io `trustpub_data`; the published checksum matches the exact candidate. Version 0.1.2 requests binary archive content and keeps JSON metadata requests. Eight release-tool tests cover negotiation, checksum rejection, authorization, and coverage guards; read-only live verification of 0.1.1 passes. The original tag and upload remain immutable. |
-| pillow-rs | Unreleased dependencies, Windows FreeType integer-width compilation, self-including checksums, generic Linux wheels, and recovery without successful registry jobs blocked publication | Candidate 0.1.2 pins the corrected dependencies, converts native font integers at the Rust boundary, adds three generator-owned parity cases, and checks Windows compilation on main. It builds portable wheels and requires successful registry evidence before recovery. Actual OIDC acceptance is established only by the new tag run. |
+| image-slash-star | The earlier coverage CLI formatting defect is fixed. Version 0.1.1 uploaded through OIDC, but its verifier requested JSON and received a URL descriptor instead of the crate. | **Released:** [0.1.2 release](https://github.com/appunni-m/image-slash-star/actions/runs/35010129246) and [exact main CI](https://github.com/appunni-m/image-slash-star/actions/runs/35007807946) passed. The binary download request preserves strict checksums; the registry, candidate, and GitHub archive all have SHA-256 `e53037e57d0c5cae052ba94851c8cf72a80b9dfe195cd21b166506ab7bdbeb3b`. Eight release-tool tests cover negotiation, checksum rejection, authorization, and coverage guards. |
+| pillow-rs | Dependencies, Windows integer widths, and packaging are fixed. Version 0.1.2 passed complete CI and wheel/source-package checks, then published Cargo and PyPI through OIDC. Its npm job failed before authentication because `cache: false` selected an unsupported package manager in setup-node. | [0.1.2 main CI](https://github.com/appunni-m/pillow-rs/actions/runs/35007945727) passed 11,348 cases in each Python/Node/browser lane. [Its release](https://github.com/appunni-m/pillow-rs/actions/runs/35011579074) records successful Cargo and PyPI jobs. Candidate 0.1.3 uses `package-manager-cache: false`; a regression reproduced the original failure and now runs in `make docs-check` before tagging. Six release-tool tests pass. The 0.1.2 uploads and tag remain immutable. |
 
 Historical Cargo uploads without GitHub `trustpub_data` do not prove the newly
 configured OIDC publisher is wrong. A skipped publish job has not attempted
 authentication. Report a configuration blocker only when the actual OIDC job
 rejects the claimed repository/workflow/environment.
+
+For the pinned setup-node v5 action, `cache` accepts a package-manager name
+(`npm`, `yarn`, or `pnpm`). Its separate `package-manager-cache` boolean disables
+automatic detection. Passing `false` as the manager caused the 0.1.2 npm setup
+failure. This follows the pinned
+[action input contract](https://github.com/actions/setup-node/blob/a0853c24544627f65ddf259abe73b1d18a591444/action.yml).
+The npm publisher has no source checkout or lockfile to cache; the corrected
+configuration disables automatic caching and retains the same OIDC permissions.
 
 The npm failure is distinct from trusted-publisher setup: npm 11.5.1 parses
 `release-bundle/fontdone-<version>.tgz` as GitHub shorthand. Its parser treats an
@@ -106,6 +114,10 @@ The owner approved reduced coverage requirements for this alpha release:
 - Pillow-rs retains its complete maintained Python/Node/browser parity lanes
   and source-bound Rust coverage collection. Incomplete coverage is reported;
   failing comparisons or invalid collection receipts still fail.
+  The 0.1.2 receipt at `46154f176d6ff31907c9f7e7bb549825a176e07e` records
+  24 plans, 11,328 target-only coverage executions, and zero failures. All 25
+  measured changed Rust lines are covered; seven comment/attribute/blank lines
+  have no line records. Version 0.1.3 does not change Rust implementation.
 
 A release does not convert planned API/codec/backend work into completed work.
 See [coverage](COVERAGE.md) and [benchmark methodology](BENCHMARKING.md) for
@@ -116,8 +128,9 @@ were changed to claim a pass.
 
 1. Synchronize package versions, changelog, exact dependency pins, and lockfiles.
 2. Run the maintained Make checks and inspect the distributable archives.
-   `make release-tools-test` exercises partial PyPI publication and rejects
-   failed/skipped/unrelated recovery evidence.
+   `make release-tools-test` validates Node action cache inputs, exercises partial
+   PyPI publication, and rejects failed/skipped/unrelated recovery evidence. It
+   also runs in the main CI documentation/input gate through `make docs-check`.
 3. Commit and push to `main`; require successful CI for that exact commit.
 4. Push a new annotated `v<version>` tag, preserving earlier immutable tags.
 5. Let GitHub run the release. Finish fontdone, then image-slash-star, then

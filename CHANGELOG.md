@@ -4,12 +4,24 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
+## 0.1.3 - 2026-09-16
+
+- Disable automatic package-manager caching with `package-manager-cache: false`
+  in the npm publisher. `cache: false` incorrectly selected an unsupported
+  package manager and stopped Node setup before authentication in 0.1.2.
+- Validate setup-node cache inputs in `make release-tools-test` and the main
+  documentation/input CI gate, so this configuration error fails before tagging.
+- Keep the successful 0.1.2 Cargo and PyPI uploads and its tag immutable; use
+  synchronized 0.1.3 metadata for the corrected three-registry release.
+- Preserve the released fontdone alpha.10 and image-slash-star 0.1.2 pins.
+  Runtime implementation and parity inputs are unchanged.
+
 ## 0.1.2 - 2026-09-15
 
 ### Changed
 
 - Publish only through GitHub OIDC after exact main CI, using synchronized
-  fontdone alpha.9 and image-slash-star 0.1.1 dependency pins.
+  fontdone alpha.10 and image-slash-star 0.1.2 dependency pins.
 - Fix Windows font binding compilation by converting native FreeType integer
   widths at the Rust boundary, with parity inputs for Unicode bearings,
   fractional metrics, and embedded bitmap bounds.

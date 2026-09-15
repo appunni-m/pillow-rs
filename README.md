@@ -2,7 +2,7 @@
 
 pillow-rs is a Rust image-processing library with Python and WebAssembly
 bindings. It follows Pillow's public behavior through a manifest-driven,
-input-only parity suite. The current source release is version `0.1.2`; compatibility is
+input-only parity suite. The current source release is version `0.1.3`; compatibility is
 measured per operation and backend rather than advertised as a complete Pillow
 replacement.
 
@@ -18,12 +18,16 @@ those controls remain visible as backend coverage gaps. Benchmark budget
 acceptance remains open as described in
 [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).
 
-Version 0.1.2 adds three native-font boundary cases. Python 3.10, Python 3.12,
+Version 0.1.2 added three native-font boundary cases. Python 3.10, Python 3.12,
 Node, and browser WASM each passed 11,348/11,348 comparisons in the
-[release preparation CI run](https://github.com/appunni-m/pillow-rs/actions/runs/34988041168).
+[0.1.2 main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/35007945727).
 Changed-line evidence is recorded in
 [`docs/COVERAGE.md`](docs/COVERAGE.md), and alpha publication gates are defined in
 [`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md).
+
+Version 0.1.3 fixes the npm publishing job's Node cache configuration. The 0.1.2
+Cargo and PyPI uploads succeeded through OIDC; its npm job stopped before
+authentication. Runtime behavior and the parity corpus are unchanged in 0.1.3.
 
 These figures are measured evidence from named runs, not a promise that every
 Pillow API, platform, or GPU adapter is supported.
