@@ -2,7 +2,7 @@
 
 pillow-rs is a Rust image-processing library with Python and WebAssembly
 bindings. It follows Pillow's public behavior through a manifest-driven,
-input-only parity suite. The current source release is version `0.1.3`; compatibility is
+input-only parity suite. The current published release is version `0.1.3`; compatibility is
 measured per operation and backend rather than advertised as a complete Pillow
 replacement.
 
@@ -20,14 +20,16 @@ acceptance remains open as described in
 
 Version 0.1.2 added three native-font boundary cases. Python 3.10, Python 3.12,
 Node, and browser WASM each passed 11,348/11,348 comparisons in the
-[0.1.2 main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/35007945727).
+[0.1.3 main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/35014896711).
 Changed-line evidence is recorded in
 [`docs/COVERAGE.md`](docs/COVERAGE.md), and alpha publication gates are defined in
 [`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md).
 
 Version 0.1.3 fixes the npm publishing job's Node cache configuration. The 0.1.2
 Cargo and PyPI uploads succeeded through OIDC; its npm job stopped before
-authentication. Runtime behavior and the parity corpus are unchanged in 0.1.3.
+authentication. The [0.1.3 release](https://github.com/appunni-m/pillow-rs/releases/tag/v0.1.3)
+successfully published Cargo, PyPI, and npm through GitHub OIDC. Runtime behavior
+and the parity corpus are unchanged in 0.1.3.
 
 These figures are measured evidence from named runs, not a promise that every
 Pillow API, platform, or GPU adapter is supported.
@@ -79,9 +81,11 @@ make build-wasm-release
 cd pillow-rs-js && npm run test:package
 ```
 
-Published registry artifacts are not implied by this source checkout. Use the
-release checklist before installing from or publishing to PyPI, npm, or
-crates.io.
+Version 0.1.3 is available on [crates.io](https://crates.io/crates/pillow-rs/0.1.3),
+[PyPI](https://pypi.org/project/pillow-rs/0.1.3/), and
+[npm](https://www.npmjs.com/package/pillow-rs/v/0.1.3). The
+[release matrix](docs/REGISTRY_RELEASE_MATRIX.md) records verification evidence
+and the process for subsequent GitHub releases.
 
 ## API and parity
 
