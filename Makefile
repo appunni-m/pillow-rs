@@ -29,7 +29,7 @@ PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
 FONTDONE_REPO ?= https://github.com/appunni-m/fontdone.git
-FONTDONE_REF ?= 5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f
+FONTDONE_REF ?= acb3e9200f1d2a16b8c182fdc52c118a1dd1440f
 FONTDONE_SRC ?= build/fontdone-src
 IMAGE_SLASH_STAR_SRC := $(abspath ../image-slash-star)
 IMAGE_SLASH_STAR_AVIF_LIB_DIR ?= $(shell p="$$(find "$(IMAGE_SLASH_STAR_SRC)/.oracle-venv" -name 'libavif*' -type f -print -quit 2>/dev/null)"; if [ -n "$$p" ]; then dirname "$$p"; fi)
@@ -286,9 +286,12 @@ help: ## Show this help
 	@printf "  $(CYAN)make clean$(NC)          Remove build artifacts and caches\n"
 	@printf "  $(CYAN)make clean-all$(NC)      clean + cargo clean\n"
 	@printf "\n$(BOLD)Release$(NC)\n"
-	@printf "  $(CYAN)make release-pypi$(NC)   Build + publish to PyPI\n"
-	@printf "  $(CYAN)make release-npm$(NC)    Build WASM + publish to npm\n"
-	@printf "  $(CYAN)make release-crates$(NC) Publish to crates.io\n"
+	@printf "  $(CYAN)make release-python-wheel$(NC) Build a host Python wheel\n"
+	@printf "  $(CYAN)make release-tools-test$(NC)  Verify release artifact and recovery guards\n"
+	@printf "  $(CYAN)make release-platform-check RELEASE_PLATFORM_TARGET=<triple>$(NC) Type-check the Python binding\n"
+	@printf "  $(CYAN)make release-status RELEASE_STATUS_ARGS='--commit <sha>'$(NC) Read GitHub conclusions\n"
+	@printf "  Publish through GitHub by pushing an annotated v<version> tag after main CI passes.\n"
+	@printf "  $(CYAN)make release-crate-package$(NC) Compile and inspect the core crate archive\n"
 	@printf "  $(CYAN)make release-check$(NC)  Build/package dry-run for every release target\n"
 	@printf "  $(CYAN)make release-local-check$(NC) Verify the local first-release bundle\n"
 	@printf "  $(CYAN)make python-compat-check$(NC) Verify abi3 facade imports on PYTHON_COMPAT\n"
@@ -1063,17 +1066,44 @@ release-check: build-all ## Build and package every release artifact without pub
 release-local-check: ## Verify the file-backed local first-release bundle
 	$(PYTHON) scripts/check_local_release_bundle.py --bundle-dir "$(LOCAL_RELEASE_DIR)"
 
-release-pypi: release-check ## Build + publish to PyPI (requires RELEASE_CONFIRM=1)
-	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
-	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to PyPI.\n" >&2; exit 2; }
-	cd $(PY_SRC) && $(MATURIN) publish --locked
+release-pypi release-npm release-crates: ## Publication uses only the tag-triggered GitHub OIDC workflow
+	@printf "Push an annotated v<version> tag on the CI-proven commit; local publication is disabled.\n" >&2
+	@exit 2
 
-release-npm: release-check ## Build WASM + publish the root npm package (requires RELEASE_CONFIRM=1)
-	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
-	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to npm.\n" >&2; exit 2; }
-	cd $(JS_SRC) && npm publish
+.PHONY: release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
+RELEASE_WHEEL_DIR ?= dist/python-wheel
+release-tools-test: ## Verify PyPI artifact identity and GitHub recovery guards
+	$(PYTHON) -m unittest discover -s scripts -p 'test_release_tools.py' -v
 
-release-crates: release-check ## Publish to crates.io (requires RELEASE_CRATES_READY=1 and RELEASE_CONFIRM=1)
-	@test "$(RELEASE_CRATES_READY)" = "1" || { printf "Set RELEASE_CRATES_READY=1 after publishing the pinned git dependencies.\n" >&2; exit 2; }
-	@test "$(RELEASE_CONFIRM)" = "1" || { printf "Set RELEASE_CONFIRM=1 to publish to crates.io.\n" >&2; exit 2; }
-	$(CARGO) publish -p $(CORE_SRC) --locked
+.PHONY: release-platform-check
+release-platform-check: ## Type-check the Python binding for an installed foreign Rust target
+	@test -n "$(RELEASE_PLATFORM_TARGET)" || { printf 'RELEASE_PLATFORM_TARGET is required\n' >&2; exit 2; }
+	PYO3_CROSS_PYTHON_VERSION=3.12 $(CARGO) check --locked -p $(PY_SRC) --target "$(RELEASE_PLATFORM_TARGET)"
+
+release-python-wheel: ## Build a host Python wheel (Linux releases use pinned manylinux in CI)
+	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out "$(RELEASE_WHEEL_DIR)"
+
+release-python-sdist: ## Build the Python source distribution
+	$(MATURIN) sdist --manifest-path $(PY_SRC)/Cargo.toml --out "$(RELEASE_WHEEL_DIR)"
+
+release-wheel-test: ## Install a host release wheel in an isolated environment and exercise PIL
+	$(PYTHON) scripts/check_release_wheel.py --wheel-dir "$(RELEASE_WHEEL_DIR)"
+
+release-sdist-test: ## Build and install the source distribution in isolation and exercise PIL
+	$(PYTHON) scripts/check_release_wheel.py --sdist $(RELEASE_WHEEL_DIR)/pillow_rs-*.tar.gz
+
+release-crate-package: ## Compile and package the core crate after dependency publication
+	$(CARGO) package --locked -p $(CORE_SRC)
+
+release-npm-pack: ## Build, test, and pack the single Node/browser npm package
+	cd $(JS_SRC) && npm ci && npm run build:release && npm run test:package
+	mkdir -p dist/release/npm
+	cd $(JS_SRC) && npm pack --ignore-scripts --pack-destination ../dist/release/npm
+
+.PHONY: release-lock-update
+release-lock-update: ## Refresh only the newly pinned release dependency packages
+	$(CARGO) update -p fontdone -p image-slash-star
+
+.PHONY: release-status
+release-status: ## Read public GitHub CI/release conclusions and failure annotations
+	$(PYTHON) scripts/check_release_status.py $(RELEASE_STATUS_ARGS)

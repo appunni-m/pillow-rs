@@ -51,8 +51,8 @@ and refreshed with `make repo-map-update`.
 
 ## FreeType Map
 
-- `build/fontdone-src/PROJECT_GOALS.md`: project-level parity goal and
-  non-negotiable constraints.
+- `build/fontdone-src/README.md` and `AGENTS.md`: project-level parity scope,
+  measured status, and non-negotiable constraints.
 - `build/fontdone-src/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
   text and migration attribution for the standalone package.
 - `build/fontdone-src/src/font.rs`: public face/font API and high-level
@@ -65,24 +65,26 @@ and refreshed with `make repo-map-update`.
   native bytecode hinting.
 - `build/fontdone-src/src/autohint/`: autohinter implementation and script
   coverage.
-- `build/fontdone-src/tests/coverage_matrix_tests.rs`: fixture matrix parity
-  harness.
-- `build/fontdone-src/tests/no_runtime_ffi.rs`: guard against runtime FFI
-  shortcuts.
-- `build/fontdone-src/tests/fixtures/*_matrix.json`: versioned oracle matrices.
-  Do not edit these to make tests pass.
+- `build/fontdone-src/tests/unified_fixture_parity.rs`: input-driven Rust,
+  C ABI, and WASM parity against the pinned FreeType oracle.
+- `build/fontdone-src/Makefile`: `test-ffi` guards the core against runtime
+  native-FFI shortcuts.
+- `build/fontdone-src/tests/manifest.yaml` and `tests/fixtures/inputs/`:
+  maintained public-surface cases and input-only workflows.
+- `build/fontdone-src/tests/fixtures/input/fonts/`: licensed oracle assets;
+  preserve their bytes and use the documented generators.
 - `build/fontdone-src/scripts/`: maintained generators, benchmark tools, and
   failure classifiers.
-- `build/fontdone-src/doc/GENERATOR_SYSTEM.md`: fixture generation contract.
-- `build/fontdone-src/doc/FONT_FIXTURE_COVERAGE_PLAN.md`: maintained plan for
-  compact font fixtures, explicit public inputs, legacy-font retirement, and
-  100% Rust structural coverage.
-- `build/fontdone-src/doc/FONT_FIXTURE_INVENTORY.md`: content-deduplicated active
-  and deprecated font inventory with selected glyph and coverage ownership.
-- `build/fontdone-src/doc/PARITY_FAILURE_CLASSIFICATION.md`: failure bucket
-  taxonomy.
-- `build/fontdone-src/doc/PERFORMANCE_BENCHMARKING.md`: Rust-vs-C FreeType
-  benchmark method and reporting.
+- `build/fontdone-src/doc/DEVELOPMENT.md`: fixture generation, debugging notes,
+  platform contracts, CI, and Rust-vs-C benchmark methodology.
+- `build/fontdone-src/doc/COVERAGE_CAMPAIGN_GOAL.md`: structural coverage work
+  and explicit unfinished scope.
+- `build/fontdone-src/doc/FILE_RETENTION_INVENTORY.tsv`: exhaustive source and
+  fixture ownership, hashes, and retention reasons.
+- `build/fontdone-src/doc/FREETYPE_SUPPORT.md`: supported behavior and adoption
+  limitations; `doc/runtime_parity_evidence.json` binds measured results to source.
+- `build/fontdone-src/doc/RELEASING.md`: one-crate, native SDK, and npm release
+  procedure using GitHub OIDC.
 
 ## Harness And Fixture Map
 
@@ -102,7 +104,7 @@ and refreshed with `make repo-map-update`.
   tooling. It is not an active test root.
 - `docs/gpu-crash-audit-20260811.md`: current GPU loop, resource, lazy-pipeline,
   watchdog, and adapter-backed verification record.
-- `build/fontdone-src/tests/coverage_matrix_tests.rs`: separate FreeType matrix
+- `build/fontdone-src/tests/unified_fixture_parity.rs`: separate FreeType matrix
   runner.
 
 ## Cleanup Rules
@@ -398,11 +400,15 @@ generated reports, build outputs, and package installs.
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
     |-- check_python_compatibility.py
+    |-- check_release_recovery.py
+    |-- check_release_status.py
+    |-- check_release_wheel.py
     |-- check_repo_map.py
     |-- codex-worktree-setup.sh
     |-- generate_migration_parity_docs.py
     |-- lint.sh
     |-- migration_parity_inventory.py
+    |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
     |-- report_migration_changed_line_coverage.py
     |-- report_migration_js_parity_gaps.py
@@ -428,6 +434,7 @@ generated reports, build outputs, and package installs.
     |-- run_migration_rust_coverage.py
     |-- test_coverage_context.py
     |-- test_receipt_state.py
+    |-- test_release_tools.py
     |-- validate_migration_parity_contract.py
     `-- validate_migration_parity_result.py
 ```

@@ -166,8 +166,9 @@ Version, packaging, and publication are separate steps:
 make release-check
 ```
 
-This builds and inspects package artifacts without publishing. Publishing
-targets require `RELEASE_CONFIRM=1` and protected credentials; follow
+This builds and inspects package artifacts without publishing. Registry
+publication runs only through the GitHub OIDC workflow after successful CI
+and an annotated version tag; local publishing targets refuse uploads. Follow
 [`docs/CI_CD_RELEASE_PLAN.md`](docs/CI_CD_RELEASE_PLAN.md) for the registry
 order, tag, provenance, and future GitHub Pages workflows.
 

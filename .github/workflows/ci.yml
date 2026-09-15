@@ -38,14 +38,14 @@ jobs:
   # ── Rust: format + clippy + parity build + supply chain ──
   rust:
     name: Rust (${{ matrix.task }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       # Keep the other fixed toolchain lanes observable when one hosted
       # runner setup fails; every lane remains required for a green run.
       fail-fast: false
       matrix:
-        task: [fmt-clippy, parity-build, supply-chain]
+        task: [fmt-clippy, parity-build, supply-chain, windows-type-check]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
       - name: install the locked Rust toolchain
@@ -63,6 +63,12 @@ jobs:
       - name: parity build
         if: matrix.task == 'parity-build'
         run: make pillow-rs-build
+
+      - name: Windows Python binding type check
+        if: matrix.task == 'windows-type-check'
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          make release-platform-check RELEASE_PLATFORM_TARGET=x86_64-pc-windows-msvc
 
       - name: supply chain audit
         if: matrix.task == 'supply-chain'
@@ -89,7 +95,7 @@ jobs:
       fail-fast: false
       matrix:
         # Pillow 12.2.0 is the versioned oracle and requires Python >=3.10.
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.10.11", "3.12.10"]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
       - name: install the locked Rust toolchain
@@ -250,16 +256,17 @@ jobs:
   # ── Documentation and manifest contract ──
   docs:
     name: Documentation and inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
       - name: install the documented input checker
         run: python -m pip install "pyyaml==6.0.3"
       - run: make docs-check
+      - run: make release-tools-test
 
   # ── WASM: build sanity and host parity ──
   wasm:
@@ -286,7 +293,7 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
       - name: create the project virtualenv
         run: python -m venv .venv
       - name: install locked Python tools

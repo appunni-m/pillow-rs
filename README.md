@@ -10,13 +10,19 @@ replacement.
 
 The active contract is defined by
 [`pillow-rs/tests/fixtures/manifest.yaml`](pillow-rs/tests/fixtures/manifest.yaml)
-(`migration-parity/manifest@2`). The latest integrated campaign selected 11,345
+(`migration-parity/manifest@2`). The last complete all-backend campaign selected 11,345
 public input workflows and recorded exact terminal output comparisons across
 the available CPU, SIMD, GPU, Node WASM, and browser WASM lanes. The GPU lane
 recorded 7,090 native dispatches and 137 explicitly classified host controls;
-those controls remain visible as backend coverage gaps. The current acceptance
-blocker is the benchmark budget comparison described in
+those controls remain visible as backend coverage gaps. Benchmark budget
+acceptance remains open as described in
 [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).
+
+The 0.1.2 release candidate adds three native-font boundary cases. The current
+Python corpus passes 11,348/11,348 comparisons; the three new cases also pass
+in Node and browser WASM. Changed-line evidence is recorded in
+[`docs/COVERAGE.md`](docs/COVERAGE.md), and alpha publication gates are defined in
+[`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md).
 
 These figures are measured evidence from named runs, not a promise that every
 Pillow API, platform, or GPU adapter is supported.
@@ -75,7 +81,7 @@ crates.io.
 ## API and parity
 
 The manifest currently declares 24 public surfaces, 209 operations, 1,801
-requirements, 11,345 parity inputs, 24 coverage plans, and 744 standard
+requirements, 11,348 parity inputs, 24 coverage plans, and 744 standard
 benchmark workloads. These are declared/indexed counts; live results are kept
 separately in `build/migration-parity/`.
 

@@ -1,377 +1,145 @@
 # Registry release matrix
 
-This file is the runbook for the first public package releases. It records
-which artifact is published where, the dependency order, and the evidence
-required before a publish job is enabled. A registry upload is permanent, so
-the version and package archive must be reviewed from the exact clean commit
-that will be tagged.
+All subsequent publication uses GitHub OIDC. The local Cargo and npm
+bootstraps are complete; local login errors do not diagnose the GitHub
+publisher. The owner reports configuring trusted publishing in each registry.
+Acceptance requires a successful publishing job and the exact registry artifact.
 
-## Current release graph
+## Release order and package boundaries
 
-The exact Cargo, PyPI, and root npm versions below are the current release
-candidates. The prepared pillow-rs release branch
-`codex/benchmark-backend-parity-fixes` is now promoted to `origin/main`; it
-includes the Apple ARM64 parity runner correction, bounded WASM output, and
-coverage-report compatibility fixes. The two dependency Cargo packages are
-visible on crates.io; the synchronized root `pillow-rs@0.1.2` Cargo upload and
-PyPI upload remain pending for the GitHub release workflow. The root npm
-bootstrap `pillow-rs@0.1.1` succeeded locally, and npm trusted publishing is
-configured for the `0.1.2` GitHub tag release.
-The sibling release branches are recorded below.
-The local-only bootstrap bundle is under `dist/release-local/` and is verified
-separately from the tracked source tree.
+| Order | Repository | Candidate | Registry artifacts | GitHub assets |
+|---|---|---|---|---|
+| 1 | `appunni-m/fontdone` | `2.14.3-alpha.9` | Cargo `fontdone`; npm `fontdone` under `next` | Native C SDK, crate, npm archive, checksums |
+| 2 | `appunni-m/image-slash-star` | `0.1.1` | Cargo `image-slash-star` | Crate, checksums |
+| 3 | `appunni-m/pillow-rs` | `0.1.2` | Cargo, PyPI, npm, all named `pillow-rs` | Crate, Python wheels/sdist, npm archive, checksums |
 
-The current release candidate is commit `9a596bf94` and hosted CI run
-`34865952403` completed successfully on 2026-09-14 across all eight jobs. No
-`v0.1.2` tag has been pushed, so the tag-driven release workflow has not run.
-The candidate passed the local package preflight and release-bundle checks;
-registry publication is waiting on the dependency and trusted-publisher gates
-listed below.
+Fontdone has exactly one public Cargo crate. Its C ABI and raw WASM workspace
+members remain private Cargo packages. Image-slash-star has no npm or PyPI
+package. Pillow-rs has one npm package serving Node.js and browser environments;
+`pillow-rs-js` is the source folder. Its Python public import is
+`from PIL import Image`, with `pillow_rs` as the implementation namespace and
+`RSPIL` as a deprecated alias. Use isolated processes/environments for comparison
+with upstream Pillow because both distributions own `PIL`.
 
-## Trusted-publisher audit (2026-09-15)
+Pillow-rs pins the exact dependency versions and Git revisions in
+`pillow-rs/Cargo.toml`. `Cargo.lock` and `FONTDONE_REF` in the root Makefile must
+match those reviewed releases. Do not tag pillow-rs until the new dependency
+Cargo versions and synchronized fontdone npm version are registry-visible.
 
-`coverage-mcp` is the working reference for the GitHub trusted-agent path. Its
-`v0.16.0` Release run `33979588689` completed successfully, its GitHub Release
-contains the checksummed crate and native bundles, and the crates.io API records
-`trustpub_data.provider=github` with repository `appunni-m/coverage-mcp` and
-the exact release commit. Its release workflow uses a tag-triggered artifact
-bundle, a job-level `crates-io` environment with `id-token: write`,
-`crates-io-auth-action`, artifact attestations, and a final GitHub Release job.
+## Trusted publisher identities
 
-The three target repositories are not at the same point:
+Every registry uses workflow filename **`release.yml`** in its own repository.
+Do not enter the full `.github/workflows/` path in the registry workflow field.
 
-| Repository | Trusted-agent evidence | Actual blocker |
-| --- | --- | --- |
-| `coverage-mcp` | Cargo `0.16.0` has GitHub `trustpub_data`; Release run `33979588689` and GitHub Release `v0.16.0` succeeded | none in the reference path |
-| `fontdone` | Cargo `2.14.3-alpha.3` was uploaded by `appunni-m` and has no `trustpub_data`; npm exposes only `2.14.3-alpha.1` | `v2.14.3-alpha.3` Release run `34812797706` stopped before publish because no successful thorough CI run existed for the exact tag. Alpha.4/5 stopped at their tag-ref guard; alpha.6 again stopped at the thorough-CI guard. OIDC publication was never reached. |
-| `image-slash-star` | Cargo `0.1.0` was uploaded by `appunni-m` and has no `trustpub_data`; no release tag is present on `origin` | The release workflow has never reached its OIDC job. The latest main CI run `34750984122` failed its strict coverage gate (`95,603/161,451` lines), and the only `v0.1.0` tag is local. |
-| `pillow-rs` | Root CI run `34865952403` for `9a596bf94` completed successfully; no root `0.1.2` registry artifact exists yet | The release tag has not been pushed because the pinned `fontdone@2.14.3-alpha.3` npm dependency is absent. Root OIDC jobs have therefore not executed. |
+| Repository | crates.io environment | npm environment | PyPI environment |
+|---|---|---|---|
+| `appunni-m/fontdone` | `crates-io` | `npm` | Not applicable |
+| `appunni-m/image-slash-star` | `crates-io` | Not applicable | Not applicable |
+| `appunni-m/pillow-rs` | `crates-io` | `npm` | `pypi` |
 
-Absence of `trustpub_data` proves that a historical Cargo upload was manual;
-it does not prove that a newly configured trusted publisher is wrong. The
-configuration becomes observable only when the next tag reaches the registry
-publish job. For `pillow-rs`, the workflow now follows the same coverage-mcp
-pattern for attestations and has a recovery workflow for an interrupted final
-GitHub Release step.
+Publish jobs run on GitHub-hosted runners with `id-token: write`. Crates.io uses
+the pinned official authentication action. npm uses Node 22.14.0, npm 11.5.1,
+and `--provenance`. PyPI uses the pinned official publishing action. No
+long-lived registry secret is read by these workflows. If an environment has
+required reviewers, GitHub pauses the job for that configured review.
 
-The latest successful registry probes (2026-09-14) found
-`image-slash-star@0.1.0` and `fontdone@2.14.3-alpha.3` visible on crates.io.
-The synchronized root `pillow-rs@0.1.2` candidate is absent from crates.io,
-PyPI, and npm; the bootstrap `pillow-rs@0.1.1` remains visible on npm. The
-local Cargo token was rejected with HTTP 403 because it lacks publish
-permission. The verified `fontdone@2.14.3-alpha.3` npm tarball is available at
-`/tmp/fontdone-2.14.3-alpha.3.tgz` (SHA-256
-`63cac70e9a5665c550abfd26a88031013f075f5b88c9ea87375a3e8c304b5902`), but
-npm rejected the local upload with `EOTP` under the account's
-`auth-and-writes` policy. Registry visibility is recorded separately from the
-remaining coverage and platform gates.
+## Working reference and diagnosed blockers
 
-Fontdone has one public Cargo release unit: the root `fontdone` package. The
-workspace members `fontdone-c-abi` and `fontdone-wasm` are private Cargo build
-targets (`publish = false`) for the native C SDK and the raw WASM input to the
-`fontdone` npm package. They are audited and archived where needed, but neither
-is a second crates.io package.
+[coverage-mcp v0.16.0](https://github.com/appunni-m/coverage-mcp/actions/runs/33979588689)
+is the reference: its release succeeded and crates.io records GitHub
+`trustpub_data` tied to the exact repository/run/commit. The adopted pattern is
+read-only validation, verified artifacts, a separate OIDC job, registry identity
+checks, and a final GitHub release with attestations.
 
-The 2026-09-13 maintained fontdone release rehearsal passed both
-`make release-dry-run` and the Cargo publish helper's `--dry-run` mode. The
-helper's publication list contains only `fontdone`; the C ABI and raw-WASM
-archives were inspected and compiled as internal build artifacts.
+The 2026-09-15 audit found these repository defects before OIDC authentication:
 
-The root Makefile's maintained `build/fontdone-src` parity checkout is pinned to
-the same `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f` revision used by the
-`pillow-rs` Cargo dependency and the public `fontdone` release. Root parity and
-release evidence therefore exercise the exact fontdone source being packaged.
+| Repository | Failure before this release | Correction and acceptance |
+|---|---|---|
+| fontdone | Native C-width compilation, unspecified Linux cache fields, cross-linker/proc-macro lookup, Windows header paths, and static/DLL symbol parsing blocked successive candidates | Alpha.9 at `acb3e920` preserves native C widths, uses the canonical macOS oracle, repairs platform audit tooling, and requires all five native/QEMU contracts on main. Fresh local parity is 20,357/20,357 with three named undefined-C cases pending; native shared/static exports each match 218 declarations. Windows regressions distinguish mangled type names, public DLL names, and alias annotations while retaining detection of real undocumented exports. |
+| image-slash-star | Every coverage test passed, then Python 3.14 rejected an unescaped percent sign in the verifier's CLI help | Candidate `c30253c9` fixes the CLI, adds a regression, pins Python 3.12.10 (available on all required runners), and retains failed CI evidence. Fresh local coverage passes all four existing alpha floors; [exact main CI](https://github.com/appunni-m/image-slash-star/actions/runs/34974261464) is green for quality, coverage, and dependencies. |
+| pillow-rs | Unreleased dependencies, Windows FreeType integer-width compilation, self-including checksums, generic Linux wheels, and recovery without successful registry jobs blocked publication | Candidate 0.1.2 pins the corrected dependencies, converts native font integers at the Rust boundary, adds three generator-owned parity cases, and checks Windows compilation on main. It builds portable wheels and requires successful registry evidence before recovery. Actual OIDC acceptance is established only by the new tag run. |
 
-| Project | Artifact | Version | Registry | Prerequisite/order | Current state |
-| --- | --- | --- | --- | --- | --- |
-| image-slash-star | `image-slash-star` | `0.1.0` | crates.io | independent; before `pillow-rs` | published from local tag `v0.1.0` commit `35dd72808e6b2a8488b98caf685a3d48e4c97468`, crates.io checksum `f35022079076b686716e61a8640b3e4bafb0004701486277cb95f004b769a178`. The clean-history branch and remote `main` are at `9177cf8f1f324b49d431613696b43eb77fb61043`; a local-only pre-promotion bundle preserves the former `main` history at `/private/tmp/image-slash-star-pre-force-backup-20260913/repository.bundle`. The published archive passed Cargo verification; the current branch archive has SHA-256 `fa6d6b73a73443304a8151430afa7b9bb57a0c24fdefd96ad90299f4e37381e7`. Hosted run `34735319851` completed with dependencies and format/lint/parity green; strict source coverage failed on the known incomplete denominator, which remains an explicit future release blocker at 95,603/161,451 lines |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | crates.io | before `pillow-rs` | published from immutable local tag `v2.14.3-alpha.3` commit `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, crates.io checksum `3288b86becd4fe2b93c196634ff28573e6aa1f7f8e3807b3ded4d85667db690c`. The preceding inventory commit `af758012a32a9e362fb7b7c41fc64ad88f68c604` passed hosted CI run `34735539764`; current pushed `main` is `d87a504d2005bd9fbd4b2b43ec58ca87713b82f6`. Hosted push run `34752632194` passed its fast and MSRV gates; the thorough matrix is intentionally skipped for push events and remains required through the documented manual gate before tagging. The published package is the immutable alpha.3 tag; current main is a follow-on candidate. The synchronized local candidate has 20,355/20,355 runnable cases with 3 safety-extension cases pending; local docs, lint, parity, package, C-SDK, npm, and Cargo dry-run checks pass. The generated C-ABI scorecard remains incomplete, and five fresh platform bundles including the Windows import library plus benchmark review remain required for the next tagged release |
-| fontdone | native C SDK archive | `2.14.3-alpha.3` | GitHub release asset | after the root crate preflight | built from the internal `fontdone-c-abi` workspace target; the tag workflow attaches a target-specific archive |
-| fontdone | `fontdone` | `2.14.3-alpha.3` | npm | after the Cargo crate; before `pillow-rs` | verified immutable-tag tarball (`63cac70e9a5665c550abfd26a88031013f075f5b88c9ea87375a3e8c304b5902`) is retained at `/tmp/fontdone-2.14.3-alpha.3.tgz`; local publication is blocked by npm `auth-and-writes` OTP. The registry currently exposes only `2.14.3-alpha.1`, so the root tag gate remains closed; raw `fontdone-wasm` remains an internal build target |
-| pillow-rs | `pillow-rs` | `0.1.0` | crates.io | historical artifact; current release follows at `0.1.2` | published from `main` commit `fededefbf1b484727b4ba04424b96bb19f2e96cc`, crates.io checksum `871e38c02ba6d7ee8d42b0e64e5ef63bb0d3427890b3f40e4f21e6e72d0fbf05` |
-| pillow-rs | `pillow-rs` | `0.1.1` | crates.io | superseded candidate; current release follows at `0.1.2` | immutable tag `v0.1.1` points to the earlier release-tooling commit; the Cargo version was never published |
-| pillow-rs | `pillow-rs` | `0.1.1` | PyPI | superseded candidate; current release follows at `0.1.2` | maturin preflight passed, but no PyPI upload was attempted |
-| pillow-rs | `pillow-rs` | `0.1.1` | npm | after the Rust dependency gate | published locally from `pillow-rs-js` with `next` and `latest` dist-tags. npm `dist.shasum` is `94cf5054b92b03ec91cbf3136582f7a7f6a16f47`; `dist.integrity` is `sha512-w5rnZLk/UQI+BOxH50Q3hk/BapGKBZdapOtkvcUItOXRm0ncoX7qVQEjbF2ksDAfkK2jGNnmoBRz1ABnPiyRUQ==`. The npm trusted publisher is configured for future GitHub tag releases |
-| pillow-rs | `pillow-rs` | `0.1.2` | crates.io | after image-slash-star and fontdone versions are visible | synchronized candidate; GitHub tag workflow will publish through the `crates-io` trusted publisher |
-| pillow-rs | `pillow-rs` | `0.1.2` | PyPI | after the Rust dependency gate | maturin builds an `abi3-py38` wheel; GitHub tag workflow will publish through the `pypi` trusted publisher |
-| pillow-rs | `pillow-rs` | `0.1.2` | npm | after the Rust dependency gate | synchronized candidate; the `0.1.1` bootstrap is already visible and the GitHub tag workflow will verify/publish the `0.1.2` tarball with provenance |
+Historical Cargo uploads without GitHub `trustpub_data` do not prove the newly
+configured OIDC publisher is wrong. A skipped publish job has not attempted
+authentication. Report a configuration blocker only when the actual OIDC job
+rejects the claimed repository/workflow/environment.
 
-The local root `v0.1.0` tag is historical: it targets
-`519226b62b545717c2169be7cbef9141754de91e`, while the published
-`pillow-rs@0.1.0` archive was built from `fededefbf1b484727b4ba04424b96bb19f2e96cc`.
-Do not push or reuse that local tag. Create a new immutable tag from the exact
-reviewed commit only after the root hosted CI and dependency gates pass. The
-image and fontdone local tags do target their published Cargo archives, but
-they are also intentionally not on `origin` until their release gates pass.
+## Coverage and compatibility acceptance
 
-The immutable local bundle retains a benchmark pair for release-candidate
-source commit `031edd3f5425df2c6931939deb0ad0d93dad376c`, before the current
-documentation updates. Both runs selected and measured the fixed
-11-workload cohort, with 44/44 comparable rows and 33/33
-terminal CPU/SIMD/GPU receipts; the unchanged five-percent comparison reports
-nine timing-only violations. Earlier host-access series at `a5a678401` and
-`de571ae57` remain historical evidence with adjacent comparisons reporting
-3, 7, 5, 5, and 12 timing-only violations. The performance gate remains
-review-needed; the local package rehearsal does not silently promote any
-timing result to a release pass. Exact current result and budget hashes are in
-the pending checklist.
+The owner approved reduced coverage requirements for this alpha release:
 
-A newer release-profile probe at source revision
-`519226b62b545717c2169be7cbef9141754de91e` completed three identical
-11-workload runs with 44/44 comparable rows and 33/33 terminal target receipts
-per run. The adjacent comparisons report two and 16 timing-only violations;
-the zero-violation gate therefore remains open. These generated results are
-additional evidence and are not substituted for the immutable bundle's
-tagged artifacts.
+- Fontdone reports measured source coverage and incomplete C-contract adoption.
+  All runnable exact comparisons, consumers, five platform checks, package
+  checks, and coverage collection must pass. Its stricter complete-release
+  target retains full C-contract and benchmark-threshold requirements. The
+  current benchmark policy is still collecting baselines and defines no budget;
+  alpha CI retains measurements without claiming a budget pass.
+- Image-slash-star enforces at least 59% lines, 46% branches, 52% functions,
+  and 58% regions. The fresh 2026-09-15 full all-feature report is respectively
+  95,473/161,451, 14,912/32,258, 4,859/9,244, and 140,609/241,503.
+  No coverage sources are excluded to meet these floors, and `make coverage-complete` retains 100%.
+- Pillow-rs retains its complete maintained Python/Node/browser parity lanes
+  and source-bound Rust coverage collection. Incomplete coverage is reported;
+  failing comparisons or invalid collection receipts still fail.
 
-A fresh clean pair at current branch head
-`13ea3dc177baa44a5d76ed7d86240aee53402ca8` again measured 11/11 workloads
-with 44/44 comparable rows and 33/33 terminal requested=actual target receipts
-per run. The unchanged budget report
-`13f1649a545ebafbe17623931bd9a14e6e5a4eb2861f8871975a1b3f1c94551e` reports
-12 timing-only violations; this is additional evidence and does not alter the
-immutable local bundle or close the zero-violation gate.
+A release does not convert planned API/codec/backend work into completed work.
+See [coverage](COVERAGE.md) and [benchmark methodology](BENCHMARKING.md) for
+measurement boundaries. No expected oracle results or performance budgets
+were changed to claim a pass.
 
-A further foreground-scheduled cohort at the current clean commit measured
-11/11 workloads in four runs with 44/44 comparable rows and 33/33 terminal
-requested=actual receipts per run. Its first adjacent comparison had zero
-violations; the next two had 10 and 10 timing-only violations. The unchanged
-budget policy and execution fingerprints are retained, so the required
-two-consecutive zero-violation gate remains open.
+## Prepare, tag, verify
 
-The current release-preparation commit was then measured in four complete
-11-workload runs (runs 20–23). Each run retained 44/44 comparable rows and
-33/33 terminal requested=actual CPU, SIMD, and Metal GPU receipts. The
-run-21-vs-run-20 comparison reported nine timing-only violations and the
-run-23-vs-run-22 comparison reported five. These receipts add no execution or
-backend mismatch; the unchanged zero-violation gate remains open.
+1. Synchronize package versions, changelog, exact dependency pins, and lockfiles.
+2. Run the maintained Make checks and inspect the distributable archives.
+   `make release-tools-test` exercises partial PyPI publication and rejects
+   failed/skipped/unrelated recovery evidence.
+3. Commit and push to `main`; require successful CI for that exact commit.
+4. Push a new annotated `v<version>` tag, preserving earlier immutable tags.
+5. Let GitHub run the release. Finish fontdone, then image-slash-star, then
+   pillow-rs. Keep the three repository workflows separate.
+6. Verify the registry version and checksum/provenance, then install from the
+   registry in a clean consumer. Check GitHub assets and checksums too.
 
-An additional elevated run at source revision `1d70e0c421217faacb9112bc19c12cf661eb9507`
-used the same fixed 11-workload cohort with native Metal access. It selected and
-measured 11/11 workloads, retained 44/44 comparable rows, and recorded 33/33
-terminal requested=actual CPU, SIMD, and GPU receipts. The result, parity
-sidecar, and budget report hashes are respectively
-`242ba2cd37d9a38fe9ebea606d24858b7dc5644c681798355cf2dcf70032eedc`,
-`88fab6f3d959aba40e2999f9ac0689022041df5a294782a8380e4e7515a8ccc3`, and
-`80d624e5d7b03c200c3f5f57e773e3e4af6704aceb40fcbf9b360f2878a524a9`.
-Compared with the preceding release run, the unchanged five-percent checker
-reported nine timing-only violations; the normalized execution and receipt
-structures remained complete. This is additional host-timing evidence and
-does not close the zero-violation gate or justify changing its policy.
+Local `make release-crates`, `make release-pypi`, and `make release-npm` refuse
+publication and direct the maintainer to GitHub. They do not consume locally
+stored registry credentials.
 
-A further elevated run at source revision `3a3ae28b20b0d86eebc1dddb45234f2da65af6b7`
-used the same 11-workload cohort with native Metal access and retained 44/44
-comparable rows plus 33/33 terminal requested=actual CPU, SIMD, and GPU
-receipts. Its result, parity, and budget hashes are
-`50431a65122edb1341a5ac2253a515b4992a0dfd95dd57dc7778fe2d06eebba7`,
-`61a2250fd0dcac5c8bdf08b1a78678c3d632ec047497b5c613d5464374d77050`, and
-`3e85f936dfe56a06b9ea3f6128d09dfdd2400dadddc2e6de634cc83327ff4b97`; the
-unchanged checker reported three timing-only violations. This reinforces the
-host-timing classification and leaves the zero-violation gate open.
+## Artifact and retry rules
 
-## Branch publication status
+Pillow-rs builds ABI3 wheels for Linux x86-64 (manylinux 2.28), macOS ARM64,
+and Windows x86-64, plus an sdist. Each wheel is installed in an isolated host
+environment and exercises the public `PIL` namespace before it reaches PyPI.
+Release hosts use Python 3.12.10, the last 3.12 patch with official macOS ARM64
+and Windows builds in the GitHub Python manifest. Linux uses a pinned manylinux container digest; generic `linux_x86_64` wheels
+are rejected. The source distribution requires the documented Rust build tools.
 
-The clean `fontdone` `main` branch is now present on `origin` at
-`d87a504d2005bd9fbd4b2b43ec58ca87713b82f6`; the preceding inventory commit
-`af758012a32a9e362fb7b7c41fc64ad88f68c604` completed hosted CI run
-`34735539764` successfully, and follow-on push run `34752632194` passed the
-fast and MSRV gates. The thorough matrix is skipped for push events and must
-be run through the documented manual gate before tagging. Its immutable local release tag
-`v2.14.3-alpha.3` remains at `5f17ad226d7c0a282fa0082316d7cdeb8ab12d9f`, so the
-tag and current main are intentionally distinct package revisions. The older `v2.14.3-alpha.2`
-tag remains as superseded local history.
-The clean pillow-rs release-preparation branch
-`codex/benchmark-backend-parity-fixes` is present on `origin` with the latest
-release-preparation correction, with the earlier source-fix,
-implementation-base, and receipt commits retained as historical references.
-`origin/main` contains the latest release-preparation correction; hosted run
-`34838826898` for this head completed successfully. Local Python and JS/WASM
-replays pass
-their selected corpus. The aggregate backend result still reports the
-intentional SIMD/GPU host-control partition, and the benchmark zero-violation
-item remains open.
-The image-slash-star remote `main` and clean-history release branch are both at
-`9177cf8f1f324b49d431613696b43eb77fb61043`; the former `main` history is
-preserved in the local-only bundle
-`/private/tmp/image-slash-star-pre-force-backup-20260913/repository.bundle`.
-The candidate's local verifier and package consumer pass. Hosted run
-`34735319851` completed with dependencies and format/lint/parity green; strict
-coverage failed on the known incomplete denominator.
-The `v0.1.0` Cargo version is published; no PyPI/npm upload or GitHub release
-tag has been made.
+Packages are compiled/tested before OIDC authentication. Every publishing job
+checks the complete bundle checksum; Cargo additionally reproduces the checked
+crate. PyPI stages only absent files and rejects an existing filename with
+different bytes. npm compares the exact tarball integrity. A failed lookup is
+never interpreted as an absent version.
 
-The root workflow accepts a guarded manual dispatch for the first publication.
-After that bootstrap, pushing an annotated `v<version>` tag runs the same
-preflight, publishes only missing registry versions, and creates the
-immutable GitHub release for that tag.
+The final GitHub release requires all registry jobs. Asset recovery verifies
+the original workflow, tag commit, run attempt, and successful verification and
+publish jobs; a merely completed workflow is insufficient. It never republishes
+a registry package. Retry transient failures on the same tag. Changed source
+or changed immutable artifact bytes require a new version and tag.
 
-The root release workflow checks that Cargo, PyPI, and npm all report the same
-version before it creates an artifact. When a version already exists, the
-publish jobs compare the crates.io SHA-256, PyPI wheel SHA-256, or npm
-`dist.integrity` value with the exact local artifact before skipping it; a
-mismatch fails the release. It is manual and defaults to a non-publishing
-preflight. The publish input is intentionally separate from the dependency
-input, so a preflight can be reviewed before any registry write.
+## Official references
 
-## Latest local release-gate probes
+- [crates.io OIDC action](https://github.com/rust-lang/crates-io-auth-action)
+- [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+- [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)
+- [Maturin distribution guidance](https://www.maturin.rs/distribution.html)
+- [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/use-artifact-attestations)
 
-The 2026-09-13 probes used the clean pushed trees and did not alter source or
-fixtures. The root documentation and release-bundle checks passed. Fontdone's
-`make release-verify` completed parity, package, C consumer, WASM consumer, npm,
-and benchmark work, then stopped at the required platform-contract gate:
-configured `5/5`, runtime evidence `1/5`, and Windows import-library evidence
-`0/1`. Image-slash-star's `make release-verify` stopped at its strict LLVM
-coverage verifier with `95,603/161,451` lines. These are release gates, not
-documentation-audit failures, and neither workflow should be tagged until its
-gate has fresh passing evidence.
+Read exact GitHub conclusions without local registry credentials:
 
-The latest public registry probes still show the three dependency Cargo
-packages, but no `pillow-rs==0.1.2` on PyPI and no synchronized
-`fontdone@2.14.3-alpha.3` on npm. The published root npm bootstrap is
-`pillow-rs@0.1.1`; the synchronized `0.1.2` Cargo, PyPI, and npm artifacts
-remain pending. The local `v0.1.1` Cargo tag is immutable, and no `v0.1.2`
-tag exists; the next registry publication must use a newly created annotated
-`v0.1.2` tag only after the dependency and trusted-publisher gates are closed.
-
-## Local credential setup
-
-Install the versions committed by the repository before authenticating:
-
-```sh
-rustup toolchain install 1.96.1 --profile minimal --component rustfmt --component clippy
-rustup override set 1.96.1
-RUSTC_WRAPPER= cargo --version
-node --version                 # release workflow uses Node 22.14.0
-npm --version                  # release workflow uses npm 11.5.1
+```bash
+make release-status RELEASE_STATUS_ARGS='--repo appunni-m/fontdone --commit <full-sha>'
+make release-status RELEASE_STATUS_ARGS='--repo appunni-m/image-slash-star --commit <full-sha>'
+make release-status RELEASE_STATUS_ARGS='--commit <pillow-rs-full-sha>'
 ```
 
-Use short-lived credentials where the registry supports them. `cargo login`
-stores a crates.io token in the local Cargo credentials file; run it
-interactively and never place the token in shell history, a commit, or a CI
-log. `npm login` should use the account or organization that owns the package,
-with two-factor authentication enabled. PyPI uploads should use an API token
-through keyring or an environment variable consumed by the upload tool; never
-paste that token into a command recorded in the repository.
-
-The first crates.io upload must be manual because a trusted publisher cannot
-create a package name that does not yet exist. After the first successful
-upload, configure the repository/workflow as a trusted publisher on crates.io,
-PyPI, and npm, then use the guarded GitHub workflow for subsequent releases.
-
-## Local preflight and publish order
-
-Run each command from a clean, tagged release commit. The root Makefile refuses
-the registry-ready path if `git status --porcelain` is non-empty.
-
-```sh
-RUSTC_WRAPPER= make docs-check
-RUSTC_WRAPPER= make migration-parity-evidence-check
-RUSTC_WRAPPER= make fmt
-RUSTC_WRAPPER= make clippy
-RUSTC_WRAPPER= make migration-parity-test
-RUSTC_WRAPPER= make migration-parity-coverage-rust
-RUSTC_WRAPPER= MIGRATION_WASM_NO_OPT=1 make release-check RELEASE_CRATES_READY=0
-PYTHON_COMPAT=python3 make python-compat-check
-```
-
-Coverage MCP is an evidence reader, not a test runner. Query its gaps or
-comparison only after the managed coverage command has produced a report whose
-recorded source revision matches the release commit. A report made by another
-revision must be remeasured before it is used as release evidence.
-
-The local first-release rehearsal is already assembled under
-`dist/release-local/`. It stages and verifies the packages in dependency order:
-`image-slash-star`, the public `fontdone` crate, the native fontdone C SDK,
-`fontdone` npm package, and finally the registry-normalized `pillow-rs`
-archive. Internal C and raw-WASM Cargo archives are retained only as package
-audit evidence. The same bundle contains the `pillow-rs` ABI3 wheel, the
-`pillow-rs` npm tarball, complete Git bundles for the three annotated tags, and
-checksum-bound offline consumer checks. This file-backed rehearsal does not
-contact or mutate crates.io, PyPI, npm, GitHub, or any remote Git repository.
-
-Run `make release-local-check` from the root checkout to revalidate the
-artifact list, checksum manifests, benchmark receipts, and complete Git
-histories after copying or rebuilding local release outputs. The check also
-rejects `fontdone-c-abi` and `fontdone-wasm` if either internal workspace
-package appears
-in the staged public Cargo registry.
-
-Publish the independent package first, then the font engine, then this
-workspace:
-
-1. In a clean `image-slash-star` release checkout, run its fixture, test,
-   lint, package, and license checks. Publish `image-slash-star` with
-   `cargo publish --locked` and verify the exact version with `cargo info`.
-2. In a clean `fontdone` release checkout, run `make fontdone-ci` and the
-   package audit. Publish the single `fontdone` crate, build the native C SDK
-   archive, and build/test `fontdone-wasm/npm`; publish a new npm package
-   version with the intended `next` tag. The workflow compares an already
-   visible version's extracted files with the reviewed archive and stops on a
-   mismatch. Attach the C SDK archive to the GitHub release.
-3. In this checkout, rerun `make release-check RELEASE_CRATES_READY=1` after
-   the exact dependency versions are visible. Publish the root crate, then
-   build/upload the PyPI wheel, then build/upload the npm tarball. Create the
-   Git tag and GitHub release only after the crate, PyPI, and npm uploads
-   succeed; attach the native C SDK archive to the GitHub release.
-
-If an upload times out, query the registry for the exact version before
-retrying. Registry versions are immutable; do not change a version merely to
-work around an uncertain response.
-
-## GitHub Actions and protected environments
-
-`.github/workflows/release.yml` runs the same locked preflight on `main`,
-uploads checksummed artifacts for review, and keeps each publish job behind
-the manual `publish` input plus a protected environment. The publish jobs use
-OIDC permissions only in the job that needs them. Configure these environment
-names and trusted publishers before enabling publication:
-
-| Environment | Registry | Required reviewer/configuration |
-| --- | --- | --- |
-| `crates-io` | crates.io | trusted publisher for this repository/workflow and package owner |
-| `pypi` | PyPI | trusted publisher matching the exact repository, workflow, and environment |
-| `npm` | npm | trusted publisher/provenance enabled for the package owner |
-
-Use these exact trusted-publisher identities; the workflow file is the path
-relative to each repository root:
-
-| Registry project | Owner/repository | Workflow | Environment | Package |
-| --- | --- | --- | --- | --- |
-| crates.io | `appunni-m/image-slash-star` | `.github/workflows/release.yml` | `crates-io` | `image-slash-star` |
-| crates.io | `appunni-m/fontdone` | `.github/workflows/release.yml` | `crates-io` | `fontdone` |
-| crates.io | `appunni-m/pillow-rs` | `.github/workflows/release.yml` | `crates-io` | `pillow-rs` |
-| PyPI | `appunni-m/pillow-rs` | `.github/workflows/release.yml` | `pypi` | `pillow-rs` |
-| npm | `appunni-m/fontdone` | `.github/workflows/release.yml` | `npm` | `fontdone` |
-| npm | `appunni-m/pillow-rs` | `.github/workflows/release.yml` | `npm` | `pillow-rs` |
-
-Create the matching GitHub environments and require reviewer approval for
-publication. Registry-side trusted publishers must use the same owner,
-repository, workflow, and environment values; do not create a long-lived
-registry token in repository secrets.
-
-Keep `contents: read` at workflow scope. The tag/release job alone receives
-`contents: write`; no registry token is stored in repository secrets.
-
-## Sibling project follow-up
-
-The sibling release files now have clean release branches with tag-driven
-workflows, pinned toolchains, successful local checks, checksummed archives,
-and registry trusted-publisher jobs. The first Cargo versions and the root
-`pillow-rs@0.1.1` npm bootstrap are published; the synchronized `0.1.2`
-Cargo/PyPI/npm release is the next tag-driven release, with PyPI and crates.io
-trusted-publisher configuration still to be verified on GitHub.
-Fontdone still needs its unresolved C-ABI route/error debt closed, the five
-target bundles including Windows import library evidence, and an owner decision
-on benchmark budgets. Image-slash-star still needs its strict source-coverage
-gate to pass for a fully qualified future release. These remain release
-quality gates rather than reasons to weaken the package or parity checks.
-
-Do not stage or discard those active sibling changes from this checkout. The
-release audit must be repeated against the final release commits, with package
-lists and checksums retained as artifacts.
-
-## Official registry references
-
-- [Cargo package publishing](https://doc.rust-lang.org/cargo/reference/publishing.html)
-- [PyPI Trusted Publishers](https://docs.pypi.org/trusted-publishers/)
-- [npm provenance and trusted publishing](https://docs.npmjs.com/generating-provenance-statements/)
+When the public API quota is exhausted, pass `--run-url` with the known GitHub
+Actions run URL. A job duration alone never establishes that the job passed.

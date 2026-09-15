@@ -2628,6 +2628,177 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.native-long-unicode-bearings",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getbbox.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 17.5
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": "j\ud83d\ude00g"
+            },
+            "anchor": {
+              "kind": "literal",
+              "value": "ls"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmetrics.nuanced.native-long-fractional-size",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmetrics",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmetrics.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 13.25
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmetrics",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.native-long-bitmap-bounds",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getbbox",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getbbox.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/sbit-gray-format1.ttf",
+          "sha256": "59866ef21c5dd06e63acd7caecbdc9fb074cd0862408d4178c4148a737abd4d8",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": "\ue000\ue000"
+            },
+            "anchor": {
+              "kind": "literal",
+              "value": "ls"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.bytes-latin1",
       "surface": "PIL.ImageFont.FreeTypeFont",
       "operation": "getbbox",

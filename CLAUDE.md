@@ -249,6 +249,18 @@ make ci
 make verify
 ```
 
+Release preparation also uses `make release-tools-test`,
+`make release-python-wheel release-wheel-test`,
+`make release-python-sdist release-sdist-test`, `make release-npm-pack`, and
+`make release-crate-package` (after the pinned dependencies are published).
+Use `make release-lock-update` when the reviewed dependency release commits
+change. `make release-platform-check RELEASE_PLATFORM_TARGET=<triple>` checks
+the Python binding for an installed foreign Rust target; actual wheel installs
+still run on the target host. Publication itself is only through the tag-triggered GitHub OIDC
+workflow. Read actual job conclusions with
+`make release-status RELEASE_STATUS_ARGS='--repo <owner/repo> --commit <full-sha>'`;
+use `--run-url <GitHub Actions URL>` if the public API quota is exhausted.
+
 Rust parity coverage also exports LCOV and a `.context.json` sidecar binding
 each report to the measured source hashes, instrumented binary, revision,
 selected inputs, and execution status. The collector rejects source/input

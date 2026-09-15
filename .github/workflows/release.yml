@@ -1,5 +1,4 @@
-# The first release is bootstrapped by a guarded manual dispatch. Later
-# releases are driven by a pushed version tag and never move an existing tag.
+# Immutable tag releases use only GitHub OIDC after successful exact main CI.
 
 name: Release
 
@@ -7,26 +6,9 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Exact synchronized package version (for example 0.1.2)
-        required: true
-        default: 0.1.2
-        type: string
-      dependencies_published:
-        description: image-slash-star and the single public fontdone crate, plus the fontdone npm package, are registry-visible
-        required: true
-        default: false
-        type: boolean
-      publish:
-        description: Publish artifacts after the preflight succeeds; push a tag separately to create the release
-        required: true
-        default: false
-        type: boolean
 
 concurrency:
-  group: release-${{ inputs.version || github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -42,8 +24,9 @@ env:
   WASM_PACK_VERSION: 0.15.0
   NODE_VERSION: 22.14.0
   NPM_VERSION: 11.5.1
-  RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+  RELEASE_VERSION: ${{ github.ref_name }}
   MIGRATION_WASM_NO_OPT: "1"
+  MIGRATION_RUST_COVERAGE_TOOLCHAIN: nightly-2026-07-16
 
 jobs:
   verify:
@@ -60,9 +43,6 @@ jobs:
       - name: require a clean checkout
         run: |
           test -z "$(git status --porcelain)"
-      - name: require the bootstrap branch
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: test "$GITHUB_REF_NAME" = main
       - name: require the immutable release tag
         if: ${{ github.event_name == 'push' }}
         run: |
@@ -106,7 +86,7 @@ jobs:
                   or (run.get("event") == "push" and run.get("head_branch") == "main")
               )
           ]
-          candidates.sort(key=lambda run: run.get("completed_at", ""), reverse=True)
+          candidates.sort(key=lambda run: run.get("updated_at", ""), reverse=True)
           print(candidates[0].get("id", "") if candidates else "")
           PY
           )"
@@ -120,7 +100,7 @@ jobs:
           cargo --version
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -129,7 +109,10 @@ jobs:
           cache-dependency-path: pillow-rs-js/package-lock.json
       - name: install fixed package tools
         run: |
-          python -m pip install --requirement requirements-ci.txt
+          python -m venv .venv
+          .venv/bin/python -m pip install --requirement requirements-ci.txt
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked
           npm install --global "npm@$NPM_VERSION"
           node --version
@@ -169,7 +152,6 @@ jobs:
           print(f"all package versions: {expected}")
           PY
       - name: verify dependency registry visibility
-        if: ${{ inputs.dependencies_published || github.event_name == 'push' }}
         run: |
           for package in image-slash-star fontdone; do
             version="$(DEP_NAME="$package" python -c 'import os,tomllib; d=tomllib.load(open("pillow-rs/Cargo.toml", "rb")); print(d["dependencies"][os.environ["DEP_NAME"]]["version"].lstrip("="))')"
@@ -184,20 +166,15 @@ jobs:
           make fmt
           make clippy
           make migration-parity-coverage-receipt-test
-      - name: run the canonical parity campaign
+          make release-tools-test
+      - name: Install pinned Rust coverage tools
         run: |
-          # Build the target facade in place so the installed Pillow oracle
-          # remains available to the source-side parity process.
-          make build-parity
-          make migration-parity-test
+          rustup toolchain install "$MIGRATION_RUST_COVERAGE_TOOLCHAIN" --profile minimal --component llvm-tools-preview
+          cargo +"$MIGRATION_RUST_COVERAGE_TOOLCHAIN" install cargo-llvm-cov --version 0.8.7 --locked
       - name: collect source-bound Rust coverage
         run: make migration-parity-coverage-rust
       - name: validate generated release evidence
         run: make migration-parity-evidence-check
-      - name: run the release package preflight
-        env:
-          RELEASE_CRATES_READY: ${{ (inputs.dependencies_published || github.event_name == 'push') && '1' || '0' }}
-        run: make release-check
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with:
@@ -207,9 +184,62 @@ jobs:
             build/migration-parity/
           if-no-files-found: warn
 
+  python-wheels:
+    name: Python wheel (${{ matrix.runner }})
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Build manylinux wheel with fixed tools and container
+        if: runner.os == 'Linux'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.14.1
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ matrix.target }}
+          manylinux: '2_28'
+          container: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
+          working-directory: pillow-rs-py
+          command: build
+          args: --release --locked --out ../dist/python-wheel --interpreter python3.12
+      - name: Build native wheel with fixed tools
+        if: runner.os != 'Linux'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.14.1
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ matrix.target }}
+          working-directory: pillow-rs-py
+          command: build
+          args: --release --locked --out ../dist/python-wheel --interpreter python
+      - name: Install and exercise the exact wheel outside the checkout
+        shell: bash
+        run: make release-wheel-test PYTHON=python
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: python-wheel-${{ matrix.runner }}
+          path: dist/python-wheel/*.whl
+          if-no-files-found: error
+
   package:
     name: Package release artifacts
-    needs: verify
+    needs: [verify, python-wheels]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -220,9 +250,6 @@ jobs:
       - name: require a clean checkout
         run: |
           test -z "$(git status --porcelain)"
-      - name: require the bootstrap branch
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: test "$GITHUB_REF_NAME" = main
       - name: require the immutable release tag
         if: ${{ github.event_name == 'push' }}
         run: |
@@ -241,7 +268,7 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -250,29 +277,36 @@ jobs:
           cache-dependency-path: pillow-rs-js/package-lock.json
       - name: install fixed package tools
         run: |
-          python -m pip install --requirement requirements-ci.txt
+          python -m venv .venv
+          .venv/bin/python -m pip install --requirement requirements-ci.txt
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked
           npm install --global "npm@$NPM_VERSION"
       - name: create release directories
         run: mkdir -p dist/release/crate dist/release/python dist/release/npm
       - name: package the root crate after dependency publication
-        if: ${{ inputs.dependencies_published || github.event_name == 'push' }}
         run: |
           version="${RELEASE_VERSION#v}"
-          cargo package --locked -p pillow-rs
+          make release-crate-package
           cp "target/package/pillow-rs-$version.crate" dist/release/crate/
-      - name: build the Python wheel
-        run: python -m maturin build --manifest-path pillow-rs-py/Cargo.toml --release --locked --out dist/release/python
-      - name: build and pack the npm package
-        working-directory: pillow-rs-js
-        run: |
-          npm ci
-          npm run build:release
-          npm run test:package
-          npm pack --ignore-scripts --pack-destination ../dist/release/npm
+      - name: Download verified platform wheels
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: python-wheel-*
+          merge-multiple: true
+          path: dist/release/python
+      - name: Build the Python source distribution
+        run: make release-python-sdist RELEASE_WHEEL_DIR=dist/release/python
+      - name: Build, install, and exercise the source distribution in isolation
+        run: make release-sdist-test RELEASE_WHEEL_DIR=dist/release/python
+      - name: Build and inspect the single Node/browser npm package
+        run: make release-npm-pack
       - name: write release checksums
         working-directory: dist/release
-        run: find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+        run: |
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          sha256sum --check SHA256SUMS
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: release-artifacts-${{ github.run_id }}
@@ -281,9 +315,9 @@ jobs:
 
   publish-crates:
     name: Publish pillow-rs to crates.io
-    if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
     needs: package
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     environment: crates-io
     permissions:
       contents: read
@@ -296,8 +330,15 @@ jobs:
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-artifacts-${{ github.run_id }}
+          path: dist/release
       - name: verify the package before authentication
-        run: cargo package --locked -p pillow-rs
+        run: |
+          (cd dist/release && sha256sum --check SHA256SUMS)
+          make release-crate-package
+          cmp "target/package/pillow-rs-${RELEASE_VERSION#v}.crate" "dist/release/crate/pillow-rs-${RELEASE_VERSION#v}.crate"
       - name: check immutable crates.io artifact
         id: cargo-check
         shell: bash
@@ -338,13 +379,13 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
-          cargo publish --locked -p pillow-rs
+          cargo publish --locked --no-verify -p pillow-rs
 
   publish-pypi:
     name: Publish pillow-rs to PyPI
-    if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
     needs: [package, publish-crates]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     environment: pypi
     permissions:
       contents: read
@@ -354,61 +395,28 @@ jobs:
         with:
           name: release-artifacts-${{ github.run_id }}
           path: dist/release
-      - name: check immutable PyPI artifact
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+          path: source
+      - name: Verify complete release bundle
+        run: (cd dist/release && sha256sum --check SHA256SUMS)
+      - name: Stage only absent immutable PyPI artifacts
         id: pypi-check
-        shell: bash
-        run: |
-          version="${RELEASE_VERSION#v}"
-          archive="$(find dist/release/python -maxdepth 1 -type f -name '*.whl' -print -quit)"
-          test -n "$archive"
-          python3 - "$archive" "$version" <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import sys
-          import urllib.error
-          import urllib.request
-
-          archive = Path(sys.argv[1])
-          version = sys.argv[2]
-          url = f"https://pypi.org/pypi/pillow-rs/{version}/json"
-          try:
-              with urllib.request.urlopen(url, timeout=30) as response:
-                  payload = json.load(response)
-          except urllib.error.HTTPError as error:
-              if error.code == 404:
-                  with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                      output.write("missing=true\n")
-                  print(f"pillow-rs=={version} is not visible")
-                  raise SystemExit(0)
-              raise
-
-          filename = archive.name
-          matches = [item for item in payload.get("urls", []) if item.get("filename") == filename]
-          if len(matches) != 1:
-              raise SystemExit(f"PyPI does not expose exactly one {filename} for pillow-rs=={version}")
-          registry_checksum = matches[0].get("digests", {}).get("sha256")
-          local_checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-          if not registry_checksum or local_checksum != registry_checksum:
-              raise SystemExit(
-                  f"PyPI artifact mismatch for pillow-rs=={version}: "
-                  f"local={local_checksum} registry={registry_checksum}"
-              )
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("missing=false\n")
-          print(f"pillow-rs=={version} is visible and matches the immutable wheel")
-          PY
+        run: >-
+          python3 source/scripts/prepare_pypi_release.py
+          --version "${RELEASE_VERSION#v}" --archive-dir dist/release/python
+          --output-dir dist/pypi-publish
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         if: steps.pypi-check.outputs.missing == 'true'
         with:
-          packages-dir: dist/release/python/
+          packages-dir: dist/pypi-publish/
 
   publish-npm:
     name: Publish pillow-rs to npm
-    if: ${{ (inputs.publish && inputs.dependencies_published) || github.event_name == 'push' }}
     needs: [package, publish-crates]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     environment: npm
     permissions:
       contents: read
@@ -423,6 +431,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
           cache: false
+      - name: Verify complete release bundle
+        run: (cd dist/release && sha256sum --check SHA256SUMS)
       - name: check immutable npm artifact
         id: npm-check
         shell: bash
@@ -473,6 +483,7 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     needs: [publish-crates, publish-pypi, publish-npm]
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
@@ -487,20 +498,24 @@ jobs:
         with:
           name: release-artifacts-${{ github.run_id }}
           path: dist/release
+      - name: Verify complete release bundle
+        run: (cd dist/release && sha256sum --check SHA256SUMS)
       - name: Attest release artifacts
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-path: |
             dist/release/crate/*.crate
             dist/release/python/*.whl
+            dist/release/python/*.tar.gz
             dist/release/npm/*.tgz
             dist/release/SHA256SUMS
       - name: create the immutable GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            dist/release/SHA256SUMS dist/release/crate/*.crate dist/release/python/*.whl dist/release/npm/*.tgz
+            dist/release/SHA256SUMS dist/release/crate/*.crate dist/release/python/*.whl dist/release/python/*.tar.gz dist/release/npm/*.tgz

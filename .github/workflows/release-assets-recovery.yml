@@ -105,6 +105,20 @@ jobs:
             and .status == "completed"
           ' <<<"${run}" >/dev/null
 
+          # A completed run may have skipped every publisher. Require success
+          # for each registry and the exact attempt before using any bundle.
+          mkdir -p target/release-recovery
+          printf '%s' "$run" > target/release-recovery/run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > target/release-recovery/jobs.json
+          if ! python3 scripts/check_release_recovery.py \
+            --run target/release-recovery/run.json \
+            --jobs target/release-recovery/jobs.json --tag "$tag" --commit "$tag_sha"; then
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then exit 1; fi
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping recovery because publication did not complete."
+            exit 0
+          fi
+
           echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
           echo "version=${tag#v}" >>"${GITHUB_OUTPUT}"
           echo "run_id=${run_id}" >>"${GITHUB_OUTPUT}"
@@ -132,7 +146,7 @@ jobs:
           set -euo pipefail
           test -s SHA256SUMS
           test -s "crate/pillow-rs-${VERSION}.crate"
-          test "$(find python -maxdepth 1 -type f -name 'pillow-rs-*.whl' | wc -l | tr -d ' ')" = 1
+          test "$(find python -maxdepth 1 -type f -name 'pillow_rs-*.whl' | wc -l | tr -d ' ')" -ge 1
           test -s "npm/pillow-rs-${VERSION}.tgz"
           sha256sum --check SHA256SUMS
       - name: Attest recovered release artifacts
@@ -142,6 +156,7 @@ jobs:
           subject-path: |
             bundle/crate/*.crate
             bundle/python/*.whl
+            bundle/python/*.tar.gz
             bundle/npm/*.tgz
             bundle/SHA256SUMS
       - name: Publish recovered release assets
@@ -153,7 +168,7 @@ jobs:
           gh release create "${RELEASE_TAG}" \
             bundle/SHA256SUMS \
             bundle/crate/*.crate \
-            bundle/python/*.whl \
+            bundle/python/*.whl bundle/python/*.tar.gz \
             bundle/npm/*.tgz \
             --verify-tag \
             --generate-notes \

@@ -11,12 +11,14 @@ turn a benchmark into a release gate before the benchmark budget policy passes.
 | Rust toolchain | `rust-toolchain.toml`, `1.96.1` | all workspace builds and checks |
 | Cargo resolution | `Cargo.lock` with `--locked` CI commands | exact Rust dependency graph |
 | Pillow oracle | manifest and CI, `12.2.0` | live parity and reverse coverage |
-| Python parity runners | CI `macos-14` ARM64, Python `3.10`, `3.12` | Pillow 12.2.0 supports these versions; the ARM64 runner matches the generated native corpus |
+| Python parity runners | CI `macos-14` ARM64, Python `3.10.11`, `3.12.10` | fixed builds from the GitHub Python manifest; the ARM64 runner matches the generated native corpus |
 | Python wheel ABI | `abi3-py38`, `requires-python >=3.8` | package compatibility floor; parity oracle still runs on 3.10+ |
 | Node.js | CI/release `22.14.0` | WASM package and browser runner |
 | npm | CI/release `11.5.1` | locked package installation and publication |
 | wasm-pack | CI/Make, `0.15.0` | WASM build |
 | maturin | `requirements-ci.txt`, `1.14.1` | Python extension build |
+| Release-host Python | `release.yml`, `3.12.10` | fixed interpreter available for Linux, macOS ARM64, and Windows |
+| Rust coverage toolchain | `nightly-2026-07-16`, cargo-llvm-cov `0.8.7` | source-bound line/branch collection |
 | coverage.py | `requirements-ci.txt`, `7.10.7` | managed source coverage |
 | NumPy | `requirements-ci.txt`, `2.2.6` | array input generation |
 | PyYAML | `requirements-ci.txt`, `6.0.3` | manifest/input parsing |
@@ -75,9 +77,13 @@ The required checks are ordered so cheap contract failures happen first:
 2. workspace clippy with the documented deprecation exception;
 3. locked core build and supply-chain checks;
 4. deterministic manifest/input validation;
-5. Python parity and managed coverage on Python 3.10 and 3.12;
+5. Python parity and managed coverage on fixed Python 3.10.11 and 3.12.10;
 6. Node/browser WASM package build and parity; and
 7. a bounded GPU smoke gate with explicit fallback accounting.
+
+The Rust matrix also type-checks the Python binding for Windows MSVC. This
+catches LLP64 integer-width errors before tagging; the release matrix still
+builds and installs real wheels on each of its three native hosts.
 
 The full all-backend campaign is available through `make test`. It remains a
 reviewable evidence job because GPU availability and browser WebGPU support are
@@ -122,32 +128,40 @@ manifest, input, backend, terminal, and measurement receipts. The workflow
 retains the budget report and labels timing violations for review; it does not
 turn a noisy timing result into a correctness failure.
 
-## Release sequence
+## Release pipeline
 
-1. Update the workspace version in `Cargo.toml`, then verify the Python and npm
-   package versions match it.
-2. Regenerate manifest-driven inputs and generated evidence.
-3. Run `make release-check`, which builds all packages, checks package contents,
-   and runs the locked metadata/build validations without publishing. Crate
-   packaging remains explicitly deferred until the pinned `image-slash-star`
-   and `fontdone` git dependencies have published registry versions; enable it
-   only with `RELEASE_CRATES_READY=1` after that prerequisite is met.
-4. Review parity, coverage, benchmark, security, and changelog evidence.
-5. For the bootstrap, run the guarded manual release dispatch after the
-   dependency crates are visible, then push an annotated `v<version>` tag.
-   That tag creates the GitHub release. Every later release starts from a
-   reviewed commit and uses the same pushed-tag path.
-6. Publish each registry from the release workflow with protected environments:
-   crates.io, PyPI, then npm. The root crate remains disabled until the
-   pinned `image-slash-star` and `fontdone` versions are visible. Registry
-   steps are idempotent for an already published bootstrap version; record
-   artifact checksums and provenance.
-7. Publish documentation and benchmark sites from the same tag; the site build
-   consumes validated generated artifacts only.
+The first local Cargo/npm bootstraps are complete. All subsequent registry
+publication uses the immutable `v<version>` tag and
+[release.yml](../.github/workflows/release.yml), following the isolated jobs in
+[coverage-mcp's working pipeline](https://github.com/appunni-m/coverage-mcp/blob/v0.16.0/.github/workflows/release.yml).
+The maintained [registry matrix](REGISTRY_RELEASE_MATRIX.md) defines exact
+package names, publisher environments, order, and coverage acceptance.
 
-Publishing targets require an explicit `RELEASE_CONFIRM=1` in local Make
-invocations. CI publication should use short-lived OIDC credentials and a
-protected environment; no token belongs in the repository.
+1. Finish fontdone, then image-slash-star, then pillow-rs. Bump versions and
+   update the locked exact dependency revisions before tagging each project.
+2. Require successful main CI on the tagged commit. A different commit or
+   merely successful fast subset cannot stand in for the required run.
+3. Run release metadata/contract checks and source-bound Rust coverage on a
+   clean runner. The collector uses `nightly-2026-07-16` by default; an explicit
+   `MIGRATION_RUST_COVERAGE_TOOLCHAIN` override is included in the build identity.
+4. Build ABI3 wheels for Linux x86-64, macOS ARM64, and Windows x86-64. The
+   Linux wheel uses manylinux 2.28 with a pinned container digest; each host
+   installs its exact wheel into a separate environment and exercises `PIL`.
+5. Assemble the verified crate, wheels, source distribution, and the single
+   Node/browser npm package. Generate checksums after packaging, excluding the
+   checksum manifest itself, then verify them.
+6. Publish with isolated OIDC jobs in `crates-io`, `pypi`, and `npm`. Compile
+   and compare the Cargo archive before token minting. PyPI stages only absent
+   files; an existing artifact with different bytes stops publication.
+7. After all registries succeed, attest the artifacts and create the GitHub
+   release. Recovery requires successful registry jobs on the exact tag/run;
+   skipped publishers cannot authorize a GitHub release.
+
+The workflow uses fixed Rust, Node, npm, maturin, and coverage versions and
+pins external actions by commit. Local publication Make targets refuse uploads;
+local credentials are not part of this pipeline. Source and artifact changes
+always receive a new version and immutable tag. No full FreeType, codec, GPU,
+or 100% coverage claim is implied by an alpha package publication.
 
 ## Dependency update policy
 

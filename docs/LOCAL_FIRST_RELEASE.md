@@ -1,5 +1,9 @@
 # Local first-release receipt
 
+This is a historical receipt. All subsequent releases use the
+[GitHub OIDC release pipeline](REGISTRY_RELEASE_MATRIX.md); the local bootstrap
+commands and versions below are not the current release procedure.
+
 This receipt records the coordinated local bootstrap prepared on 2026-09-11.
 The file-backed rehearsal remains immutable and does not itself write to a
 registry or remote Git repository. The owner-authorized manual bootstrap was
