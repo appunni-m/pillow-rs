@@ -67,3 +67,27 @@ make migration-parity-changed-line-coverage \
 The original measured LCOV SHA-256 is
 `843077eefc939e59c393f8392f4cbe487c8b2d27965d11c93a736ed9633afcfc`.
 Keep its `.context.json` sidecar; never attach it to a regenerated report.
+
+## 0.1.3 release verification
+
+Fresh collection at released commit
+`fd78eb80402a0d6d99e6b696d0a1ebf9ba11d5fb` passed all 24 plans and 11,328
+target coverage executions. Against the same base, all 25 measured changed
+Rust lines have hits, with zero uncovered measured lines and seven lines
+without LCOV records. The release has no additional Rust implementation changes.
+
+Retained artifacts are:
+
+- `build/migration-parity/release-0.1.3-fd78eb804-coverage.json`;
+- `target/coverage/release-0.1.3-fd78eb804-rust.json`;
+- `target/coverage/release-0.1.3-fd78eb804-rust.lcov` and its `.context.json`;
+- `build/migration-parity/release-0.1.3-fd78eb804-changed-lines.json`.
+
+The LCOV SHA-256 is
+`0622dde0a4ceba6ad0a5987e9249490742bb6c58d8d44654dbbeab2fa3d1a995`.
+The [exact commit's main CI](https://github.com/appunni-m/pillow-rs/actions/runs/35014896711)
+also passed all 11,348 comparisons in each Python 3.10, Python 3.12, Node, and
+browser WASM lane. The [release workflow](https://github.com/appunni-m/pillow-rs/actions/runs/35017008075)
+passed source-bound coverage and native installation checks for all three
+platform wheels. Receipts remain bound to that released commit; later
+documentation edits do not change their recorded source identity.
