@@ -18,9 +18,10 @@ those controls remain visible as backend coverage gaps. Benchmark budget
 acceptance remains open as described in
 [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).
 
-The 0.1.2 release candidate adds three native-font boundary cases. The current
-Python corpus passes 11,348/11,348 comparisons; the three new cases also pass
-in Node and browser WASM. Changed-line evidence is recorded in
+Version 0.1.2 adds three native-font boundary cases. Python 3.10, Python 3.12,
+Node, and browser WASM each passed 11,348/11,348 comparisons in the
+[release preparation CI run](https://github.com/appunni-m/pillow-rs/actions/runs/34988041168).
+Changed-line evidence is recorded in
 [`docs/COVERAGE.md`](docs/COVERAGE.md), and alpha publication gates are defined in
 [`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md).
 

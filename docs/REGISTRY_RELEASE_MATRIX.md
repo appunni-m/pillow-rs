@@ -55,7 +55,7 @@ The 2026-09-15 audit found these repository defects before OIDC authentication:
 
 | Repository | Failure before this release | Correction and acceptance |
 |---|---|---|
-| fontdone | Native C-width compilation, unspecified Linux cache fields, cross-linker/proc-macro lookup, Windows header/symbol parsing, and a linker probe overwriting the measured DLL blocked successive candidates | Alpha.9 at `4ae25add` preserves native C widths, uses the canonical macOS oracle, repairs audit parsing, and isolates the linker-library probe. All five native/QEMU contracts pass in [the exact main run](https://github.com/appunni-m/fontdone/actions/runs/34986139564). Fresh local parity is 20,357/20,357 with three named undefined-C cases pending; native shared/static exports each match 218 declarations. Seven tooling regressions preserve real export detection and artifact identity. |
+| fontdone | Native C-width compilation, cross-linker/proc-macro lookup, Windows header/symbol parsing, and a linker probe overwriting the measured DLL blocked successive candidates. The aggregate then exposed a silently disabled bzip2 reference and three unspecified Linux SBit field comparisons. | Alpha.9 at `a6efc670` preserves native C widths, repairs the audit tools, requires the enabled bzip2 reference, and uses the documented canonical macOS host for full comparisons. [Candidate CI](https://github.com/appunni-m/fontdone/actions/runs/34994548421) requires all five native/QEMU contracts plus their aggregate report. Fresh local parity is 20,357/20,357 with three named undefined-C inputs pending; the external C audit passes 218 functions and 1,496 cases. Eight tooling regressions cover export detection, artifact identity, and missing BZip2. Cross-host equality for unspecified SBit fields remains unproven. |
 | image-slash-star | Every coverage test passed, then Python 3.14 rejected an unescaped percent sign in the verifier's CLI help | Candidate `c30253c9` fixes the CLI, adds a regression, pins Python 3.12.10 (available on all required runners), and retains failed CI evidence. Fresh local coverage passes all four existing alpha floors; [exact main CI](https://github.com/appunni-m/image-slash-star/actions/runs/34974261464) is green for quality, coverage, and dependencies. |
 | pillow-rs | Unreleased dependencies, Windows FreeType integer-width compilation, self-including checksums, generic Linux wheels, and recovery without successful registry jobs blocked publication | Candidate 0.1.2 pins the corrected dependencies, converts native font integers at the Rust boundary, adds three generator-owned parity cases, and checks Windows compilation on main. It builds portable wheels and requires successful registry evidence before recovery. Actual OIDC acceptance is established only by the new tag run. |
 
@@ -63,6 +63,13 @@ Historical Cargo uploads without GitHub `trustpub_data` do not prove the newly
 configured OIDC publisher is wrong. A skipped publish job has not attempted
 authentication. Report a configuration blocker only when the actual OIDC job
 rejects the claimed repository/workflow/environment.
+
+The crates.io metadata check also needs a descriptive HTTP `User-Agent` with
+the repository contact URL. The local default-curl request returned HTTP 403;
+the identified request returned HTTP 200 for the existing `pillow-rs/0.1.0`
+version. The release workflow now identifies that request before checking
+whether a version is absent or immutable. This follows the
+[crates.io maintainer's explanation of generic-agent rejection](https://users.rust-lang.org/t/tor-i2p-yggdrasil-mycelium-proxy-for-crates-io/138527/3).
 
 ## Coverage and compatibility acceptance
 
