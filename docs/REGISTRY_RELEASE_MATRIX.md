@@ -21,12 +21,38 @@ The sibling release branches are recorded below.
 The local-only bootstrap bundle is under `dist/release-local/` and is verified
 separately from the tracked source tree.
 
-The current release candidate is commit `82bac508a` and hosted CI run
-`34862236282` completed successfully on 2026-09-14 across all eight jobs. No
+The current release candidate is commit `9a596bf94` and hosted CI run
+`34865952403` completed successfully on 2026-09-14 across all eight jobs. No
 `v0.1.2` tag has been pushed, so the tag-driven release workflow has not run.
 The candidate passed the local package preflight and release-bundle checks;
 registry publication is waiting on the dependency and trusted-publisher gates
 listed below.
+
+## Trusted-publisher audit (2026-09-15)
+
+`coverage-mcp` is the working reference for the GitHub trusted-agent path. Its
+`v0.16.0` Release run `33979588689` completed successfully, its GitHub Release
+contains the checksummed crate and native bundles, and the crates.io API records
+`trustpub_data.provider=github` with repository `appunni-m/coverage-mcp` and
+the exact release commit. Its release workflow uses a tag-triggered artifact
+bundle, a job-level `crates-io` environment with `id-token: write`,
+`crates-io-auth-action`, artifact attestations, and a final GitHub Release job.
+
+The three target repositories are not at the same point:
+
+| Repository | Trusted-agent evidence | Actual blocker |
+| --- | --- | --- |
+| `coverage-mcp` | Cargo `0.16.0` has GitHub `trustpub_data`; Release run `33979588689` and GitHub Release `v0.16.0` succeeded | none in the reference path |
+| `fontdone` | Cargo `2.14.3-alpha.3` was uploaded by `appunni-m` and has no `trustpub_data`; npm exposes only `2.14.3-alpha.1` | `v2.14.3-alpha.3` Release run `34812797706` stopped before publish because no successful thorough CI run existed for the exact tag. Alpha.4/5 stopped at their tag-ref guard; alpha.6 again stopped at the thorough-CI guard. OIDC publication was never reached. |
+| `image-slash-star` | Cargo `0.1.0` was uploaded by `appunni-m` and has no `trustpub_data`; no release tag is present on `origin` | The release workflow has never reached its OIDC job. The latest main CI run `34750984122` failed its strict coverage gate (`95,603/161,451` lines), and the only `v0.1.0` tag is local. |
+| `pillow-rs` | Root CI run `34865952403` for `9a596bf94` completed successfully; no root `0.1.2` registry artifact exists yet | The release tag has not been pushed because the pinned `fontdone@2.14.3-alpha.3` npm dependency is absent. Root OIDC jobs have therefore not executed. |
+
+Absence of `trustpub_data` proves that a historical Cargo upload was manual;
+it does not prove that a newly configured trusted publisher is wrong. The
+configuration becomes observable only when the next tag reaches the registry
+publish job. For `pillow-rs`, the workflow now follows the same coverage-mcp
+pattern for attestations and has a recovery workflow for an interrupted final
+GitHub Release step.
 
 The latest successful registry probes (2026-09-14) found
 `image-slash-star@0.1.0` and `fontdone@2.14.3-alpha.3` visible on crates.io.
