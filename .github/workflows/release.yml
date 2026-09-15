@@ -88,10 +88,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=success" \
-            --jq '.workflow_runs[0].id // empty')"
+          payload="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100")"
+          run_id="$(PAYLOAD="${payload}" python3 - <<'PY'
+          import json
+          import os
+
+          runs = json.loads(os.environ["PAYLOAD"]).get("workflow_runs", [])
+          candidates = [
+              run
+              for run in runs
+              if run.get("name") == "CI"
+              and run.get("status") == "completed"
+              and run.get("conclusion") == "success"
+              and (
+                  run.get("event") == "workflow_dispatch"
+                  or (run.get("event") == "push" and run.get("head_branch") == "main")
+              )
+          ]
+          candidates.sort(key=lambda run: run.get("completed_at", ""), reverse=True)
+          print(candidates[0].get("id", "") if candidates else "")
+          PY
+          )"
           test -n "$run_id"
+          echo "using successful CI run ${run_id} for ${GITHUB_SHA}"
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
@@ -455,6 +475,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
@@ -464,6 +487,14 @@ jobs:
         with:
           name: release-artifacts-${{ github.run_id }}
           path: dist/release
+      - name: Attest release artifacts
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: |
+            dist/release/crate/*.crate
+            dist/release/python/*.whl
+            dist/release/npm/*.tgz
+            dist/release/SHA256SUMS
       - name: create the immutable GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

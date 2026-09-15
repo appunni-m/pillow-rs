@@ -1,0 +1,160 @@
+# Recover a GitHub Release when the tag workflow completed its verified
+# package/publish jobs but the final release-creation job was interrupted.
+# The recovery path never rebuilds or republishes an artifact.
+
+name: Release asset recovery
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable release tag to recover
+        required: true
+        type: string
+      run_id:
+        description: Release workflow run containing the verified bundle
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    name: Recover verified GitHub release assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve and verify release source
+        id: release
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          DISPATCH_RUN_ID: ${{ inputs.run_id }}
+          COMPLETED_TAG: ${{ github.event.workflow_run.head_branch }}
+          COMPLETED_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          case "${GITHUB_EVENT_NAME}" in
+            workflow_run)
+              tag="${COMPLETED_TAG}"
+              run_id="${COMPLETED_RUN_ID}"
+              ;;
+            workflow_dispatch)
+              tag="${DISPATCH_TAG}"
+              run_id="${DISPATCH_RUN_ID}"
+              ;;
+            *)
+              echo "Unsupported recovery event ${GITHUB_EVENT_NAME}." >&2
+              exit 1
+              ;;
+          esac
+
+          if ! [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Refusing invalid release tag ${tag}." >&2
+            exit 1
+          fi
+          tag_sha="$(git rev-parse "${tag}^{commit}")"
+
+          if [ -z "${run_id}" ]; then
+            runs="$(gh api \
+              --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/release.yml/runs" \
+              -f branch="${tag}" -f event=push -f per_page=100)"
+            run_id="$(jq -r --arg tag "${tag}" --arg sha "${tag_sha}" '
+              [.workflow_runs[] | select(
+                .name == "Release"
+                and .event == "push"
+                and .head_branch == $tag
+                and .head_sha == $sha
+                and .status == "completed"
+              )]
+              | sort_by(.created_at)
+              | reverse
+              | .[0].id // empty
+            ' <<<"${runs}")"
+          fi
+
+          if ! [[ "${run_id}" =~ ^[0-9]+$ ]]; then
+            echo "No completed Release run found for ${tag} at ${tag_sha}." >&2
+            exit 1
+          fi
+
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+          jq -e --arg tag "${tag}" --arg sha "${tag_sha}" '
+            .name == "Release"
+            and .event == "push"
+            and .head_branch == $tag
+            and .head_sha == $sha
+            and .status == "completed"
+          ' <<<"${run}" >/dev/null
+
+          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+          echo "version=${tag#v}" >>"${GITHUB_OUTPUT}"
+          echo "run_id=${run_id}" >>"${GITHUB_OUTPUT}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "needed=false" >>"${GITHUB_OUTPUT}"
+            echo "GitHub Release ${tag} already exists; recovery is a no-op."
+          else
+            echo "needed=true" >>"${GITHUB_OUTPUT}"
+          fi
+      - name: Download verified release bundle
+        if: steps.release.outputs.needed == 'true'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-artifacts-${{ steps.release.outputs.run_id }}
+          path: bundle/
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.release.outputs.run_id }}
+      - name: Verify recovered bundle
+        if: steps.release.outputs.needed == 'true'
+        shell: bash
+        working-directory: bundle
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -s SHA256SUMS
+          test -s "crate/pillow-rs-${VERSION}.crate"
+          test "$(find python -maxdepth 1 -type f -name 'pillow-rs-*.whl' | wc -l | tr -d ' ')" = 1
+          test -s "npm/pillow-rs-${VERSION}.tgz"
+          sha256sum --check SHA256SUMS
+      - name: Attest recovered release artifacts
+        if: steps.release.outputs.needed == 'true'
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: |
+            bundle/crate/*.crate
+            bundle/python/*.whl
+            bundle/npm/*.tgz
+            bundle/SHA256SUMS
+      - name: Publish recovered release assets
+        if: steps.release.outputs.needed == 'true'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          gh release create "${RELEASE_TAG}" \
+            bundle/SHA256SUMS \
+            bundle/crate/*.crate \
+            bundle/python/*.whl \
+            bundle/npm/*.tgz \
+            --verify-tag \
+            --generate-notes \
+            --title "${RELEASE_TAG}"
