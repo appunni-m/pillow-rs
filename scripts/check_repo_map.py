@@ -26,6 +26,12 @@ ROOT_FILES = {
     "Cargo.toml",
     "CONTRIBUTING.md",
     "Makefile",
+    "docs.mk",
+    "documentation.json",
+    "mkdocs.yml",
+    "requirements-docs.in",
+    "requirements-docs.txt",
+    ".github/workflows/docs.yml",
     "README.md",
     "requirements-ci.txt",
     "deny.toml",
@@ -58,6 +64,8 @@ INCLUDED_EXACT = {
 
 EXCLUDED_PREFIXES = (
     "tests/fixtures/",
+    # The deprecated internal Python alias is not a public entry point.
+    "pillow-rs-py/python/RSPIL/",
 )
 
 EXCLUDED_SUFFIXES = (

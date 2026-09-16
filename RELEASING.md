@@ -1,48 +1,86 @@
 # Releasing pillow-rs
 
-`pillow-rs` is released as three coordinated artifacts from one reviewed
-commit:
+Version **0.1.3** is published on crates.io, PyPI, and npm. All subsequent
+publication runs from this repository's pinned `release.yml` workflow using
+GitHub OIDC. Local publishing targets refuse uploads.
 
-| Artifact | Package | Registry | Prerequisite |
-| --- | --- | --- | --- |
-| Rust core | `pillow-rs` | crates.io | `image-slash-star` and `fontdone` are visible at their pinned versions |
-| Python binding | `pillow-rs` | PyPI | the Rust package is available and the wheel consumer check passes |
-| WebAssembly binding | `pillow-rs` | npm | the Rust package is available and the npm consumer check passes |
+| Artifact | Registry name | Public API |
+| --- | --- | --- |
+| Rust core | crates.io `pillow-rs` | `pillow_rs` |
+| Python wheels and source distribution | PyPI `pillow-rs` | `PIL` |
+| Shared Node/browser WASM package | npm `pillow-rs` | `pillow-rs` |
 
-The C SDK and the `fontdone` browser package are released from the separate
-`fontdone` repository. Its workspace contains private Cargo build packages;
-only its root `fontdone` package is published to crates.io.
+Publish new dependency versions from fontdone and image-slash-star first, then
+update pillow-rs's exact dependency versions and lockfile. Fontdone has one
+public Cargo crate; its C/WASM build members remain private. Image-slash-star
+has no Python or npm distribution.
 
-## Bootstrap rehearsal
+## Prepare a release
 
-From a clean checkout, run the maintained checks before any upload:
+1. Update authoritative package versions, exact dependency pins, lockfiles,
+   changelog, and the documented version.
+2. Run the relevant full parity, coverage, portability, package-consumer, and
+   supply-chain checks. Preserve failures and unmeasured scope.
+3. From a clean checkout, run `make release-check RELEASE_CRATES_READY=1`.
+   Inspect the crate, wheel/sdist, and packed npm contents.
+4. Commit and push to main. Require successful CI for that exact commit.
+5. Push a new annotated `v<version>` tag on the validated commit.
+
+Tags and registry versions are immutable. Changed source or changed artifact
+bytes require a new version. A retry is for the same source and artifacts,
+not a way to replace a published package.
+
+## Publication and verification
+
+The workflow checks tag identity, builds artifacts before authentication,
+validates checksums, and runs isolated consumers. Separate publishing jobs
+use `id-token: write` and the configured environments:
+
+| Registry | Workflow filename | Environment |
+| --- | --- | --- |
+| crates.io | `release.yml` | `crates-io` |
+| PyPI | `release.yml` | `pypi` |
+| npm | `release.yml` | `npm` |
+
+No long-lived registry token is required. npm stable versions use `latest`;
+prereleases use `next`. The final GitHub release requires all registry jobs.
+
+Verify the downloaded registry artifacts against the GitHub checksum manifest.
+Check registry provenance for the repository, workflow, and source identity.
+Install a published wheel in a fresh environment outside the checkout. The
+[release matrix](docs/REGISTRY_RELEASE_MATRIX.md) records the accepted versions
+and workflow runs across the three projects.
 
 ```sh
-make release-local-check
-MIGRATION_WASM_NO_OPT=1 make release-check RELEASE_CRATES_READY=0
+make release-tools-test
+make release-status RELEASE_STATUS_ARGS='--commit <full-source-sha>'
 ```
 
-The first command verifies the file-backed bundle, checksums, package archives,
-and Git bundles. The second command runs the registry-independent root release
-gate. Keep parity, coverage, benchmark, and backend fallback evidence attached
-to the exact commit; do not change a fixture or threshold to make a release
-pass.
+A skipped job did not authenticate. A completed workflow is not necessarily
+successful. Diagnose the failing job before changing trusted-publisher settings.
+The recovery helper validates the original source/run and required successful
+jobs; it does not republish registry packages.
 
-Publish the dependency crates first, then rerun the root gate with
-`RELEASE_CRATES_READY=1`. The first public upload requires the package owners'
-registry credentials or trusted publishers for crates.io, PyPI, and npm. The
-release workflows use short-lived OIDC credentials behind protected GitHub
-environments; no registry token belongs in the repository.
+## Platform and compatibility boundaries
 
-The npm job selects the `latest` dist-tag for a stable version and `next` for
-any version containing a prerelease suffix such as `-alpha.1`. This keeps a
-prerelease out of the stable npm channel without requiring a workflow edit for
-each version bump.
+Release wheels cover Linux x86-64 (manylinux 2.28), macOS ARM64, and Windows
+x86-64, plus an sdist for source builds. Native wheel consumers run before
+publication. ABI metadata and tested Python versions are separate; see
+[installation](docs/INSTALLATION.md).
 
-## Subsequent releases
+Release acceptance does not complete every API, codec, GPU, or coverage goal.
+The [maturity guide](docs/COMPATIBILITY.md) and
+[coverage evidence](docs/COVERAGE.md) preserve those boundaries.
 
-After the bootstrap, update all authoritative versions and changelog entries,
-run the full release gate, and push one annotated immutable `v<version>` tag.
-The tag workflow verifies that the tag, package metadata, lockfile, and hosted
-CI run identify the same commit before publishing crates.io, PyPI, and npm
-artifacts. Never move a tag after a registry upload.
+## Documentation deployment
+
+The Documentation workflow publishes this repository's GitHub Pages site after
+a checked main build. It is independent of package publication: documentation
+changes do not require new registry versions. See the
+[documentation checklist](docs/DOCUMENTATION_CHECKLIST.md).
+
+## Registry references
+
+- [crates.io authentication action](https://github.com/rust-lang/crates-io-auth-action)
+- [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)
+- [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)

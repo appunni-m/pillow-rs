@@ -137,7 +137,7 @@ pub enum PilError {
 
     // ============================================================================
     // AS PER DESIGN — DO NOT REMOVE:
-    //   Below variants were added per the SYSTEMIC_FIXES.md audit to eliminate
+    //   Below variants were added per the docs/ARCHITECTURE.md audit to eliminate
     //   bare `String` error types and dead error variants. Every domain gets a
     //   named, descriptive variant so callers can match on error kind.
     // ============================================================================

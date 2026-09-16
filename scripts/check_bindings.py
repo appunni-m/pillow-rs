@@ -248,7 +248,7 @@ def main():
             for lineno, msg in sorted(violations):
                 print(f"    line {lineno}: {msg}")
         print("\n  All logic must live in pillow-rs/src/. Bindings should delegate ONLY.")
-        print("  See CLAUDE.md lines 14-18 and SYSTEMIC_FIXES.md Fix 5.")
+        print("  See CLAUDE.md lines 14-18 and docs/ARCHITECTURE.md (binding boundaries).")
         print("  → This is a WARNING during migration. It will become an ERROR.")
         print("⚠️  Thin-wrapper migration is incomplete.")
         # sys.exit(1)  ← uncomment when migration complete

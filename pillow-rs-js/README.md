@@ -1,41 +1,85 @@
-# pillow-rs
+# pillow-rs for Node.js and browsers
 
-`pillow-rs` provides the Rust image API through one npm package. Its package
-exports select the browser/WASM entry for browser bundlers and a Node entry
-for Node.js. Both entries use the same complete codec surface and the same
-WASM module.
+The npm package is **pillow-rs**, version **0.1.3**. One package contains the
+shared WASM implementation and conditional Node/browser entry points.
+`pillow-rs-js` is the Rust binding directory, not a second npm package.
 
-```js
-import init, { Image } from 'pillow-rs';
-await init();
+[Documentation](https://appunni-m.github.io/pillow-rs/javascript/) ·
+[Maturity](https://appunni-m.github.io/pillow-rs/compatibility/) ·
+[Benchmarks](https://appunni-m.github.io/pillow-rs/benchmarks/)
 
-const image = new Image('RGB', 2, 2, 0, 0, 0, 255);
-```
-
-In a browser, `init()` fetches the package's `pillow_rs_js_bg.wasm` asset
-relative to the generated module. In Node.js, the conditional `node` export
-reads that same bundled asset from disk, so the no-argument initializer works
-without a `file://` fetch. `initSync()` is also available in Node.js for code
-that needs synchronous setup. Pass an explicit URL, `Response`, bytes, or
-compiled module to `init()` when an application owns the browser asset path.
-
-The former `pillow-rs/extra` subpath is not part of the release contract. A
-fresh build produces one publishable WASM payload and one package entrypoint
-per environment.
-
-The package is generated from the Rust workspace. `pkg/` is build output and
-is intentionally absent from source control. The supported local checks are:
+## Install
 
 ```sh
-npm ci
-npm run build:release
-npm run test:package
+npm install pillow-rs@0.1.3
 ```
 
-The package does not include filesystem APIs or native dependencies. AVIF is
-not part of the browser codec contract at this time. See the project
-documentation and release notes for the current capability and parity scope:
-<https://github.com/appunni-m/pillow-rs>.
+This is an ES module package. It declares Node.js 20+; CI exercises Node.js
+22.14.0. Browser use requires WebAssembly and a bundler or module server that
+serves the emitted WASM asset.
 
-This package is licensed under the MIT-CMU License. The complete terms are in
-[`LICENSE`](LICENSE).
+## First image
+
+Save this as an ES module in the project where you installed the package:
+
+```javascript
+import init, { Image } from "pillow-rs";
+
+await init();
+const image = new Image("RGB", 3, 2, 255, 12, 34, 255);
+try {
+  const resized = image.resize(6, 4);
+  try {
+    console.log([...resized.size()]); // [6, 4]
+    console.log(resized.toBytes().length); // 72
+  } finally {
+    resized.free();
+  }
+} finally {
+  image.free();
+}
+```
+
+The constructor takes mode, width, height, and RGBA color components.
+`size()` returns a `Uint32Array`; `toBytes()` returns raw image bytes as a
+`Uint8Array`, not an encoded image file. The generated TypeScript declarations
+define the JavaScript names and argument types.
+
+## Initialization and browser assets
+
+Node resolves `node.js` and loads the bundled WASM bytes from disk. A browser
+bundler resolves the generated web module. Call and await `init()` before
+constructing images in either environment.
+
+If your bundler relocates the WASM asset, pass the emitted URL through the
+initializer's `module_or_path` option. Serve the asset with the correct URL
+and a WebAssembly-compatible response; an HTML fallback page is not a WASM
+module. Do not ship private `pkg/` imports as the application's package API.
+
+Browser and Node run the same selected public parity workflows. The JavaScript
+API is not Python syntax: for example, use `resize(width, height)` and
+`toBytes()`. See [compatibility](../docs/COMPATIBILITY.md) for the covered
+scope. AVIF is outside the current browser codec contract.
+
+## Memory and errors
+
+WASM-backed objects own allocations. Release them with `free()` when finished,
+including on errors; never call methods after freeing an object. New image
+results need their own cleanup. Byte conversion can allocate or copy.
+
+Operations can throw for invalid modes, unsupported operations, or invalid
+inputs. Report the smallest call sequence, browser/Node version, dimensions,
+mode, and package version when opening an issue.
+
+## Build and verify
+
+From the repository root:
+
+```sh
+make build-wasm-release
+make test-wasm-node
+make test-wasm-browser
+```
+
+The published archive includes both runtime entry points, WASM, declarations,
+README, and license. Release CI tests the packed package before publishing.

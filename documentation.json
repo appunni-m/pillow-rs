@@ -1,0 +1,89 @@
+{
+  "project": "pillow-rs",
+  "version": "0.1.3",
+  "release_revision": "fd78eb80402a0d6d99e6b696d0a1ebf9ba11d5fb",
+  "repository": "appunni-m/pillow-rs",
+  "site_url": "https://appunni-m.github.io/pillow-rs/",
+  "pages": [
+    {
+      "source": "README.md",
+      "output": "index.md"
+    },
+    {
+      "source": "docs/INSTALLATION.md",
+      "output": "installation.md"
+    },
+    {
+      "source": "docs/PYTHON.md",
+      "output": "python.md"
+    },
+    {
+      "source": "pillow-rs-js/README.md",
+      "output": "javascript.md"
+    },
+    {
+      "source": "docs/RUST.md",
+      "output": "rust.md"
+    },
+    {
+      "source": "docs/COMPATIBILITY.md",
+      "output": "compatibility.md"
+    },
+    {
+      "source": "docs/COVERAGE.md",
+      "output": "coverage.md"
+    },
+    {
+      "source": "docs/BENCHMARKING.md",
+      "output": "benchmarking.md"
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "output": "contributing.md"
+    },
+    {
+      "source": "docs/COMMANDS.md",
+      "output": "commands.md"
+    },
+    {
+      "source": "docs/ARCHITECTURE.md",
+      "output": "architecture.md"
+    },
+    {
+      "source": "docs/DOCUMENTATION_CHECKLIST.md",
+      "output": "documentation.md"
+    },
+    {
+      "source": "RELEASING.md",
+      "output": "releasing.md"
+    },
+    {
+      "source": "SUPPORT.md",
+      "output": "support.md"
+    },
+    {
+      "source": "SECURITY.md",
+      "output": "security.md"
+    },
+    {
+      "source": "CODE_OF_CONDUCT.md",
+      "output": "conduct.md"
+    },
+    {
+      "source": "CHANGELOG.md",
+      "output": "changelog.md"
+    }
+  ],
+  "support": {
+    "kind": "pillow",
+    "source": "pillow-rs/tests/fixtures/manifest.yaml"
+  },
+  "benchmark": {
+    "kind": "pillow",
+    "source": "docs/evidence/benchmark.json"
+  },
+  "rust_example": {
+    "source": "docs/RUST.md",
+    "crate": "pillow-rs"
+  }
+}

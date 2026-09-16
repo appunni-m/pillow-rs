@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import venv
 
+from check_docs_examples import fenced_examples
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -53,6 +55,11 @@ assert ImageOps.mirror(loaded).tobytes() == im.tobytes()
 assert loaded.resize((6, 4)).size == (6, 4)
 print("installed PIL replacement:", version("pillow-rs"), PIL.__file__)
 '''], check=True, cwd=root)
+        checkout = Path(__file__).resolve().parent.parent
+        for source in ("README.md", "docs/PYTHON.md"):
+            for index, example in enumerate(fenced_examples(checkout / source, "python")):
+                subprocess.run([str(python), "-I", "-c", example], check=True, cwd=root)
+                print(f"Executed installed-wheel example: {source}, block {index + 1}")
 
 
 if __name__ == "__main__":

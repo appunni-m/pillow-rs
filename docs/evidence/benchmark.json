@@ -1,0 +1,1784 @@
+{
+  "revision": "3a3ae28b20b0d86eebc1dddb45234f2da65af6b7",
+  "measured_at": "2026-09-12T13:55:26.753613Z",
+  "clean": true,
+  "status": "completed",
+  "run_id": "migration-benchmark-ac0b8f04165f4a6abeb8b4d6ccf79e1f",
+  "environment": {
+    "os": "macOS-15.7.7-arm64-arm-64bit",
+    "architecture": "arm64",
+    "cpu": "arm",
+    "toolchain": "3.12.13",
+    "power_mode": "unknown"
+  },
+  "policy_status": "Timing budget acceptance is separate; no budget pass is inferred from this result.",
+  "notes": [
+    "Whole-workflow timings. successful_execution is an execution gate, not a pixel-parity claim.",
+    "Requested and actual backends are separate. Host controls and missing terminal evidence do not prove native GPU performance."
+  ],
+  "rows": [
+    {
+      "workload": "pipeline-chain.simd-constant.1024x768",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 733.812,
+      "p90_us": null,
+      "p95_us": 1122.875,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.simd-constant.1024x768",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 1400.1670000000001,
+      "p90_us": null,
+      "p95_us": 1641.875,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.simd-constant.1024x768",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 958.6245,
+      "p90_us": null,
+      "p95_us": 983.1659999999999,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.simd-constant.1024x768",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 62515.04149999999,
+      "p90_us": null,
+      "p95_us": 68713.791,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.analysis-masked-rgb-1024x768",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 7091.7919999999995,
+      "p90_us": null,
+      "p95_us": 7213.25,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 7,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.analysis-masked-rgb-1024x768",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 5028.8335,
+      "p90_us": null,
+      "p95_us": 5368.708,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 7,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.analysis-masked-rgb-1024x768",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 15599.6255,
+      "p90_us": null,
+      "p95_us": 19980.708,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 7,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.analysis-masked-rgb-1024x768",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 123550.625,
+      "p90_us": null,
+      "p95_us": 133673.29200000002,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 7,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.imagestat.cmyk-1024x768",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 4066.7919999999995,
+      "p90_us": null,
+      "p95_us": 4340.958,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 13,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.imagestat.cmyk-1024x768",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 3334.104,
+      "p90_us": null,
+      "p95_us": 3840.666,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 13,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.imagestat.cmyk-1024x768",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 7985.9580000000005,
+      "p90_us": null,
+      "p95_us": 8359.542,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 13,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.terminal-read.imagestat.cmyk-1024x768",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 63122.31199999999,
+      "p90_us": null,
+      "p95_us": 70078.208,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 13,
+        "operation_class": "terminal",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.autocontrast.32x32",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 144.042,
+      "p90_us": null,
+      "p95_us": 188.208,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          32
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.autocontrast.32x32",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 39.0,
+      "p90_us": null,
+      "p95_us": 50.666999999999994,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          32
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.autocontrast.32x32",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 57.25,
+      "p90_us": null,
+      "p95_us": 62.292,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          32
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.autocontrast.32x32",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 3296.1455,
+      "p90_us": null,
+      "p95_us": 3837.333,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          32
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-002",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 189.3955,
+      "p90_us": null,
+      "p95_us": 209.291,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          29,
+          13
+        ],
+        "mode": "L",
+        "chain_length": 3,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-002",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 175.97899999999998,
+      "p90_us": null,
+      "p95_us": 188.54199999999997,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          29,
+          13
+        ],
+        "mode": "L",
+        "chain_length": 3,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-002",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 187.167,
+      "p90_us": null,
+      "p95_us": 286.66700000000003,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          29,
+          13
+        ],
+        "mode": "L",
+        "chain_length": 3,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-002",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 3010.4790000000003,
+      "p90_us": null,
+      "p95_us": 3831.791,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          29,
+          13
+        ],
+        "mode": "L",
+        "chain_length": 3,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-020",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 148.04149999999998,
+      "p90_us": null,
+      "p95_us": 161.917,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          18,
+          14
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-020",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 103.37450000000001,
+      "p90_us": null,
+      "p95_us": 114.91600000000001,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          18,
+          14
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-020",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 107.875,
+      "p90_us": null,
+      "p95_us": 153.667,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          18,
+          14
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.matrix-020",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 14271.4795,
+      "p90_us": null,
+      "p95_us": 14864.708999999999,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          18,
+          14
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.metadata-cache.extractband-rgba",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 129.29200000000003,
+      "p90_us": null,
+      "p95_us": 151.334,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGBA",
+        "chain_length": 7,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.metadata-cache.extractband-rgba",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 103.3955,
+      "p90_us": null,
+      "p95_us": 289.084,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGBA",
+        "chain_length": 7,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.metadata-cache.extractband-rgba",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 206.4375,
+      "p90_us": null,
+      "p95_us": 389.834,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGBA",
+        "chain_length": 7,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.metadata-cache.extractband-rgba",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 51935.542,
+      "p90_us": null,
+      "p95_us": 63215.083,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGBA",
+        "chain_length": 7,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-filter-invert",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 221.70800000000003,
+      "p90_us": null,
+      "p95_us": 1366.333,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          24
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-filter-invert",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 128.93749999999997,
+      "p90_us": null,
+      "p95_us": 178.75,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          24
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-filter-invert",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 176.625,
+      "p90_us": null,
+      "p95_us": 252.66699999999997,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          24
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-filter-invert",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 3272.2290000000003,
+      "p90_us": null,
+      "p95_us": 3801.542,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          24
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.resize-rotate-crop",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 220.458,
+      "p90_us": null,
+      "p95_us": 978.125,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          31,
+          19
+        ],
+        "mode": "RGBA",
+        "chain_length": 3,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.resize-rotate-crop",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 223.62550000000002,
+      "p90_us": null,
+      "p95_us": 321.25,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          31,
+          19
+        ],
+        "mode": "RGBA",
+        "chain_length": 3,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.resize-rotate-crop",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 212.729,
+      "p90_us": null,
+      "p95_us": 252.125,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          31,
+          19
+        ],
+        "mode": "RGBA",
+        "chain_length": 3,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.resize-rotate-crop",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 9131.958,
+      "p90_us": null,
+      "p95_us": 10465.5,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          31,
+          19
+        ],
+        "mode": "RGBA",
+        "chain_length": 3,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.brightness.256x256",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 420.0415,
+      "p90_us": null,
+      "p95_us": 1159.125,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.brightness.256x256",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 120.06249999999999,
+      "p90_us": null,
+      "p95_us": 124.833,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.brightness.256x256",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 116.45849999999999,
+      "p90_us": null,
+      "p95_us": 201.875,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-matrix.expanded.brightness.256x256",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 40507.438,
+      "p90_us": null,
+      "p95_us": 66940.417,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-batch-rgb-shapes",
+      "subject": "pillow",
+      "status": "completed",
+      "median_us": 815.3545,
+      "p90_us": null,
+      "p95_us": 983.833,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          192
+        ],
+        "mode": "RGB",
+        "chain_length": 11,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "pillow",
+      "actual_backend": "pillow",
+      "terminal_complete": false,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-batch-rgb-shapes",
+      "subject": "python-cpu",
+      "status": "completed",
+      "median_us": 1122.479,
+      "p90_us": null,
+      "p95_us": 1146.25,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          192
+        ],
+        "mode": "RGB",
+        "chain_length": 11,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "cpu",
+      "actual_backend": "cpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-batch-rgb-shapes",
+      "subject": "python-simd",
+      "status": "completed",
+      "median_us": 1727.9375,
+      "p90_us": null,
+      "p95_us": 1999.042,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          192
+        ],
+        "mode": "RGB",
+        "chain_length": 11,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "simd",
+      "actual_backend": "simd",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    },
+    {
+      "workload": "pipeline-chain.reviewed.draw-batch-rgb-shapes",
+      "subject": "python-gpu",
+      "status": "completed",
+      "median_us": 66256.917,
+      "p90_us": null,
+      "p95_us": 70302.583,
+      "sample_count": 6,
+      "sample_unit": "timed workflow execution",
+      "policy": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          192
+        ],
+        "mode": "RGB",
+        "chain_length": 11,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      },
+      "correctness": "successful_execution: pass",
+      "requested_backend": "gpu",
+      "actual_backend": "gpu",
+      "terminal_complete": true,
+      "fallback_reasons": {}
+    }
+  ],
+  "schema": "public-docs/benchmark-snapshot@1",
+  "repository": "appunni-m/pillow-rs",
+  "source_sha256": "50431a65122edb1341a5ac2253a515b4992a0dfd95dd57dc7778fe2d06eebba7"
+}

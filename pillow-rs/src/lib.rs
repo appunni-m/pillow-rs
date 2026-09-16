@@ -73,7 +73,7 @@
 //   3. Replace .map().unwrap_or() with .map_or()
 //   4. Remove redundant clones
 //   5. Replace manual loop indexing with iter()/enumerate()
-//   Tracked at CODEBASE_AUDIT.md Fix 2. Remove each when addressed.
+//   Tracked at docs/ARCHITECTURE.md (existing Clippy allowances). Remove each when addressed.
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_in_result)]
@@ -91,7 +91,7 @@ use std::collections::BTreeMap;
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE THESE MODULES:
 //   Each module below is a foundational piece of the systemic fix architecture
-//   (see SYSTEMIC_FIXES.md). Removing any of them breaks the guarantees enforced
+//   (see docs/ARCHITECTURE.md). Removing any of them breaks the guarantees enforced
 //   by CI and creates entire classes of bugs.
 //
 //   - checked_dims:  Only way to allocate image buffers (no overflow, no DoS)
