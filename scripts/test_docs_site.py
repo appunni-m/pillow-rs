@@ -10,9 +10,32 @@ from unittest.mock import patch
 
 from docs_evidence import SCHEMA, cell, number, project_jpeg, project_pillow, validate
 from docs_site import anchors, prepare_output, read_config, rewrite_links
+from report_pipeline_roadmap_status import ROADMAP, build_report
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_public_roadmap_preserves_the_complete_index_without_claiming_a_run(self) -> None:
+        report = build_report(None)
+        self.assertEqual(report["items_total"], 64)
+        self.assertEqual(report["missing_ids"], [])
+        self.assertEqual(report["unexpected_ids"], [])
+        self.assertEqual(report["duplicate_ids"], [])
+        self.assertIsNone(report["evidence"]["coverage"])
+        self.assertIsNone(report["evidence"]["benchmark_result"])
+        self.assertGreater(len(report["open_ids"]), 0)
+
+    def test_roadmap_removal_or_duplicate_cannot_disappear_from_the_report(self) -> None:
+        text = ROADMAP.read_text()
+        first = next(line for line in text.splitlines() if line.startswith("| FIL-01 |"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "roadmap.md"
+            with patch("report_pipeline_roadmap_status.ROOT", Path(directory)), \
+                 patch("report_pipeline_roadmap_status.ROADMAP", path):
+                path.write_text(text.replace(first + "\n", ""))
+                self.assertEqual(build_report(None)["missing_ids"], ["FIL-01"])
+                path.write_text(text + first + "\n")
+                self.assertEqual(build_report(None)["duplicate_ids"], ["FIL-01"])
+
     def test_links_follow_published_pages_and_keep_repository_source_links(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

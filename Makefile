@@ -1015,7 +1015,11 @@ repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
 
-docs-check: docs-lint docs-test repo-map-check migration-parity-inputs-check release-tools-test ## Validate documentation, inputs, and release configuration
+docs-check: docs-lint docs-test repo-map-check migration-parity-inputs-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, inputs, and release configuration
+
+.PHONY: migration-parity-pipeline-roadmap-check
+migration-parity-pipeline-roadmap-check: ## Validate all 64 public roadmap IDs without claiming benchmark execution
+	$(PYTHON) scripts/report_pipeline_roadmap_status.py --inventory-only --output target/docs-roadmap-status.json
 	@test -s README.md
 	@test -s CONTRIBUTING.md
 	@test -s CHANGELOG.md

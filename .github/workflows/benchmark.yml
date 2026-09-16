@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/benchmark.yml'
       - 'scripts/run_migration_benchmark.py'
+      - 'scripts/report_pipeline_*.py'
+      - 'docs/PIPELINE_ROADMAP.md'
       - 'scripts/docs_evidence.py'
   workflow_dispatch:
     inputs:

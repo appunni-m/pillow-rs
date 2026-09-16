@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-ROADMAP = ROOT / "docs" / "image-pipeline-performance-roadmap.md"
+ROADMAP = ROOT / "docs" / "PIPELINE_ROADMAP.md"
 DEFAULT_RESULT = ROOT / "build" / "migration-parity" / "benchmark-result.json"
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "pipeline-roadmap-status.json"
 
@@ -31,9 +31,10 @@ from report_pipeline_benchmark_coverage import (  # noqa: E402
 )
 
 
-ITEM_RE = re.compile(r"^### FIL-(\d+) — (.+)$", re.MULTILINE)
-PRIORITY_RE = re.compile(r"^Priority: (.+)$", re.MULTILINE)
-STATUS_RE = re.compile(r"^Status: (.+)$", re.MULTILINE)
+ITEM_RE = re.compile(
+    r"^\| FIL-(\d+) \| (.+?) \| (P[0-2]) \| (closed|in progress|proposed|implemented|verified|rejected) \|$",
+    re.MULTILINE,
+)
 
 
 def normalize_status(raw: str | None) -> str:
@@ -54,21 +55,16 @@ def normalize_status(raw: str | None) -> str:
 
 
 def parse_items(text: str) -> list[dict[str, Any]]:
-    matches = list(ITEM_RE.finditer(text))
     items: list[dict[str, Any]] = []
-    for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        body = text[match.end() : end]
-        priority = PRIORITY_RE.search(body)
-        status = STATUS_RE.search(body)
+    for match in ITEM_RE.finditer(text):
         items.append(
             {
                 "id": f"FIL-{int(match.group(1)):02d}",
                 "number": int(match.group(1)),
                 "title": match.group(2).strip(),
-                "priority": priority.group(1).strip() if priority else None,
-                "status": normalize_status(status.group(1).strip() if status else None),
-                "status_text": status.group(1).strip() if status else None,
+                "priority": match.group(3),
+                "status": normalize_status(match.group(4)),
+                "status_text": match.group(4),
             }
         )
     return items
@@ -80,7 +76,7 @@ def file_timestamp(path: Path) -> str | None:
     return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
 
 
-def build_report(result_path: Path) -> dict[str, Any]:
+def build_report(result_path: Path | None) -> dict[str, Any]:
     roadmap_text = ROADMAP.read_text(encoding="utf-8")
     items = parse_items(roadmap_text)
     expected = [f"FIL-{number:02d}" for number in range(1, 65)]
@@ -90,7 +86,7 @@ def build_report(result_path: Path) -> dict[str, Any]:
     unexpected = sorted(set(ids) - set(expected))
 
     coverage: dict[str, Any] | None = None
-    if result_path.is_file():
+    if result_path is not None and result_path.is_file():
         coverage = report_workload_coverage(DEFAULT_INPUT, result_path)
 
     status_counts = Counter(str(item["status"]) for item in items)
@@ -114,9 +110,9 @@ def build_report(result_path: Path) -> dict[str, Any]:
         "items": items,
         "evidence": {
             "benchmark_result": display_path(result_path)
-            if result_path.is_file()
+            if result_path is not None and result_path.is_file()
             else None,
-            "benchmark_result_mtime": file_timestamp(result_path),
+            "benchmark_result_mtime": file_timestamp(result_path) if result_path else None,
             "roadmap_mtime": file_timestamp(ROADMAP),
             "coverage": coverage,
         },
@@ -129,11 +125,15 @@ def main() -> int:
     parser.add_argument("--result", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--inventory-only", action="store_true",
+                        help="validate all roadmap IDs without requiring a measured benchmark")
     args = parser.parse_args()
+    if args.inventory_only and args.check:
+        parser.error("--inventory-only and --check are mutually exclusive")
 
     result_path = args.result.resolve()
     output_path = args.output.resolve()
-    document = build_report(result_path)
+    document = build_report(None if args.inventory_only else result_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
 
