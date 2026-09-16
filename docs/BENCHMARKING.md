@@ -96,97 +96,6 @@ Retained comparison artifacts may live outside the checkout (for example under
 roadmap report commands preserve those external paths and accept them directly;
 they do not require copying a result into `build/migration-parity/`.
 
-The latest release-profile evidence (2026-09-10) contains three complete fixed
-11-workload runs at source revision
-`519226b62b545717c2169be7cbef9141754de91e`. Every run measured 11/11
-workloads, produced 44/44 comparable rows, and had 33/33 requested-to-actual
-terminal receipts across CPU, SIMD, and native Metal GPU. The first adjacent
-comparison reports two timing-only violations and the next reports 16, with
-identical execution structure. The result and budget hashes are recorded in
-the [pending checklist](benchmark-backend-pending-2026-09-03.md). Earlier
-host-access series at `a5a678401` and `de571ae57` remain historical evidence.
-These are observations on one arm64 machine, not correctness failures; the
-zero-violation acceptance item remains open under the unchanged five-percent
-policy.
-
-A fresh clean pair at branch head
-`13ea3dc177baa44a5d76ed7d86240aee53402ca8` selected and measured 11/11
-workloads, with 44/44 comparable rows and 33/33 terminal requested=actual
-CPU/SIMD/native-Metal-GPU receipts in each run. Result SHA-256 values are
-`e7d59eacb8af90e3995a5ff22e38b5db1a16c2b6f4684c9bde9bd8c7b2e77ca8` and
-`1bc65d682852064f71b74dcfb3becb243cc00d01f74bf17164368cbda0653115`.
-The unchanged budget report
-`13f1649a545ebafbe17623931bd9a14e6e5a4eb2861f8871975a1b3f1c94551e`
-reports 12 statistically credible timing-only violations; the zero-violation
-acceptance item remains open.
-
-The release-candidate dependency-pin replay at source commit
-`031edd3f5425df2c6931939deb0ad0d93dad376c` (captured before the current
-documentation updates; runtime and fixture inputs are unchanged) selected and measured the same
-11-workload cohort twice. Each run produced 44/44 comparable rows and 33/33
-terminal requested-to-actual receipts across CPU, SIMD, and native Metal GPU.
-The unchanged five-percent comparison reported nine timing-only violations;
-the result, parity receipts, and budget receipt are retained with the local
-first-release bundle. This current-commit evidence also leaves the
-zero-violation acceptance item open.
-
-The current release-preparation commit
-`027c1e7710b8ac99ea1eb9ccbcc41566b6260cd2` was then measured in two immediate
-fixed-ID runs with native Metal GPU access. Both runs measured 11/11 workloads,
-44/44 comparable rows, and 33/33 terminal requested-to-actual CPU, SIMD, and
-GPU receipts. The unchanged five-percent comparator reported six timing-only
-violations; the result and budget hashes are recorded in the [pending
-checklist](benchmark-backend-pending-2026-09-03.md). This remains host timing
-evidence, and the zero-violation acceptance item is still open.
-
-The current head `8811d524b2e0c8b3e2c94be2d2044ac0cf0d3c1f` was also measured in
-two immediate fixed-ID runs under macOS utility QoS with native Metal GPU
-access. Both runs measured 11/11 workloads, 44/44 comparable rows, and 33/33
-terminal requested-to-actual CPU, SIMD, and GPU receipts. The unchanged
-five-percent comparator reported seven timing-only violations; the result and
-budget hashes are recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md).
-This remains host timing evidence, and the zero-violation acceptance item is
-still open.
-
-The current clean head `47ded27dc76fbf11d12c609d2a0874706b0dc29b` was then
-measured in five complete release-profile runs using the same fixed 11-workload
-cohort. Each run retained 44/44 comparable rows and 33/33 terminal
-requested-to-actual CPU, SIMD, and native Metal GPU receipts. Adjacent
-comparisons reported five, five, three, and five timing-only violations. The
-result and budget hashes are recorded in the [pending checklist](benchmark-backend-pending-2026-09-03.md);
-the zero-violation acceptance item remains open under the unchanged policy.
-
-The current pushed head `71e0b7214918bc8db4a7a9a606046b8a7fe8b1b2` was also
-measured in two immediate release-profile runs under macOS utility QoS with
-native Metal GPU access. Both runs selected and measured 11/11 workloads,
-retained 44/44 comparable rows, and recorded 33/33 terminal requested-to-actual
-CPU, SIMD, and GPU receipts. The unchanged five-percent comparison reported
-eight timing-only violations; the result and budget hashes are recorded in the
-[pending checklist](benchmark-backend-pending-2026-09-03.md). This confirms
-the remaining issue is host timing variance, and the zero-violation acceptance
-item remains open without changing the benchmark contract.
-
-The maintained `migration-parity-benchmark-low-load` target now probes
-Darwin's utility QoS/background policy before delegating to the existing fixed
-cohort. At clean source commit `a524b5c378e2c4efa5bf3f4cc803bfd70561bf1a`,
-two runs retained 11/11 workloads, 44/44 comparable rows, and 33/33 terminal
-requested-to-actual receipts for CPU, SIMD, and native Metal GPU. The first
-adjacent comparison reported four timing-only violations and the next six;
-the exact hashes and policy details are retained in the [pending
-checklist](benchmark-backend-pending-2026-09-03.md). The entry point improves
-host scheduling control while leaving workloads, repeat policy, thresholds, and
-receipt semantics unchanged.
-
-At source revision `cc3c763d4d2b2b05f0fec54933c63a0b56a3cabc`, two adjacent
-low-load pairs used the same fixed 11-workload release cohort with native
-Metal GPU access. Every run selected and measured 11/11 workloads, retained
-44/44 comparable rows, and recorded 33/33 terminal requested-to-actual CPU,
-SIMD, and GPU receipts. The first pair reported two timing-only GPU
-violations; the second reported three. The normalized receipt structure stayed
-equal while the affected rows changed, so the zero-violation acceptance item
-remains open under the unchanged five-percent policy. Exact result and budget
-hashes are retained in the [pending checklist](benchmark-backend-pending-2026-09-03.md).
-
 ## Interpretation rules
 
 - Report median and spread with the environment and commit; do not publish a
@@ -208,16 +117,34 @@ warmup/measurement/analysis/comparison model. See the
 [Rust Performance Book](https://nnethercote.github.io/perf-book/benchmarking.html)
 and [Criterion analysis documentation](https://bheisler.github.io/criterion.rs/book/analysis.html).
 
-## Website data path
+## Published results
 
-The future benchmark site should consume validated JSON result artifacts, not a
-hand-edited Markdown table. A GitHub Pages build will:
+The [GitHub Pages benchmark view](https://appunni-m.github.io/pillow-rs/benchmarks/)
+renders validated snapshots with per-workload policies, medians, percentiles,
+correctness gates, and requested/actual backends. It retains failed subjects and
+missing measurements. It does not aggregate unrelated operations into a headline
+speedup. Hosted runners are useful observations, not controlled laboratory hosts.
 
-1. validate manifest and result schemas;
-2. select only compatible runs and retain their source hashes;
-3. render correctness, backend, timing, and budget views separately; and
-4. publish the generated site as an artifact from a scheduled or manually
-   approved workflow.
+The committed snapshot is historical: source
+`3a3ae28b20b0d86eebc1dddb45234f2da65af6b7`, measured 2026-09-12. It contains
+11 workloads and 44 subject rows. Its original result SHA-256 is
+`50431a65122edb1341a5ac2253a515b4992a0dfd95dd57dc7778fe2d06eebba7`.
+The associated unchanged five-percent comparison reported three timing-only
+violations: SIMD draw-batch RGB shapes, CPU SIMD-constant 1024x768, and the Pillow
+terminal-read CMYK workflow. Its budget SHA-256 is
+`3e85f936dfe56a06b9ea3f6128d09dfdd2400dadddc2e6de634cc83327ff4b97`.
+The required consecutive zero-violation comparisons remain open. This snapshot
+is not a timing measurement of release 0.1.3.
 
-Until that site exists, `BENCHMARKS.md` is a landing page and the JSON under
-`build/migration-parity/` is the evidence record.
+After running the maintained benchmark, export its public view:
+
+```sh
+make docs-benchmark
+make docs-build
+```
+
+The exporter retains the original report hash, revision, environment, policy,
+and all subject outcomes, while omitting local paths and hostnames. Full result
+and parity receipts remain CI artifacts. The Benchmark workflow publishes a
+public data artifact; the Documentation workflow validates and renders that data
+using site code from main. Site publication does not change benchmark budgets.

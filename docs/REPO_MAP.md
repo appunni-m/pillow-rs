@@ -1,136 +1,30 @@
-# Repository Map
+# Repository map
 
-This is the maintained index for important files in this workspace. It should
-answer two questions for a new contributor or agent:
+Use this map to locate maintained source and generators. [Architecture](ARCHITECTURE.md)
+explains ownership; [Contributing](../CONTRIBUTING.md) explains the workflow.
 
-- Where does a change belong?
-- Which files are source of truth versus generated, vendored, or historical?
+| Path | Responsibility |
+| --- | --- |
+| `pillow-rs/` | Rust image model, operations, drawing, pipelines, font integration |
+| `pillow-rs-py/` | Python `PIL` facade and PyO3 conversion/delegation |
+| `pillow-rs-js/` | WASM bindings, npm runtime entry points, Node/browser runners |
+| `pillow-rs/tests/fixtures/manifest.yaml` | Selected public contract and indexed input files |
+| `scripts/` | Maintained generators, runners, receipt validators, release and documentation tools |
+| `docs/` | Public guides and explicitly versioned generated evidence |
+| `.github/workflows/` | Validation, benchmark, Pages, and package-release automation |
+| `deprecated/` | Retired test-system provenance; not an active test root |
 
-Update this file when source ownership, harness ownership, or project-goal
-documents move. The generated tree below is validated by `make repo-map-check`
-and refreshed with `make repo-map-update`.
+The root Makefile owns the pinned fontdone checkout under `build/fontdone-src/`.
+Contribute to fontdone in its own repository. Its FreeType checkout is a read-only
+oracle; runtime implementation remains Rust. Dependency versions and revisions
+are pinned in Cargo metadata and the root Makefile.
 
-## Maintenance Rules
+## Generated source inventory
 
-- Use `Makefile` targets for normal workflows. If a repeated workflow has no
-  target, add one instead of documenting a raw command.
-- Keep runtime implementation in Rust crates. Binding crates stay thin.
-- Do not treat generated outputs, caches, build directories, or local package
-  installs as repository source.
-- Keep fixture generators and parity harnesses documented as maintained system
-  components, not one-off scripts.
-- `build/fontdone-src/freetype/` is a version-pinned C FreeType oracle for
-  fixture generation and diagnosis only. Runtime code must not call it.
-
-## Primary Source Of Truth
-
-- `CLAUDE.md` with symlinked `AGENTS.md` and `AGENT.md`: default agent
-  briefing, project constraints, skill routing, and workflow policy.
-- `Makefile`: root build, test, lint, fixture, benchmark, coverage, and CI
-  entrypoint.
-- `Cargo.toml`: workspace membership, edition, lint policy, and shared cargo
-  settings.
-- `rust-toolchain.toml`: pinned toolchain and required components.
-- `pillow-rs/tests/fixtures/manifest.yaml`: the fixed
-  `migration-parity/manifest@2` public-surface specification. Parity, coverage,
-  and benchmark inputs are indexed from this manifest; generated results are
-  not stored here.
-- `docs/REPO_MAP.md`: this maintained ownership and code tree map.
-
-## Workspace Crates
-
-- `pillow-rs/`: pure Rust image operations and shared image model.
-  `src/image.rs`, `src/pipeline.rs`, `src/ops/`, `src/draw/`, and
-  `src/font/imagingft.rs` are the primary implementation paths.
-- `pillow-rs-py/`: PyO3 binding crate. `src/lib.rs` exposes Rust to Python;
-  `python/pillow_rs/` must stay a thin Python surface.
-- `pillow-rs-js/`: wasm-bindgen binding crate plus browser/node test runners.
-- `build/fontdone-src/`: pinned GitHub checkout for the standalone pure Rust
-  FreeType-compatible implementation and parity harness. `pillow-rs` depends
-  on the same pinned `fontdone` revision through Cargo.
-
-## FreeType Map
-
-- `build/fontdone-src/README.md` and `AGENTS.md`: project-level parity scope,
-  measured status, and non-negotiable constraints.
-- `build/fontdone-src/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
-  text and migration attribution for the standalone package.
-- `build/fontdone-src/src/font.rs`: public face/font API and high-level
-  FreeType-compatible behavior.
-- `build/fontdone-src/src/scaler.rs`: size scaling and glyph load pipeline.
-- `build/fontdone-src/src/outline.rs`: outline geometry, bbox, cbox, and point
-  representation.
-- `build/fontdone-src/src/render.rs` and `src/grays.rs`: bitmap render paths.
-- `build/fontdone-src/src/tt/`: TrueType parsing, glyph loading, metrics, and
-  native bytecode hinting.
-- `build/fontdone-src/src/autohint/`: autohinter implementation and script
-  coverage.
-- `build/fontdone-src/tests/unified_fixture_parity.rs`: input-driven Rust,
-  C ABI, and WASM parity against the pinned FreeType oracle.
-- `build/fontdone-src/Makefile`: `test-ffi` guards the core against runtime
-  native-FFI shortcuts.
-- `build/fontdone-src/tests/manifest.yaml` and `tests/fixtures/inputs/`:
-  maintained public-surface cases and input-only workflows.
-- `build/fontdone-src/tests/fixtures/input/fonts/`: licensed oracle assets;
-  preserve their bytes and use the documented generators.
-- `build/fontdone-src/scripts/`: maintained generators, benchmark tools, and
-  failure classifiers.
-- `build/fontdone-src/doc/DEVELOPMENT.md`: fixture generation, debugging notes,
-  platform contracts, CI, and Rust-vs-C benchmark methodology.
-- `build/fontdone-src/doc/COVERAGE_CAMPAIGN_GOAL.md`: structural coverage work
-  and explicit unfinished scope.
-- `build/fontdone-src/doc/FILE_RETENTION_INVENTORY.tsv`: exhaustive source and
-  fixture ownership, hashes, and retention reasons.
-- `build/fontdone-src/doc/FREETYPE_SUPPORT.md`: supported behavior and adoption
-  limitations; `doc/runtime_parity_evidence.json` binds measured results to source.
-- `build/fontdone-src/doc/RELEASING.md`: one-crate, native SDK, and npm release
-  procedure using GitHub OIDC.
-
-## Harness And Fixture Map
-
-- `scripts/run_all_backend_tests.py`: maintained CPU/SIMD/GPU/JS campaign
-  orchestrator. GPU children use bounded process groups, and full GPU parity
-  runs by default after the smoke gate.
-- `scripts/run_migration_parity.py`: live source/target runner for indexed
-  input-only workflows.
-- `scripts/run_migration_coverage.py`: target coverage producer for indexed
-  coverage plans.
-- `scripts/run_migration_benchmark.py`: correctness-gated benchmark producer
-  for indexed workloads.
-- `pillow-rs/tests/fixtures/inputs/`: the active parity, coverage, and
-  benchmark input documents; expected values and run status are prohibited.
-- `deprecated/migration-parity-v0/`: read-only provenance archive for the
-  retired fixture/oracle suites, old manifest, and old coverage/benchmark
-  tooling. It is not an active test root.
-- `docs/gpu-crash-audit-20260811.md`: current GPU loop, resource, lazy-pipeline,
-  watchdog, and adapter-backed verification record.
-- `build/fontdone-src/tests/unified_fixture_parity.rs`: separate FreeType matrix
-  runner.
-
-## Cleanup Rules
-
-These paths are not source of truth and should stay untracked or be removed
-before commit:
-
-- `target/`
-- `.pytest_cache/`
-- `__pycache__/`
-- `pillow-rs-js/node_modules/`
-- `pillow-rs-js/pkg/`
-- `pillow-rs-js/pkg_node/`
-- `build/fontdone-src/freetype/build*/`
-
-Historical planning documents may be useful as archaeology, but implementation
-work should be guided by current Makefiles, `CLAUDE.md`, this map, and active
-crate-level project docs. If a historical document contains current guidance,
-promote that guidance into one of those maintained files and then delete or
-archive the stale document.
-
-## Maintained Code Tree
-
-The tree below is generated from tracked source, harness, script, and control
-files. It intentionally excludes vendored C FreeType, fixture payloads,
-generated reports, build outputs, and package installs.
+Run `make repo-map-update` after staging new or removed maintained files, then
+`make repo-map-check`. The tree excludes fixture payloads, generated reports,
+private compatibility aliases, vendored oracles, and build/package outputs.
+It is a navigation aid, not an API-support or coverage claim.
 
 <!-- BEGIN GENERATED CODE TREE -->
 ```text
@@ -155,6 +49,7 @@ generated reports, build outputs, and package installs.
 |   `-- workflows/
 |       |-- benchmark.yml
 |       |-- ci.yml
+|       |-- docs.yml
 |       `-- release.yml
 |-- AGENT.md
 |-- AGENTS.md
@@ -168,6 +63,9 @@ generated reports, build outputs, and package installs.
 |-- deny.toml
 |-- docs/
 |   `-- REPO_MAP.md
+|-- docs.mk
+|-- documentation.json
+|-- mkdocs.yml
 |-- pillow-rs/
 |   |-- Cargo.toml
 |   |-- src/
@@ -366,8 +264,6 @@ generated reports, build outputs, and package installs.
 |   |   |-- PIL/
 |   |   |   |-- Image.py
 |   |   |   `-- __init__.py
-|   |   |-- RSPIL/
-|   |   |   `-- __init__.py
 |   |   `-- pillow_rs/
 |   |       |-- __init__.py
 |   |       |-- enums.py
@@ -387,6 +283,8 @@ generated reports, build outputs, and package installs.
 |       |-- lib.rs
 |       `-- putdata.rs
 |-- requirements-ci.txt
+|-- requirements-docs.in
+|-- requirements-docs.txt
 |-- rust-toolchain.toml
 |-- rustfmt.toml
 `-- scripts/
@@ -395,6 +293,7 @@ generated reports, build outputs, and package installs.
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
     |-- check_bindings.py
+    |-- check_docs_examples.py
     |-- check_local_release_bundle.py
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
@@ -405,6 +304,8 @@ generated reports, build outputs, and package installs.
     |-- check_release_wheel.py
     |-- check_repo_map.py
     |-- codex-worktree-setup.sh
+    |-- docs_evidence.py
+    |-- docs_site.py
     |-- generate_migration_parity_docs.py
     |-- lint.sh
     |-- migration_parity_inventory.py
@@ -433,6 +334,7 @@ generated reports, build outputs, and package installs.
     |-- run_migration_pillow_coverage.py
     |-- run_migration_rust_coverage.py
     |-- test_coverage_context.py
+    |-- test_docs_site.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
     |-- validate_migration_parity_contract.py

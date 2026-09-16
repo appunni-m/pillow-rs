@@ -1,200 +1,112 @@
 # pillow-rs
 
-pillow-rs is a Rust image-processing library with Python and WebAssembly
-bindings. It follows Pillow's public behavior through a manifest-driven,
-input-only parity suite. The current published release is version `0.1.3`; compatibility is
-measured per operation and backend rather than advertised as a complete Pillow
-replacement.
+Rust image processing with a familiar Python `PIL` interface and one WebAssembly
+package for Node.js and browsers.
 
-## Current status
+[Documentation](https://appunni-m.github.io/pillow-rs/) ·
+[API support](https://appunni-m.github.io/pillow-rs/api-support/) ·
+[Benchmarks](https://appunni-m.github.io/pillow-rs/benchmarks/) ·
+[Rust API](https://docs.rs/pillow-rs/0.1.3/pillow_rs/)
 
-The active contract is defined by
-[`pillow-rs/tests/fixtures/manifest.yaml`](pillow-rs/tests/fixtures/manifest.yaml)
-(`migration-parity/manifest@2`). The last complete all-backend campaign selected 11,345
-public input workflows and recorded exact terminal output comparisons across
-the available CPU, SIMD, GPU, Node WASM, and browser WASM lanes. The GPU lane
-recorded 7,090 native dispatches and 137 explicitly classified host controls;
-those controls remain visible as backend coverage gaps. Benchmark budget
-acceptance remains open as described in
-[`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md).
+**Current release: 0.1.3.** This is an early compatibility release. The maintained
+Python, Node, and browser suites each pass 11,348 comparisons at the released
+commit. That covers selected inputs, modes, and errors, not every Pillow API or
+every possible image. Read [maturity and limitations](docs/COMPATIBILITY.md)
+before replacing Pillow in an application.
 
-Version 0.1.2 added three native-font boundary cases. Python 3.10, Python 3.12,
-Node, and browser WASM each passed 11,348/11,348 comparisons in the
-[0.1.3 main CI run](https://github.com/appunni-m/pillow-rs/actions/runs/35014896711).
-Changed-line evidence is recorded in
-[`docs/COVERAGE.md`](docs/COVERAGE.md), and alpha publication gates are defined in
-[`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md).
+## Choose your package
 
-Version 0.1.3 fixes the npm publishing job's Node cache configuration. The 0.1.2
-Cargo and PyPI uploads succeeded through OIDC; its npm job stopped before
-authentication. The [0.1.3 release](https://github.com/appunni-m/pillow-rs/releases/tag/v0.1.3)
-successfully published Cargo, PyPI, and npm through GitHub OIDC. Runtime behavior
-and the parity corpus are unchanged in 0.1.3.
-
-These figures are measured evidence from named runs, not a promise that every
-Pillow API, platform, or GPU adapter is supported.
-
-## Packages
-
-| Target | Source | Import/use |
+| Use case | Install | Entry point |
 | --- | --- | --- |
-| Rust core | [`pillow-rs/`](pillow-rs/) | `pillow_rs` |
-| Python extension | [`pillow-rs-py/`](pillow-rs-py/) | `from PIL import Image` |
-| WebAssembly package | [`pillow-rs-js/README.md`](pillow-rs-js/README.md) | `import { Image } from "pillow-rs"` |
+| Python image processing | `python -m pip install pillow-rs==0.1.3` | `from PIL import Image` |
+| Node.js or a browser | `npm install pillow-rs@0.1.3` | `import init, { Image } from 'pillow-rs'` |
+| Rust application | `cargo add pillow-rs@=0.1.3` | `pillow_rs::Image` |
 
-The Python wheel uses the `abi3-py38` boundary and declares `requires-python >=3.8`.
-The parity oracle is Pillow 12.2.0, which requires Python 3.10 or newer, so CI
-parity runs use Python 3.10 and 3.12. The WASM CI lane uses Node 22.14.0 with
-npm 11.5.1.
+Python wheels are published for Linux x86-64 (glibc 2.28+), macOS ARM64, and
+Windows x86-64. Other platforms may build from the source distribution; they
+do not have a published wheel in this release. Rust source builds use Rust
+1.96.1. See [installation](docs/INSTALLATION.md) for runtime requirements.
 
-## Quick start from a checkout
+## Make your first image
 
-Use an isolated Python 3.10+ environment for the parity tools:
+Use a fresh Python environment. Both Pillow and pillow-rs provide `PIL`, so
+install them in separate environments.
 
 ```sh
-make setup-venv PYTHON=python3.12
-make build
-python -c "from PIL import Image; print(Image.new('RGB', (10, 10)))"
+python3 -m venv .venv
+.venv/bin/python -m pip install pillow-rs==0.1.3
 ```
 
-The Python package uses Pillow's normal `PIL` import path.  `make build` is a
-local replacement install; for parity work, use `make build-parity` so the
-checkout facade is available on `PYTHONPATH` while the separately installed
-Pillow oracle remains intact.
-
-### Migrating from RSPIL
-
-Replace the old package import directly:
+On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
 
 ```python
-from PIL import Image
+from io import BytesIO
+from PIL import Image, ImageOps
+
+image = Image.new("RGB", (3, 2), (255, 12, 34))
+image = ImageOps.mirror(image).resize((6, 4))
+output = BytesIO()
+image.save(output, format="PNG")
+assert image.size == (6, 4)
+assert output.getvalue().startswith(b"\x89PNG\r\n\x1a\n")
 ```
 
-The public `PIL` modules are backed by the Rust extension.  `pillow_rs` is an
-internal binding namespace, and `RSPIL` remains only as a deprecated import
-bridge for older applications.
+Continue with [Python recipes](docs/PYTHON.md), [JavaScript and browser
+integration](pillow-rs-js/README.md), or [Rust integration](docs/RUST.md).
 
-Build the WASM package and run its package check with:
+## What to expect
 
-```sh
-make build-wasm-release
-cd pillow-rs-js && npm run test:package
-```
+- Creation, transformations, drawing, filters, color, and font operations have
+  a fixed public contract. The [API inventory](https://appunni-m.github.io/pillow-rs/api-support/)
+  identifies every selected path and its input cases.
+- Python uses familiar `PIL` imports. JavaScript exposes an explicitly
+  initialized WASM API; it does not reproduce Python syntax or objects.
+- The Rust core uses [image-slash-star](https://github.com/appunni-m/image-slash-star)
+  for codecs and [fontdone](https://github.com/appunni-m/fontdone) for fonts.
+- CPU, SIMD, and optional GPU execution have different measured support.
+  A passing comparison does not by itself establish native GPU execution.
+- Release 0.1.3 does not promise complete Pillow replacement, hardened decoding
+  of arbitrary hostile inputs, or a stable pre-1.0 API.
 
-Version 0.1.3 is available on [crates.io](https://crates.io/crates/pillow-rs/0.1.3),
-[PyPI](https://pypi.org/project/pillow-rs/0.1.3/), and
-[npm](https://www.npmjs.com/package/pillow-rs/v/0.1.3). The
-[release matrix](docs/REGISTRY_RELEASE_MATRIX.md) records verification evidence
-and the process for subsequent GitHub releases.
+## Performance you can inspect
 
-## API and parity
+The [benchmark site](https://appunni-m.github.io/pillow-rs/benchmarks/) shows
+workload timings, sample counts, spread, correctness gates, and actual backends.
+Historical results retain their source revision. Missing measurements remain
+unavailable. There is no single project-wide speedup claim.
 
-The manifest currently declares 24 public surfaces, 209 operations, 1,801
-requirements, 11,348 parity inputs, 24 coverage plans, and 744 standard
-benchmark workloads. These are declared/indexed counts; live results are kept
-separately in `build/migration-parity/`.
+Read the [measurement protocol](docs/BENCHMARKING.md) to reproduce a run.
+Benchmark budget acceptance is separate from correctness and publication.
 
-Every active parity case contains only public stimulus. Pillow produces the
-oracle result at run time, and the Rust target is compared with the same input.
-Coverage selectors and benchmark workloads reference those cases without
-embedding expected output bytes or hashes.
+## Contribute
 
-Regenerate and validate the input contract with:
-
-```sh
-make migration-parity-inputs
-make migration-parity-inputs-check
-make migration-parity-fixtures-check
-```
-
-## Test and verification commands
-
-The root `Makefile` is the maintained command interface:
+Bug reports, small reproductions, documentation improvements, and input-driven
+parity fixes are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```sh
-make fmt
-make clippy
+make help
+make setup-venv PYTHON=python3.12
+make build-parity
 make migration-parity-test
-make migration-parity-test-all-backends
-make migration-parity-coverage
-make test
 ```
 
-`make test` runs the shared target lanes, JS/WASM lanes, reverse Pillow source
-coverage, and the ordered missing-feature report. GPU and browser capability
-limitations are recorded in the result artifact. They are not converted into
-passing output.
+For documentation only, use `make docs-setup`, `make docs-build`, and
+`make docs-serve`. Each repository builds and publishes its own GitHub Pages
+site. The [command reference](docs/COMMANDS.md) explains side effects and scope.
 
-For one case, use `make migration-parity-case MIGRATION_PARITY_CASE=<case-id>`.
-Use the same case ID with the coverage and all-backend variables when
-debugging a first divergence.
+## Project information
 
-## Benchmarking
+- [Support](SUPPORT.md) and [private security reporting](SECURITY.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md) and [release process](RELEASING.md)
+- [Architecture](docs/ARCHITECTURE.md) and [coverage evidence](docs/COVERAGE.md)
 
-The benchmark inputs and repeat policy are documented in
-[`docs/BENCHMARKING.md`](docs/BENCHMARKING.md). Run the quick smoke cohort with:
+The project is distributed under the [MIT-CMU License](LICENSE). Dependencies
+and fixture assets retain their own licenses and notices.
 
-```sh
-MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark
-make migration-parity-pipeline-report
-```
+## Acknowledgements
 
-Run the complete standard workload set with
-`MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark`. A timing
-number is publishable only when the workload passed its correctness gate and
-the manifest, input, runtime, and backend identities match the comparison.
-Use `MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark` for
-the fixed 11-workload release acceptance cohort.
-`BENCHMARKS.md` is a landing page; the JSON result is the evidence record.
-
-## Architecture
-
-```text
-pillow-rs/       pure Rust image model, operations, pipeline, and backends
-pillow-rs-py/    thin PyO3 boundary and Python compatibility modules
-pillow-rs-js/    thin wasm-bindgen boundary and Node/browser adapters
-scripts/         manifest generators, parity runners, validators, and reports
-```
-
-Runtime image logic lives in the Rust core. Bindings convert host values and
-delegate to it. The compute registry can route a pipeline through CPU, SIMD,
-or GPU; unsupported or unproven GPU work keeps an explicit host-control record
-and follows the configured fallback policy.
-
-## Documentation map
-
-| Page | Purpose |
-| --- | --- |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, development, tests, coverage, and release checks |
-| [`docs/DOCUMENTATION_CHECKLIST.md`](docs/DOCUMENTATION_CHECKLIST.md) | Active documentation rules and claim labels |
-| [`docs/REPOSITORY_FILE_AUDIT.md`](docs/REPOSITORY_FILE_AUDIT.md) | Tracked-file classification and archive/deletion policy |
-| [`docs/CI_CD_RELEASE_PLAN.md`](docs/CI_CD_RELEASE_PLAN.md) | Fixed inputs, CI stages, release sequence, and Pages plan |
-| [`docs/LOCAL_FIRST_RELEASE.md`](docs/LOCAL_FIRST_RELEASE.md) | Exact local bootstrap tags, package order, evidence, and public prerequisites |
-| [`docs/REGISTRY_RELEASE_MATRIX.md`](docs/REGISTRY_RELEASE_MATRIX.md) | Local registry setup, dependency order, and guarded publication runbook |
-| [`RELEASING.md`](RELEASING.md) | Root artifact order, bootstrap rehearsal, and tag-driven releases |
-| [`SECURITY.md`](SECURITY.md) | Private vulnerability reporting and disclosure scope |
-| [`SUPPORT.md`](SUPPORT.md) | Reproducible bug reports and parity support |
-| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contribution and project-space conduct |
-| [`docs/REPO_MAP.md`](docs/REPO_MAP.md) | Maintained ownership map and generated source tree |
-| [`docs/COVERAGE.md`](docs/COVERAGE.md) | Current coverage evidence landing page |
-| [`BENCHMARKS.md`](BENCHMARKS.md) | Current benchmark evidence landing page |
-| [`docs/generated/`](docs/generated/) | Generated contract and evidence views |
-| [`docs/benchmark-backend-pending-2026-09-03.md`](docs/benchmark-backend-pending-2026-09-03.md) | Integrated GPU parity and benchmark acceptance record |
-
-Older dated reports, `CODEBASE_AUDIT.md`, `SYSTEMIC_FIXES.md`, and
-`docs/superpowers/` are historical references. The retired fixture and oracle
-trees are under [`deprecated/`](deprecated/) with an explicit migration map.
-
-## Contributing
-
-Before opening a change, read [`CONTRIBUTING.md`](CONTRIBUTING.md) and the
-documentation checklist. New operations require a manifest entry, input-only
-parity and coverage cases, and measured coverage. Fixes must preserve failing
-cases and thresholds until the implementation is correct.
-
-## License and attribution
-
-pillow-rs is licensed under the MIT-CMU License. It targets the public behavior
-of [Pillow](https://python-pillow.org/), whose license and attribution remain
-in [`LICENSE`](LICENSE). The pinned `fontdone` checkout and `image-slash-star`
-dependency retain their own licenses and notices.
+Thank you to [Puhu](https://github.com/bgunebakan/puhu) for the Rust/Python image
+processing work that informed the early exploration of this project, and to
+[Pillow](https://python-pillow.org/) and its contributors for the image library,
+public API, and reference behavior on which the compatibility work depends.

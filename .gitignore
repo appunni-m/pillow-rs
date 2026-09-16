@@ -29,6 +29,7 @@ coverage/report.json
 /worktree/
 venv/
 .venv/
+.venv-docs/
 .oracle-venv/
 libnull.rlib
 pybak/

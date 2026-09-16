@@ -41,7 +41,7 @@ cargo clippy --all-targets --all-features -- -A deprecated
 # ── Project-specific grep enforcements ──────────────────────────────────────
 # AS PER DESIGN — DO NOT REMOVE:
 #   These patterns cannot be caught by clippy alone. Each prevents an entire
-#   class of bugs documented in CODEBASE_AUDIT.md / SYSTEMIC_FIXES.md.
+#   class of bugs documented in docs/ARCHITECTURE.md.
 #   Allowed exceptions: checked_dims.rs, image_utils.rs, op_def.rs, tests.
 # ============================================================================
 

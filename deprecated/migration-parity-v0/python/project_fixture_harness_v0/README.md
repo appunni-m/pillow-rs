@@ -1,6 +1,6 @@
 # Deprecated Project Fixture Harness v0
 
-This directory preserves the old stored-output Pillow/RSPIL parity harness only
+This directory preserves the old stored-output Pillow/the retired Python namespace parity harness only
 as migration evidence. It is not an active test suite and must not be used as
 an oracle by the replacement migration-parity system.
 

@@ -4,7 +4,7 @@
 # Run `make` or `make help` to see all targets.
 
 # ── Variables ─────────────────────────────────────────────────────────────────
-PYTHON       ?= $(shell if [ -x .venv/bin/python ]; then printf '%s' .venv/bin/python; else printf '%s' python3; fi)
+PYTHON       ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PYTHON_COMPAT ?= $(PYTHON)
 PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
@@ -32,7 +32,6 @@ FONTDONE_REPO ?= https://github.com/appunni-m/fontdone.git
 FONTDONE_REF ?= cb90d41a863f8569335d8ed775a4038d23c79dc5
 FONTDONE_SRC ?= build/fontdone-src
 IMAGE_SLASH_STAR_SRC := $(abspath ../image-slash-star)
-IMAGE_SLASH_STAR_AVIF_LIB_DIR ?= $(shell p="$$(find "$(IMAGE_SLASH_STAR_SRC)/.oracle-venv" -name 'libavif*' -type f -print -quit 2>/dev/null)"; if [ -n "$$p" ]; then dirname "$$p"; fi)
 FIXTURES_DIR := pillow-rs/tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
@@ -49,8 +48,8 @@ MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
 MIGRATION_PILLOW_COVERAGE_OUTPUT ?= build/migration-parity/pillow-oracle-coverage-result.json
 MIGRATION_PILLOW_COVERAGE_REPORT ?= target/coverage/migration-parity-pillow.json
 MIGRATION_PILLOW_COVERAGE_DATA ?= target/coverage/.migration-parity-pillow
-MIGRATION_PILLOW_MISSING_MANIFEST ?= docs/coverage-pillow-missing-feature-manifest.json
-MIGRATION_PILLOW_MISSING_MARKDOWN ?= docs/coverage-pillow-missing-feature-manifest.md
+MIGRATION_PILLOW_MISSING_MANIFEST ?= build/migration-parity/coverage-pillow-missing-feature-manifest.json
+MIGRATION_PILLOW_MISSING_MARKDOWN ?= build/migration-parity/coverage-pillow-missing-feature-manifest.md
 MIGRATION_COVERAGE_OPERATION ?=
 MIGRATION_COVERAGE_EXCLUDE_CASE_IDS ?=
 MIGRATION_COVERAGE_EXCLUDE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_EXCLUDE_CASE_IDS),--exclude-case-id '$(case_id)')
@@ -76,7 +75,7 @@ MIGRATION_BROWSER_PARITY_OUTPUT ?= build/migration-parity/browser-wasm-parity-re
 MIGRATION_JS_PARITY_CHUNK_SIZE ?= 128
 MIGRATION_BROWSER_PARITY_CHUNK_SIZE ?= 512
 MIGRATION_JS_GAP_MANIFEST ?= build/migration-parity/js-wasm-gap-manifest.json
-MIGRATION_JS_GAP_MARKDOWN ?= docs/coverage-js-wasm-gap-manifest.md
+MIGRATION_JS_GAP_MARKDOWN ?= build/migration-parity/coverage-js-wasm-gap-manifest.md
 MIGRATION_JS_PARITY_CASE_IDS ?= $(MIGRATION_PARITY_CASE_IDS)
 MIGRATION_JS_PARITY_CASE_ID_LIST := $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_SPACE),$(MIGRATION_JS_PARITY_CASE_IDS)))
 MIGRATION_JS_PARITY_CASE_ARGS := $(foreach case_id,$(MIGRATION_JS_PARITY_CASE_ID_LIST),--case-id '$(case_id)')
@@ -141,9 +140,6 @@ MIGRATION_BENCHMARK_PROFILE_ARGS_pipeline := --pipeline
 MIGRATION_BENCHMARK_PROFILE_ARGS := $(MIGRATION_BENCHMARK_PROFILE_ARGS_$(MIGRATION_BENCHMARK_PROFILE))
 MIGRATION_STATUS_OUTPUT ?= build/migration-parity/status-report.json
 
-ifneq ($(strip $(IMAGE_SLASH_STAR_AVIF_LIB_DIR)),)
-export IMAGE_SLASH_STAR_AVIF_LIB_DIR
-endif
 
 # Colors for help output
 BOLD := \033[1m
@@ -152,10 +148,25 @@ NC   := \033[0m
 
 # ── Default ───────────────────────────────────────────────────────────────────
 .DEFAULT_GOAL := help
-.PHONY: help
+.PHONY: help help-all
+
+help: ## Show common contributor commands
+	@printf "%s\n" "pillow-rs — build, compare, contribute" "" \
+	  "  make setup-venv     Install pinned Python tools in this checkout" \
+	  "  make build-parity   Build without replacing the Pillow oracle" \
+	  "  make build          Install the replacement for application use" \
+	  "  make test           Full backend and Node/browser campaign" \
+	  "  make fmt / clippy   Check Rust formatting / lint" \
+	  "  make bench          Run the declared benchmark cohort" \
+	  "  make docs-setup     Install hash-locked site tools" \
+	  "  make docs-build     Build and validate the public site" \
+	  "  make docs-serve     Preview at localhost:8000" \
+	  "  make docs-check     Check docs, inputs, and release tooling" \
+	  "  make help-all       Show specialized lanes and options" \
+	  "" "See docs/COMMANDS.md for requirements and side effects."
 
 # ── Help ──────────────────────────────────────────────────────────────────────
-help: ## Show this help
+help-all: ## Show all specialized commands
 	@printf "$(BOLD)pillow-rs Makefile$(NC)\n"
 	@printf "\n$(BOLD)Setup$(NC)\n"
 	@printf "  $(CYAN)make setup$(NC)          Install all dev dependencies\n"
@@ -1003,13 +1014,12 @@ repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
 
-docs-check: repo-map-check migration-parity-inputs-check release-tools-test ## Validate documentation, inputs, and release configuration
+docs-check: docs-lint docs-test repo-map-check migration-parity-inputs-check release-tools-test ## Validate documentation, inputs, and release configuration
 	@test -s README.md
 	@test -s CONTRIBUTING.md
 	@test -s CHANGELOG.md
 	@test -s BENCHMARKS.md
 	@test -s docs/DOCUMENTATION_CHECKLIST.md
-	@test -s docs/CI_CD_RELEASE_PLAN.md
 	@test -s docs/REGISTRY_RELEASE_MATRIX.md
 	@test -s docs/BENCHMARKING.md
 	@test -s docs/COVERAGE.md
@@ -1100,6 +1110,10 @@ release-npm-pack: ## Build, test, and pack the single Node/browser npm package
 	mkdir -p dist/release/npm
 	cd $(JS_SRC) && npm pack --ignore-scripts --pack-destination ../dist/release/npm
 
+.PHONY: docs-js-test
+docs-js-test: ## Execute the README example and verify the already-built npm package
+	cd $(JS_SRC) && npm run test:package
+
 .PHONY: release-lock-update
 release-lock-update: ## Refresh only the newly pinned release dependency packages
 	$(CARGO) update -p fontdone -p image-slash-star
@@ -1107,3 +1121,9 @@ release-lock-update: ## Refresh only the newly pinned release dependency package
 .PHONY: release-status
 release-status: ## Read public GitHub CI/release conclusions and failure annotations
 	$(PYTHON) scripts/check_release_status.py $(RELEASE_STATUS_ARGS)
+
+.PHONY: docs-status
+docs-status: ## Read public documentation workflow results for a commit or run URL
+	$(PYTHON) scripts/check_release_status.py --workflow docs.yml $(RELEASE_STATUS_ARGS)
+
+include docs.mk

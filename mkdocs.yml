@@ -1,0 +1,78 @@
+site_name: pillow-rs
+site_description: Rust image processing with Python and WebAssembly bindings.
+site_url: https://appunni-m.github.io/pillow-rs/
+repo_url: https://github.com/appunni-m/pillow-rs
+repo_name: appunni-m/pillow-rs
+docs_dir: target/docs-source
+site_dir: target/site
+use_directory_urls: true
+strict: true
+theme:
+  name: material
+  font: false
+  language: en
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+extra_css:
+  - assets/docs.css
+extra_javascript:
+  - assets/evidence.js
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+nav:
+  - Overview: index.md
+  - Start here:
+      - Installation: installation.md
+      - Python recipes: python.md
+      - JavaScript and browsers: javascript.md
+      - Rust integration: rust.md
+  - Compatibility:
+      - Maturity and limitations: compatibility.md
+      - API support inventory: api-support.md
+      - Coverage evidence: coverage.md
+  - Performance:
+      - Benchmark results: benchmarks.md
+      - Measurement protocol: benchmarking.md
+  - Contribute:
+      - Contributor guide: contributing.md
+      - Command reference: commands.md
+      - Architecture: architecture.md
+      - Documentation maintenance: documentation.md
+  - Project:
+      - Releases: releasing.md
+      - Support: support.md
+      - Security: security.md
+      - Code of conduct: conduct.md
+      - Changelog: changelog.md

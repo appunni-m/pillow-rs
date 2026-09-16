@@ -59,6 +59,8 @@ def main() -> None:
     selection.add_argument("--commit", help="exact 40-character commit SHA")
     selection.add_argument("--run-url", help="public GitHub Actions run URL; also works without API quota")
     parser.add_argument("--repo", default="appunni-m/pillow-rs", help="GitHub owner/repository")
+    parser.add_argument("--workflow", action="append", choices=("ci.yml", "release.yml", "docs.yml", "benchmark.yml"),
+                        help="limit to a named workflow; defaults to CI and release")
     args = parser.parse_args()
     try:
         if args.run_url:
@@ -75,7 +77,7 @@ def main() -> None:
         payload = json.loads(read_url(f"{base}/runs?{query}"))
         result = []
         for run in payload["workflow_runs"]:
-            if run["head_sha"] != args.commit or PurePosixPath(run["path"]).name not in {"ci.yml", "release.yml"}:
+            if run["head_sha"] != args.commit or PurePosixPath(run["path"]).name not in set(args.workflow or ("ci.yml", "release.yml")):
                 continue
             row = {key: run.get(key) for key in (
                 "id", "name", "event", "head_branch", "head_sha", "status", "conclusion", "html_url",

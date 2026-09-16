@@ -57,6 +57,12 @@ if (typeof nodeEntry.Image !== 'function' || typeof nodeEntry.initSync !== 'func
     throw new Error('Node package entry is missing the generated API or initSync wrapper');
 }
 
+const examples = [...readFileSync('README.md', 'utf8').matchAll(/^```javascript\s*\n([\s\S]*?)^```\s*$/gm)];
+if (examples.length === 0) throw new Error('README has no executable JavaScript example');
+for (const [, example] of examples) {
+    execFileSync(process.execPath, ['--input-type=module', '-e', example], { stdio: 'inherit' });
+}
+
 process.stdout.write(
     `npm package: ${report.size} compressed bytes, ${report.unpackedSize} unpacked bytes, ` +
     `${report.entryCount} entries\n`,

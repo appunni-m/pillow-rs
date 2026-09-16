@@ -39,8 +39,7 @@ backend limitations in the documentation remain part of its contract.
 
 ### Compatibility and release notes
 
-- The public Python namespace remains `PIL`; `RSPIL` stays a deprecated
-  compatibility bridge.
+- The public Python namespace remains `PIL`; legacy import compatibility remains deprecated.
 - GPU and browser capability gaps, benchmark budget review, and source
   coverage limitations remain explicit release evidence.
 
@@ -49,9 +48,9 @@ backend limitations in the documentation remain part of its contract.
 ### Changed
 
 - Made `PIL` the public Python namespace so `from PIL import Image` is the
-  direct replacement for the former `RSPIL` import.
-- Kept `pillow_rs` as the internal binding namespace and `RSPIL` as a
-  deprecated compatibility bridge.
+  documented replacement entry point.
+- Kept `pillow_rs` as the internal binding namespace and retained a deprecated
+  compatibility bridge.
 - Synchronized the Rust, Python, and WebAssembly package versions for the
   release candidate.
 
