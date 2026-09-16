@@ -218,8 +218,8 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     status = ("**Diagnostic measurement from a modified checkout.** Not a release baseline."
               if not snapshot["clean"] else "**Historical measurement.** Not a measurement of the latest release."
               if historical else "**Measurement of the documented release.**")
-    lines = ["# Benchmark results", "", status,
-             f"Recorded {cell(snapshot['measured_at'][:10])}. Run status: **{cell(snapshot['status'])}**.", ""]
+    lines = ["# Benchmark results", "",
+             f'<p class="bench-run-note">Recorded {cell(snapshot["measured_at"][:10])}. {cell(status.replace("**", ""))} Run status: {cell(snapshot["status"])}.</p>', ""]
     details = ["# Benchmark measurement details", "", status, "",
              "[View the results](benchmarks.md) · [Run benchmarks](benchmarking.md)", "",
              "| Measurement identity | Value |", "| --- | --- |",
@@ -232,12 +232,8 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
               "not the full source receipt. It preserves the original report hash and numerical observations; "
               "hostnames, local paths, and internal traces are omitted.", ""]
     details += [f"- {cell(note)}" for note in snapshot["notes"]]
-    lines += ["Latency is in **microseconds (µs)**; lower is faster. Compare implementations "
-              "within the same workload. P95 is the 95th percentile; sample counts show how many timings were collected.", "",
-              "[Hardware, caveats, and full measurements](benchmark-details.md). "
-              "A completed timing run does not by itself establish equal output.", "", controls("Filter results"),
-              "| Workload | Implementation | Median µs | P95 µs | Samples | Result |",
-              "| --- | --- | ---: | ---: | ---: | --- |"]
+    from docs_benchmark_view import render_dashboard
+    lines += [render_dashboard(snapshot, config), ""]
     details += ["", "## Full measurements", "",
                 "| Workload | Subject | Median µs | P90 µs | P95 µs | Samples | Result / correctness | Requested → actual | Terminal receipt |",
                 "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |"]
@@ -246,19 +242,6 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
         result = f"{row['status']}; {row['correctness']}"
         terminal = "Complete" if row["terminal_complete"] is True else "Not proven" if row["terminal_complete"] is False else "Not measured" if row["requested_backend"] == "gpu" else "Not applicable"
         details.append("| " + " | ".join(cell(v) for v in (row["workload"], row["subject"], row["median_us"], row["p90_us"], row["p95_us"], row["sample_count"], result, route, terminal)) + " |")
-        correctness = row["correctness"]
-        outcome = ("Timing only" if correctness in {"timing_only", "successful_execution: pass"}
-                   else "Output matches" if correctness == "output hash match: True; byte length match: True"
-                   else "Output differs" if correctness.startswith("output hash match: False;") else correctness)
-        if row["status"] not in {"completed", "passed", "ok"}:
-            outcome = f"{row['status']}; {outcome}"
-        implementation = row["subject"]
-        if row["requested_backend"] != row["actual_backend"]:
-            implementation += f" ({route})"
-        if row["requested_backend"] == "gpu" and row["terminal_complete"] is not True:
-            outcome += "; GPU completion unproven"
-        lines.append("| " + " | ".join(cell(v) for v in (row["workload"], implementation, row["median_us"],
-                     row["p95_us"], row["sample_count"], outcome)) + " |")
     lines += ["", "[Measurement details and hardware](benchmark-details.md) · "
               "[Download results](assets/benchmark.json) · [Contributor benchmark guide](benchmarking.md)", ""]
     details += ["", "## Workload boundaries", "", "Repeat counts, dimensions, modes, and cache states are retained per workload:", ""]
