@@ -72,19 +72,6 @@ impl OpEntry {
             gpu_source: None,
         }
     }
-
-    /// Creates a registry entry with no executable backend implementation.
-    ///
-    /// This is used for descriptors that are retained only when the optional
-    /// GPU feature is enabled. A no-GPU build keeps the operation key visible
-    /// to the CPU/SIMD registry without embedding shader assets.
-    #[cfg(not(feature = "gpu"))]
-    pub const fn empty() -> Self {
-        OpEntry {
-            cpu_fn: None,
-            simd_fn: None,
-        }
-    }
 }
 
 // ── Registration macros — one per backend ────────────────────────────────────────
@@ -107,31 +94,6 @@ macro_rules! gpu_entry {
 macro_rules! gpu_entry {
     ($f:expr, $shader:literal) => {
         $crate::compute::registry::OpEntry::cpu_only($f as $crate::compute::registry::CpuOpFn)
-    };
-}
-
-/// Create an OpEntry that retains a shader contract without a CPU executor.
-///
-/// Some deprecated descriptors remain in the operation metadata so backend
-/// contract tests can inspect their shader sources, while their supported
-/// public constructors materialize eagerly and never dispatch these entries.
-#[cfg(feature = "gpu")]
-macro_rules! gpu_only_entry {
-    ($shader:literal) => {
-        $crate::compute::registry::OpEntry {
-            cpu_fn: None,
-            gpu_shader: Some($shader),
-            gpu_source: Some(include_str!(concat!("pool_gpu/shaders/", $shader))),
-            simd_fn: None,
-        }
-    };
-}
-
-/// Omit shader-only descriptors entirely from no-GPU builds.
-#[cfg(not(feature = "gpu"))]
-macro_rules! gpu_only_entry {
-    ($shader:literal) => {
-        $crate::compute::registry::OpEntry::empty()
     };
 }
 
@@ -163,7 +125,6 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::Thumbnail { .. } => "Thumbnail",
         PipelineOp::Reduce { .. } => "Reduce",
         PipelineOp::Convert { .. } => "Convert",
-        PipelineOp::Quantize { .. } => "Quantize",
         PipelineOp::RemapPalette { .. } => "RemapPalette",
         PipelineOp::Filter3x3 { .. } => "Filter3x3",
         PipelineOp::Filter5x5 { .. } => "Filter5x5",
@@ -221,7 +182,6 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::CompositeModule { .. } => "CompositeModule",
         PipelineOp::Eval { .. } => "Eval",
         PipelineOp::EffectNoise { .. } => "EffectNoise",
-        PipelineOp::PointOp { .. } => "PointOp",
         PipelineOp::Transform { .. } => "Transform",
         PipelineOp::Color3DLut { .. } => "Color3DLut",
         PipelineOp::PutPixel { .. } => "PutPixel",
@@ -229,9 +189,6 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::PutAlpha { .. } => "PutAlpha",
         PipelineOp::PutAlphaData { .. } => "PutAlphaData",
         PipelineOp::ExtractBand { .. } => "ExtractBand",
-        PipelineOp::LinearGradient { .. } => "LinearGradient",
-        PipelineOp::RadialGradient { .. } => "RadialGradient",
-        PipelineOp::EffectMandelbrot { .. } => "EffectMandelbrot",
         PipelineOp::DrawLine { .. } => "DrawLine",
         PipelineOp::DrawRectangle { .. } => "DrawRectangle",
         PipelineOp::DrawRoundedRect { .. } => "DrawRoundedRect",
@@ -713,9 +670,6 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
                         | ColorMode::F
                 )
         }
-        // Quantize returns a palette-backed image in Pillow. The shader is a
-        // per-channel uniform quantizer and cannot produce that public result.
-        PipelineOp::Quantize { .. } => false,
         // Autocontrast and Equalize are admitted here because the GPU pool
         // expands them into their histogram/control/LUT/remap pass sequence.
         // The operation-level registry cannot inspect the source image, so
@@ -890,15 +844,6 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // before dispatch, so both ordinary and palette-index writes use the
         // same packed byte kernel here.
         PipelineOp::PutPixel { .. } => true,
-        // These operations are exposed as eager Image-module constructors in
-        // the public core. Their retained shader assets do not reproduce the
-        // full mode-specific byte contracts: gradients support 1/P/I/F and
-        // Mandelbrot has a different iteration/update ordering. Keep the
-        // sources available for validation and future work, but route the
-        // public operation to CPU until a matching output contract exists.
-        PipelineOp::LinearGradient { .. }
-        | PipelineOp::RadialGradient { .. }
-        | PipelineOp::EffectMandelbrot { .. } => false,
         _ => true,
     }
 }
@@ -956,7 +901,6 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
             | PipelineOp::MinFilter { .. }
             | PipelineOp::MedianFilter { .. }
             | PipelineOp::RankFilter { .. }
-            | PipelineOp::LinearGradient { .. }
             | PipelineOp::EffectNoise { .. }
             | PipelineOp::EffectSpread { .. }
             | PipelineOp::Color3DLut { .. }
@@ -1121,7 +1065,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         | PipelineOp::Grayscale
         | PipelineOp::AlphaComposite { .. }
         | PipelineOp::Eval { .. }
-        | PipelineOp::PointOp { .. }
         | PipelineOp::Multiply { .. }
         | PipelineOp::Screen { .. }
         | PipelineOp::Difference { .. }
@@ -1328,13 +1271,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![code]
         }
 
-        // ── Quantize: colors, levels, step ──
-        PipelineOp::Quantize { colors, .. } => {
-            let c = *colors;
-            let levels = 256 / c.max(1);
-            vec![c, levels, 256]
-        }
-
         // ── PutAlpha: alpha as u32 ──
         PipelineOp::PutAlpha { alpha, mode } => vec![*alpha as u32, mode.code()],
         PipelineOp::PutAlphaData { mode, .. } => vec![0, mode.code()],
@@ -1501,29 +1437,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── ExtractBand: channel index ──
         PipelineOp::ExtractBand { index } => vec![*index as u32],
-
-        // ── LinearGradient, RadialGradient: no params ──
-        PipelineOp::LinearGradient { .. } => vec![],
-        PipelineOp::RadialGradient { .. } => vec![],
-
-        // ── EffectMandelbrot: extent + quality ──
-        PipelineOp::EffectMandelbrot {
-            w: _,
-            h: _,
-            x0,
-            y0,
-            x1,
-            y1,
-            quality,
-        } => {
-            vec![
-                (*x0 as f32).to_bits(),
-                (*y0 as f32).to_bits(),
-                (*x1 as f32).to_bits(),
-                (*y1 as f32).to_bits(),
-                *quality,
-            ]
-        }
 
         // ── Everything else (no GPU support / no params) ──
         _ => vec![],
@@ -2654,25 +2567,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
 
     // ── Point + Transform ──
     m.insert(
-        "PointOp",
-        gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PointOp { lut } = op {
-                    // PointOp is an internal LUT-fusion descriptor; share the
-                    // public Eval implementation so validation and semantics
-                    // cannot drift between the two operation forms.
-                    op_eval(img, lut)
-                } else {
-                    Err(PilError::ValueError("expected PointOp op".into()))
-                }
-            },
-            "point_op.wgsl"
-        ),
-    );
-    m.insert(
         "Transform",
         gpu_entry!(
             |img: &DynamicImage,
@@ -2823,18 +2717,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
             },
             "extract_band.wgsl"
         ),
-    );
-
-    // ── LinearGradient (native SIMD generator + retained shader contract) ──
-    m.insert("LinearGradient", gpu_only_entry!("linear_gradient.wgsl"));
-
-    // ── RadialGradient (deprecated shader contract only) ──
-    m.insert("RadialGradient", gpu_only_entry!("radial_gradient.wgsl"));
-
-    // ── EffectMandelbrot (deprecated shader contract only) ──
-    m.insert(
-        "EffectMandelbrot",
-        gpu_only_entry!("effect_mandelbrot.wgsl"),
     );
 
     // ── ImageDraw ops ──
@@ -3148,7 +3030,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Pad", adapters::simd_pad)?;
     simd_set(m, "Convert", adapters::simd_convert)?;
     simd_set(m, "Reduce", adapters::simd_reduce)?;
-    simd_set(m, "LinearGradient", adapters::simd_linear_gradient)?;
     simd_set(m, "EffectNoise", adapters::simd_effect_noise)?;
     simd_set(m, "EffectSpread", adapters::simd_effect_spread)?;
     simd_set(m, "Color3DLut", adapters::simd_color3dlut)?;

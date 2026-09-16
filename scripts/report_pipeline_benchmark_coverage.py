@@ -2,8 +2,8 @@
 """Report the maintained PipelineOp benchmark workload coverage.
 
 This is a benchmark-input audit, not an LLVM coverage denominator.  It checks
-that every PipelineOp variant has exactly one operation-matrix workload and
-reports the separately measured composition-workflow population.  When the
+that every canonical PipelineOp family and retained eager public operation has
+an operation-matrix workload, and reports composition workflows separately.  When the
 managed benchmark result exists, it also reports successful execution by
 subject; unsupported backend operations remain visible in that receipt.
 """
@@ -52,13 +52,19 @@ def display_path(path: Path) -> str:
 
 
 # Some public operations intentionally share one deferred pipeline descriptor.
-# Keep those aliases explicit so the denominator measures PipelineOp variants,
-# rather than counting two public entry points that lower to the same variant
-# (or treating the typed BoxBlurXY descriptor as an unbenchmarked operation).
+# Keep aliases explicit so shared descriptors do not add duplicate deferred
+# families. Eager public workloads are added separately below.
 PIPELINE_VARIANT_ALIASES: dict[str, str] = {
     "BoxBlurXY": "BoxBlur",
     "Blend": "BlendModule",
     "Composite": "CompositeModule",
+}
+
+
+# These maintained public workloads never require their own deferred variant.
+# Keep them in the acceptance denominator after removing the retired descriptors.
+PUBLIC_OPERATION_WORKLOADS = {
+    "Quantize", "PointOp", "LinearGradient", "RadialGradient", "EffectMandelbrot",
 }
 
 
@@ -109,9 +115,10 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
     document = json.loads(path.read_text(encoding="utf-8"))
     workloads = document["workloads"]
     source_variants = pipeline_op_variants()
-    canonical_source_variants = {
+    canonical_deferred_variants = {
         canonical_variant(variant) for variant in source_variants
     }
+    canonical_source_variants = canonical_deferred_variants | PUBLIC_OPERATION_WORKLOADS
     spec_variants = set(PIPELINE_OP_BENCHMARK_SPECS)
     canonical_spec_variants = {canonical_variant(variant) for variant in spec_variants}
     expected_ids = {
@@ -213,7 +220,8 @@ def report(path: Path, result_path: Path | None = None) -> dict[str, object]:
         "schema": "pillow-rs/pipeline-benchmark-coverage@1",
         "input": display_path(path),
         "source_pipeline_op_variants": len(source_variants),
-        "canonical_pipeline_op_variants": len(canonical_source_variants),
+        "canonical_pipeline_op_variants": len(canonical_deferred_variants),
+        "public_operation_workloads": sorted(PUBLIC_OPERATION_WORKLOADS),
         "benchmark_spec_variants": len(canonical_spec_variants),
         "benchmark_spec_aliases": sorted(
             f"{alias}->{canonical}" for alias, canonical in PIPELINE_VARIANT_ALIASES.items()

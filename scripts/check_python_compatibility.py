@@ -28,7 +28,6 @@ MODULES = (
     "pillow_rs",
     "pillow_rs.imagedraw",
     "pillow_rs.operations",
-    "RSPIL",
 )
 
 
@@ -37,14 +36,11 @@ def main() -> int:
         importlib.import_module(module)
     from PIL import Image
     import PIL
-    import RSPIL
 
     if Image.__name__ != "PIL.Image":
         raise AssertionError(f"from PIL import Image returned {Image!r}")
     if not isinstance(Image.new("L", (2, 2)), Image.Image):
         raise AssertionError("PIL.Image.new did not return PIL.Image.Image")
-    if RSPIL.Image is not Image:
-        raise AssertionError("deprecated RSPIL alias is not the PIL module")
     if PIL.__version__ != importlib.import_module("pillow_rs").__version__:
         raise AssertionError("PIL and pillow_rs versions differ")
     print(

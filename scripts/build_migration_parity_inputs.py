@@ -39859,6 +39859,50 @@ def build_nuanced_cases(
         )
     cases.extend(benchmark_pipeline_cases(surface_id))
     cases.extend(pipeline_composition_cases(surface_id, operations))
+    cases.extend(release_cleanup_parity_cases(surface_id))
+    return cases
+
+
+def release_cleanup_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise fused Eval tables after removing the PointOp descriptor.
+
+    Odd widths retain vector tails; distinct per-band maps preserve alpha
+    semantics through three lazy public point calls and final materialization.
+    """
+    if surface_id != "PIL.Image.Image":
+        return []
+    cases = []
+    for mode, color, bands in (
+        ("L", 255, 1), ("LA", [0, 255], 2),
+        ("RGB", [0, 127, 255], 3), ("RGBA", [255, 127, 0, 31], 4),
+    ):
+        steps = [{
+            "step_id": "source", "surface": "PIL.Image", "operation": "new",
+            "receiver": None,
+            "arguments": {"mode": literal(mode), "size": literal([17, 3]),
+                          "color": literal(color)},
+        }]
+        receiver = "source"
+        for index in range(3):
+            step_id = f"point-{index}"
+            table = [(value * (index + band + 2) + 19 * band + 7 * index) % 256
+                     for band in range(bands) for value in range(256)]
+            steps.append({
+                "step_id": step_id, "surface": surface_id, "operation": "point",
+                "receiver": binding(receiver), "arguments": {"lut": literal(table)},
+            })
+            receiver = step_id
+        steps.append({
+            "step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+            "receiver": binding(receiver), "arguments": {},
+        })
+        cases.append({
+            "case_id": f"pipeline-composition.eval-fusion-release-{mode.lower()}",
+            "surface": surface_id, "operation": "point",
+            "covers": [f"{surface_id}.point.behavior.default"],
+            "target_profiles": [TARGET_PROFILE], "assets": [], "steps": steps,
+            "observations": [receiver, "materialize"],
+        })
     return cases
 
 

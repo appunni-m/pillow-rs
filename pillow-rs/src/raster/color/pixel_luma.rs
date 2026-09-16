@@ -25,18 +25,6 @@ impl<T: Primitive> Pixel for Luma<T> {
     fn alpha(&self) -> Self::Subpixel {
         Self::Subpixel::DEFAULT_MAX_VALUE
     }
-    fn channels4(&self) -> (T, T, T, T) {
-        let c = self.0;
-        (
-            c[0],
-            T::DEFAULT_MAX_VALUE,
-            T::DEFAULT_MAX_VALUE,
-            T::DEFAULT_MAX_VALUE,
-        )
-    }
-    fn from_channels(a: T, _b: T, _c: T, _d: T) -> Luma<T> {
-        Luma([a])
-    }
 
     fn from_slice(slice: &[T]) -> &Luma<T> {
         // Pixel's slice contract requires exactly the statically known channel count.
@@ -140,14 +128,6 @@ impl<T: Primitive> Pixel for LumaA<T> {
     #[inline]
     fn alpha(&self) -> Self::Subpixel {
         self.0[1]
-    }
-
-    fn channels4(&self) -> (T, T, T, T) {
-        let c = self.0;
-        (c[0], T::DEFAULT_MAX_VALUE, T::DEFAULT_MAX_VALUE, c[1])
-    }
-    fn from_channels(a: T, _b: T, _c: T, d: T) -> LumaA<T> {
-        LumaA([a, d])
     }
 
     fn from_slice(slice: &[T]) -> &LumaA<T> {

@@ -112,24 +112,12 @@ impl<I: ?Sized> Clone for Pixels<'_, I> {
 
 /// A trait for manipulating images.
 pub trait GenericImage: GenericImageView {
-    /// Gets a reference to the mutable pixel at location (x, y).
-    #[deprecated(since = "0.24.0", note = "Use `get_pixel` and `put_pixel` instead.")]
-    fn get_pixel_mut(&mut self, x: u32, y: u32) -> &mut Self::Pixel;
-
     /// Put a pixel at location (x, y). Indexed from top left.
     ///
     /// # Panics
     ///
     /// Panics if `(x, y)` is out of bounds.
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel);
-
-    /// Puts a pixel at location (x, y), ignoring bounds checking.
-    /// Put a pixel at location (x, y), taking into account alpha channels
-    #[deprecated(
-        since = "0.24.0",
-        note = "Use iterator `pixels_mut` to blend the pixels directly"
-    )]
-    fn blend_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel);
 
     /// Copies all of the pixels from another image into this image.
     fn copy_from<O>(

@@ -57,6 +57,31 @@ if (typeof nodeEntry.Image !== 'function' || typeof nodeEntry.initSync !== 'func
     throw new Error('Node package entry is missing the generated API or initSync wrapper');
 }
 
+// The convenience affine method must use the same public input path as the
+// full method, including transparent default fill and malformed-size errors.
+const affineSource = new nodeEntry.Image('RGBA', 3, 2, 255, 12, 34, 127);
+try {
+    const matrix = [1, 0, 1, 0, 1, 0];
+    const simple = affineSource.transform([3, 2], matrix);
+    const explicit = affineSource.transformWithInput([3, 2], 0, matrix, 0, 1, null);
+    try {
+        if (Buffer.compare(simple.toBytes(), explicit.toBytes()) !== 0) {
+            throw new Error('affine convenience method differs from public transform');
+        }
+    } finally {
+        simple.free();
+        explicit.free();
+    }
+    for (const size of [[], [3], [3, 2, 1]]) {
+        let rejected = false;
+        try { affineSource.transform(size, matrix).free(); }
+        catch (error) { if (error.name !== 'TypeError') throw error; rejected = true; }
+        if (!rejected) throw new Error('invalid affine size was accepted');
+    }
+} finally {
+    affineSource.free();
+}
+
 const examples = [...readFileSync('README.md', 'utf8').matchAll(/^```javascript\s*\n([\s\S]*?)^```\s*$/gm)];
 if (examples.length === 0) throw new Error('README has no executable JavaScript example');
 for (const [, example] of examples) {

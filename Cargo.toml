@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.3"
+version = "0.2.0"
 edition = "2024"
 license = "MIT-CMU"
 rust-version = "1.96.1"
@@ -44,9 +44,8 @@ unused_crate_dependencies = "warn"
 # Previously dead code was suppressed with #[allow(dead_code)] — that is banned.
 dead_code = "deny"
 
-# ── Temporary allowances (targeted migrations planned) ──
-# TODO(#ci): Migrate pillow-rs-py to IntoPyObject API (PyO3 v0.23+)
-deprecated = "allow"
+# Reject obsolete dependency APIs before release.
+deprecated = "deny"
 
 # ── Documentation ──
 # AS PER DESIGN — DO NOT REMOVE:

@@ -1062,14 +1062,11 @@ impl<O, S> IntoColor<O> for S
 where
     O: Pixel + FromColor<S>,
 {
-    #[allow(deprecated)]
     fn to_color(&self) -> O {
-        let mut pix = O::from_channels(
-            O::Subpixel::DEFAULT_MIN_VALUE,
-            O::Subpixel::DEFAULT_MIN_VALUE,
-            O::Subpixel::DEFAULT_MIN_VALUE,
-            O::Subpixel::DEFAULT_MIN_VALUE,
-        );
+        // All raster layouts have one to four channels. Initialize exactly
+        // that layout before the conversion fills every output channel.
+        let channels = [O::Subpixel::DEFAULT_MIN_VALUE; 4];
+        let mut pix = *O::from_slice(&channels[..usize::from(O::CHANNEL_COUNT)]);
         pix.copy_from_color(self);
         pix
     }
@@ -1098,11 +1095,6 @@ impl GenericImageView for DynamicImage {
 use super::traits::GenericImage as GenericImageTrait;
 
 impl GenericImageTrait for DynamicImage {
-    #[allow(deprecated)]
-    fn get_pixel_mut(&mut self, _x: u32, _y: u32) -> &mut Self::Pixel {
-        panic!("get_pixel_mut not supported on DynamicImage")
-    }
-
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
         match self {
             DynamicImage::ImageLuma8(img) => {
@@ -1170,27 +1162,5 @@ impl GenericImageTrait for DynamicImage {
                 img.put_pixel(x, y, pf);
             }
         }
-    }
-
-    #[allow(deprecated)]
-    fn blend_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
-        // Simple alpha blend using the current pixel
-        let current = self.get_pixel(x, y);
-        let alpha = pixel[3];
-        let inverse_alpha = u8::MAX.saturating_sub(alpha);
-        let blend_channel = |source: u8, destination: u8| {
-            let weighted = u32::from(source)
-                .saturating_mul(u32::from(alpha))
-                .saturating_add(u32::from(destination).saturating_mul(u32::from(inverse_alpha)));
-            let blended = weighted.checked_div(u32::from(u8::MAX)).unwrap_or_default();
-            u8::try_from(blended).unwrap_or(u8::MAX)
-        };
-        let blended = Rgba([
-            blend_channel(pixel[0], current[0]),
-            blend_channel(pixel[1], current[1]),
-            blend_channel(pixel[2], current[2]),
-            blend_channel(pixel[3], current[3]),
-        ]);
-        self.put_pixel(x, y, blended);
     }
 }

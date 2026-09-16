@@ -235,10 +235,8 @@ make test-wasm
 make test-all
 make migration-parity-test
 make migration-parity-test-all-backends
-make image-backend-parity-test
 make fixtures
-make fixture-coverage-check
-make pillow-rs-fixtures-check
+make migration-parity-fixtures-check
 make fmt
 make fmt-fix
 make clippy
@@ -254,8 +252,8 @@ Release preparation also uses `make release-tools-test`,
 `make release-python-wheel release-wheel-test`,
 `make release-python-sdist release-sdist-test`, `make release-npm-pack`, and
 `make release-crate-package` (after the pinned dependencies are published).
-Use `make release-lock-update` when the reviewed dependency release commits
-change. `make release-platform-check RELEASE_PLATFORM_TARGET=<triple>` checks
+Use `make release-lock-update` after changing workspace release versions; it
+preserves the reviewed dependency set. `make release-platform-check RELEASE_PLATFORM_TARGET=<triple>` checks
 the Python binding for an installed foreign Rust target; actual wheel installs
 still run on the target host. Publication itself is only through the tag-triggered GitHub OIDC
 workflow. Read actual job conclusions with
@@ -290,9 +288,10 @@ adds a Python call-cost profile to the diagnostic artifacts. The retained
 These diagnostic timings include profiler overhead and must never serve as
 benchmark acceptance samples.
 
-`make pillow-rs-fixtures-check` regenerates the current imagingft fixtures in a
-temporary directory and requires exact JSON and raw-byte equality. The
-crate-local equivalent is `make -C pillow-rs fixtures-check`.
+`make migration-parity-fixtures-check` regenerates the maintained manifest and
+inputs in a temporary directory and requires exact equality. Historical runners
+and generated outputs have been removed; the frozen inventory authority remains
+at `scripts/data/migration-authority-v0.yaml` with its original SHA-256.
 
 fontdone / FreeType parity targets:
 
@@ -340,7 +339,7 @@ touched package clean.
 All new public PIL-style operations start from `manifest.yaml`.
 
 1. Add the manifest entry.
-2. Generate stubs with the project script.
+2. Regenerate the maintained input specifications with `make migration-parity-inputs`.
 3. Implement in core.
 4. Add binding delegation.
 5. Add parity fixture and coverage map entry.

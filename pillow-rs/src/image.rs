@@ -218,7 +218,6 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             // the generic mode-preserving planner path is authoritative.
             | PipelineOp::PutData { .. }
             | PipelineOp::Eval { .. }
-            | PipelineOp::PointOp { .. }
     )
 }
 
@@ -458,7 +457,6 @@ fn known_pipeline_op_dimensions(
         | PipelineOp::EffectSpread { .. }
         | PipelineOp::Eval { .. }
         | PipelineOp::EffectNoise { .. }
-        | PipelineOp::PointOp { .. }
         | PipelineOp::DrawLine { .. }
         | PipelineOp::DrawRectangle { .. }
         | PipelineOp::DrawRoundedRect { .. }
@@ -1861,7 +1859,6 @@ impl Image {
             // Pillow's Image.point maps P indices directly, and Image._new
             // copies the source palette. Image.eval delegates to point.
             | PipelineOp::Eval { .. }
-            | PipelineOp::PointOp { .. }
             // Pillow mutates palette indices directly for putdata, while
             // putalpha promotes each index to a PA (index, alpha) pair.
             | PipelineOp::PutData {

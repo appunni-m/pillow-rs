@@ -21,14 +21,6 @@ impl<T: Primitive + Enlargeable> Pixel for Rgb<T> {
     const COLOR_MODEL: &'static str = "RGB";
     const HAS_ALPHA: bool = false;
 
-    fn channels4(&self) -> (T, T, T, T) {
-        let c = self.0;
-        (c[0], c[1], c[2], T::DEFAULT_MAX_VALUE)
-    }
-    fn from_channels(a: T, b: T, c: T, _d: T) -> Rgb<T> {
-        Rgb([a, b, c])
-    }
-
     fn from_slice(slice: &[T]) -> &Rgb<T> {
         // Pixel's slice contract requires exactly the statically known channel count.
         #[allow(clippy::expect_used)]
@@ -132,13 +124,6 @@ impl<T: Primitive + Enlargeable> Pixel for Rgba<T> {
     #[inline]
     fn alpha(&self) -> Self::Subpixel {
         self.0[3]
-    }
-    fn channels4(&self) -> (T, T, T, T) {
-        let c = self.0;
-        (c[0], c[1], c[2], c[3])
-    }
-    fn from_channels(a: T, b: T, c: T, d: T) -> Rgba<T> {
-        Rgba([a, b, c, d])
     }
 
     fn from_slice(slice: &[T]) -> &Rgba<T> {

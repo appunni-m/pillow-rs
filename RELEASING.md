@@ -15,13 +15,21 @@ update pillow-rs's exact dependency versions and lockfile. Fontdone has one
 public Cargo crate; its C/WASM build members remain private. Image-slash-star
 has no Python or npm distribution.
 
+## Next candidate
+
+The working candidate is **0.2.0**, a breaking Rust API cleanup. The published
+release above remains the source of installed-release evidence. Consult the
+[changelog](CHANGELOG.md) and [Rust migration guide](docs/RUST.md#upgrading-to-020)
+before upgrading. Deprecation cleanup does not close the broader GPU arithmetic
+proofs or benchmark-budget gaps listed in [maturity](docs/COMPATIBILITY.md).
+
 ## Prepare a release
 
 1. Update authoritative package versions, exact dependency pins, lockfiles,
    changelog, and the documented version.
 2. Run the relevant full parity, coverage, portability, package-consumer, and
    supply-chain checks. Preserve failures and unmeasured scope.
-3. From a clean checkout, run `make release-check RELEASE_CRATES_READY=1`.
+3. From a clean checkout, run `make release-check`.
    Inspect the crate, wheel/sdist, and packed npm contents.
 4. Commit and push to main. Require successful CI for that exact commit.
 5. Push a new annotated `v<version>` tag on the validated commit.

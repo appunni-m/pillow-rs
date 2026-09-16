@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pillow-rs"
-version = "0.1.3"
+version = "0.2.0"
 description = "Pillow drop-in replacement powered by Rust"
 requires-python = ">=3.8"
 classifiers = [
@@ -42,7 +42,7 @@ dev = [
 [tool.maturin]
 python-source = "python"
 # ``PIL`` is the drop-in public namespace.  Keep ``pillow_rs`` for the thin
-# implementation binding and ``RSPIL`` as a deprecated source-level alias.
-python-packages = ["pillow_rs", "PIL", "RSPIL"]
+# implementation binding.
+python-packages = ["pillow_rs", "PIL"]
 module-name = "pillow_rs._core"
 features = ["pyo3/extension-module"]

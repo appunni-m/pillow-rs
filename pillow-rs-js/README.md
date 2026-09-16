@@ -83,3 +83,11 @@ make test-wasm-browser
 
 The published archive includes both runtime entry points, WASM, declarations,
 README, and license. Release CI tests the packed package before publishing.
+
+## Next-version migration
+
+The unreleased 0.2.0 candidate keeps the same package name and environment
+selection. Its `transform(size, matrix)` helper now uses the same affine input
+path as `transformWithInput`. A size must have exactly two entries. Omitting
+fill uses Pillow's zeroed-pixel default; specify a fill with `transformWithInput`
+when opaque border pixels are required.

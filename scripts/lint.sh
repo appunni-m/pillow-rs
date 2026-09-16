@@ -36,7 +36,7 @@ cargo fmt --check
 #     no cast_truncation, missing_docs, arithmetic_side_effects, ...) ──
 echo ""
 echo "=== clippy (workspace lints) ==="
-cargo clippy --all-targets --all-features -- -A deprecated
+cargo clippy --all-targets --all-features -- -D deprecated
 
 # ── Project-specific grep enforcements ──────────────────────────────────────
 # AS PER DESIGN — DO NOT REMOVE:

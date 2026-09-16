@@ -11,8 +11,12 @@ package for Node.js and browsers.
 **Current release: 0.1.3.** This is an early compatibility release. The maintained
 Python, Node, and browser suites each pass 11,348 comparisons at the released
 commit. That covers selected inputs, modes, and errors, not every Pillow API or
-every possible image. Read [maturity and limitations](docs/COMPATIBILITY.md)
+every possible image. Read [maturity and limitations](https://appunni-m.github.io/pillow-rs/compatibility/)
 before replacing Pillow in an application.
+
+The unreleased **0.2.0** candidate removes deprecated Rust interfaces and the
+former Python import bridge. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-020)
+and [release checklist](https://appunni-m.github.io/pillow-rs/releasing/#next-candidate) before upgrading.
 
 ## Choose your package
 
@@ -25,7 +29,7 @@ before replacing Pillow in an application.
 Python wheels are published for Linux x86-64 (glibc 2.28+), macOS ARM64, and
 Windows x86-64. Other platforms may build from the source distribution; they
 do not have a published wheel in this release. Rust source builds use Rust
-1.96.1. See [installation](docs/INSTALLATION.md) for runtime requirements.
+1.96.1. See [installation](https://appunni-m.github.io/pillow-rs/installation/) for runtime requirements.
 
 ## Make your first image
 
@@ -51,8 +55,8 @@ assert image.size == (6, 4)
 assert output.getvalue().startswith(b"\x89PNG\r\n\x1a\n")
 ```
 
-Continue with [Python recipes](docs/PYTHON.md), [JavaScript and browser
-integration](pillow-rs-js/README.md), or [Rust integration](docs/RUST.md).
+Continue with [Python recipes](https://appunni-m.github.io/pillow-rs/python/), [JavaScript and browser
+integration](https://appunni-m.github.io/pillow-rs/javascript/), or [Rust integration](https://appunni-m.github.io/pillow-rs/rust/).
 
 ## What to expect
 
@@ -75,13 +79,13 @@ workload timings, sample counts, spread, correctness gates, and actual backends.
 Historical results retain their source revision. Missing measurements remain
 unavailable. There is no single project-wide speedup claim.
 
-Read the [measurement protocol](docs/BENCHMARKING.md) to reproduce a run.
+Read the [measurement protocol](https://appunni-m.github.io/pillow-rs/benchmarking/) to reproduce a run.
 Benchmark budget acceptance is separate from correctness and publication.
 
 ## Contribute
 
 Bug reports, small reproductions, documentation improvements, and input-driven
-parity fixes are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+parity fixes are welcome. Start with [CONTRIBUTING.md](https://appunni-m.github.io/pillow-rs/contributing/).
 
 ```sh
 make help
@@ -92,14 +96,14 @@ make migration-parity-test
 
 For documentation only, use `make docs-setup`, `make docs-build`, and
 `make docs-serve`. Each repository builds and publishes its own GitHub Pages
-site. The [command reference](docs/COMMANDS.md) explains side effects and scope.
+site. The [command reference](https://appunni-m.github.io/pillow-rs/commands/) explains side effects and scope.
 
 ## Project information
 
-- [Support](SUPPORT.md) and [private security reporting](SECURITY.md)
-- [Code of conduct](CODE_OF_CONDUCT.md)
-- [Changelog](CHANGELOG.md) and [release process](RELEASING.md)
-- [Architecture](docs/ARCHITECTURE.md) and [coverage evidence](docs/COVERAGE.md)
+- [Support](https://appunni-m.github.io/pillow-rs/support/) and [private security reporting](https://appunni-m.github.io/pillow-rs/security/)
+- [Code of conduct](https://appunni-m.github.io/pillow-rs/conduct/)
+- [Changelog](https://appunni-m.github.io/pillow-rs/changelog/) and [release process](https://appunni-m.github.io/pillow-rs/releasing/)
+- [Architecture](https://appunni-m.github.io/pillow-rs/architecture/) and [coverage evidence](https://appunni-m.github.io/pillow-rs/coverage/)
 
 The project is distributed under the [MIT-CMU License](LICENSE). Dependencies
 and fixture assets retain their own licenses and notices.
