@@ -1,8 +1,12 @@
 # Python recipes
 
+<!-- release:summary -->
+**Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
+<!-- /release:summary -->
+
 These examples use `PIL` after installing pillow-rs in its own environment.
-They require no sample downloads or private files. The [API inventory](https://appunni-m.github.io/pillow-rs/api-support/)
-lists selected paths and their input coverage.
+They require no sample downloads or private files. Start with [installation](INSTALLATION.md#python)
+and check [supported APIs](COMPATIBILITY.md).
 
 ## Create, encode, and reopen
 
@@ -48,7 +52,7 @@ their Pillow contract; do not assume that every method is immutable.
    uses. A simple RGB resize does not establish those paths.
 
 Importing two aliases in one interpreter does not isolate their shared package
-name. The maintained parity runner executes source and target separately.
+name. Use one process per environment.
 
 ## Fonts and sequences
 
@@ -63,8 +67,7 @@ and compare the frame metadata your application needs.
 
 ## Errors and support
 
-Selected cases compare public failures as well as results. Unsupported paths
-remain explicit failures. Catch only errors your application can handle.
+Unsupported paths can raise errors. Catch only errors your application can handle.
 
 Reports should include package and Python versions, platform, API path, mode,
 dimensions, and the smallest non-sensitive input. See [support](../SUPPORT.md).

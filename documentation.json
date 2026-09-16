@@ -1,81 +1,99 @@
 {
   "project": "pillow-rs",
   "version": "12.2.0-alpha.1",
-  "release_revision": "fd78eb80402a0d6d99e6b696d0a1ebf9ba11d5fb",
+  "release_revision": "310788f9fcadc85b02263b383c5a6ea094b000c6",
   "repository": "appunni-m/pillow-rs",
   "site_url": "https://appunni-m.github.io/pillow-rs/",
   "pages": [
     {
       "source": "README.md",
-      "output": "index.md"
+      "output": "index.md",
+      "audience": "user"
     },
     {
       "source": "docs/INSTALLATION.md",
-      "output": "installation.md"
+      "output": "installation.md",
+      "audience": "user"
     },
     {
       "source": "docs/PYTHON.md",
-      "output": "python.md"
+      "output": "python.md",
+      "audience": "user"
     },
     {
       "source": "pillow-rs-js/README.md",
-      "output": "javascript.md"
+      "output": "javascript.md",
+      "audience": "user"
     },
     {
       "source": "docs/RUST.md",
-      "output": "rust.md"
+      "output": "rust.md",
+      "audience": "user"
     },
     {
       "source": "docs/COMPATIBILITY.md",
-      "output": "compatibility.md"
+      "output": "compatibility.md",
+      "audience": "user"
     },
     {
       "source": "docs/COVERAGE.md",
-      "output": "coverage.md"
+      "output": "coverage.md",
+      "audience": "contributor"
     },
     {
       "source": "docs/BENCHMARKING.md",
-      "output": "benchmarking.md"
+      "output": "benchmarking.md",
+      "audience": "contributor"
     },
     {
       "source": "docs/PIPELINE_ROADMAP.md",
-      "output": "pipeline-roadmap.md"
+      "output": "pipeline-roadmap.md",
+      "audience": "contributor"
     },
     {
       "source": "CONTRIBUTING.md",
-      "output": "contributing.md"
+      "output": "contributing.md",
+      "audience": "contributor"
     },
     {
       "source": "docs/COMMANDS.md",
-      "output": "commands.md"
+      "output": "commands.md",
+      "audience": "contributor"
     },
     {
       "source": "docs/ARCHITECTURE.md",
-      "output": "architecture.md"
+      "output": "architecture.md",
+      "audience": "contributor"
     },
     {
       "source": "docs/DOCUMENTATION_CHECKLIST.md",
-      "output": "documentation.md"
+      "output": "documentation.md",
+      "audience": "contributor"
     },
     {
       "source": "RELEASING.md",
-      "output": "releasing.md"
+      "output": "releasing.md",
+      "audience": "contributor"
     },
     {
       "source": "SUPPORT.md",
-      "output": "support.md"
+      "output": "support.md",
+      "audience": "project"
     },
     {
       "source": "SECURITY.md",
-      "output": "security.md"
+      "output": "security.md",
+      "audience": "project"
     },
     {
       "source": "CODE_OF_CONDUCT.md",
-      "output": "conduct.md"
+      "output": "conduct.md",
+      "audience": "project"
     },
     {
       "source": "CHANGELOG.md",
-      "output": "changelog.md"
+      "output": "changelog.md",
+      "audience": "project"
     }
   ],
   "support": {
@@ -89,5 +107,23 @@
   "rust_example": {
     "source": "docs/RUST.md",
     "crate": "pillow-rs"
+  },
+  "published_release": {
+    "version": "12.2.0-alpha.1",
+    "revision": "310788f9fcadc85b02263b383c5a6ea094b000c6",
+    "published_at": "2026-09-16T13:29:58Z"
+  },
+  "registries": [
+    "cargo",
+    "npm",
+    "pypi"
+  ],
+  "python_examples": [
+    "README.md",
+    "docs/PYTHON.md"
+  ],
+  "javascript_example": {
+    "source": "pillow-rs-js/README.md",
+    "language": "javascript"
   }
 }

@@ -289,7 +289,9 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
     |-- check_bindings.py
+    |-- check_docs_browser.cjs
     |-- check_docs_examples.py
+    |-- check_docs_registry.py
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
@@ -304,6 +306,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- data/
     |   `-- migration-authority-v0.yaml
     |-- docs_evidence.py
+    |-- docs_release.py
     |-- docs_site.py
     |-- generate_migration_parity_docs.py
     |-- lint.sh
@@ -335,6 +338,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- select_docs_benchmark.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
+    |-- test_docs_release.py
     |-- test_docs_site.py
     |-- test_receipt_state.py
     |-- test_release_tools.py

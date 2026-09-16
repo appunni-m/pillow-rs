@@ -8,6 +8,14 @@ document.addEventListener('DOMContentLoaded', () => {
       sibling = sibling.nextElementSibling;
     }
     const rows = sibling ? [...sibling.querySelectorAll('tbody tr')] : [];
+    const table = sibling?.tagName === 'TABLE' ? sibling : sibling?.querySelector('table');
+    if (table) {
+      table.dataset.benchmark = '';
+      const headings = [...table.querySelectorAll('thead th')].map(cell => cell.textContent);
+      for (const row of rows) {
+        [...row.cells].forEach((cell, index) => { cell.dataset.label = headings[index]; });
+      }
+    }
     const update = () => {
       const query = input.value.trim().toLocaleLowerCase();
       let visible = 0;

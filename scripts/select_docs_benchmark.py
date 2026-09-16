@@ -41,7 +41,15 @@ def select_run(repository: str, event_name: str, event: dict, fetch=read_json) -
     if event_name in {"pull_request", "pull_request_target"}:
         return None
     base = f"https://api.github.com/repos/{repository}/actions"
-    explicit = event_name == "workflow_run"
+    release_event = event_name == "workflow_run" and event.get("workflow_run", {}).get("path") == ".github/workflows/release.yml"
+    if release_event:
+        run = event["workflow_run"]
+        if not (run.get("name") == "Release" and run.get("conclusion") == "success"
+                and run.get("status") == "completed" and run.get("event") in {"push", "workflow_dispatch"}
+                and re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", run.get("head_branch", ""))
+                and run.get("head_repository", {}).get("full_name") == repository):
+            raise ValueError("Release event is not a successful tag run from this repository")
+    explicit = event_name == "workflow_run" and not release_event
     if explicit:
         runs = [event["workflow_run"]]
         if not trusted_run(runs[0], repository):

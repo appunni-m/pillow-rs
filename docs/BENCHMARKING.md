@@ -1,5 +1,8 @@
 # Benchmarking protocol
 
+This is the contributor guide for collecting and interpreting measurements.
+For comparisons, start with [benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/).
+
 This page defines the benchmark contract used by pillow-rs. It separates
 correctness, timing, backend, and resource evidence so a fast but incorrect or
 partially executed workload cannot look like a performance result.

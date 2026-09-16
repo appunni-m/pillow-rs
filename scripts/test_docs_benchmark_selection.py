@@ -23,6 +23,16 @@ class BenchmarkSelectionTests(unittest.TestCase):
         self.assertEqual(select_run("owner/repo", "workflow_run", {"workflow_run": self.run},
                                     Mock(return_value=self.artifacts)), selected)
 
+    def test_release_event_uses_main_benchmark_data_and_never_release_artifacts(self):
+        run = dict(self.run, path=".github/workflows/release.yml", name="Release", head_branch="v1.0.0-alpha.1")
+        fetch = Mock(side_effect=[{"workflow_runs": [self.run]}, self.artifacts])
+        selected = select_run("owner/repo", "workflow_run", {"workflow_run": run}, fetch)
+        self.assertEqual(selected["run_id"], "42")
+        self.assertIn("workflows/benchmark.yml", fetch.call_args_list[0].args[0])
+        for change in ({"head_repository": {"full_name": "fork/repo"}}, {"head_branch": "main"}, {"conclusion": "failure"}):
+            with self.assertRaisesRegex(ValueError, "Release event"):
+                select_run("owner/repo", "workflow_run", {"workflow_run": dict(run, **change)}, Mock())
+
     def test_pull_requests_use_committed_data_without_accessing_artifacts(self) -> None:
         fetch = Mock(side_effect=AssertionError("PR must not fetch hosted artifacts"))
         self.assertIsNone(select_run("owner/repo", "pull_request", {}, fetch))
