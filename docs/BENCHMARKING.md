@@ -156,3 +156,26 @@ and all subject outcomes, while omitting local paths and hostnames. Full result
 and parity receipts remain CI artifacts. The Benchmark workflow publishes a
 public data artifact; the Documentation workflow validates and renders that data
 using site code from main. Site publication does not change benchmark budgets.
+
+## Reading the comparison table
+
+The public page places one workload on each row and implementations in columns.
+Column headings sort the underlying time values, independent of the displayed
+ns/µs/ms units. Workload and implementation filters retain the baseline and update
+the visible comparison counts. Details expose sample counts, percentiles and
+recorded correctness; the full measurements and JSON remain downloadable.
+
+A speed factor is baseline median divided by project median. For example,
+20 µs versus 10 µs is **2× faster**; 10 µs versus 20 µs is **2× slower**.
+Each row's bars share a linear scale; different workloads do not share a scale.
+Counts and the lowest-median highlight describe observations, not a statistical
+significance test or an overall project score. Small differences may be noise.
+Timing-only rows remain labeled; failed execution, differing output, missing
+baseline, incompatible measurement policies and unconfirmed GPU completion do
+not receive a comparative speed label. A fallback names the backend actually used.
+The UI never changes samples, acceptance thresholds or correctness results.
+
+The presentation takes cues from [Artificial Analysis](https://artificialanalysis.ai/methodology)
+and [MLPerf Endpoints](https://mlcommons.org/benchmarks/endpoints/): make the
+comparison clear while keeping task, environment and quality context visible.
+These projects are references for presentation, not validators of these results.

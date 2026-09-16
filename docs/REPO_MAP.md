@@ -305,6 +305,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- codex-worktree-setup.sh
     |-- data/
     |   `-- migration-authority-v0.yaml
+    |-- docs_benchmark_view.py
     |-- docs_evidence.py
     |-- docs_release.py
     |-- docs_site.py
@@ -338,6 +339,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- select_docs_benchmark.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
+    |-- test_docs_benchmark_view.py
     |-- test_docs_release.py
     |-- test_docs_site.py
     |-- test_receipt_state.py
