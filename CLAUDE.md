@@ -245,6 +245,7 @@ make clippy
 make lint
 make repo-map-check
 make repo-map-update
+make workflows-check
 make ci
 make verify
 ```

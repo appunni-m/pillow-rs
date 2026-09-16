@@ -1,6 +1,12 @@
 name: Benchmark
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/benchmark.yml'
+      - 'scripts/run_migration_benchmark.py'
+      - 'scripts/docs_evidence.py'
   workflow_dispatch:
     inputs:
       profile:
@@ -38,6 +44,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown

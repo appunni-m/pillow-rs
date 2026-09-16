@@ -299,6 +299,7 @@ help-all: ## Show all specialized commands
 	@printf "\n$(BOLD)Release$(NC)\n"
 	@printf "  $(CYAN)make release-python-wheel$(NC) Build a host Python wheel\n"
 	@printf "  $(CYAN)make release-tools-test$(NC)  Verify release artifact and recovery guards\n"
+	@printf "  $(CYAN)make workflows-check$(NC)    Check Actions YAML with checksum-pinned actionlint\n"
 	@printf "  $(CYAN)make release-platform-check RELEASE_PLATFORM_TARGET=<triple>$(NC) Type-check the Python binding\n"
 	@printf "  $(CYAN)make release-status RELEASE_STATUS_ARGS='--commit <sha>'$(NC) Read GitHub conclusions\n"
 	@printf "  Publish through GitHub by pushing an annotated v<version> tag after main CI passes.\n"
@@ -1121,6 +1122,10 @@ release-lock-update: ## Refresh only the newly pinned release dependency package
 .PHONY: release-status
 release-status: ## Read public GitHub CI/release conclusions and failure annotations
 	$(PYTHON) scripts/check_release_status.py $(RELEASE_STATUS_ARGS)
+
+.PHONY: workflows-check
+workflows-check: ## Validate all Actions workflows (downloads pinned actionlint on first use)
+	$(PYTHON) scripts/check_workflows.py
 
 .PHONY: docs-status
 docs-status: ## Read public documentation workflow results for a commit or run URL

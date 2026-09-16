@@ -63,7 +63,14 @@ and manual runs publish the checked artifact through GitHub Pages using
 settings. No separate site repository, registry token, or generated-content
 branch is required.
 
+After enabling Pages, rerun the Documentation workflow or push a reviewed
+documentation change to main. Check the deploy job and the published URL;
+successful builds alone do not prove deployment.
+
 Benchmark workflow artifacts can refresh the public result page. Their data is
 validated against this repository and the measured commit before rendering;
 downloaded data never supplies executable site code. The checked-in snapshot
 remains a reproducible fallback for documentation builds.
+
+Changes to the benchmark workflow, harness, or public evidence exporter on main
+run the benchmark immediately. Weekly and manual runs remain available.

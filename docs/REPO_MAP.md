@@ -303,6 +303,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_release_status.py
     |-- check_release_wheel.py
     |-- check_repo_map.py
+    |-- check_workflows.py
     |-- codex-worktree-setup.sh
     |-- docs_evidence.py
     |-- docs_site.py

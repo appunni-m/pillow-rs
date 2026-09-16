@@ -55,6 +55,7 @@ implementation comment or a maintained public contributor guide.
 make fmt
 make clippy
 make docs-check
+make workflows-check
 ```
 
 For runtime changes, run `make test` and the relevant coverage/benchmark gates.
@@ -64,6 +65,12 @@ backends remain explicit.
 
 [Coverage](docs/COVERAGE.md) explains collection receipts and changed-line
 claims. [Benchmarking](docs/BENCHMARKING.md) explains controlled comparisons.
+
+`make workflows-check` validates Actions YAML, expressions, action inputs, and
+job dependencies using checksum-pinned actionlint 1.7.12. The first invocation
+downloads the tool into `target/`; later invocations verify the cached archive.
+Shell and Python lint remain separate checks. CI runs the workflow check on
+every commit.
 Do not attach an old coverage context to a new report.
 
 ## Send a pull request
