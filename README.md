@@ -1,5 +1,11 @@
 # pillow-rs
 
+[![CI](https://github.com/appunni-m/pillow-rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/appunni-m/pillow-rs/actions/workflows/ci.yml)
+[![Documentation](https://github.com/appunni-m/pillow-rs/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/appunni-m/pillow-rs/actions/workflows/docs.yml)
+[![Benchmarks](https://github.com/appunni-m/pillow-rs/actions/workflows/benchmark.yml/badge.svg?branch=main)](https://github.com/appunni-m/pillow-rs/actions/workflows/benchmark.yml)
+[![Release](https://github.com/appunni-m/pillow-rs/actions/workflows/release.yml/badge.svg)](https://github.com/appunni-m/pillow-rs/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/appunni-m/pillow-rs?include_prereleases&sort=semver)](https://github.com/appunni-m/pillow-rs/releases)
+
 <!-- release:summary -->
 **Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
 <!-- /release:summary -->
