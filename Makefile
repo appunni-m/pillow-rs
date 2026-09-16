@@ -1024,9 +1024,12 @@ release-check: build-all ## Build and package every release artifact without pub
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
 
 
-.PHONY: release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
+.PHONY: release-version-check release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
 RELEASE_WHEEL_DIR ?= dist/python-wheel
-release-tools-test: ## Verify action inputs, PyPI artifact identity, and GitHub recovery guards
+release-version-check: ## Require one version in manifests, locks, runtime, and docs (Python 3.12)
+	$(PYTHON) scripts/release_versions.py $(if $(RELEASE_VERSION),--version "$(RELEASE_VERSION)")
+
+release-tools-test: release-version-check ## Verify action inputs, PyPI artifact identity, and GitHub recovery guards
 	$(PYTHON) scripts/check_release_licenses.py
 	$(PYTHON) -m unittest discover -s scripts -p 'test_release_tools.py' -v
 
@@ -1064,6 +1067,7 @@ docs-js-test: ## Execute the README example and verify the already-built npm pac
 .PHONY: release-lock-update
 release-lock-update: ## Refresh workspace versions without changing reviewed dependencies
 	$(CARGO) update --workspace --offline
+	cd $(JS_SRC) && npm install --package-lock-only --ignore-scripts --offline
 
 .PHONY: release-status
 release-status: ## Read public GitHub CI/release conclusions and failure annotations

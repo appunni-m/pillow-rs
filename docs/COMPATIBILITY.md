@@ -1,6 +1,6 @@
 # Maturity and compatibility
 
-**Version 0.1.3 is an early compatibility release.** It offers useful image
+**12.2.0-alpha.1 is an unreleased compatibility candidate.** It offers useful image
 operations and a tested `PIL` facade. It does not implement all of Pillow,
 every image-format specification, or the full FreeType API.
 

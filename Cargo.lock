@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "pillow-rs"
-version = "0.2.0"
+version = "12.2.0-alpha.1"
 dependencies = [
  "bytemuck",
  "csscolorparser",
@@ -758,7 +758,7 @@ dependencies = [
 
 [[package]]
 name = "pillow-rs-js"
-version = "0.2.0"
+version = "12.2.0-alpha.1"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "pillow-rs-py"
-version = "0.2.0"
+version = "12.2.0-alpha.1"
 dependencies = [
  "pillow-rs",
  "pyo3",

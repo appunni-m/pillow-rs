@@ -165,7 +165,9 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
-          gh release create "${RELEASE_TAG}" \
+          release_flags=()
+          if [[ "${RELEASE_TAG#v}" == *-* ]]; then release_flags+=(--prerelease); fi
+          gh release create "${RELEASE_TAG}" "${release_flags[@]}" \
             bundle/SHA256SUMS \
             bundle/crate/*.crate \
             bundle/python/*.whl bundle/python/*.tar.gz \
