@@ -51,7 +51,7 @@ jobs:
         env:
           DOCS_BENCHMARK_SNAPSHOT: ${{ github.event_name == 'workflow_run' && 'target/public-benchmark/snapshot.json' || '' }}
           DOCS_BENCHMARK_REVISION: ${{ github.event.workflow_run.head_sha }}
-        run: make docs-test docs-lint docs-build PYTHON=python
+        run: make docs-test docs-lint docs-build PYTHON=.venv-docs/bin/python
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: target/site
