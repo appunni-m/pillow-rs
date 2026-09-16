@@ -1,6 +1,6 @@
 # pillow-rs for Node.js and browsers
 
-The npm package is **pillow-rs**, version **0.1.3**. One package contains the
+The npm package is **pillow-rs**, candidate **12.2.0-alpha.1** (unreleased). One package contains the
 shared WASM implementation and conditional Node/browser entry points.
 `pillow-rs-js` is the Rust binding directory, not a second npm package.
 
@@ -10,9 +10,13 @@ shared WASM implementation and conditional Node/browser entry points.
 
 ## Install
 
+After this candidate is published:
+
 ```sh
-npm install pillow-rs@0.1.3
+npm install pillow-rs@12.2.0-alpha.1
 ```
+
+Until publication, use the [source build](#build-and-verify).
 
 This is an ES module package. It declares Node.js 20+; CI exercises Node.js
 22.14.0. Browser use requires WebAssembly and a bundler or module server that
@@ -86,7 +90,7 @@ README, and license. Release CI tests the packed package before publishing.
 
 ## Next-version migration
 
-The unreleased 0.2.0 candidate keeps the same package name and environment
+The unreleased 12.2.0-alpha.1 candidate keeps the same package name and environment
 selection. Its `transform(size, matrix)` helper now uses the same affine input
 path as `transformWithInput`. A size must have exactly two entries. Omitting
 fill uses Pillow's zeroed-pixel default; specify a fill with `transformWithInput`

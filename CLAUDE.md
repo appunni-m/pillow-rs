@@ -253,7 +253,10 @@ Release preparation also uses `make release-tools-test`,
 `make release-python-sdist release-sdist-test`, `make release-npm-pack`, and
 `make release-crate-package` (after the pinned dependencies are published).
 Use `make release-lock-update` after changing workspace release versions; it
-preserves the reviewed dependency set. `make release-platform-check RELEASE_PLATFORM_TARGET=<triple>` checks
+preserves the reviewed dependency set in Cargo and npm. Run
+`make release-version-check` with Python 3.12 to require the same declared version
+in manifests, locks, the Python runtime, and documentation.
+`make release-platform-check RELEASE_PLATFORM_TARGET=<triple>` checks
 the Python binding for an installed foreign Rust target; actual wheel installs
 still run on the target host. Publication itself is only through the tag-triggered GitHub OIDC
 workflow. Read actual job conclusions with

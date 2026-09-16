@@ -11,6 +11,7 @@ import venv
 
 from check_docs_examples import fenced_examples
 from check_release_licenses import ROOT, verify_archive_license
+from release_versions import python_version, runtime_version
 
 
 def main() -> None:
@@ -31,6 +32,7 @@ def main() -> None:
         if "-linux_" in package.name:
             raise SystemExit("generic Linux wheels are not accepted for PyPI; build a manylinux wheel")
     verify_archive_license(package, (ROOT / "LICENSE").read_bytes())
+    expected = runtime_version()
     with tempfile.TemporaryDirectory(prefix="pillow-rs-wheel-consumer-") as directory:
         root = Path(directory)
         venv.EnvBuilder(with_pip=True).create(root / "venv")
@@ -45,6 +47,8 @@ import sys
 from PIL import Image, ImageOps
 import PIL
 import pillow_rs._core
+assert PIL.__version__ == pillow_rs.__version__ == sys.argv[1]
+assert version("pillow-rs") == sys.argv[2]
 assert find_spec("RSPIL") is None, "retired Python namespace must not ship"
 assert Path(PIL.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 im = Image.new("RGB", (3, 2), (255, 12, 34))
@@ -58,7 +62,7 @@ assert loaded.tobytes() == im.tobytes()
 assert ImageOps.mirror(loaded).tobytes() == im.tobytes()
 assert loaded.resize((6, 4)).size == (6, 4)
 print("installed PIL replacement:", version("pillow-rs"), PIL.__file__)
-'''], check=True, cwd=root)
+''', expected, python_version(expected)], check=True, cwd=root)
         checkout = Path(__file__).resolve().parent.parent
         for source in ("README.md", "docs/PYTHON.md"):
             for index, example in enumerate(fenced_examples(checkout / source, "python")):

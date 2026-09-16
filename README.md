@@ -6,29 +6,35 @@ package for Node.js and browsers.
 [Documentation](https://appunni-m.github.io/pillow-rs/) ·
 [API support](https://appunni-m.github.io/pillow-rs/api-support/) ·
 [Benchmarks](https://appunni-m.github.io/pillow-rs/benchmarks/) ·
-[Rust API](https://docs.rs/pillow-rs/0.1.3/pillow_rs/)
+[Rust guide](https://appunni-m.github.io/pillow-rs/rust/)
 
-**Current release: 0.1.3.** This is an early compatibility release. The maintained
-Python, Node, and browser suites each pass 11,348 comparisons at the released
-commit. That covers selected inputs, modes, and errors, not every Pillow API or
-every possible image. Read [maturity and limitations](https://appunni-m.github.io/pillow-rs/compatibility/)
+**Current candidate: 12.2.0-alpha.1 (unreleased).** Cargo, npm, Python, and
+this documentation use the same declared version. The base version tracks the
+targeted Pillow release; `alpha.1` identifies this project's first candidate
+for that target. Matching version numbers do not imply complete compatibility.
+Read [maturity and limitations](https://appunni-m.github.io/pillow-rs/compatibility/)
 before replacing Pillow in an application.
 
-The unreleased **0.2.0** candidate removes deprecated Rust interfaces and the
-former Python import bridge. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-020)
-and [release checklist](https://appunni-m.github.io/pillow-rs/releasing/#next-candidate) before upgrading.
+This candidate removes deprecated Rust interfaces and the former Python import
+bridge. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-1220-alpha1)
+and [release checklist](https://appunni-m.github.io/pillow-rs/releasing/#next-candidate).
+[Published-release evidence](https://appunni-m.github.io/pillow-rs/coverage/)
+retains the version and revision actually measured.
 
 ## Choose your package
 
+The registry commands below apply **after this candidate is published**.
+To try it now, [build from source](https://appunni-m.github.io/pillow-rs/installation/#build-the-unreleased-candidate).
+
 | Use case | Install | Entry point |
 | --- | --- | --- |
-| Python image processing | `python -m pip install pillow-rs==0.1.3` | `from PIL import Image` |
-| Node.js or a browser | `npm install pillow-rs@0.1.3` | `import init, { Image } from 'pillow-rs'` |
-| Rust application | `cargo add pillow-rs@=0.1.3` | `pillow_rs::Image` |
+| Python image processing | `python -m pip install pillow-rs==12.2.0-alpha.1` | `from PIL import Image` |
+| Node.js or a browser | `npm install pillow-rs@12.2.0-alpha.1` | `import init, { Image } from 'pillow-rs'` |
+| Rust application | `cargo add pillow-rs@=12.2.0-alpha.1` | `pillow_rs::Image` |
 
-Python wheels are published for Linux x86-64 (glibc 2.28+), macOS ARM64, and
+The release workflow builds Python wheels for Linux x86-64 (glibc 2.28+), macOS ARM64, and
 Windows x86-64. Other platforms may build from the source distribution; they
-do not have a published wheel in this release. Rust source builds use Rust
+are outside the wheel matrix. Rust source builds use Rust
 1.96.1. See [installation](https://appunni-m.github.io/pillow-rs/installation/) for runtime requirements.
 
 ## Make your first image
@@ -38,7 +44,7 @@ install them in separate environments.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==0.1.3
+.venv/bin/python -m pip install pillow-rs==12.2.0-alpha.1
 ```
 
 On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
@@ -69,8 +75,8 @@ integration](https://appunni-m.github.io/pillow-rs/javascript/), or [Rust integr
   for codecs and [fontdone](https://github.com/appunni-m/fontdone) for fonts.
 - CPU, SIMD, and optional GPU execution have different measured support.
   A passing comparison does not by itself establish native GPU execution.
-- Release 0.1.3 does not promise complete Pillow replacement, hardened decoding
-  of arbitrary hostile inputs, or a stable pre-1.0 API.
+- This alpha does not promise complete Pillow replacement, hardened decoding
+  of arbitrary hostile inputs, or a stable API.
 
 ## Performance you can inspect
 

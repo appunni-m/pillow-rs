@@ -4,12 +4,16 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
-## 0.2.0 - Unreleased
+## 12.2.0-alpha.1 - Unreleased
+
+- Align Cargo, npm, Python manifests and runtime, and current documentation on
+  one version targeting Pillow 12.2.0. Verify synchronization in CI and handle
+  Python artifact normalization and GitHub prerelease status automatically.
 
 - Remove obsolete Rust pixel trait methods (`channels4`, `from_channels`,
   generic `get_pixel_mut`, and `blend_pixel`), `Image::transform_affine`, and
   the deferred `Quantize`, `PointOp`, `LinearGradient`, `RadialGradient`, and
-  `EffectMandelbrot` variants. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-020).
+  `EffectMandelbrot` variants. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-1220-alpha1).
 - Route internal LUT fusion through `Eval`; eager quantization, gradient,
   and Mandelbrot constructors remain supported. Keep all existing benchmark operation
   workloads (85 canonical families) and the full public parity inventory.

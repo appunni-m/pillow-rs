@@ -122,36 +122,7 @@ jobs:
         working-directory: pillow-rs-js
         run: npm ci
       - name: verify synchronized package metadata
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import subprocess
-          import tomllib
-
-          expected = os.environ["RELEASE_VERSION"].removeprefix("v")
-          if not expected or any(char not in "0123456789.-" for char in expected):
-              raise SystemExit(f"invalid release version: {expected!r}")
-          metadata = json.loads(
-              subprocess.check_output(
-                  ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
-                  text=True,
-              )
-          )
-          cargo_version = next(
-              package["version"]
-              for package in metadata["packages"]
-              if package["name"] == "pillow-rs"
-          )
-          with open("pillow-rs-py/pyproject.toml", "rb") as handle:
-              python_version = tomllib.load(handle)["project"]["version"]
-          with open("pillow-rs-js/package.json", encoding="utf-8") as handle:
-              npm_version = json.load(handle)["version"]
-          actual = {"cargo": cargo_version, "pypi": python_version, "npm": npm_version}
-          if actual != {key: expected for key in actual}:
-              raise SystemExit(f"package versions differ: expected {expected}, got {actual}")
-          print(f"all package versions: {expected}")
-          PY
+        run: make release-version-check RELEASE_VERSION="$RELEASE_VERSION"
       - name: verify dependency registry visibility
         run: |
           for package in image-slash-star fontdone; do
@@ -529,7 +500,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          release_flags=()
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then release_flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "${release_flags[@]}" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \

@@ -3,15 +3,73 @@ from __future__ import annotations
 import copy
 import hashlib
 import io
+import os
 from pathlib import Path
+import subprocess
 import tarfile
 import tempfile
 import unittest
 import zipfile
 import yaml
 from check_release_recovery import REQUIRED_JOBS, validate
-from prepare_pypi_release import missing_files
+from prepare_pypi_release import missing_files, validate_archive_versions
 from check_release_licenses import verify_archive_license
+from release_versions import check_versions, python_version
+
+
+class ReleaseVersionTests(unittest.TestCase):
+    def test_one_semver_maps_to_python_artifact_names(self) -> None:
+        for declared, normalized in (("12.2.0-alpha.1", "12.2.0a1"),
+                                     ("12.2.0-beta.2", "12.2.0b2"),
+                                     ("12.2.0-rc.3", "12.2.0rc3"),
+                                     ("12.2.0", "12.2.0"), ("0.1.3", "0.1.3")):
+            with self.subTest(version=declared):
+                self.assertEqual(python_version(declared), normalized)
+                archives = [Path(f"pillow_rs-{normalized}-cp38-abi3-macosx_11_0_arm64.whl"),
+                            Path(f"pillow_rs-{normalized}.tar.gz")]
+                self.assertEqual(validate_archive_versions(archives, declared), normalized)
+
+    def test_bad_tags_and_mixed_prerelease_counters_are_rejected(self) -> None:
+        for version in ("", "12.2", "12.2.0a1", "v12.2.0", "12.2.0-alpha",
+                        "12.2.0-alpha.01", "012.2.0", "12.2.0-dev.1", "../12.2.0",
+                        "12.2.0+build.1", "12.2.0\n"):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                python_version(version)
+        check_versions("12.2.0-alpha.1", {"cargo": "12.2.0-alpha.1", "python": "12.2.0-alpha.1"})
+        for stale in ("0.1.3", "12.2.0a1", "12.2.0-alpha.2", "12.2.0"):
+            with self.subTest(stale=stale), self.assertRaises(ValueError):
+                check_versions("12.2.0-alpha.1", {"cargo": "12.2.0-alpha.1", "python": stale})
+
+    def test_artifact_staging_rejects_other_versions_and_misleading_suffixes(self) -> None:
+        for filename in ("pillow_rs-12.2.0.tar.gz", "pillow_rs-12.2.0a2.tar.gz",
+                         "pillow_rs-12.2.0a1.tar.gz.extra.tar.gz",
+                         "pillow_rs-12.2.0a1evil-cp38-abi3-linux_x86_64.whl",
+                         "other-12.2.0a1.tar.gz"):
+            with self.subTest(filename=filename), self.assertRaises(ValueError):
+                validate_archive_versions([Path(filename)], "12.2.0-alpha.1")
+
+    def test_github_creation_and_recovery_mark_only_prereleases(self) -> None:
+        workflows = Path(__file__).resolve().parent.parent / ".github/workflows"
+        with tempfile.TemporaryDirectory() as directory:
+            gh = Path(directory) / "gh"
+            gh.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+            gh.chmod(0o755)
+            for filename, step_name in (("release.yml", "create the immutable GitHub release"),
+                                        ("release-assets-recovery.yml", "Publish recovered release assets")):
+                document = yaml.safe_load((workflows / filename).read_text())
+                scripts = [step["run"] for job in document["jobs"].values()
+                           for step in job.get("steps", []) if step.get("name") == step_name]
+                self.assertEqual(len(scripts), 1)
+                for tag in ("v12.2.0-alpha.1", "v12.2.0"):
+                    with self.subTest(workflow=filename, tag=tag):
+                        result = subprocess.run(["bash", "-e", "-c", scripts[0]],
+                                                cwd=directory, check=True, capture_output=True, text=True,
+                                                env={**os.environ, "PATH": directory + os.pathsep + os.environ["PATH"],
+                                                     "GITHUB_REF_NAME": tag, "RELEASE_TAG": tag})
+                        args = result.stdout.splitlines()
+                        self.assertEqual(args[:3], ["release", "create", tag])
+                        self.assertEqual("--prerelease" in args, "-" in tag)
+                        self.assertIn("--verify-tag", args)
 
 
 class LicenseArchiveTests(unittest.TestCase):

@@ -11,6 +11,18 @@ import shutil
 import urllib.error
 import urllib.request
 
+from release_versions import python_version
+
+
+def validate_archive_versions(archives: list[Path], version: str) -> str:
+    normalized = python_version(version)
+    for archive in archives:
+        wheel = archive.name.startswith(f"pillow_rs-{normalized}-") and archive.suffix == ".whl"
+        sdist = archive.name in (f"pillow_rs-{normalized}.tar.gz", f"pillow-rs-{normalized}.tar.gz")
+        if not wheel and not sdist:
+            raise ValueError(f"unexpected package/version: {archive.name}")
+    return normalized
+
 
 def missing_files(archives: list[Path], metadata: dict | None) -> list[Path]:
     if not archives:
@@ -38,14 +50,10 @@ def main() -> None:
     parser.add_argument("--archive-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
-    if not args.version or any(c not in "0123456789." for c in args.version):
-        raise SystemExit("expected a numeric release version")
     archives = sorted(args.archive_dir.glob("*.whl")) + sorted(args.archive_dir.glob("*.tar.gz"))
-    for archive in archives:
-        if not archive.name.startswith((f"pillow_rs-{args.version}-", f"pillow_rs-{args.version}.tar.gz", f"pillow-rs-{args.version}.tar.gz")):
-            raise SystemExit(f"unexpected package/version: {archive.name}")
+    normalized = validate_archive_versions(archives, args.version)
     try:
-        with urllib.request.urlopen(f"https://pypi.org/pypi/pillow-rs/{args.version}/json", timeout=30) as response:
+        with urllib.request.urlopen(f"https://pypi.org/pypi/pillow-rs/{normalized}/json", timeout=30) as response:
             metadata = json.load(response)
     except urllib.error.HTTPError as error:
         if error.code != 404:

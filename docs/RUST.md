@@ -1,11 +1,13 @@
 # Rust integration
 
 The core crate owns image operations. Bindings delegate to it, while the Rust
-API uses Rust values and `Result`.
+API uses Rust values and `Result`. This guide targets **12.2.0-alpha.1**
+(unreleased). The registry dependency below applies after publication; use a
+[source build](INSTALLATION.md#build-the-unreleased-candidate) until then.
 
 ```toml
 [dependencies]
-pillow-rs = "=0.1.3"
+pillow-rs = "=12.2.0-alpha.1"
 ```
 
 ## First operation
@@ -23,8 +25,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 The constructor takes width, height, mode, and an RGBA color tuple. The image
-retains its selected mode. The [versioned Rust reference](https://docs.rs/pillow-rs/0.1.3/pillow_rs/)
-describes fallible operations, buffers, and root exports.
+retains its selected mode. The [published Rust reference](https://docs.rs/pillow-rs/)
+describes the latest published crate. For this candidate, consult the
+[source API](../pillow-rs/src/lib.rs) and migration notes below.
 
 ## Features and backends
 
@@ -52,10 +55,10 @@ Run your corpus with the features and target you will ship. The published
 Python and WASM evidence does not establish every Rust feature/target
 combination. Report regressions with the smallest input and public call sequence.
 
-## Upgrading to 0.2.0
+## Upgrading to 12.2.0-alpha.1
 
-The unreleased 0.2.0 candidate removes deprecated Rust interfaces, so it is a
-breaking upgrade from 0.1.x. The published version remains 0.1.3 until the
+The unreleased 12.2.0-alpha.1 candidate removes deprecated Rust interfaces, so it is a
+breaking upgrade from 0.1.x. It becomes available in registries after the
 candidate passes release gates and its immutable tag is published.
 
 | Removed interface | Maintained replacement |

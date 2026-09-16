@@ -20,6 +20,7 @@ use a shell with GNU Make and the required toolchains, as CI does. Start with
 | Documentation setup | `make docs-setup` | Installs the hash-locked documentation tools into `.venv-docs` |
 | Documentation checks | `make docs-test docs-lint` | Tests validation guards and checks public sources |
 | Site build / preview | `make docs-build` / `make docs-serve` | Builds static HTML / serves it at localhost:8000 |
+| Version synchronization | `make release-lock-update` / `make release-version-check` | Refreshes Cargo/npm workspace versions / checks declarations with Python 3.12 |
 | Release preparation | `make release-check` | Builds and inspects registry artifacts; requires a clean checkout |
 | Cache cleanup | `make clean` | Removes Python bytecode and the temporary report |
 | Build cleanup | `make clean-all` | Also removes Cargo build outputs |

@@ -1,8 +1,29 @@
 # Installation
 
-The package is **pillow-rs** on crates.io, PyPI, and npm. The current version is
-`0.1.3`. Python imports `PIL`; Rust imports `pillow_rs`; JavaScript imports
+The package is **pillow-rs** on crates.io, PyPI, and npm. The current candidate is
+`12.2.0-alpha.1` (unreleased). Python imports `PIL`; Rust imports `pillow_rs`; JavaScript imports
 `pillow-rs`.
+
+Registry installation commands below apply **after this candidate is published**.
+See the [release matrix](REGISTRY_RELEASE_MATRIX.md) for published history.
+All manifests declare the same version; Python package tools normalize its
+spelling automatically when producing wheel names and installed metadata.
+
+## Build the unreleased candidate
+
+Clone this repository and run the required build from its root:
+
+```sh
+git clone https://github.com/appunni-m/pillow-rs.git
+cd pillow-rs
+make setup-venv PYTHON=python3.12
+make build
+```
+
+The local Python environment then provides `from PIL import Image`. For Node
+or browser development, run `make build-wasm-release` from the same checkout;
+its built package is in `pillow-rs-js/`. Rust applications can use a Cargo path
+dependency pointing to the checkout's `pillow-rs/` directory.
 
 ## Python
 
@@ -11,14 +32,14 @@ Create a separate environment. Upstream Pillow and pillow-rs own the same
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==0.1.3
+.venv/bin/python -m pip install pillow-rs==12.2.0-alpha.1
 .venv/bin/python -c "from PIL import Image; print(Image.new('RGB', (3, 2)).size)"
 ```
 
 The final command prints `(3, 2)`. On Windows, use
 `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
 
-| Distribution | Published platform | Verification |
+| Distribution | Release platform | Verification |
 | --- | --- | --- |
 | ABI3 wheel | Linux x86-64, glibc 2.28+ | Installed and exercised in release CI |
 | ABI3 wheel | macOS ARM64, macOS 11+ | Installed and exercised in release CI |
@@ -26,7 +47,7 @@ The final command prints `(3, 2)`. On Windows, use
 | Source distribution | Other compatible Rust/Python hosts | Source build required; not a wheel-support claim |
 
 Metadata permits Python 3.8+ and uses `abi3-py38`. Full Pillow comparisons use
-Python 3.10 and 3.12; release wheels were installed on Python 3.12.10. The
+Python 3.10 and 3.12; release CI installs wheels on Python 3.12.10. The
 metadata floor is not an executed test matrix for every Python version.
 
 Source builds require Rust 1.96.1 and a native linker. Pip uses the declared
@@ -35,7 +56,7 @@ Maturin build backend. Prefer a wheel on a published platform.
 ## Node.js and browsers
 
 ```sh
-npm install pillow-rs@0.1.3
+npm install pillow-rs@12.2.0-alpha.1
 ```
 
 The package declares Node.js 20+; CI uses 22.14.0. One WASM module serves both
@@ -47,7 +68,7 @@ only the source folder name.
 
 ```toml
 [dependencies]
-pillow-rs = "=0.1.3"
+pillow-rs = "=12.2.0-alpha.1"
 ```
 
 Rust 1.96.1 is the declared minimum and tested workspace toolchain. Cargo uses
@@ -56,7 +77,7 @@ the published fontdone and image-slash-star dependencies. See [Rust integration]
 ## Upgrade and rollback
 
 Pin the version and keep your lockfile. Run the application's image corpus
-before upgrading: pre-1.0 API and backend behavior are still evolving.
+before upgrading: alpha API and backend behavior are still evolving.
 
 To return to upstream Pillow, create a fresh environment and install Pillow
 there. Reusing an environment after one distribution overwrites the other's

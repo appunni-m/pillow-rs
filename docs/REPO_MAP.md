@@ -310,6 +310,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- migration_parity_inventory.py
     |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
+    |-- release_versions.py
     |-- report_migration_changed_line_coverage.py
     |-- report_migration_js_parity_gaps.py
     |-- report_migration_parity_region_coverage.py

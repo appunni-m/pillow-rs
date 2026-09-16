@@ -1,8 +1,9 @@
 # Releasing pillow-rs
 
-Version **0.1.3** is published on crates.io, PyPI, and npm. All subsequent
-publication runs from this repository's pinned `release.yml` workflow using
-GitHub OIDC. Local publishing targets refuse uploads.
+The current candidate is **12.2.0-alpha.1** (unreleased) for Cargo, npm, and
+Python. Publication runs from this repository's pinned `release.yml` workflow
+using GitHub OIDC. [Published history](docs/REGISTRY_RELEASE_MATRIX.md) records
+previous registry versions.
 
 | Artifact | Registry name | Public API |
 | --- | --- | --- |
@@ -17,16 +18,37 @@ has no Python or npm distribution.
 
 ## Next candidate
 
-The working candidate is **0.2.0**, a breaking Rust API cleanup. The published
-release above remains the source of installed-release evidence. Consult the
-[changelog](CHANGELOG.md) and [Rust migration guide](docs/RUST.md#upgrading-to-020)
+The working candidate is **12.2.0-alpha.1**, a breaking Rust API cleanup.
+Installed-release evidence retains its original version and source revision. Consult the
+[changelog](CHANGELOG.md) and [Rust migration guide](docs/RUST.md#upgrading-to-1220-alpha1)
 before upgrading. Deprecation cleanup does not close the broader GPU arithmetic
 proofs or benchmark-budget gaps listed in [maturity](docs/COMPATIBILITY.md).
+
+## Version policy
+
+Use one declared version in Cargo, npm, Python, the Python runtime, and current
+documentation: **12.2.0-alpha.1**. The base version follows the targeted Pillow
+version; increment the `alpha.N` suffix for subsequent candidates. Use
+`beta.N`, `rc.N`, or a stable version only when the corresponding maturity is
+justified. A matching Pillow version is a compatibility target, not a claim
+that every API is implemented.
+
+Python tooling normalizes the declared spelling automatically for its registry
+metadata and archive filenames. Do not maintain a separate Python version.
+Release validation checks exact declarations first, then checks the normalized
+Python artifacts. GitHub marks candidate releases as prereleases; npm uses
+`next` until a stable release.
+
+```sh
+make release-lock-update
+make release-version-check RELEASE_VERSION=v12.2.0-alpha.1
+```
 
 ## Prepare a release
 
 1. Update authoritative package versions, exact dependency pins, lockfiles,
-   changelog, and the documented version.
+   changelog, and the documented version. Run `make release-lock-update` and
+   `make release-version-check` with Python 3.12 to verify synchronization.
 2. Run the relevant full parity, coverage, portability, package-consumer, and
    supply-chain checks. Preserve failures and unmeasured scope.
 3. From a clean checkout, run `make release-check`.

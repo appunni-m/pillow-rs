@@ -22,7 +22,7 @@ from .operations import (
     linear_gradient, merge, new, open, radial_gradient, resize, rotate, save,
 )
 
-__version__ = "0.1.3"
+__version__ = "12.2.0-alpha.1"
 
 __all__ = [
     "Image", "ImageMode", "ImageFormat",
