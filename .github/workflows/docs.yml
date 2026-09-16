@@ -39,18 +39,23 @@ jobs:
           python-version: '3.12.10'
       - name: Install the hash-locked documentation tools
         run: make docs-setup PYTHON=python
+      - name: Select the latest successful main benchmark
+        id: benchmark
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: make docs-benchmark-select PYTHON=.venv-docs/bin/python
       - name: Download data from the successful main benchmark
-        if: github.event_name == 'workflow_run'
+        if: steps.benchmark.outputs.run_id != ''
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: public-benchmark
           path: target/public-benchmark
           github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.benchmark.outputs.run_id }}
       - name: Check sources and build the public site
         env:
-          DOCS_BENCHMARK_SNAPSHOT: ${{ github.event_name == 'workflow_run' && 'target/public-benchmark/snapshot.json' || '' }}
-          DOCS_BENCHMARK_REVISION: ${{ github.event.workflow_run.head_sha }}
+          DOCS_BENCHMARK_SNAPSHOT: ${{ steps.benchmark.outputs.run_id != '' && 'target/public-benchmark/snapshot.json' || '' }}
+          DOCS_BENCHMARK_REVISION: ${{ steps.benchmark.outputs.head_sha }}
         run: make docs-test docs-lint docs-build PYTHON=.venv-docs/bin/python
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:

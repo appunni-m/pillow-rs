@@ -70,7 +70,11 @@ successful builds alone do not prove deployment.
 Benchmark workflow artifacts can refresh the public result page. Their data is
 validated against this repository and the measured commit before rendering;
 downloaded data never supplies executable site code. The checked-in snapshot
-remains a reproducible fallback for documentation builds.
+remains a reproducible fallback for local/PR builds and when the latest
+successful hosted run has no unexpired public artifact. Main deployments select
+that latest successful benchmark, so a later documentation push cannot overwrite
+its measurement with the committed fallback. Benchmark-triggered deployments
+require the exact triggering run's artifact. API failures fail the build.
 
 Changes to the benchmark workflow, harness, or public evidence exporter on main
 run the benchmark immediately. Weekly and manual runs remain available.

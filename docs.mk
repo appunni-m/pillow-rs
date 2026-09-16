@@ -33,7 +33,7 @@ docs-lint: ## Check public document links, commands, attribution, and package id
 	$(PYTHON) scripts/docs_site.py check
 
 docs-test: ## Exercise broken-link, output-path, and benchmark validation guards
-	$(PYTHON) -m unittest discover -s scripts -p 'test_docs_site.py' -v
+	$(PYTHON) -m unittest discover -s scripts -p 'test_docs*.py' -v
 
 docs-examples: ## Compile and run the Rust quickstart directly from Markdown
 	$(PYTHON) scripts/check_docs_examples.py
@@ -41,3 +41,7 @@ docs-examples: ## Compile and run the Rust quickstart directly from Markdown
 docs-benchmark: ## Export a public view of a recorded benchmark; never runs or changes measurements
 	$(PYTHON) scripts/docs_evidence.py "$(DOCS_BENCHMARK_KIND)" "$(DOCS_BENCHMARK_SOURCE)" \
 		"$(DOCS_BENCHMARK_OUTPUT)" --repository "$(DOCS_REPOSITORY)"
+
+.PHONY: docs-benchmark-select
+docs-benchmark-select: ## Select trusted hosted benchmark data for a Pages build
+	$(PYTHON) scripts/select_docs_benchmark.py
