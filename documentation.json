@@ -38,6 +38,10 @@
       "output": "benchmarking.md"
     },
     {
+      "source": "docs/PIPELINE_ROADMAP.md",
+      "output": "pipeline-roadmap.md"
+    },
+    {
       "source": "CONTRIBUTING.md",
       "output": "contributing.md"
     },

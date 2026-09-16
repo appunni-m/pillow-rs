@@ -43,6 +43,7 @@ Run the correctness gate before interpreting timing:
 make migration-parity-inputs-check
 MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark
 make migration-parity-pipeline-report
+make migration-parity-pipeline-roadmap-status
 ```
 
 The scheduled/manual GitHub Actions workflow accepts an optional
@@ -95,6 +96,10 @@ Retained comparison artifacts may live outside the checkout (for example under
 `/tmp` while a run is being reviewed). The performance, workload-coverage, and
 roadmap report commands preserve those external paths and accept them directly;
 they do not require copying a result into `build/migration-parity/`.
+
+The [public pipeline roadmap](PIPELINE_ROADMAP.md) retains all 64 item IDs and
+their reviewed statuses. Its generated status report combines that index with
+execution evidence; timings never automatically close a work item.
 
 ## Interpretation rules
 

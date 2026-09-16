@@ -65,6 +65,7 @@ nav:
   - Performance:
       - Benchmark results: benchmarks.md
       - Measurement protocol: benchmarking.md
+      - Pipeline roadmap: pipeline-roadmap.md
   - Contribute:
       - Contributor guide: contributing.md
       - Command reference: commands.md
