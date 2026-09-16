@@ -25,7 +25,8 @@ env:
   NODE_VERSION: 22.14.0
   NPM_VERSION: 11.5.1
   RELEASE_VERSION: ${{ github.ref_name }}
-  MIGRATION_WASM_NO_OPT: "1"
+  # Published WASM must be optimized. The parity runner owns its separate opt-out.
+  MIGRATION_WASM_NO_OPT: "0"
   MIGRATION_RUST_COVERAGE_TOOLCHAIN: nightly-2026-07-16
 
 jobs:
