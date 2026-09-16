@@ -1027,6 +1027,7 @@ release-check: build-all ## Build and package every release artifact without pub
 .PHONY: release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
 RELEASE_WHEEL_DIR ?= dist/python-wheel
 release-tools-test: ## Verify action inputs, PyPI artifact identity, and GitHub recovery guards
+	$(PYTHON) scripts/check_release_licenses.py
 	$(PYTHON) -m unittest discover -s scripts -p 'test_release_tools.py' -v
 
 .PHONY: release-platform-check
@@ -1048,11 +1049,13 @@ release-sdist-test: ## Build and install the source distribution in isolation an
 
 release-crate-package: ## Compile and package the core crate after dependency publication
 	$(CARGO) package --locked -p $(CORE_SRC)
+	python3 scripts/check_release_licenses.py --crate
 
 release-npm-pack: ## Build, test, and pack the single Node/browser npm package
 	cd $(JS_SRC) && npm ci && npm run build:release && npm run test:package
 	mkdir -p dist/release/npm
 	cd $(JS_SRC) && npm pack --ignore-scripts --pack-destination ../dist/release/npm
+	python3 scripts/check_release_licenses.py dist/release/npm/pillow-rs-$$(node -p "require('./$(JS_SRC)/package.json').version").tgz
 
 .PHONY: docs-js-test
 docs-js-test: ## Execute the README example and verify the already-built npm package

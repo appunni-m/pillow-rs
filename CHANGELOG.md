@@ -23,6 +23,8 @@ backend limitations in the documentation remain part of its contract.
 - Remove retired test runners, generated oracle outputs, unused shaders, and
   first-release-only tooling. Keep the frozen inventory authority byte-for-byte.
 - Refresh pinned GitHub Actions for CI, Pages, and trusted publication.
+- Include the complete project license in Cargo and Python archives, use current
+  Python license metadata, and verify license contents before release.
 
 ## 0.1.3 - 2026-09-16
 
