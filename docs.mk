@@ -45,3 +45,17 @@ docs-benchmark: ## Export a public view of a recorded benchmark; never runs or c
 .PHONY: docs-benchmark-select
 docs-benchmark-select: ## Select trusted hosted benchmark data for a Pages build
 	$(PYTHON) scripts/select_docs_benchmark.py
+
+.PHONY: docs-release-check docs-release-refresh docs-registry-examples
+docs-release-check: ## Verify public docs against the latest GitHub release and package registries
+	$(PYTHON) scripts/docs_release.py --online
+
+docs-release-refresh: ## Update reviewed release references after publication (requires network)
+	$(PYTHON) scripts/docs_release.py --refresh
+
+docs-registry-examples: ## Install published packages in temporary projects and run the documented examples
+	$(PYTHON) scripts/check_docs_registry.py
+
+.PHONY: docs-browser-check
+docs-browser-check: docs-build ## Check benchmark filtering and mobile layout using the existing JS development tools
+	node scripts/check_docs_browser.cjs $(DOCS_BROWSER_URLS)

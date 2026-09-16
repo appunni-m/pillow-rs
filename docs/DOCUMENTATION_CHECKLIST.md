@@ -1,41 +1,48 @@
-# Maintaining the documentation
+# Documentation maintenance
 
-Documentation is a public interface. Keep installation, examples, support
-limits, benchmark interpretation, and contributor commands usable from a
-published package or a fresh checkout.
+User documentation answers: how do I install the package, use it, interpret
+results, and understand its limitations? Contributor documentation explains
+source builds, tests, fixtures, benchmark collection, and release procedures.
 
-## Sources and audiences
+## Required review
 
-| Audience | Start | Authoritative detail |
-| --- | --- | --- |
-| Python user | [Installation](INSTALLATION.md), [recipes](PYTHON.md) | Public manifest and executed parity inputs |
-| Rust user | [Rust integration](RUST.md) | Versioned rustdoc and Cargo feature definitions |
-| Node/browser user | [JavaScript guide](../pillow-rs-js/README.md) | Package exports and generated declarations |
-| Evaluator | [Maturity](COMPATIBILITY.md), [benchmarks](BENCHMARKING.md) | Source-bound, dated execution evidence |
-| Contributor | [Contributing](../CONTRIBUTING.md), [commands](COMMANDS.md) | Makefile, generators, and source map |
-| Maintainer | [Releasing](../RELEASING.md) | Pinned GitHub workflows and registry artifact identity |
+- [ ] Install from the appropriate package manager; keep source setup under Contribute.
+- [ ] Lead benchmark pages with results, units, and a clear current/historical label.
+- [ ] Keep supported and unsupported features concise; link detailed contracts separately.
+- [ ] Verify examples against the published package, not just the workspace source.
+- [ ] Keep package names, release links, API references, and platform requirements accurate.
+- [ ] Preserve historical measurements, source revisions, and incomplete results.
+- [ ] Keep attribution, licenses, and the final Puhu/Pillow acknowledgements.
+- [ ] Preview the site at narrow and wide widths; check search and navigation.
 
-`documentation.json` selects the pages published from this repository.
-`mkdocs.yml` owns navigation. The site builds from reviewed Markdown and
-validated evidence into `target/site/`; generated HTML is not committed.
+## Release freshness
 
-## Change checklist
+`documentation.json` records the published release separately from the source
+version. Each page declares an audience. User pages must have a generated
+release reference and must not contain repository test/build instructions.
+Paired `release:*` comments keep installation blocks synchronized with the
+published record. Keep these markers when editing Markdown.
 
-- [ ] Identify the audience and a concrete task before adding a page.
-- [ ] Keep one canonical explanation; link to it instead of copying a report.
-- [ ] Verify installation names, versions, platform requirements, and examples.
-- [ ] Distinguish declared, tested, partial, unsupported, and unmeasured scope.
-- [ ] State the source revision, runner, denominator, and limitations for measurements.
-- [ ] Keep failed results and absent measurements visible.
-- [ ] Check links, headings, commands, package contents, and rendered pages.
-- [ ] Preserve licenses, fixture provenance, and the final Puhu/Pillow acknowledgements.
-- [ ] Remove superseded internal plans and audit diaries after consolidating durable guidance.
+After a release has finished publishing to its registries:
 
-Old measurements remain historical. Regenerating a presentation does not create
-a new coverage receipt or benchmark. Public benchmark snapshots retain the
-original report hash and omit local machine paths and hostnames.
+```sh
+make docs-release-refresh
+make docs-release-check
+make docs-registry-examples
+```
 
-## Validate and preview
+Review and commit the changed release record and user pages. The refresh
+checks the newest published GitHub release (including alphas), resolves its
+tag to the immutable commit, and verifies the matching registry versions.
+It does not bump source versions or rewrite old benchmark and coverage data.
+An API error fails the check; it does not silently accept stale information.
+
+The Documentation workflow checks release freshness on main updates, successful tag releases, manual
+runs, and daily. Pull requests run offline structure checks and example checks;
+release freshness is verified before deploying main. A pending source version
+may differ from the published version without directing users to unavailable packages.
+
+## Build and validate
 
 ```sh
 make docs-setup
@@ -45,36 +52,38 @@ make docs-build
 make docs-serve
 ```
 
-The build fails on missing pages, invalid local links and anchors, missing
-assets, retired Python names, malformed benchmark snapshots, and attribution
-regressions. It also checks rendered HTML. Inspect the site with a narrow
-viewport, keyboard navigation, light/dark themes, and search before merging
-navigation or styling changes.
+The offline checks validate audience assignments, managed release blocks,
+installation and API pins, relative Markdown links, rendered links and anchors
+(including absolute links to this project's Pages site), and final attribution.
+They cannot prove every prose claim or every external page's contents; review
+behavioral claims against the implementation and recorded evidence.
 
-The documentation dependencies are fully pinned with hashes in
-`requirements-docs.txt`. Update `requirements-docs.in`, run
-`make docs-lock`, review the lock change, and repeat validation.
+`make docs-registry-examples` creates temporary consumer projects, installs exact
+published versions, and executes the Markdown quickstarts. Rust compilation
+is cached under `target/docs-registry-cargo`; temporary environments are removed.
+The source example check remains separate so a future source change cannot
+hide a broken published-package example.
 
-## Publish from this repository
+Documentation tools use the hash-locked `requirements-docs.txt`. Update the
+direct pins and use `make docs-lock` for intentional tool upgrades.
 
-The Documentation workflow builds pull requests without deploying. Main pushes
-and manual runs publish the checked artifact through GitHub Pages using
-`github-pages`. The Pages source must be GitHub Actions in this repository's
-settings. No separate site repository, registry token, or generated-content
-branch is required.
+## Publish and benchmark data
 
-After enabling Pages, rerun the Documentation workflow or push a reviewed
-documentation change to main. Check the deploy job and the published URL;
-successful builds alone do not prove deployment.
+Each repository deploys its own site to GitHub Pages through Actions.
+`mkdocs.yml` owns navigation, `documentation.json` selects source pages, and
+`target/site` is generated output. Successful trusted main benchmark runs can
+supply the displayed data. Only data is imported from benchmark artifacts;
+executable site code comes from the reviewed checkout.
 
-Benchmark workflow artifacts can refresh the public result page. Their data is
-validated against this repository and the measured commit before rendering;
-downloaded data never supplies executable site code. The checked-in snapshot
-remains a reproducible fallback for local/PR builds and when the latest
-successful hosted run has no unexpired public artifact. Main deployments select
-that latest successful benchmark, so a later documentation push cannot overwrite
-its measurement with the committed fallback. Benchmark-triggered deployments
-require the exact triggering run's artifact. API failures fail the build.
+Results show all recorded rows, including failures, fallbacks, and unmeasured
+values. Detailed source hashes, environment, sample boundaries, and policies
+are available under Contribute. A documentation build never reruns a benchmark
+or turns an older measurement into evidence for a new release.
 
-Changes to the benchmark workflow, harness, or public evidence exporter on main
-run the benchmark immediately. Weekly and manual runs remain available.
+## Browser review
+
+With the JavaScript development dependencies installed, run
+`make docs-browser-check` to check result filtering and desktop/mobile layout.
+The check starts a temporary loopback server and saves review screenshots under
+`target/docs-preview/`. For an already running preview, pass its benchmark URL
+through `DOCS_BROWSER_URLS`.

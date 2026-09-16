@@ -13,3 +13,21 @@
 .evidence-controls output { display: block; margin: .4rem 0; color: var(--md-default-fg-color--light); }
 @media (max-width: 640px) { .md-typeset { font-size: .8rem; } .md-typeset h1 { font-size: 1.8rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+/* GitHub's latest stable tag can lag the alpha release documented here. */
+.md-source__fact--version { display: none; }
+.md-typeset table[data-benchmark] { width: 100%; }
+.md-typeset table[data-benchmark] td:first-child { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .md-typeset table[data-benchmark],
+  .md-typeset table[data-benchmark] tbody { display: block; width: 100%; min-width: 0; }
+  .md-typeset table[data-benchmark] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .md-typeset table[data-benchmark] tr { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 1rem; border: 1px solid var(--md-default-fg-color--lightest); }
+  .md-typeset table[data-benchmark] tr[hidden] { display: none; }
+  .md-typeset table[data-benchmark] td { display: block; min-width: 0; padding: .5rem .75rem; text-align: left; border: 0; }
+  .md-typeset table[data-benchmark] td:nth-child(-n+2) { grid-column: 1 / -1; }
+  .md-typeset table[data-benchmark] td:first-child { font-weight: 650; background: var(--md-code-bg-color); }
+  .md-typeset table[data-benchmark] td::before { content: attr(data-label); display: block; font-size: .65rem; font-weight: 400; color: var(--md-default-fg-color--light); }
+}
+
+body:has(table[data-benchmark]) .md-sidebar--secondary { display: none; }

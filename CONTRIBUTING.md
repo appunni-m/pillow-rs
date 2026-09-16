@@ -86,3 +86,17 @@ superseded plans and session diaries belong in Git history.
 
 Publication is separate from contribution. Maintainers follow
 [Releasing](RELEASING.md) after CI passes for the exact source commit.
+
+## Binding development
+
+From a complete checkout, build and verify the Python and JavaScript bindings:
+
+```sh
+make setup-venv PYTHON=python3.12
+make build
+make build-wasm-release
+make test-wasm-node
+make test-wasm-browser
+```
+
+For performance work, use the [benchmark contributor guide](docs/BENCHMARKING.md).

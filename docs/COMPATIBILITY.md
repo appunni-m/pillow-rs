@@ -1,75 +1,54 @@
-# Maturity and compatibility
+# Supported APIs and limitations
 
-**12.2.0-alpha.1 is an unreleased compatibility candidate.** It offers useful image
-operations and a tested `PIL` facade. It does not implement all of Pillow,
-every image-format specification, or the full FreeType API.
+<!-- release:summary -->
+**Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
+<!-- /release:summary -->
 
-## Read status correctly
+pillow-rs implements a subset of Pillow. Use the tables below to decide whether
+it fits your application. A supported operation can still reject unsupported
+modes, options, or input formats.
 
-| Label | What it establishes | What it does not establish |
-| --- | --- | --- |
-| Tested case | A named comparison passed on a recorded runner | All arguments, modes, platforms, or backends |
-| Declared support | A manifest or runtime table exposes a path | Complete executed evidence |
-| Partial | The documented subset is available | The remainder of the API or format |
-| Unsupported | No supported application path is claimed | Success inferred from a stub |
-| Unmeasured | No qualifying evidence is available | Success, failure, or zero cost |
+## Supported API families
 
-The [generated inventory](https://appunni-m.github.io/pillow-rs/api-support/)
-lists all 209 selected operations across 24 surfaces. Its source is the
-[manifest](../pillow-rs/tests/fixtures/manifest.yaml); case counts come from
-indexed inputs. Declared support, input count, and executed outcomes are
-separate facts.
-
-## API paths
-
-| Family | Current scope |
+| What you want to do | APIs to start with |
 | --- | --- |
-| `PIL.Image`, `PIL.Image.Image` | Selected creation, codec, pixel, geometry, conversion, and composition operations |
-| `PIL.ImageOps`, `PIL.ImageChops`, `PIL.ImageColor` | Selected operations, modes, and argument combinations |
-| `PIL.ImageDraw`, `PIL.ImageEnhance`, `PIL.ImageFilter` | Selected drawing, enhancement, and filter paths |
-| `PIL.ImageFont` and font classes | Selected loading, masks, metrics, and geometry; fontdone limitations apply |
-| `PIL.ImagePalette`, `PIL.ImageSequence`, `PIL.ImageStat` | Selected palette, iterator, and statistics paths |
-| Paths outside the inventory | Unmeasured by this contract; no drop-in support claim |
-| GUI integration, platform capture, external color management | Outside the selected public contract |
-| JavaScript | Its own initialized WASM API; selected parity workflows execute through it |
+| Create, open, save, and inspect images | `PIL.Image`: `new`, `open`; image `save`, `size`, `mode`, pixel access |
+| Resize, crop, rotate, or convert | Image `resize`, `crop`, `rotate`, `convert` |
+| Flip, mirror, fit, or apply image operations | `PIL.ImageOps` and `PIL.ImageChops` |
+| Draw shapes and text | `PIL.ImageDraw` |
+| Adjust color or apply filters | `PIL.ImageColor`, `PIL.ImageEnhance`, `PIL.ImageFilter` |
+| Load fonts and measure text | Selected `PIL.ImageFont` APIs; see font limits below |
+| Work with palettes, frames, or statistics | `PIL.ImagePalette`, `PIL.ImageSequence`, `PIL.ImageStat` |
 
-Presence of an API does not establish every mode. The inventory links to
-inputs for covered modes, sizes, keywords, and failures.
+Start with the [Python recipes](PYTHON.md), [Rust guide](RUST.md), or
+[JavaScript guide](../pillow-rs-js/README.md). JavaScript uses its own API names
+and initialization; Python examples cannot be pasted directly into JavaScript.
+The [complete selected-operation inventory](https://appunni-m.github.io/pillow-rs/api-support/)
+is available when you need to check a specific public path.
 
-## Backend support
+## Partial or unsupported
 
-| Backend | Evidence and limits |
+| Area | Limitation |
 | --- | --- |
-| Python CPU | 11,348 maintained cases passed on both release-commit Python CI lanes |
-| Node WASM | 11,348 cases passed on the release-commit Node runner |
-| Browser WASM | 11,348 cases passed in the CI headless browser; other browser/device combinations are not implied |
-| SIMD | Separate backend campaigns exist; routing may include explicit host controls |
-| GPU | Requires an available adapter and native dispatch receipt; unsupported paths and host controls remain visible |
-| WGSL line coverage | Unmeasured; Rust LCOV does not instrument shader lines |
+| Full Pillow replacement | APIs outside the selected operation inventory are not promised |
+| Image modes and options | Support varies by operation; verify the combinations your application uses |
+| Codecs | JPEG, PNG, GIF, BMP, TIFF, WebP, and ICO/CUR have selected supported paths; metadata, frames, and encoding differ by format |
+| AVIF | Partial and outside the current browser codec contract |
+| Fonts | Selected font loading, masks, and metrics; full shaping, color-font behavior, and FreeType replacement are not promised |
+| GUI, screen capture, external color management | Outside the supported public contract |
+| GPU acceleration | Optional and operation-dependent; choosing GPU can fall back to CPU |
+| API stability | Alpha releases may introduce breaking changes |
 
-Broader floating-point GPU arithmetic proofs and zero-violation benchmark
-budget acceptance remain open. Requesting a GPU backend is not proof of native
-execution.
+The release uses image-slash-star 0.1.2 and fontdone 2.14.3-alpha.10.
+Dependency projects' newer documentation can describe features this release
+does not include. Consult their versioned
+[codec reference](https://docs.rs/image-slash-star/0.1.2/image_slash_star/) and
+[font reference](https://docs.rs/fontdone/2.14.3-alpha.10/fontdone/) when needed.
 
-## Codecs and fonts
+## Before replacing Pillow
 
-Codec support comes from enabled image-slash-star features. Still images,
-sequences, metadata, and encoding have separate capabilities. AVIF is incomplete
-and outside the current browser codec contract. Consult [codec support](https://appunni-m.github.io/image-slash-star/capabilities/).
-
-Fontdone maintains a conservative per-function adoption map. Passing fixtures
-or exporting a C symbol does not make all FreeType behavior available. Text
-shaping, full color-font rendering, and broad C replacement need separate
-review. Consult [fontdone maturity](https://appunni-m.github.io/fontdone/maturity/).
-
-## Published-release evidence
-
-[Main CI](https://github.com/appunni-m/pillow-rs/actions/runs/35014896711)
-tested commit `fd78eb80402a0d6d99e6b696d0a1ebf9ba11d5fb`. Python 3.10,
-Python 3.12, Node, and browser each passed 11,348/11,348 comparisons.
-[Release CI](https://github.com/appunni-m/pillow-rs/actions/runs/35017008075)
-also installed native wheels on Linux, macOS, and Windows before publication.
-[Coverage](COVERAGE.md) records the source-bound collection.
-
-These are versioned observations. A documentation build does not turn an old
-measurement into evidence for the newest source revision.
+Try the operations, images, fonts, frame metadata, and expected errors your
+application relies on in separate Pillow and pillow-rs environments.
+[Migration steps](PYTHON.md#evaluate-an-existing-pillow-application) explain how.
+For measured comparisons and open implementation work, see the contributor
+[coverage evidence](COVERAGE.md) and [roadmap](PIPELINE_ROADMAP.md).

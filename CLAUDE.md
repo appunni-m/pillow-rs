@@ -248,6 +248,13 @@ make ci
 make verify
 ```
 
+Public documentation uses `make docs-test docs-lint docs-build`. Run
+`make docs-release-check` to verify the published GitHub and registry identity,
+and `make docs-registry-examples` for installed-package quickstarts. After
+publication, `make docs-release-refresh` updates marked release references.
+Keep user installation, usage, and benchmark results separate from contributor
+build/test instructions; see `docs/DOCUMENTATION_CHECKLIST.md`.
+
 Release preparation also uses `make release-tools-test`,
 `make release-python-wheel release-wheel-test`,
 `make release-python-sdist release-sdist-test`, `make release-npm-pack`, and

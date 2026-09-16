@@ -1,22 +1,16 @@
 # pillow-rs for Node.js and browsers
 
-The npm package is **pillow-rs**, candidate **12.2.0-alpha.1** (unreleased). One package contains the
-shared WASM implementation and conditional Node/browser entry points.
-`pillow-rs-js` is the Rust binding directory, not a second npm package.
+<!-- release:summary -->
+**Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
+<!-- /release:summary -->
 
-[Documentation](https://appunni-m.github.io/pillow-rs/javascript/) ·
-[Maturity](https://appunni-m.github.io/pillow-rs/compatibility/) ·
-[Benchmarks](https://appunni-m.github.io/pillow-rs/benchmarks/)
+Install the single npm package for both environments:
 
-## Install
-
-After this candidate is published:
-
+<!-- release:npm -->
 ```sh
 npm install pillow-rs@12.2.0-alpha.1
 ```
-
-Until publication, use the [source build](#build-and-verify).
+<!-- /release:npm -->
 
 This is an ES module package. It declares Node.js 20+; CI exercises Node.js
 22.14.0. Browser use requires WebAssembly and a bundler or module server that
@@ -60,7 +54,7 @@ initializer's `module_or_path` option. Serve the asset with the correct URL
 and a WebAssembly-compatible response; an HTML fallback page is not a WASM
 module. Do not ship private `pkg/` imports as the application's package API.
 
-Browser and Node run the same selected public parity workflows. The JavaScript
+The JavaScript
 API is not Python syntax: for example, use `resize(width, height)` and
 `toBytes()`. See [compatibility](../docs/COMPATIBILITY.md) for the covered
 scope. AVIF is outside the current browser codec contract.
@@ -75,22 +69,9 @@ Operations can throw for invalid modes, unsupported operations, or invalid
 inputs. Report the smallest call sequence, browser/Node version, dimensions,
 mode, and package version when opening an issue.
 
-## Build and verify
+## Upgrading
 
-From the repository root:
-
-```sh
-make build-wasm-release
-make test-wasm-node
-make test-wasm-browser
-```
-
-The published archive includes both runtime entry points, WASM, declarations,
-README, and license. Release CI tests the packed package before publishing.
-
-## Next-version migration
-
-The unreleased 12.2.0-alpha.1 candidate keeps the same package name and environment
+Version 12.2.0-alpha.1 keeps the same package name and environment
 selection. Its `transform(size, matrix)` helper now uses the same affine input
 path as `transformWithInput`. A size must have exactly two entries. Omitting
 fill uses Pillow's zeroed-pixel default; specify a fill with `transformWithInput`

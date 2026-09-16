@@ -53,27 +53,27 @@ validation:
     anchors: warn
 nav:
   - Overview: index.md
-  - Start here:
+  - Use:
       - Installation: installation.md
       - Python recipes: python.md
       - JavaScript and browsers: javascript.md
-      - Rust integration: rust.md
-  - Compatibility:
-      - Maturity and limitations: compatibility.md
-      - API support inventory: api-support.md
-      - Coverage evidence: coverage.md
-  - Performance:
-      - Benchmark results: benchmarks.md
-      - Measurement protocol: benchmarking.md
-      - Pipeline roadmap: pipeline-roadmap.md
+      - Rust: rust.md
+      - Supported APIs and limitations: compatibility.md
+  - Benchmark results: benchmarks.md
   - Contribute:
       - Contributor guide: contributing.md
-      - Command reference: commands.md
+      - Commands: commands.md
+      - Run benchmarks: benchmarking.md
+      - Benchmark measurement details: benchmark-details.md
+      - API parity inventory: api-support.md
+      - Coverage evidence: coverage.md
+      - Implementation roadmap: pipeline-roadmap.md
       - Architecture: architecture.md
       - Documentation maintenance: documentation.md
+      - Release process: releasing.md
   - Project:
-      - Releases: releasing.md
+      - Releases: https://github.com/appunni-m/pillow-rs/releases
+      - Changelog: changelog.md
       - Support: support.md
       - Security: security.md
       - Code of conduct: conduct.md
-      - Changelog: changelog.md

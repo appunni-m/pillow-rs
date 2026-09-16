@@ -69,6 +69,8 @@ def tracked_markdown(root: Path) -> list[Path]:
 
 
 def check_sources(root: Path, config: dict) -> None:
+    from docs_release import check_documents
+    check_documents(root, config)
     errors = []
     pages = config["pages"]
     if len({p["output"] for p in pages}) != len(pages):
@@ -107,7 +109,7 @@ def check_sources(root: Path, config: dict) -> None:
         errors.append("README must end with the Puhu and Pillow acknowledgements")
     if re.search(r"^## ", end, re.MULTILINE):
         errors.append("acknowledgements must be the last README section")
-    if config["version"] not in readme:
+    if config["published_release"]["version"] not in readme:
         errors.append("README does not identify the documented release version")
     if errors:
         raise ValueError("\n".join(errors))
@@ -168,7 +170,8 @@ def prepare(root: Path, config: dict) -> None:
         (output / "api-support.md").write_text(render_support(root, config, output))
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     (output / "assets" / "build.json").write_text(json.dumps({
-        "repository": config["repository"], "version": config["version"],
+        "repository": config["repository"], "version": config["published_release"]["version"],
+        "source_version": config["version"], "release_revision": config["release_revision"],
         "documentation_revision": revision,
         "sources": {p["source"]: hashlib.sha256(source_path(root, p["source"]).read_bytes()).hexdigest()
                     for p in config["pages"]},
@@ -196,6 +199,7 @@ def check_html(root: Path) -> None:
     site = (root / "target" / "site").resolve()
     documents = {}
     errors = []
+    site_url = json.loads((root / "documentation.json").read_text())["site_url"]
     for path in site.rglob("*.html"):
         parser = HtmlLinks()
         parser.feed(path.read_text())
@@ -208,9 +212,16 @@ def check_html(root: Path) -> None:
             continue
         for link in parser.links:
             parsed = urlsplit(link)
-            if parsed.scheme or parsed.netloc or parsed.path.startswith("/"):
+            if link.startswith(site_url):
+                parsed = urlsplit(link[len(site_url):])
+                target = (site / unquote(parsed.path)).resolve()
+            elif parsed.scheme or parsed.netloc or parsed.path.startswith("/"):
                 continue
-            target = (path.parent / unquote(parsed.path)).resolve() if parsed.path else path
+            else:
+                target = (path.parent / unquote(parsed.path)).resolve() if parsed.path else path
+            if not target.is_relative_to(site):
+                errors.append(f"{path.relative_to(site)}: rendered link leaves the site {link}")
+                continue
             if target.is_dir():
                 target = target / "index.html"
             if not target.exists():

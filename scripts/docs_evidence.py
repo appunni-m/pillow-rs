@@ -207,6 +207,7 @@ def controls(label: str) -> str:
 def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     source = root / config["benchmark"]["source"]
     if not source.exists():
+        (output / "benchmark-details.md").write_text("# Benchmark measurement details\n\nNo measurement is available. [Contributor benchmark guide](benchmarking.md).\n")
         return ("# Benchmark results\n\nNo benchmark snapshot has been published for this project yet. "
                 "This is **unmeasured**, not a zero-duration result or a performance claim.\n\n"
                 "See the [measurement protocol](benchmarking.md) for the maintained command and CI artifact.\n")
@@ -214,39 +215,63 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     validate(snapshot, config["repository"])
     (output / "assets" / "benchmark.json").write_text(json.dumps(snapshot, indent=2) + "\n")
     historical = snapshot["revision"] != config["release_revision"]
-    lines = ["# Benchmark results", "",
-             "**Diagnostic measurement.**" if not snapshot["clean"] else "**Historical measurement** — not a measurement of the current release." if historical else "**Measurement of the documented release revision.**", "",
-             "**Diagnostic run from a modified checkout. Do not use it as a release baseline.**" if not snapshot["clean"] else "Measured from a clean source checkout.", "",
+    status = ("**Diagnostic measurement from a modified checkout.** Not a release baseline."
+              if not snapshot["clean"] else "**Historical measurement.** Not a measurement of the latest release."
+              if historical else "**Measurement of the documented release.**")
+    lines = ["# Benchmark results", "", status,
+             f"Recorded {cell(snapshot['measured_at'][:10])}. Run status: **{cell(snapshot['status'])}**.", ""]
+    details = ["# Benchmark measurement details", "", status, "",
+             "[View the results](benchmarks.md) · [Run benchmarks](benchmarking.md)", "",
              "| Measurement identity | Value |", "| --- | --- |",
              f"| Source revision | `{snapshot['revision']}` |", f"| Measured at | {cell(snapshot['measured_at'])} |",
              f"| Result status | {cell(snapshot['status'])} |", f"| Source document SHA-256 | `{snapshot['source_sha256']}` |",
              f"| Policy | {cell(snapshot['policy_status'])} |"]
     for key, value in snapshot["environment"].items():
-        lines.append(f"| {cell(key)} | {cell(value)} |")
-    lines += ["", "Download the [public measurement data](assets/benchmark.json). This is a presentation snapshot, "
+        details.append(f"| {cell(key)} | {cell(value)} |")
+    details += ["", "Download the [public measurement data](assets/benchmark.json). This is a presentation snapshot, "
               "not the full source receipt. It preserves the original report hash and numerical observations; "
               "hostnames, local paths, and internal traces are omitted.", ""]
-    lines += [f"- {cell(note)}" for note in snapshot["notes"]]
-    lines += ["", "Latency is **microseconds per declared operation/workflow**. Lower values mean less elapsed time "
-              "only for comparable rows. P90 and P95 are separate percentiles, not confidence intervals. "
-              "Do not average unrelated workloads into a project-wide speedup.", "", controls("Filter workloads, implementations, or status"),
-              "| Workload | Subject | Median µs | P90 µs | P95 µs | Samples | Result / correctness | Requested → actual | Terminal receipt |",
-              "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |"]
+    details += [f"- {cell(note)}" for note in snapshot["notes"]]
+    lines += ["Latency is in **microseconds (µs)**; lower is faster. Compare implementations "
+              "within the same workload. P95 is the 95th percentile; sample counts show how many timings were collected.", "",
+              "[Hardware, caveats, and full measurements](benchmark-details.md). "
+              "A completed timing run does not by itself establish equal output.", "", controls("Filter results"),
+              "| Workload | Implementation | Median µs | P95 µs | Samples | Result |",
+              "| --- | --- | ---: | ---: | ---: | --- |"]
+    details += ["", "## Full measurements", "",
+                "| Workload | Subject | Median µs | P90 µs | P95 µs | Samples | Result / correctness | Requested → actual | Terminal receipt |",
+                "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |"]
     for row in snapshot["rows"]:
         route = f"{row['requested_backend']} → {row['actual_backend']}"
         result = f"{row['status']}; {row['correctness']}"
         terminal = "Complete" if row["terminal_complete"] is True else "Not proven" if row["terminal_complete"] is False else "Not measured" if row["requested_backend"] == "gpu" else "Not applicable"
-        lines.append("| " + " | ".join(cell(v) for v in (row["workload"], row["subject"], row["median_us"], row["p90_us"], row["p95_us"], row["sample_count"], result, route, terminal)) + " |")
-    lines += ["", "## Workload boundaries", "", "Repeat counts, dimensions, modes, and cache states are retained per workload:", ""]
+        details.append("| " + " | ".join(cell(v) for v in (row["workload"], row["subject"], row["median_us"], row["p90_us"], row["p95_us"], row["sample_count"], result, route, terminal)) + " |")
+        correctness = row["correctness"]
+        outcome = ("Timing only" if correctness in {"timing_only", "successful_execution: pass"}
+                   else "Output matches" if correctness == "output hash match: True; byte length match: True"
+                   else "Output differs" if correctness.startswith("output hash match: False;") else correctness)
+        if row["status"] not in {"completed", "passed", "ok"}:
+            outcome = f"{row['status']}; {outcome}"
+        implementation = row["subject"]
+        if row["requested_backend"] != row["actual_backend"]:
+            implementation += f" ({route})"
+        if row["requested_backend"] == "gpu" and row["terminal_complete"] is not True:
+            outcome += "; GPU completion unproven"
+        lines.append("| " + " | ".join(cell(v) for v in (row["workload"], implementation, row["median_us"],
+                     row["p95_us"], row["sample_count"], outcome)) + " |")
+    lines += ["", "[Measurement details and hardware](benchmark-details.md) · "
+              "[Download results](assets/benchmark.json) · [Contributor benchmark guide](benchmarking.md)", ""]
+    details += ["", "## Workload boundaries", "", "Repeat counts, dimensions, modes, and cache states are retained per workload:", ""]
     seen = set()
     for row in snapshot["rows"]:
         if row["workload"] in seen:
             continue
         seen.add(row["workload"])
-        lines += [f"### {cell(row['workload'])}", "", f"Sample unit: {cell(row['sample_unit'])}.", "", "```json",
+        details += [f"### {cell(row['workload'])}", "", f"Sample unit: {cell(row['sample_unit'])}.", "", "```json",
                   json.dumps({"context": row["context"], "measurement_policy": row["policy"]}, indent=2), "```", ""]
-    lines += ["## Reproduce and interpret", "", "Use the [benchmark protocol](benchmarking.md). "
+    details += ["## Reproduce and interpret", "", "Use the [benchmark protocol](benchmarking.md). "
               "Correctness, native dispatch, timing regressions, process memory, and artifact size are separate claims.", ""]
+    (output / "benchmark-details.md").write_text("\n".join(details))
     return "\n".join(lines)
 
 

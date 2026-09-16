@@ -1,9 +1,11 @@
 # Releasing pillow-rs
 
-The current candidate is **12.2.0-alpha.1** (unreleased) for Cargo, npm, and
-Python. Publication runs from this repository's pinned `release.yml` workflow
-using GitHub OIDC. [Published history](docs/REGISTRY_RELEASE_MATRIX.md) records
-previous registry versions.
+<!-- release:summary -->
+**Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
+<!-- /release:summary -->
+
+Packages publish through this repository's `release.yml` workflow using GitHub OIDC.
+The [release evidence](docs/REGISTRY_RELEASE_MATRIX.md) keeps older measurements explicitly dated.
 
 | Artifact | Registry name | Public API |
 | --- | --- | --- |
@@ -16,18 +18,9 @@ update pillow-rs's exact dependency versions and lockfile. Fontdone has one
 public Cargo crate; its C/WASM build members remain private. Image-slash-star
 has no Python or npm distribution.
 
-## Next candidate
-
-The working candidate is **12.2.0-alpha.1**, a breaking Rust API cleanup.
-Installed-release evidence retains its original version and source revision. Consult the
-[changelog](CHANGELOG.md) and [Rust migration guide](docs/RUST.md#upgrading-to-1220-alpha1)
-before upgrading. Deprecation cleanup does not close the broader GPU arithmetic
-proofs or benchmark-budget gaps listed in [maturity](docs/COMPATIBILITY.md).
-
 ## Version policy
 
-Use one declared version in Cargo, npm, Python, the Python runtime, and current
-documentation: **12.2.0-alpha.1**. The base version follows the targeted Pillow
+Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.0-alpha.1**. The base version follows the targeted Pillow
 version; increment the `alpha.N` suffix for subsequent candidates. Use
 `beta.N`, `rc.N`, or a stable version only when the corresponding maturity is
 justified. A matching Pillow version is a compatibility target, not a claim
@@ -47,7 +40,8 @@ make release-version-check RELEASE_VERSION=v12.2.0-alpha.1
 ## Prepare a release
 
 1. Update authoritative package versions, exact dependency pins, lockfiles,
-   changelog, and the documented version. Run `make release-lock-update` and
+   changelog, and the source-version field in `documentation.json`. Keep published
+   installation blocks on the last available registry release. Run `make release-lock-update` and
    `make release-version-check` with Python 3.12 to verify synchronization.
 2. Run the relevant full parity, coverage, portability, package-consumer, and
    supply-chain checks. Preserve failures and unmeasured scope.
@@ -114,3 +108,17 @@ changes do not require new registry versions. See the
 - [crates.io authentication action](https://github.com/rust-lang/crates-io-auth-action)
 - [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)
 - [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+
+## Refresh user documentation after publication
+
+Wait for every registry job and the GitHub release to succeed, then run:
+
+```sh
+make docs-release-refresh
+make docs-release-check docs-registry-examples
+```
+
+Review and commit the refreshed release record and installation blocks. The
+Documentation workflow checks freshness after a successful tag release and
+on its daily schedule. Keep source-candidate versions separate from published
+installation versions; do not send users to a version that is still building.

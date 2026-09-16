@@ -1,8 +1,12 @@
-# Published artifacts and release evidence
+# Historical artifacts and release evidence
 
 The three projects publish from their own GitHub repositories through OIDC.
-These are versioned observations from 2026-09-16, not a claim that later
-commits have already passed release checks.
+The observations below describe earlier releases verified on 2026-09-16.
+They are retained for audit and do not identify the newest installable versions.
+For current packages, use the release lists for
+[pillow-rs](https://github.com/appunni-m/pillow-rs/releases),
+[fontdone](https://github.com/appunni-m/fontdone/releases), and
+[image-slash-star](https://github.com/appunni-m/image-slash-star/releases).
 
 | Project | Accepted version | Registries | Release evidence |
 | --- | --- | --- | --- |

@@ -1,14 +1,18 @@
 # Rust integration
 
-The core crate owns image operations. Bindings delegate to it, while the Rust
-API uses Rust values and `Result`. This guide targets **12.2.0-alpha.1**
-(unreleased). The registry dependency below applies after publication; use a
-[source build](INSTALLATION.md#build-the-unreleased-candidate) until then.
+<!-- release:summary -->
+**Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
+<!-- /release:summary -->
 
+Install the core image-processing crate from crates.io. Requires Rust 1.96.1
+or newer. Public methods use Rust values and `Result`.
+
+<!-- release:cargo -->
 ```toml
 [dependencies]
 pillow-rs = "=12.2.0-alpha.1"
 ```
+<!-- /release:cargo -->
 
 ## First operation
 
@@ -25,9 +29,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 The constructor takes width, height, mode, and an RGBA color tuple. The image
-retains its selected mode. The [published Rust reference](https://docs.rs/pillow-rs/)
-describes the latest published crate. For this candidate, consult the
-[source API](../pillow-rs/src/lib.rs) and migration notes below.
+retains its selected mode.
+
+<!-- release:rust-api -->
+[Rust API reference](https://docs.rs/pillow-rs/12.2.0-alpha.1/pillow_rs/).
+<!-- /release:rust-api -->
+
+The reference describes arguments, return values, and errors.
 
 ## Features and backends
 
@@ -36,8 +44,8 @@ features. Codec features select image-slash-star support. `gpu` enables GPU
 infrastructure; it does not make every operation native GPU work. `parallel`
 enables the configured parallel paths.
 
-The [maturity guide](COMPATIBILITY.md) distinguishes compiled features, tested
-cases, and measured native dispatch. Inspect dispatch receipts for GPU timings.
+The [compatibility guide](COMPATIBILITY.md) explains the supported scope.
+GPU availability and acceleration depend on the operation and host.
 
 ## Ownership and I/O
 
@@ -57,9 +65,8 @@ combination. Report regressions with the smallest input and public call sequence
 
 ## Upgrading to 12.2.0-alpha.1
 
-The unreleased 12.2.0-alpha.1 candidate removes deprecated Rust interfaces, so it is a
-breaking upgrade from 0.1.x. It becomes available in registries after the
-candidate passes release gates and its immutable tag is published.
+Version 12.2.0-alpha.1 removes deprecated Rust interfaces and is a breaking
+upgrade from 0.1.x.
 
 | Removed interface | Maintained replacement |
 | --- | --- |
@@ -70,7 +77,3 @@ candidate passes release gates and its immutable tag is published.
 | `Image::transform_affine` | `Image::transform_public` with method `0` and `TransformData::Affine` |
 | `PipelineOp::PointOp` | `PipelineOp::Eval` |
 | Deferred quantization and generator variants | `Image::quantize` and the public `linear_gradient`, `radial_gradient`, and `effect_mandelbrot` constructors |
-
-No selected Pillow endpoint or parity requirement was removed. Benchmark
-workload IDs remain stable; eager constructors and public point workflows
-are counted separately from the remaining deferred Rust variants.
