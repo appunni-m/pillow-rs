@@ -59,7 +59,7 @@ def main() -> None:
     selection.add_argument("--commit", help="exact 40-character commit SHA")
     selection.add_argument("--run-url", help="public GitHub Actions run URL; also works without API quota")
     parser.add_argument("--repo", default="appunni-m/pillow-rs", help="GitHub owner/repository")
-    parser.add_argument("--workflow", action="append", choices=("ci.yml", "release.yml", "docs.yml", "benchmark.yml"),
+    parser.add_argument("--workflow", action="append", choices=("ci.yml", "release.yml", "docs.yml", "benchmark.yml", "release-assets-recovery.yml"),
                         help="limit to a named workflow; defaults to CI and release")
     args = parser.parse_args()
     try:
