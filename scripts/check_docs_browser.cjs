@@ -34,6 +34,23 @@ async function main() {
       for (const width of [1440, 390]) {
         await page.setViewport({ width, height: 1000 });
         await page.goto(url, { waitUntil: 'networkidle0' });
+        if (await page.$('pre.api-contract')) {
+          const contracts = await page.$$eval('pre.api-contract', nodes => nodes.map(node => ({
+            text: node.querySelector('code')?.textContent,
+            children: node.querySelector('code')?.childElementCount,
+            whitespace: getComputedStyle(node.querySelector('code')).whiteSpace,
+          })));
+          if (contracts.some(item => !item.text || item.children !== 0 || item.whitespace !== 'pre-wrap')) {
+            throw new Error('API contracts are not literal, wrapping code blocks');
+          }
+          if (contracts.some(item => /&(?:#x27|#124|gt);/.test(item.text))) throw new Error('API contract shows encoded characters');
+          await page.$eval('pre.api-contract', element => element.scrollIntoView({ block: 'center', inline: 'center' }));
+          const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
+          if (bodyWidth > width) throw new Error(`API inventory page overflows at ${width}px`);
+          await page.screenshot({ path: path.join(output, `api-contracts-${index}-${width}.png`) });
+          console.log(`${url}: ${width}px, ${contracts.length} literal wrapping code blocks passed`);
+          continue;
+        }
         const before = await page.$eval('#bench-count', element => element.textContent);
         await page.type('#evidence-filter', 'no-such-workload');
         const after = await page.$eval('#bench-count', element => element.textContent);
@@ -84,7 +101,7 @@ async function main() {
       }
       await page.setJavaScriptEnabled(false);
       await page.goto(url, { waitUntil: 'networkidle0' });
-      if (!(await page.$('.bench-workload .bench-time'))) throw new Error('Measurements require JavaScript');
+      if (!(await page.$('.bench-workload .bench-time, pre.api-contract code'))) throw new Error('Documentation content requires JavaScript');
       await page.close();
     }
   } finally {

@@ -8,13 +8,44 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from docs_evidence import SCHEMA, cell, number, project_jpeg, project_pillow, validate
-from docs_site import anchors, prepare_output, read_config, rewrite_links
+from docs_evidence import SCHEMA, cell, contract_code, number, project_jpeg, project_pillow, validate
+from docs_site import HtmlContracts, anchors, check_api_contracts, prepare_output, read_config, rewrite_links
 from report_pipeline_roadmap_status import ROADMAP, build_report
 from report_pipeline_benchmark_coverage import DEFAULT_INPUT, report as pipeline_report
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_contract_code_preserves_quotes_unions_arrows_and_literal_markup(self) -> None:
+        signature = "__call__(mode: 'str | None' = None, note='<tag>&`', *args, **kwargs) -> 'Image'\n# next line"
+        parser = HtmlContracts()
+        parser.feed(contract_code("PIL.Image.convert", signature))
+        self.assertEqual(parser.contracts, {"PIL.Image.convert": signature})
+
+    def test_rendered_contract_gate_rejects_double_escaping_or_missing_code(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            signature = "convert(mode: 'str | None') -> 'Image'"
+            manifest = {"surfaces": [{"id": "PIL.Image", "operations": [{"source": {"path": "PIL.Image.convert", "signature": signature}}]}]}
+            (root / "manifest.json").write_text(json.dumps(manifest))
+            config = {"support": {"source": "manifest.json"}}
+            block = contract_code("PIL.Image.convert", signature)
+            valid = '<h2 id="pilimage">PIL.Image</h2>' + block
+            check_api_contracts(root, config, valid)
+            with self.assertRaisesRegex(ValueError, "text differs"):
+                check_api_contracts(root, config, valid.replace("&gt;", "&amp;gt;"))
+            with self.assertRaisesRegex(ValueError, "lacks a code element"):
+                check_api_contracts(root, config, valid.replace("<code>", "").replace("</code>", ""))
+            with self.assertRaisesRegex(ValueError, "inventory differs"):
+                check_api_contracts(root, config, "<p>No contracts</p>")
+            with self.assertRaisesRegex(ValueError, "surface headings"):
+                check_api_contracts(root, config, '<td>## PIL.Image</td>' + block)
+
+    def test_contract_duplicate_paths_are_rejected(self) -> None:
+        parser = HtmlContracts()
+        block = contract_code("PIL.Image.convert", "convert()")
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            parser.feed(block + block)
+
     def test_eager_and_point_workloads_remain_required_after_descriptor_removal(self) -> None:
         baseline = pipeline_report(DEFAULT_INPUT)
         self.assertEqual(baseline["operation_variants_total"], 85)
