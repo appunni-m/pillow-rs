@@ -204,6 +204,15 @@ def controls(label: str) -> str:
     return f'<div class="evidence-controls"><label for="evidence-filter">{label}</label><input id="evidence-filter" type="search" autocomplete="off"><output aria-live="polite"></output></div>\n'
 
 
+def contract_code(path: str, signature: str) -> str:
+    # Markdown code spans escape entities again. Use literal HTML code, escaping
+    # once for HTML and protecting syntax from Markdown's inline/table parser.
+    content = html.escape(signature)
+    for character in "\\`*_[]|~\n\r":
+        content = content.replace(character, f"&#{ord(character)};")
+    return f'<pre class="api-contract" data-api-path="{html.escape(path, quote=True)}"><code>{content}</code></pre>'
+
+
 def render_benchmarks(root: Path, config: dict, output: Path) -> str:
     source = root / config["benchmark"]["source"]
     if not source.exists():
@@ -276,14 +285,14 @@ def render_support(root: Path, config: dict, output: Path) -> str:
                  "[Maturity and release evidence](compatibility.md) identify the executed scope.", "",
                  f"Manifest SHA-256: `{hashlib.sha256(source.read_bytes()).hexdigest()}`.", ""]
         for surface in document["surfaces"]:
-            lines += [f"## {surface['id']}", "", "| Public path | Declared support | Input cases | Contract |", "| --- | --- | ---: | --- |"]
+            lines += ["", f"## {surface['id']}", "", "| Public path | Declared support | Input cases | Contract |", "| --- | --- | ---: | --- |"]
             for operation in surface["operations"]:
                 key = (surface["id"], operation["id"])
                 path = operation["source"]["path"]
                 status = ", ".join(t["support"]["status"] for t in operation["targets"])
                 witness = f"[{counts[key]}]({paths[key]})" if key in paths else "0 — unmeasured"
-                signature = cell(operation["source"]["signature"])
-                lines.append(f"| `{path}` | {status} | {witness} | `{signature}` |")
+                signature = contract_code(path, operation["source"]["signature"])
+                lines.append(f"| `{path}` | {status} | {witness} | {signature} |")
         return "\n".join(lines) + "\n"
     raise ValueError("unknown generated support inventory")
 

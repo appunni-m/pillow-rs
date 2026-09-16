@@ -17,6 +17,9 @@
 /* GitHub's latest stable tag can lag the alpha release documented here. */
 .md-source__fact--version { display: none; }
 
+.md-typeset pre.api-contract { margin: 0; min-width: 16rem; max-width: 36rem; }
+.md-typeset pre.api-contract > code { white-space: pre-wrap; overflow-wrap: anywhere; padding: .55rem .7rem; font-size: .72rem; }
+
 /* Benchmark comparison table: measurements stay aligned across implementations. */
 .benchmark-dashboard { --bench-positive: #087f6a; --bench-negative: #a64b00; --bench-muted: #607080; --bench-cell: var(--md-default-bg-color); }
 [data-md-color-scheme="slate"] .benchmark-dashboard { --bench-positive: #66d9bd; --bench-negative: #ffbd80; --bench-muted: #a8b3c0; }

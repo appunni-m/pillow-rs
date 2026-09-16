@@ -195,11 +195,64 @@ class HtmlLinks(HTMLParser):
             self.links.append(values["src"])
 
 
+class HtmlContracts(HTMLParser):
+    """Read displayed contract text, including entity decoding, from final HTML."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.contracts: dict[str, str] = {}
+        self.path: str | None = None
+        self.parts: list[str] = []
+        self.has_code = False
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        values = dict(attrs)
+        if tag == "pre" and "api-contract" in values.get("class", "").split():
+            path = values.get("data-api-path")
+            if not path or path in self.contracts or self.path is not None:
+                raise ValueError("API contract block has a missing or duplicate public path")
+            self.path, self.parts, self.has_code = path, [], False
+        elif tag == "code" and self.path is not None:
+            self.has_code = True
+
+    def handle_data(self, data: str) -> None:
+        if self.path is not None:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "pre" and self.path is not None:
+            if not self.has_code:
+                raise ValueError(f"API contract lacks a code element: {self.path}")
+            self.contracts[self.path] = "".join(self.parts)
+            self.path = None
+
+
+def check_api_contracts(root: Path, config: dict, rendered: str) -> None:
+    import yaml
+
+    source = source_path(root, config["support"]["source"])
+    manifest = yaml.safe_load(source.read_text())
+    expected = {operation["source"]["path"]: operation["source"]["signature"]
+                for surface in manifest["surfaces"] for operation in surface["operations"]}
+    parser = HtmlContracts()
+    parser.feed(rendered)
+    if parser.contracts.keys() != expected.keys():
+        raise ValueError("rendered API contract inventory differs from the public manifest")
+    for path, signature in expected.items():
+        if parser.contracts[path] != signature:
+            raise ValueError(f"rendered API contract text differs from the manifest: {path}")
+    expected_sections = anchors("\n".join(f"## {surface['id']}" for surface in manifest["surfaces"]))
+    actual_sections = set(re.findall(r'<h2\b[^>]*\bid="([^"]+)"', rendered))
+    if not expected_sections <= actual_sections:
+        raise ValueError("rendered API surface headings are missing or absorbed into a table")
+
+
 def check_html(root: Path) -> None:
     site = (root / "target" / "site").resolve()
     documents = {}
     errors = []
-    site_url = json.loads((root / "documentation.json").read_text())["site_url"]
+    config = json.loads((root / "documentation.json").read_text())
+    site_url = config["site_url"]
     for path in site.rglob("*.html"):
         parser = HtmlLinks()
         parser.feed(path.read_text())
@@ -230,6 +283,8 @@ def check_html(root: Path) -> None:
                 errors.append(f"{path.relative_to(site)}: missing rendered anchor {link}")
     if errors:
         raise ValueError("\n".join(errors))
+    if config.get("support", {}).get("kind") == "pillow":
+        check_api_contracts(root, config, (site / "api-support/index.html").read_text())
     print(f"Rendered site: {len(documents)} HTML pages; local links, assets, and anchors checked")
 
 
