@@ -294,6 +294,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
     |-- check_python_compatibility.py
+    |-- check_release_licenses.py
     |-- check_release_recovery.py
     |-- check_release_status.py
     |-- check_release_wheel.py

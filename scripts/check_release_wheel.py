@@ -10,6 +10,7 @@ import tempfile
 import venv
 
 from check_docs_examples import fenced_examples
+from check_release_licenses import ROOT, verify_archive_license
 
 
 def main() -> None:
@@ -29,6 +30,7 @@ def main() -> None:
         package = wheels[0]
         if "-linux_" in package.name:
             raise SystemExit("generic Linux wheels are not accepted for PyPI; build a manylinux wheel")
+    verify_archive_license(package, (ROOT / "LICENSE").read_bytes())
     with tempfile.TemporaryDirectory(prefix="pillow-rs-wheel-consumer-") as directory:
         root = Path(directory)
         venv.EnvBuilder(with_pip=True).create(root / "venv")

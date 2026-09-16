@@ -2,12 +2,41 @@
 from __future__ import annotations
 import copy
 import hashlib
+import io
 from pathlib import Path
+import tarfile
 import tempfile
 import unittest
+import zipfile
 import yaml
 from check_release_recovery import REQUIRED_JOBS, validate
 from prepare_pypi_release import missing_files
+from check_release_licenses import verify_archive_license
+
+
+class LicenseArchiveTests(unittest.TestCase):
+    def test_archive_requires_complete_license_text(self) -> None:
+        expected = b"Copyright notice\nPermission terms\nDisclaimer\n"
+        with tempfile.TemporaryDirectory() as directory:
+            for suffix in (".whl", ".crate", ".tar.gz", ".tgz"):
+                for name, content in (("README.md", expected),
+                                      ("LICENSE", b"MIT-CMU"),
+                                      ("LICENSE", expected)):
+                    with self.subTest(format=suffix, name=name, content=content):
+                        archive = Path(directory) / ("package" + suffix)
+                        if suffix == ".whl":
+                            with zipfile.ZipFile(archive, "w") as package:
+                                package.writestr("package.dist-info/licenses/" + name, content)
+                        else:
+                            with tarfile.open(archive, "w:gz") as package:
+                                member = tarfile.TarInfo("package/" + name)
+                                member.size = len(content)
+                                package.addfile(member, io.BytesIO(content))
+                        if name == "LICENSE" and content == expected:
+                            verify_archive_license(archive, expected)
+                        else:
+                            with self.assertRaises(ValueError):
+                                verify_archive_license(archive, expected)
 
 
 class WorkflowInputTests(unittest.TestCase):
