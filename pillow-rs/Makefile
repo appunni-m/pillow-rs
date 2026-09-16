@@ -25,8 +25,7 @@ help:
 	@printf "  make migration-parity-benchmark Run correctness-gated benchmarks\n"
 	@printf "\nFixtures:\n"
 	@printf "  make fixtures         Delegate to project migration-parity inputs\n"
-	@printf "  make fixtures-check   Validate Font public-api raw input fixtures\n"
-	@printf "  make fixtures-clean   Refuse to mutate active input specifications\n"
+	@printf "  make fixtures-check   Validate maintained public parity inputs\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
 	@printf "  make fmt-fix          Apply rustfmt\n"
@@ -74,10 +73,6 @@ fixtures:
 .PHONY: fixtures-check
 fixtures-check:
 	$(MAKE) -C .. migration-parity-inputs-check
-
-.PHONY: fixtures-clean
-fixtures-clean:
-	@printf "Active migration-parity inputs are immutable specifications; no outputs are cleaned.\n"
 
 .PHONY: public-api-boundary
 public-api-boundary:

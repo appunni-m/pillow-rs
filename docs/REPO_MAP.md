@@ -12,7 +12,7 @@ explains ownership; [Contributing](../CONTRIBUTING.md) explains the workflow.
 | `scripts/` | Maintained generators, runners, receipt validators, release and documentation tools |
 | `docs/` | Public guides and explicitly versioned generated evidence |
 | `.github/workflows/` | Validation, benchmark, Pages, and package-release automation |
-| `deprecated/` | Retired test-system provenance; not an active test root |
+| `scripts/data/migration-authority-v0.yaml` | Hash-pinned provenance used to regenerate the public inventory |
 
 The root Makefile owns the pinned fontdone checkout under `build/fontdone-src/`.
 Contribute to fontdone in its own repository. Its FreeType checkout is a read-only
@@ -115,7 +115,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- difference.wgsl
 |   |   |   |       |-- draw.wgsl
 |   |   |   |       |-- duplicate.wgsl
-|   |   |   |       |-- effect_mandelbrot.wgsl
 |   |   |   |       |-- effect_noise.wgsl
 |   |   |   |       |-- effect_spread.wgsl
 |   |   |   |       |-- equalize.wgsl
@@ -136,7 +135,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- invert.wgsl
 |   |   |   |       |-- invert_chops.wgsl
 |   |   |   |       |-- lighter.wgsl
-|   |   |   |       |-- linear_gradient.wgsl
 |   |   |   |       |-- logical_and.wgsl
 |   |   |   |       |-- logical_or.wgsl
 |   |   |   |       |-- logical_xor.wgsl
@@ -157,8 +155,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- put_alpha_data.wgsl
 |   |   |   |       |-- put_data.wgsl
 |   |   |   |       |-- put_pixel.wgsl
-|   |   |   |       |-- quantize.wgsl
-|   |   |   |       |-- radial_gradient.wgsl
 |   |   |   |       |-- rank_filter.wgsl
 |   |   |   |       |-- reduce.wgsl
 |   |   |   |       |-- remap_palette.wgsl
@@ -294,7 +290,6 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- build_migration_parity_manifest.py
     |-- check_bindings.py
     |-- check_docs_examples.py
-    |-- check_local_release_bundle.py
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
@@ -305,6 +300,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_repo_map.py
     |-- check_workflows.py
     |-- codex-worktree-setup.sh
+    |-- data/
+    |   `-- migration-authority-v0.yaml
     |-- docs_evidence.py
     |-- docs_site.py
     |-- generate_migration_parity_docs.py
@@ -319,7 +316,6 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- report_pipeline_benchmark_coverage.py
     |-- report_pipeline_performance.py
     |-- report_pipeline_roadmap_status.py
-    |-- review_migration_parity_cases.py
     |-- run_all_backend_tests.py
     |-- run_migration_benchmark.py
     |-- run_migration_coverage.py

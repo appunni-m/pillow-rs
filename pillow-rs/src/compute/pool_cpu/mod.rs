@@ -50,7 +50,7 @@ fn byte_point_mode_allowed(img: &DynamicImage, mode: Option<&str>) -> bool {
 ///
 /// The public ImageOps implementations for palette, numeric, and 16-bit modes
 /// have mode-specific behavior that is not equivalent to a byte LUT over the
-/// whole buffer.  LA/RGBA are safe here only for explicit `PointOp`/`Eval`
+/// whole buffer.  LA/RGBA are safe here only for explicit `Eval`
 /// tables; the ImageOps invert/solarize/posterize wrappers remain outside this
 /// fusion because Pillow rejects those mode combinations.
 fn point_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
@@ -82,9 +82,7 @@ fn point_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
                     .collect(),
             )
         }
-        PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } if lut.len() == bands * 256 => {
-            Some(lut.to_vec())
-        }
+        PipelineOp::Eval { lut } if lut.len() == bands * 256 => Some(lut.to_vec()),
         _ => None,
     }
 }
@@ -139,7 +137,7 @@ fn fused_point_batch(
     if invert_run >= 2 {
         return Some((
             invert_run,
-            PipelineOp::PointOp {
+            PipelineOp::Eval {
                 lut: repeated_invert_lut(bands, invert_run % 2 == 1).into(),
             },
         ));
@@ -163,7 +161,7 @@ fn fused_point_batch(
 
     (consumed >= 2).then_some((
         consumed,
-        PipelineOp::PointOp {
+        PipelineOp::Eval {
             lut: composed.into(),
         },
     ))
@@ -391,7 +389,7 @@ impl BackendImpl for CpuPool {
                 // identity point operations still return an independent image
                 // object with the same native bytes and mode.
                 let next = match &fused {
-                    PipelineOp::PointOp { lut }
+                    PipelineOp::Eval { lut }
                         if point_band_count(input)
                             .is_some_and(|bands| point_lut_is_identity(lut, bands)) =>
                     {

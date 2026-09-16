@@ -110,19 +110,6 @@ pub enum PipelineOp {
         /// Optional dither method.
         dither: Option<DitherMethod>,
     },
-    /// Legacy deferred quantization descriptor.
-    ///
-    /// The public [`Image::quantize`](crate::Image::quantize) implementation
-    /// owns quantization and materializes the palette directly. This variant
-    /// remains only for compatibility with operation metadata; it has no
-    /// registered executor and is not produced by a supported public pipeline.
-    #[deprecated(note = "legacy deferred quantization; use Image::quantize instead")]
-    Quantize {
-        /// Requested palette color count.
-        colors: u32,
-        /// Whether dithering is enabled.
-        dither: bool,
-    },
     /// Remap palette indices through a destination map.
     RemapPalette {
         /// Destination palette index map.
@@ -496,17 +483,6 @@ pub enum PipelineOp {
         sigma: f64,
     },
 
-    // ── Point operations (lookup table) ──
-    /// Legacy CPU point-operation descriptor.
-    ///
-    /// Public point/eval calls use [`Eval`](Self::Eval). This descriptor is
-    /// retained for internal GPU LUT fusion and is not a public pipeline
-    /// construction path.
-    #[deprecated(note = "legacy point descriptor; use PipelineOp::Eval")]
-    PointOp {
-        /// Lookup table.
-        lut: Arc<[u8]>,
-    },
     // ── 3D Color Lookup Table ──
     /// Apply a 3D color lookup table.
     Color3DLut {
@@ -588,52 +564,6 @@ pub enum PipelineOp {
     ExtractBand {
         /// Band index.
         index: u8,
-    },
-
-    // ── Gradient generation (ImageModule) ──
-    /// Legacy deferred linear-gradient descriptor.
-    ///
-    /// The public module constructor materializes the gradient eagerly. This
-    /// deprecated descriptor remains available for operation metadata and can
-    /// use the native SIMD generator when explicitly executed by a pipeline.
-    #[deprecated(note = "legacy deferred gradient; use the public linear_gradient constructor")]
-    LinearGradient {
-        /// Output mode.
-        mode: ColorMode,
-    },
-    /// Legacy deferred radial-gradient descriptor.
-    ///
-    /// The public module constructor materializes the gradient eagerly. This
-    /// deprecated descriptor is retained for operation metadata and shader
-    /// contract inspection only; it has no registered executor.
-    #[deprecated(note = "legacy deferred gradient; use the public radial_gradient constructor")]
-    RadialGradient {
-        /// Output mode.
-        mode: ColorMode,
-    },
-
-    // ── Fractal generation (ImageModule) ──
-    /// Legacy deferred Mandelbrot descriptor.
-    ///
-    /// The public module constructor materializes the effect eagerly. This
-    /// deprecated descriptor is retained for operation metadata and shader
-    /// contract inspection only; it has no registered executor.
-    #[deprecated(note = "legacy deferred Mandelbrot; use the public effect_mandelbrot constructor")]
-    EffectMandelbrot {
-        /// Target width of the produced image, in pixels.
-        w: u32,
-        /// Target height of the produced image, in pixels.
-        h: u32,
-        /// Left coordinate in the complex plane.
-        x0: f64,
-        /// Top coordinate in the complex plane.
-        y0: f64,
-        /// Right coordinate in the complex plane.
-        x1: f64,
-        /// Bottom coordinate in the complex plane.
-        y1: f64,
-        /// Iteration quality parameter.
-        quality: u32,
     },
 
     // ── ImageDraw ops (geometric) ──

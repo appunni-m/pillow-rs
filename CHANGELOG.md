@@ -4,6 +4,26 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
+## 0.2.0 - Unreleased
+
+- Remove obsolete Rust pixel trait methods (`channels4`, `from_channels`,
+  generic `get_pixel_mut`, and `blend_pixel`), `Image::transform_affine`, and
+  the deferred `Quantize`, `PointOp`, `LinearGradient`, `RadialGradient`, and
+  `EffectMandelbrot` variants. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-020).
+- Route internal LUT fusion through `Eval`; eager quantization, gradient,
+  and Mandelbrot constructors remain supported. Keep all existing benchmark operation
+  workloads (85 canonical families) and the full public parity inventory.
+- Ship Python through `PIL` and its internal `pillow_rs` implementation only.
+  Remove the former import bridge; use `from PIL import Image`.
+- Use current PyO3 capsule/class conversion APIs and reject deprecated API usage
+  in the workspace and CI.
+- Route the JavaScript `transform(size, matrix)` convenience method through
+  the public affine entry point. Invalid sizes now raise `TypeError`; exposed
+  output pixels use Pillow's zero-fill default, including transparent alpha.
+- Remove retired test runners, generated oracle outputs, unused shaders, and
+  first-release-only tooling. Keep the frozen inventory authority byte-for-byte.
+- Refresh pinned GitHub Actions for CI, Pages, and trusted publication.
+
 ## 0.1.3 - 2026-09-16
 
 - Disable automatic package-manager caching with `package-manager-cache: false`

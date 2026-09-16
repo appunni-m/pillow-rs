@@ -61,7 +61,6 @@ const GPU_HISTOGRAM_BYTES: usize = GPU_HISTOGRAM_WORDS * std::mem::size_of::<u32
 const MAX_GPU_BLUR_RADIUS: u32 = 64;
 const MAX_GPU_FILTER_SIZE: u32 = 15;
 const MAX_GPU_REDUCE_FACTOR: u32 = 64;
-const MAX_GPU_MANDELBROT_ITERS: u32 = 10_000;
 // Order-statistic filters use a bounded local insertion sort.  The estimate
 // below is intentionally large enough for the reviewed 9x9/256x256 material
 // workloads and the 3x3/1024x768 matrix case, while still rejecting unbounded
@@ -9002,7 +9001,7 @@ fn extract_lut(op: &PipelineOp, mode: u32) -> Option<[u32; 256]> {
         return Some(packed);
     }
     let lut_bytes: &[u8] = match op {
-        PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => lut.as_ref(),
+        PipelineOp::Eval { lut } => lut.as_ref(),
         _ => return None,
     };
     let channels = match mode {
@@ -9059,7 +9058,7 @@ fn gpu_point_lut(op: &PipelineOp, mode: u32) -> Option<Vec<u8>> {
         3 | 4 => 4,
         _ => return None,
     };
-    if let PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } = op {
+    if let PipelineOp::Eval { lut } = op {
         return (lut.len() == channels * 256).then(|| lut.to_vec());
     }
     if matches!(
@@ -9140,7 +9139,7 @@ fn fuse_gpu_point_ops(ops: &[PipelineOp], mode: u32) -> Vec<PipelineOp> {
             consumed += 1;
         }
         if consumed >= 2 {
-            fused.push(PipelineOp::PointOp {
+            fused.push(PipelineOp::Eval {
                 lut: composed.into(),
             });
         } else {
@@ -9531,8 +9530,6 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
             Some((new_w, new_h))
         }
         PipelineOp::Transform { w, h, .. } => Some((*w, *h)),
-        PipelineOp::LinearGradient { .. } | PipelineOp::RadialGradient { .. } => Some((256, 256)),
-        PipelineOp::EffectMandelbrot { w, h, .. } => Some((*w, *h)),
         PipelineOp::CompositeModule { other, .. } => other.size().ok(),
         _ => None,
     }
@@ -9692,9 +9689,6 @@ fn op_has_explicit_output_dimensions(op: &PipelineOp) -> bool {
             | PipelineOp::Scale { .. }
             | PipelineOp::Transform { .. }
             | PipelineOp::CompositeModule { .. }
-            | PipelineOp::LinearGradient { .. }
-            | PipelineOp::RadialGradient { .. }
-            | PipelineOp::EffectMandelbrot { .. }
     )
 }
 
@@ -10445,10 +10439,10 @@ fn gpu_dimensions_require_cpu(
         return true;
     }
     let source_mode = mode_code(image);
-    if ops.iter().any(|op| {
-        matches!(op, PipelineOp::Eval { .. } | PipelineOp::PointOp { .. })
-            && extract_lut(op, source_mode).is_none()
-    }) {
+    if ops
+        .iter()
+        .any(|op| matches!(op, PipelineOp::Eval { .. }) && extract_lut(op, source_mode).is_none())
+    {
         return true;
     }
     let (mut cur_w, mut cur_h) = image.dimensions();
@@ -11100,7 +11094,6 @@ fn gpu_shader_work_items(
             let block_h = u64::from((*y_factor).max(1).min(source_h.max(1)));
             block_w.saturating_mul(block_h)
         }
-        PipelineOp::EffectMandelbrot { quality, .. } => u64::from(*quality),
         PipelineOp::PutData { mode, .. } => mode.channels() as u64,
         PipelineOp::Pad { .. } => 4,
         // Even a constant-work shader consumes one invocation per output
@@ -11272,21 +11265,6 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
         }
         PipelineOp::AlphaComposite { dest, src, .. } => *dest == (0, 0) && *src == (0, 0),
         PipelineOp::Autocontrast { cutoff, .. } => finite_f32(*cutoff),
-        PipelineOp::EffectMandelbrot {
-            w,
-            h,
-            x0,
-            y0,
-            x1,
-            y1,
-            quality,
-        } => {
-            *w > 0
-                && *h > 0
-                && *quality >= 1
-                && *quality <= MAX_GPU_MANDELBROT_ITERS
-                && [*x0, *y0, *x1, *y1].into_iter().all(finite_f32)
-        }
         _ => true,
     }
 }

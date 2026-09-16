@@ -1034,16 +1034,8 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
-    fn get_pixel_mut(&mut self, x: u32, y: u32) -> &mut P {
-        self.get_pixel_mut(x, y)
-    }
-
     fn put_pixel(&mut self, x: u32, y: u32, pixel: P) {
         *self.get_pixel_mut(x, y) = pixel;
-    }
-
-    fn blend_pixel(&mut self, x: u32, y: u32, p: P) {
-        self.get_pixel_mut(x, y).blend(&p);
     }
 }
 

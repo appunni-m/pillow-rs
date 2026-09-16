@@ -24,14 +24,7 @@ import yaml
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
-AUTHORITY_PATH = (
-    WORKSPACE_ROOT
-    / "deprecated"
-    / "migration-parity-v0"
-    / "manifest-history"
-    / "project_manifest_v0"
-    / "manifest.yaml"
-)
+AUTHORITY_PATH = WORKSPACE_ROOT / "scripts" / "data" / "migration-authority-v0.yaml"
 
 EXPECTED_AUTHORITY_VERSION = "0.2.0"
 EXPECTED_PILLOW_VERSION = "12.2.0"

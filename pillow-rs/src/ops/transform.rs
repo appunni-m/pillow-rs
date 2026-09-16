@@ -644,38 +644,6 @@ impl Image {
         }
     }
 
-    /// Applies an affine transform and returns a lazy result image.
-    ///
-    /// `matrix` must contain `[a, b, c, d, e, f]`, where
-    /// `x' = a*x + b*y + c` and `y' = d*x + e*y + f`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError::ValueError`] when `matrix` does not contain exactly
-    /// six coefficients.
-    ///
-    /// The host bindings use [`Image::transform_public`] so method, resampling,
-    /// and fill inputs are normalized together. Keep this direct wrapper for
-    /// Rust source compatibility and migrate callers to that public-input
-    /// entry point.
-    #[deprecated(note = "legacy affine transform wrapper; use transform_public instead")]
-    pub fn transform_affine(
-        &self,
-        size: (u32, u32),
-        matrix: &[f64],
-        fillcolor: (u8, u8, u8, u8),
-    ) -> Result<Image, PilError> {
-        let palette_fill = self.has_palette_mode().then_some(0);
-        self.transform_affine_with_palette_fill(
-            size,
-            matrix,
-            fillcolor,
-            palette_fill,
-            ResampleFilter::Nearest,
-            false,
-        )
-    }
-
     fn transform_affine_palette_index_with_filter(
         &self,
         size: (u32, u32),

@@ -37,15 +37,9 @@ use pyo3::types::PyTuple;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
-use std::ffi::CString;
 use std::path::PathBuf;
 
 mod putdata;
-
-// PyO3 0.29 removed the deprecated `PyObject` alias. Keep the binding's
-// existing host-facing signatures explicit while migrating conversions to
-// `IntoPyObjectExt`.
-type PyObject = Py<PyAny>;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
 pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
@@ -103,7 +97,7 @@ fn blur_radius_pair_from_python(
 /// Pillow uses this object to recognize expressions such as ``x + 1`` and
 /// ``x * 0.5`` without enumerating a byte lookup table.  It is an adapter
 /// object only; the resulting scale and offset are applied by the Rust core.
-#[pyclass(name = "ImagePointTransform")]
+#[pyclass(name = "ImagePointTransform", from_py_object)]
 #[derive(Clone, Copy)]
 pub struct PyPointTransform {
     scale: f64,
@@ -238,14 +232,14 @@ impl PyPointTransform {
 /// Thin host handle for the Rust-owned ImageSequence iterator state.
 #[pyclass(name = "Iterator", unsendable)]
 pub struct PyImageSequenceIterator {
-    image: PyObject,
+    image: Py<PyAny>,
     state: pillow_rs::ImageSequenceIterator,
 }
 
 #[pymethods]
 impl PyImageSequenceIterator {
     #[new]
-    fn new(im: PyObject, py: Python<'_>) -> PyResult<Self> {
+    fn new(im: Py<PyAny>, py: Python<'_>) -> PyResult<Self> {
         let bound = im.bind(py);
         if !bound.hasattr("seek")? {
             return Err(pyo3::exceptions::PyAttributeError::new_err(
@@ -267,7 +261,7 @@ impl PyImageSequenceIterator {
         slf
     }
 
-    fn __next__(&mut self, py: Python<'_>) -> PyResult<PyObject> {
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let frame = self.state.position();
         match self.image.bind(py).call_method1("seek", (frame,)) {
             Ok(_) => {
@@ -316,7 +310,7 @@ fn map_open_path_error(
         // Pillow keeps a bytes path as a bytes object in the public OSError
         // tuple. Preserve that host representation while Rust owns the actual
         // filesystem lookup.
-        let filename: PyObject = if let Ok(bytes) = original.cast::<PyBytes>() {
+        let filename: Py<PyAny> = if let Ok(bytes) = original.cast::<PyBytes>() {
             PyBytes::new(py, bytes.as_bytes()).into()
         } else {
             PyString::new(py, &path.to_string_lossy()).into()
@@ -683,7 +677,7 @@ fn ops_validate_deform_resample(value: Option<&Bound<'_, PyAny>>) -> PyResult<()
     pillow_rs::imageops_validate_deform_resample(value).map_err(map_error)
 }
 
-fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
+fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<Py<PyAny>> {
     use pillow_rs::StatValue;
 
     Python::attach(|py| {
@@ -1089,7 +1083,11 @@ impl PyImage {
     }
 
     #[pyo3(signature = (rawmode=None))]
-    fn getpalette_with_input(&self, rawmode: Option<String>, py: Python<'_>) -> PyResult<PyObject> {
+    fn getpalette_with_input(
+        &self,
+        rawmode: Option<String>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
         let palette = self
             .inner
             .getpalette_with_input(rawmode.as_deref())
@@ -1140,14 +1138,14 @@ impl PyImage {
         self.inner.getxmp()
     }
 
-    fn getim(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn getim(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         // The pure-Rust core owns the unsupported-handle decision. The binding
         // only creates a named capsule so the Python result keeps Pillow's
         // observable shape; its payload is deliberately not an Imaging pointer.
         let _ = self.inner.getim();
-        let name = CString::new("PIL Imaging")
-            .map_err(|_| pyo3::exceptions::PySystemError::new_err("invalid capsule name"))?;
-        Ok(PyCapsule::new(py, 0u8, Some(name))?.into_any().unbind())
+        Ok(PyCapsule::new_with_value(py, 0u8, c"PIL Imaging")?
+            .into_any()
+            .unbind())
     }
 
     #[pyo3(signature = (size, resample=None))]
@@ -1199,21 +1197,21 @@ impl PyImage {
     }
 
     /// Return extrema formatted as PIL expects.
-    fn getextrema_formatted(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn getextrema_formatted(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let formatted = py
             .detach(|| self.inner.getextrema_formatted())
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             pillow_rs::FormattedExtrema::Empty => Ok(py.None()),
             pillow_rs::FormattedExtrema::EmptyMultiple(bands) => {
-                let values: Vec<PyObject> = (0..bands).map(|_| py.None()).collect();
+                let values: Vec<Py<PyAny>> = (0..bands).map(|_| py.None()).collect();
                 Ok(PyTuple::new(py, values)?.into_py_any(py)?)
             }
             pillow_rs::FormattedExtrema::Single((minimum, maximum)) => {
                 Ok((minimum, maximum).into_py_any(py)?)
             }
             pillow_rs::FormattedExtrema::Multiple(values) => {
-                let tuples: Vec<PyObject> = values
+                let tuples: Vec<Py<PyAny>> = values
                     .into_iter()
                     .map(|(minimum, maximum)| (minimum, maximum).into_py_any(py))
                     .collect::<PyResult<_>>()?;
@@ -1228,10 +1226,10 @@ impl PyImage {
         })
     }
     /// Band names for the active image, delegated to the Rust core.
-    fn getbands(&self) -> PyResult<PyObject> {
+    fn getbands(&self) -> PyResult<Py<PyAny>> {
         let bands = self.inner.getbands().map_err(map_error)?;
         Python::attach(|py| {
-            let objs: Vec<PyObject> = bands
+            let objs: Vec<Py<PyAny>> = bands
                 .iter()
                 .map(|band| band.into_py_any(py))
                 .collect::<PyResult<_>>()?;
@@ -1244,7 +1242,7 @@ impl PyImage {
         &self,
         mask: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         let mask = imageops_mask_from_python(mask)?;
         let result = py
             .detach(|| self.inner.stat_formatted_with_mask(mask))
@@ -1454,7 +1452,7 @@ impl PyImage {
         &mut self,
         maxcolors: Option<u32>,
         py: Python<'_>,
-    ) -> PyResult<Option<PyObject>> {
+    ) -> PyResult<Option<Py<PyAny>>> {
         let maxcolors = maxcolors.unwrap_or(256);
         let formatted = py
             .detach(|| self.inner.getcolors_formatted(maxcolors))
@@ -1481,7 +1479,7 @@ impl PyImage {
     }
 
     /// Return getdata formatted as PIL expects.
-    fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<PyObject> {
+    fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let formatted = py
             .detach(|| self.inner.getdata_formatted(band))
             .map_err(map_error)?;
@@ -1710,7 +1708,7 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn getpixel_formatted(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<PyObject> {
+    fn getpixel_formatted(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<Py<PyAny>> {
         let value = py
             .detach(|| self.inner.getpixel_formatted(xy.0, xy.1))
             .map_err(map_error)?;
@@ -1769,7 +1767,7 @@ impl PyImage {
         self.inner.format_name()
     }
 
-    fn compatibility_info(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn compatibility_info(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         image_info_to_python(py, self.inner.compatibility_info())
     }
 
@@ -1777,7 +1775,7 @@ impl PyImage {
         &self,
         py: Python<'_>,
         target_mode: &str,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         image_info_to_python(py, self.inner.converted_compatibility_info(target_mode))
     }
 
@@ -1950,7 +1948,7 @@ fn set_pipeline_telemetry(enabled: bool) -> bool {
 fn pipeline_operation_telemetry_to_py(
     py: Python<'_>,
     samples: Vec<pillow_rs::PipelineOperationTelemetry>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let values = PyList::empty(py);
     for sample in samples {
         let value = PyDict::new(py);
@@ -1966,7 +1964,7 @@ fn pipeline_operation_telemetry_to_py(
 }
 
 #[pyfunction]
-fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<PyObject>> {
+fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
     let operation_telemetry = pillow_rs::Backend::take_pipeline_operation_telemetry();
     let Some((
         requested_backend,
@@ -2044,7 +2042,7 @@ fn set_gpu_shader_coverage(enabled: bool) -> bool {
 /// process. This reports shader execution coverage; source line and branch
 /// coverage require a separate WGSL instrumentation pass.
 #[pyfunction]
-fn take_gpu_shader_coverage(py: Python<'_>) -> PyResult<PyObject> {
+fn take_gpu_shader_coverage(py: Python<'_>) -> PyResult<Py<PyAny>> {
     let result = PyList::empty(py);
     for record in pillow_rs::Backend::take_gpu_shader_coverage() {
         let item = PyDict::new(py);
@@ -2120,7 +2118,7 @@ fn fromarray(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
 }
 
 #[pyfunction]
-fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     let input = values
         .extract::<Vec<i64>>()
         .map(pillow_rs::ImagingCoreBytesInput::Scalars)
@@ -2137,7 +2135,7 @@ fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<
 fn image_info_value_to_python(
     py: Python<'_>,
     value: pillow_rs::ImageInfoValue,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     match value {
         pillow_rs::ImageInfoValue::Integer(value) => Ok(value.into_py_any(py)?),
         pillow_rs::ImageInfoValue::Float(value) => Ok(value.into_py_any(py)?),
@@ -2159,7 +2157,7 @@ fn image_info_value_to_python(
 fn image_info_to_python(
     py: Python<'_>,
     fields: Vec<(String, pillow_rs::ImageInfoValue)>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let result = PyDict::new(py);
     for (key, value) in fields {
         result.set_item(key, image_info_value_to_python(py, value)?)?;
@@ -2172,7 +2170,7 @@ fn exif_compat_fields(
     py: Python<'_>,
     raw: Option<Vec<u8>>,
     loaded_exif: bool,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let fields = pillow_rs::prepare_exif_compat(raw.as_deref(), loaded_exif);
     let result = PyDict::new(py);
     result.set_item("_loaded_exif", fields.loaded_exif)?;
@@ -2313,7 +2311,7 @@ pub struct PyFont {
 fn font_bbox_value_to_python(
     py: Python<'_>,
     value: pillow_rs::ImageFontBBoxValue,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     match value {
         pillow_rs::ImageFontBBoxValue::Integer(value) => value.into_py_any(py),
         pillow_rs::ImageFontBBoxValue::Float(value) => value.into_py_any(py),
@@ -2324,7 +2322,7 @@ fn font_bbox_value_to_python(
 fn imagefont_normalize_bbox(
     py: Python<'_>,
     bbox: (f64, f64, f64, f64),
-) -> PyResult<(PyObject, PyObject, PyObject, PyObject)> {
+) -> PyResult<(Py<PyAny>, Py<PyAny>, Py<PyAny>, Py<PyAny>)> {
     let values = pillow_rs::normalize_font_bbox(bbox);
     Ok((
         font_bbox_value_to_python(py, values[0])?,
@@ -2440,7 +2438,7 @@ fn pilfont_text_input_from_python(
 fn variation_axes_to_python(
     py: Python<'_>,
     axes: Vec<pillow_rs::ImageFontVariationAxis>,
-) -> PyResult<Vec<PyObject>> {
+) -> PyResult<Vec<Py<PyAny>>> {
     axes.into_iter()
         .map(|axis| {
             let dict = PyDict::new(py);
@@ -2761,7 +2759,7 @@ impl PyFont {
         pillow_rs::imagefont_has_variations(&self.inner)
     }
 
-    fn get_variation_axes(&self) -> PyResult<Vec<PyObject>> {
+    fn get_variation_axes(&self) -> PyResult<Vec<Py<PyAny>>> {
         Python::attach(|py| {
             pillow_rs::imagefont_get_variation_axes(&self.inner)
                 .map_err(map_error)
@@ -2777,7 +2775,7 @@ impl PyFont {
         pillow_rs::imagefont_native_getvarnames(&self.inner).map_err(map_error)
     }
 
-    fn getvaraxes(&self) -> PyResult<Vec<PyObject>> {
+    fn getvaraxes(&self) -> PyResult<Vec<Py<PyAny>>> {
         Python::attach(|py| {
             pillow_rs::imagefont_native_getvaraxes(&self.inner)
                 .map_err(map_error)
@@ -4247,7 +4245,7 @@ fn image_effect_mandelbrot(
 // --- ImageColor ---
 
 #[pyfunction]
-fn getrgb(color: &str) -> PyResult<PyObject> {
+fn getrgb(color: &str) -> PyResult<Py<PyAny>> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(map_error)?;
     Python::attach(|py| {
         if pillow_rs::color_has_explicit_alpha(color) {
@@ -4279,7 +4277,7 @@ fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
 }
 
 #[pyfunction]
-fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
+fn getcolor(color: &str, mode: &str) -> PyResult<Py<PyAny>> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(map_error)?;
     let result = pillow_rs::getcolor(r, g, b, a, mode).map_err(map_error)?;
     Python::attach(|py| match result {
@@ -4327,7 +4325,7 @@ fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> 
 
 /// Compute Pillow ImageStat values from a precomputed histogram.
 #[pyfunction]
-fn stat_from_histogram(data: Vec<f64>) -> PyResult<PyObject> {
+fn stat_from_histogram(data: Vec<f64>) -> PyResult<Py<PyAny>> {
     let result = pillow_rs::stat_from_histogram(&data);
     stat_result_to_python(&result)
 }
@@ -4378,7 +4376,7 @@ fn color3dlut_new(
 fn color3dlut_generate(
     size: (u32, u32, u32),
     channels: u32,
-    callback: PyObject,
+    callback: Py<PyAny>,
     py: Python,
 ) -> PyResult<Vec<f64>> {
     pillow_rs::color3dlut_generate_table(
@@ -4403,7 +4401,7 @@ fn color3dlut_transform(
     channels_in: u32,
     channels_out: Option<u32>,
     with_normals: bool,
-    callback: PyObject,
+    callback: Py<PyAny>,
     py: Python,
 ) -> PyResult<(Vec<f64>, u32)> {
     let input = pillow_rs::prepare_color3dlut(table, size, channels_in).map_err(map_error)?;

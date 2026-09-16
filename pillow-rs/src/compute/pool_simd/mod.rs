@@ -74,9 +74,7 @@ fn point_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
                     .collect(),
             )
         }
-        PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } if lut.len() == bands * 256 => {
-            Some(lut.to_vec())
-        }
+        PipelineOp::Eval { lut } if lut.len() == bands * 256 => Some(lut.to_vec()),
         _ => None,
     }
 }

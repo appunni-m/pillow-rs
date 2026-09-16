@@ -2194,8 +2194,20 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "transform")]
     pub fn transform(&self, sz: Vec<u32>, d: Vec<f64>) -> Result<Image, JsValue> {
+        let [width, height] = sz.as_slice() else {
+            return Err(err(pillow_rs::PilError::TypeError(
+                "size must be a two-item sequence".to_owned(),
+            )));
+        };
         self.inner
-            .transform_affine((sz[0], sz[1]), &d, (0, 0, 0, 255))
+            .transform_public(
+                (*width, *height),
+                0,
+                Some(pillow_rs::TransformData::Affine(d)),
+                0,
+                1,
+                None,
+            )
             .map(|i| Image { inner: i })
             .map_err(err)
     }

@@ -1054,7 +1054,11 @@ def wasm_lane_record(
         summary = None
     actual_scope = result.get("scope") if isinstance(result, dict) else None
     if not isinstance(actual_scope, dict):
-        actual_scope = expected_scope
+        # A build failure has no adapter artifact. Preserve the selected scope
+        # while explicitly reporting zero execution, so failure receipts validate.
+        actual_scope = scope_with_execution(
+            expected_scope, executed=0, pending=expected_scope.get("selected", 0)
+        )
     artifact_passed = (
         isinstance(result, dict)
         and result.get("status") == "completed"

@@ -17,13 +17,11 @@ NPM_CONFIG_CACHE ?= $(CURDIR)/target/npm-cache
 # ownership or permissions; callers may override it when desired.
 UV_CACHE_DIR ?= $(CURDIR)/target/uv-cache
 export UV_CACHE_DIR
-LOCAL_RELEASE_DIR ?= dist/release-local
 WASM_PACK    := wasm-pack
 WASM_PACK_VERSION ?= 0.15.0
 CARGO_DENY_VERSION ?= 0.20.2
 CARGO_AUDIT_VERSION ?= 0.22.2
 CI_REQUIREMENTS ?= requirements-ci.txt
-RELEASE_CRATES_READY ?= 0
 MANIFEST     := pillow-rs/tests/fixtures/manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
@@ -188,7 +186,6 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-js-gap-report$(NC)  Group actual Node/browser WASM failures; pending means summary.not_run\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify the fixed manifest and indexed inputs\n"
 	@printf "  $(CYAN)make migration-parity-crash-quarantine-check$(NC) Verify isolated crash inputs without executing them\n"
-	@printf "  $(CYAN)make migration-parity-case-review$(NC) Verify duplicate selection and nuanced cases\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Compare Pillow vs CPU, SIMD, and GPU\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark-low-load$(NC) Run the fixed cohort with macOS utility/background scheduling\n"
@@ -257,7 +254,6 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-manifest$(NC) Build the fixed project-wide manifest from frozen authority\n"
 	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build deterministic parity/coverage/benchmark inputs\n"
 	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for manifest and input builds\n"
-	@printf "  $(CYAN)make migration-parity-case-review$(NC) Review duplicate and nuanced case selection\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Verify strict aggregate/result interfaces\n"
 	@printf "  $(CYAN)make migration-parity-receipt-test$(NC) Verify terminal-complete receipt state transitions\n"
@@ -305,10 +301,7 @@ help-all: ## Show all specialized commands
 	@printf "  Publish through GitHub by pushing an annotated v<version> tag after main CI passes.\n"
 	@printf "  $(CYAN)make release-crate-package$(NC) Compile and inspect the core crate archive\n"
 	@printf "  $(CYAN)make release-check$(NC)  Build/package dry-run for every release target\n"
-	@printf "  $(CYAN)make release-local-check$(NC) Verify the local first-release bundle\n"
 	@printf "  $(CYAN)make python-compat-check$(NC) Verify abi3 facade imports on PYTHON_COMPAT\n"
-	@printf "\n$(BOLD)Stubs$(NC)\n"
-	@printf "  $(CYAN)make stubs$(NC)          Check for missing Rust stubs vs manifest\n"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 .PHONY: setup setup-ci setup-venv
@@ -340,7 +333,7 @@ build-parity: MATURIN_DEVELOP_FLAGS=--skip-install
 build-parity: build ## Build the checkout facade without installing the PIL namespace
 
 build-dev: ## Build Python package (debug, faster compile)
-	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --locked
+	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --locked $(MATURIN_DEVELOP_FLAGS)
 
 build-wasm: build-wasm-core ## Build the default core WASM package (dev)
 
@@ -450,10 +443,8 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
 .PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
-.PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
-.PHONY: pillow-rs-fixtures-clean
+.PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
 .PHONY: pillow-rs-ci pillow-rs-clean
@@ -464,10 +455,6 @@ pillow-rs-help: ## Show pillow-rs crate targets
 pillow-rs-test: ## Run the public parity campaign for pillow-rs
 	$(MAKE) migration-parity-test-all-backends
 
-image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test:
-	@printf "This legacy image-backend parity target is archived under deprecated/migration-parity-v0.\n"
-	@printf "Use 'make migration-parity-test' with the active manifest-driven inputs.\n"
-	@exit 2
 
 migration-parity-test: ## Run canonical input-only parity against live Pillow
 	set +e; \
@@ -709,13 +696,6 @@ migration-parity-docs: migration-parity-aggregate ## Generate specification and 
 font-tests font-tests-release imagingft-tests imagingft-tests-release:
 	$(MAKE) migration-parity-test
 
-pillow-rs-imagingft pillow-rs-imagingft-release:
-	@printf "The legacy ImagingFT matrix is archived under deprecated/migration-parity-v0.\n"
-	@printf "Use 'make migration-parity-test' with the active manifest-driven inputs.\n"
-	@exit 2
-
-pillow-rs-fixtures-clean: ## Remove imagingft fixture outputs
-	$(MAKE) -C $(CORE_SRC) fixtures-clean
 
 pillow-rs-public-api-boundary: ## Enforce pillow-rs explicit root public API boundary
 	$(MAKE) -C $(CORE_SRC) public-api-boundary
@@ -880,12 +860,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check migration-parity-receipt-test image-backend-fixtures putdata-fixtures
-.PHONY: imagefont-getmask2-fixtures
-.PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
-.PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
-.PHONY: fixture-coverage-check
-.PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check migration-parity-receipt-test
 
 fixtures: migration-parity-fixtures ## Build the active manifest and input specifications
 
@@ -903,8 +878,6 @@ migration-parity-inputs: ## Build deterministic parity, coverage, and benchmark 
 
 migration-parity-fixtures: migration-parity-manifest migration-parity-inputs ## Compatibility alias during migration
 
-migration-parity-case-review: migration-parity-inputs ## Review duplicate and nuanced active case selection
-	$(PYTHON) scripts/review_migration_parity_cases.py
 
 migration-parity-fixtures-check: migration-parity-inventory-check ## Verify authority and manifest regeneration
 	@set -e; \
@@ -948,13 +921,6 @@ migration-parity-changed-line-coverage: ## Attribute changed Rust lines to sourc
 		--base $(MIGRATION_COVERAGE_DIFF_BASE) \
 		--output $(MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT)
 
-image-backend-fixtures putdata-fixtures imagefont-getmask2-fixtures \
-	compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures \
-	palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut \
-	fixture-coverage-check fixtures-suite0 fixtures-suite1 fixtures-clean:
-	@printf "This legacy fixture target is archived under deprecated/migration-parity-v0.\n"
-	@printf "Use 'make migration-parity-fixtures' and the live migration lanes.\n"
-	@exit 2
 
 # ── Lint ──────────────────────────────────────────────────────────────────────
 .PHONY: fmt fmt-fix clippy clippy-core lint
@@ -969,11 +935,11 @@ fmt-fix: ## Fix Rust formatting
 
 clippy: ## Run clippy on all targets
 	python3 scripts/check_public_api_boundary.py
-	$(CARGO) clippy --all-targets --all-features -- -A deprecated
+	$(CARGO) clippy --all-targets --all-features -- -D deprecated
 
 clippy-core: ## Run clippy on core only
 	python3 scripts/check_public_api_boundary.py
-	$(CARGO) clippy -p $(CORE_SRC) -- -A deprecated
+	$(CARGO) clippy -p $(CORE_SRC) -- -D deprecated
 
 lint: fmt clippy ## Run fmt + clippy
 
@@ -991,15 +957,6 @@ coverage-wasm:
 	@printf "Add a reviewed target profile and coverage plan before enabling this lane.\n"
 	@exit 2
 
-coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust \
-	coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust \
-	coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust \
-	coverage-transposed-font-rust coverage-font-rust coverage-font-rust-with-freetype \
-	coverage-imagingft-rust font-tests-coverage font-tests-coverage-with-freetype \
-	imagingft-tests-coverage:
-	@printf "This legacy coverage target is archived under deprecated/migration-parity-v0.\n"
-	@printf "Use 'make migration-parity-coverage' with indexed coverage plans.\n"
-	@exit 2
 
 # ── Benchmark ─────────────────────────────────────────────────────────────────
 .PHONY: bench bench-incr bench-priority
@@ -1048,28 +1005,16 @@ clean: ## Remove build artifacts and caches
 clean-all: clean ## clean + cargo clean
 	$(CARGO) clean
 
-# ── Stubs ─────────────────────────────────────────────────────────────────────
-.PHONY: stubs
-
-stubs:
-	@printf "The old stub generator is archived under deprecated/migration-parity-v0.\n"
-	@printf "Use the fixed manifest inventory and implementation checks instead.\n"
-	@exit 2
 
 # ── Release ───────────────────────────────────────────────────────────────────
-.PHONY: release-check release-local-check release-pypi release-npm release-crates
+.PHONY: release-check
 
 release-check: build-all ## Build and package every release artifact without publishing
 	$(CARGO) metadata --locked --no-deps --format-version 1 >/dev/null
-	@if test "$(RELEASE_CRATES_READY)" = "1"; then \
-		test -z "$$(git status --porcelain)" || { \
-			printf "release-check requires a clean worktree when crate dependencies are registry-ready.\n" >&2; \
-			exit 2; \
-		}; \
-		$(CARGO) package -p $(CORE_SRC) --locked; \
-	else \
-		printf "crate package dry-run deferred: publish image-slash-star and fontdone first, then set RELEASE_CRATES_READY=1.\n"; \
-	fi
+	@test -z "$$(git status --porcelain)" || { \
+		printf "release-check requires a clean worktree.\n" >&2; exit 2; \
+	}
+	$(CARGO) package -p $(CORE_SRC) --locked
 	# Development imports can leave bytecode caches inside the Python source
 	# tree; never include those generated files in a publishable wheel.
 	find $(PY_SRC)/python -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
@@ -1078,12 +1023,6 @@ release-check: build-all ## Build and package every release artifact without pub
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
 
-release-local-check: ## Verify the file-backed local first-release bundle
-	$(PYTHON) scripts/check_local_release_bundle.py --bundle-dir "$(LOCAL_RELEASE_DIR)"
-
-release-pypi release-npm release-crates: ## Publication uses only the tag-triggered GitHub OIDC workflow
-	@printf "Push an annotated v<version> tag on the CI-proven commit; local publication is disabled.\n" >&2
-	@exit 2
 
 .PHONY: release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
 RELEASE_WHEEL_DIR ?= dist/python-wheel
@@ -1120,8 +1059,8 @@ docs-js-test: ## Execute the README example and verify the already-built npm pac
 	cd $(JS_SRC) && npm run test:package
 
 .PHONY: release-lock-update
-release-lock-update: ## Refresh only the newly pinned release dependency packages
-	$(CARGO) update -p fontdone -p image-slash-star
+release-lock-update: ## Refresh workspace versions without changing reviewed dependencies
+	$(CARGO) update --workspace --offline
 
 .PHONY: release-status
 release-status: ## Read public GitHub CI/release conclusions and failure annotations

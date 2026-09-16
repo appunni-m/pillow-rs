@@ -64,8 +64,6 @@ INCLUDED_EXACT = {
 
 EXCLUDED_PREFIXES = (
     "tests/fixtures/",
-    # The deprecated internal Python alias is not a public entry point.
-    "pillow-rs-py/python/RSPIL/",
 )
 
 EXCLUDED_SUFFIXES = (

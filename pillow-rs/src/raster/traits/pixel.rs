@@ -27,31 +27,6 @@ pub trait Pixel: Copy + Clone {
         self.to_luma_alpha().0[1]
     }
 
-    /// Returns the channels of this pixel as a 4 tuple. If the pixel
-    /// has less than 4 channels the remainder is filled with the maximum value
-    #[deprecated(since = "0.24.0", note = "Use `channels()` or `channels_mut()`")]
-    fn channels4(
-        &self,
-    ) -> (
-        Self::Subpixel,
-        Self::Subpixel,
-        Self::Subpixel,
-        Self::Subpixel,
-    );
-
-    /// Construct a pixel from the 4 channels a, b, c and d.
-    /// If the pixel does not contain 4 channels the extra are ignored.
-    #[deprecated(
-        since = "0.24.0",
-        note = "Use the constructor of the pixel, for example `Rgba([r,g,b,a])` or `Pixel::from_slice`"
-    )]
-    fn from_channels(
-        a: Self::Subpixel,
-        b: Self::Subpixel,
-        c: Self::Subpixel,
-        d: Self::Subpixel,
-    ) -> Self;
-
     /// Returns a view into a slice.
     fn from_slice(slice: &[Self::Subpixel]) -> &Self;
 

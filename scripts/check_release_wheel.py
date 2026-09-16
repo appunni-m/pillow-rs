@@ -36,12 +36,14 @@ def main() -> None:
         subprocess.run([str(python), "-m", "pip", "install", "--no-deps", str(package)], check=True, cwd=root)
         subprocess.run([str(python), "-I", "-c", '''
 from importlib.metadata import version
+from importlib.util import find_spec
 from io import BytesIO
 from pathlib import Path
 import sys
 from PIL import Image, ImageOps
 import PIL
 import pillow_rs._core
+assert find_spec("RSPIL") is None, "retired Python namespace must not ship"
 assert Path(PIL.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 im = Image.new("RGB", (3, 2), (255, 12, 34))
 assert im.tobytes() == bytes([255, 12, 34]) * 6

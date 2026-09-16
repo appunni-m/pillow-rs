@@ -11,9 +11,30 @@ from unittest.mock import patch
 from docs_evidence import SCHEMA, cell, number, project_jpeg, project_pillow, validate
 from docs_site import anchors, prepare_output, read_config, rewrite_links
 from report_pipeline_roadmap_status import ROADMAP, build_report
+from report_pipeline_benchmark_coverage import DEFAULT_INPUT, report as pipeline_report
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_eager_and_point_workloads_remain_required_after_descriptor_removal(self) -> None:
+        baseline = pipeline_report(DEFAULT_INPUT)
+        self.assertEqual(baseline["operation_variants_total"], 85)
+        self.assertEqual(baseline["missing_operation_workloads"], [])
+        self.assertEqual(baseline["unexpected_benchmark_specs"], [])
+        document = json.loads(DEFAULT_INPUT.read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "benchmark.json"
+            for operation in ("quantize", "pointop", "lineargradient",
+                              "radialgradient", "effectmandelbrot"):
+                workload_id = f"pipeline-op.{operation}.benchmark-materialized"
+                modified = copy.deepcopy(document)
+                modified["workloads"] = [item for item in modified["workloads"]
+                                         if item["workload_id"] != workload_id]
+                path.write_text(json.dumps(modified))
+                result = pipeline_report(path)
+                self.assertEqual(result["operation_variants_total"], 85)
+                self.assertEqual(result["missing_operation_workloads"], [workload_id])
+                self.assertLess(result["operation_coverage_percent"], 100.0)
+
     def test_public_roadmap_preserves_the_complete_index_without_claiming_a_run(self) -> None:
         report = build_report(None)
         self.assertEqual(report["items_total"], 64)

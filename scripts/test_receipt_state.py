@@ -240,15 +240,23 @@ class BenchmarkIdentityTests(unittest.TestCase):
                 "run_command",
                 return_value=(1, "", "synthetic failure", False),
             ) as run_command:
-                all_backends_runner.run_js_lane(
+                lanes = all_backends_runner.run_js_lane(
                     output_dir=Path(directory),
                     timeout_seconds=1,
                     case_ids=[],
-                    scope={},
+                    scope={"selected": 7, "case_ids_sha256": "a" * 64},
                 )
 
         environment = run_command.call_args.kwargs["env"]
         self.assertEqual(environment["MIGRATION_JS_STREAM_OUTPUT"], "1")
+
+        self.assertEqual(len(lanes), 2)
+        for lane in lanes:
+            self.assertEqual(lane["status"], "failed")
+            self.assertEqual(lane["scope"]["selected"], 7)
+            self.assertEqual(lane["scope"]["executed"], 0)
+            self.assertEqual(lane["scope"]["pending"], 7)
+            self.assertEqual(lane["reason"], "synthetic failure")
 
     def test_sparse_parity_preflight_is_expanded_to_all_timed_profiles(self) -> None:
         cpu_identity = {

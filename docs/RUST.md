@@ -51,3 +51,23 @@ method contract and apply limits appropriate to your inputs.
 Run your corpus with the features and target you will ship. The published
 Python and WASM evidence does not establish every Rust feature/target
 combination. Report regressions with the smallest input and public call sequence.
+
+## Upgrading to 0.2.0
+
+The unreleased 0.2.0 candidate removes deprecated Rust interfaces, so it is a
+breaking upgrade from 0.1.x. The published version remains 0.1.3 until the
+candidate passes release gates and its immutable tag is published.
+
+| Removed interface | Maintained replacement |
+| --- | --- |
+| `Pixel::channels4` | `channels()` or `channels_mut()` |
+| `Pixel::from_channels` | Native pixel constructors or `Pixel::from_slice` |
+| `GenericImage::get_pixel_mut` | `get_pixel` then `put_pixel`; concrete `ImageBuffer::get_pixel_mut` remains available |
+| `GenericImage::blend_pixel` | Blend native pixels directly with `Pixel::blend` and write them back |
+| `Image::transform_affine` | `Image::transform_public` with method `0` and `TransformData::Affine` |
+| `PipelineOp::PointOp` | `PipelineOp::Eval` |
+| Deferred quantization and generator variants | `Image::quantize` and the public `linear_gradient`, `radial_gradient`, and `effect_mandelbrot` constructors |
+
+No selected Pillow endpoint or parity requirement was removed. Benchmark
+workload IDs remain stable; eager constructors and public point workflows
+are counted separately from the remaining deferred Rust variants.

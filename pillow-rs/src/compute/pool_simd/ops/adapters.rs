@@ -4572,10 +4572,6 @@ pub(crate) fn simd_supports_for_image(
                 && img.height() != 0
                 && (img.width() as usize).saturating_mul(img.height() as usize) != 0
         }
-        PipelineOp::LinearGradient { mode } => matches!(
-            mode,
-            ColorMode::Mode1 | ColorMode::L | ColorMode::P | ColorMode::I | ColorMode::F
-        ),
         PipelineOp::EffectSpread { distance } => {
             let _ = distance;
             native_copy_layout(img, mode).is_some_and(|channels| {
@@ -4824,9 +4820,6 @@ pub(crate) fn simd_supports_for_image(
                     affine_chops
                 }
         }
-        // Operations not listed above remain explicitly unsupported until their
-        // data plane is vectorized or classified as native-copy.
-        _ => false,
     }
 }
 
@@ -4935,7 +4928,6 @@ pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
             | PipelineOp::BlendModule { .. }
             | PipelineOp::Eval { .. }
             | PipelineOp::PutData { .. }
-            | PipelineOp::PointOp { .. }
             | PipelineOp::PutPixel { .. }
             | PipelineOp::DrawLine { .. }
             | PipelineOp::DrawRectangle { .. }
@@ -5508,15 +5500,6 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
             next.width = shape.width.checked_add(twice)?;
             next.height = shape.height.checked_add(twice)?;
         }
-        PipelineOp::LinearGradient { mode } => {
-            next.width = 256;
-            next.height = 256;
-            next.layout = match mode {
-                ColorMode::Mode1 | ColorMode::L | ColorMode::P => SimdLayout::Luma8,
-                ColorMode::I | ColorMode::F => SimdLayout::Rgba8,
-                _ => SimdLayout::Unsupported,
-            };
-        }
         PipelineOp::Constant { .. } => next.layout = SimdLayout::Luma8,
         PipelineOp::Grayscale => next.layout = SimdLayout::Luma8,
         PipelineOp::Colorize { .. } => next.layout = SimdLayout::Rgb8,
@@ -5687,7 +5670,6 @@ fn operation_target_mode(op: &PipelineOp) -> Option<&'static str> {
                 None
             }
         },
-        PipelineOp::LinearGradient { mode } => Some(color_mode_name(mode)),
         PipelineOp::Grayscale | PipelineOp::EffectNoise { .. } => Some("L"),
         PipelineOp::Colorize { .. } => Some("RGB"),
         PipelineOp::Constant { .. } => Some("L"),
@@ -5903,7 +5885,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 && shape.layout == SimdLayout::Luma8
                 && matches!(mode, None | Some("L" | "P"))
         }
-        PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => {
+        PipelineOp::Eval { lut } => {
             shape_native_point_channels(shape, mode).is_some_and(|channels| {
                 lut.len() == 256 * channels
                     && shape
@@ -6104,10 +6086,6 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 && shape.height != 0
                 && (shape.width as usize).saturating_mul(shape.height as usize) != 0
         }
-        PipelineOp::LinearGradient { mode } => matches!(
-            mode,
-            ColorMode::Mode1 | ColorMode::L | ColorMode::P | ColorMode::I | ColorMode::F
-        ),
         PipelineOp::EffectSpread { distance } => {
             let _ = distance;
             shape_native_identity_copy_channels(shape, mode).is_some_and(|channels| {
@@ -6349,7 +6327,6 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                     affine_chops
                 }
         }
-        _ => false,
     }
 }
 
@@ -11626,19 +11603,6 @@ pub(crate) fn simd_linear_gradient_generate(mode: &str) -> Result<DynamicImage, 
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::image_utils::raw_bytes_to_image(256, 256, output, channels)
-}
-
-/// Execute the retained deferred `LinearGradient` descriptor through the same
-/// native generator used by the eager public constructor.
-pub fn simd_linear_gradient(
-    _img: &DynamicImage,
-    op: &PipelineOp,
-    _mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let PipelineOp::LinearGradient { mode } = op else {
-        return Err(PilError::ValueError("expected LinearGradient op".into()));
-    };
-    simd_linear_gradient_generate(color_mode_name(mode))
 }
 
 /// Generate Pillow's deterministic effect-noise stream with scalar RNG and
