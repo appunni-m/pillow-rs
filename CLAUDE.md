@@ -1,371 +1,57 @@
-# pillow-rs Agent Instructions
-
-This file is the default briefing for agents working in this repository.
-Keep it short, contextual, and enforceable. Put long debugging playbooks in
-skills or project docs, then link to them here.
-
-`AGENTS.md` and `AGENT.md` are symlinks to this file. Maintain this file only.
-
-## First Principles
-
-- Do the work end to end: explore, implement, verify, and report.
-- Prefer existing repo patterns over new abstractions.
-- Do not hand the task back to the user when the next step is actionable.
-- Never hide failures by weakening tests, thresholds, fixtures, or expected
-  outputs.
-- Keep main clean unless you are intentionally integrating a reviewed change.
-- Runtime code must be pure Rust unless a crate is explicitly a binding crate.
-
-## Skills To Load
-
-Use skills instead of repeating long procedure in this file.
-
-- `rust-development`: any Rust implementation, refactor, API design, tests,
-  borrow/lifetime work, or performance-sensitive Rust code.
-- `coding-guidelines`: Rust naming, formatting, clippy, or code review style.
-- `systematic-debugging`: stuck bugs, C-vs-Rust first divergence tracing,
-  porting algorithms, root cause analysis, and pipeline instrumentation.
-- `.claude/skills/freetype-parity`: any external `fontdone` parity, fixture,
-  harness, native TrueType, autohinter, rasterizer, metrics, bbox/cbox, or
-  subagent-split task.
-- `.claude/skills/fix-pil-parity`: Pillow/PIL facade fixture parity outside the
-  FreeType-specific harness.
-- `.claude/skills/compute-backend`: GPU/CPU backend, shader, or compute path
-  work.
-- `unsafe-check`, `unsafe-checker`, or `unsafe-review`: unsafe Rust, raw
-  pointers, FFI audits, repr/layout, or soundness questions.
-
-If a named skill is unavailable in the current agent environment, read the
-repo-local skill file directly when present and continue.
-
-## Repository Shape
-
-Workspace crates:
-
-- `pillow-rs/`: pure Rust image logic. No binding dependencies.
-- `pillow-rs-py/`: PyO3 wrapper. Keep it thin.
-- `pillow-rs-js/`: wasm-bindgen wrapper. Keep it thin.
-- `build/fontdone-src/`: pinned GitHub checkout of the standalone pure Rust
-  FreeType-compatible implementation and parity harness. The Cargo package/
-  crate name is `fontdone`; the root Makefile owns the checkout at the pinned
-  `FONTDONE_REF`.
-
-Core crates never touch Python objects, JS objects, file paths, or network.
-Core takes Rust primitives and returns Rust primitives. I/O and conversion live
-in binding crates.
-
-The maintained ownership map and generated source tree live in
-`docs/REPO_MAP.md`. When important files move, are added, or are removed, update
-that document with `make repo-map-update` and verify it with
-`make repo-map-check`.
-
-## Non-Negotiable Rules
-
-- No runtime FFI shortcuts in core or the pinned `fontdone` checkout: no `freetype-sys`,
-  `bindgen`, `cc`, `extern "C"`, `dlopen`, or native FreeType calls.
-- C/Pillow/FreeType references are read-only oracles for fixture generation,
-  diagnosis, and trace comparison.
-- Never edit fixture output/input JSON, oracle data, expected hashes, or
-  thresholds to make tests pass.
-- Never commit temporary debug prints. Permanent traces must use guarded
-  `log::trace!` patterns.
-- Never work on legacy `pillow-rs-font`; keep FreeType effort focused on the
-  pinned GitHub `fontdone` repository through the root Makefile checkout.
-- Do not use destructive git commands like `git reset --hard` or broad
-  checkouts unless the user explicitly asks.
-- Do not revert user changes. Work with them or ask only if they make progress
-  impossible.
-- All FFI layers must be thin wrappers. `fontdone-ffi-c` and `fontdone-ffi-wasm`
-  may own raw-pointer validation, handle lifetime, `repr(C)` record copying,
-  and C-ABI boilerplate — they must not contain font parsing, glyph rendering,
-  math algorithms, fixture interpretation, native FreeType calls, or any
-  parity-specific behavior. The core crate `fontdone` owns all logic and must
-  be 100% safe Rust (`#![deny(unsafe_code)]`).
-
-## Binding Rules
-
-`pillow-rs-py/python/pillow_rs/` must stay thin:
-
-- No algorithmic loops or list comprehensions.
-- No math-heavy logic.
-- No filesystem/subprocess/tempfile logic.
-- `if`/`elif`/`else` only for type checks, `None` defaults, or mode dispatch.
-- Bindings delegate to Rust core via `_core.xxx()` or `_rust_image.xxx()`.
-
-FreeType FFI/ABI crates must stay thin:
-
-- `fontdone` is the pure-Rust implementation and owns behavior.
-- `fontdone-ffi-c` exports only the intentionally implemented C ABI symbols.
-  It may own `repr(C)` records, handles, pointer validation, allocation
-  lifetime, and field copying needed to expose the ABI; it must not parse font
-  formats, implement glyph logic, interpret fixture JSON, call native FreeType,
-  or contain parity-specific behavior.
-- `fontdone-ffi-wasm` exports only the intentionally implemented WASM handle
-  ABI. It may own linear-memory allocation helpers, handle validation, and ABI
-  record copying; it must not contain font parsing or glyph logic.
-- Test-only ABI inspection helpers must be feature-gated, must not be
-  `no_mangle`, and must not appear in public C headers or exported symbol
-  checks.
-- Keep `scripts/check_public_api_inputs.py` as the thin-wrapper export gate:
-  C ABI exports must be public FreeType symbols only; WASM exports must match
-  the explicit WASM export allow-list.
-
-## Drawing Rule
-
-Draw directly in the image's native pixel format. Never convert to RGBA just
-to draw.
-
-Expected dispatch families:
-
-```text
-Luma8 | LumaA8 | Rgb8 | Rgba8
-```
-
-## Logging
-
-Use `log` macros in library code. Do not use `println!` or `eprintln!` in core
-library code.
-
-- `error`: corrupt data or unrecoverable failures.
-- `warn`: recoverable fallbacks.
-- `info`: high-level operations.
-- `debug`: algorithm stages and backend choices.
-- `trace`: per-scan, per-point, per-pixel internals.
-
-Core crates never initialize the logger. Bindings do that.
-
-Permanent trace pattern:
-
-```rust
-#[cfg(debug_assertions)]
-if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-    log::trace!(target: "autohint::pipeline", "[TAG] field={}", value);
-}
-```
-
-## fontdone Goal
-
-The project goal is 100% pure-Rust parity with the version-matched C FreeType
-oracle across every public endpoint exposed by `fontdone`.
-
-Parity means:
-
-- Pixel or bitmap byte parity where a rendered mask exists.
-- Exact metric parity where metrics are returned.
-- Exact outline bbox/cbox parity where geometry is exposed.
-- Deterministic, reproducible fixture generation.
-- Every incomplete lane remains visible as a failing or explicitly named
-  incomplete baseline. Do not narrow the goal to the passing subset.
-
-For FreeType work, load `.claude/skills/freetype-parity` and
-`systematic-debugging` before changing code.
-
-Full parity work must fix the pure-Rust implementation first. Do not grow C or
-WASM FFI wrappers to compensate for Rust behavior differences; wrappers should
-only reflect already-correct core behavior through the ABI surface.
-
-## Harness And Fixtures
-
-- Fixture generators are part of the system. Add or update documented
-  generators under `build/fontdone-src/scripts/` or `build/fontdone-src/doc/`
-  only in a separately authorized fontdone task.
-- Do not create one-off scripts that future agents cannot reproduce.
-- Prefer exact comparisons: pixel bytes for masks, bytes/hashes for bitmap
-  output, exact 26.6 values for metrics and geometry.
-- When a lane is incomplete, make the failure count visible and classify it.
-
-## Parity Documentation
-
-Every discovered implementation nuance must be preserved for future agents.
-
-- When a fix depends on subtle C behavior, add a short code comment at the
-  implementation site with the C function/file area and the reason.
-- If a finding affects future debugging strategy, fixture generation, or
-  harness expectations, update the relevant project notes or skill docs.
-- Commit messages must include the first divergence, the C behavior, the Rust
-  behavior before the fix, and the exact lane count impact.
-- Do not leave knowledge only in chat, temporary traces, or one-off scripts.
-
-## Subagents
-
-Subagents are isolated workers for classified failure buckets only.
-
-- They must use separate worktrees and branches.
-- They must never edit `/home/appunni/work/pil-wasm` directly.
-- They must receive the exact worktree path, branch, baseline counts, Makefile
-  lane target, and constraints.
-- They must not push main.
-- They must commit only verified improvements and report changed files,
-  before/after counts, verification commands, and remaining bucket.
-- They must document any newly discovered implementation nuance in code at the
-  relevant site, and call it out in their final report. If the nuance is broad
-  enough to guide future workers, they must update the appropriate project
-  note or skill doc instead of leaving it only in the report.
-- The orchestrating agent reviews and merges into main, then runs the relevant
-  lane, full harness, no-runtime-FFI, fmt, and clippy checks.
-- Archive or remove completed worktrees. Do not report archived trees as
-  active subagents.
-
-Detailed subagent protocol lives in `.claude/skills/freetype-parity`.
-
-## Build And Test
-
-All normal workflows must go through `make`.
-
-- Run `make help` first when you do not know the target name.
-- Do not paste raw `cargo`, `python`, `node`, `wasm-pack`, or shell script
-  commands for routine build, test, lint, fixture, benchmark, or CI work.
-- If a repeated workflow has no target, add or extend a Makefile target in the
-  same change and document it here. A manual command that is not documented is
-  not a maintained workflow.
-- One-off diagnostic commands are allowed only for investigation. If they become
-  useful twice, promote them to a Makefile target.
-
-Common root targets:
-
-```bash
-make help
-make setup
-make setup-venv
-make build
-make build-dev
-make build-wasm-release
-make test
-make test-wasm
-make test-all
-make migration-parity-test
-make migration-parity-test-all-backends
-make fixtures
-make migration-parity-fixtures-check
-make fmt
-make fmt-fix
-make clippy
-make lint
-make repo-map-check
-make repo-map-update
-make workflows-check
-make ci
-make verify
-```
-
-Public documentation uses `make docs-test docs-lint docs-build`. Run
-`make docs-release-check` to verify the published GitHub and registry identity,
-and `make docs-registry-examples` for installed-package quickstarts. After
-publication, `make docs-release-refresh` updates marked release references.
-Keep user installation, usage, and benchmark results separate from contributor
-build/test instructions; see `docs/DOCUMENTATION_CHECKLIST.md`.
-
-Release preparation also uses `make release-tools-test`,
-`make release-python-wheel release-wheel-test`,
-`make release-python-sdist release-sdist-test`, `make release-npm-pack`, and
-`make release-crate-package` (after the pinned dependencies are published).
-Use `make release-lock-update` after changing workspace release versions; it
-preserves the reviewed dependency set in Cargo and npm. Run
-`make release-version-check` with Python 3.12 to require the same declared version
-in manifests, locks, the Python runtime, and documentation.
-`make release-platform-check RELEASE_PLATFORM_TARGET=<triple>` checks
-the Python binding for an installed foreign Rust target; actual wheel installs
-still run on the target host. Publication itself is only through the tag-triggered GitHub OIDC
-workflow. Read actual job conclusions with
-`make release-status RELEASE_STATUS_ARGS='--repo <owner/repo> --commit <full-sha>'`;
-use `--run-url <GitHub Actions URL>` if the public API quota is exhausted.
-
-Rust parity coverage also exports LCOV and a `.context.json` sidecar binding
-each report to the measured source hashes, instrumented binary, revision,
-selected inputs, and execution status. The collector rejects source/input
-changes during collection. Preserve separate reports for incremental batches
-with `MIGRATION_RUST_COVERAGE_LLVM_REPORT` and
-`MIGRATION_RUST_COVERAGE_LCOV_REPORT`; do not attach receipts to old reports.
-Use `make migration-parity-changed-line-coverage
-MIGRATION_COVERAGE_DIFF_BASE=<base>` to report measured changed Rust lines.
-Lines without LCOV records and WGSL shader lines remain explicitly unmeasured.
-Verify collector guards with `make migration-parity-coverage-receipt-test`.
-Combined coverage retains each backend's selected IDs and execution results.
-Its plan denominator is unique plans; test totals count executions across all
-requested backends. Any failed or incomplete backend makes the collector fail.
-The source receipt also binds actual referenced assets, bitmap-font companion
-files, and selected native input JSON before execution. Native-generated
-temporary outputs are excluded from that immutable input snapshot.
-
-`make setup-venv PYTHON=/path/to/python3.12` creates this checkout's isolated
-Python environment for native builds and public parity. It does not install
-the JS toolchain. Use it for worktrees instead of sharing another checkout's
-mutable extension installation.
-
-`make migration-parity-profile MIGRATION_PROFILE_ARGS='--python-profile'`
-adds a Python call-cost profile to the diagnostic artifacts. The retained
-`.input.json` is the exact workflow supplied before native profilers attach.
-These diagnostic timings include profiler overhead and must never serve as
-benchmark acceptance samples.
-
-`make migration-parity-fixtures-check` regenerates the maintained manifest and
-inputs in a temporary directory and requires exact equality. Historical runners
-and generated outputs have been removed; the frozen inventory authority remains
-at `scripts/data/migration-authority-v0.yaml` with its original SHA-256.
-
-fontdone / FreeType parity targets:
-
-```bash
-make fontdone-help
-make fontdone-ci
-make fontdone-test
-make fontdone-parity
-make fontdone-ffi
-make fontdone-ffi-compat
-make fontdone-doc
-make fontdone-doc-test
-make fontdone-lint
-make fontdone-bench
-make fontdone-bench-quick
-make fontdone-fixtures
-```
-
-`make fontdone-ffi` is the no-runtime-native-FFI guard for `fontdone` core.
-`make fontdone-ffi-compat` is the public API/ABI compatibility gate; it runs
-the generated FreeType C surface audit and verifies manifest/input coverage
-plus thin C/WASM ABI exports. These gates are not parity substitutes; they keep
-the harness and wrapper boundaries honest while parity failures remain visible.
-
-For narrow FreeType lanes, prefer the crate-local Makefile targets:
-
-```bash
-make fontdone-source
-make -C build/fontdone-src test-harness
-make -C build/fontdone-src test-generator
-make -C build/fontdone-src test-render-mode
-make -C build/fontdone-src test-fixed
-make -C build/fontdone-src test-interface
-make -C build/fontdone-src test-ffi
-make -C build/fontdone-src test-ffi-compat
-make -C build/fontdone-src test-perf
-```
-
-Run the narrow failing Makefile target first, then the broader harness target.
-If a full workspace clippy failure is unrelated, report it clearly and keep the
-touched package clean.
-
-## Manifest And Coverage
-
-All new public PIL-style operations start from `manifest.yaml`.
-
-1. Add the manifest entry.
-2. Regenerate the maintained input specifications with `make migration-parity-inputs`.
-3. Implement in core.
-4. Add binding delegation.
-5. Add parity fixture and coverage map entry.
-6. Verify with the fixture parity tests and coverage report.
-
-Coverage is trust-based: a function is trusted only when at least one PIL
-parity test passes. Signature-only tests do not count.
-
-## Reporting
-
-Final reports should include:
-
-- Commit or working tree status.
-- Files changed and why.
-- Test commands and results.
-- Current parity counts when working on `fontdone`.
-- Remaining risks or failures, classified by bucket.
-
-Keep status reports factual. If no subagents are active, say so directly.
+# pillow-rs agent guide
+
+`AGENTS.md` and `AGENT.md` link to this file. Edit `CLAUDE.md` only.
+
+## Scope and ownership
+
+- `pillow-rs/` owns image algorithms and backend execution in Rust. Do not use
+  native Pillow, FreeType, or codec libraries as runtime substitutes.
+- `pillow-rs-py/` and `pillow-rs-js/` own host conversion, I/O, validation, and
+  delegation. Keep image algorithms in core. The public Python namespace is
+  `PIL`; `pillow_rs` contains internal binding modules.
+- Draw in the image's native pixel format. Mode conversion must be explicit.
+- fontdone and image-slash-star are separate repositories. Follow their own
+  instructions when a task includes them. `build/fontdone-src/` may contain
+  active standalone work; preserve it and do not reset it to `FONTDONE_REF`.
+  Root `fontdone-*` targets require the configured pin; use the standalone
+  checkout's Makefile for work on its current revision.
+- Preserve unrelated changes and existing safety/lint checks. Keep library
+  diagnostics in `log` macros; do not commit temporary prints or traces.
+
+## Behavior and evidence
+
+- Fix implementation failures without weakening assertions, thresholds, or the
+  selected contract. Do not special-case fixture identities in runtime code.
+- Update generator-owned inputs through their maintained generators when
+  behavior changes. Keep active inputs free of expected outputs and run status.
+  Start from [the public manifest](pillow-rs/tests/fixtures/manifest.yaml).
+- Add cases for changed behavior and collect changed-line coverage for runtime
+  fixes. Report parity, measured coverage, fallback, and unmeasured paths
+  separately. Coverage receipts must match the measured source and inputs.
+- For Pillow comparisons, use `make build-parity` and isolated processes or
+  environments. `make build` installs the replacement `PIL` namespace and can
+  overwrite the oracle in that environment.
+- Record subtle reference behavior beside the implementation. Keep user guides
+  separate from contributor procedures, and retain README acknowledgements.
+
+## Verification and references
+
+Use existing Makefile targets; `make help` and `make help-all` list them.
+Direct commands are fine for focused diagnostics or a task without a suitable
+target. Add a maintained target when introducing a reusable workflow.
+
+Run checks relevant to the change. Documentation edits use `make docs-lint`;
+site changes also use `make docs-test docs-build`. Rust changes use the focused
+tests and `make fmt clippy`; behavior changes also need the affected parity
+lanes. Run broader campaigns when the change affects their scope. Report
+failures and checks that could not run; do not describe old results as fresh.
+
+- [Contributing](CONTRIBUTING.md): setup and change workflow.
+- [Command reference](docs/COMMANDS.md): targets, prerequisites, and side effects.
+- [Architecture](docs/ARCHITECTURE.md) and [repository map](docs/REPO_MAP.md):
+  ownership. Use `make repo-map-update repo-map-check` when files move, are
+  added, or are removed.
+- [Coverage](docs/COVERAGE.md) and [benchmarking](docs/BENCHMARKING.md):
+  evidence collection and interpretation.
+- [Releasing](RELEASING.md): version synchronization, package checks, and
+  tag-triggered publishing.
