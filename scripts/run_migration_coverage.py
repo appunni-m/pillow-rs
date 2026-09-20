@@ -522,6 +522,11 @@ def run(args: argparse.Namespace) -> int:
         exclude_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
         excluded_operations=coverage_not_applicable_operations(manifest),
     )
+    if args.parity_only:
+        plans = [
+            {**plan, "selectors": {**plan["selectors"], "command_ids": []}}
+            for plan in plans
+        ]
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
     operation_index = build_operation_index(manifest)
     args.coverage_report.resolve().parent.mkdir(parents=True, exist_ok=True)
@@ -559,7 +564,12 @@ def run(args: argparse.Namespace) -> int:
                     if command_id == "coverage-font-native":
                         from run_migration_font_native_cases import run_native_cases
 
-                        passed, _skipped, failed = run_native_cases()
+                        observations = run_native_cases()
+                        # This counts completed coverage probes, not parity
+                        # assertions; raised API errors are reported separately.
+                        print(json.dumps({key: value for key, value in observations.items() if key != "cases"}))
+                        passed = observations["returned"] + observations["raised"]
+                        failed = observations["failed"]
                     elif command_id == "coverage-imageops-native":
                         from run_migration_imageops_native_cases import run_native_cases
 
@@ -620,6 +630,8 @@ def run(args: argparse.Namespace) -> int:
         case_ids=args.case_id,
         exclude_case_ids=args.exclude_case_id,
     )
+    if args.parity_only:
+        command["argv"].append("MIGRATION_COVERAGE_PARITY_ONLY=1")
     identity = coverage_identity(
         manifest_path,
         input_paths,
@@ -676,6 +688,7 @@ def main() -> int:
     parser.add_argument("--operation")
     parser.add_argument("--case-id", action="append")
     parser.add_argument("--exclude-case-id", action="append")
+    parser.add_argument("--parity-only", action="store_true", help="Measure canonical parity cases without native coverage supplements")
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--coverage-report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument(

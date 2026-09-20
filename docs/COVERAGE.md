@@ -62,5 +62,56 @@ helps find missing application paths; it does not measure Rust coverage.
 Generated missing-feature reports are dated execution artifacts under
 `build/migration-parity/`.
 
+## Reduce repetitive parity inputs
+
+Use `make migration-parity-reduction
+MIGRATION_REDUCTION_ARGS='--candidates <reviewed-pairs.json> --output-dir <new-directory>'`
+after reviewing inputs and live observations for equivalent behavior. The
+candidate file is an array of `case_id` / `replacement_case_id` objects; each
+replacement must remain selected with the same target profiles, and every
+requirement/profile mapping must remain represented in the corpus. Merge the
+requirement labels when identical workflows are consolidated. Measurement artifacts belong in ignored output
+directories, never in active fixture inputs.
+
+The command measures the same canonical parity cases separately on CPU, SIMD
+and GPU, then tries removals in batches of 100. A changed coverage set restores
+half the batch and recursively checks both halves against the initial baseline.
+Rust executable lines, functions, regions and branch outcomes and Python lines
+and branches must match exactly, including their instrumented denominators.
+Unchanged percentages alone do not pass. External dependency source and WGSL
+shader internals are outside these measured locations.
+The GPU report must reach an actual hardware dispatch; selecting GPU while its
+adapter is unavailable and all work falls back to CPU does not pass.
+
+`MIGRATION_COVERAGE_PARITY_ONLY=1` omits native-only supplements from both
+baseline and trials; the regular coverage command continues to run them.
+Reports retain source, input and instrumented-build identities. The reduction
+command never changes the corpus. Apply accepted removals in the generator,
+regenerate parity/coverage/benchmark inputs, then verify parity and coverage
+again. Matching coverage is necessary here but is not proof that two tests
+protect the same behavior. Keep distinct contracts and numerical regressions.
+
+`make migration-parity-reduction-test` checks the restoration and comparison
+guards. Reusing an output directory resumes matching completed measurements;
+changed sources, inputs, candidates or execution failures stop the comparison.
+
 The manifest and [maturity guide](COMPATIBILITY.md) define the selected scope.
 Missing records, unavailable adapters, and unexecuted paths stay unmeasured.
+
+## Native font coverage observations
+
+`make migration-parity-font-native-coverage` runs the supplemental font inputs
+against the checkout's Python binding and a test-only Rust driver. The driver
+calls `text_bbox`, `getbbox_binary`, and `render_text_binary` directly; these
+methods are not exposed through Python. The command writes individual returned
+values or API exceptions to `build/migration-parity/font-native-observations.json`.
+These are coverage probes, **not parity passes**: an API exception records what
+ran without asserting that the exception is correct. Harness failures, unknown
+operations, duplicate case IDs and unavailable drivers fail the command.
+
+The full Rust coverage lane builds and instruments that driver, includes font
+wrapper execution in Python coverage, and binds each backend's observation
+report to its coverage receipt. `make migration-parity-font-native-test` checks
+the adapter and failure-reporting guards. Keep native input removals separate
+from generator-owned parity removals and compare fresh full-lane measurements
+before and after any native removal.

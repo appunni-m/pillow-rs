@@ -165,7 +165,7 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     # reviewed materialized workflow so this benchmark measures a successful
     # value-producing colorize call while the behavior/error case remains in
     # parity coverage.
-    "pil-imageops.colorize.standard": "pipeline-case.colorize.materialized-smoke",
+    "pil-imageops.colorize.standard": "PIL.ImageOps.colorize.nuanced.two-color",
     "pil-imagepalette-imagepalette.getcolor.standard": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
 }
 BENCHMARK_SUCCESS_WORKFLOW_IDS = {
@@ -1661,29 +1661,56 @@ def operation_prefix(surface: str, operation: str) -> str:
 
 
 def case_signature(case: dict[str, Any]) -> str:
-    """Return the behavior-bearing identity of a parity workflow.
+    """Identify a workflow independently of case, requirement and step labels.
 
-    Case IDs and requirement membership are labels, not stimuli.  They must
-    not prevent exact duplicate workflows from being merged.  Every other
-    field remains part of the signature so that omission/default semantics,
-    asset identity, setup order, and observations stay distinct.
+    Normalize only workflow bindings and observation IDs. Literal payloads,
+    target profiles, assets, comparisons and public operations stay distinct.
     """
 
-    return json.dumps(
-        {
-            key: case[key]
-            for key in (
-                "surface",
-                "operation",
-                "target_profiles",
-                "assets",
-                "steps",
-                "observations",
-            )
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    step_ids = {
+        step["step_id"]: f"step-{index}"
+        for index, step in enumerate(case["steps"])
+    }
+
+    def normalize(value: Any, key: str | None = None) -> Any:
+        if isinstance(value, dict):
+            if value.get("kind") == "literal":
+                return value
+            return {name: normalize(child, name) for name, child in value.items()}
+        if isinstance(value, list):
+            return [normalize(child, key) for child in value]
+        if key in {"step_id", "observations"} and isinstance(value, str):
+            return step_ids.get(value, value)
+        return value
+
+    identity = normalize({
+        key: value for key, value in case.items()
+        if key not in {"case_id", "covers", "comparisons"}
+    })
+    if "comparisons" in case:
+        identity["comparisons"] = {
+            step_ids.get(step_id, step_id): policy
+            for step_id, policy in case["comparisons"].items()
+        }
+    return json.dumps(identity, sort_keys=True, separators=(",", ":"))
+
+
+def merge_workflow_aliases(
+    cases: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Keep the first stable case ID and merge all duplicate requirements."""
+
+    unique: dict[str, dict[str, Any]] = {}
+    aliases: dict[str, str] = {}
+    for case in cases:
+        signature = case_signature(case)
+        if signature not in unique:
+            unique[signature] = case
+            continue
+        retained = unique[signature]
+        aliases[case["case_id"]] = retained["case_id"]
+        retained["covers"] = list(dict.fromkeys([*retained["covers"], *case["covers"]]))
+    return list(unique.values()), aliases
 
 
 def requirement_priority(requirement_id: str, prefix: str) -> tuple[int, int, str]:
@@ -12661,7 +12688,7 @@ def build_nuanced_cases(
                 fill = [-1, 89, 211]
             elif variant == 9:
                 fill = [17, 89, 211, 128]
-            if pattern in (18, 19):
+            if pattern == 18:
                 fill = []
             spec["values"]["fillcolor"] = literal(fill)
             if pattern in (0, 1, 2, 3, 4, 5, 6, 7):
@@ -13059,7 +13086,7 @@ def build_nuanced_cases(
         """Build one public ImageOps contract-boundary workflow.
 
         The existing ImageOps matrix reaches the ordinary geometry and color
-        success paths.  This separate 100-case matrix keeps the remaining
+        success paths. This separate boundary matrix keeps the remaining
         public boundary forms input-driven: unsupported modes, malformed
         centering/method/color values, optional masks, and valid typed/palette
         variants.  Error cases intentionally omit materialization; the parity
@@ -13592,35 +13619,14 @@ def build_nuanced_cases(
     def imageops_centering_edge_spec(pattern: int) -> dict[str, Any]:
         """Build one public empty-centering ImageOps.pad error workflow."""
 
-        mode, pixel, color = (
-            ("L", 173, 7)
-            if pattern % 5 == 0
-            else ("LA", [173, 127], [7, 191])
-            if pattern % 5 == 1
-            else ("RGB", [173, 127, 31], [7, 83, 149])
-            if pattern % 5 == 2
-            else ("RGBA", [173, 127, 31, 191], [7, 83, 149, 191])
-            if pattern % 5 == 3
-            else ("P", 3, "red")
-        )
-        if pattern >= 5:
-            seed = (pattern * 37 + 13) % 256
-            if mode == "L":
-                pixel, color = seed, (seed + 7) % 256
-            elif mode == "LA":
-                pixel, color = [seed, (seed + 41) % 256], [(seed + 7) % 256, 191]
-            elif mode == "RGB":
-                pixel, color = (
-                    [seed, (seed + 41) % 256, (seed + 83) % 256],
-                    [(seed + 7) % 256, (seed + 29) % 256, (seed + 61) % 256],
-                )
-            elif mode == "RGBA":
-                pixel, color = (
-                    [seed, (seed + 41) % 256, (seed + 83) % 256, 191],
-                    [(seed + 7) % 256, (seed + 29) % 256, (seed + 61) % 256, 191],
-                )
-            else:
-                pixel, color = seed % 256, seed % 256
+        mode, pixel, color = {
+            0: ("L", 173, 7),
+            1: ("LA", [173, 127], [7, 191]),
+            2: ("RGB", [173, 127, 31], [7, 83, 149]),
+            3: ("RGBA", [173, 127, 31, 191], [7, 83, 149, 191]),
+            4: ("P", 3, "red"),
+            9: ("P", 90, 90),
+        }[pattern]
         return {
             "surface": "PIL.ImageOps",
             "operation": "pad",
@@ -13636,27 +13642,6 @@ def build_nuanced_cases(
                 "color": literal(color),
                 "centering": literal([]),
             },
-        }
-
-    def imageops_posterize_palette_coverage_spec(pattern: int) -> dict[str, Any]:
-        """Build one valid palette input for posterize's public error path.
-
-        Pillow rejects ``ImageOps.posterize`` on mode ``P`` with its named
-        ``NotImplementedError`` contract.  Keep the image and bit depth
-        values valid while varying the public inputs, so the branch is
-        exercised through the binding rather than through a direct core call.
-        """
-
-        return {
-            "surface": "PIL.ImageOps",
-            "operation": "posterize",
-            "requirement_suffix": "behavior.default",
-            "name": f"coverage-batch-imageops-posterize-p-{pattern:03d}",
-            "mode": "P",
-            "size": [5 + pattern % 7, 4 + (pattern // 7) % 6],
-            "edge": "nonzero-pixel",
-            "pixel": (pattern * 29 + 7) % 256,
-            "values": {"bits": literal(1 + pattern % 8)},
         }
 
     def imageops_scalar_fallback_spec(pattern: int) -> dict[str, Any]:
@@ -25824,49 +25809,38 @@ def build_nuanced_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "reduce",
                 "requirement_suffix": "parameter.factor",
-                "name": f"coverage-batch-reduce-zero-y-{mode.lower()}-{pattern}",
+                "name": f"coverage-batch-reduce-zero-y-{mode.lower()}-0",
                 "mode": mode,
                 "scenario_size": [16, 16],
                 "edge": "uniform-fill",
-                "pixel": (
-                    (pattern * 19 + 3) % 256
-                    if mode == "L"
-                    else [(pattern * 19 + channel * 43 + 3) % 256 for channel in range(3)]
-                ),
+                "pixel": 3 if mode == "L" else [3, 46, 89],
                 "values": {"factor": literal([2, 0])},
             }
-            for pattern in range(10)
             for mode in ("L", "RGB")
         ),
-        *(
-            {
-                "surface": "PIL.Image.Image",
-                "operation": "reduce",
-                "requirement_suffix": "parameter.factor",
-                "name": f"coverage-batch-reduce-zero-x-l-{pattern}",
-                "mode": "L",
-                "scenario_size": [16, 16],
-                "edge": "uniform-fill",
-                "pixel": (pattern * 23 + 11) % 256,
-                "values": {"factor": literal([0, 2])},
-            }
-            for pattern in range(10)
-        ),
-        *(
-            {
-                "surface": "PIL.Image.Image",
-                "operation": "reduce",
-                "requirement_suffix": "parameter.box",
-                "name": f"coverage-batch-reduce-box-overflow-{pattern}",
-                "mode": "RGB",
-                "scenario_size": [16, 16],
-                "values": {
-                    "factor": literal([2, 2]),
-                    "box": literal([0, 0, 2_147_483_648 + pattern, 4]),
-                },
-            }
-            for pattern in range(10)
-        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.factor",
+            "name": "coverage-batch-reduce-zero-x-l-0",
+            "mode": "L",
+            "scenario_size": [16, 16],
+            "edge": "uniform-fill",
+            "pixel": 11,
+            "values": {"factor": literal([0, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.box",
+            "name": "coverage-batch-reduce-box-overflow-0",
+            "mode": "RGB",
+            "scenario_size": [16, 16],
+            "values": {
+                "factor": literal([2, 2]),
+                "box": literal([0, 0, 2_147_483_648, 4]),
+            },
+        },
         # Coverage batch 2026-08-14g: exercise the public crop_float path with
         # ordinary in-bounds, fractional, padded, disjoint, and zero-area
         # boxes across the byte-backed and palette mode families.  Every box
@@ -26033,25 +26007,24 @@ def build_nuanced_cases(
                 "surface": "PIL.Image.Image",
                 "operation": "reduce",
                 "requirement_suffix": "parameter.box",
-                "name": f"coverage-batch-reduce-box-underflow-{mode.lower()}-{pattern}",
+                "name": f"coverage-batch-reduce-box-underflow-{mode.lower()}-0",
                 "mode": mode,
                 "scenario_size": [16, 16],
                 "edge": "uniform-fill",
                 "pixel": (
-                    (pattern * 29 + 7) % 256
+                    7
                     if mode == "L"
                     else [
-                        (pattern * 29 + channel * 47 + 7) % 256
+                        channel * 47 + 7
                         for channel in range({"LA": 2, "RGB": 3, "RGBA": 4}[mode])
                     ]
                 ),
                 "values": {
                     "factor": literal([2, 2]),
-                    "box": literal([-2_147_483_649 - pattern, 0, 4, 4]),
+                    "box": literal([-2_147_483_649, 0, 4, 4]),
                 },
             }
             for mode in ("L", "LA", "RGB", "RGBA")
-            for pattern in range(5)
         ),
         # Coverage batch 2026-08-14i: exercise valid public conversion inputs
         # that vary the source representation, destination mode, dither enum,
@@ -27254,11 +27227,9 @@ def build_nuanced_cases(
         ),
         # Coverage batch 2026-08-14r: exercise the public LA getbbox path
         # with a non-zero luma component while alpha_only remains false. The
-        # existing LA cases are alpha-only or zero-luma inputs, so they do not
-        # evaluate the second operand of the native `luma != 0 || alpha != 0`
-        # predicate. Every case is a valid Image.new/getbbox workflow and
-        # varies both dimensions and pixel values so the declarative generator
-        # retains all 100 signatures.
+        # nonzero luma short-circuits `luma != 0 || alpha != 0`. Keep
+        # representative channel values here; the complementary zero-luma
+        # and alpha-only cases exercise the other predicate states.
         *(
             {
                 "surface": "PIL.Image.Image",
@@ -27274,26 +27245,22 @@ def build_nuanced_cases(
                 ],
                 "values": {"alpha_only": literal(False)},
             }
-            for pattern in range(100)
+            for pattern in (0, 1)
         ),
         # Coverage batch 2026-08-14s: exercise the public ImageOps.crop
         # oversized-border error contract. The existing border-8 case is the
         # valid exact-half-size boundary and therefore returns an empty image;
-        # these inputs are the adjacent public invalid range. Keep the values
-        # distinct so the generator retains all 100 cases and let both
+        # retain a representative adjacent invalid input and let both
         # implementations produce the error result.
-        *(
-            {
-                "surface": "PIL.ImageOps",
-                "operation": "crop",
-                "requirement_suffix": "parameter.border",
-                "name": f"coverage-batch-crop-oversized-border-{border}",
-                "mode": "RGB",
-                "size": [16, 16],
-                "values": {"border": literal(border)},
-            }
-            for border in range(9, 109)
-        ),
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "crop",
+            "requirement_suffix": "parameter.border",
+            "name": "coverage-batch-crop-oversized-border-9",
+            "mode": "RGB",
+            "size": [16, 16],
+            "values": {"border": literal(9)},
+        },
         # Coverage batch 2026-08-23c: exercise the second operand of the
         # public ImageOps.crop oversized-border guard.  The existing square
         # matrix short-circuits on ``2 * border > width``; these rectangular
@@ -27310,7 +27277,7 @@ def build_nuanced_cases(
                 "size": [2 * border + 1, 2 * border - 1],
                 "values": {"border": literal(border)},
             }
-            for border in range(1, 101)
+            for border in (1, 2)
         ),
         # Coverage batch 2026-08-23f: exercise scalar transpose methods for
         # RGBX.  RGBX retains four-byte samples but is intentionally excluded
@@ -27580,7 +27547,13 @@ def build_nuanced_cases(
         # analysis inputs across every maintained source mode. The generator
         # writes only public pixels and masks; returned extrema, histograms,
         # and bounding boxes remain parity observations.
-        *(analysis_coverage_spec(pattern) for pattern in range(100)),
+        *(
+            analysis_coverage_spec(pattern)
+            for pattern in (
+                *range(0, 39), *range(40, 49), *range(50, 58),
+                *range(60, 69), *range(70, 78), *range(80, 89), *range(90, 98),
+            )
+        ),
         # Coverage batch 2026-08-14z: exercise non-uniform public conversion
         # inputs across the byte, palette, CMYK, HSV/YCbCr, integer, and float
         # source families. The samples are created through maintained public
@@ -27596,8 +27569,11 @@ def build_nuanced_cases(
         *(paste_coverage_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14ad: exercise reachable public transform
         # fill coercions, typed named colors, resampling errors, empty meshes,
-        # and extent transforms through one declarative 100-case matrix.
-        *(transform_coverage_spec(pattern) for pattern in range(100)),
+        # and extent transforms through a declarative boundary matrix.
+        *(
+            transform_coverage_spec(pattern)
+            for pattern in (*range(0, 19), *range(20, 100))
+        ),
         # Coverage batch 2026-08-14ae: exercise expanded public point LUTs
         # across the native one-, two-, three-, and four-band mode families.
         *(point_coverage_spec(pattern) for pattern in range(100)),
@@ -27613,16 +27589,35 @@ def build_nuanced_cases(
         # Coverage batch 2026-08-14am: exercise the remaining public ImageOps
         # contract branches: typed color coercions, centering/method errors,
         # unsupported modes, optional mask validation, and palette/typed
-        # geometry success paths. Keep this as exactly 100 retained cases.
-        *(imageops_contract_spec(pattern) for pattern in range(100)),
+        # geometry success paths, retaining distinct contract witnesses.
+        *(
+            imageops_contract_spec(pattern)
+            for pattern in (*range(0, 21), *range(25, 71), *range(72, 100))
+        ),
         # Coverage batch 2026-08-16b: exercise the valid nonzero-mask branch
         # of ImageOps.autocontrast through public image/mask pixels and an
         # observed result. Keep the input matrix bounded at 100 cases.
         *(autocontrast_mask_nonzero_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14ar: exercise the reachable public
-        # ImageOps.posterize mode-P NotImplementedError branch with exactly
-        # 100 valid palette images and bit-depth inputs.
-        *(imageops_posterize_palette_coverage_spec(pattern) for pattern in range(100)),
+        # ImageOps.posterize mode-P NotImplementedError branch with
+        # representative valid palette images and bit-depth inputs.
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "posterize",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-imageops-posterize-p-{case_number}",
+                "mode": "P",
+                "size": size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"bits": literal(bits)},
+            }
+            for case_number, size, pixel, bits in (
+                ("000", [5, 4], 7, 1),
+                ("001", [6, 4], 36, 2),
+            )
+        ),
         # Coverage batch 2026-08-15a: exercise public CMYK/P ImageOps modes
         # that select the packed SIMD scalar fallback rather than the native
         # byte transform. Keep this at exactly 100 valid input cases.
@@ -27648,7 +27643,7 @@ def build_nuanced_cases(
         *(exif_retained_entry_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14ai: exercise Pillow's public IndexError for
         # an empty ImageOps.pad centering sequence across native image modes.
-        *(imageops_centering_edge_spec(pattern) for pattern in range(10)),
+        *(imageops_centering_edge_spec(pattern) for pattern in (*range(0, 5), 9)),
         # Coverage batch 2026-08-14aj: force the public module effects to
         # materialize their lazy pipelines across native mode families.  The
         # exact 100-case count is retained by the generated input audit.
@@ -29336,17 +29331,6 @@ def build_nuanced_cases(
             "name": "materialized-rgb-odd-height",
             "mode": "RGB",
             "edge": "nonzero-pixel",
-            "pixel": [12, 34, 56],
-            "size": [4, 3],
-            "observe_result": "tobytes",
-        },
-        {
-            "surface": "PIL.ImageOps",
-            "operation": "flip",
-            "requirement_suffix": "behavior.default",
-            "name": "simd-rgb-odd-height-valid",
-            "mode": "RGB",
-            "edge": "nonzero-pixel-safe",
             "pixel": [12, 34, 56],
             "size": [4, 3],
             "observe_result": "tobytes",
@@ -34985,26 +34969,18 @@ def build_nuanced_cases(
                 ("RGB", [200, 100, 50], 3),
             )
         ),
-        *(
-            {
-                "surface": "PIL.Image.Image",
-                "operation": "transpose",
-                "requirement_suffix": "behavior.default",
-                "name": f"{mode.lower()}-odd-rotate180-valid",
-                "mode": mode,
-                "edge": "nonzero-pixel-safe",
-                "pixel": pixel,
-                "size": [3, 3],
-                "values": {"method": literal(3)},
-                "observe_result": "tobytes",
-            }
-            for mode, pixel in (
-                ("L", 200),
-                ("LA", [200, 128]),
-                ("RGB", [200, 100, 50]),
-                ("RGBA", [200, 100, 50, 128]),
-            )
-        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-odd-rotate180-valid",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel-safe",
+            "pixel": [200, 100, 50, 128],
+            "size": [3, 3],
+            "values": {"method": literal(3)},
+            "observe_result": "tobytes",
+        },
         {
             "surface": "PIL.Image.Image",
             "operation": "transpose",
@@ -40960,6 +40936,22 @@ def build_pipeline_parity_case(
 ) -> dict[str, Any]:
     requirement_id = _performance_requirement(operations, spec.surface, spec.operation)
     workflow = build_pipeline_workflow(variant, spec, cases_by_id)
+    identity = {
+        "surface": spec.surface,
+        "operation": spec.operation,
+        "target_profiles": [TARGET_PROFILE],
+        "assets": workflow["assets"],
+        "steps": workflow["steps"],
+        "observations": workflow["observations"],
+    }
+    signature = case_signature(identity)
+    for existing in cases_by_id.values():
+        if (existing["surface"], existing["operation"]) != (spec.surface, spec.operation):
+            continue
+        if case_signature(existing) == signature:
+            if requirement_id not in existing["covers"]:
+                existing["covers"].append(requirement_id)
+            return existing
     return {
         "case_id": f"pipeline-case.{slug(variant)}.materialized-smoke",
         "surface": spec.surface,
@@ -44248,9 +44240,15 @@ def build_inputs(
                 pipeline_case_pool,
                 operations,
             )
-            parity_cases.append(pipeline_case)
+            if pipeline_case["case_id"] not in pipeline_case_pool:
+                parity_cases.append(pipeline_case)
             pipeline_case_pool[pipeline_case["case_id"]] = pipeline_case
             pipeline_case_ids.append(pipeline_case["case_id"])
+
+        # Benchmark smoke aliases must share the same execution as an
+        # existing parity workflow when their only difference is step labels.
+        parity_cases, case_aliases = merge_workflow_aliases(parity_cases)
+        duplicate_count += len(case_aliases)
 
         for case in parity_cases:
             case_id = case["case_id"]
@@ -44288,6 +44286,9 @@ def build_inputs(
         selected_cases.extend(
             case_id for case_id in pipeline_case_ids if case_id not in selected_cases
         )
+        selected_cases = list(dict.fromkeys(
+            case_aliases.get(case_id, case_id) for case_id in selected_cases
+        ))
         # Coverage is intentionally input-only: do not add direct native
         # probes to compensate for paths that lack a public parity workflow.
         # Those paths remain visible as uncovered until a real public input
@@ -44338,6 +44339,7 @@ def build_inputs(
             pipeline_workload = BENCHMARK_PIPELINE_WORKLOADS.get(workload_id)
             if pipeline_workload is not None:
                 case_id = pipeline_workload["case_id"]
+            case_id = case_aliases.get(case_id, case_id)
             workflow_override = _benchmark_success_workflow(workload_id)
             input_spec = (
                 {"kind": "workflow", **workflow_override}

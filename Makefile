@@ -50,6 +50,8 @@ MIGRATION_PILLOW_MISSING_MANIFEST ?= build/migration-parity/coverage-pillow-miss
 MIGRATION_PILLOW_MISSING_MARKDOWN ?= build/migration-parity/coverage-pillow-missing-feature-manifest.md
 MIGRATION_COVERAGE_OPERATION ?=
 MIGRATION_COVERAGE_EXCLUDE_CASE_IDS ?=
+MIGRATION_COVERAGE_PARITY_ONLY ?= 0
+MIGRATION_COVERAGE_PARITY_ONLY_ARG = $(if $(filter 1,$(MIGRATION_COVERAGE_PARITY_ONLY)),--parity-only,)
 MIGRATION_COVERAGE_EXCLUDE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_EXCLUDE_CASE_IDS),--exclude-case-id '$(case_id)')
 MIGRATION_EMPTY :=
 MIGRATION_SPACE := $(MIGRATION_EMPTY) $(MIGRATION_EMPTY)
@@ -103,8 +105,10 @@ MIGRATION_PROFILE_REPEAT ?= 40
 MIGRATION_PROFILE_TIMEOUT ?= 180
 MIGRATION_PROFILE_OUTPUT_DIR ?= build/migration-parity/profiles
 MIGRATION_RUST_COVERAGE_LLVM_REPORT ?= target/coverage/migration-parity-rust.json
+MIGRATION_RUST_COVERAGE_PYTHON_REPORT ?= target/coverage/migration-parity-python.json
 MIGRATION_RUST_COVERAGE_LCOV_REPORT ?= target/coverage/migration-parity-rust.lcov
 MIGRATION_COVERAGE_DIFF_BASE ?= HEAD
+MIGRATION_REDUCTION_ARGS ?=
 MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT ?= build/migration-parity/changed-line-coverage.json
 MIGRATION_PROFILE_ARGS ?=
 MIGRATION_CORE_BENCHMARK_ARGS ?=
@@ -518,6 +522,7 @@ migration-parity-coverage: ## Run target coverage from indexed coverage plans
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$(abspath $(PY_SRC)/python):$$PYTHONPATH" $(PYTHON) scripts/run_migration_coverage.py \
 		--output $(MIGRATION_COVERAGE_OUTPUT) \
 		--coverage-report $(MIGRATION_COVERAGE_REPORT) \
+		$(MIGRATION_COVERAGE_PARITY_ONLY_ARG) \
 		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
 		$(MIGRATION_COVERAGE_CASE_ARGS); \
 	status=$$?; \
@@ -549,7 +554,9 @@ migration-parity-coverage-rust: ## Run merged Python+Rust coverage with a tempor
 	$(PYTHON) scripts/run_migration_rust_coverage.py \
 		--output $(MIGRATION_RUST_COVERAGE_OUTPUT) \
 		--llvm-report $(MIGRATION_RUST_COVERAGE_LLVM_REPORT) \
+		--python-report $(MIGRATION_RUST_COVERAGE_PYTHON_REPORT) \
 		--lcov-report $(MIGRATION_RUST_COVERAGE_LCOV_REPORT) \
+		$(MIGRATION_COVERAGE_PARITY_ONLY_ARG) \
 		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
 		$(MIGRATION_COVERAGE_CASE_ARGS); \
 	status=$$?; \
@@ -577,8 +584,15 @@ migration-parity-operation-coverage: ## Run merged coverage for one manifest pub
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
 
-migration-parity-font-native-coverage: ## Run the font-native coverage-only corpus
-	$(PYTHON) scripts/run_migration_font_native_cases.py
+.PHONY: migration-parity-font-native-build migration-parity-font-native-test
+migration-parity-font-native-build: ## Build the test-only Rust font coverage driver
+	$(CARGO) build -p pillow-rs --example font_native_coverage --features test-api
+
+migration-parity-font-native-test: ## Check font coverage dispatch and failure reporting
+	$(PYTHON) -m unittest discover -s scripts -p 'test_font_native_cases.py' -v
+
+migration-parity-font-native-coverage: migration-parity-font-native-build migration-parity-font-native-test ## Run the font-native coverage-only corpus
+	PYTHONPATH="$(CURDIR)/pillow-rs-py/python" $(PYTHON) scripts/run_migration_font_native_cases.py --output build/migration-parity/font-native-observations.json
 
 migration-parity-imageops-native-coverage: ## Run the image-ops native coverage-only corpus
 	$(PYTHON) scripts/run_migration_imageops_native_cases.py
@@ -888,7 +902,7 @@ migration-parity-fixtures-check: migration-parity-inventory-check ## Verify auth
 	$(MAKE) migration-parity-inputs-check
 
 .PHONY: migration-parity-inputs-check
-migration-parity-inputs-check: ## Verify deterministic input regeneration
+migration-parity-inputs-check: migration-parity-reduction-test migration-parity-font-native-test ## Verify deterministic inputs and safe workflow consolidation
 	$(PYTHON) scripts/check_migration_parity_inputs.py
 	$(PYTHON) scripts/validate_migration_parity_contract.py --manifest "$(MANIFEST)"
 
@@ -913,6 +927,13 @@ migration-parity-receipt-test: ## Verify terminal-complete receipt state transit
 .PHONY: migration-parity-coverage-receipt-test
 migration-parity-coverage-receipt-test: ## Verify coverage source/build provenance guards
 	$(PYTHON) -m unittest discover -s scripts -p 'test_coverage_context.py' -v
+
+.PHONY: migration-parity-reduction migration-parity-reduction-test
+migration-parity-reduction: ## Measure reviewed removal batches against exact CPU/SIMD/GPU coverage without editing inputs
+	$(PYTHON) scripts/reduce_migration_parity_cases.py $(MIGRATION_REDUCTION_ARGS)
+
+migration-parity-reduction-test: ## Verify binary restoration and exact coverage comparison safeguards
+	$(PYTHON) -m unittest discover -s scripts -p 'test_parity_reduction.py' -v
 
 .PHONY: migration-parity-changed-line-coverage
 migration-parity-changed-line-coverage: ## Attribute changed Rust lines to source-bound LCOV evidence
