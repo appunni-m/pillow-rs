@@ -3,10 +3,10 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from types import ModuleType
 import unittest
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pillow-rs-py/python"))
 import run_migration_font_native_cases as runner
 
 
@@ -16,6 +16,19 @@ def case(operation="getmask", **params):
 
 
 class NativeCoverageTests(unittest.TestCase):
+    def setUp(self):
+        # These tests verify dispatch and evidence bookkeeping, not native
+        # rendering. Keep the documentation/input gate runnable before a
+        # PyO3 build, and never import an installed Pillow oracle by accident.
+        pil = ModuleType("PIL")
+        pil.__file__ = str(runner.ROOT / "pillow-rs-py/python/PIL/__init__.py")
+        pil.Image, pil.ImageDraw, pil.ImageFont = Mock(), Mock(), Mock()
+        binding = ModuleType("pillow_rs")
+        binding._core = ModuleType("pillow_rs._core")
+        binding._core.__file__ = str(runner.ROOT / "pillow-rs-py/python/pillow_rs/_core.abi3.so")
+        self.enterContext(patch.dict(sys.modules, {"PIL": pil, "pillow_rs": binding}))
+        self.enterContext(patch("run_migration_parity.configure_target_backend"))
+
     def test_errors_are_observations_but_harness_exceptions_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
@@ -76,8 +89,13 @@ class NativeCoverageTests(unittest.TestCase):
 
     def test_oracle_import_cannot_be_used_as_target_coverage(self):
         import PIL
+        runner.require_target()
         with patch.object(PIL, "__file__", "/unrelated/site-packages/PIL/__init__.py"):
             with self.assertRaisesRegex(RuntimeError, "checkout PIL"):
+                runner.require_target()
+        from pillow_rs import _core
+        with patch.object(_core, "__file__", "/unrelated/site-packages/pillow_rs/_core.abi3.so"):
+            with self.assertRaisesRegex(RuntimeError, "checkout extension"):
                 runner.require_target()
 
     def test_missing_rust_driver_is_an_infrastructure_error(self):
