@@ -26,8 +26,12 @@ class NativeCoverageTests(unittest.TestCase):
         binding = ModuleType("pillow_rs")
         binding._core = ModuleType("pillow_rs._core")
         binding._core.__file__ = str(runner.ROOT / "pillow-rs-py/python/pillow_rs/_core.abi3.so")
-        self.enterContext(patch.dict(sys.modules, {"PIL": pil, "pillow_rs": binding}))
-        self.enterContext(patch("run_migration_parity.configure_target_backend"))
+        for patcher in (
+            patch.dict(sys.modules, {"PIL": pil, "pillow_rs": binding}),
+            patch("run_migration_parity.configure_target_backend"),
+        ):
+            self.addCleanup(patcher.stop)
+            patcher.start()
 
     def test_errors_are_observations_but_harness_exceptions_fail(self):
         with tempfile.TemporaryDirectory() as directory:
