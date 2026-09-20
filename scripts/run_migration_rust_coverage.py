@@ -101,6 +101,7 @@ def coverage_build_inputs() -> list[Path]:
         ROOT / ".cargo",
         ROOT / "pillow-rs" / "Cargo.toml",
         ROOT / "pillow-rs" / "src",
+        ROOT / "pillow-rs" / "examples" / "font_native_coverage.rs",
         ROOT / "pillow-rs-py" / "Cargo.toml",
         ROOT / "pillow-rs-py" / "pyproject.toml",
         ROOT / "pillow-rs-py" / "src",
@@ -195,11 +196,11 @@ def coverage_input_hashes(
             paths.add(path)
             for case in json.loads(path.read_text(encoding="utf-8")).get("cases", []):
                 assets = case.get("inputs", {}).get("assets", {})
-                asset = next(iter(assets.values()), {})
-                if asset.get("kind") not in {"load_default", "pilfont_default"}:
-                    source = asset_path(asset, assets_root=FIXTURE_ROOT / "assets")
-                    if source is not None:
-                        add_asset(source)
+                for asset in assets.values():
+                    if asset.get("kind") not in {"load_default", "pilfont_default"}:
+                        source = asset_path(asset, assets_root=FIXTURE_ROOT / "assets")
+                        if source is not None:
+                            add_asset(source)
                 if str(case.get("operation", "")).removeprefix("font.") == "unsupported_magic":
                     add_asset(FIXTURE_ROOT / "assets" / "font" / "pilfont" / "courb08.png")
     if "run_migration_imagecore_native_cases.py" in supplements:
@@ -301,6 +302,7 @@ def write_coverage_context(
     full_scope: bool,
     input_hashes: dict[str, str | None] | None = None,
     backend_executions: list[dict[str, Any]] | None = None,
+    native_observations: list[dict[str, Any]] | None = None,
 ) -> None:
     """Bind a fresh report to its measured source, build, and execution result.
 
@@ -327,6 +329,7 @@ def write_coverage_context(
             "inputs": identity["inputs"],
             "summary": summary,
             "backends": backend_executions or [],
+            "native_observations": native_observations or [],
         },
     }
     report.with_name(report.name + ".context.json").write_text(
@@ -483,7 +486,7 @@ def merged_file_data(
 def run_locked(args: argparse.Namespace) -> int:
     # Invalidate before parsing/fingerprinting too: an early failed rerun must
     # not leave a success receipt beside the previous report.
-    for report in (args.llvm_report, args.lcov_report):
+    for report in (args.llvm_report, args.lcov_report, args.python_report):
         report.with_name(report.name + ".context.json").unlink(missing_ok=True)
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
@@ -505,6 +508,11 @@ def run_locked(args: argparse.Namespace) -> int:
         exclude_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
         excluded_operations=coverage_not_applicable_operations(manifest),
     )
+    if args.parity_only:
+        plans = [
+            {**plan, "selectors": {**plan["selectors"], "command_ids": []}}
+            for plan in plans
+        ]
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
 
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
@@ -525,7 +533,9 @@ def run_locked(args: argparse.Namespace) -> int:
     )
     selected_cases = [cases_by_id[case_id] for case_id in sorted(selected_ids)]
     canonical_full_lane = args.operation is None and not args.case_id
-    native_supplement_scripts = coverage_supplements(plans, full_lane=canonical_full_lane)
+    native_supplement_scripts = (
+        [] if args.parity_only else coverage_supplements(plans, full_lane=canonical_full_lane)
+    )
     input_hashes = coverage_input_hashes(
         manifest_path, input_paths, selected_cases, native_supplement_scripts,
     )
@@ -601,8 +611,16 @@ def run_locked(args: argparse.Namespace) -> int:
             check=True,
         )
         instrumented_artifact = install_instrumented_extension()
+        font_driver = LLVM_COV_TARGET / "debug" / "examples" / "font_native_coverage"
+        if "run_migration_font_native_cases.py" in native_supplement_scripts:
+            subprocess.run(
+                ["cargo", "build", "-p", "pillow-rs", "--example", "font_native_coverage",
+                 "--features", "test-api", "--target-dir", str(LLVM_COV_TARGET)],
+                env=build_env, cwd=ROOT, check=True,
+            )
         build_id = hashlib.sha256(
             build_fingerprint.encode("ascii") + instrumented_artifact.read_bytes()
+            + (font_driver.read_bytes() if "run_migration_font_native_cases.py" in native_supplement_scripts else b"")
         ).hexdigest()
         COVERAGE_BUILD_STAMP.write_text(build_fingerprint + "\n", encoding="utf-8")
         print(
@@ -618,9 +636,11 @@ def run_locked(args: argparse.Namespace) -> int:
         run_env["PYTHONPATH"] = target_python + os.pathsep + run_env.get("PYTHONPATH", "")
         run_env["PYTHONDONTWRITEBYTECODE"] = "1"
         run_env["LLVM_PROFILE_FILE"] = str(args.profile)
+        run_env["MIGRATION_FONT_NATIVE_DRIVER"] = str(font_driver)
         # The full lane keeps its maintained public native supplements;
         # scoped lanes only include explicitly selected supplement commands.
         child_results: dict[str, dict[str, Any]] = {}
+        native_observations = []
         python_data_paths: list[Path] = []
         for backend in COVERAGE_BACKENDS:
             child_output = args.output.with_name(f"{args.output.stem}.{backend}.json")
@@ -645,6 +665,7 @@ def run_locked(args: argparse.Namespace) -> int:
                     str(backend_coverage_data),
                 ]
                 + (["--operation", args.operation] if args.operation else [])
+                + (["--parity-only"] if args.parity_only else [])
                 + sum((["--case-id", case_id] for case_id in (args.case_id or [])), [])
                 + sum(
                     (["--exclude-case-id", case_id] for case_id in (args.exclude_case_id or [])),
@@ -658,10 +679,21 @@ def run_locked(args: argparse.Namespace) -> int:
             validate_coverage_result(child_results[backend])
 
             for script_name in native_supplement_scripts:
+                # Include font wrapper probes in the Python report as well as
+                # LLVM, and retain their errors without calling them parity passes.
+                font_probe = script_name == "run_migration_font_native_cases.py"
+                prefix = (["-m", "coverage", "run", "--append", "--branch",
+                           "--data-file", str(backend_coverage_data),
+                           "--source", str(ROOT / "pillow-rs-py/python/PIL") + "," + str(ROOT / "pillow-rs-py/python/pillow_rs")]
+                          if font_probe else [])
+                output_args = (["--output", str(args.output.with_name(f"{args.output.stem}.{backend}.font-native.json"))]
+                               if font_probe else [])
                 subprocess.run(
                     [
                         sys.executable,
+                        *prefix,
                         str(ROOT / "scripts" / script_name),
+                        *output_args,
                     ],
                     env={
                         **backend_env,
@@ -671,6 +703,17 @@ def run_locked(args: argparse.Namespace) -> int:
                     cwd=ROOT,
                     check=True,
                 )
+                if font_probe:
+                    observation_path = Path(output_args[1])
+                    observation = json.loads(observation_path.read_text(encoding="utf-8"))
+                    if observation["failed"] or observation["total"] != observation["returned"] + observation["raised"]:
+                        raise RuntimeError("incomplete font-native coverage observations")
+                    native_observations.append({
+                        "backend": backend, "command": script_name,
+                        "report": str(observation_path.resolve()),
+                        "sha256": hashlib.sha256(observation_path.read_bytes()).hexdigest(),
+                        "summary": {key: value for key, value in observation.items() if key != "cases"},
+                    })
 
             materialize_profiles()
 
@@ -787,6 +830,8 @@ def run_locked(args: argparse.Namespace) -> int:
             case_ids=args.case_id,
             exclude_case_ids=args.exclude_case_id,
         )
+        if args.parity_only:
+            command["argv"].append("MIGRATION_COVERAGE_PARITY_ONLY=1")
         identity = coverage_identity(
             manifest_path,
             input_paths,
@@ -825,11 +870,12 @@ def run_locked(args: argparse.Namespace) -> int:
             "infrastructure_errors": [],
         }
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-        for report in (args.llvm_report, args.lcov_report):
+        for report in (args.llvm_report, args.lcov_report, args.python_report):
             write_coverage_context(
                 report, source_hashes, build_id, identity, result["summary"],
-                full_scope=canonical_full_lane and not args.exclude_case_id,
+                full_scope=canonical_full_lane and not args.exclude_case_id and not args.parity_only,
                 input_hashes=input_hashes, backend_executions=backend_executions,
+                native_observations=native_observations,
             )
         print(json.dumps(result["summary"], sort_keys=True))
     finally:
@@ -858,6 +904,7 @@ def main() -> int:
     parser.add_argument("--operation")
     parser.add_argument("--case-id", action="append")
     parser.add_argument("--exclude-case-id", action="append")
+    parser.add_argument("--parity-only", action="store_true", help="Measure canonical parity cases without native coverage supplements")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--python-report", type=Path, default=DEFAULT_PYTHON_REPORT)
     parser.add_argument("--llvm-report", type=Path, default=DEFAULT_LLVM_REPORT)

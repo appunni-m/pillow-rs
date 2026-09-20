@@ -58362,7 +58362,8 @@
       "surface": "PIL.Image",
       "operation": "linear_gradient",
       "covers": [
-        "PIL.Image.linear_gradient.behavior.default"
+        "PIL.Image.linear_gradient.behavior.default",
+        "PIL.Image.linear_gradient.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -58562,7 +58563,8 @@
       "surface": "PIL.Image",
       "operation": "radial_gradient",
       "covers": [
-        "PIL.Image.radial_gradient.behavior.default"
+        "PIL.Image.radial_gradient.behavior.default",
+        "PIL.Image.radial_gradient.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -67985,86 +67987,6 @@
             "sigma": {
               "kind": "literal",
               "value": 1.0
-            }
-          }
-        },
-        {
-          "step_id": "materialize",
-          "surface": "PIL.Image.Image",
-          "operation": "tobytes",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "call"
-          },
-          "arguments": {}
-        }
-      ],
-      "observations": [
-        "call",
-        "materialize"
-      ]
-    },
-    {
-      "case_id": "pipeline-case.lineargradient.materialized-smoke",
-      "surface": "PIL.Image",
-      "operation": "linear_gradient",
-      "covers": [
-        "PIL.Image.linear_gradient.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "linear_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "L"
-            }
-          }
-        },
-        {
-          "step_id": "materialize",
-          "surface": "PIL.Image.Image",
-          "operation": "tobytes",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "call"
-          },
-          "arguments": {}
-        }
-      ],
-      "observations": [
-        "call",
-        "materialize"
-      ]
-    },
-    {
-      "case_id": "pipeline-case.radialgradient.materialized-smoke",
-      "surface": "PIL.Image",
-      "operation": "radial_gradient",
-      "covers": [
-        "PIL.Image.radial_gradient.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "radial_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "L"
             }
           }
         },

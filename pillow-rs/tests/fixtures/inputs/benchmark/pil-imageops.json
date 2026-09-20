@@ -79,7 +79,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "pipeline-case.colorize.materialized-smoke"
+        "case_id": "PIL.ImageOps.colorize.nuanced.two-color"
       },
       "measurement": {
         "boundary": "whole_workflow",

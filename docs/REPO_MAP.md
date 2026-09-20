@@ -314,6 +314,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- migration_parity_inventory.py
     |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
+    |-- reduce_migration_parity_cases.py
     |-- release_versions.py
     |-- report_migration_changed_line_coverage.py
     |-- report_migration_js_parity_gaps.py
@@ -342,6 +343,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_docs_benchmark_view.py
     |-- test_docs_release.py
     |-- test_docs_site.py
+    |-- test_font_native_cases.py
+    |-- test_parity_reduction.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
     |-- validate_migration_parity_contract.py

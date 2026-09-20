@@ -797,8 +797,6 @@
           "pipeline-case.compositemodule.materialized-smoke",
           "pipeline-case.eval.materialized-smoke",
           "pipeline-case.effectnoise.materialized-smoke",
-          "pipeline-case.lineargradient.materialized-smoke",
-          "pipeline-case.radialgradient.materialized-smoke",
           "pipeline-case.effectmandelbrot.materialized-smoke"
         ],
         "command_ids": []
