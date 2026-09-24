@@ -299,31 +299,50 @@ fn pil_grayscale_inner(
     img: &DynamicImage,
     round: bool,
 ) -> Result<crate::raster::GrayImage, PilError> {
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
+    let (w, h) = (img.width(), img.height());
     // Pillow's ImageOps.grayscale preserves valid empty images.  The output
     // has no samples to allocate or process, so use the explicit empty-image
     // allowance rather than treating this as an invalid allocation.
     let dims = CheckedDims::new_allow_empty(w, h, 1)?;
-    let rgb_data = rgb.as_raw().as_slice();
-
     // PIL-identical 16-bit fixed-point BT.601:
     // Y = (19595*R + 38470*G + 7471*B + [32768]) >> 16
     let rounding = if round { 32768u32 } else { 0u32 };
-    let mut gray = dims.alloc_buffer();
-    let len = rgb_data.len().min(dims.total_pixels() * 3);
-    let mut i = 0;
-    while i + 2 < len {
-        let r = rgb_data[i] as u32;
-        let g = rgb_data[i + 1] as u32;
-        let b = rgb_data[i + 2] as u32;
-        let y = (19595u32 * r + 38470u32 * g + 7471u32 * b + rounding) >> 16;
-        gray[i / 3] = y.min(255) as u8;
-        i += 3;
-    }
+    // Borrow byte storage in its native layout. Expanding L/LA or stripping
+    // RGBA through to_rgb8 allocates an entire extra image; even RGB clones.
+    let gray = match img {
+        DynamicImage::ImageLuma8(source) => source.as_raw().to_vec(),
+        DynamicImage::ImageLumaA8(source) => source
+            .as_raw()
+            .chunks_exact(2)
+            .map(|pixel| pixel[0])
+            .collect(),
+        DynamicImage::ImageRgb8(source) => {
+            grayscale_rgb_bytes::<3>(source.as_raw(), dims, rounding)
+        }
+        DynamicImage::ImageRgba8(source) => {
+            grayscale_rgb_bytes::<4>(source.as_raw(), dims, rounding)
+        }
+        _ => grayscale_rgb_bytes::<3>(img.to_rgb8().as_raw(), dims, rounding),
+    };
 
     crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("pil_grayscale buffer mismatch".to_string()))
+}
+
+fn grayscale_rgb_bytes<const CHANNELS: usize>(
+    source: &[u8],
+    dims: CheckedDims,
+    rounding: u32,
+) -> Vec<u8> {
+    let mut gray = dims.alloc_buffer();
+    for (pixel, output) in source.chunks_exact(CHANNELS).zip(&mut gray) {
+        *output = ((19595 * u32::from(pixel[0])
+            + 38470 * u32::from(pixel[1])
+            + 7471 * u32::from(pixel[2])
+            + rounding)
+            >> 16) as u8;
+    }
+    gray
 }
 
 /// Converts a CMYK image to Pillow-compatible grayscale.

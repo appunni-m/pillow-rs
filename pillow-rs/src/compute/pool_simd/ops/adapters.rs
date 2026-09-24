@@ -7656,6 +7656,11 @@ fn native_convert_layout(
     target: &ColorMode,
     mode: Option<&str>,
 ) -> Option<NativeConvertLayout> {
+    // RGBa needs unpremultiplication before luma. The byte converter below
+    // has no such arithmetic; retain the exact CPU path for this contract.
+    if mode == Some("RGBa") && matches!(target, ColorMode::L) {
+        return None;
+    }
     let (target_channels, target_is_luma, target_is_cmyk, target_is_hsv, target_is_ycbcr) =
         native_convert_target(target)?;
     let source_channels = if target_is_hsv || target_is_ycbcr {
@@ -7743,6 +7748,9 @@ fn native_convert_shape_layout(
     target: &ColorMode,
     mode: Option<&str>,
 ) -> Option<NativeConvertLayout> {
+    if mode == Some("RGBa") && matches!(target, ColorMode::L) {
+        return None;
+    }
     let (target_channels, target_is_luma, target_is_cmyk, target_is_hsv, target_is_ycbcr) =
         native_convert_target(target)?;
     let source_channels = if target_is_hsv || target_is_ycbcr {
@@ -11122,15 +11130,87 @@ pub fn simd_invert_chops(
 // Section B: Single-image with extra params (solarize, posterize, ...)
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Convert an admitted native byte image to `L` without widening it through
-/// packed RGBA storage.
-///
-/// The source-byte gather is scalar control because `wide` does not expose a
-/// portable byte-gather instruction.  RGB/RGBA luma arithmetic runs in eight
-/// `u32` lanes with Pillow's fixed-point coefficients; LA uses a vector
-/// shuffle to drop alpha; L uses a native vector copy.  The final partial
-/// group is zero-padded and processed by the same vector kernel, so strict
-/// SIMD never becomes a scalar-only implementation for a short valid image.
+/// Extract sixteen samples from complete interleaved byte vectors. Const
+/// layout/channel parameters let the compiler keep shuffle masks invariant.
+#[inline]
+fn grayscale_channel<const CHANNELS: usize, const CHANNEL: usize>(blocks: &[u8x16; 4]) -> u8x16 {
+    let mut samples = u8x16::splat(0);
+    for (block, bytes) in blocks.iter().enumerate().take(CHANNELS) {
+        let select = u8x16::new(std::array::from_fn(|lane| {
+            let index = lane * CHANNELS + CHANNEL;
+            if index / 16 == block {
+                (index % 16) as u8
+            } else {
+                0x80
+            }
+        }));
+        samples |= bytes.swizzle_relaxed(select);
+    }
+    samples
+}
+
+#[inline(always)]
+fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
+    let load = |offset| {
+        u8x16::new(
+            source[offset..offset + 16]
+                .try_into()
+                .expect("complete grayscale vector"),
+        )
+    };
+    let blocks = [
+        load(0),
+        load(16),
+        if CHANNELS >= 3 {
+            load(32)
+        } else {
+            u8x16::splat(0)
+        },
+        if CHANNELS == 4 {
+            load(48)
+        } else {
+            u8x16::splat(0)
+        },
+    ];
+    let red = grayscale_channel::<CHANNELS, 0>(&blocks);
+    if CHANNELS == 2 {
+        return red.to_array();
+    }
+    let r = u16x16::from(red);
+    let g = u16x16::from(grayscale_channel::<CHANNELS, 1>(&blocks));
+    let b = u16x16::from(grayscale_channel::<CHANNELS, 2>(&blocks));
+    // Decompose the exact coefficients at bit 8, retaining their residual:
+    // 19595=77*256-117, 38470=150*256+70, 7471=29*256+47.
+    // The biased residual is 2933..62603; wrapping u16 operations therefore
+    // produce its exact positive value. Base plus carry stays <=65524.
+    // Exhaustive live-Pillow verification covers all 2^24 RGB inputs.
+    // Force compile-time vector constants: runtime splat construction on
+    // Apple ARM emitted seven memset_pattern16 calls per sixteen pixels.
+    let base = r * const { u16x16::splat(77) }
+        + g * const { u16x16::splat(150) }
+        + b * const { u16x16::splat(29) };
+    let residual = g * const { u16x16::splat(70) } + b * const { u16x16::splat(47) }
+        - r * const { u16x16::splat(117) }
+        + const { u16x16::splat(32768) };
+    simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
+}
+
+fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
+    let mut inputs = source.chunks_exact(16 * CHANNELS);
+    let mut outputs = output.chunks_exact_mut(16);
+    for (input, output) in inputs.by_ref().zip(outputs.by_ref()) {
+        output.copy_from_slice(&grayscale_block::<CHANNELS>(input));
+    }
+    let tail = outputs.into_remainder();
+    if !tail.is_empty() {
+        let mut padded = [0u8; 64];
+        padded[..inputs.remainder().len()].copy_from_slice(inputs.remainder());
+        tail.copy_from_slice(&grayscale_block::<CHANNELS>(&padded)[..tail.len()]);
+    }
+}
+
+/// Convert admitted native bytes to L. Complete groups use direct vector
+/// loads and deinterleaving; only the final partial group needs padding.
 fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8>, u64, u64)> {
     if !(1..=4).contains(&channels) {
         return None;
@@ -11140,61 +11220,15 @@ fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8
     if source.len() != pixels.checked_mul(channels)? {
         return None;
     }
-
     let mut output = vec![0u8; pixels];
-    let mut vector_blocks = 0u64;
-
     match channels {
-        1 => {
-            for start in (0..pixels).step_by(16) {
-                let active = (pixels - start).min(16);
-                let mut padded = [0u8; 16];
-                padded[..active].copy_from_slice(&source[start..start + active]);
-                let block = u8x16::new(padded);
-                output[start..start + active].copy_from_slice(&block.to_array()[..active]);
-                vector_blocks = vector_blocks.saturating_add(1);
-            }
-        }
-        2 => {
-            let select_luma = u8x16::new([0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0]);
-            for start in (0..pixels).step_by(8) {
-                let active = (pixels - start).min(8);
-                let source_start = start * 2;
-                let source_len = active * 2;
-                let mut padded = [0u8; 16];
-                padded[..source_len]
-                    .copy_from_slice(&source[source_start..source_start + source_len]);
-                let luma = u8x16::new(padded).swizzle_relaxed(select_luma).to_array();
-                output[start..start + active].copy_from_slice(&luma[..active]);
-                vector_blocks = vector_blocks.saturating_add(1);
-            }
-        }
-        3 | 4 => {
-            for start in (0..pixels).step_by(8) {
-                let active = (pixels - start).min(8);
-                let mut red = [0u8; 8];
-                let mut green = [0u8; 8];
-                let mut blue = [0u8; 8];
-                for lane in 0..active {
-                    let source_start = (start + lane) * channels;
-                    red[lane] = source[source_start];
-                    green[lane] = source[source_start + 1];
-                    blue[lane] = source[source_start + 2];
-                }
-                let luma = (u32x8::new(red.map(u32::from)) * u32x8::splat(19595)
-                    + u32x8::new(green.map(u32::from)) * u32x8::splat(38470)
-                    + u32x8::new(blue.map(u32::from)) * u32x8::splat(7471)
-                    + u32x8::splat(32768))
-                    >> 16u32;
-                let luma = luma.to_array().map(|value| value.min(255) as u8);
-                output[start..start + active].copy_from_slice(&luma[..active]);
-                vector_blocks = vector_blocks.saturating_add(1);
-            }
-        }
+        1 => output.copy_from_slice(source),
+        2 => grayscale_interleaved::<2>(source, &mut output),
+        3 => grayscale_interleaved::<3>(source, &mut output),
+        4 => grayscale_interleaved::<4>(source, &mut output),
         _ => return None,
     }
-
-    Some((output, vector_blocks, 0))
+    Some((output, pixels.div_ceil(16) as u64, 0))
 }
 
 /// Apply ImageOps.colorize's three per-value LUTs to native `L` samples.

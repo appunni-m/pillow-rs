@@ -710,6 +710,152 @@ pre-push checks remain pending. After these three attempts, the next ranked
 visit is `PIL.ImageOps.grayscale`; the shared font-loading blockers remain
 recorded separately above. No coverage collection was run.
 
+## Grayscale visit
+
+The seven-workload baseline is
+`migration-benchmark-0678c64154da4ed3b3d6910d8de66401`. At 1024 × 768,
+Pillow/CPU/SIMD/GPU medians are 0.382959/0.929271/1.843626/2.985209 ms.
+The ordinary standard row only queues the operation and has no native execution
+proof; six materialized workflows provide the meaningful latency boundary.
+
+Four bounded attempts address distinct mechanisms:
+
+1. The original focused cohort passes 42 comparisons, but an 18-mode audit
+   finds 102 failures among 972 comparisons. `RGBa` needs integer
+   unpremultiplication before grayscale; zero alpha preserves stored channels,
+   and samples above alpha clip. `La` must construct successfully and then
+   reject conversion to L, including empty images. Core constructors now retain
+   its logical tag, and public Grayscale/conversion report the exact error.
+   CPU conversion to L shares the source-aware grayscale executor. SIMD's
+   conversion admission rejects its unsupported RGBa-to-L arithmetic instead
+   of interpreting premultiplied bytes as ordinary RGBA. These premultiplied
+   cases use the exact CPU path and do not prove native SIMD/GPU acceleration.
+   Thirty-six permanent input-only cases cover both entry points. The first
+   repair leaves eight SIMD conversion failures; the admission fix clears them.
+   Receipts: `perf-grayscale-20260925-initial-modes-parity.json` and
+   `perf-grayscale-20260925-parity-fix-parity.json`.
+2. CPU grayscale borrows native L/LA/RGB/RGBA storage. Previously, `to_rgb8()`
+   allocated a complete intermediate even for RGB inputs. Layout-specific loops
+   remove that copy/expansion while keeping the rounded L and truncated bilevel
+   formulas distinct. Receipt `migration-benchmark-7e49cdb9768547ea84deb0413c334a6d`
+   reduces large CPU latency to 0.201313 ms, 4.62× faster than its initial value;
+   Pillow measures 0.338479 ms in that run. Small public calls still miss.
+3. SIMD loads complete sixteen-pixel blocks and deinterleaves with byte shuffles;
+   only the tail is padded. L is a native copy and LA drops alpha by shuffle.
+   RGB arithmetic retains all coefficient bits in sixteen u16 lanes. Write
+   `19595 = 77*256-117`, `38470 = 150*256+70`, and `7471 = 29*256+47`.
+   With `base = 77R+150G+29B` and `residual = 70G+47B-117R+32768`, the exact
+   result is `(base + (residual >> 8)) >> 8`. Residual lies in 2933..62603;
+   unsigned wrapping intermediates recover that positive result, and the final
+   pre-shift sum is at most 65524. All 16,777,216 RGB triples match live Pillow
+   on CPU/SIMD/GPU before and after this rewrite. The prototype still takes
+   1.041396 ms on large SIMD input: assembly reveals seven `memset_pattern16`
+   calls setting up vector constants for each sixteen-pixel block. Receipt:
+   `migration-benchmark-e1ae0db70c864ec88a130693f87036d8`; assembly:
+   `grayscale-simd-blocks-20260925.asm`.
+4. The final code-generation change forces compile-time vector constants and
+   inlines the block kernel so the loop can retain them. It changes no arithmetic
+   or input contract.
+
+Before the final constant-setup change, the shared conversion/Color/Contrast/
+Grayscale cohort passes 2,709 comparisons, the 18-mode audit passes 972, and
+all native-layout widths 0..33 pass 510 comparisons. Their receipts are
+`perf-grayscale-20260925-final-shared-parity.json`,
+`perf-grayscale-20260925-final-modes-parity.json`, and
+`perf-grayscale-20260925-final-tails-parity.json`. The exhaustive RGB diagnostic
+retains actual concatenated output bytes, backend receipts, and binary identities
+in `grayscale-rgb-domain-20260925-initial/` and
+`grayscale-rgb-domain-20260925-final/`; the latter records attempt three.
+
+The new exhaustive diagnostic initially assumed a `status` key in raw core
+telemetry. That key belongs to adapter receipts, not raw telemetry. The corrected
+harness requires a successful terminal byte export, the requested and actual
+backend, one operation without fallback, and complete GPU upload/readback plus
+one dispatch. It compares actual bytes with isolated live Pillow; it never uses
+the proposed formula to construct backend expected outputs. This was a harness
+schema error, not a production parity failure. No assertion, workload, or
+performance threshold is weakened.
+
+### Grayscale checkpoint and remaining gaps
+
+The final SIMD assembly has no function calls in the complete-pixel hot loop;
+shuffle masks and arithmetic constants are initialized before it. Receipt:
+`grayscale-simd-constants-20260925.asm`. After that last change, all RGB triples
+again pass exact CPU/SIMD/GPU comparison, 510 tail/layout comparisons pass, and
+96 maintained Grayscale/workflow comparisons pass. Final receipts:
+`grayscale-rgb-domain-20260925-constants/report.json`,
+`perf-grayscale-20260925-constants-tails-parity.json`, and
+`perf-grayscale-20260925-constants-final-parity.json`.
+
+The checkpoint latency receipt is
+`migration-benchmark-c5c873b4ac384bd79199df4bfcc26f29`. All six materialized
+rows have completed native CPU/SIMD/GPU receipts without fallback. The separate
+workflow parity checks above establish exact output. No workload or repeat
+policy changes. An earlier timing run overlapped documentation generation;
+`perf-grayscale-20260925-constants-final.json` is retained, while this checkpoint
+run starts after that background work completes. Median milliseconds are:
+
+| Grayscale workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized RGB 16 × 16 | 0.012375 | 0.011979 | 0.012979 | 0.561979 |
+| RGB 32 × 24 | 0.010167 | 0.010750 | 0.011125 | 0.425396 |
+| RGB 1 × 1 | 0.009771 | 0.010084 | 0.010604 | 0.534646 |
+| RGB 32 × 32 | 0.010146 | 0.010479 | 0.011104 | 0.418063 |
+| RGB 256 × 256 | 0.027021 | 0.023625 | 0.031875 | 0.536834 |
+| RGB 1024 × 768 | 0.292855 | 0.205959 | 0.261521 | 2.226750 |
+
+Large CPU and SIMD latency improve 4.51× and 7.05× against their starting
+values. SIMD is only 1.12× faster than Pillow there and misses the 5× target
+at every materialized size. CPU still loses on three small rows. GPU still
+loses to SIMD on every row; its implementation is unchanged, so run-to-run GPU
+timing variation is not an optimization gain.
+
+The next Grayscale visit needs to address public wrapper/materialization/export
+costs for small images and compare native interleaved loads with the portable
+shuffle sequence. The CPU loop currently beats explicit SIMD on the largest
+row. GPU RGB 1024 × 768 still uploads and reads back 3,145,728 bytes each for a
+786,432-byte L output. A native input/output layout would remove RGB expansion
+and reduce readback, but requires an exact dedicated dispatch/result path.
+GPU synchronization and queue behavior also remain unresolved. Premultiplied
+modes still lack native acceleration; cross-runtime verification remains pending.
+
+The first changing-input run completes its L cohort, then the new Grayscale
+selector rejects Pillow's RGB reference inventory because one remaining check
+assumes output mode equals input mode. The shared expected-result-mode helper
+now requires L for grayscale at both inventory and returned-output checks;
+all previous mode-preserving selectors keep their existing requirement.
+`grayscale-throughput-20260925-checkpoint.json` retains this failed harness run.
+The fixed harness continues checking every output byte and the complete input
+upload independently of the smaller output readback.
+
+Final changing-input receipt `grayscale-throughput-20260925-final.json` passes
+40,320 exact outputs, including 38,400 timed completions, with consistent source
+and binary identities. Completed 1024 × 768 images per second are:
+
+| Input mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 8120.5 | 13910.2 | 12344.5 | 500.1 |
+| L | 2 | 8014.5 | 14602.3 | 14267.5 | 745.2 |
+| L | 4 | 7403.3 | 15118.7 | 14256.3 | 989.4 |
+| RGB | 1 | 1715.6 | 3966.0 | 3238.0 | 523.5 |
+| RGB | 2 | 2778.9 | 6535.9 | 5429.9 | 829.1 |
+| RGB | 4 | 3540.4 | 8173.9 | 7426.8 | 1220.6 |
+
+At depth one, SIMD request medians are 0.072042 ms for L and 0.284459 ms for
+RGB, versus Pillow's 0.105042/0.558459 ms: 1.46×/1.96×. CPU medians are
+0.063167/0.226812 ms. GPU medians are 1.962875/1.844958 ms, and GPU throughput
+loses to SIMD at every queue depth. These completed-request measurements do not
+meet the remaining goals.
+
+Four attempts are checkpointed. The reusable optimization skill now includes
+semantic-versus-physical layout decisions, exact coefficient decomposition with
+bounded carries, and diagnosing runtime vector-constant setup. No coverage was
+run; input regeneration updates only declared plans and documentation counts.
+Pre-push checks and cross-runtime evidence remain pending. No operation is
+newly declared complete. The next bounded visit is `PIL.Image.Image.resize`,
+including its mapped pipeline workloads; Grayscale remains pending with the
+specific blockers above.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose

@@ -299,6 +299,14 @@ impl Image {
             return Ok(self.copy());
         }
 
+        if src_mode == "La" && mode == "L" {
+            // Pillow cannot drop premultiplied luma's alpha directly, even
+            // for empty input. Reject at the public call, before queuing work.
+            return Err(PilError::ValueError(
+                "conversion from La to L not supported".into(),
+            ));
+        }
+
         // Pillow's typed I;16 converters consume an 8-bit luma sample as the
         // same numeric unsigned word; they do not expand 17 to 0x1111 like
         // the generic image-raster u8→u16 conversion.  Keep this destination
