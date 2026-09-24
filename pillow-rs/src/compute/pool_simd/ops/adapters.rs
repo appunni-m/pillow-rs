@@ -4819,7 +4819,6 @@ pub(crate) fn simd_supports_for_image(
             offset,
         } => {
             scale.is_finite()
-                && *scale != 0.0
                 && offset.is_finite()
                 && simd_chops_operands_supported(img, other, mode)
                 && if *scale == 1.0 && *offset == 0.0 {
@@ -6334,7 +6333,6 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             offset,
         } => {
             scale.is_finite()
-                && *scale != 0.0
                 && offset.is_finite()
                 && shape_preserves_chops_operands(shape, other, mode)
                 && if *scale == 1.0 && *offset == 0.0 {
@@ -7257,7 +7255,6 @@ pub(crate) fn simd_in_place_supported(
         .is_some(),
         PipelineOp::Add { scale, offset, .. } | PipelineOp::Subtract { scale, offset, .. } => {
             scale.is_finite()
-                && *scale != 0.0
                 && offset.is_finite()
                 && native_chops_layout(img, mode)
                     .is_some_and(|channels| has_affine_vector_rows(img, channels))
@@ -8602,15 +8599,26 @@ where
         return Some(img.clone());
     }
     let mut output = vec![0u8; left.len()];
-    for (block_index, output_chunk) in output.chunks_mut(16).enumerate() {
-        let start = block_index * 16;
-        let active = output_chunk.len();
+    let mut left_chunks = left.chunks_exact(16);
+    let mut right_chunks = right.chunks_exact(16);
+    let mut output_chunks = output.chunks_exact_mut(16);
+    for ((left_chunk, right_chunk), output_chunk) in left_chunks
+        .by_ref()
+        .zip(right_chunks.by_ref())
+        .zip(output_chunks.by_ref())
+    {
+        let left = u8x16::new(left_chunk.try_into().expect("16-byte exact chunk"));
+        let right = u8x16::new(right_chunk.try_into().expect("16-byte exact chunk"));
+        output_chunk.copy_from_slice(&vector_op(left, right).to_array());
+    }
+    let remainder = output_chunks.into_remainder();
+    if !remainder.is_empty() {
         let mut left_padded = [0u8; 16];
         let mut right_padded = [0u8; 16];
-        left_padded[..active].copy_from_slice(&left[start..start + active]);
-        right_padded[..active].copy_from_slice(&right[start..start + active]);
+        left_padded[..remainder.len()].copy_from_slice(left_chunks.remainder());
+        right_padded[..remainder.len()].copy_from_slice(right_chunks.remainder());
         let values = vector_op(u8x16::new(left_padded), u8x16::new(right_padded));
-        output_chunk.copy_from_slice(&values.to_array()[..active]);
+        remainder.copy_from_slice(&values.to_array()[..remainder.len()]);
     }
     crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(16) as u64);
     crate::compute::record_pipeline_operation_scalar_tail(0);
@@ -8654,15 +8662,21 @@ where
         crate::compute::record_pipeline_operation_path("native-copy");
         return true;
     }
-    for (block_index, left_chunk) in left.chunks_mut(16).enumerate() {
-        let start = block_index * 16;
-        let active = left_chunk.len();
+    let mut left_chunks = left.chunks_exact_mut(16);
+    let mut right_chunks = right.chunks_exact(16);
+    for (left_chunk, right_chunk) in left_chunks.by_ref().zip(right_chunks.by_ref()) {
+        let left = u8x16::new((&*left_chunk).try_into().expect("16-byte exact chunk"));
+        let right = u8x16::new(right_chunk.try_into().expect("16-byte exact chunk"));
+        left_chunk.copy_from_slice(&vector_op(left, right).to_array());
+    }
+    let remainder = left_chunks.into_remainder();
+    if !remainder.is_empty() {
         let mut left_padded = [0u8; 16];
         let mut right_padded = [0u8; 16];
-        left_padded[..active].copy_from_slice(left_chunk);
-        right_padded[..active].copy_from_slice(&right[start..start + active]);
+        left_padded[..remainder.len()].copy_from_slice(remainder);
+        right_padded[..remainder.len()].copy_from_slice(right_chunks.remainder());
         let values = vector_op(u8x16::new(left_padded), u8x16::new(right_padded));
-        left_chunk.copy_from_slice(&values.to_array()[..active]);
+        remainder.copy_from_slice(&values.to_array()[..remainder.len()]);
     }
     crate::compute::record_pipeline_operation_vector_blocks(left.len().div_ceil(16) as u64);
     crate::compute::record_pipeline_operation_scalar_tail(0);
@@ -8919,7 +8933,7 @@ fn native_module_blend(
 }
 
 #[inline]
-fn native_chops_affine_byte(value: f64) -> u8 {
+fn native_chops_affine_byte(value: f32) -> u8 {
     if value <= 0.0 {
         0
     } else if value >= 255.0 {
@@ -8933,16 +8947,16 @@ fn native_chops_affine_byte(value: f64) -> u8 {
 fn native_chops_affine_vector(
     left: [u8; 8],
     right: [u8; 8],
-    scale: f64,
-    offset: f64,
+    scale: f32,
+    offset: f32,
     subtract: bool,
 ) -> [u8; 8] {
-    let left = f64x8::new(left.map(f64::from));
-    let right = f64x8::new(right.map(f64::from));
+    let left = f32x8::new(left.map(f32::from));
+    let right = f32x8::new(right.map(f32::from));
     let value = if subtract {
-        (left - right) / f64x8::splat(scale) + f64x8::splat(offset)
+        (left - right) / f32x8::splat(scale) + f32x8::splat(offset)
     } else {
-        (left + right) / f64x8::splat(scale) + f64x8::splat(offset)
+        (left + right) / f32x8::splat(scale) + f32x8::splat(offset)
     };
     value.to_array().map(native_chops_affine_byte)
 }
@@ -8959,8 +8973,8 @@ fn native_chops_pair_channels(
 
 /// Apply Pillow's scaled/offset Chops formula to native byte samples.
 ///
-/// The arithmetic is vectorized in eight exact `f64` lanes because Pillow
-/// evaluates `(left +/- right) / scale + offset` in double precision before
+/// The arithmetic is vectorized in eight `f32` lanes because Pillow
+/// narrows scale to float and evaluates the division and offset addition before
 /// clamping and truncating to a byte. Loads are native interleaved bytes; no
 /// packed RGBA conversion is introduced for RGB, LA, RGBA, CMYK, HSV, YCbCr,
 /// RGBa, or RGBX storage.
@@ -8973,9 +8987,11 @@ fn native_chops_affine(
     subtract: bool,
 ) -> Option<DynamicImage> {
     let channels = native_chops_pair_channels(img, other, mode)?;
-    if !scale.is_finite() || scale == 0.0 || !offset.is_finite() {
+    if !scale.is_finite() || !offset.is_finite() {
         return None;
     }
+    let scale = scale as f32;
+    let offset = offset as f32;
     let width = img.width() as usize;
     let height = img.height() as usize;
     let row_stride = width.checked_mul(channels)?;
@@ -9017,9 +9033,9 @@ fn native_chops_affine(
         }
         for index in vector_len..output_row.len() {
             let value = if subtract {
-                (f64::from(left_row[index]) - f64::from(right_row[index])) / scale + offset
+                (f32::from(left_row[index]) - f32::from(right_row[index])) / scale + offset
             } else {
-                (f64::from(left_row[index]) + f64::from(right_row[index])) / scale + offset
+                (f32::from(left_row[index]) + f32::from(right_row[index])) / scale + offset
             };
             output_row[index] = native_chops_affine_byte(value);
         }
@@ -9048,9 +9064,11 @@ fn native_chops_affine_in_place(
     let Some(channels) = native_chops_pair_channels(&*img, other, mode) else {
         return false;
     };
-    if !scale.is_finite() || scale == 0.0 || !offset.is_finite() {
+    if !scale.is_finite() || !offset.is_finite() {
         return false;
     }
+    let scale = scale as f32;
+    let offset = offset as f32;
     let width = img.width() as usize;
     let height = img.height() as usize;
     let Some(row_stride) = width.checked_mul(channels) else {
@@ -9095,9 +9113,9 @@ fn native_chops_affine_in_place(
         }
         for index in vector_len..left_row.len() {
             let value = if subtract {
-                (f64::from(left_row[index]) - f64::from(right_row[index])) / scale + offset
+                (f32::from(left_row[index]) - f32::from(right_row[index])) / scale + offset
             } else {
-                (f64::from(left_row[index]) + f64::from(right_row[index])) / scale + offset
+                (f32::from(left_row[index]) + f32::from(right_row[index])) / scale + offset
             };
             left_row[index] = native_chops_affine_byte(value);
         }

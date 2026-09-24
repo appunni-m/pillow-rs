@@ -1,7 +1,7 @@
 //! Pillow `ImageChops`-style channel operations.
 //!
-//! Functions return lazy pipeline images that combine one or two inputs. Shape
-//! and mode compatibility are checked when the pipeline materializes.
+//! Functions return lazy pipeline images that combine one or two inputs.
+//! Binary arithmetic clips to the overlapping dimensions after validating modes.
 
 use std::sync::Arc;
 
@@ -33,7 +33,9 @@ fn validate_binary_operands(image1: &Image, image2: &Image) -> Result<(), PilErr
     let Some(class2) = binary_mode_class(&mode2) else {
         return Err(PilError::ValueError("images do not match".into()));
     };
-    if image1.size()? != image2.size()? || class1 != class2 {
+    // Chops.c clips binary results to the smaller width and height; unequal
+    // dimensions are valid. Backend admission still checks its own layout needs.
+    if class1 != class2 {
         return Err(PilError::ValueError("images do not match".into()));
     }
     Ok(())
@@ -53,8 +55,8 @@ fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilEr
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -71,8 +73,8 @@ pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Im
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn subtract(
     image1: &Image,
     image2: &Image,
@@ -94,8 +96,8 @@ pub fn subtract(
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -110,8 +112,8 @@ pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -126,8 +128,8 @@ pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -142,8 +144,8 @@ pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -158,8 +160,8 @@ pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -174,8 +176,8 @@ pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -190,8 +192,8 @@ pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -206,8 +208,8 @@ pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -314,8 +316,8 @@ pub fn offset_with_default(
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -330,8 +332,8 @@ pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error for unsupported or incompatible byte-mode layouts. The
+/// result clips to the smaller width and height; execution errors are deferred.
 pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(

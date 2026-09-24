@@ -528,53 +528,28 @@ pub(crate) fn gpu_filter_rational_denominator(
     None
 }
 
-/// Return the f32 parameters when the Add/Subtract WGSL kernel is exact for
-/// every possible pair of byte samples.
-///
-/// The public Pillow operation evaluates the affine expression in f64 and
-/// truncates after clamping. The shader evaluates the same expression in f32,
-/// so checking all 256 × 256 byte pairs in scalar preflight proves the
-/// selected parameterization before a vector dispatch is admitted. A zero
-/// divisor remains CPU-only because WGSL division by zero is not a safe way to
-/// represent Pillow's historical C behavior.
+/// The GPU applies a parameter-only lookup table, so zero and subnormal
+/// divisors do not require device floating-point division or CPU pixel work.
 #[cfg(feature = "gpu")]
-pub(crate) fn gpu_chops_affine_params(scale: f64, offset: f64, subtract: bool) -> Option<[u32; 2]> {
-    if !scale.is_finite() || scale == 0.0 || !offset.is_finite() {
-        return None;
+pub(crate) fn gpu_chops_affine_supported(scale: f64, offset: f64) -> bool {
+    scale.is_finite() && offset.is_finite()
+}
+
+/// Pack the complete affine numerator domain into 512 bytes of uniforms.
+/// Add has sums 0..510; Subtract has differences -255..255. The last byte is
+/// padding. This table depends only on scale/offset, never either image.
+/// Host f32 division preserves Pillow rounding even when device division uses
+/// an approximate reciprocal or flushes a subnormal divisor to zero.
+fn gpu_chops_affine_lut(scale: f64, offset: f64, subtract: bool) -> Vec<u32> {
+    let scale = scale as f32;
+    let offset = offset as f32;
+    let mut packed = vec![0u32; 128];
+    for index in 0..511 {
+        let numerator = index as f32 - if subtract { 255.0 } else { 0.0 };
+        let value = (numerator / scale + offset).clamp(0.0, 255.0) as u8;
+        packed[index / 4] |= u32::from(value) << ((index % 4) * 8);
     }
-
-    let scale_f32 = scale as f32;
-    let offset_f32 = offset as f32;
-    if !scale_f32.is_finite()
-        || !offset_f32.is_finite()
-        || scale_f32 as f64 != scale
-        || offset_f32 as f64 != offset
-    {
-        return None;
-    }
-
-    for a in 0..=255_u32 {
-        for b in 0..=255_u32 {
-            let numerator = if subtract {
-                f64::from(a) - f64::from(b)
-            } else {
-                f64::from(a) + f64::from(b)
-            };
-            let cpu = (numerator / scale + offset).clamp(0.0, 255.0) as u8;
-
-            let numerator_f32 = if subtract {
-                a as f32 - b as f32
-            } else {
-                a as f32 + b as f32
-            };
-            let shader = (numerator_f32 / scale_f32 + offset_f32).clamp(0.0, 255.0) as u8;
-            if cpu != shader {
-                return None;
-            }
-        }
-    }
-
-    Some([scale_f32.to_bits(), offset_f32.to_bits()])
+    packed
 }
 
 /// Return the finite float alpha used by Pillow's ImagingBlend and the WGSL
@@ -718,19 +693,12 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // Sharpness uses integer 3x3 smooth weights and a scalar-proven
         // fixed-point blend in the active WGSL implementation.
         PipelineOp::Sharpness { factor } => gpu_sharpness_factor_int(*factor).is_some(),
-        // Add/Subtract use a scalar exhaustive proof for the f32 uniform
-        // representation instead of limiting the real vector kernel to the
-        // unit-divisor endpoint.
-        PipelineOp::Add { scale, offset, .. } => {
-            gpu_chops_affine_params(*scale, *offset, false).is_some()
-        }
-        PipelineOp::Subtract { scale, offset, .. } => {
-            gpu_chops_affine_params(*scale, *offset, true).is_some()
-        }
-        // Blend's CPU contract evaluates f64 alpha before the final
-        // truncating cast. The real WGSL path uses f32 arithmetic, so admit
-        // only alpha values exhaustively proven equivalent over all byte
-        // pairs.
+        // Add/Subtract encode the complete sum/difference domain in a small
+        // parameter-only table, preserving host f32 rounding on the GPU.
+        PipelineOp::Add { scale, offset, .. } => gpu_chops_affine_supported(*scale, *offset),
+        PipelineOp::Subtract { scale, offset, .. } => gpu_chops_affine_supported(*scale, *offset),
+        // Blend narrows alpha to f32 and uses fused interpolation on both
+        // host and device; admission needs only the finite-alpha contract.
         PipelineOp::BlendModule { alpha, .. } => gpu_blend_alpha_params(*alpha).is_some(),
         // Color3DLut uses the same signed 12.4 table preparation and 18.15
         // coordinate scales as the CPU implementation. The table is packed
@@ -1138,15 +1106,9 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // 16-bit range would change valid offsets on wide/tall images.
         PipelineOp::Offset { x, y } => vec![*x as u32, *y as u32],
 
-        // ── Add / Subtract: scalar-proven f32 parameter bits ──
-        PipelineOp::Add { scale, offset, .. } => gpu_chops_affine_params(*scale, *offset, false)
-            .unwrap_or([0, 0])
-            .to_vec(),
-        PipelineOp::Subtract { scale, offset, .. } => {
-            gpu_chops_affine_params(*scale, *offset, true)
-                .unwrap_or([0, 0])
-                .to_vec()
-        }
+        // ── Add / Subtract: packed parameter-only affine lookup ──
+        PipelineOp::Add { scale, offset, .. } => gpu_chops_affine_lut(*scale, *offset, false),
+        PipelineOp::Subtract { scale, offset, .. } => gpu_chops_affine_lut(*scale, *offset, true),
 
         // ── BlendModule: native f32 alpha bits ──
         PipelineOp::BlendModule { alpha, .. } => {

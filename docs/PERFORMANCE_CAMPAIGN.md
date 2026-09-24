@@ -467,6 +467,134 @@ remain investigations rather than proven bottlenecks. No blend target is
 complete; pre-push and cross-runtime checks remain pending. The campaign moves
 to the next ranked operation, `PIL.ImageChops.add`.
 
+## Add visit
+
+This visit uses four bounded attempts: restore affine arithmetic and argument
+parity; replace inaccurate device division with a parameter table; restore
+unequal-size clipping; then simplify default CPU arithmetic and SIMD block
+loads. Subtract shares the affine implementation, and the bytewise helpers also
+serve min/max, difference, modulo, and logical Chops operations.
+
+The first exhaustive live-Pillow comparison failed 20 of 102 comparisons.
+Eighteen had wrong bytes because the CPU/SIMD formulas used binary64 instead
+of Pillow's binary32 scale, division, and offset addition. Two rejected the
+zero divisor under strict SIMD selection. Python offsets also need the integer
+index protocol and C-int range checks, rather than arbitrary floating offsets.
+The binding now preserves the observed exception types and messages, including
+C-long overflow before C-int overflow.
+
+Merely matching the shader's float type did not restore GPU parity: four of
+108 comparisons still failed after that first repair. Scale 0.3 exposed device
+division differences at truncation boundaries; a subnormal scale with offset 1
+also changed the zero numerator. Receipts preserve these failed variants in
+`perf-add-20260924-initial-pairs-parity.json` and
+`perf-add-20260924-f32-parity.json`.
+
+The retained GPU path builds a packed 512-byte table from scale and offset in
+Rust core. Although there are 65,536 input byte pairs, only 511 sums or
+differences can enter the affine formula. The GPU indexes that table while
+processing every pixel; the host neither reads image pixels to construct the
+table nor caches output images. This removes the old per-admission exhaustive
+pair scan and device floating division. All 36 exhaustive parameter cases
+execute natively on each backend: 108 exact comparisons, with one GPU dispatch
+and a 768-byte aligned parameter allocation per GPU receipt. The selected
+scales include zero, subnormal, negative, and values that narrow to infinity.
+Evidence: `perf-add-20260924-final-pairs-parity.json` and the corresponding
+`add-pairs-final-pairs-*-20260924.json` execution receipts.
+
+The third attempt corrected a shared public validator: Pillow clips unequal
+input dimensions to their overlap; rejecting them was wrong. A focused probe
+failed all 288 comparisons before the correction. Ninety-six permanent cases
+now cover twelve affected arithmetic operations in L/LA/RGB/RGBA, both empty
+overlaps and varied nonempty rows with different source strides. Native
+acceleration for unequal shapes still needs separate proof; fallback parity
+does not satisfy the accelerated target.
+
+The final attempt specializes default CPU Add/Subtract as saturating byte
+arithmetic. SIMD full blocks now load/store directly, padding only the final
+partial vector. The isolated Add loop improved 17.9× at 2.25 MiB, but the
+three-byte case regressed by about 2 ns; these component timings are not public
+latency claims. All 532 strict CPU/SIMD comparisons across ten operations,
+vector tails, row boundaries, and supported native byte modes pass. Evidence:
+`add-simd-loop-20260924.jsonl` and
+`perf-add-20260924-final-tails-parity.json`.
+
+### Argument-test representation limitation
+
+The migration manifest declares numeric offset literals and its validator
+rejects `None` and string literals before invoking either library. The first
+post-LUT benchmark therefore stopped before timing. No validator, assertion,
+threshold, or workload was weakened. The ten original offset inputs moved
+intact to `scripts/test_chops_affine_parity.py`, with an additional custom
+`__index__` object. All 66 backend/case comparisons pass against isolated live
+Pillow, checking exact output or exception type and message. Numeric rounding
+cases remain in the maintained corpus. This is an input-representation limit,
+not evidence that invalid offsets are supported.
+
+### Add checkpoint and remaining gaps
+
+The final shared-operation cohort passes 2,379 comparisons, including the
+permanent clipping cases: `perf-add-20260924-final-shared-parity.json`.
+All seven maintained Add workloads retain their original policy in receipt
+`migration-benchmark-13fceee41f6a4fd3abfc35ecb697fd2f`. The standard deferred
+construction row has no native execution proof. The six materialized rows
+record completed execution of the requested backend without fallback. Median
+milliseconds are:
+
+| Add workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized RGB 16 × 16 | 0.019521 | 0.018104 | 0.018188 | 0.477250 |
+| RGB 32 × 24 | 0.016271 | 0.076479 | 0.017542 | 0.331125 |
+| RGB 1 × 1 | 0.013438 | 0.017542 | 0.017354 | 0.402751 |
+| RGB 32 × 32 | 0.017146 | 0.017875 | 0.017146 | 0.559708 |
+| RGB 256 × 256 | 0.196875 | 0.039751 | 0.081667 | 0.850771 |
+| RGB 1024 × 768 | 3.128625 | 0.900146 | 0.623250 | 4.019708 |
+
+The six materialized workflows also pass 18 separate strict-backend exact
+output comparisons in `perf-add-20260924-final-workloads-parity.json`; their
+maintained execution-only timing gates are not used as parity evidence.
+
+At 256², CPU improves 5.20× from its initial 0.206563 ms and SIMD improves
+1.63× from 0.133208 ms. The large SIMD sample improves 2.59× from 1.613604 ms
+and is 5.02× faster than this run's Pillow median. The smaller SIMD cases still
+miss 5×. Tiny CPU cases still lose, and the 32 × 24 CPU result regresses from
+0.017500 ms to 0.076479 ms, with variation across setup, planning, and terminal
+phases. Keep that observation; a later controlled repeat must resolve its cause.
+
+GPU improves 2.26× on the materialized 16² case and 3.15× at 32 × 24. The large
+GPU sample changes from 3.961792 to 4.019708 ms and remains 6.45× slower than
+SIMD. Its terminal phase has a 3.733230 ms median, including execution and
+export; this is not a device-kernel measurement. Remaining investigations are
+fixed public-call overhead, input/output copying, CPU row scheduling, and GPU
+preparation, transfer, lookup, and completion costs. A default-parameter integer
+shader could avoid table lookups, but that is an unmeasured follow-up for a later
+visit. No full-operation target is complete.
+
+The fresh-image throughput run passes 40,320 exact output comparisons,
+including 38,400 timed completions. Source hashes remain unchanged and runtime
+binaries agree across processes. Every GPU request includes both input images,
+one dispatch, and output readback. Receipt:
+`add-throughput-20260924-final.json`. Completed 1024 × 768 image pairs per second
+are:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1378.9 | 2987.4 | 5790.2 | 258.3 |
+| L | 2 | 1414.4 | 4576.4 | 6659.3 | 403.8 |
+| L | 4 | 1397.4 | 5291.4 | 7012.4 | 582.1 |
+| RGB | 1 | 258.9 | 1020.6 | 1359.6 | 263.5 |
+| RGB | 2 | 301.6 | 1344.7 | 1733.8 | 401.2 |
+| RGB | 4 | 324.1 | 1407.8 | 1603.1 | 538.3 |
+
+At depth one, SIMD request medians are 0.142833 ms for L and 0.588958 ms for
+RGB, versus Pillow's 0.668812/3.740542 ms: 4.68×/6.35×. The L latency target
+still misses, and GPU loses to SIMD on both latency and throughput at every
+tested depth. SIMD RGB throughput also falls between depths two and four; more
+workers alone do not solve that limit. These are completed fresh requests,
+not reciprocal-latency estimates. Cross-runtime and pre-push checks remain
+pending. The next bounded visit is `PIL.ImageChops.subtract`, which shares the
+retained fixes but still needs its own measurements and remaining-gap review.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose
@@ -476,7 +604,7 @@ and one case outside pipeline telemetry. The initial sandbox run had no
 enumerated adapters and returned adapter-unavailable errors; rerunning with
 host GPU access passed without changing source, cases, or assertions.
 
-The wider input corpus currently contains 11,108 parity cases, 24 coverage
+The wider input corpus currently contains 11,236 parity cases, 24 coverage
 plans, and 769 benchmark workloads. Those counts describe indexed inputs, not
 fresh full-corpus evidence. No coverage collection was run for this campaign.
 

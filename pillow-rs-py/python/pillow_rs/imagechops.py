@@ -3,12 +3,12 @@ from .image import Image
 from . import _core
 
 
-def add(image1: Image, image2: Image, scale: float = 1.0, offset: float = 0) -> Image:
+def add(image1: Image, image2: Image, scale: float = 1.0, offset: int = 0) -> Image:
     """Add two images."""
     return Image(_core.chops_add(image1._rust_image, image2._rust_image, scale, offset))
 
 
-def subtract(image1: Image, image2: Image, scale: float = 1.0, offset: float = 0) -> Image:
+def subtract(image1: Image, image2: Image, scale: float = 1.0, offset: int = 0) -> Image:
     """Subtract image2 from image1."""
     return Image(_core.chops_subtract(image1._rust_image, image2._rust_image, scale, offset))
 
