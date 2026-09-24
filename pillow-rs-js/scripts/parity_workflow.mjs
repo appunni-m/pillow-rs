@@ -10,9 +10,46 @@ function key(surface, operation) {
 }
 
 // Python's Image.info mapping belongs to the host wrapper rather than the
-// Rust pixel object. Keep only explicitly supplied public metadata here, and
-// copy it across Pillow operations whose wrappers preserve info.
+// Rust pixel object. Preserve the identity of an observed mapping across
+// loads, and shallow-copy it across operations whose wrappers preserve info.
 const imageInfo = new WeakMap();
+
+function imageInfoValue(image) {
+    if (!imageInfo.has(image)) {
+        imageInfo.set(image, { value: {}, native: null, omitted: new Set(), rebaseline: false });
+    }
+    const state = imageInfo.get(image);
+    const native = image.compatibilityInfo();
+    const previous = state.native;
+    if (previous != null) {
+        if (state.rebaseline) {
+            for (const name of Object.keys(previous)) {
+                if (!Object.hasOwn(native, name)) state.omitted.add(name);
+            }
+        }
+        for (const name of Object.keys(native)) state.omitted.delete(name);
+        for (const name of state.omitted) native[name] = previous[name];
+    }
+    if (previous == null || state.rebaseline) {
+        for (const [name, value] of Object.entries(native)) {
+            if ((previous == null || !Object.hasOwn(previous, name))
+                && !Object.hasOwn(state.value, name)) state.value[name] = value;
+        }
+    } else {
+        for (const name of Object.keys(previous)) {
+            if (!Object.hasOwn(native, name)) delete state.value[name];
+        }
+        for (const [name, value] of Object.entries(native)) {
+            if (!Object.hasOwn(previous, name)
+                || JSON.stringify(value) !== JSON.stringify(previous[name])) state.value[name] = value;
+        }
+    }
+    // A baseline must not alias mutable arrays or dictionaries exposed to the
+    // caller. Unchanged decoder metadata must preserve caller edits/deletions.
+    state.native = structuredClone(native);
+    state.rebaseline = false;
+    return state.value;
+}
 
 function unsupportedError(message) {
     const error = new Error(message);
@@ -907,10 +944,22 @@ function imageMethod(receiver, operation, args, wasm) {
             args.fillcolor ?? null,
         );
         case 'transpose': {
+            // Pillow loads a WebP frame before copying its info. This also
+            // updates any dictionary reference captured by an earlier step.
+            if (receiver.format === 'WEBP') {
+                receiver.load();
+                imageInfoValue(receiver);
+            }
             const result = receiver.transpose(transposeName(args.method));
             if (imageInfo.has(receiver)) {
                 // Pillow's Image._new makes a shallow copy of the mapping.
-                imageInfo.set(result, { ...imageInfo.get(receiver) });
+                const source = imageInfo.get(receiver);
+                imageInfo.set(result, {
+                    value: { ...source.value },
+                    native: structuredClone(source.native),
+                    omitted: new Set(source.omitted),
+                    rebaseline: true,
+                });
             }
             return result;
         }
@@ -1781,7 +1830,12 @@ function callStep(wasm, step, bindings, operations, assets) {
     if (receiver?.__pillow_rs_image_with_info__) {
         const input = receiver.__pillow_rs_image_with_info__;
         receiver = newImage(wasm, input);
-        imageInfo.set(receiver, input.info);
+        imageInfo.set(receiver, {
+            value: input.info,
+            native: receiver.compatibilityInfo(),
+            omitted: new Set(),
+            rebaseline: false,
+        });
     }
     const info = operations[key(step.surface, step.operation)] ?? {};
     if (info.kind === 'property_get'
@@ -1796,8 +1850,7 @@ function callStep(wasm, step, bindings, operations, assets) {
             && step.operation === 'info'
             && typeof receiver?.compatibilityInfo === 'function'
         ) {
-            if (imageInfo.has(receiver)) return jsonSafe(imageInfo.get(receiver));
-            return receiver.compatibilityInfo();
+            return imageInfoValue(receiver);
         }
         if (typeof receiver?.toObject === 'function') return receiver.toObject()[step.operation] ?? null;
         if (step.operation === 'size' && typeof receiver?.size === 'function') return receiver.size();
@@ -1844,7 +1897,9 @@ function callStep(wasm, step, bindings, operations, assets) {
                     `'tuple' object has no attribute '${step.operation}'`,
                 );
             }
-            return imageMethod(receiver, step.operation, args, wasm);
+            const value = imageMethod(receiver, step.operation, args, wasm);
+            if (imageInfo.has(receiver)) imageInfoValue(receiver);
+            return value;
         }
         if (step.surface === 'PIL.ImageDraw.ImageDraw') {
             const value = drawMethod(receiver, step.operation, args, wasm);
@@ -1923,9 +1978,8 @@ function imageValue(value) {
     if (value == null) return null;
     const raw = asBytes(value.toBytes());
     const info = typeof value.compatibilityInfo === 'function'
-        ? jsonSafe(value.compatibilityInfo())
+        ? jsonSafe(imageInfoValue(value))
         : {};
-    if (imageInfo.has(value)) Object.assign(info, jsonSafe(imageInfo.get(value)));
     if (value.__pillow_rs_converted_info__ && typeof value.__pillow_rs_converted_info__ === 'object') {
         Object.assign(info, value.__pillow_rs_converted_info__);
     }
