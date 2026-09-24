@@ -1,7 +1,7 @@
 # Performance campaign
 
-Status: active. This report records the operation-wide baseline and the focused
-equalize and transpose work. It is a dated performance snapshot, not a support declaration.
+Status: active. This report records the operation-wide baseline and focused
+optimization visits. It is a dated performance snapshot, not a support declaration.
 The selected contract lives in the [parity manifest](../pillow-rs/tests/fixtures/manifest.yaml).
 
 The goals are per operation: CPU latency at or below Pillow, SIMD latency at
@@ -267,8 +267,100 @@ crop metadata loss. The unchanged cohort then passes 383/384 comparisons:
 all CPU/SIMD cases pass, and GPU retains only the autocontrast pixel mismatch.
 The post-fix receipt is `perf-invert-20260924-crop-info-fix-parity.json`.
 A Rust regression covers JPEG metadata across invert followed by crop; it is
-added for the pre-push test run. Inversion's performance work remains gated on
-the composed pipeline's unresolved GPU parity failure.
+added for the pre-push test run.
+
+The GPU autocontrast shader now reproduces the reference's binary64 division,
+separate rounded products, subtraction, and integer truncation using pairs of
+32-bit integers. The bounded domain needs at most a 61-bit product. Each channel
+finds its histogram bounds and scale once; all 256 lanes then build the LUT.
+This requires no shader f64 support, host LUT computation, or extra GPU passes.
+
+An isolated hardware diagnostic exercised the production arithmetic helpers on
+all 16,777,216 byte/low/high combinations and matched independent scalar f64
+evaluation. All 8,355,840 valid-range values also matched LUT bytes generated
+by live Pillow's public masked autocontrast. The old integer formula differed
+on 12,094 values. Receipt:
+`autocontrast-gpu-exhaustive-pillow-20260924.jsonl`.
+
+Twenty permanent input-only L/RGB cases cover interior rounding, endpoint
+rounding, and masked values outside the selected range. The complete public
+autocontrast shader path passes 585 focused comparisons, and the inversion
+pipeline cohort passes all 384 comparisons. Another 60 comparisons exercise
+the new cases under strict backend selection; all 20 GPU receipts record
+completed hardware execution, four dispatches, and no fallback. Receipts:
+`perf-autocontrast-20260924-binary64-parity.json`,
+`perf-autocontrast-20260924-binary64-strict-parity.json`, and
+`perf-invert-20260924-autocontrast-fix-parity.json`.
+
+The first inversion speed change replaces padding/copying every vector with
+the existing helper that loads complete vectors directly and pads only the
+tail. XOR with the active-channel mask performs inversion and preserves alpha.
+A paired release diagnostic compared the old and new loops over 32,768
+channel/alpha/length combinations with identical output. The isolated loop
+improved about 20–24× for buffers of 768 bytes through 2.25 MiB. This component
+result, retained in `invert-simd-loop-20260924.jsonl`, does not establish public
+latency or throughput targets.
+
+### Inversion checkpoint and remaining gaps
+
+This visit retained three changes: crop metadata preservation, exact GPU
+autocontrast arithmetic for the failing composed pipeline, and direct full-block
+SIMD inversion. It is checkpointed before taking on another bottleneck. Both
+ImageOps and ImageChops inversion plus mapped workflows pass 477 comparisons;
+another 252 strict-backend comparisons pass across vector tails, row boundaries,
+alpha, and CMYK. The artifacts are
+`perf-invert-20260924-simd-full-blocks-parity.json` and
+`perf-invert-20260924-simd-full-blocks-tails-parity.json`.
+
+All 46 maintained workloads retain their original policies in receipt
+`migration-benchmark-798d49766c95438fb2f662193b33bcf1`. Selected median
+milliseconds are:
+
+| Invert workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 1 × 1 | 0.033500 | 0.011396 | 0.011542 | 0.269042 |
+| RGB 32 × 32 | 0.035959 | 0.011938 | 0.012021 | 0.263500 |
+| RGB 256 × 256 | 0.118876 | 0.022604 | 0.023542 | 0.381938 |
+| RGB 1024 × 768 | 1.226604 | 0.507917 | 0.583584 | 1.615667 |
+| Invert → mirror, RGB 1024² | 2.322813 | 2.083501 | 0.732834 | 1.563208 |
+
+The 256² SIMD median improves 4.36× from 0.102604 ms and is 5.05× faster
+than Pillow in this run. The larger materialized case improves only 1.05×;
+its public SIMD latency is still just 2.10× faster than Pillow. The component
+speedup does not remove construction, copying, export, or scheduling costs.
+
+The changing-input throughput run completed 40,320 exact output comparisons,
+including 38,400 timed completions, with unchanged source hashes and consistent
+runtime binaries. All GPU requests recorded one dispatch and complete transfers.
+Receipt: `invert-throughput-20260924-simd-full-blocks.json`. Rates are completed
+fresh 1024 × 768 requests per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 2762.1 | 5013.0 | 5027.9 | 526.2 |
+| L | 2 | 4106.3 | 8372.6 | 8281.2 | 752.8 |
+| L | 4 | 5095.4 | 10270.7 | 10374.2 | 985.4 |
+| RGB | 1 | 606.4 | 1903.9 | 1861.5 | 618.4 |
+| RGB | 2 | 936.2 | 2636.1 | 2453.0 | 998.7 |
+| RGB | 4 | 1082.9 | 2627.6 | 2582.5 | 1214.9 |
+
+At depth one, SIMD request medians are 0.189813 ms for L and 0.484417 ms
+for RGB, versus Pillow's 0.347938/1.577541 ms: 1.83×/3.26×, below 5×.
+GPU fails both the SIMD latency and throughput goals at every tested depth.
+CPU is faster than Pillow for these standalone samples, but some composed
+workloads still lose; the loaded JPEG ten-operation pipeline measures
+3.875730 ms on CPU versus Pillow's 3.455834 ms.
+
+Remaining investigations are the large-image terminal costs (allocation,
+copies/export, and row scheduling), fixed overhead on small inputs, and GPU
+format preparation/transfers/completion. The large standard SIMD workload
+spends a 0.426542 ms median in the terminal phase; that includes execution and
+export and does not identify one cause. The throughput profile also shows RGB
+scaling plateauing between depths two and four. Profile those stages before
+changing thresholds or adding workers. No full-operation target is complete,
+and cross-runtime plus pre-push checks remain pending. The next bounded visit
+is `PIL.ImageChops.blend`, ranked by the remaining baseline gaps after excluding
+the already checkpointed equalize, inversion, and shared font-loading work.
 
 ## Transpose verified behavior
 
@@ -279,7 +371,7 @@ and one case outside pipeline telemetry. The initial sandbox run had no
 enumerated adapters and returned adapter-unavailable errors; rerunning with
 host GPU access passed without changing source, cases, or assertions.
 
-The wider input corpus currently contains 11,060 parity cases, 24 coverage
+The wider input corpus currently contains 11,080 parity cases, 24 coverage
 plans, and 769 benchmark workloads. Those counts describe indexed inputs, not
 fresh full-corpus evidence. No coverage collection was run for this campaign.
 

@@ -39841,6 +39841,55 @@ def build_nuanced_cases(
     cases.extend(constructor_and_raw_export_parity_cases(surface_id))
     cases.extend(filtered_alpha_transform_parity_cases(surface_id))
     cases.extend(equalize_mask_parity_cases(surface_id))
+    cases.extend(autocontrast_rounding_parity_cases(surface_id))
+    return cases
+
+
+def autocontrast_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise binary64 rounding before autocontrast's integer truncation."""
+    if surface_id != "PIL.ImageOps":
+        return []
+    cases = []
+    for mode in ("L", "RGB"):
+        channels = 3 if mode == "RGB" else 1
+        for low, high in ((0, 49), (0, 105), (1, 154), (23, 113), (164, 255)):
+            for masked in (False, True):
+                # A mask selects range endpoints while the output includes
+                # every byte value, including values outside that range.
+                values = range(256) if masked else range(low, high + 1)
+                data = bytes(value for value in values for _ in range(channels))
+                width = len(data) // channels
+                assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                           "data": base64.b64encode(data).decode("ascii"),
+                           "sha256": hashlib.sha256(data).hexdigest(),
+                           "media_type": "application/octet-stream"}]
+                steps = [{"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+                          "receiver": None, "arguments": {"mode": literal(mode),
+                          "size": literal([width, 1]), "data": asset_value("pixels")}}]
+                arguments = {"image": binding("image")}
+                if masked:
+                    mask = bytes(int(value in (low, high)) for value in range(256))
+                    assets.append({"id": "mask", "kind": "inline", "encoding": "base64",
+                                   "data": base64.b64encode(mask).decode("ascii"),
+                                   "sha256": hashlib.sha256(mask).hexdigest(),
+                                   "media_type": "application/octet-stream"})
+                    steps.append({"step_id": "mask", "surface": "PIL.Image", "operation": "frombytes",
+                                  "receiver": None, "arguments": {"mode": literal("L"),
+                                  "size": literal([width, 1]), "data": asset_value("mask")}})
+                    arguments["mask"] = binding("mask")
+                steps.extend([
+                    {"step_id": "call", "surface": "PIL.ImageOps", "operation": "autocontrast",
+                     "receiver": None, "arguments": arguments},
+                    {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ])
+                cases.append({
+                    "case_id": f"PIL.ImageOps.autocontrast.nuanced.binary64-{mode.lower()}-{low}-{high}-{'mask' if masked else 'full'}",
+                    "surface": "PIL.ImageOps", "operation": "autocontrast",
+                    "covers": ["PIL.ImageOps.autocontrast.behavior.default"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
     return cases
 
 
