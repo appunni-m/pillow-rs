@@ -567,8 +567,9 @@ SIMD. Its terminal phase has a 3.733230 ms median, including execution and
 export; this is not a device-kernel measurement. Remaining investigations are
 fixed public-call overhead, input/output copying, CPU row scheduling, and GPU
 preparation, transfer, lookup, and completion costs. A default-parameter integer
-shader could avoid table lookups, but that is an unmeasured follow-up for a later
-visit. No full-operation target is complete.
+shader could avoid table lookups, but the later Subtract trial found no reliable
+public benefit from that change. Measure device time before another arithmetic
+rewrite. No full-operation target is complete.
 
 The fresh-image throughput run passes 40,320 exact output comparisons,
 including 38,400 timed completions. Source hashes remain unchanged and runtime
@@ -595,6 +596,120 @@ not reciprocal-latency estimates. Cross-runtime and pre-push checks remain
 pending. The next bounded visit is `PIL.ImageChops.subtract`, which shares the
 retained fixes but still needs its own measurements and remaining-gap review.
 
+## Subtract visit
+
+The three-workload starting cohort passes 198 focused parity comparisons, but
+its materialized 16² and 32 × 24 rows still miss the targets. Four size-matrix
+workloads are added at 1², 32², 256², and 1024 × 768 using the existing workload
+policy. All six materialized workflows pass 18 separate exact comparisons
+before timing, since the maintained workflow gate records successful execution
+rather than output parity. No existing workload or assertion changes.
+
+The seven-row baseline is
+`migration-benchmark-6867c98db6144b1d87e4411bf4f4042b`. At 1024 × 768,
+Pillow/CPU/SIMD/GPU medians are 3.122313/0.968917/0.593250/4.136271 ms. The
+changing-input baseline passes 40,320 exact outputs, including 38,400 timed
+completions, with consistent source/runtime identity. At queue depth one, its
+L rates are 1253.3/3001.1/5443.4/258.0 fresh pairs per second and RGB rates are
+260.8/875.0/1152.0/274.3. Receipt:
+`subtract-throughput-20260924-baseline.json`.
+
+Three bounded optimization attempts address separate costs:
+
+1. CPU and SIMD Chops now hold the existing immutable secondary pixel storage.
+   Previously, `materialize()` returned a deep copy before the kernel borrowed
+   its byte slice. Palette indices remain native samples. The SIMD helper also
+   serves blend and fused multiply/screen, so the verification cohort includes
+   those callers and their composed workloads.
+2. The GPU trial used exact unsigned `left - min(left, right)` for default
+   subtraction. General scale/offset values retained the exact parameter-only table. The first
+   shader variant was rejected for implicit unsigned-to-signed vector conversion;
+   the unsigned expression resolves the validation failure without float math.
+   Failed receipts remain in `perf-subtract-20260924-shared-fast-gpu-parity.json`
+   and `perf-subtract-20260924-shared-fast-gpu-pairs-parity.json`. The corrected
+   candidate passed parity but did not show a reliable public win: large GPU
+   latency changed from 4.136271 to 4.057604 ms, small-case changes were mixed,
+   and fresh RGB throughput at queue depth four fell from 543.0 to 421.3 pairs
+   per second. L throughput rose only 6–8% while Pillow's L baseline also varied
+   substantially between runs. The shader and parameter changes are rejected;
+   the checkpoint retains the prior exact table implementation. Candidate
+   receipts: `perf-subtract-20260924-scheduling.json` and
+   `subtract-throughput-20260924-scheduling.json`.
+3. Cheap CPU subtraction stays serial below 4 MiB of output and groups up to
+   32 complete rows per parallel task above it. General arithmetic retains its
+   existing scheduling policy. The paired 12-thread component diagnostic compares
+   serial rows, individual parallel rows, and grouped rows with identical data.
+   At 1024 × 768 L, their medians are 15.45/57.92/45.90 µs; at RGB, they are
+   52.15/70.48/55.55 µs. At 2048² RGB, grouping reduces 373.38 to 315.33 µs.
+   These component results select the policy; they do not establish public
+   latency. Receipt: `subtract-row-scheduling-20260924.jsonl`.
+
+All 108 exhaustive byte-pair comparisons pass after the shader correction.
+Six live-Pillow CPU comparisons around the scheduling crossover also pass,
+including unequal source strides and partial final row groups. Receipts:
+`perf-subtract-20260924-scheduling-pairs-parity.json` and
+`perf-subtract-20260924-scheduling-strides-parity.json`.
+
+### Subtract checkpoint and remaining gaps
+
+The retained changes are shared secondary buffers and CPU scheduling for the
+default byte operation. The shared cohort passes 2,943 comparisons, including
+blend and composed Chops workflows. After restoring the original GPU path,
+the final build passes 210 focused Subtract comparisons, 108 exhaustive affine
+comparisons, and 18 materialized-workflow comparisons. Artifacts are
+`perf-subtract-20260924-scheduling-shared-parity.json`,
+`perf-subtract-20260924-final-parity.json`,
+`perf-subtract-20260924-final-pairs-parity.json`, and
+`perf-subtract-20260924-final-workloads-parity.json`.
+
+Final receipt `migration-benchmark-7abb03f24fa640f5af3e9ed645cb1939` retains the
+seven-workload policy. All six materialized rows have completed native receipts
+without fallback; the deferred standard row has no execution proof. Median
+milliseconds are:
+
+| Subtract workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized RGB 16 × 16 | 0.015563 | 0.016542 | 0.018938 | 0.486230 |
+| RGB 32 × 24 | 0.015708 | 0.016354 | 0.017750 | 0.386667 |
+| RGB 1 × 1 | 0.014125 | 0.015833 | 0.017750 | 0.420083 |
+| RGB 32 × 32 | 0.016417 | 0.016354 | 0.016855 | 0.358875 |
+| RGB 256 × 256 | 0.181396 | 0.031271 | 0.033813 | 0.704583 |
+| RGB 1024 × 768 | 2.859647 | 0.479021 | 0.419480 | 3.740146 |
+
+Large CPU latency improves 2.02× and SIMD improves 1.41× against the expanded
+baseline. SIMD is 5.36×/6.82× faster than Pillow at 256²/1024 × 768 in this
+run, but the small rows still miss. CPU remains slower than Pillow on three
+materialized small rows. The unchanged GPU implementation remains much slower
+than SIMD; its timing differences between runs are not an implementation gain.
+The next visit must profile the remaining public-call, copying/export, and GPU
+transfer/completion costs rather than repeat an unproven arithmetic change.
+
+Final changing-input receipt `subtract-throughput-20260924-final.json` passes
+40,320 exact output comparisons, including 38,400 timed completions, with
+unchanged source hashes and consistent runtime binaries. Every GPU request
+records its primary and auxiliary images, one dispatch, and readback. Completed
+1024 × 768 pairs per second are:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1411.9 | 8268.2 | 8095.7 | 282.5 |
+| L | 2 | 1467.8 | 9893.7 | 9747.1 | 422.0 |
+| L | 4 | 1499.7 | 10673.4 | 10471.8 | 625.6 |
+| RGB | 1 | 277.1 | 1984.9 | 1979.6 | 293.0 |
+| RGB | 2 | 313.5 | 2656.8 | 2565.9 | 415.2 |
+| RGB | 4 | 339.4 | 2546.2 | 2420.7 | 601.0 |
+
+At depth one, SIMD request medians are 0.105146 ms for L and 0.412104 ms for
+RGB, versus Pillow's 0.646771/3.506312 ms: 6.15×/8.51×. CPU request medians
+improve from 0.287250/0.894875 to 0.103688/0.414166 ms. These larger fresh-image
+results meet the CPU and SIMD latency ratios, but the operation remains pending
+because small cases still lose and GPU misses both targets at every queue depth.
+RGB CPU/SIMD throughput also falls between depths two and four, so increasing
+concurrency alone does not resolve the remaining limit. Cross-runtime and
+pre-push checks remain pending. After these three attempts, the next ranked
+visit is `PIL.ImageOps.grayscale`; the shared font-loading blockers remain
+recorded separately above. No coverage collection was run.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose
@@ -605,7 +720,7 @@ enumerated adapters and returned adapter-unavailable errors; rerunning with
 host GPU access passed without changing source, cases, or assertions.
 
 The wider input corpus currently contains 11,236 parity cases, 24 coverage
-plans, and 769 benchmark workloads. Those counts describe indexed inputs, not
+plans, and 773 benchmark workloads. Those counts describe indexed inputs, not
 fresh full-corpus evidence. No coverage collection was run for this campaign.
 
 The WASM metadata adapter needed a correction for retained `Image.info`

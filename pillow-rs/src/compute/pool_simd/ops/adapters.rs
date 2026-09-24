@@ -9267,7 +9267,7 @@ pub(crate) fn simd_fused_multiply_screen(
         return Ok(None);
     }
     let other = materialize_chops_operand(first_other, mode)?;
-    let channels = match (img, &other) {
+    let channels = match (img, other.as_ref()) {
         (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_)) => 1usize,
         (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_)) => 2,
         (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_)) => 3,
@@ -11075,13 +11075,12 @@ fn native_transpose(
 
 fn materialize_chops_operand(
     arc: &Arc<Image>,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    if matches!(mode, Some("P" | "PA")) {
-        arc.materialize_indices()
-    } else {
-        arc.materialize_for_ops()
-    }
+    _mode: Option<&str>,
+) -> Result<Arc<DynamicImage>, PilError> {
+    // Native Chops and blend read stored samples, never expanded palette
+    // colors. The shared handle keeps a secondary operand alive without a
+    // full-image copy, including when it aliases an input pipeline branch.
+    arc.materialized_shared()
 }
 
 fn simd_native_chops(

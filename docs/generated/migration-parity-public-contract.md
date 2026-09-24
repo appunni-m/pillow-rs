@@ -21,7 +21,7 @@ statement_status: declared
 - Requirements: 1801
 - Indexed parity cases: 11236
 - Indexed coverage plans: 24
-- Indexed benchmark workloads: 769
+- Indexed benchmark workloads: 773
 
 ## Declared operations
 
