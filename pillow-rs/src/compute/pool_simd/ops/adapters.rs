@@ -4324,10 +4324,11 @@ pub(crate) fn simd_supports_for_image(
             ..
         } => match method {
             TransformMethod::Affine => {
-                native_affine_luma16_transform_supported_for_image(img, *w, *h, method, data, mode)
-                    || native_affine_nearest_transform_supported_for_image(
-                        img, *w, *h, method, data, *filter, mode,
-                    )
+                native_affine_luma16_transform_supported_for_image(
+                    img, *w, *h, method, data, *filter, mode,
+                ) || native_affine_nearest_transform_supported_for_image(
+                    img, *w, *h, method, data, *filter, mode,
+                )
             }
             TransformMethod::Perspective | TransformMethod::Quad => {
                 native_projective_nearest_transform_supported_for_image(
@@ -5845,7 +5846,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
         } => match method {
             TransformMethod::Affine => {
                 native_affine_luma16_transform_supported_for_shape(
-                    shape, *w, *h, method, data, mode,
+                    shape, *w, *h, method, data, *filter, mode,
                 ) || native_affine_nearest_transform_supported_for_shape(
                     shape, *w, *h, method, data, *filter, mode,
                 )
@@ -17066,10 +17067,12 @@ fn native_affine_luma16_transform_supported_for_image(
     height: u32,
     method: &TransformMethod,
     data: &[f64],
+    filter: ResampleFilter,
     mode: Option<&str>,
 ) -> bool {
     matches!(img, DynamicImage::ImageLuma16(_))
         && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+        && matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
         && matches!(method, TransformMethod::Affine)
         && width != 0
         && height != 0
@@ -17085,10 +17088,12 @@ fn native_affine_luma16_transform_supported_for_shape(
     height: u32,
     method: &TransformMethod,
     data: &[f64],
+    filter: ResampleFilter,
     mode: Option<&str>,
 ) -> bool {
     shape.layout == SimdLayout::Luma16
         && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+        && matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
         && matches!(method, TransformMethod::Affine)
         && width != 0
         && height != 0
@@ -18984,6 +18989,7 @@ fn simd_affine_luma16_transform_bytes(
     height: u32,
     data: &[f64],
     fill: Option<(u8, u8, u8, u8)>,
+    filter: ResampleFilter,
     mode: Option<&str>,
 ) -> Result<Option<DynamicImage>, PilError> {
     if !native_affine_luma16_transform_supported_for_image(
@@ -18992,6 +18998,7 @@ fn simd_affine_luma16_transform_bytes(
         height,
         &TransformMethod::Affine,
         data,
+        filter,
         mode,
     ) {
         return Ok(None);
@@ -18999,6 +19006,61 @@ fn simd_affine_luma16_transform_bytes(
     let DynamicImage::ImageLuma16(source) = img else {
         return Ok(None);
     };
+    if matches!(filter, ResampleFilter::Bilinear) {
+        // SPECIAL filtered transforms sample the first width bytes of each
+        // native row. Reuse the exact byte SIMD kernel, then restore the
+        // untouched second fill byte instead of filtering numeric u16 values.
+        let big_endian = mode == Some("I;16B")
+            || (cfg!(target_endian = "big") && matches!(mode, Some("I;16" | "I;16N")));
+        let encode = |value: u16| {
+            if big_endian {
+                value.to_be_bytes()
+            } else {
+                value.to_le_bytes()
+            }
+        };
+        let fill_value = fill.map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
+        let fill_bytes = encode(fill_value);
+        let mut bytes = Vec::with_capacity(source.width() as usize * source.height() as usize);
+        for row in source.as_raw().chunks_exact(source.width() as usize) {
+            bytes.extend(
+                row.iter()
+                    .flat_map(|&value| encode(value))
+                    .take(source.width() as usize),
+            );
+        }
+        let plane = DynamicImage::ImageLuma8(
+            ImageBuffer::from_raw(source.width(), source.height(), bytes)
+                .ok_or_else(|| PilError::InternalError("SIMD I;16 byte plane shape".into()))?,
+        );
+        let Some(sampled) = simd_affine_bilinear_transform_bytes(
+            &plane,
+            width,
+            height,
+            data,
+            Some((fill_bytes[0], 0, 0, 0)),
+            Some("L"),
+        )?
+        else {
+            return Ok(None);
+        };
+        let values = sampled
+            .as_bytes()
+            .iter()
+            .map(|&byte| {
+                let bytes = [byte, fill_bytes[1]];
+                if big_endian {
+                    u16::from_be_bytes(bytes)
+                } else {
+                    u16::from_le_bytes(bytes)
+                }
+            })
+            .collect();
+        return ImageBuffer::from_raw(width, height, values)
+            .map(DynamicImage::ImageLuma16)
+            .map(Some)
+            .ok_or_else(|| PilError::InternalError("SIMD I;16 transform output shape".into()));
+    }
     let source_width = source.width() as usize;
     let source_height = source.height() as usize;
     let destination_width = width as usize;
@@ -19016,25 +19078,27 @@ fn simd_affine_luma16_transform_bytes(
             let count = (destination_width - destination_x).min(SIMD_F64_LANES);
             let x = f64x8::new(std::array::from_fn(|lane| {
                 if lane < count {
-                    (destination_x + lane) as f64
+                    (destination_x + lane) as f64 + 0.5
                 } else {
                     0.0
                 }
             }));
-            let y = f64x8::splat(destination_y as f64);
-            let source_x =
-                (f64x8::splat(*a) * x + f64x8::splat(*b) * y + f64x8::splat(*c)).to_array();
-            let source_y =
-                (f64x8::splat(*d) * x + f64x8::splat(*e) * y + f64x8::splat(*f)).to_array();
+            let y = f64x8::splat(destination_y as f64 + 0.5);
+            let source_x = (rotate_fused_mul_add(f64x8::splat(*a), x, f64x8::splat(*b) * y)
+                + f64x8::splat(*c))
+            .to_array();
+            let source_y = (rotate_fused_mul_add(f64x8::splat(*d), x, f64x8::splat(*e) * y)
+                + f64x8::splat(*f))
+            .to_array();
             let mut values = [fill; SIMD_F64_LANES];
             for lane in 0..count {
                 let input_x = if source_x[lane].is_finite() {
-                    (source_x[lane] + 0.5).floor() as i64
+                    source_x[lane].floor() as i64
                 } else {
                     -1
                 };
                 let input_y = if source_y[lane].is_finite() {
-                    (source_y[lane] + 0.5).floor() as i64
+                    source_y[lane].floor() as i64
                 } else {
                     -1
                 };
@@ -19225,6 +19289,49 @@ fn simd_mesh_transform_bytes(
         .map(|result| Some(preserve_mode(img, result)))
 }
 
+fn simd_affine_fixed_bytes<const CHANNELS: usize>(
+    source: &[u8],
+    source_width: usize,
+    source_height: usize,
+    width: usize,
+    height: usize,
+    plan: [i64; 6],
+    fill: [u8; 4],
+) -> Vec<u8> {
+    let [a, b, c, d, e, f] = plan;
+    let offsets_x = i64x8::new(std::array::from_fn(|lane| lane as i64 * a));
+    let offsets_y = i64x8::new(std::array::from_fn(|lane| lane as i64 * d));
+    let step_x = i64x8::splat(a * 8);
+    let step_y = i64x8::splat(d * 8);
+    let mut output = vec![0; width * height * CHANNELS];
+    for (y, row) in output.chunks_exact_mut(width * CHANNELS).enumerate() {
+        let mut source_x = i64x8::splat(c + y as i64 * b) + offsets_x;
+        let mut source_y = i64x8::splat(f + y as i64 * e) + offsets_y;
+        for block in row.chunks_mut(8 * CHANNELS) {
+            let x = (source_x >> 16_i32).to_array();
+            let y = (source_y >> 16_i32).to_array();
+            for (lane, pixel) in block.chunks_exact_mut(CHANNELS).enumerate() {
+                if x[lane] >= 0
+                    && x[lane] < source_width as i64
+                    && y[lane] >= 0
+                    && y[lane] < source_height as i64
+                {
+                    let start = (y[lane] as usize * source_width + x[lane] as usize) * CHANNELS;
+                    pixel.copy_from_slice(&source[start..start + CHANNELS]);
+                } else {
+                    pixel.copy_from_slice(&fill[..CHANNELS]);
+                }
+            }
+            source_x += step_x;
+            source_y += step_y;
+        }
+    }
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks((height * width.div_ceil(8)) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    output
+}
+
 fn simd_affine_nearest_transform_bytes(
     img: &DynamicImage,
     width: u32,
@@ -19263,6 +19370,53 @@ fn simd_affine_nearest_transform_bytes(
     let [a, b, c, d, e, f] = data else {
         return Ok(None);
     };
+    if let Some(plan) = crate::compute::pool_cpu::ops::effects::affine_nearest_fixed(
+        [*a, *b, *c, *d, *e, *f],
+        width,
+        height,
+    ) {
+        let output = match channels {
+            1 => simd_affine_fixed_bytes::<1>(
+                source,
+                source_width,
+                source_height,
+                destination_width,
+                destination_height,
+                plan,
+                fill,
+            ),
+            2 => simd_affine_fixed_bytes::<2>(
+                source,
+                source_width,
+                source_height,
+                destination_width,
+                destination_height,
+                plan,
+                fill,
+            ),
+            3 => simd_affine_fixed_bytes::<3>(
+                source,
+                source_width,
+                source_height,
+                destination_width,
+                destination_height,
+                plan,
+                fill,
+            ),
+            4 => simd_affine_fixed_bytes::<4>(
+                source,
+                source_width,
+                source_height,
+                destination_width,
+                destination_height,
+                plan,
+                fill,
+            ),
+            _ => return Ok(None),
+        };
+        return crate::image_utils::raw_bytes_to_image(width, height, output, channels)
+            .map(|result| Some(preserve_mode(img, result)));
+    }
     let pixels_per_vector = SIMD_RESIZE_NEAREST_BYTES / channels;
     let mut output = vec![0u8; destination_len];
     let mut vector_blocks = 0u64;
@@ -21190,8 +21344,9 @@ pub fn simd_transform(
     else {
         return Err(PilError::ValueError("expected Transform op".into()));
     };
-    let luma16_supported =
-        native_affine_luma16_transform_supported_for_image(img, *w, *h, method, data, mode);
+    let luma16_supported = native_affine_luma16_transform_supported_for_image(
+        img, *w, *h, method, data, *filter, mode,
+    );
     let supported = match method {
         TransformMethod::Affine => {
             luma16_supported
@@ -21212,7 +21367,7 @@ pub fn simd_transform(
         return Err(simd_unsupported("Transform"));
     }
     if luma16_supported {
-        return simd_affine_luma16_transform_bytes(img, *w, *h, data, *fill, mode)?
+        return simd_affine_luma16_transform_bytes(img, *w, *h, data, *fill, *filter, mode)?
             .ok_or_else(|| simd_unsupported("Transform"));
     }
     match method {

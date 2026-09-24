@@ -1163,7 +1163,7 @@ fn rotate_cubic_horizontal_f64(samples: [f64; 4], distance: f64) -> f64 {
 }
 
 #[inline]
-fn rotate_cubic_horizontal_i32(samples: [i32; 4], distance: f64) -> f64 {
+pub(crate) fn rotate_cubic_horizontal_i32(samples: [i32; 4], distance: f64) -> f64 {
     let [v1, v2, v3, v4] = samples;
     // Geometry.c's INT32 BICUBIC coefficients are formed in the source
     // integer type before the Horner chain is promoted to double. Explicit
@@ -1203,7 +1203,7 @@ fn rotate_cubic_vertical_f64_fma(samples: [f64; 4], distance: f64) -> f64 {
 }
 
 #[inline]
-fn rotate_cubic_vertical_f64(samples: [f64; 4], distance: f64) -> f64 {
+pub(crate) fn rotate_cubic_vertical_f64(samples: [f64; 4], distance: f64) -> f64 {
     rotate_cubic_horizontal_f64(samples, distance)
 }
 

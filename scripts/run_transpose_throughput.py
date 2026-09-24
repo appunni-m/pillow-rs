@@ -40,6 +40,10 @@ and requires one public operation and one GPU dispatch per request.
 L/RGB inputs. GPU receipts must account for the complete multichannel input
 upload as well as the smaller L readback.
 
+``--operation transform`` uses one nearest affine transform with fractional
+coefficients and explicit fill, retaining the input size. It exercises fresh
+source selection across the full image and requires one native GPU dispatch.
+
 ``--operation add`` and ``--operation subtract`` use the same two-image policy
 with default scale/offset.
 
@@ -78,6 +82,7 @@ import run_migration_parity as parity
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = "pillow-rs/transpose-throughput-diagnostic@1"
 SUBJECTS = ("Pillow", "python-cpu", "python-simd", "python-gpu")
+TRANSFORM_DATA = [0.87, 0.21, -1.25, -0.16, 1.13, 0.5]
 DEPTHS = (1, 2, 4)
 FRAMES = 16
 WARMUPS = 5
@@ -186,6 +191,10 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].invert(image)
         elif plan.get("operation") == "grayscale":
             image = plan["imageops_api"].grayscale(image)
+        elif plan.get("operation") == "transform":
+            fill = 173 if plan["mode"] == "L" else (17, 83, 149)
+            image = image.transform(tuple(plan["size"]), 0, TRANSFORM_DATA,
+                                    resample=0, fillcolor=fill)
         elif plan.get("operation") in ("blend", "add", "subtract"):
             other_data = plan["pair_inputs"][(frame_id + 1) % len(plan["pair_inputs"])]
             other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
@@ -447,7 +456,7 @@ def run(args: argparse.Namespace) -> int:
     operation = args.operation
     defaults = ["RGB", "RGBA"] if operation == "transpose" else ["L", "RGB"]
     modes = list(dict.fromkeys(args.mode or defaults))
-    if operation in ("equalize", "invert", "grayscale") and any(mode not in ("L", "RGB") for mode in modes):
+    if operation in ("equalize", "invert", "grayscale", "transform") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
     before = source_identity()
     result: dict[str, Any] = {
@@ -459,6 +468,7 @@ def run(args: argparse.Namespace) -> int:
         "policy": {"host_queue_depths": list(DEPTHS), "frames_per_window": FRAMES,
                    "warmup_windows": WARMUPS, "measurement_iterations_per_sample": ITERATIONS,
                    "samples": SAMPLES, "operation": operation, "methods": [0, 2] if operation == "transpose" else [],
+                   "affine_coefficients": TRANSFORM_DATA if operation == "transform" else None,
                    "boundary": ("two fresh frombytes images, blend(alpha=0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "blend" else "two fresh frombytes images, add(scale=1, offset=0), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "add" else "two fresh frombytes images, subtract(scale=1, offset=0), terminal bytes, worker scheduling and receipt capture"
@@ -542,7 +552,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "add", "subtract"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "add", "subtract", "transform"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

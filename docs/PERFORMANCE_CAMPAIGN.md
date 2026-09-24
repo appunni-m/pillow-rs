@@ -1031,9 +1031,13 @@ The retained changes are:
 The source contract was checked against Pillow 12.2.0's Image.rotate wrapper and
 [Geometry.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Geometry.c).
 
-The final Rotate cohort passes **930/930** exact comparisons. Strict native
-bilinear runs pass **72/72** comparisons across SIMD/GPU, and strict native GPU
-bicubic passes **36/36**, covering nine logical modes without fallback. The
+The final Rotate cohort passes **930/930** exact comparisons. Strict-backend
+bilinear runs pass **72/72** comparisons across SIMD/GPU, and strict-backend GPU
+bicubic passes **36/36**, covering nine logical modes. Backend locking alone
+does not exclude an exact host semantic fallback. A subsequent Transform
+checkpoint rerun records actual execution for all 108 comparisons: 36 SIMD
+and 72 GPU executions, completed on their requested backend without fallback.
+That receipt is `perf-rotate-20260925-transform-shared-parity.json`. The
 shared affine Transform cohort passes **2,241/2,241** comparisons; that receipt
 precedes the final Rotate-only typed helper and fill-lowering changes. Receipts:
 
@@ -1106,6 +1110,121 @@ workloads and 54 suites. No coverage was collected. Pre-push Rust, docs and
 cross-runtime checks remain pending. Four attempts are checkpointed; the next
 operation is Transform, starting with its unchanged benchmark and the existing
 shared-parity receipt.
+
+## Transform four-attempt checkpoint
+
+On 2026-09-25, Transform reached the four-attempt limit and remains incomplete.
+The initial maintained cohort passed 2,241 comparisons, but a seeded audit of
+16 modes, three filters and five methods found **248 failures in 720
+comparisons**. The retained fixes preserve Pillow's typed arithmetic, alpha,
+fill and source-coordinate selection:
+
+1. CPU I interpolation now uses wrapping integer source differences and ordered
+   binary64 arithmetic; F projective/mesh sampling borrows raw storage and
+   writes final bytes directly. La bypasses another premultiplication. I;16
+   handles complete-sample nearest and the reference's unusual filtered byte
+   ABI across all methods, including overlapping mesh records.
+2. SIMD I;16 nearest uses floating pixel-center coordinates; bilinear reuses
+   exact byte interpolation with logical sample byte order. Unsupported
+   bicubic work reports CPU fallback instead of silently doing nearest.
+3. GPU filtered affine maps use the existing exact projective sampler with
+   denominator one. The shader samples I;16's logical byte plane directly
+   from uploaded storage. Filtered I stays an explicit CPU fallback.
+4. Match actual GPU transport packing when locating a logical byte or encoding
+   fill: I;16B/I;16N uploads differ from other u16 modes. Larger varied nearest
+   affine inputs also exposed a CPU/SIMD mismatch hidden by tiny cases. Reuse
+   Pillow's signed 16.16 selector, advance CPU coordinates by integer additions,
+   and compute eight SIMD coordinates together with packed integer increments.
+   Borrow CPU sources when premultiplication is unnecessary.
+
+The reference contract is Pillow 12.2.0
+[Geometry.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Geometry.c).
+There are 242 new permanent input-only cases: the 240 mode/method/filter
+combinations and two 256 × 256 nearest-affine drift regressions. Existing
+assertions and benchmark policies are unchanged. Final receipts record:
+
+- **2,967/2,967** maintained Transform/workflow comparisons:
+  `perf-transform-20260925-checkpoint-parity.json`.
+- **720/720** varied-mode comparisons with actual execution receipts:
+  `perf-transform-20260925-checkpoint-modes-parity.json`. Of 240 cases per
+  backend, CPU executes 240 natively, SIMD 91 with 149 CPU fallbacks, and GPU
+  224 with 16 CPU fallbacks. Passing fallback output does not meet acceleration
+  goals. GPU gaps are filtered I plus nearest affine/extent RGBa, La and RGBX.
+- **930/930** shared Rotate regressions:
+  `perf-rotate-20260925-transform-shared-parity.json`.
+- **40,320/40,320** fresh-request outputs, including 38,400 measured
+  completions: `perf-transform-20260925-throughput.json`. Every target request
+  executes natively without fallback; GPU receipts record one dispatch and
+  complete upload/readback. Source and runtime identities stay consistent.
+
+All receipts are under `build/migration-parity/`. The unchanged ten-workload
+benchmark is `migration-benchmark-900a3ce0cbfb4c628c8824e7c32caa57`, saved as
+`perf-transform-20260925-checkpoint.json`. The initial receipt is
+`migration-benchmark-1b5aa73fef644c2a98d76ce678b3d52e`. Final median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16 × 16 materialized | 0.014292 | 0.016229 | 0.017167 | 0.306896 |
+| RGB 32 × 24 | 0.011855 | 0.014854 | 0.015542 | 0.247083 |
+| `pipeline-chain.matrix-025` | 0.031334 | 0.196250 | 0.185250 | 0.936334 |
+| `pipeline-chain.matrix-075` | 0.016146 | 0.021855 | 0.021250 | 0.593958 |
+| `pipeline-chain.matrix-081` | 0.024355 | 0.018667 | 0.019563 | 0.524084 |
+| `pipeline-chain.matrix-082` | 0.016292 | 0.020709 | 0.021355 | 0.556688 |
+| `pipeline-chain.matrix-083` | 0.015876 | 0.018917 | 0.019667 | 0.317958 |
+| `pipeline-chain.matrix-084` | 0.017167 | 0.024104 | 0.025604 | 0.574604 |
+| `pipeline-chain.matrix-085` | 0.015896 | 0.020917 | 0.022459 | 0.593938 |
+| Standard lazy construction | 0.008000 | 0.009458 | 0.009730 | 0.009792 |
+
+All 27 materialized target receipts identify native execution without fallback.
+CPU misses its target on 8/9 materialized rows; SIMD and GPU miss on all nine.
+The lazy row provides no kernel proof. Short timings do not establish stable
+speed changes, and these basic workloads do not measure the repaired filtered
+or typed paths. The fresh-input predecessor had incorrect CPU/SIMD pixels, so
+its timings would not be a valid optimization baseline.
+
+For fresh 256 × 256 nearest affine requests, queue-depth-one median request
+latencies are L: Pillow 0.054459, CPU 0.132917, SIMD 0.044708, GPU 0.252583 ms;
+RGB: Pillow 0.118041, CPU 0.208667, SIMD 0.066416, GPU 0.255521 ms. SIMD reaches
+1.22×/1.78× Pillow, short of 5×. Each request includes source construction,
+materialization and receipt capture. Aggregate completed images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 17,574 | 7,192 | 20,413 | 3,838 |
+| L | 2 | 28,150 | 6,971 | 18,216 | 3,712 |
+| L | 4 | 34,400 | 6,567 | 15,804 | 3,583 |
+| RGB | 1 | 8,206 | 4,637 | 14,188 | 3,762 |
+| RGB | 2 | 11,935 | 4,533 | 13,342 | 3,747 |
+| RGB | 4 | 13,302 | 4,438 | 12,387 | 3,678 |
+
+GPU misses the throughput goal at every measured queue depth. Host request
+concurrency does not prove simultaneous GPU kernels. Concrete next-visit work:
+
+- **CPU/SIMD nearest:** specialize CPU channel copies and expose contiguous
+  runs; SIMD still gathers selected pixels scalarly. Measure remaining bounds,
+  copies and memory traffic before adding wider coordinate vectors. Check host
+  serialization because additional workers reduce target throughput.
+- **Coordinate parity:** pure scaling and affine maps outside the fixed-point
+  range use repeated floating additions in Pillow. The retained fixed-point
+  fix does not prove those recurrence boundaries, extreme coefficients or
+  every tail. Preserve the reference's algorithm selector before vectorizing.
+- **Native support:** remove the 149 SIMD and 16 GPU mode-audit fallbacks with
+  exact kernels. This checkpoint proves parity on the selected cohort, not
+  universal support or parity for all public inputs.
+- **Filtered GPU cost:** the shared exact projective path prepares 52 geometry
+  bytes per output pixel and emulates binary64 arithmetic. Measure host table
+  preparation, upload and interpolation separately, then reduce parameter
+  traffic without changing evaluation order. Small-request completion and
+  output materialization remain an approximately 0.25 ms floor here.
+- **Outstanding evidence:** varied filtered/typed performance, other hardware
+  and bindings, and ingestion of focused receipts into the complete operation
+  matrix. Pre-push checks remain pending. No operation has all goals proven.
+
+The skill now records how to preserve arithmetic-path selection and distinguish
+logical byte order from actual transfer packing. The fixture index contains
+12,264 cases, 24 static plans, 773 benchmark workloads and 54 suites; no coverage
+was collected. The next visit is Multiply, the first unvisited operator in the
+highest remaining ranked pipeline (`long-auxiliary.multiply-screen-260`).
 
 ## Transpose verified behavior
 

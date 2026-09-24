@@ -6934,6 +6934,15 @@ impl GpuInner {
             } = op
             {
                 let mut transform_params = registry::extract_params(op);
+                // SPECIAL filtered samples read/write one logical byte. The
+                // packed transport has its own byte order. Carry the first
+                // logical byte's position in the otherwise unused header word.
+                let logical_big_endian = logical_mode == Some("I;16B")
+                    || (cfg!(target_endian = "big")
+                        && matches!(logical_mode, Some("I;16" | "I;16N")));
+                let transport_big_endian =
+                    matches!(logical_mode, Some("I;16B" | "I;16N")) || cfg!(target_endian = "big");
+                params[3] = u32::from(logical_big_endian != transport_big_endian);
                 // Pillow's affine nearest kernel quantizes its coefficients
                 // to signed 16.16 once, then advances integer coordinates
                 // across each output row.  Carry those fixed-point values
@@ -9020,11 +9029,7 @@ fn gpu_resize_should_premultiply(
 }
 
 fn gpu_transform_uses_nearest(logical_mode: Option<&str>, filter: ResampleFilter) -> bool {
-    matches!(filter, ResampleFilter::Nearest)
-        || matches!(
-            logical_mode,
-            Some("P" | "1" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N")
-        )
+    matches!(filter, ResampleFilter::Nearest) || matches!(logical_mode, Some("P" | "1"))
 }
 
 fn gpu_transform_should_premultiply(
@@ -9062,7 +9067,7 @@ fn gpu_transform_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) ->
         return 0;
     };
     let has_alpha =
-        matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
+        matches!(logical_mode, Some("LA" | "La" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
     // Pillow's default rotate fill for CMYK is the complete zero C/M/Y/K
     // sample. It is not the opaque-alpha default used by RGB-like modes.
     let default_fill = if matches!(logical_mode, Some("CMYK" | "F")) {
@@ -9077,11 +9082,22 @@ fn gpu_transform_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) ->
         .map(|index| (index, 0, 0, 255))
         .or(*fill)
         .unwrap_or(default_fill);
+    if mode == 5 {
+        // Geometry upload/readback keeps B/N samples in big-endian byte
+        // order even on little-endian hosts. Fill must use that same transport.
+        let value = u16::from_le_bytes([resolved.0, resolved.1]);
+        let bytes = if matches!(logical_mode, Some("I;16B" | "I;16N")) {
+            value.to_be_bytes()
+        } else {
+            value.to_ne_bytes()
+        };
+        return u32::from(bytes[0]) | (u32::from(bytes[1]) << 8);
+    }
     // Core normalizes LA/PA colors as `(luma, alpha, 0, 0)` because that is
     // the native two-band representation.  The GPU transport is packed
     // RGBA, so move the logical alpha into byte three and replicate luma in
     // the unused color lanes just as `to_rgba8()` does for the source image.
-    let packed = if matches!(logical_mode, Some("LA" | "PA")) {
+    let packed = if matches!(logical_mode, Some("LA" | "La" | "PA")) {
         (resolved.0, resolved.0, resolved.0, resolved.1)
     } else {
         resolved
@@ -10908,6 +10924,32 @@ fn expand_gpu_geometry_ops(
             }
         }
         let replacement = match op {
+            PipelineOp::Transform {
+                method: TransformMethod::Affine,
+                data,
+                filter,
+                ..
+            } if data.len() >= 6
+                && (!gpu_transform_uses_nearest(logical_mode, *filter)
+                    || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))) =>
+            {
+                let mut replacement = op.clone();
+                if let PipelineOp::Transform {
+                    method,
+                    data: coefficients,
+                    ..
+                } = &mut replacement
+                {
+                    // Denominator one retains the affine center mapping while
+                    // using the exact filtered arithmetic and SPECIAL nearest
+                    // coordinates, rather than the old f32/16.16 shader paths.
+                    *method = TransformMethod::Perspective;
+                    let mut projective = data[..6].to_vec();
+                    projective.extend([0.0, 0.0]);
+                    *coefficients = Arc::from(projective);
+                }
+                replacement
+            }
             PipelineOp::Scale { filter, .. }
             | PipelineOp::Contain { filter, .. }
             | PipelineOp::Cover { filter, .. } => match op_output_dims(op, cur_w, cur_h) {
@@ -12994,8 +13036,15 @@ fn gpu_transform_geometry_is_admitted(
                     | "HSV"
                     | "YCbCr"
                     | "F"
+                    | "La"
+                    | "I"
+                    | "I;16"
+                    | "I;16L"
+                    | "I;16B"
+                    | "I;16N"
             )
         )
+        && (mode != Some("I") || matches!(filter, ResampleFilter::Nearest))
         && *w > 0
         && *h > 0
         && u64::from(*w) * u64::from(*h)
@@ -14448,6 +14497,7 @@ impl GpuPool {
         // transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                || (logical_mode == "La" && ops.iter().all(gpu_transform_is_projective))
                 // ImageDraw's geometry is scan-converted by the exact host
                 // canvas before the packed draw shader copies the complete
                 // result.  The data-plane therefore preserves raw indexed,
