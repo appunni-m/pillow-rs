@@ -1140,7 +1140,7 @@ fn transform_affine_f32(
 /// arithmetic promoted to f64, and the final value is stored as f32.
 #[inline]
 fn sample_transform_f32(
-    source: &[f32],
+    source: &[u8],
     src_w: u32,
     src_h: u32,
     sx: f64,
@@ -1158,7 +1158,12 @@ fn sample_transform_f32(
     let at = |x: i64, y: i64| -> f32 {
         let x = x.clamp(0, src_w_i - 1) as usize;
         let y = y.clamp(0, src_h_i - 1) as usize;
-        source[y * src_w as usize + x]
+        let index = (y * src_w as usize + x) * 4;
+        f32::from_le_bytes(
+            source[index..index + 4]
+                .try_into()
+                .expect("native sample width"),
+        )
     };
 
     match filter {
@@ -1219,6 +1224,68 @@ fn sample_transform_f32(
         // bicubic. Keep an internal fallback deterministic if a direct Rust
         // caller constructs another descriptor.
         _ => at(floor_x, floor_y),
+    }
+}
+
+/// The I filter subtracts in i32 before promoting to f64. Reuse Rotate's
+/// ordered integer cubic polynomial rather than interpreting its storage as RGBA.
+#[inline]
+fn sample_transform_i32(
+    source: &[u8],
+    src_w: u32,
+    src_h: u32,
+    sx: f64,
+    sy: f64,
+    filter: &ResampleFilter,
+) -> i32 {
+    let x = (sx - 0.5).floor() as i64;
+    let y = (sy - 0.5).floor() as i64;
+    let dx = sx - 0.5 - x as f64;
+    let dy = sy - 0.5 - y as f64;
+    let at = |x: i64, y: i64| {
+        let x = x.clamp(0, i64::from(src_w) - 1) as usize;
+        let y = y.clamp(0, i64::from(src_h) - 1) as usize;
+        let index = (y * src_w as usize + x) * 4;
+        i32::from_le_bytes(
+            source[index..index + 4]
+                .try_into()
+                .expect("native sample width"),
+        )
+    };
+    let value = if matches!(filter, ResampleFilter::Bicubic) {
+        let rows = std::array::from_fn(|row| {
+            let yy = y + row as i64 - 1;
+            super::geometry::rotate_cubic_horizontal_i32(
+                [at(x - 1, yy), at(x, yy), at(x + 1, yy), at(x + 2, yy)],
+                dx,
+            )
+        });
+        super::geometry::rotate_cubic_vertical_f64(rows, dy)
+    } else {
+        let p00 = at(x, y);
+        let p10 = at(x + 1, y);
+        let p01 = at(x, y + 1);
+        let p11 = at(x + 1, y + 1);
+        let top = f64::from(p10.wrapping_sub(p00)) * dx + f64::from(p00);
+        let bottom = f64::from(p11.wrapping_sub(p01)) * dx + f64::from(p01);
+        (bottom - top) * dy + top
+    };
+    value as i32
+}
+
+#[inline]
+fn sample_transform_scalar32<const IS_FLOAT: bool>(
+    source: &[u8],
+    src_w: u32,
+    src_h: u32,
+    sx: f64,
+    sy: f64,
+    filter: &ResampleFilter,
+) -> [u8; 4] {
+    if IS_FLOAT {
+        sample_transform_f32(source, src_w, src_h, sx, sy, filter).to_le_bytes()
+    } else {
+        sample_transform_i32(source, src_w, src_h, sx, sy, filter).to_le_bytes()
     }
 }
 
@@ -1454,7 +1521,7 @@ fn f64_fma_c(left: f64, right: f64, addend: f64) -> f64 {
     }
 }
 
-fn transform_projective_f32(
+fn transform_projective_scalar32<const IS_FLOAT: bool>(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -1466,7 +1533,7 @@ fn transform_projective_f32(
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageRgba8(rgba) = img else {
         return Err(PilError::InternalError(
-            "F projective transform requires four-byte storage".into(),
+            "Scalar32 projective transform requires four-byte storage".into(),
         ));
     };
     let (src_w, src_h) = rgba.dimensions();
@@ -1486,21 +1553,19 @@ fn transform_projective_f32(
                 .and_then(|height| width.checked_mul(height))
         })
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
-    let raw = rgba.as_raw();
-    let source = raw
-        .chunks_exact(4)
-        .take(source_len)
-        .map(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]))
-        .collect::<Vec<_>>();
-    if source.len() != source_len {
+    let source = rgba.as_raw();
+    if source.len() / 4 != source_len {
         return Err(PilError::InternalError(
-            "F projective source buffer shape mismatch".into(),
+            "Scalar32 projective source buffer shape mismatch".into(),
         ));
     }
     let fill_word = fill
-        .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
-        .unwrap_or(0.0);
-    let mut output = vec![fill_word; output_len];
+        .map(|color| [color.0, color.1, color.2, color.3])
+        .unwrap_or([0; 4]);
+    let _ = output_len
+        .checked_mul(4)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let mut output = fill_word.repeat(output_len);
 
     let quad_coefficients = if quad {
         if dst_w == 0 || dst_h == 0 {
@@ -1553,22 +1618,21 @@ fn transform_projective_f32(
                 && sy >= 0.0
                 && sy < f64::from(src_h)
             {
-                output[output_index] = sample_transform_f32(&source, src_w, src_h, sx, sy, filter);
+                output[output_index * 4..output_index * 4 + 4].copy_from_slice(
+                    &sample_transform_scalar32::<IS_FLOAT>(source, src_w, src_h, sx, sy, filter),
+                );
             }
         }
     }
 
-    let bytes = output
-        .into_iter()
-        .flat_map(f32::to_le_bytes)
-        .collect::<Vec<_>>();
-    let out = RgbaImage::from_raw(dst_w, dst_h, bytes)
-        .ok_or_else(|| PilError::InternalError("F projective output shape mismatch".into()))?;
+    let out = RgbaImage::from_raw(dst_w, dst_h, output).ok_or_else(|| {
+        PilError::InternalError("Scalar32 projective output shape mismatch".into())
+    })?;
     Ok(DynamicImage::ImageRgba8(out))
 }
 
-/// Apply Pillow's FLOAT32 filters to a piecewise quadrilateral mesh.
-fn transform_mesh_f32(
+/// Apply Pillow's typed 32-bit filters to a piecewise quadrilateral mesh.
+fn transform_mesh_scalar32<const IS_FLOAT: bool>(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -1579,7 +1643,7 @@ fn transform_mesh_f32(
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageRgba8(rgba) = img else {
         return Err(PilError::InternalError(
-            "F mesh transform requires four-byte storage".into(),
+            "Scalar32 mesh transform requires four-byte storage".into(),
         ));
     };
     let (src_w, src_h) = rgba.dimensions();
@@ -1599,21 +1663,19 @@ fn transform_mesh_f32(
                 .and_then(|height| width.checked_mul(height))
         })
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
-    let raw = rgba.as_raw();
-    let source = raw
-        .chunks_exact(4)
-        .take(source_len)
-        .map(|word| f32::from_le_bytes([word[0], word[1], word[2], word[3]]))
-        .collect::<Vec<_>>();
-    if source.len() != source_len {
+    let source = rgba.as_raw();
+    if source.len() / 4 != source_len {
         return Err(PilError::InternalError(
-            "F mesh source buffer shape mismatch".into(),
+            "Scalar32 mesh source buffer shape mismatch".into(),
         ));
     }
     let fill_word = fill
-        .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
-        .unwrap_or(0.0);
-    let mut output = vec![fill_word; output_len];
+        .map(|color| [color.0, color.1, color.2, color.3])
+        .unwrap_or([0; 4]);
+    let _ = output_len
+        .checked_mul(4)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let mut output = fill_word.repeat(output_len);
     let sw_f = f64::from(src_w);
     let sh_f = f64::from(src_h);
 
@@ -1679,22 +1741,51 @@ fn transform_mesh_f32(
                     // was already initialized to that word and must retain a
                     // valid sample written by an earlier overlapping record.
                     if fill_is_none {
-                        output[output_index] = 0.0;
+                        output[output_index * 4..output_index * 4 + 4].fill(0);
                     }
                     continue;
                 }
-                output[output_index] = sample_transform_f32(&source, src_w, src_h, sx, sy, filter);
+                output[output_index * 4..output_index * 4 + 4].copy_from_slice(
+                    &sample_transform_scalar32::<IS_FLOAT>(source, src_w, src_h, sx, sy, filter),
+                );
             }
         }
     }
 
-    let bytes = output
-        .into_iter()
-        .flat_map(f32::to_le_bytes)
-        .collect::<Vec<_>>();
-    let out = RgbaImage::from_raw(dst_w, dst_h, bytes)
-        .ok_or_else(|| PilError::InternalError("F mesh output shape mismatch".into()))?;
+    let out = RgbaImage::from_raw(dst_w, dst_h, output)
+        .ok_or_else(|| PilError::InternalError("Scalar32 mesh output shape mismatch".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
+}
+
+/// Pillow uses 16.16 nearest affine coordinates when the map is not a
+/// pure scale and all four output corners fit its fixed-point range. Keep
+/// this decision shared with SIMD; generic/SPECIAL sampling has another ABI.
+pub(crate) fn affine_nearest_fixed(data: [f64; 6], width: u32, height: u32) -> Option<[i64; 6]> {
+    let [a, b, c, d, e, f] = data;
+    if b == 0.0 && d == 0.0 {
+        return None;
+    }
+    if ![
+        (0.0, 0.0),
+        (f64::from(width), 0.0),
+        (0.0, f64::from(height)),
+        (f64::from(width), f64::from(height)),
+    ]
+    .into_iter()
+    .all(|(x, y)| {
+        (a.mul_add(x, b * y) + c).abs() < 32768.0 && (d.mul_add(x, e * y) + f).abs() < 32768.0
+    }) {
+        return None;
+    }
+    let fixed = |value: f64| value.mul_add(65536.0, 0.5).floor() as i64;
+    Some([
+        fixed(a),
+        fixed(b),
+        fixed(c + a * 0.5 + b * 0.5),
+        fixed(d),
+        fixed(e),
+        fixed(f + d * 0.5 + e * 0.5),
+    ])
 }
 
 /// Apply an affine transform working on the native number of channels.
@@ -1728,6 +1819,32 @@ fn transform_affine_generic(
     });
 
     let mut out = vec![0u8; (dst_w * dst_h) as usize * channels];
+
+    if nearest
+        && let Some([a, b, c, d, e, f]) =
+            affine_nearest_fixed([aff_a, aff_b, aff_c, aff_d, aff_e, aff_f], dst_w, dst_h)
+    {
+        let fill = [fill_color.0, fill_color.1, fill_color.2, fill_color.3];
+        for y in 0..dst_h {
+            let mut sx = c + i64::from(y) * b;
+            let mut sy = f + i64::from(y) * e;
+            for x in 0..dst_w {
+                let ix = sx >> 16;
+                let iy = sy >> 16;
+                let index = (y as usize * dst_w as usize + x as usize) * channels;
+                let pixel = &mut out[index..index + channels];
+                if ix >= 0 && ix < i64::from(sw) && iy >= 0 && iy < i64::from(sh) {
+                    let source = (iy as usize * sw as usize + ix as usize) * channels;
+                    pixel.copy_from_slice(&raw[source..source + channels]);
+                } else {
+                    pixel.copy_from_slice(&fill[..channels]);
+                }
+                sx += a;
+                sy += d;
+            }
+        }
+        return crate::image_utils::raw_bytes_to_image(dst_w, dst_h, out, channels);
+    }
 
     for dy in 0..dst_h {
         for dx in 0..dst_w {
@@ -2084,41 +2201,108 @@ fn transform_projective_generic(
     })
 }
 
-/// Apply the nearest-neighbor affine path to native unsigned 16-bit samples.
+/// Preserve Pillow's native unsigned 16-bit transform sampling contract.
 ///
-/// The byte-oriented transform helper cannot process `I;16` as one-byte
-/// luma: its source stride is two bytes per sample and its output must remain
-/// `ImageLuma16`. Keep this path native so scalar fill values retain both
-/// bytes instead of being duplicated into an 8-bit result.
-fn transform_affine_luma16(
+/// Nearest copies complete samples; filtered transforms sample the first
+/// width bytes of each two-byte row and replace only the first logical output
+/// byte. Preserve the other fill byte and the mode's byte order in `ImageLuma16`.
+fn transform_luma16(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
+    method: &TransformMethod,
     data: &[f64],
+    filter: &ResampleFilter,
     fill: Option<(u8, u8, u8, u8)>,
+    fill_is_none: bool,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let source = img.to_luma16();
+    let DynamicImage::ImageLuma16(source) = img else {
+        unreachable!()
+    };
     let (src_w, src_h) = source.dimensions();
-    let (a, b, c, d, e, f) = (data[0], data[1], data[2], data[3], data[4], data[5]);
-    let fill = fill.map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
-    let mut output = vec![fill; (dst_w as usize).saturating_mul(dst_h as usize)];
-
-    for dy in 0..dst_h {
-        for dx in 0..dst_w {
-            let sx = a * f64::from(dx) + b * f64::from(dy) + c;
-            let sy = d * f64::from(dx) + e * f64::from(dy) + f;
-            let ix = (sx + 0.5).floor() as i64;
-            let iy = (sy + 0.5).floor() as i64;
-            if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
-                output[(dy as usize) * dst_w as usize + dx as usize] =
-                    source.get_pixel(ix as u32, iy as u32)[0];
-            }
+    let fill_value = fill.map_or(0, |value| u16::from_le_bytes([value.0, value.1]));
+    let nearest = matches!(filter, ResampleFilter::Nearest);
+    let big_endian = mode == Some("I;16B")
+        || (cfg!(target_endian = "big") && matches!(mode, Some("I;16" | "I;16N")));
+    let encode = |value: u16| {
+        if big_endian {
+            value.to_be_bytes()
+        } else {
+            value.to_le_bytes()
         }
-    }
-
-    ImageBuffer::from_raw(dst_w, dst_h, output)
+    };
+    let fill_bytes = if nearest {
+        fill_value.to_ne_bytes()
+    } else {
+        encode(fill_value)
+    };
+    let carrier = if nearest {
+        // A two-band carrier relocates both native bytes without interpreting
+        // them as alpha. SPECIAL nearest uses floating center coordinates even
+        // for affine transforms, so bypass the ordinary 16.16 byte sampler.
+        DynamicImage::ImageLumaA8(
+            ImageBuffer::from_raw(src_w, src_h, img.as_bytes().to_vec())
+                .ok_or_else(|| PilError::InternalError("I;16 transform source shape".into()))?,
+        )
+    } else {
+        // Geometry.c selects filter8 for SPECIAL modes, reads only the first
+        // width bytes of each 2*width-byte row, and writes only byte zero.
+        let mut bytes = Vec::with_capacity(src_w as usize * src_h as usize);
+        for row in source.as_raw().chunks(src_w.max(1) as usize) {
+            bytes.extend(
+                row.iter()
+                    .flat_map(|&value| encode(value))
+                    .take(src_w as usize),
+            );
+        }
+        DynamicImage::ImageLuma8(
+            ImageBuffer::from_raw(src_w, src_h, bytes)
+                .ok_or_else(|| PilError::InternalError("I;16 transform byte plane shape".into()))?,
+        )
+    };
+    let mut projective = Vec::new();
+    let (method, data) = if nearest && matches!(method, TransformMethod::Affine) {
+        projective.extend_from_slice(data);
+        projective.extend([0.0, 0.0]);
+        (&TransformMethod::Perspective, projective.as_slice())
+    } else {
+        (method, data)
+    };
+    let result = op_transform(
+        &carrier,
+        dst_w,
+        dst_h,
+        method,
+        data,
+        filter,
+        Some((fill_bytes[0], fill_bytes[1], 0, 0)),
+        fill_is_none,
+        Some(if nearest { "PA" } else { "L" }),
+    )?;
+    let values = if nearest {
+        result
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|bytes| u16::from_ne_bytes([bytes[0], bytes[1]]))
+            .collect()
+    } else {
+        result
+            .as_bytes()
+            .iter()
+            .map(|&byte| {
+                let bytes = [byte, fill_bytes[1]];
+                if big_endian {
+                    u16::from_be_bytes(bytes)
+                } else {
+                    u16::from_le_bytes(bytes)
+                }
+            })
+            .collect()
+    };
+    ImageBuffer::from_raw(dst_w, dst_h, values)
         .map(DynamicImage::ImageLuma16)
-        .ok_or_else(|| PilError::InternalError("transform I;16 buffer shape mismatch".into()))
+        .ok_or_else(|| PilError::InternalError("I;16 transform output shape".into()))
 }
 
 pub fn op_transform(
@@ -2132,6 +2316,53 @@ pub fn op_transform(
     fill_is_none: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if matches!(img, DynamicImage::ImageLuma16(_)) {
+        return transform_luma16(
+            img,
+            w,
+            h,
+            method,
+            data,
+            filter,
+            fill,
+            fill_is_none,
+            explicit_mode,
+        );
+    }
+    if explicit_mode == Some("I") && !matches!(filter, ResampleFilter::Nearest) {
+        return match method {
+            TransformMethod::Affine => {
+                let mut projective = data.to_vec();
+                projective.extend([0.0, 0.0]);
+                transform_projective_scalar32::<false>(
+                    img,
+                    w,
+                    h,
+                    &projective,
+                    filter,
+                    fill,
+                    fill_is_none,
+                    false,
+                )
+            }
+            TransformMethod::Perspective | TransformMethod::Quad => {
+                transform_projective_scalar32::<false>(
+                    img,
+                    w,
+                    h,
+                    data,
+                    filter,
+                    fill,
+                    fill_is_none,
+                    matches!(method, TransformMethod::Quad),
+                )
+            }
+            TransformMethod::Mesh => {
+                transform_mesh_scalar32::<false>(img, w, h, data, fill, fill_is_none, filter)
+            }
+        };
+    }
+
     match method {
         TransformMethod::Affine => {
             // `Image::transform_public` and the maintained affine wrappers
@@ -2139,9 +2370,6 @@ pub fn op_transform(
             // operation. A malformed transform descriptor is outside the
             // supported public input boundary, so the executor can index the
             // validated coefficients directly.
-            if img.color() == crate::raster::ColorType::L16 {
-                return transform_affine_luma16(img, w, h, data, fill);
-            }
             let (aff_a, aff_b, aff_c, aff_d, aff_e, aff_f) =
                 (data[0], data[1], data[2], data[3], data[4], data[5]);
             let p_mode = explicit_mode == Some("P") || explicit_mode == Some("1");
@@ -2157,21 +2385,21 @@ pub fn op_transform(
             // The fill sample is written as supplied into that temporary mode
             // and is unpremultiplied along with the sampled pixels.
             let needs_alpha_roundtrip = !use_nearest
-                && !matches!(explicit_mode, Some("PA") | Some("RGBa") | Some("RGBX"))
+                && !matches!(
+                    explicit_mode,
+                    Some("PA") | Some("La") | Some("RGBa") | Some("RGBX")
+                )
                 && !matches!(explicit_mode, Some("CMYK" | "I" | "F"))
                 && matches!(
                     img.color(),
                     crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
                 );
-            let work = if needs_alpha_roundtrip {
-                premultiply_alpha(img)
-            } else {
-                img.clone()
-            };
+            let premultiplied = needs_alpha_roundtrip.then(|| premultiply_alpha(img));
+            let work = premultiplied.as_ref().unwrap_or(img);
             let transform_fill = fill;
 
             let result = transform_affine_generic(
-                &work,
+                work,
                 w,
                 h,
                 aff_a,
@@ -2198,7 +2426,8 @@ pub fn op_transform(
             // malformed mesh descriptors are outside the supported input
             // boundary.
             if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
-                let result = transform_mesh_f32(img, w, h, data, fill, fill_is_none, filter)?;
+                let result =
+                    transform_mesh_scalar32::<true>(img, w, h, data, fill, fill_is_none, filter)?;
                 return Ok(preserve_mode(img, result));
             }
             // Pillow's non-nearest Image.transform path premultiplies LA/RGBA
@@ -2208,18 +2437,15 @@ pub fn op_transform(
             let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
                 && !matches!(
                     explicit_mode,
-                    Some("PA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
+                    Some("PA" | "La" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
                 )
                 && matches!(
                     img.color(),
                     crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
                 );
-            let work = if needs_alpha_roundtrip {
-                premultiply_alpha(img)
-            } else {
-                img.clone()
-            };
-            let result = transform_mesh(&work, w, h, data, fill, *filter, fill_is_none)?;
+            let premultiplied = needs_alpha_roundtrip.then(|| premultiply_alpha(img));
+            let work = premultiplied.as_ref().unwrap_or(img);
+            let result = transform_mesh(work, w, h, data, fill, *filter, fill_is_none)?;
             let result = if needs_alpha_roundtrip {
                 unpremultiply_alpha(&result)
             } else {
@@ -2232,7 +2458,7 @@ pub fn op_transform(
             // wrapper validate the exact eight-coefficient contract before
             // queuing this operation.
             if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
-                let result = transform_projective_f32(
+                let result = transform_projective_scalar32::<true>(
                     img,
                     w,
                     h,
@@ -2252,19 +2478,15 @@ pub fn op_transform(
             let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
                 && !matches!(
                     explicit_mode,
-                    Some("PA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
+                    Some("PA" | "La" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
                 )
                 && matches!(
                     img.color(),
                     crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
                 );
-            let work = if needs_alpha_roundtrip {
-                premultiply_alpha(img)
-            } else {
-                img.clone()
-            };
-            let result =
-                transform_projective_generic(&work, w, h, &data[..8], filter, fill, false)?;
+            let premultiplied = needs_alpha_roundtrip.then(|| premultiply_alpha(img));
+            let work = premultiplied.as_ref().unwrap_or(img);
+            let result = transform_projective_generic(work, w, h, &data[..8], filter, fill, false)?;
             let result = if needs_alpha_roundtrip {
                 unpremultiply_alpha(&result)
             } else {
@@ -2277,7 +2499,7 @@ pub fn op_transform(
             // validate the exact eight-coordinate contract before queuing
             // this operation.
             if explicit_mode == Some("F") && !matches!(filter, ResampleFilter::Nearest) {
-                let result = transform_projective_f32(
+                let result = transform_projective_scalar32::<true>(
                     img,
                     w,
                     h,
@@ -2296,18 +2518,15 @@ pub fn op_transform(
             let needs_alpha_roundtrip = !matches!(filter, ResampleFilter::Nearest)
                 && !matches!(
                     explicit_mode,
-                    Some("PA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
+                    Some("PA" | "La" | "RGBa" | "RGBX" | "CMYK" | "I" | "F")
                 )
                 && matches!(
                     img.color(),
                     crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
                 );
-            let work = if needs_alpha_roundtrip {
-                premultiply_alpha(img)
-            } else {
-                img.clone()
-            };
-            let result = transform_projective_generic(&work, w, h, &data[..8], filter, fill, true)?;
+            let premultiplied = needs_alpha_roundtrip.then(|| premultiply_alpha(img));
+            let work = premultiplied.as_ref().unwrap_or(img);
+            let result = transform_projective_generic(work, w, h, &data[..8], filter, fill, true)?;
             let result = if needs_alpha_roundtrip {
                 unpremultiply_alpha(&result)
             } else {

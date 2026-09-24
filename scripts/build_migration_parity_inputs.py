@@ -39850,6 +39850,7 @@ def build_nuanced_cases(
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
+    cases.extend(transform_mode_parity_cases(surface_id))
     return cases
 
 
@@ -39906,6 +39907,77 @@ def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
+    return cases
+
+
+
+def transform_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Expose native sample bytes, alpha, edge coordinates and fill semantics."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    cases = []
+    modes = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "I": 4, "F": 4,
+             "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+    width, height = 17, 11
+    for mode, channels in modes.items():
+        rng = random.Random(f"transform-modes-{mode}")
+        if mode == "I":
+            raw = b"".join(struct.pack("<i", rng.randrange(-100000, 100000))
+                           for _ in range(width * height))
+        elif mode == "F":
+            raw = b"".join(struct.pack("<f", rng.uniform(-1000, 1000))
+                           for _ in range(width * height))
+        else:
+            raw = rng.randbytes(width * height * channels)
+        assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                   "data": base64.b64encode(raw).decode("ascii"),
+                   "sha256": hashlib.sha256(raw).hexdigest(),
+                   "media_type": "application/octet-stream"}]
+        fill = (4660 if mode.startswith("I;16") else 173.25 if mode == "F"
+                else 173 if channels == 1 or mode == "I" else [173, 127] if channels == 2
+                else [17, 83, 149] if channels == 3 else [17, 83, 149, 127])
+        quad = [-1.25, 0.5, 1.0, 10.25, 16.5, 9.5, 15.25, -0.5]
+        parameters = (
+            ("affine", {"method": 0, "data": [0.87, 0.21, -1.25, -0.16, 1.13, 0.5]}),
+            ("extent", {"method": 1, "data": [-0.25, 0.5, 17.25, 10.75]}),
+            ("perspective", {"method": 2, "data": [0.87, 0.21, -1.25, -0.16, 1.13, 0.5, 0.005, -0.003]}),
+            ("quad", {"method": 3, "data": quad}),
+            ("mesh", {"method": 4, "data": [
+                [[0, 0, 13, 9], quad], [[2, 1, 10, 8], [-1, 0, 0, 11, 17, 10, 15, 0]]]}),
+        )
+        for resample in (0, 2, 3):
+            for name, arguments in parameters:
+                steps = [
+                    {"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+                     "receiver": None, "arguments": {"mode": literal(mode),
+                     "size": literal([width, height]), "data": asset_value("pixels")}},
+                    {"step_id": "call", "surface": surface_id, "operation": "transform",
+                     "receiver": binding("image"), "arguments": {"size": literal([13, 9]),
+                     "fillcolor": literal(fill), "resample": literal(resample),
+                     **{key: literal(value) for key, value in arguments.items()}}},
+                    {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ]
+                cases.append({
+                    "case_id": f"{surface_id}.transform.nuanced.modes-{mode}-{resample}-{name}",
+                    "surface": surface_id, "operation": "transform",
+                    "covers": [f"{surface_id}.transform.behavior.default"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
+    # Fixed-point selection differs from direct f64 coordinates only after
+    # enough output steps; the small mode matrix cannot expose that drift.
+    for mode, channels in (("L", 1), ("RGB", 3)):
+        case = copy.deepcopy(next(case for case in cases
+                                  if case["case_id"].endswith(f"modes-{mode}-0-affine")))
+        case["case_id"] += "-large"
+        raw = random.Random(f"transform-large-{mode}").randbytes(256 * 256 * channels)
+        case["assets"][0].update(data=base64.b64encode(raw).decode("ascii"),
+                                 sha256=hashlib.sha256(raw).hexdigest())
+        case["steps"][0]["arguments"]["size"] = literal([256, 256])
+        case["steps"][1]["arguments"]["size"] = literal([256, 256])
+        cases.append(case)
     return cases
 
 

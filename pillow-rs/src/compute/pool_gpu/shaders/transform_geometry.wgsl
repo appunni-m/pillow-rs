@@ -557,6 +557,15 @@ fn channel_sample(word: u32, channel: u32) -> F64OrderedState {
     return number(bitcast<u32>(f32(value)));
 }
 fn sample(base: u32, x: u32, y: u32, channel: u32) -> F64OrderedState {
+    if params.mode == 5u {
+        // Geometry.c's SPECIAL filter8 reads the first width bytes of each
+        // two-byte row. The header identifies where the first logical byte
+        // sits in the opaque packed transport; no second image is needed.
+        let byte_x = geometry[base + 1u + x];
+        let word = input[(byte_x >> 1u) + geometry[base + 5u + y]];
+        let shift = ((byte_x & 1u) ^ (params._pad & 1u)) * 8u;
+        return number(bitcast<u32>(f32((word >> shift) & 255u)));
+    }
     return channel_sample(input[geometry[base + 1u + x] + geometry[base + 5u + y]], channel);
 }
 fn interpolate(base: u32, channel: u32, dx: F64OrderedState, dy: F64OrderedState) -> F64OrderedState {
@@ -596,6 +605,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if params.filter_code == 0u { output[index] = input[geometry[base + 1u]]; return; }
     let dx = fraction(geometry[base + 9u], geometry[base + 10u]);
     let dy = fraction(geometry[base + 11u], geometry[base + 12u]);
+    if params.mode == 5u {
+        let value = byte_store(interpolate(base, 0u, dx, dy));
+        // Only byte zero is written by the reference filter; retain the
+        // other byte from the original fill even after overlapping records.
+        if (params._pad & 1u) != 0u {
+            output[index] = (value << 8u) | (params.fill_color & 255u);
+        } else {
+            output[index] = value | (params.fill_color & 0xff00u);
+        }
+        return;
+    }
     if params.mode == 8u { output[index] = float_bits(interpolate(base, 0u, dx, dy)); return; }
     var r = byte_store(interpolate(base, 0u, dx, dy));
     var g = 0u;
