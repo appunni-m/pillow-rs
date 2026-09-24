@@ -44,15 +44,10 @@ static SOFT_LIGHT_LUT: [u8; 65536] = {
     arr
 };
 
-fn materialize_chops_other(other: &Arc<Image>) -> Result<DynamicImage, PilError> {
-    // Chops.c receives the logical image core. For indexed inputs that means
-    // one-byte palette indices, not the visible RGB expansion used by color
-    // operations.
-    if matches!(other.mode()?.as_str(), "P" | "PA") {
-        other.materialize_indices()
-    } else {
-        other.materialize_for_ops()
-    }
+fn materialize_chops_other(other: &Arc<Image>) -> Result<Arc<DynamicImage>, PilError> {
+    // Chops reads native samples, including palette indices. Retain the
+    // immutable cached pixels instead of copying the entire secondary image.
+    other.materialized_shared()
 }
 
 #[inline]
@@ -81,6 +76,7 @@ fn apply_binary_rows<F>(
     left_stride: usize,
     right_stride: usize,
     op: F,
+    _cheap_bytes: bool,
 ) where
     F: Fn(u8, u8) -> u8 + Send + Sync,
 {
@@ -113,22 +109,32 @@ fn apply_binary_rows<F>(
     }
 
     #[cfg(feature = "parallel")]
-    if width.saturating_mul(height) >= CHOPS_PARALLEL_PIXEL_THRESHOLD {
+    if if _cheap_bytes {
+        // Saturating bytes have little computation to amortize scheduling.
+        // The measured crossover is around 4 MiB; larger work uses groups of
+        // complete rows while preserving each source's independent stride.
+        output.len() >= 4 * 1024 * 1024
+    } else {
+        width.saturating_mul(height) >= CHOPS_PARALLEL_PIXEL_THRESHOLD
+    } {
+        let rows_per_task = if _cheap_bytes { height.min(32) } else { 1 };
         crate::par_rows_mut!(
             output,
-            output_stride,
-            height,
-            |_row_start, _row_end, y, row| {
-                apply_row(
-                    left,
-                    right,
-                    row,
-                    y as usize,
-                    output_stride,
-                    left_stride,
-                    right_stride,
-                    &op,
-                );
+            output_stride * rows_per_task,
+            height.div_ceil(rows_per_task),
+            |_row_start, _row_end, tile, rows| {
+                for (local_y, row) in rows.chunks_exact_mut(output_stride).enumerate() {
+                    apply_row(
+                        left,
+                        right,
+                        row,
+                        tile as usize * rows_per_task + local_y,
+                        output_stride,
+                        left_stride,
+                        right_stride,
+                        &op,
+                    );
+                }
             }
         );
     } else {
@@ -174,6 +180,17 @@ fn channel_op_binary(
     other: &Arc<Image>,
     op: impl Fn(u8, u8) -> u8 + Send + Sync,
 ) -> Result<DynamicImage, PilError> {
+    channel_op_binary_with_policy(img, other, op, false)
+}
+
+/// The cheap-byte policy trades row scheduling for contiguous work until the
+/// measured byte-size crossover, without changing the arithmetic or layout.
+fn channel_op_binary_with_policy(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    op: impl Fn(u8, u8) -> u8 + Send + Sync,
+    cheap_bytes: bool,
+) -> Result<DynamicImage, PilError> {
     let other_img = materialize_chops_other(other)?;
     let channels = img.color().channel_count() as usize;
     let other_channels = other_img.color().channel_count() as usize;
@@ -197,7 +214,16 @@ fn channel_op_binary(
     };
 
     apply_binary_rows(
-        a_bytes, b_bytes, &mut out, w as usize, h as usize, ch, stride_a, stride_b, op,
+        a_bytes,
+        b_bytes,
+        &mut out,
+        w as usize,
+        h as usize,
+        ch,
+        stride_a,
+        stride_b,
+        op,
+        cheap_bytes,
     );
 
     let result = match ch {
@@ -265,6 +291,7 @@ fn channel_op_binary_lut(
         stride_a,
         stride_b,
         |a, b| lut[a as usize * 256 + b as usize],
+        false,
     );
 
     let result =
@@ -323,7 +350,7 @@ pub fn op_chops_subtract(
     let scale = scale as f32;
     let offset = offset as f32;
     if scale == 1.0 && offset == 0.0 {
-        return channel_op_binary(img, other, u8::saturating_sub);
+        return channel_op_binary_with_policy(img, other, u8::saturating_sub, true);
     }
     channel_op_binary(img, other, |a, b| {
         // Subtraction uses the same float32 scale/division/offset ordering.

@@ -680,6 +680,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "Multiply",
     "Screen",
     "Add",
+    "Subtract",
     "Darker",
     "Brightness",
 )
