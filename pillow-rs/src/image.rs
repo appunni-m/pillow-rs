@@ -2079,7 +2079,9 @@ impl Image {
                     palette: self.palette(),
                     palette_alpha: self.palette_alpha(),
                     source_format: None,
-                    info: None,
+                    // Loading a pipeline before crop clears the public file
+                    // format, but Pillow retains the source's info mapping.
+                    info: self.image_info(),
                     exif: self.exif_metadata(),
                     image,
                 }))
@@ -6627,6 +6629,20 @@ mod byte_export_tests {
 #[cfg(test)]
 mod compatibility_info_tests {
     use super::{Image, ImageInfoValue, PilError};
+
+    #[test]
+    fn crop_after_pipeline_preserves_jpeg_info() -> Result<(), PilError> {
+        let image = Image::open_bytes(
+            include_bytes!("../tests/fixtures/assets/image/rgb-small.jpg").to_vec(),
+        )?;
+        let expected = image.compatibility_info();
+        assert!(expected.iter().any(|(key, _)| key == "jfif"));
+        let inverted = crate::ops::imageops::invert(&image)?;
+        let cropped = inverted.crop(Some((0, 0, 2, 2)))?;
+        assert_eq!(cropped.compatibility_info(), expected);
+        assert!(cropped.source_format().is_none());
+        Ok(())
+    }
 
     #[test]
     fn webp_timing_defaults_appear_only_after_load() -> Result<(), PilError> {
