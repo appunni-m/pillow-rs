@@ -95,6 +95,9 @@ output is compared exactly with live Pillow outside the timing window. GPU
 receipts must include histogram/LUT/remap execution and complete transfers.
 `--check-only` verifies one window per depth without emitting timing summaries.
 The transpose selector remains the default with its existing workload policy.
+Use `--operation invert` and a separate output path for fresh L/RGB inversion
+under the same window policy. Inversion requires one GPU dispatch and complete
+transfers; it uses the original full-range input tile.
 
 For the fixed release-acceptance cohort:
 

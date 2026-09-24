@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure fresh public transpose or equalize requests with a bounded host worker queue.
+"""Measure fresh image-operation requests with a bounded host worker queue.
 
 The standalone ``pillow-rs/transpose-throughput-diagnostic@1`` JSON schema
 contains policy, source hashes, input/reference byte identities, and one child
@@ -31,6 +31,10 @@ levels before the per-frame offset to exercise nonidentity LUTs at the default
 size; reference metadata records whether each output changes. Equalize keeps
 input dimensions and requires one public operation and four GPU passes. The
 transpose default, stimulus, receipt rules, and timing policy are unchanged.
+
+``--operation invert`` measures fresh ``ImageOps.invert`` calls in L/RGB
+under the same policy. It uses the full-range tile, preserves dimensions,
+and requires one public operation and one GPU dispatch per request.
 
 Use ``make migration-parity-transpose-throughput`` to build the replacement
 without overwriting the Pillow oracle, or invoke this script after build-parity.
@@ -151,7 +155,7 @@ def patterned_frames(mode: str, size: tuple[int, int], directory: Path, operatio
 
 
 def result_size(plan: dict[str, Any]) -> list[int]:
-    return list(plan["size"] if plan.get("operation") == "equalize" else reversed(plan["size"]))
+    return list(reversed(plan["size"]) if plan.get("operation", "transpose") == "transpose" else plan["size"])
 
 
 def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
@@ -163,6 +167,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
         image = image_api.frombytes(plan["mode"], tuple(plan["size"]), data)
         if plan.get("operation") == "equalize":
             image = plan["imageops_api"].equalize(image)
+        elif plan.get("operation") == "invert":
+            image = plan["imageops_api"].invert(image)
         else:
             image = image.transpose(0).transpose(2)
         if core is not None:
@@ -194,7 +200,7 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         return "requested/actual backend does not match isolated subject"
     if receipt.get("fallback_reason") is not None:
         return "unexpected backend fallback"
-    expected_operations = 1 if operation == "equalize" else 2
+    expected_operations = 2 if operation == "transpose" else 1
     if receipt.get("operation_count") != expected_operations:
         return f"receipt does not contain {expected_operations} public {operation} operation(s)"
     if backend == "gpu":
@@ -297,7 +303,7 @@ def child(args: argparse.Namespace) -> int:
     subject = args.child_subject
     identity = parity.side_identity("source" if subject == "Pillow" else "target")
     image_api = importlib.import_module("PIL.Image")
-    if plan.get("operation") == "equalize":
+    if plan.get("operation") in ("equalize", "invert"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
     core = None if subject == "Pillow" else importlib.import_module("pillow_rs._core")
     if core is not None:
@@ -405,13 +411,13 @@ def run(args: argparse.Namespace) -> int:
     if min(args.size) < 1:
         raise ValueError("--size requires positive dimensions")
     operation = args.operation
-    defaults = ["L", "RGB"] if operation == "equalize" else ["RGB", "RGBA"]
+    defaults = ["RGB", "RGBA"] if operation == "transpose" else ["L", "RGB"]
     modes = list(dict.fromkeys(args.mode or defaults))
-    if operation == "equalize" and any(mode not in ("L", "RGB") for mode in modes):
-        raise ValueError("equalize throughput supports L/RGB input")
+    if operation in ("equalize", "invert") and any(mode not in ("L", "RGB") for mode in modes):
+        raise ValueError(f"{operation} throughput supports L/RGB input")
     before = source_identity()
     result: dict[str, Any] = {
-        "schema": SCHEMA if operation == "transpose" else "pillow-rs/equalize-throughput-diagnostic@1", "status": "completed", "started_at": utc_now(), "argv": sys.argv,
+        "schema": SCHEMA if operation == "transpose" else f"pillow-rs/{operation}-throughput-diagnostic@1", "status": "completed", "started_at": utc_now(), "argv": sys.argv,
         "environment": {"platform": platform.platform(), "machine": platform.machine(),
                         "python": sys.version, "cpu_count": os.cpu_count(),
                         "RAYON_NUM_THREADS": os.environ.get("RAYON_NUM_THREADS")},
@@ -498,7 +504,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

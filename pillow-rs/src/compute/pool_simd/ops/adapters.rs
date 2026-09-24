@@ -6804,17 +6804,9 @@ fn native_enhance_output(
 fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
     let active = NATIVE_BYTE_INVERT_MASKS[channels][invert_alpha as usize];
     let active_vector = u8x16::new(*active);
-    let inactive = u8x16::splat(u8::MAX) - active_vector;
-    let mut chunks = bytes.chunks_mut(16);
-    for chunk in &mut chunks {
-        let active_lanes = chunk.len();
-        let mut padded = [0u8; 16];
-        padded[..active_lanes].copy_from_slice(chunk);
-        let input = u8x16::new(padded);
-        let inverted = u8x16::splat(u8::MAX) - input;
-        let output = (inverted & active_vector) | (input & inactive);
-        chunk.copy_from_slice(&output.to_array()[..active_lanes]);
-    }
+    // XOR with an all-ones byte inverts it; zero preserves an alpha byte.
+    // The shared loop loads full vectors directly and pads only the tail.
+    native_all_channel_transform_bytes(bytes, &|input| input ^ active_vector);
 }
 
 fn apply_native_rows<F>(
