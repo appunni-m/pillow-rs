@@ -23944,110 +23944,82 @@ fn alpha_composite_div255(value: u32x8) -> u32x8 {
 }
 
 #[inline]
-fn alpha_composite_channel_vector(
-    source: [u32; 8],
-    destination: [u32; 8],
-    coefficient_source: u32x8,
-    coefficient_destination: u32x8,
-) -> [u8; 8] {
-    // AlphaComposite.c uses PRECISION_BITS=7. All intermediates fit in u32:
-    // the coefficient product is below 2^31 and the channel accumulator is
-    // below 2^24, so widening is lossless before the vectorized SHIFTFORDIV255.
-    let blended =
-        u32x8::new(source) * coefficient_source + u32x8::new(destination) * coefficient_destination;
-    let rounded = alpha_composite_div255(blended + u32x8::splat(0x80 << 7)) >> 7u32;
-    let rounded = rounded.to_array();
-    std::array::from_fn(|lane| rounded[lane].min(255) as u8)
+fn alpha_composite_coefficient(source_alpha: u32x8, denominator: u32x8) -> u32x8 {
+    const NUMERATOR_SCALE: u32x8 = u32x8::new([255 * 255 * 128; 8]);
+    const ONE: u32x8 = u32x8::new([1; 8]);
+    let numerator = source_alpha * NUMERATOR_SCALE;
+    // numerator = (sa * 65025) * 128: the integer in parentheses is < 2^24,
+    // so both operands are exactly representable as f32. The quotient is at
+    // most 32640. Rounded f32 division can cross its upper integer boundary
+    // by less than one; an exact u32 product detects and corrects that case.
+    // Products stay below 2^31. This retains Pillow's integer floor without
+    // widening eight coefficient lanes to doubles or accepting float rounding.
+    let n: i32x8 = bytemuck::cast(numerator);
+    let d: i32x8 = bytemuck::cast(denominator.max(ONE));
+    let quotient: u32x8 = bytemuck::cast((n.round_float() / d.round_float()).trunc_int());
+    quotient + (quotient * denominator).simd_gt(numerator)
 }
 
 #[inline]
-fn alpha_composite_vector_block(source: &[u8], output: &mut [u8], channels: usize) -> bool {
-    let Some(block_bytes) = channels.checked_mul(8) else {
-        return false;
+fn alpha_composite_vector_block<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
+    const BYTE: u32x8 = u32x8::new([255; 8]);
+    const COEFFICIENT_SUM: u32x8 = u32x8::new([255 << 7; 8]);
+    const COLOR_BIAS: u32x8 = u32x8::new([0x80 << 7; 8]);
+    const ALPHA_BIAS: u32x8 = u32x8::new([0x80; 8]);
+    const ZERO: u32x8 = u32x8::new([0; 8]);
+    let load = |bytes: &[u8]| -> u32x8 {
+        if CHANNELS == 4 {
+            let words: [u32; 8] = bytemuck::pod_read_unaligned(bytes);
+            u32x8::new(words.map(u32::from_le))
+        } else {
+            let words: [u16; 8] = bytemuck::pod_read_unaligned(bytes);
+            u32x8::from(u16x8::new(words.map(u16::from_le)))
+        }
     };
-    if !matches!(channels, 2 | 4) || source.len() < block_bytes || output.len() < block_bytes {
-        return false;
+    let source = load(source);
+    let destination = load(output);
+    let alpha_shift = ((CHANNELS - 1) * 8) as u32;
+    let source_alpha = source >> alpha_shift;
+    let destination_alpha = destination >> alpha_shift;
+    let out_alpha_255 = source_alpha * BYTE + destination_alpha * (BYTE - source_alpha);
+    let coefficient_source = alpha_composite_coefficient(source_alpha, out_alpha_255);
+    let coefficient_destination = COEFFICIENT_SUM - coefficient_source;
+    let channel = |shift: u32| {
+        let blended = ((source >> shift) & BYTE) * coefficient_source
+            + ((destination >> shift) & BYTE) * coefficient_destination;
+        alpha_composite_div255(blended + COLOR_BIAS) >> 7u32
+    };
+    let mut result =
+        channel(0) | (alpha_composite_div255(out_alpha_255 + ALPHA_BIAS) << alpha_shift);
+    if CHANNELS == 4 {
+        result = result | (channel(8) << 8u32) | (channel(16) << 16u32);
     }
-
-    let source_alpha =
-        std::array::from_fn(|lane| u32::from(source[lane * channels + channels - 1]));
-    let destination_alpha =
-        std::array::from_fn(|lane| u32::from(output[lane * channels + channels - 1]));
-    let source_alpha_vector = u32x8::new(source_alpha);
-    let destination_alpha_vector = u32x8::new(destination_alpha);
-    let blend = destination_alpha_vector * (u32x8::splat(255) - source_alpha_vector);
-    let out_alpha_255 = source_alpha_vector * u32x8::splat(255) + blend;
-    let coefficient_numerator =
-        source_alpha_vector * u32x8::splat(255) * u32x8::splat(255) * u32x8::splat(1 << 7);
-    // There is no portable integer divide instruction in `wide`. Convert
-    // only this coefficient-control calculation to f64 lanes, take the exact
-    // floor required by C, then return the hot per-channel path to u32 lanes.
-    // Every operand is an exactly representable integer below 2^32.
-    let coefficient_source = f64x8::new(coefficient_numerator.to_array().map(f64::from))
-        / f64x8::new(
-            out_alpha_255
-                .to_array()
-                .map(f64::from)
-                .map(|value| value.max(1.0)),
-        );
-    let coefficient_source = u32x8::new(
-        coefficient_source
-            .floor()
-            .to_array()
-            .map(|value| value as u32),
-    );
-    let coefficient_destination = u32x8::splat(255 << 7) - coefficient_source;
-    let output_alpha = alpha_composite_div255(out_alpha_255 + u32x8::splat(0x80)).to_array();
-    let out_alpha_255_values = out_alpha_255.to_array();
-    let source_luma = std::array::from_fn(|lane| u32::from(source[lane * channels]));
-    let destination_luma = std::array::from_fn(|lane| u32::from(output[lane * channels]));
-    let luma = alpha_composite_channel_vector(
-        source_luma,
-        destination_luma,
-        coefficient_source,
-        coefficient_destination,
-    );
-
-    let rgb = if channels == 4 {
-        let source_green = std::array::from_fn(|lane| u32::from(source[lane * channels + 1]));
-        let destination_green = std::array::from_fn(|lane| u32::from(output[lane * channels + 1]));
-        let source_blue = std::array::from_fn(|lane| u32::from(source[lane * channels + 2]));
-        let destination_blue = std::array::from_fn(|lane| u32::from(output[lane * channels + 2]));
-        Some((
-            alpha_composite_channel_vector(
-                source_green,
-                destination_green,
-                coefficient_source,
-                coefficient_destination,
-            ),
-            alpha_composite_channel_vector(
-                source_blue,
-                destination_blue,
-                coefficient_source,
-                coefficient_destination,
-            ),
-        ))
+    // A transparent source preserves all destination color bytes exactly.
+    result = source_alpha.simd_eq(ZERO).bitselect(destination, result);
+    if CHANNELS == 4 {
+        output.copy_from_slice(bytemuck::cast_slice(&result.to_array().map(u32::to_le)));
     } else {
-        None
-    };
-
-    for lane in 0..8 {
-        // Pillow leaves the destination pixel untouched when both alpha
-        // values are zero. The vector arithmetic uses a denominator of one
-        // only to avoid a divide-by-zero lane; this branch restores the
-        // observable transparent RGB/LA payload exactly.
-        if source_alpha[lane] == 0 || out_alpha_255_values[lane] == 0 {
-            continue;
-        }
-        let offset = lane * channels;
-        output[offset] = luma[lane];
-        if let Some((green, blue)) = &rgb {
-            output[offset + 1] = green[lane];
-            output[offset + 2] = blue[lane];
-        }
-        output[offset + channels - 1] = output_alpha[lane].min(255) as u8;
+        output.copy_from_slice(bytemuck::cast_slice(
+            &result.to_array().map(|v| (v as u16).to_le()),
+        ));
     }
-    true
+}
+
+fn alpha_composite_chunk<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
+    let block_bytes = CHANNELS * 8;
+    let vector_bytes = output.len() / block_bytes * block_bytes;
+    for (source, output) in source[..vector_bytes]
+        .chunks_exact(block_bytes)
+        .zip(output[..vector_bytes].chunks_exact_mut(block_bytes))
+    {
+        alpha_composite_vector_block::<CHANNELS>(source, output);
+    }
+    for (source, output) in source[vector_bytes..]
+        .chunks_exact(CHANNELS)
+        .zip(output[vector_bytes..].chunks_exact_mut(CHANNELS))
+    {
+        alpha_composite_scalar_pixel(source, output, CHANNELS);
+    }
 }
 
 #[inline]
@@ -24105,73 +24077,35 @@ fn simd_alpha_composite_native(
     }
 
     let mut output = destination_bytes.to_vec();
-    let width = img.width() as usize;
-    let height = img.height() as usize;
-    let vector_blocks_per_row = width / 8;
-    let scalar_tail_per_row = width % 8;
-    let vector_blocks = vector_blocks_per_row.saturating_mul(height);
-    let scalar_tail = scalar_tail_per_row.saturating_mul(height);
-    let process_row = |source_row: &[u8], output_row: &mut [u8]| -> bool {
-        let vector_pixels = vector_blocks_per_row * 8;
-        for pixel in (0..vector_pixels).step_by(8) {
-            let byte_start = pixel * channels;
-            let byte_end = byte_start + channels * 8;
-            if !alpha_composite_vector_block(
-                &source_row[byte_start..byte_end],
-                &mut output_row[byte_start..byte_end],
-                channels,
-            ) {
-                return false;
-            }
+    // There is no row dependency: complete pixels stream across row boundaries.
+    // Coarse disjoint tiles amortize task scheduling for larger buffers.
+    let pixels = output.len() / channels;
+    let vector_blocks = pixels / 8;
+    let scalar_tail = pixels % 8;
+    let process_chunk = |source: &[u8], output: &mut [u8]| {
+        if channels == 4 {
+            alpha_composite_chunk::<4>(source, output);
+        } else {
+            alpha_composite_chunk::<2>(source, output);
         }
-        for pixel in vector_pixels..width {
-            let byte_start = pixel * channels;
-            let byte_end = byte_start + channels;
-            alpha_composite_scalar_pixel(
-                &source_row[byte_start..byte_end],
-                &mut output_row[byte_start..byte_end],
-                channels,
-            );
-        }
-        true
     };
     #[cfg(feature = "parallel")]
-    if output.len() >= 256 * 1024 {
-        let failed = AtomicBool::new(false);
+    if output.len() >= 1024 * 1024 {
+        let tile_bytes = 64 * 1024;
+        let tiles = output.len().div_ceil(tile_bytes);
         crate::par_rows_mut!(
             &mut output,
-            row_stride,
-            height,
-            |row_start, row_end, _y, output_row| {
-                if !process_row(&source_bytes[row_start..row_end], output_row) {
-                    failed.store(true, Ordering::Relaxed);
-                }
+            tile_bytes,
+            tiles,
+            |start, _end, _tile, bytes| {
+                process_chunk(&source_bytes[start..start + bytes.len()], bytes);
             }
         );
-        if failed.load(Ordering::Relaxed) {
-            return Ok(None);
-        }
     } else {
-        for row in 0..height {
-            let row_start = row * row_stride;
-            if !process_row(
-                &source_bytes[row_start..row_start + row_stride],
-                &mut output[row_start..row_start + row_stride],
-            ) {
-                return Ok(None);
-            }
-        }
+        process_chunk(source_bytes, &mut output);
     }
     #[cfg(not(feature = "parallel"))]
-    for row in 0..height {
-        let row_start = row * row_stride;
-        if !process_row(
-            &source_bytes[row_start..row_start + row_stride],
-            &mut output[row_start..row_start + row_stride],
-        ) {
-            return Ok(None);
-        }
-    }
+    process_chunk(source_bytes, &mut output);
     if vector_blocks == 0 {
         // Empty images have no pixel data to vectorize. They are still a
         // valid SIMD-capable operation after scalar validation and produce an
@@ -24206,6 +24140,31 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn alpha_composite_coefficient_matches_integer_division_for_all_alpha_pairs() {
+        for source in 0..=255u32 {
+            for destination_start in (0..256u32).step_by(8) {
+                let denominators = std::array::from_fn(|lane| {
+                    source * 255 + (destination_start + lane as u32) * (255 - source)
+                });
+                let actual = super::alpha_composite_coefficient(
+                    wide::u32x8::splat(source),
+                    wide::u32x8::new(denominators),
+                )
+                .to_array();
+                for (lane, denominator) in denominators.into_iter().enumerate() {
+                    let expected = source * 255 * 255 * 128 / denominator.max(1);
+                    assert_eq!(
+                        actual[lane],
+                        expected,
+                        "sa={source} da={}",
+                        destination_start + lane as u32
+                    );
+                }
+            }
+        }
+    }
+
     #[cfg(feature = "parallel")]
     use super::{
         TransposeNativeCollectCounters, TransposeNativeOddCollectCounters,

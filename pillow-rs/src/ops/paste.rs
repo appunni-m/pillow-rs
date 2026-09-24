@@ -453,17 +453,21 @@ impl Image {
             return Ok(());
         }
         let destination_size = self.size()?;
-        let background = if box_coords
+        if box_coords
             == (
                 0,
                 0,
                 i32::try_from(destination_size.0).map_err(|_| coordinate_overflow())?,
                 i32::try_from(destination_size.1).map_err(|_| coordinate_overflow())?,
-            ) {
-            self.clone()
-        } else {
-            self.crop(Some(box_coords))?
-        };
+            )
+        {
+            // A full-canvas unmasked paste would replace every output byte.
+            // After the same geometry/empty checks, queue only its composite;
+            // the low-level primitive retains mode and size validation. The
+            // immutable source graph still protects shared/copy-on-write data.
+            return self.alpha_composite(&overlay, (0, 0), (0, 0));
+        }
+        let background = self.crop(Some(box_coords))?;
 
         let mut result = background.copy();
         result.alpha_composite(&overlay, (0, 0), (0, 0))?;

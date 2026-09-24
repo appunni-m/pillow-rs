@@ -8196,10 +8196,11 @@ impl GpuInner {
         Ok(result)
     }
 
-    /// Execute byte-wise Multiply without expanding L/LA/RGB to RGBA.
+    /// Execute native Multiply/AlphaComposite without transport mode expansion.
     #[cfg(target_endian = "little")]
-    fn execute_native_multiply(
+    fn execute_native_binary(
         &self,
+        op: &PipelineOp,
         image: &DynamicImage,
         other: &DynamicImage,
         channels: u8,
@@ -8214,17 +8215,17 @@ impl GpuInner {
             || other.as_bytes().len() != length
         {
             return Err(PilError::InternalError(
-                "GPU native Multiply layout mismatch".into(),
+                "GPU native binary operation layout mismatch".into(),
             ));
         }
         let transfer_bytes = (length as u64 + 3) & !3;
         if transfer_bytes > u64::from(buffers.capacity) * 4 {
             return Err(PilError::InternalError(
-                "GPU native Multiply exceeds its working set".into(),
+                "GPU native binary operation exceeds its working set".into(),
             ));
         }
         let words = u32::try_from(transfer_bytes / 4)
-            .map_err(|_| PilError::ValueError("GPU native Multiply is too large".into()))?;
+            .map_err(|_| PilError::ValueError("GPU native binary operation is too large".into()))?;
         let columns = words.min(1024);
         let rows = words.div_ceil(columns);
         let groups_x = columns.div_ceil(16);
@@ -8232,18 +8233,34 @@ impl GpuInner {
         let limit = self.device.limits().max_compute_workgroups_per_dimension;
         if groups_x > limit || groups_y > limit {
             return Err(PilError::ValueError(
-                "GPU native Multiply exceeds adapter workgroup limit".into(),
+                "GPU native binary operation exceeds adapter workgroup limit".into(),
             ));
         }
-        let cached = self.resolve_pipeline(
-            "Multiply",
-            "multiply.wgsl",
-            include_str!("shaders/multiply.wgsl"),
-        )?;
-        // Mode 9 means four independent stored bytes per word, including alpha,
-        // padding channels and samples that cross a logical pixel boundary.
-        let parameters = [columns, rows, 9, words];
-        let parameter_bytes = std::mem::size_of_val(&parameters);
+        let in_place = matches!(op, PipelineOp::AlphaComposite { .. });
+        let (variant, shader_file, shader_source) = match op {
+            PipelineOp::Multiply { .. } => (
+                "Multiply",
+                "multiply.wgsl",
+                include_str!("shaders/multiply.wgsl"),
+            ),
+            PipelineOp::AlphaComposite { .. } => (
+                "AlphaComposite",
+                "alpha_composite.wgsl",
+                include_str!("shaders/alpha_composite.wgsl"),
+            ),
+            _ => {
+                return Err(PilError::InternalError(
+                    "unsupported native binary GPU operation".into(),
+                ));
+            }
+        };
+        let cached = self.resolve_pipeline(variant, shader_file, shader_source)?;
+        // Multiply mode 9 packs four independent bytes. AlphaComposite mode 9
+        // packs two complete LA pixels; RGBA keeps its ordinary mode code.
+        let mode = if in_place && channels == 4 { 3 } else { 9 };
+        let parameters = [columns, rows, mode, words, 0, 0];
+        let parameters = &parameters[..if in_place { 6 } else { 4 }];
+        let parameter_bytes = std::mem::size_of_val(parameters);
         buffers.params_arena.ensure_capacity(
             &self.device,
             "gpu_batch_params",
@@ -8251,38 +8268,61 @@ impl GpuInner {
             parameter_bytes,
             self.device.limits().min_uniform_buffer_offset_alignment as usize,
         );
-        buffers.img2_arena.ensure_capacity(
-            &self.device,
-            "gpu_batch_img2",
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            transfer_bytes as usize,
-            4,
-        );
+        if !in_place {
+            buffers.img2_arena.ensure_capacity(
+                &self.device,
+                "gpu_batch_img2",
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                transfer_bytes as usize,
+                4,
+            );
+        }
         let write_bytes = |buffer: &wgpu::Buffer, bytes: &[u8]| -> Result<(), PilError> {
             let size = NonZeroU64::new(transfer_bytes).ok_or_else(|| {
-                PilError::InternalError("GPU native Multiply upload is empty".into())
+                PilError::InternalError("GPU native binary operation upload is empty".into())
             })?;
             let mut view = self
                 .queue
                 .write_buffer_with(buffer, 0, size)
                 .ok_or_else(|| {
-                    PilError::InternalError("GPU native Multiply staging allocation failed".into())
+                    PilError::InternalError(
+                        "GPU native binary operation staging allocation failed".into(),
+                    )
                 })?;
             let mapped = view.as_mut();
             mapped[..length].copy_from_slice(bytes);
             mapped[length..].fill(0);
             Ok(())
         };
-        if self.direct_primary_readback {
-            self.upload_native_transpose_mapped(image.as_bytes(), length, transfer_bytes, buffers)?;
+        // The in-place shader reads the overlay and updates the destination;
+        // initialize that output buffer directly instead of a device copy.
+        let (input_image, second_image) = if in_place {
+            (other, image)
         } else {
-            write_bytes(&buffers.buf_a, image.as_bytes())?;
+            (image, other)
+        };
+        if self.direct_primary_readback {
+            self.upload_native_transpose_mapped(
+                input_image.as_bytes(),
+                length,
+                transfer_bytes,
+                buffers,
+            )?;
+        } else {
+            write_bytes(&buffers.buf_a, input_image.as_bytes())?;
         }
-        write_bytes(&buffers.img2_arena.buffer, other.as_bytes())?;
+        write_bytes(
+            if in_place {
+                &buffers.buf_b
+            } else {
+                &buffers.img2_arena.buffer
+            },
+            second_image.as_bytes(),
+        )?;
         self.queue.write_buffer(
             &buffers.params_arena.buffer,
             0,
-            bytemuck::cast_slice(&parameters),
+            bytemuck::cast_slice(parameters),
         );
         let input = if self.direct_primary_readback {
             &buffers
@@ -8297,42 +8337,42 @@ impl GpuInner {
             offset: 0,
             size: transfer_bytes,
         });
+        let parameter_range = Some(BufferRange {
+            offset: 0,
+            size: parameter_bytes as u64,
+        });
+        let mut entries = Vec::with_capacity(if in_place { 3 } else { 4 });
+        entries.push(wgpu::BindGroupEntry {
+            binding: 0,
+            resource: ranged_binding(input, image_range)?,
+        });
+        if !in_place {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: ranged_binding(&buffers.img2_arena.buffer, image_range)?,
+            });
+        }
+        entries.push(wgpu::BindGroupEntry {
+            binding: if in_place { 1 } else { 2 },
+            resource: ranged_binding(&buffers.buf_b, image_range)?,
+        });
+        entries.push(wgpu::BindGroupEntry {
+            binding: if in_place { 2 } else { 3 },
+            resource: ranged_binding(&buffers.params_arena.buffer, parameter_range)?,
+        });
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_native_multiply"),
+            label: Some("gpu_native_binary"),
             layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(input, image_range)?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(&buffers.img2_arena.buffer, image_range)?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(&buffers.buf_b, image_range)?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: parameter_bytes as u64,
-                        }),
-                    )?,
-                },
-            ],
+            entries: &entries,
         });
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("gpu_native_multiply"),
+                label: Some("gpu_native_binary"),
             });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_native_multiply"),
+                label: Some("gpu_native_binary"),
                 timestamp_writes: None,
             });
             pass.set_pipeline(&cached.pipeline);
@@ -8349,12 +8389,12 @@ impl GpuInner {
             encoder.copy_buffer_to_buffer(&buffers.buf_b, 0, &staging.buffer, 0, transfer_bytes);
         }
         self.queue.submit(Some(encoder.finish()));
-        self.poll_device("GPU native Multiply submission")?;
+        self.poll_device("GPU native binary operation submission")?;
         let result =
             self.readback_with(transfer_bytes, readback.buffer(buffers, false), |mapped| {
                 if mapped.len() != transfer_bytes as usize {
                     return Err(PilError::InternalError(
-                        "GPU native Multiply readback length mismatch".into(),
+                        "GPU native binary operation readback length mismatch".into(),
                     ));
                 }
                 let bytes = mapped[..length].to_vec();
@@ -9981,6 +10021,27 @@ fn gpu_byte_point_mode_allowed(image: &DynamicImage, mode: Option<&str>) -> bool
         DynamicImage::ImageRgb8(_) => matches!(mode, None | Some("RGB")),
         DynamicImage::ImageRgba8(_) => matches!(mode, None | Some("RGBA")),
         _ => false,
+    }
+}
+
+#[cfg(target_endian = "little")]
+fn gpu_native_binary_channels(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<u8> {
+    match op {
+        PipelineOp::Multiply { .. } => gpu_native_multiply_channels(image, mode),
+        PipelineOp::AlphaComposite {
+            dest: (0, 0),
+            src: (0, 0),
+            ..
+        } => match image {
+            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
+            DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -15364,19 +15425,20 @@ impl GpuPool {
             );
         }
         #[cfg(target_endian = "little")]
-        if let ([PipelineOp::Multiply { .. }], [auxiliary]) = (ops, auxiliary_images.as_slice())
-            && let Some(channels) = gpu_native_multiply_channels(img, mode)
+        if let ([op], [auxiliary]) = (ops, auxiliary_images.as_slice())
+            && let Some(channels) = gpu_native_binary_channels(op, img, mode)
             && let Some(other) = auxiliary.second.as_deref()
             && img.color() == other.color()
             && img.dimensions() == other.dimensions()
         {
-            // All public/adapter guards have run. Pack independent samples
-            // four per word instead of padding each logical pixel to RGBA.
+            // Public/adapter guards have run. Keep native sample transport for
+            // one binary operation; composed batches retain their normal path.
             let bytes = CheckedDims::new(img.width(), img.height(), channels)?.total_bytes();
-            let words = u32::try_from(bytes.div_ceil(4))
-                .map_err(|_| PilError::ValueError("GPU native Multiply is too large".into()))?;
+            let words = u32::try_from(bytes.div_ceil(4)).map_err(|_| {
+                PilError::ValueError("GPU native binary operation is too large".into())
+            })?;
             let mut buffers = gpu.acquire_buffers(words)?;
-            let result = gpu.execute_native_multiply(img, other, channels, &mut buffers)?;
+            let result = gpu.execute_native_binary(op, img, other, channels, &mut buffers)?;
             gpu.recycle_buffers(buffers);
             return Ok(result);
         }

@@ -10,7 +10,7 @@
 // 3-binding layout: input_src, output_dst, params.
 //
 // Mode-aware: only composite active channels.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA; internal 9=two native LA pixels per word.
 
 struct Params {
     width: u32,
@@ -77,8 +77,24 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    // Native transport may end within the final rectangular dispatch row.
+    // Ordinary RGBA transport leaves this word-count field zero.
+    if params._pad != 0u && idx >= params._pad { return; }
     let src_pixel = input_src[idx];
     let dst_pixel = output_dst[idx];
 
-    output_dst[idx] = alpha_composite_pixel(src_pixel, dst_pixel, params.mode);
+    if params.mode == 9u {
+        // Preserve native LA pairs. Shift alpha into the existing compositor's
+        // high byte, then repack both results without expanding host buffers.
+        let src_low = (src_pixel & 0xffu) | ((src_pixel & 0xff00u) << 16u);
+        let dst_low = (dst_pixel & 0xffu) | ((dst_pixel & 0xff00u) << 16u);
+        let src_high = ((src_pixel >> 16u) & 0xffu) | (src_pixel & 0xff000000u);
+        let dst_high = ((dst_pixel >> 16u) & 0xffu) | (dst_pixel & 0xff000000u);
+        let low = alpha_composite_pixel(src_low, dst_low, 1u);
+        let high = alpha_composite_pixel(src_high, dst_high, 1u);
+        output_dst[idx] = (low & 0xffu) | ((low >> 16u) & 0xff00u)
+            | ((high & 0xffu) << 16u) | (high & 0xff000000u);
+    } else {
+        output_dst[idx] = alpha_composite_pixel(src_pixel, dst_pixel, params.mode);
+    }
 }
