@@ -69,8 +69,8 @@ pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
 impl Image {
     /// Returns a resized image from Pillow's public input representation.
     ///
-    /// The original image is unchanged. Indexed modes, including `"PA"`, force
-    /// nearest sampling to avoid interpolating palette indices or alpha bytes.
+    /// The original image is unchanged. Modes `"1"` and `"P"` force nearest
+    /// sampling; `"PA"` filters its raw index and alpha bands independently.
     ///
     /// # Errors
     ///
@@ -81,21 +81,136 @@ impl Image {
         filter: Option<ResampleInput>,
         box_coords: Option<(i32, i32, i32, i32)>,
     ) -> Result<Image, PilError> {
-        let filter = parse_resample_input(filter)?;
-        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
-        if let Some(box_coords) = box_coords {
-            // Pillow's imaging core rejects a source rectangle whose right or
-            // bottom edge precedes its left or top edge with this resize
-            // specific error. Do this before delegating to crop: crop has a
-            // separate public error contract for reversed coordinates.
-            if box_coords.2 < box_coords.0 || box_coords.3 < box_coords.1 {
-                return Err(PilError::ValueError("box can't be empty".into()));
-            }
-            return self
-                .crop(Some(box_coords))?
-                .resize_with_filter((w, h), filter);
+        self.resize_with_options(
+            size,
+            filter,
+            box_coords.map(|(left, top, right, bottom)| {
+                (
+                    f64::from(left),
+                    f64::from(top),
+                    f64::from(right),
+                    f64::from(bottom),
+                )
+            }),
+            None,
+        )
+    }
+
+    /// Resizes a floating source region, optionally reducing by integer factors first.
+    ///
+    /// `reducing_gap` follows Pillow: values below one are invalid, and
+    /// nearest/indexed and filtered LA/RGBA paths ignore a valid gap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] for invalid dimensions, filter, gap, or source bounds.
+    pub fn resize_with_options(
+        &self,
+        size: (i64, i64),
+        filter: Option<ResampleInput>,
+        box_coords: Option<(f64, f64, f64, f64)>,
+        reducing_gap: Option<f64>,
+    ) -> Result<Image, PilError> {
+        let mut filter = parse_resample_input(filter)?;
+        if reducing_gap.is_some_and(|gap| gap < 1.0) {
+            return Err(PilError::ValueError(
+                "reducing_gap must be 1.0 or greater".into(),
+            ));
         }
-        self.resize_with_filter((w, h), filter)
+        if matches!(self, Image::Bytes { .. }) {
+            // Pillow loads an encoded source during resize(), so decoding
+            // errors belong to this call, not a later output observation.
+            // Keep the shared decode cache without cloning the pixel buffer.
+            self.materialized_shared()?;
+        }
+        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
+        let (source_w, source_h) = self.size()?;
+        let full_box = (0.0, 0.0, f64::from(source_w), f64::from(source_h));
+        let mut bounds = box_coords.unwrap_or(full_box);
+        if (w, h) == (source_w, source_h) && bounds == full_box {
+            // The resize executors already copy identity geometry before
+            // filtering. Retain their ordinary backend execution boundary.
+            return self.resize_with_filter((w, h), filter);
+        }
+        let mode = self.mode()?;
+        if matches!(mode.as_str(), "1" | "P") {
+            filter = ResampleFilter::Nearest;
+        }
+        let mut source = self.clone();
+        // Pillow's alpha recursion omits reducing_gap after premultiplying.
+        // Applying reduction to ordinary RGBA/LA first changes its rounding.
+        if let Some(gap) = reducing_gap
+            && !matches!(filter, ResampleFilter::Nearest)
+            && !matches!(mode.as_str(), "LA" | "RGBA")
+        {
+            let factor = |extent: f64, output: u32| -> Result<u32, PilError> {
+                let value = extent / f64::from(output) / gap;
+                if value.is_nan() {
+                    return Err(PilError::ValueError(
+                        "cannot convert float NaN to integer".into(),
+                    ));
+                }
+                if value.is_infinite() {
+                    return Err(PilError::OverflowError(
+                        "cannot convert float infinity to integer".into(),
+                    ));
+                }
+                Ok((value as u32).max(1))
+            };
+            let factor_x = factor(bounds.2 - bounds.0, w)?;
+            let factor_y = factor(bounds.3 - bounds.1, h)?;
+            if factor_x > 1 || factor_y > 1 {
+                // Pillow's integer reducer does not accept 16-bit modes,
+                // although its ordinary filtered resampler does.
+                if mode.starts_with("I;16") {
+                    return Err(PilError::ValueError("image has wrong mode".into()));
+                }
+                validate_resize_box(bounds, (source_w, source_h))?;
+                let (_, support) = crate::ops::pil_resize::filter_from_resample(filter);
+                let support_x = (support - 0.5) * (bounds.2 - bounds.0) / f64::from(w);
+                let support_y = (support - 0.5) * (bounds.3 - bounds.1) / f64::from(h);
+                // Keep the filter halo when reducing an interior box. Pillow
+                // truncates left/top and rounds right/bottom upward here.
+                let safe = (
+                    (bounds.0 - support_x).trunc().max(0.0) as u32,
+                    (bounds.1 - support_y).trunc().max(0.0) as u32,
+                    (bounds.2 + support_x).ceil().min(f64::from(source_w)) as u32,
+                    (bounds.3 + support_y).ceil().min(f64::from(source_h)) as u32,
+                );
+                if safe != (0, 0, source_w, source_h) {
+                    source = source.crop(Some((
+                        safe.0 as i32,
+                        safe.1 as i32,
+                        safe.2 as i32,
+                        safe.3 as i32,
+                    )))?;
+                }
+                source = source.reduce(factor_x, factor_y)?;
+                bounds = (
+                    (bounds.0 - f64::from(safe.0)) / f64::from(factor_x),
+                    (bounds.1 - f64::from(safe.1)) / f64::from(factor_y),
+                    (bounds.2 - f64::from(safe.0)) / f64::from(factor_x),
+                    (bounds.3 - f64::from(safe.1)) / f64::from(factor_y),
+                );
+            }
+        }
+        let source_size = source.size()?;
+        let bounds = validate_resize_box(bounds, source_size)?;
+        let full_source = (0.0, 0.0, f64::from(source_size.0), f64::from(source_size.1));
+        let vertical_first =
+            u64::from(source_size.1) > u64::from(source_size.0) * 100 && h < source_size.1;
+        if bounds == full_source && !vertical_first {
+            return source.resize_with_filter((w, h), filter);
+        }
+        Ok(Image::push_op(
+            &source,
+            PipelineOp::ResizeBoxed {
+                w,
+                h,
+                filter,
+                box_coords: bounds,
+            },
+        ))
     }
 
     fn resize_with_filter(
@@ -103,10 +218,9 @@ impl Image {
         (w, h): (u32, u32),
         mut filter: ResampleFilter,
     ) -> Result<Image, PilError> {
-        // PIL forces NEAREST for indexed samples, including PA's raw
-        // index/alpha pairs, to avoid interpolating palette indices or alpha
-        // bytes. The result remains PA rather than expanding to RGBA.
-        if self.has_palette_mode() || matches!(self.explicit_mode(), Some("1") | Some("PA")) {
+        // Only single-band indexed samples force nearest. PA retains the
+        // requested filter over its independent raw index and alpha bands.
+        if self.has_palette_mode() || self.explicit_mode() == Some("1") {
             filter = ResampleFilter::Nearest;
         }
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
@@ -294,6 +408,32 @@ impl Image {
             }
         }))
     }
+}
+
+fn validate_resize_box(
+    bounds: (f64, f64, f64, f64),
+    size: (u32, u32),
+) -> Result<(f64, f64, f64, f64), PilError> {
+    // _imaging.c reads a float32 box before checking its bounds. A double
+    // just outside an edge may round back to that edge and remain valid.
+    let bounds = (
+        f64::from(bounds.0 as f32),
+        f64::from(bounds.1 as f32),
+        f64::from(bounds.2 as f32),
+        f64::from(bounds.3 as f32),
+    );
+    if bounds.0 < 0.0 || bounds.1 < 0.0 {
+        return Err(PilError::ValueError("box offset can't be negative".into()));
+    }
+    if bounds.2 > f64::from(size.0 as f32) || bounds.3 > f64::from(size.1 as f32) {
+        return Err(PilError::ValueError(
+            "box can't exceed original image size".into(),
+        ));
+    }
+    if bounds.2 < bounds.0 || bounds.3 < bounds.1 {
+        return Err(PilError::ValueError("box can't be empty".into()));
+    }
+    Ok(bounds)
 }
 
 fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {

@@ -152,6 +152,7 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
     matches!(
         op,
         PipelineOp::Resize { .. }
+            | PipelineOp::ResizeBoxed { .. }
             | PipelineOp::Crop { .. }
             | PipelineOp::Rotate { .. }
             | PipelineOp::Transpose { .. }
@@ -312,6 +313,7 @@ fn known_pipeline_op_dimensions(
 ) -> Option<(u32, u32)> {
     match op {
         PipelineOp::Resize { w, h, .. }
+        | PipelineOp::ResizeBoxed { w, h, .. }
         | PipelineOp::Thumbnail { w, h, .. }
         | PipelineOp::Pad { w, h, .. }
         | PipelineOp::Transform { w, h, .. } => Some((*w, *h)),
@@ -1919,7 +1921,7 @@ impl Image {
                 ..
             } => true,
             PipelineOp::Rotate { fill: None, .. } => true,
-            PipelineOp::Resize { filter, .. } => {
+            PipelineOp::Resize { filter, .. } | PipelineOp::ResizeBoxed { filter, .. } => {
                 matches!(filter, ResampleFilter::Nearest)
             }
             PipelineOp::Thumbnail { filter, .. } => {
@@ -1975,6 +1977,10 @@ impl Image {
             // pipeline while the raw PA samples are updated.
             || (source.explicit_mode() == Some("PA")
                 && matches!(op, PipelineOp::PutPixel { .. }))
+            // PA resize filters the raw index/alpha pair without expanding
+            // the palette. Preserve that palette for later conversions.
+            || (source.explicit_mode() == Some("PA")
+                && matches!(op, PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. }))
             || (source.explicit_mode() == Some("PA")
                 && matches!(
                     op,

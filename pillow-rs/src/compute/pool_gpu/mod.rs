@@ -6757,11 +6757,11 @@ impl GpuInner {
             // Reduce's mode word distinguishes ordinary four-byte samples
             // from RGBA/LA alpha layouts. RGBa and RGBX share the physical
             // RGBA transport, but Pillow averages all four stored channels
-            // directly; use the raw-four-channel Reduce encoding only for
-            // that operation while retaining the source mode code for the
-            // rest of the batch.
+            // directly. PA and La likewise average raw bands; their packed
+            // luma copies and alpha can use the raw-four-channel encoding.
+            // Retain the source mode code for the rest of the batch.
             let op_mode = if matches!(op, PipelineOp::Reduce { .. })
-                && matches!(logical_mode, Some("RGBa" | "RGBX"))
+                && matches!(logical_mode, Some("RGBa" | "RGBX" | "PA" | "La"))
             {
                 4
             } else {

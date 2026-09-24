@@ -1384,6 +1384,67 @@ pub fn execute_resize(
     Ok(preserve_mode(img, result))
 }
 
+/// Resize a floating source region with Pillow's typed and pass-order rules.
+pub fn execute_resize_boxed(
+    img: &DynamicImage,
+    w: u32,
+    h: u32,
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let resize = |image: &DynamicImage, width, height, bounds: (f64, f64, f64, f64), mode| {
+        if mode == Some("I") && !matches!(filter, ResampleFilter::Nearest) {
+            resize_i_boxed(
+                image, width, height, bounds.0, bounds.1, bounds.2, bounds.3, filter,
+            )
+        } else {
+            // Nearest copies complete stored samples, including F's bits.
+            let mode = if matches!(filter, ResampleFilter::Nearest) {
+                None
+            } else {
+                mode
+            };
+            Ok(pil_resize_boxed(
+                image, width, height, bounds.0, bounds.1, bounds.2, bounds.3, filter, mode,
+            ))
+        }
+    };
+    if u64::from(img.height()) <= u64::from(img.width()) * 100 || h >= img.height() {
+        return resize(img, w, h, bounds, mode);
+    }
+    // Pillow changes pass order for very tall inputs. Keep alpha premultiplied
+    // across both passes: an intermediate unpremultiply/re-premultiply rounds
+    // the colors again and changes the final bytes.
+    let alpha_mode = match (img, mode) {
+        (DynamicImage::ImageRgba8(_), None | Some("RGBA")) => Some("RGBa"),
+        (DynamicImage::ImageLumaA8(_), None | Some("LA")) => Some("La"),
+        _ => None,
+    }
+    .filter(|_| !matches!(filter, ResampleFilter::Nearest));
+    let source = alpha_mode.map(|_| premultiply_alpha(img));
+    let working_mode = alpha_mode.or(mode);
+    let vertical = resize(
+        source.as_ref().unwrap_or(img),
+        img.width(),
+        h,
+        (0.0, bounds.1, f64::from(img.width()), bounds.3),
+        working_mode,
+    )?;
+    let result = resize(
+        &vertical,
+        w,
+        h,
+        (bounds.0, 0.0, bounds.2, f64::from(h)),
+        working_mode,
+    )?;
+    Ok(if alpha_mode.is_some() {
+        unpremultiply_alpha(&result)
+    } else {
+        result
+    })
+}
+
 /// Execute a Crop operation.
 ///
 /// `Image::crop` owns Pillow's signed/out-of-bounds normalization before it
@@ -2218,11 +2279,13 @@ pub fn execute_reduce(
     let new_w = w.div_ceil(fx);
     let new_h = h.div_ceil(fy);
     let raw = img.as_bytes();
-    let premultiplied_alpha =
-        matches!(
-            img.color(),
-            crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-        ) && !matches!(explicit_mode, Some("CMYK" | "RGBa" | "RGBX" | "F" | "I"));
+    let premultiplied_alpha = matches!(
+        img.color(),
+        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+    ) && !matches!(
+        explicit_mode,
+        Some("CMYK" | "RGBa" | "La" | "PA" | "RGBX" | "F" | "I")
+    );
     let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
     if new_w == 0 || new_h == 0 {
         return raw_bytes_to_image(new_w, new_h, out, channels);

@@ -873,17 +873,21 @@ impl PyImage {
         }
     }
 
-    #[pyo3(signature = (size, resample=None, box_coords=None))]
+    #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
     fn resize(
         &self,
         size: (i64, i64),
         resample: Option<&Bound<'_, PyAny>>,
-        box_coords: Option<(i32, i32, i32, i32)>,
+        box_coords: Option<(f64, f64, f64, f64)>,
+        reducing_gap: Option<f64>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let resample = resample_input_from_python(resample)?;
         let rs = py
-            .detach(|| self.inner.resize(size, resample, box_coords))
+            .detach(|| {
+                self.inner
+                    .resize_with_options(size, resample, box_coords, reducing_gap)
+            })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
