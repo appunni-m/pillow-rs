@@ -236,20 +236,22 @@ pub fn merge_inputs(mode: &str, bands: &[MergeInput]) -> Result<Image, PilError>
 
 /// Blends two same-sized images by linear interpolation.
 ///
-/// `alpha` is clamped to `0.0..=1.0`; output is `(1 - alpha) * image1 +
-/// alpha * image2`.
+/// `alpha` may extrapolate outside `0.0..=1.0`. Each sample is blended
+/// with fused float32 arithmetic, then clipped to the byte range and truncated.
 ///
 /// # Errors
 ///
-/// Returns [`PilError::ValueError`] when modes or image dimensions differ, or
+/// Returns [`PilError::ValueError`] for incompatible modes or unequal dimensions, or
 /// another [`PilError`] when metadata lookup fails.
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let mode1 = image1.mode()?;
     let mode2 = image2.mode()?;
     let compatible = match mode1.as_str() {
         "L" => mode2 == "L",
-        "LA" => mode2 == "LA",
-        "RGB" | "HSV" | "YCbCr" => matches!(mode2.as_str(), "RGB" | "HSV" | "YCbCr"),
+        "LA" | "La" => matches!(mode2.as_str(), "LA" | "La"),
+        "RGB" | "LAB" | "HSV" | "YCbCr" => {
+            matches!(mode2.as_str(), "RGB" | "LAB" | "HSV" | "YCbCr")
+        }
         "RGBA" | "CMYK" | "RGBa" | "RGBX" => {
             matches!(mode2.as_str(), "RGBA" | "CMYK" | "RGBa" | "RGBX")
         }
@@ -261,7 +263,7 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
         // mismatches are reported as ``images do not match``.
         let wrong_mode = !matches!(
             mode1.as_str(),
-            "L" | "LA" | "RGB" | "HSV" | "YCbCr" | "RGBA" | "CMYK" | "RGBa" | "RGBX"
+            "L" | "LA" | "La" | "RGB" | "LAB" | "HSV" | "YCbCr" | "RGBA" | "CMYK" | "RGBa" | "RGBX"
         ) || matches!(mode2.as_str(), "1" | "P" | "PA");
         return Err(PilError::ValueError(
             if wrong_mode {

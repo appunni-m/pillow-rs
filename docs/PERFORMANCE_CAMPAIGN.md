@@ -1899,3 +1899,136 @@ transfer and dispatch receipts truthful, continue SIMD gains along the measured
 public path, and remove the CPU tiny-case overhead. The campaign has moved on
 to give other operations bounded optimization attempts. Current measurements
 do not meet the complete performance goals.
+
+## Image.blend four-attempt checkpoint
+
+On 2026-09-25, module-level `Image.blend` received three parity repair
+iterations and one SIMD optimization attempt. This is separate from the earlier
+`ImageChops.blend` checkpoint. The original 80 cases passed 240 comparisons,
+but broader modes exposed rejected La/LAB inputs and missing first-image metadata.
+
+1. Admit La with LA and LAB with the three-channel family, preserving the first
+   image's output mode and existing error precedence. Copy the first image's
+   metadata mapping shallowly, including at alpha 1. Alpha can extrapolate;
+   the Rust documentation no longer incorrectly says it is clamped to 0–1.
+2. Remove the LAB A/B storage bias independently from each LAB operand before
+   blending, then restore it for a LAB result. Keep LAB on exact CPU execution
+   when SIMD/GPU cannot implement those semantics. The GPU guard also checks
+   a LAB second operand when the first image uses ordinary RGB storage.
+3. Preserve a merge's logical output mode through queued operations. Previously
+   `merge("LAB", ...)` produced the correct raw storage but advanced the executor
+   mode to RGB. A following blend therefore interpreted the A/B samples wrongly.
+4. Replace scalar per-lane extraction, clamp/conversion and byte stores after
+   SIMD FMA with packed widening, clamp, truncation, narrowing and a sixteen-byte
+   store. Stream across rows, retain the eight-byte admission boundary, pad only
+   the final 8–15-byte block, and handle a shorter final remainder scalarly.
+
+The final expanded suite passes **876/876 exact comparisons** (292 cases),
+including **212 added input-only blend cases**. Related merge, Contrast and
+Color paths pass **1,161/1,161 comparisons**. A separate probe compares every
+one of the 65,536 byte pairs at 16 factors, including extrapolation, near-one
+factors, large finite factors and nonfinite factors. Together with lengths
+1–33 it passes **147/147 comparisons** across backend selections. Metadata,
+alpha endpoints, nonfinite factors and independent result ownership pass
+another **42/42**. Unsupported acceleration still uses the exact fallback;
+these counts are not claims that every case executes natively.
+
+Among the 212 added blend cases, 77 record no arithmetic backend (including
+rejected inputs). CPU records execution on the other 135. SIMD records 108
+cases with SIMD receipts and 27 with CPU receipts; GPU records 52 with GPU
+receipts and 83 with CPU receipts. LAB, other logical-mode restrictions, tiny
+inputs and setup operations remain part of the ownership gap.
+
+The audit also found independent constructor failures: `Image.new("LAB", (0, 1))`,
+`Image.new("LAB", (1, 0))`, and raw `Image.frombytes("LAB", ...)` succeed in
+Pillow and are rejected by the target. They are retained as **three permanent
+constructor regression inputs**, with their failing receipt under
+`perf-lab-constructor-20260925-blockers-parity.json`. LAB blend cases use
+`merge("LAB", [L, L, L])`, including zero-size L bands, to reach blend itself.
+Those passing blend results do not resolve the constructor defects. The initial
+120 failures in 636 varied comparisons included six comparisons stopped by
+zero-size LAB construction; the remaining 114 reached a blend discrepancy.
+
+Local evidence uses `build/migration-parity/perf-image-blend-20260925-`:
+`varied-initial-parity.json`, `checkpoint-parity.json`, `domain-parity.json`,
+`host-parity.json`, `repaired-throughput.json`, `checkpoint-throughput.json`,
+and `checkpoint.json`. Shared-path evidence is
+`perf-image-blend-related-20260925-checkpoint-parity.json`. An initial sandboxed
+throughput run could not access Metal and is retained as
+`sandbox-unavailable-throughput.json`; it is excluded from performance results.
+The completed throughput and final parity runs used adapter access.
+
+The three maintained benchmark workloads and their thresholds are unchanged.
+Initial run `migration-benchmark-e07ab1ef1741430b8599dfcb8d942bd8`; final run
+`migration-benchmark-e6e94342840d46998493d94bcd838966`. Final median milliseconds:
+
+| Materialized workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Operation | 0.015229 | 0.018625 | 0.017771 | 0.225417 |
+| Operation matrix 32 × 24 | 0.014313 | 0.017729 | 0.017209 | 0.216188 |
+
+Both materialized rows complete on the requested backend without fallback.
+CPU misses Pillow, SIMD misses 5×, and GPU misses SIMD on both. The standard
+row has no completed backend receipt and cannot prove backend performance;
+its Pillow/CPU/SIMD/GPU medians are 0.010042/0.012250/0.012396/0.012333 ms.
+
+The fresh-input diagnostic includes two new `frombytes` images, module blend
+at alpha 0.3, and terminal bytes. Both before/after runs pass **40,320 exact
+output checks**, including warmup, with 38,400 measured completions each.
+Source and runtime identities stay unchanged during each run. Every target
+request records its requested native backend; GPU records one dispatch. Final
+queue-one request medians include construction, allocation, transfer and waits:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU | Pillow / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 0.537771 ms | 0.211271 ms | 0.388729 ms | 2.953438 ms | 1.38× |
+| RGB | 2.715104 ms | 0.532313 ms | 1.226521 ms | 2.806729 ms | 2.21× |
+
+SIMD improves **1.68×/1.72×** from its parity-correct baseline of
+0.654438/2.108021 ms. CPU is essentially unchanged at this boundary; the
+retained CPU change repairs LAB semantics. GPU transport was not optimized
+in this visit. Completed images per second, including scheduling and receipts:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1,825 | 4,464 | 2,475 | 336 |
+| L | 2 | 1,968 | 5,261 | 2,497 | 334 |
+| L | 4 | 1,989 | 5,208 | 2,606 | 325 |
+| RGB | 1 | 372 | 1,680 | 805 | 345 |
+| RGB | 2 | 410 | 1,911 | 842 | 350 |
+| RGB | 4 | 435 | 1,966 | 840 | 347 |
+
+Remaining blockers and concrete next investigations:
+
+- **SIMD instruction overhead:** the old release loop emits per-lane float
+  compares, scalar conversions and byte stores after vector FMAs. The retained
+  loop emits vector min/max, truncation, narrowing and one packed store, but
+  still calls `_memset_pattern16` twice per sixteen-byte block to construct
+  repeated float constants and spills around those calls. Hoist or express
+  constants so their construction leaves the hot loop, then inspect widening
+  shuffles and compare packed-word extraction. SIMD remains 1.84×/2.30× slower
+  than CPU for L/RGB. No second SIMD trial was taken after the visit limit.
+- **CPU and small-call cost:** the two small materialized rows remain slower
+  than Pillow. Attribute Python wrapping, metadata, graph construction and
+  terminal export before changing arithmetic. Large CPU blending still
+  zero-initializes output and schedules individual rows; compare exact-size
+  output construction and coarse independent chunks at measured crossovers.
+- **GPU transport:** both L and RGB upload 3,145,728 bytes, provide another
+  3,145,728 auxiliary bytes, and read back 3,145,728 bytes, with 256 parameter
+  bytes, one full-frame copy and one mode conversion. Reuse the native byte
+  transfer helper for supported BlendModule layouts, keeping all-channel FMA,
+  word-count tail guards and the shader's 32-byte parameter layout. L currently
+  expands fourfold; RGB expands to four bytes per pixel. Then isolate queue
+  writes, mapping and waits. GPU is 7.60×/2.29× slower than SIMD and has lower
+  sustained throughput. Zero host-buffer counters do not establish no allocations.
+- **Remaining parity and scope:** fix the recorded LAB constructor defects in
+  their own operation visits; accelerate LAB only with its per-operand bias
+  contract. More shapes, factors, composed pipelines, bindings and platforms,
+  integration into the complete results matrix, and pre-push verification remain.
+
+The reusable skill records biased representations across queued stages and
+packed conversion/store costs, including vector-constant construction that
+lowers to library calls. Static indices contain 13,253 parity cases,
+24 coverage declarations, 773 workloads and 54 suites. No coverage collection
+ran. This operation is checkpointed as incomplete; the next operation is
+Color enhancement. No public operation has every performance target demonstrated.
