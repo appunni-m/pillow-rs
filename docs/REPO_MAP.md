@@ -322,6 +322,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- report_migration_js_parity_gaps.py
     |-- report_migration_parity_region_coverage.py
     |-- report_migration_pillow_missing.py
+    |-- report_optimization_goals.py
     |-- report_pipeline_benchmark_coverage.py
     |-- report_pipeline_performance.py
     |-- report_pipeline_roadmap_status.py
@@ -347,6 +348,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_docs_release.py
     |-- test_docs_site.py
     |-- test_font_native_cases.py
+    |-- test_font_variant_parity.py
+    |-- test_optimization_goals.py
     |-- test_parity_reduction.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
