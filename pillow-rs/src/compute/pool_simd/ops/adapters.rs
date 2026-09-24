@@ -8385,15 +8385,21 @@ fn native_convert_bytes(
     Some((output, vector_blocks, 0))
 }
 
-/// Apply one of the exact byte-domain ImageChops blend formulas without
-/// widening ordinary images to packed RGBA pixels.
-///
-/// Every non-empty row is processed by padded `u8x16`/`u16x16` blocks. The
-/// padding lanes are never written back, so a four-byte indexed row still
-/// executes the same vector data path as a wider row. Keeping rows separate
-/// here preserves the layout contract for interleaved LA/PA and CMYK bytes.
-/// These native variants avoid two full-frame conversions for every dual-image
-/// operation in a pipeline.
+/// Multiply/screen operate on stored bytes, independently of row or channel.
+#[inline(always)]
+fn native_chops_blend_block(left: [u8; 16], right: [u8; 16], screen: bool) -> [u8; 16] {
+    const MAX: u16x16 = u16x16::splat(255);
+    let left = u16x16::from(u8x16::new(left));
+    let right = u16x16::from(u8x16::new(right));
+    let values = if screen {
+        MAX - simd_div255((MAX - left) * (MAX - right))
+    } else {
+        simd_div255(left * right)
+    };
+    simd_pack_u16x16(values).to_array()
+}
+
+/// Load complete blocks directly; only the final partial block needs padding.
 fn apply_native_blend_rows(
     left: &[u8],
     right: &[u8],
@@ -8412,56 +8418,49 @@ fn apply_native_blend_rows(
     {
         return false;
     }
-    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height);
+    let vector_blocks = left.len().div_ceil(16);
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
     }
     let apply_row = |left_row: &[u8], right_row: &[u8], output_row: &mut [u8]| {
-        for (block_index, output_chunk) in output_row.chunks_mut(16).enumerate() {
-            let start = block_index * 16;
-            let active = output_chunk.len();
-            let mut left_padded = [0u8; 16];
-            let mut right_padded = [0u8; 16];
-            left_padded[..active].copy_from_slice(&left_row[start..start + active]);
-            right_padded[..active].copy_from_slice(&right_row[start..start + active]);
-            let left = u16x16::from(u8x16::new(left_padded));
-            let right = u16x16::from(u8x16::new(right_padded));
-            let values = if screen {
-                let inverse_left = u16x16::splat(255) - left;
-                let inverse_right = u16x16::splat(255) - right;
-                u16x16::splat(255) - simd_div255(inverse_left * inverse_right)
-            } else {
-                simd_div255(left * right)
-            };
-            let packed = simd_pack_u16x16(values).to_array();
-            output_chunk.copy_from_slice(&packed[..active]);
+        let mut left_chunks = left_row.chunks_exact(16);
+        let mut right_chunks = right_row.chunks_exact(16);
+        let mut output_chunks = output_row.chunks_exact_mut(16);
+        for ((left, right), output) in left_chunks
+            .by_ref()
+            .zip(right_chunks.by_ref())
+            .zip(output_chunks.by_ref())
+        {
+            output.copy_from_slice(&native_chops_blend_block(
+                left.try_into().expect("complete vector"),
+                right.try_into().expect("complete vector"),
+                screen,
+            ));
+        }
+        let remainder = output_chunks.into_remainder();
+        if !remainder.is_empty() {
+            let mut left = [0; 16];
+            let mut right = [0; 16];
+            left[..remainder.len()].copy_from_slice(left_chunks.remainder());
+            right[..remainder.len()].copy_from_slice(right_chunks.remainder());
+            remainder
+                .copy_from_slice(&native_chops_blend_block(left, right, screen)[..remainder.len()]);
         }
     };
 
     #[cfg(feature = "parallel")]
-    if output.len() >= 256 * 1024 {
-        crate::par_rows_mut!(output, row_stride, height, |row_start, row_end, _y, row| {
-            apply_row(&left[row_start..row_end], &right[row_start..row_end], row);
+    if output.len() >= 4 * 1024 * 1024 {
+        const TILE_BYTES: usize = 64 * 1024;
+        let tiles = output.len().div_ceil(TILE_BYTES);
+        crate::par_rows_mut!(output, TILE_BYTES, tiles, |start, _end, _tile, bytes| {
+            let end = start + bytes.len();
+            apply_row(&left[start..end], &right[start..end], bytes);
         });
     } else {
-        for row_index in 0..height {
-            let row_start = row_index * row_stride;
-            apply_row(
-                &left[row_start..row_start + row_stride],
-                &right[row_start..row_start + row_stride],
-                &mut output[row_start..row_start + row_stride],
-            );
-        }
+        apply_row(left, right, output);
     }
     #[cfg(not(feature = "parallel"))]
-    for row_index in 0..height {
-        let row_start = row_index * row_stride;
-        apply_row(
-            &left[row_start..row_start + row_stride],
-            &right[row_start..row_start + row_stride],
-            &mut output[row_start..row_start + row_stride],
-        );
-    }
+    apply_row(left, right, output);
     true
 }
 
@@ -8483,59 +8482,45 @@ fn apply_native_blend_rows_in_place(
     if row_stride.checked_mul(height) != Some(left.len()) || right.len() != left.len() {
         return false;
     }
-    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height);
+    let vector_blocks = left.len().div_ceil(16);
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
     }
 
     let apply_row = |left_row: &mut [u8], right_row: &[u8]| {
-        for (block_index, left_chunk) in left_row.chunks_mut(16).enumerate() {
-            let start = block_index * 16;
-            let active = left_chunk.len();
-            let mut left_padded = [0u8; 16];
-            let mut right_padded = [0u8; 16];
-            left_padded[..active].copy_from_slice(left_chunk);
-            right_padded[..active].copy_from_slice(&right_row[start..start + active]);
-            let left = u16x16::from(u8x16::new(left_padded));
-            let right = u16x16::from(u8x16::new(right_padded));
-            let values = if screen {
-                let inverse_left = u16x16::splat(255) - left;
-                let inverse_right = u16x16::splat(255) - right;
-                u16x16::splat(255) - simd_div255(inverse_left * inverse_right)
-            } else {
-                simd_div255(left * right)
-            };
-            let packed = simd_pack_u16x16(values).to_array();
-            left_chunk.copy_from_slice(&packed[..active]);
+        let mut left_chunks = left_row.chunks_exact_mut(16);
+        let mut right_chunks = right_row.chunks_exact(16);
+        for (left, right) in left_chunks.by_ref().zip(right_chunks.by_ref()) {
+            let values = native_chops_blend_block(
+                (&*left).try_into().expect("complete vector"),
+                right.try_into().expect("complete vector"),
+                screen,
+            );
+            left.copy_from_slice(&values);
+        }
+        let remainder = left_chunks.into_remainder();
+        if !remainder.is_empty() {
+            let mut left = [0; 16];
+            let mut right = [0; 16];
+            left[..remainder.len()].copy_from_slice(remainder);
+            right[..remainder.len()].copy_from_slice(right_chunks.remainder());
+            remainder
+                .copy_from_slice(&native_chops_blend_block(left, right, screen)[..remainder.len()]);
         }
     };
     #[cfg(feature = "parallel")]
-    if left.len() >= 256 * 1024 {
-        crate::par_rows_mut!(
-            left,
-            row_stride,
-            height,
-            |row_start, row_end, _y, left_row| {
-                apply_row(left_row, &right[row_start..row_end]);
-            }
-        );
+    if left.len() >= 4 * 1024 * 1024 {
+        const TILE_BYTES: usize = 64 * 1024;
+        let tiles = left.len().div_ceil(TILE_BYTES);
+        crate::par_rows_mut!(left, TILE_BYTES, tiles, |start, _end, _tile, bytes| {
+            let end = start + bytes.len();
+            apply_row(bytes, &right[start..end]);
+        });
     } else {
-        for row_index in 0..height {
-            let row_start = row_index * row_stride;
-            apply_row(
-                &mut left[row_start..row_start + row_stride],
-                &right[row_start..row_start + row_stride],
-            );
-        }
+        apply_row(left, right);
     }
     #[cfg(not(feature = "parallel"))]
-    for row_index in 0..height {
-        let row_start = row_index * row_stride;
-        apply_row(
-            &mut left[row_start..row_start + row_stride],
-            &right[row_start..row_start + row_stride],
-        );
-    }
+    apply_row(left, right);
     crate::compute::record_pipeline_operation_path("vector");
     true
 }
@@ -9226,7 +9211,9 @@ fn simd_div255(value: u16x16) -> u16x16 {
     // For 0 <= value <= 65025, this is exactly floor(value / 255), including
     // both endpoints.  It replaces an integer divide without changing the
     // intermediate truncation required by ImageChops.multiply/screen.
-    let incremented = value + u16x16::splat(1);
+    // A runtime splat can emit memset_pattern16 in every vector iteration.
+    const ONE: u16x16 = u16x16::splat(1);
+    let incremented = value + ONE;
     (incremented + (incremented >> 8u32)) >> 8u32
 }
 

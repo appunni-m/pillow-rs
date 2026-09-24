@@ -110,7 +110,7 @@ fn apply_binary_rows<F>(
 
     #[cfg(feature = "parallel")]
     if if _cheap_bytes {
-        // Saturating bytes have little computation to amortize scheduling.
+        // Cheap byte arithmetic has little computation to amortize scheduling.
         // The measured crossover is around 4 MiB; larger work uses groups of
         // complete rows while preserving each source's independent stride.
         output.len() >= 4 * 1024 * 1024
@@ -359,7 +359,7 @@ pub fn op_chops_subtract(
 }
 
 pub fn op_chops_multiply(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| ((a as u32 * b as u32) / 255) as u8)
+    channel_op_binary_with_policy(img, other, |a, b| ((a as u32 * b as u32) / 255) as u8, true)
 }
 
 pub fn op_chops_screen(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
