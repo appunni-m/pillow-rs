@@ -28,6 +28,7 @@ use pyo3::types::PyBytesMethods;
 use pyo3::types::PyCapsule;
 use pyo3::types::PyDict;
 use pyo3::types::PyDictMethods;
+use pyo3::types::PyFloat;
 use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyListMethods;
@@ -3774,10 +3775,35 @@ fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
 }
 
 #[pyfunction]
-fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<PyImage> {
+fn ops_solarize(image: &Bound<'_, PyImage>, threshold: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    let py = image.py();
+    let input = if threshold.is_exact_instance_of::<PyInt>()
+        || threshold.is_exact_instance_of::<PyBool>()
+    {
+        // Compare before narrowing so arbitrarily large Python integers retain
+        // the same byte-domain behavior without integer or float overflow.
+        let value = if threshold.lt(0)? {
+            0.0
+        } else if threshold.gt(255)? {
+            256.0
+        } else {
+            f64::from(threshold.extract::<u8>()?)
+        };
+        pillow_rs::SolarizeInput::Threshold(value)
+    } else if threshold.is_exact_instance_of::<PyFloat>() {
+        pillow_rs::SolarizeInput::Threshold(threshold.extract::<f64>()?)
+    } else {
+        let mut below = Box::new([false; 256]);
+        for (sample, result) in below.iter_mut().enumerate() {
+            *result = sample.into_pyobject_or_pyerr(py)?.lt(threshold)?;
+        }
+        pillow_rs::SolarizeInput::Comparisons(below)
+    };
+    // Custom comparisons can mutate the input image. Snapshot its current
+    // Rust handle only after those calls, and propagate their first exception.
     let inner = image.borrow().inner.clone();
-    let t = threshold.unwrap_or(128);
-    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_solarize(&inner, t)))
+    let rs = py
+        .detach(|| pillow_rs::imageops_solarize_with_input(&inner, input))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

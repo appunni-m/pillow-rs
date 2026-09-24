@@ -29,7 +29,17 @@ def posterize(image: Image, bits: int) -> Image:
 
 
 def solarize(image: Image, threshold: int = 128) -> Image:
-    return Image(_core.ops_solarize(image._rust_image, threshold))
+    result = Image(_core.ops_solarize(image._rust_image, threshold))
+    # Pillow's point result copies the metadata mapping, retaining references
+    # to nested values. Comparison callbacks may have changed it during the call.
+    if image._transpose_loads_info:
+        image.load()
+        image.info
+    result._info = image._info.copy()
+    result._native_info = image._native_info
+    result._native_info_rebaseline = True
+    result._native_info_omitted = image._native_info_omitted
+    return result
 
 
 def grayscale(image: Image) -> Image:

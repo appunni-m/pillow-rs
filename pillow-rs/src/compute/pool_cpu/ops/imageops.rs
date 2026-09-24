@@ -516,6 +516,35 @@ pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilErr
 /// Solarize: invert pixels where value >= threshold.
 /// PIL uses >=, not >.
 pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, PilError> {
+    if matches!(
+        img,
+        DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
+    ) {
+        // Every stored byte is a color sample in the public L/RGB contract.
+        // Write the result once instead of expanding L to RGB and converting back.
+        let bytes = img
+            .as_bytes()
+            .iter()
+            .map(|&value| {
+                if value >= threshold {
+                    255 - value
+                } else {
+                    value
+                }
+            })
+            .collect();
+        let channels = if matches!(img, DynamicImage::ImageLuma8(_)) {
+            1
+        } else {
+            3
+        };
+        return crate::image_utils::raw_bytes_to_image_allow_empty(
+            img.width(),
+            img.height(),
+            bytes,
+            channels,
+        );
+    }
     let t = threshold;
     let mut rgb = img.to_rgb8();
     let (width, height) = rgb.dimensions();

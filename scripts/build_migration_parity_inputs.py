@@ -39849,6 +39849,7 @@ def build_nuanced_cases(
     cases.extend(multiply_mode_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
+    cases.extend(solarize_threshold_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
@@ -40131,6 +40132,58 @@ def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                 "steps": steps, "observations": ["image", "call", "materialize"],
             })
+    return cases
+
+
+def solarize_threshold_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Host comparison semantics, mode rejection, empty images and vector tails."""
+    if surface_id != "PIL.ImageOps":
+        return []
+    cases = []
+
+    def make_case(mode, channels, threshold, label, size=(17, 17)):
+        width, height = size
+        length = ((width + 7) // 8 if mode == "1" else width * channels) * height
+        raw = bytes((i * 73 + 29) & 255 for i in range(length))
+        if mode == "F":
+            raw = b"".join(struct.pack("<f", (i * 13.75) % 600 - 100)
+                           for i in range(width * height))
+        steps = [
+            {"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+             "receiver": None, "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                                                "data": asset_value("pixels")}},
+            {"step_id": "call", "surface": surface_id, "operation": "solarize",
+             "receiver": None, "arguments": {"image": binding("image"), "threshold": literal(threshold)}},
+            {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+             "receiver": binding("call"), "arguments": {}},
+        ]
+        assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                   "data": base64.b64encode(raw).decode(), "sha256": hashlib.sha256(raw).hexdigest(),
+                   "media_type": "application/octet-stream"}]
+        if not width or not height:
+            steps[0]["operation"] = "new"
+            steps[0]["arguments"].pop("data")
+            steps[0]["arguments"]["color"] = literal(0)
+            assets = []
+        return {"case_id": f"{surface_id}.solarize.nuanced.audit-{mode}-{label}",
+                "surface": surface_id, "operation": "solarize",
+                "covers": [f"{surface_id}.solarize.behavior.default"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": assets, "steps": steps, "observations": ["call", "materialize"]}
+
+    modes = {"1": 0, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "HSV": 3, "YCbCr": 3,
+             "I": 4, "F": 4, "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+    for mode, channels in modes.items():
+        for index, threshold in enumerate((-1, 0, 0.5, 127.5, 128, 255, 255.1, 256, 300,
+                                           True, None, "128", [])):
+            cases.append(make_case(mode, channels, threshold, str(index)))
+    for mode, channels in (("L", 1), ("RGB", 3)):
+        word_edges = ((4095, 1), (4098, 1), (4101, 1)) if mode == "L" else ((1365, 1), (1366, 1), (1367, 1))
+        for size in ((0, 3), (3, 0), (1, 1), (15, 3), (16, 3), (17, 3), (31, 3), (33, 3), *word_edges):
+            for threshold in (0, 127.5, 256):
+                cases.append(make_case(mode, channels, threshold,
+                                       f"{size[0]}x{size[1]}-{threshold}", size))
     return cases
 
 

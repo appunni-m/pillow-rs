@@ -981,6 +981,15 @@ def operation_contract(
         for parameter in parameters:
             if parameter["id"] == "factor":
                 add_unique(parameter["value_types"], "string")
+    if endpoint.source_path == "PIL.ImageOps.solarize":
+        # The int annotation is narrower than the runtime comparison contract.
+        # Pillow compares each byte with the supplied object before checking
+        # image mode. Include fractional/bool inputs and negative type cases;
+        # exact results and exceptions remain the existing parity assertions.
+        for parameter in parameters:
+            if parameter["id"] == "threshold":
+                for value_type in ("number", "boolean", "null", "string", "sequence"):
+                    add_unique(parameter["value_types"], value_type)
     if endpoint.source_path == "PIL.Image.Image.getchannel":
         # The documented selector is int | str, but Pillow also exposes a
         # stable TypeError for other host values. Keep JSON values available

@@ -59,6 +59,9 @@ inputs and ``Image.alpha_composite``; every request completes one composite.
 from each fresh image and ``enhance(0.3)`` before exporting bytes. Base-image
 construction and its host mean calculation are inside the measured boundary.
 
+``--operation solarize`` applies ``ImageOps.solarize(image, 128)`` to each
+fresh L/RGB image before exporting its bytes.
+
 Use ``make migration-parity-transpose-throughput`` to build the replacement
 without overwriting the Pillow oracle, or invoke this script after build-parity.
 """
@@ -199,6 +202,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].invert(image)
         elif plan.get("operation") == "grayscale":
             image = plan["imageops_api"].grayscale(image)
+        elif plan.get("operation") == "solarize":
+            image = plan["imageops_api"].solarize(image, 128)
         elif plan.get("operation") == "contrast":
             image = plan["imageenhance_api"].Contrast(image).enhance(0.3)
         elif plan.get("operation") == "transform":
@@ -356,7 +361,7 @@ def child(args: argparse.Namespace) -> int:
     subject = args.child_subject
     identity = parity.side_identity("source" if subject == "Pillow" else "target")
     image_api = importlib.import_module("PIL.Image")
-    if plan.get("operation") in ("equalize", "invert", "grayscale"):
+    if plan.get("operation") in ("equalize", "invert", "grayscale", "solarize"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
     if plan.get("operation") in ("blend", "add", "subtract", "multiply", "alpha-composite"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
@@ -488,6 +493,7 @@ def run(args: argparse.Namespace) -> int:
                    "warmup_windows": WARMUPS, "measurement_iterations_per_sample": ITERATIONS,
                    "samples": SAMPLES, "operation": operation, "methods": [0, 2] if operation == "transpose" else [],
                    "contrast_factor": 0.3 if operation == "contrast" else None,
+                   "solarize_threshold": 128 if operation == "solarize" else None,
                    "affine_coefficients": TRANSFORM_DATA if operation == "transform" else None,
                    "boundary": ("two fresh frombytes images, blend(alpha=0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "blend" else "two fresh frombytes images, add(scale=1, offset=0), terminal bytes, worker scheduling and receipt capture"
@@ -575,7 +581,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))
