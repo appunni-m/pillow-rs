@@ -1226,6 +1226,149 @@ logical byte order from actual transfer packing. The fixture index contains
 was collected. The next visit is Multiply, the first unvisited operator in the
 highest remaining ranked pipeline (`long-auxiliary.multiply-screen-260`).
 
+## Multiply four-attempt checkpoint
+
+On 2026-09-25, Multiply completed four attempts and was checkpointed with
+remaining gaps. The unchanged baseline measured 26 declared workloads
+(`migration-benchmark-f74c87efb9e1401b951fd0e9e369b326`) and passed 261 maintained
+parity comparisons. A separate 115-case audit found 18 failures: the shared
+binary-mode validator rejected La, although Pillow applies Chops arithmetic
+to its stored bytes. All 65,536 byte pairs already produced exact products.
+
+The retained changes are:
+
+1. Admit La to the existing two-byte Chops mode family. The six Multiply La
+   cases and 33 related Chops cases now pass. Algorithms stay in Rust core;
+   accepting the logical mode does not imply native SIMD/GPU execution.
+2. Load complete SIMD blocks directly instead of initializing two scratch
+   arrays and making variable-length copies for every sixteen samples. Share
+   the exact block arithmetic with the owned in-place path; pad only the tail.
+3. Force the divide-by-255 helper's constant vector to compile-time storage.
+   ARM64 disassembly exposed `memset_pattern16` inside every vector iteration;
+   the replacement loop contains packed multiply/add, shifts and narrowing
+   without that call. For equal contiguous SIMD layouts, stream across row
+   boundaries and use 64 KiB tiles above 4 MiB. CPU Multiply uses the existing
+   cheap-byte scheduling policy, retaining separate strides for clipped inputs.
+   Partial tiles use their actual slice length rather than a full-row endpoint.
+4. Transfer native Multiply bytes on GPU, four independent samples per word,
+   instead of expanding every pixel to RGBA. Reuse the existing shader,
+   checked buffer pool, mapped Metal input, auxiliary staging and readback
+   paths. Preserve all channels and remove only transport alignment padding.
+   This path handles a single equal-layout Multiply; composed pipelines retain
+   their existing execution contracts. No output cache or CPU pixel computation
+   substitutes for the GPU kernel.
+
+There are 148 permanent input-only regressions: 115 Multiply cases covering
+19 modes, empty/clipped layouts, vector tails and all byte pairs, plus 33 La
+cases for the shared validator. Existing tests and benchmark policies remain
+unchanged. Exact Pillow evidence under `build/migration-parity/`:
+
+- **606/606** final Multiply comparisons, including mapped composed workflows:
+  `perf-multiply-20260925-checkpoint-parity.json`.
+- **12/12** large threshold/tail comparisons across CPU, SIMD and GPU:
+  `perf-multiply-20260925-checkpoint-tiles-parity.json`. These exercise buffers
+  immediately below/at/above 4 MiB and partial final tiles.
+- **579/579** shared Screen comparisons after the CPU/SIMD changes:
+  `perf-screen-20260925-multiply-attempt3-parity.json`. Subsequent GPU changes
+  only affect Multiply; the final Multiply workflows also check compositions.
+- **99/99** related La Chops comparisons after the validator repair:
+  `perf-chops-la-20260925-multiply-attempt1-parity.json`.
+- **40,320/40,320** fresh-request output checks in both the correct pre-optimization
+  baseline and final throughput runs. Receipts are
+  `perf-multiply-20260925-attempt1-throughput.json` and
+  `perf-multiply-20260925-checkpoint-throughput.json`.
+
+In the 115-case mode audit, 79 cases reach valid arithmetic and 36 check rejected
+scalar/16-bit modes. CPU executes all 79 valid cases. SIMD executes 61 natively
+and falls back on 18; GPU executes 66 natively and falls back on 13 unequal-size
+cases. Empty results include native zero-work paths. These passing fallbacks
+do not prove acceleration. No universal parity or support claim follows from
+this finite cohort.
+
+The final unchanged benchmark receipt is
+`migration-benchmark-015177f1e319480f8e762a7e9d44ed9f`, saved as
+`perf-multiply-20260925-checkpoint.json`. Selected median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 1 × 1 | 0.012167 | 0.014292 | 0.015917 | 0.285729 |
+| RGB 16 × 16 | 0.014188 | 0.016042 | 0.017125 | 0.306604 |
+| RGB 32 × 32 | 0.014813 | 0.018396 | 0.015750 | 0.290854 |
+| RGB 256 × 256 | 0.158979 | 0.032292 | 0.033521 | 0.439521 |
+| RGB 1024 × 768 | 2.153000 | 0.433417 | 0.434667 | 1.652208 |
+| Multiply→Screen RGB 1024² quick pipeline | 6.493709 | 0.899417 | 1.120479 | 3.684229 |
+| 260-operation Multiply/Screen chain | 0.864645 | 1.088083 | 1.132437 | 6.797167 |
+| Cold Multiply→Screen RGB 1024² | 11.917500 | 1.350292 | 1.385292 | 17.906791 |
+
+Of 25 declared workloads with native completion receipts, CPU misses on five,
+SIMD misses 5× on sixteen, and GPU misses SIMD latency on all 25. The remaining
+resident row measures cached materialization and cannot prove fresh execution.
+The standard/quick aliases share the same measured pipeline, so these row
+counts are not independent operation completions. The RGB 256 × 256 SIMD
+median improved from 0.260104 to 0.033521 ms (7.76×); large CPU improved from
+0.663042 to 0.433417 ms and GPU from 3.460625 to 1.652208 ms. Short benchmark
+samples fluctuate; the fresh-input run supplies a separate longer boundary.
+
+That diagnostic creates two fresh 1024 × 768 images per request. Request timing
+includes construction, allocation, transfers, synchronization and terminal bytes;
+window throughput also includes worker scheduling and receipt capture. Each of
+16 changing input pairs is checked against live
+Pillow outside timing. Five warmup windows precede five samples of twenty
+windows at each queue depth. All target requests execute on their named backend
+without fallback; GPU records exactly one dispatch. Source and runtime binary
+identities remain consistent during each run. Queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU | SIMD speedup over Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 0.556000 | 0.099708 | 0.104813 | 0.462834 | 5.30× |
+| RGB | 2.666104 | 0.406167 | 0.305958 | 1.084979 | 8.71× |
+
+The corresponding baseline GPU medians were 2.896667/2.797625 ms: improvements
+of 6.26×/2.58×. The 5.30×/8.71× figures describe request medians, not the complete
+window: queue-one throughput ratios are 4.73×/7.72×. Native L transfers now use
+786,432 bytes for each primary input,
+secondary input and result; RGB uses 2,359,296 bytes each, plus 16 parameter
+bytes. Readback still allocates the host result. This is reduced transfer and
+conversion work, not a zero-allocation or zero-readback claim. Aggregate fresh
+completed images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1,764 | 8,839 | 8,339 | 2,112 |
+| L | 2 | 1,976 | 11,776 | 10,816 | 3,461 |
+| L | 4 | 1,992 | 13,309 | 13,006 | 4,615 |
+| RGB | 1 | 370 | 2,391 | 2,855 | 861 |
+| RGB | 2 | 404 | 3,264 | 3,144 | 1,272 |
+| RGB | 4 | 427 | 3,665 | 3,618 | 1,387 |
+
+Multiply remains incomplete. Next-visit decisions and blockers:
+
+- **Tiny requests:** host construction, validation and terminal overhead still
+  exceed Pillow on several rows. Attribute those stages before changing the
+  now-cheap arithmetic loop; wider vectors cannot remove a fixed call floor.
+- **SIMD support and bandwidth:** La and unequal dimensions still use CPU
+  fallback. Add exact native stride handling and mode admission separately.
+  SIMD misses 5× on several uniform/composed workloads even though the two
+  fresh-input cases meet it. Measure copies/allocations and the 4 MiB scheduling
+  crossover across more shapes and hardware before further instruction tuning.
+- **GPU throughput:** queue-one latency remains 4.42× SIMD for L and 3.55× for
+  RGB; throughput remains lower at every measured queue depth. Profile auxiliary
+  staging, command encoding, mapping and completion. The native-byte path is
+  currently little-endian and single-operation; mixed chains still expand to
+  packed RGBA. Preserve per-step truncation if extending fusion or residency.
+- **Long pipelines:** the 260-operation chain still misses all targets. Count
+  graph construction, repeated auxiliary preparation and dispatches before
+  extending exact fusion. Existing intermediate observations must remain valid.
+- **Outstanding proof:** additional modes, shapes, bindings and hardware;
+  ingestion of focused receipts into the complete operation matrix; pre-push
+  Rust/docs/cross-runtime checks. No operation has every campaign goal proven.
+
+The optimization skill records when row boundaries are unnecessary and how
+packing independent samples removes transport expansion. The fixture index now
+contains 12,412 cases, 24 static plans, 773 benchmark workloads and 54 suites.
+No coverage was collected. The next independent operation visit is Alpha
+Composite; Screen's shared improvements do not mark its own goals complete.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose

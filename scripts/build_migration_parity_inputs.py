@@ -39846,6 +39846,7 @@ def build_nuanced_cases(
     cases.extend(blend_rounding_parity_cases(surface_id))
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
+    cases.extend(multiply_mode_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
@@ -40128,6 +40129,66 @@ def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                 "steps": steps, "observations": ["image", "call", "materialize"],
             })
+    return cases
+
+
+def multiply_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise stored-byte arithmetic, mode admission, clipping and vector tails."""
+    if surface_id != "PIL.ImageChops":
+        return []
+    cases = []
+    modes = {"1": 0, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "HSV": 3, "YCbCr": 3,
+             "I": 4, "F": 4, "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+
+    def make_case(mode, channels, size, other_size, label, raws=None):
+        assets, steps = [], []
+        for index, (width, height) in enumerate((size, other_size)):
+            length = ((width + 7) // 8 if mode == "1" else width * channels) * height
+            raw = (raws[index] if raws is not None else
+                   random.Random(f"multiply-{mode}-{label}-{index}").randbytes(length))
+            assets.append({"id": f"pixels{index}", "kind": "inline", "encoding": "base64",
+                           "data": base64.b64encode(raw).decode("ascii"),
+                           "sha256": hashlib.sha256(raw).hexdigest(),
+                           "media_type": "application/octet-stream"})
+            steps.append({"step_id": f"image{index}", "surface": "PIL.Image",
+                          "operation": "frombytes", "receiver": None,
+                          "arguments": {"mode": literal(mode), "size": literal([width, height]),
+                                        "data": asset_value(f"pixels{index}")}})
+        steps.extend([
+            {"step_id": "call", "surface": surface_id, "operation": "multiply", "receiver": None,
+             "arguments": {"image1": binding("image0"), "image2": binding("image1")}},
+            {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+             "receiver": binding("call"), "arguments": {}},
+        ])
+        return {"case_id": f"{surface_id}.multiply.nuanced.{mode}-{label}",
+                "surface": surface_id, "operation": "multiply",
+                "covers": [f"{surface_id}.multiply.behavior.default"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                "steps": steps, "observations": ["call", "materialize"]}
+
+    for mode, channels in modes.items():
+        for label, size, other_size in (
+            ("tail15", (15, 7), (15, 7)), ("block16", (16, 7), (16, 7)),
+            ("tail17", (17, 11), (17, 11)), ("clipped", (17, 11), (13, 9)),
+            ("zero-width", (0, 3), (0, 3)), ("zero-height", (3, 0), (3, 0)),
+        ):
+            cases.append(make_case(mode, channels, size, other_size, label))
+    raws = (bytes(left for left in range(256) for right in range(256)),
+            bytes(right for left in range(256) for right in range(256)))
+    cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws))
+    # La shares the byte-mode validator with the other binary Chops operations.
+    for operation in ("add", "subtract", "screen", "darker", "lighter", "difference",
+                      "add_modulo", "subtract_modulo", "overlay", "hard_light", "soft_light"):
+        for label, size, other_size in (("tail17", (17, 11), (17, 11)),
+                                       ("clipped", (17, 11), (13, 9)),
+                                       ("zero-width", (0, 3), (0, 3))):
+            case = make_case("La", 2, size, other_size, label)
+            case["case_id"] = case["case_id"].replace(".multiply.", f".{operation}.")
+            case["operation"] = operation
+            case["covers"] = [f"{surface_id}.{operation}.behavior.default"]
+            case["steps"][2]["operation"] = operation
+            cases.append(case)
     return cases
 
 

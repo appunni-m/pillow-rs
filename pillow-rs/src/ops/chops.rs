@@ -12,7 +12,8 @@ use crate::pipeline::PipelineOp;
 fn binary_mode_class(mode: &str) -> Option<u8> {
     match mode {
         "1" | "L" | "P" => Some(1),
-        "LA" | "PA" => Some(2),
+        // Chops operates on stored bytes, including premultiplied La samples.
+        "LA" | "La" | "PA" => Some(2),
         "RGB" | "YCbCr" | "HSV" => Some(3),
         "RGBA" | "CMYK" | "RGBa" | "RGBX" => Some(4),
         _ => None,
