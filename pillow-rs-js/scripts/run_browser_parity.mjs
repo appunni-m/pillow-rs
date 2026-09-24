@@ -49,6 +49,14 @@ function errorEnvelope(error) {
     };
 }
 
+function stringifyParityInput(value) {
+    return JSON.stringify(value, (_key, item) => (
+        typeof item === 'number' && Object.is(item, -0)
+            ? { __pillow_rs_negative_zero__: true }
+            : item
+    ));
+}
+
 function serveStatic(request, response) {
     // Navigating between streamed batches can abort an in-flight module or
     // WASM fetch. Ignore that expected disconnect instead of allowing an
@@ -60,7 +68,7 @@ function serveStatic(request, response) {
             'Content-Type': 'application/json; charset=utf-8',
             'Cache-Control': 'no-store',
         });
-        response.end(JSON.stringify(input));
+        response.end(stringifyParityInput(input));
         return;
     }
 

@@ -10,6 +10,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_coverage:
+        description: Run Python migration-parity coverage after parity succeeds
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -244,10 +250,11 @@ jobs:
         run: exit 1
 
       - name: coverage
-        if: steps.python-parity.outcome == 'success'
+        if: github.event_name == 'workflow_dispatch' && inputs.run_coverage && steps.python-parity.outcome == 'success'
         run: make PYTHON=.venv/bin/python migration-parity-coverage
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: github.event_name == 'workflow_dispatch' && inputs.run_coverage && steps.python-parity.outcome == 'success'
         with:
           name: coverage-py${{ matrix.python-version }}
           path: target/coverage/migration-parity-python.json
