@@ -11832,10 +11832,10 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
         PipelineOp::Add { scale, offset, .. } => {
             // The scalar preflight exhaustively compares all byte pairs with
             // the f32 values consumed by the real WGSL kernel.
-            registry::gpu_chops_affine_params(*scale, *offset, false).is_some()
+            registry::gpu_chops_affine_supported(*scale, *offset)
         }
         PipelineOp::Subtract { scale, offset, .. } => {
-            registry::gpu_chops_affine_params(*scale, *offset, true).is_some()
+            registry::gpu_chops_affine_supported(*scale, *offset)
         }
         PipelineOp::BlendModule { alpha, .. } => registry::gpu_blend_alpha_params(*alpha).is_some(),
         PipelineOp::Scale { factor, .. } => {

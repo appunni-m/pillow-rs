@@ -302,10 +302,15 @@ pub fn op_chops_add(
     scale: f64,
     offset: f64,
 ) -> Result<DynamicImage, PilError> {
+    let scale = scale as f32;
+    let offset = offset as f32;
+    if scale == 1.0 && offset == 0.0 {
+        return channel_op_binary(img, other, u8::saturating_add);
+    }
     channel_op_binary(img, other, |a, b| {
-        // Pillow 12.2.0 `Chops.c::ImagingChopAdd`: ((a + b) / scale + offset),
-        // then CHOP clamps to [0, 255].
-        ((a as f64 + b as f64) / scale + offset).clamp(0.0, 255.0) as u8
+        // ImagingChopAdd takes float scale and int offset. Both the division
+        // and addition round in float32 before truncation; f64 changes bytes.
+        ((f32::from(a) + f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8
     })
 }
 
@@ -315,10 +320,14 @@ pub fn op_chops_subtract(
     scale: f64,
     offset: f64,
 ) -> Result<DynamicImage, PilError> {
+    let scale = scale as f32;
+    let offset = offset as f32;
+    if scale == 1.0 && offset == 0.0 {
+        return channel_op_binary(img, other, u8::saturating_sub);
+    }
     channel_op_binary(img, other, |a, b| {
-        // Pillow 12.2.0 `Chops.c::ImagingChopSubtract`: ((a - b) / scale +
-        // offset), then CHOP clamps to [0, 255].
-        ((a as f64 - b as f64) / scale + offset).clamp(0.0, 255.0) as u8
+        // Subtraction uses the same float32 scale/division/offset ordering.
+        ((f32::from(a) - f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8
     })
 }
 

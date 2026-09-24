@@ -39843,6 +39843,95 @@ def build_nuanced_cases(
     cases.extend(equalize_mask_parity_cases(surface_id))
     cases.extend(autocontrast_rounding_parity_cases(surface_id))
     cases.extend(blend_rounding_parity_cases(surface_id))
+    cases.extend(chops_affine_rounding_parity_cases(surface_id))
+    cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
+    return cases
+
+
+def chops_clipped_dimensions_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Unequal binary inputs clip to their overlap, retaining source strides."""
+    if surface_id != "PIL.ImageChops":
+        return []
+    cases = []
+    for operation in ("add", "subtract", "multiply", "screen", "darker", "lighter",
+                      "difference", "overlay", "hard_light", "soft_light",
+                      "add_modulo", "subtract_modulo"):
+        for mode in ("L", "LA", "RGB", "RGBA"):
+            channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4}[mode]
+            for left_size, right_size in (([3, 2], [2, 3]), ([0, 2], [2, 0])):
+                assets, steps = [], []
+                for name, size, seed in (("image1", left_size, 17), ("image2", right_size, 31)):
+                    data = bytes((index * seed + 13) % 256
+                                 for index in range(size[0] * size[1] * channels))
+                    assets.append({"id": name, "kind": "inline", "encoding": "base64",
+                                   "data": base64.b64encode(data).decode("ascii"),
+                                   "sha256": hashlib.sha256(data).hexdigest(),
+                                   "media_type": "application/octet-stream"})
+                    arguments = {"mode": literal(mode), "size": literal(size)}
+                    empty = 0 in size
+                    arguments.update({"color": literal(seed)} if empty else {"data": asset_value(name)})
+                    steps.append({"step_id": name, "surface": "PIL.Image",
+                                  "operation": "new" if empty else "frombytes",
+                                  "receiver": None, "arguments": arguments})
+                steps.extend([
+                    {"step_id": "call", "surface": surface_id, "operation": operation,
+                     "receiver": None, "arguments": {"image1": binding("image1"),
+                                                       "image2": binding("image2")}},
+                    {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ])
+                cases.append({
+                    "case_id": f"{surface_id}.{operation}.nuanced.clipped-{mode.lower()}-{left_size[0]}",
+                    "surface": surface_id, "operation": operation,
+                    "covers": [f"{surface_id}.{operation}.behavior.default"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
+    return cases
+
+
+def chops_affine_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise every byte sum/difference at float32 rounding boundaries."""
+    if surface_id != "PIL.ImageChops":
+        return []
+    cases = []
+    parameters = ((0.3, 0), (0.1000000001, -13), (2.0000001, 0),
+                  (-0.3, 257), (3, 1), (0, 0), (1e-40, 1), (1e40, 1))
+    for operation in ("add", "subtract"):
+        for mode in ("L", "RGB"):
+            assets = []
+            for side in (0, 1):
+                values = []
+                for pixel in range(511):
+                    for channel in range(1 if mode == "L" else 3):
+                        value = (pixel + channel * 173) % 511
+                        pair = ((min(value, 255), max(value - 255, 0)) if operation == "add"
+                                else (max(value - 255, 0), max(255 - value, 0)))
+                        values.append(pair[side])
+                data = bytes(values)
+                assets.append({"id": f"image{side + 1}", "kind": "inline", "encoding": "base64",
+                               "data": base64.b64encode(data).decode("ascii"),
+                               "sha256": hashlib.sha256(data).hexdigest(),
+                               "media_type": "application/octet-stream"})
+            for scale, offset in parameters:
+                steps = [{"step_id": name, "surface": "PIL.Image", "operation": "frombytes",
+                          "receiver": None, "arguments": {"mode": literal(mode),
+                          "size": literal([511, 1]), "data": asset_value(name)}}
+                         for name in ("image1", "image2")]
+                steps.extend([
+                    {"step_id": "call", "surface": surface_id, "operation": operation,
+                     "receiver": None, "arguments": {"image1": binding("image1"),
+                     "image2": binding("image2"), "scale": literal(scale), "offset": literal(offset)}},
+                    {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ])
+                cases.append({
+                    "case_id": f"{surface_id}.{operation}.nuanced.float32-domain-{mode.lower()}-{scale}-{offset}",
+                    "surface": surface_id, "operation": operation,
+                    "covers": [f"{surface_id}.{operation}.parameter.scale"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
     return cases
 
 

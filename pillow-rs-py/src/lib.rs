@@ -3989,14 +3989,34 @@ fn ops_exif_transpose(image: &Bound<'_, PyImage>, in_place: bool) -> PyResult<Op
 
 // --- ImageChops module-level functions ---
 
+fn chops_offset_from_python(offset: &Bound<'_, PyAny>) -> PyResult<f64> {
+    // PyArg_ParseTuple's "i" accepts __index__, checks C long first, then int.
+    // Extract inside the binding to retain Pillow's unprefixed error messages.
+    let value = offset.extract::<std::os::raw::c_long>().map_err(|error| {
+        if error.is_instance_of::<PyOverflowError>(offset.py()) {
+            PyOverflowError::new_err("Python int too large to convert to C long")
+        } else {
+            error
+        }
+    })?;
+    let value = i32::try_from(value).map_err(|_| {
+        PyOverflowError::new_err(if value < 0 {
+            "signed integer is less than minimum"
+        } else {
+            "signed integer is greater than maximum"
+        })
+    })?;
+    Ok(f64::from(value))
+}
+
 #[pyfunction]
-#[pyo3(signature = (image1, image2, scale=1.0, offset=0.0))]
 fn chops_add(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
     scale: f64,
-    offset: f64,
+    offset: &Bound<'_, PyAny>,
 ) -> PyResult<PyImage> {
+    let offset = chops_offset_from_python(offset)?;
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
     let rs = Python::attach(|py| py.detach(|| pillow_rs::chops_add(&b1, &b2, scale, offset)))
@@ -4005,13 +4025,13 @@ fn chops_add(
 }
 
 #[pyfunction]
-#[pyo3(signature = (image1, image2, scale=1.0, offset=0.0))]
 fn chops_subtract(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
     scale: f64,
-    offset: f64,
+    offset: &Bound<'_, PyAny>,
 ) -> PyResult<PyImage> {
+    let offset = chops_offset_from_python(offset)?;
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
     let rs = Python::attach(|py| py.detach(|| pillow_rs::chops_subtract(&b1, &b2, scale, offset)))

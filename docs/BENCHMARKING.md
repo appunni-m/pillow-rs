@@ -101,6 +101,9 @@ transfers; it uses the original full-range input tile.
 Use `--operation blend` for two fresh images blended at alpha 0.3. The second
 image uses the next changing input frame; construction of both images is timed,
 and GPU receipts must include its auxiliary image transfer.
+Use `--operation add` for the same two-image boundary with default scale 1 and
+offset 0. Its input sequence, window policy, and auxiliary-transfer checks are
+identical; the operation and output path remain distinct.
 
 For the fixed release-acceptance cohort:
 

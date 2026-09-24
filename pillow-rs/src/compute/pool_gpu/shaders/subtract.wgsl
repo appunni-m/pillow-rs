@@ -1,5 +1,5 @@
 // Subtract: (a - b) / scale + offset, clamped to [0, 255]
-// scale and offset passed as f32 bit patterns (u32 bits)
+// A packed parameter-only LUT preserves the host float32 rounding contract.
 // Mode-aware: only processes channels present in the image mode.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
@@ -9,10 +9,8 @@ struct Params {
     height: u32,
     mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
     _pad: u32,
-    scale_bits: u32,
-    offset_bits: u32,
-    _pad2: u32,
-    _pad3: u32,
+    // Four byte outputs per word, four words per uniform vector.
+    lookup: array<vec4<u32>, 32>,
 }
 
 // ── Mode helpers ──
@@ -25,6 +23,11 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 @group(0) @binding(1) var<storage, read> input_b: array<u32>;
 @group(0) @binding(2) var<storage, read_write> output: array<u32>;
 @group(0) @binding(3) var<uniform> params: Params;
+
+fn affine_lookup(index: u32) -> u32 {
+    let word = params.lookup[index >> 4u][(index >> 2u) & 3u];
+    return (word >> ((index & 3u) * 8u)) & 255u;
+}
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -43,15 +46,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let bb = (pb >> 16u) & 0xffu;
     let ba = (pb >> 24u) & 0xffu;
 
-    // Decode f32 params from u32 bit patterns
-    let scale = bitcast<f32>(params.scale_bits);
-    let offset = bitcast<f32>(params.offset_bits);
-
-    // Use signed for subtraction to handle negative intermediates
-    let out_r = u32(clamp(f32(i32(ar) - i32(br)) / scale + offset, 0.0, 255.0));
-    let out_g_raw = u32(clamp(f32(i32(ag) - i32(bg)) / scale + offset, 0.0, 255.0));
-    let out_b_raw = u32(clamp(f32(i32(ab) - i32(bb)) / scale + offset, 0.0, 255.0));
-    let out_a_raw = u32(clamp(f32(i32(aa) - i32(ba)) / scale + offset, 0.0, 255.0));
+    let out_r = affine_lookup(ar + 255u - br);
+    let out_g_raw = affine_lookup(ag + 255u - bg);
+    let out_b_raw = affine_lookup(ab + 255u - bb);
+    let out_a_raw = affine_lookup(aa + 255u - ba);
 
     let out_g = select(ag, out_g_raw, mode_has_g(params.mode));
     let out_b = select(ab, out_b_raw, mode_has_b(params.mode));

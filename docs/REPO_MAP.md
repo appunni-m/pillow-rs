@@ -342,6 +342,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_migration_rust_coverage.py
     |-- run_transpose_throughput.py
     |-- select_docs_benchmark.py
+    |-- test_chops_affine_parity.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py
     |-- test_docs_benchmark_view.py
