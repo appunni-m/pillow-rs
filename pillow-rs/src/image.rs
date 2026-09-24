@@ -247,8 +247,12 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
     }
     Some(
         match op {
-            PipelineOp::Equalize if matches!(current, "P" | "PA") => "RGB",
-            PipelineOp::Equalize => current,
+            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
+                if matches!(current, "P" | "PA") =>
+            {
+                "RGB"
+            }
+            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => current,
             // Public convert and merge constructors attach `explicit_mode`
             // for non-raster-native targets (including CMYK, YCbCr, HSV, I,
             // F, P, and 1). `Image::mode` returns that tag before reaching
@@ -439,6 +443,7 @@ fn known_pipeline_op_dimensions(
         | PipelineOp::RankFilter { .. }
         | PipelineOp::Autocontrast { .. }
         | PipelineOp::Equalize
+        | PipelineOp::EqualizeMasked { .. }
         | PipelineOp::Invert
         | PipelineOp::Flip
         | PipelineOp::Mirror

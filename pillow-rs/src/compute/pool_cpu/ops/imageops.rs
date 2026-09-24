@@ -132,12 +132,78 @@ pub(crate) fn autocontrast_lut(
     Ok(lut)
 }
 
+/// Accumulate native byte bands while shortening repeated-counter dependencies.
+///
+/// Sixteen equal pixels need one increment per band. Other blocks alternate
+/// counter banks so skewed inputs do not serialize every increment on one
+/// address. Four padding words separate the banks' channel strides; the final
+/// reduction reads only the 256 real bins. Small inputs use one bank to avoid
+/// paying for extra zeroing and reduction.
+fn equalize_histogram<const BANKS: usize>(raw: &[u8], channels: usize) -> [[u32; 256]; 3] {
+    let mut banks = [[[0u32; 260]; 3]; BANKS];
+    if channels == 1 {
+        let mut chunks = raw.chunks_exact(16);
+        for chunk in &mut chunks {
+            if chunk == [chunk[0]; 16] {
+                banks[0][0][usize::from(chunk[0])] += 16;
+            } else {
+                for (index, &value) in chunk.iter().enumerate() {
+                    banks[index % BANKS][0][usize::from(value)] += 1;
+                }
+            }
+        }
+        for &value in chunks.remainder() {
+            banks[0][0][usize::from(value)] += 1;
+        }
+    } else {
+        let mut chunks = raw.chunks_exact(48);
+        for chunk in &mut chunks {
+            // Establish a three-byte period across the complete block. Testing
+            // only its ends would miss changes inside a repeated-color region.
+            let repeated = chunk[..24] == chunk[24..]
+                && chunk[..12] == chunk[12..24]
+                && chunk[..6] == chunk[6..12]
+                && chunk[..3] == chunk[3..6];
+            if repeated {
+                banks[0][0][usize::from(chunk[0])] += 16;
+                banks[0][1][usize::from(chunk[1])] += 16;
+                banks[0][2][usize::from(chunk[2])] += 16;
+            } else {
+                for (index, pixel) in chunk.chunks_exact(3).enumerate() {
+                    let bank = &mut banks[index % BANKS];
+                    bank[0][usize::from(pixel[0])] += 1;
+                    bank[1][usize::from(pixel[1])] += 1;
+                    bank[2][usize::from(pixel[2])] += 1;
+                }
+            }
+        }
+        for pixel in chunks.remainder().chunks_exact(3) {
+            banks[0][0][usize::from(pixel[0])] += 1;
+            banks[0][1][usize::from(pixel[1])] += 1;
+            banks[0][2][usize::from(pixel[2])] += 1;
+        }
+    }
+    let mut result = [[0u32; 256]; 3];
+    for bank in &banks {
+        for (output, counts) in result.iter_mut().zip(bank).take(channels) {
+            for (total, count) in output.iter_mut().zip(counts) {
+                *total += count;
+            }
+        }
+    }
+    result
+}
+
 /// Build the per-channel LUT used by Pillow's equalize operation.
 ///
 /// Histogram construction is scalar reduction/control work. The returned
 /// native-band table is intentionally separate from applying it so SIMD can
 /// keep the complete pixel pass in its vector LUT data plane.
-pub(crate) fn equalize_lut(img: &DynamicImage, channels: usize) -> Option<Vec<u8>> {
+pub(crate) fn equalize_lut(
+    img: &DynamicImage,
+    channels: usize,
+    mask: Option<&DynamicImage>,
+) -> Option<Vec<u8>> {
     if !matches!(channels, 1 | 3) {
         return None;
     }
@@ -150,18 +216,25 @@ pub(crate) fn equalize_lut(img: &DynamicImage, channels: usize) -> Option<Vec<u8
     }
 
     let mut histograms = [[0u32; 256]; 3];
-    // Keep the admitted L/RGB layouts in fixed-band loops. A runtime channel
-    // index makes this scalar reduction dominate identity equalize workloads.
-    if channels == 1 {
-        for &value in raw {
-            histograms[0][usize::from(value)] += 1;
+    // Masked selection retains its exact nonzero-byte predicate; unmasked
+    // byte images can combine repeated samples without examining a mask.
+    if let Some(mask) = mask {
+        if (mask.width(), mask.height()) != (img.width(), img.height())
+            || !matches!(mask, DynamicImage::ImageLuma8(_))
+        {
+            return None;
         }
+        for (pixel, &selected) in raw.chunks_exact(channels).zip(mask.as_bytes()) {
+            if selected != 0 {
+                for (histogram, &value) in histograms.iter_mut().zip(pixel) {
+                    histogram[usize::from(value)] += 1;
+                }
+            }
+        }
+    } else if raw.len() / channels < 16_384 {
+        histograms = equalize_histogram::<1>(raw, channels);
     } else {
-        for pixel in raw.chunks_exact(3) {
-            histograms[0][usize::from(pixel[0])] += 1;
-            histograms[1][usize::from(pixel[1])] += 1;
-            histograms[2][usize::from(pixel[2])] += 1;
-        }
+        histograms = equalize_histogram::<4>(raw, channels);
     }
 
     let mut lut = vec![0u8; channels * 256];
@@ -217,17 +290,6 @@ fn apply_autocontrast_row(
     for (index, output) in row.iter_mut().enumerate() {
         let channel = index % channels;
         *output = lut[channel * 256 + usize::from(raw[raw_start + index])];
-    }
-}
-
-#[inline]
-fn apply_equalize_row(source: &[u8], row: &mut [u8], luts: &[[u8; 256]; 3], apply: &[bool; 3]) {
-    for (output, input) in row.chunks_exact_mut(3).zip(source.chunks_exact(3)) {
-        for channel in 0..3 {
-            if apply[channel] {
-                output[channel] = luts[channel][input[channel] as usize];
-            }
-        }
     }
 }
 
@@ -350,87 +412,34 @@ pub fn op_autocontrast(
 /// Equalize: histogram equalization matching PIL's algorithm.
 /// Build LUT from non-zero histogram bins, using PIL's step formula.
 pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    // PIL 12 equalize: build LUT from non-zero histogram bins
-    // step = (sum(non_zero_bins) - last_bin_count) / 255
-    // lut[i] = floor(accumulator / step) where accumulator tracks step/2 + cumulative hist
-    let rgb = img.to_rgb8();
-    // Start from a copy of the input: uniform or single-value histograms
-    // keep the source pixels unchanged (PIL's equalize identity path).
-    let mut out = rgb.clone();
-    let mut luts = [[0u8; 256]; 3];
-    let mut apply = [false; 3];
-    let mut histograms = [[0u32; 256]; 3];
-    for px in rgb.pixels() {
-        for ch in 0..3 {
-            histograms[ch][px[ch] as usize] += 1;
-        }
-    }
-    for ch in 0..3 {
-        let mut nonzero_bins = 0usize;
-        let mut last_nonzero_count = 0u32;
-        let mut total = 0u32;
-        for &count in &histograms[ch] {
-            total += count;
-            if count > 0 {
-                nonzero_bins += 1;
-                last_nonzero_count = count;
-            }
-        }
-        if nonzero_bins <= 1 {
-            // Identity LUT
-            continue; // out already has original pixels from the RgbImage
-        }
-        let step = (total - last_nonzero_count) / 255;
-        if step == 0 {
-            continue; // Identity LUT
-        }
-        let mut n = step / 2;
-        for i in 0..256 {
-            luts[ch][i] = (n / step).min(255) as u8;
-            n += histograms[ch][i];
-        }
-        apply[ch] = true;
-    }
-    let (width, height) = rgb.dimensions();
-    let row_stride = width as usize * 3;
-    let source = rgb.as_raw();
-    #[cfg(feature = "parallel")]
-    if (width as usize).saturating_mul(height as usize) >= POINT_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
-            out.as_mut(),
-            row_stride,
-            height as usize,
-            |row_start, _row_end, _y, row| {
-                apply_equalize_row(
-                    &source[row_start..row_start + row_stride],
-                    row,
-                    &luts,
-                    &apply,
-                );
-            }
-        );
+    op_equalize_with_mask(img, None)
+}
+
+/// Equalize with a validated histogram mask, retaining native L/RGB storage.
+pub(crate) fn op_equalize_with_mask(
+    img: &DynamicImage,
+    mask: Option<&std::sync::Arc<crate::image::Image>>,
+) -> Result<DynamicImage, PilError> {
+    let mask = mask.map(|mask| mask.materialized_shared()).transpose()?;
+    let converted;
+    let source = if matches!(
+        img,
+        DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
+    ) {
+        img
     } else {
-        for y in 0..height as usize {
-            let row_start = y * row_stride;
-            apply_equalize_row(
-                &source[row_start..row_start + row_stride],
-                &mut out.as_mut()[row_start..row_start + row_stride],
-                &luts,
-                &apply,
-            );
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
-    for y in 0..height as usize {
-        let row_start = y * row_stride;
-        apply_equalize_row(
-            &source[row_start..row_start + row_stride],
-            &mut out.as_mut()[row_start..row_start + row_stride],
-            &luts,
-            &apply,
-        );
-    }
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+        converted = DynamicImage::ImageRgb8(img.to_rgb8());
+        &converted
+    };
+    let channels = usize::from(source.color().channel_count());
+    let lut = equalize_lut(source, channels, mask.as_deref())
+        .ok_or_else(|| PilError::ValueError("images do not match".into()))?;
+    let result = if super::super::point_lut_is_identity(&lut, channels) {
+        source.clone()
+    } else {
+        super::effects::op_eval(source, &lut)?
+    };
+    Ok(preserve_mode(img, result))
 }
 
 /// Invert: subtract each pixel value from 255 (all channels, matching PIL's point()).
@@ -1188,4 +1197,35 @@ pub fn op_expand(
 
     let expanded = crate::image_utils::raw_bytes_to_image(new_w, new_h, output, 4)?;
     Ok(preserve_mode(img, expanded))
+}
+
+#[cfg(test)]
+mod equalize_histogram_tests {
+    use super::equalize_histogram;
+
+    #[test]
+    fn banks_and_repeated_blocks_preserve_every_sample() {
+        for channels in [1, 3] {
+            for pixels in [0, 1, 15, 16, 17, 31, 32, 33, 16_383, 16_384, 16_385] {
+                for pattern in 0..4 {
+                    let data: Vec<u8> = (0..pixels * channels)
+                        .map(|index| match pattern {
+                            0 => 17,
+                            1 => (index * 71 + index / 23) as u8,
+                            2 => ((index / (channels * 43)) * 13) as u8,
+                            // The ends match, but a pixel inside each candidate
+                            // repeated block differs. Every byte must be checked.
+                            _ => u8::from(index / channels % 16 == 7) * 119,
+                        })
+                        .collect();
+                    let mut expected = [[0u32; 256]; 3];
+                    for (index, &value) in data.iter().enumerate() {
+                        expected[index % channels][usize::from(value)] += 1;
+                    }
+                    assert_eq!(equalize_histogram::<1>(&data, channels), expected);
+                    assert_eq!(equalize_histogram::<4>(&data, channels), expected);
+                }
+            }
+        }
+    }
 }

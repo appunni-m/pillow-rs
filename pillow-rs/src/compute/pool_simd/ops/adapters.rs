@@ -4378,8 +4378,16 @@ pub(crate) fn simd_supports_for_image(
                     .is_some_and(|channels| has_valid_byte_data(img, channels))
                 && autocontrast_mask_supported(img.width(), img.height(), mask.as_ref())
         }
-        PipelineOp::Equalize => native_autocontrast_layout(img, mode)
-            .is_some_and(|channels| has_valid_byte_data(img, channels)),
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => {
+            native_autocontrast_layout(img, mode)
+                .is_some_and(|channels| has_valid_byte_data(img, channels))
+                && match op {
+                    PipelineOp::EqualizeMasked { mask } => {
+                        autocontrast_mask_supported(img.width(), img.height(), Some(mask))
+                    }
+                    _ => true,
+                }
+        }
         PipelineOp::RemapPalette { dest_map } => native_remap_palette_layout(img, mode)
             .is_some_and(|_| dest_map.len() <= 256 && has_valid_remap_bytes(img)),
         // Eval/PointOp keeps its interleaved native layout. The LUT lookup
@@ -4894,6 +4902,7 @@ pub(crate) fn preserves_native_contract(op: &PipelineOp) -> bool {
             | PipelineOp::RankFilter { .. }
             | PipelineOp::Autocontrast { .. }
             | PipelineOp::Equalize
+            | PipelineOp::EqualizeMasked { .. }
             | PipelineOp::RemapPalette { .. }
             | PipelineOp::Invert
             | PipelineOp::Flip
@@ -5723,12 +5732,14 @@ pub(crate) fn simd_mode_after_op(op: &PipelineOp, current: Option<&str>) -> Opti
     }
     if let Some(target) = operation_target_mode(op) {
         // Equalize expands indexed samples before its histogram operation.
-        if matches!(op, PipelineOp::Equalize) {
+        if matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }) {
             return Some(target.to_owned());
         }
         return Some(target.to_owned());
     }
-    if matches!(op, PipelineOp::Equalize) && matches!(current, Some("P" | "PA")) {
+    if matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. })
+        && matches!(current, Some("P" | "PA"))
+    {
         return Some("RGB".to_owned());
     }
     current.map(str::to_owned)
@@ -5874,11 +5885,16 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 })
                 && autocontrast_mask_supported(shape.width, shape.height, mask.as_ref())
         }
-        PipelineOp::Equalize => {
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => {
             shape_native_autocontrast_channels(shape, mode).is_some_and(|channels| {
                 shape_has_empty_native_bytes(shape, channels)
                     || shape_has_nonempty_byte_data(shape, channels)
-            })
+            }) && match op {
+                PipelineOp::EqualizeMasked { mask } => {
+                    autocontrast_mask_supported(shape.width, shape.height, Some(mask))
+                }
+                _ => true,
+            }
         }
         PipelineOp::RemapPalette { dest_map } => {
             dest_map.len() <= 256
@@ -7091,6 +7107,27 @@ fn native_lut_tables_for_channels(lut: &[u8], channels: usize) -> Option<[[u8x16
     Some(tables)
 }
 
+fn native_rgb_lut_bytes(bytes: &mut [u8], tables: &[[u8x16; 16]; 4]) {
+    // A block contains sixteen complete pixels, so all three lookups use all
+    // vector lanes. Padding is confined to the final incomplete pixel block.
+    for chunk in bytes.chunks_mut(48) {
+        let mut input = [[0u8; 16]; 3];
+        for (lane, pixel) in chunk.chunks_exact(3).enumerate() {
+            input[0][lane] = pixel[0];
+            input[1][lane] = pixel[1];
+            input[2][lane] = pixel[2];
+        }
+        let output: [[u8; 16]; 3] = std::array::from_fn(|channel| {
+            native_lut_chunk(u8x16::new(input[channel]), &tables[channel]).to_array()
+        });
+        for (lane, pixel) in chunk.chunks_exact_mut(3).enumerate() {
+            pixel[0] = output[0][lane];
+            pixel[1] = output[1][lane];
+            pixel[2] = output[2][lane];
+        }
+    }
+}
+
 /// Apply one LUT per native byte band. The table lookup is vectorized with
 /// `u8x16`; only the interleaved-band gather/scatter is scalar because the
 /// portable `wide` API has no byte-gather instruction. Independent scanlines
@@ -7108,6 +7145,20 @@ fn native_lut_apply(
     let expected_len = row_stride.checked_mul(height)?;
     if row_stride == 0 || bytes.len() != expected_len {
         return None;
+    }
+    if channels == 1 || channels == 3 {
+        let vector_blocks = width
+            .div_ceil(16)
+            .saturating_mul(channels)
+            .saturating_mul(height) as u64;
+        apply_native_rows(bytes, width, height, channels, |row| {
+            if channels == 1 {
+                native_remap_palette_bytes(row, &tables[0]);
+            } else {
+                native_rgb_lut_bytes(row, &tables);
+            }
+        });
+        return Some((vector_blocks, 0));
     }
     let vector_blocks = row_stride.div_ceil(16).saturating_mul(height) as u64;
     apply_native_rows(bytes, width, height, channels, |row| {
@@ -11584,7 +11635,7 @@ pub fn simd_equalize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if !matches!(op, PipelineOp::Equalize) {
+    if !matches!(op, PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }) {
         return Err(PilError::ValueError("expected Equalize op".into()));
     }
     let Some(channels) = native_autocontrast_layout(img, mode) else {
@@ -11597,7 +11648,13 @@ pub fn simd_equalize(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Ok(img.clone());
     }
-    let Some(lut) = crate::compute::pool_cpu::ops::imageops::equalize_lut(img, channels) else {
+    let mask = match op {
+        PipelineOp::EqualizeMasked { mask } => Some(mask.materialized_shared()?),
+        _ => None,
+    };
+    let Some(lut) =
+        crate::compute::pool_cpu::ops::imageops::equalize_lut(img, channels, mask.as_deref())
+    else {
         return Err(simd_unsupported("Equalize"));
     };
     if native_lut_is_identity(&lut, channels) {
@@ -23909,11 +23966,39 @@ mod tests {
         transpose_native_odd_collect_admitted,
     };
     use super::{
-        native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band,
+        native_lut_apply, native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band,
         simd_projective_nearest_transform_bytes, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
     use crate::raster::{DynamicImage, GrayImage, RgbaImage};
+
+    #[test]
+    fn native_lut_preserves_channel_order_and_vector_tails() {
+        for channels in 1..=4 {
+            let lut: Vec<u8> = (0..channels)
+                .flat_map(|channel| {
+                    (0..256).map(move |value| ((value * 73 + channel * 47 + 19) & 255) as u8)
+                })
+                .collect();
+            for width in [1, 15, 16, 17, 31, 32, 33, 257] {
+                for height in [1, 3, 1025] {
+                    let mut bytes: Vec<u8> = (0..width * height * channels)
+                        .map(|index| ((index * 113 + index / 7) & 255) as u8)
+                        .collect();
+                    let expected: Vec<u8> = bytes
+                        .iter()
+                        .enumerate()
+                        .map(|(index, &value)| lut[(index % channels) * 256 + usize::from(value)])
+                        .collect();
+                    let (_, scalar_tail) =
+                        native_lut_apply(&mut bytes, width, height, channels, &lut)
+                            .expect("valid native byte lookup");
+                    assert_eq!(bytes, expected, "{width}x{height}, {channels} channels");
+                    assert_eq!(scalar_tail, 0);
+                }
+            }
+        }
+    }
 
     fn assert_native_transpose_matches_forward_mapping(
         source: &[u8],
