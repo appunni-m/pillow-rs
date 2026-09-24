@@ -11821,7 +11821,7 @@ surfaces:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageChops.add
       signature: 'add(image1: pillow_rs.image.Image, image2: pillow_rs.image.Image, scale: float = 1.0,
-        offset: float = 0) -> pillow_rs.image.Image'
+        offset: int = 0) -> pillow_rs.image.Image'
       support:
         status: supported
     requirements:
@@ -14257,7 +14257,7 @@ surfaces:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageChops.subtract
       signature: 'subtract(image1: pillow_rs.image.Image, image2: pillow_rs.image.Image, scale: float
-        = 1.0, offset: float = 0) -> pillow_rs.image.Image'
+        = 1.0, offset: int = 0) -> pillow_rs.image.Image'
       support:
         status: supported
     requirements:
@@ -28595,6 +28595,11 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - integer
+        - number
+        - boolean
+        - 'null'
+        - string
+        - sequence
         omission:
           kind: literal
           value: 128

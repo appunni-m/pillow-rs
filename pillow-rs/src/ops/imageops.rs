@@ -49,6 +49,15 @@ pub enum ImageOpsColor {
     Invalid,
 }
 
+/// Host-neutral threshold input for [`solarize_with_input`].
+pub enum SolarizeInput {
+    /// A built-in numeric threshold, including NaN and infinities.
+    Threshold(f64),
+    /// Results of `sample < threshold` for samples 0 through 255.
+    /// Bindings retain host comparison order and exceptions for custom objects.
+    Comparisons(Box<[bool; 256]>),
+}
+
 pub fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), PilError> {
     match mask {
         ImageOpsMask::None => Ok(()),
@@ -613,9 +622,25 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// Returns [`PilError::OsError`] for modes other than L and RGB,
 /// or another [`PilError`] when mode detection fails.
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
+    solarize_with_input(image, SolarizeInput::Threshold(f64::from(threshold)))
+}
+
+/// Solarizes with numeric or host-defined threshold comparisons.
+///
+/// A sample is unchanged exactly when `sample < threshold`. Fractional
+/// thresholds therefore round upward; thresholds above 255 preserve all bytes,
+/// and NaN inverts them all. Custom comparisons need not be monotonic.
+///
+/// # Errors
+///
+/// Returns [`PilError::NotImplementedError`] for P, [`PilError::OsError`] for
+/// other modes outside L/RGB, or an error when mode detection fails. Bindings
+/// must evaluate custom comparisons before calling this function so their
+/// exceptions and mutations precede image validation, as they do in Pillow.
+pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image, PilError> {
     let mode = image.mode()?;
     // Pillow 12.2.0 exposes P as an explicit unsupported ImageOps._lut path;
     // this must be raised at the call, before deferred pipeline execution.
@@ -624,10 +649,30 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
             "mode P support coming soon".into(),
         ));
     }
-    if matches!(mode.as_str(), "LA" | "RGBA" | "CMYK") {
+    if mode != "L" && mode != "RGB" {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
-    Ok(Image::push_op(image, PipelineOp::Solarize { threshold }))
+    let lut = match input {
+        SolarizeInput::Threshold(threshold) if threshold <= 255.0 || threshold.is_nan() => {
+            return Ok(Image::push_op(
+                image,
+                PipelineOp::Solarize {
+                    threshold: threshold.ceil() as u8,
+                },
+            ));
+        }
+        SolarizeInput::Threshold(_) => (0..=255u8).collect::<Vec<_>>(),
+        SolarizeInput::Comparisons(below) => (0..=255u8)
+            .map(|value| {
+                if below[usize::from(value)] {
+                    value
+                } else {
+                    255 - value
+                }
+            })
+            .collect(),
+    };
+    crate::ops::module_fns::eval_replicated(image, &lut, if mode == "L" { 1 } else { 3 })
 }
 
 /// Converts an image to grayscale using Pillow-compatible BT.601 luma.

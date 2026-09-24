@@ -2,6 +2,8 @@
 // Mode-aware: only processes channels present in the image mode.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
+// Internal mode 9 holds four independent native L/RGB bytes per word.
+// Width/height describe dispatch words and _pad bounds the final partial row.
 
 struct Params {
     width: u32,
@@ -26,6 +28,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    if params.mode == 9u && idx >= params._pad { return; }
     let pixel = input[idx];
     let r = pixel & 0xffu;
     let g = (pixel >> 8u) & 0xffu;
@@ -40,7 +43,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let out_r = val_r;
     let out_g = select(g, val_g, mode_has_g(params.mode));
     let out_b = select(b, val_b, mode_has_b(params.mode));
-    let out_a = select(255u, a, mode_has_a(params.mode));
+    let out_a = select(select(255u, a, mode_has_a(params.mode)),
+                       select(a, 255u - a, a >= thresh), params.mode == 9u);
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

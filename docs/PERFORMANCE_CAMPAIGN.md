@@ -1644,6 +1644,140 @@ finite-domain lookup tables. Static input indices contain 12,725 cases,
 ends at its checkpoint; the next independent operation is Solarize. No public
 operation has every performance target demonstrated.
 
+## Solarize four-attempt checkpoint
+
+On 2026-09-25, Solarize's original 312 comparisons passed, but a varied
+threshold/mode audit found **669 failures in 741 comparisons**. The binding
+narrowed thresholds to u8 and treated explicit `None` as omission. Pillow instead
+compares each byte with the original threshold before checking the image mode.
+It accepts fractional and out-of-range numbers, inverts every byte for NaN,
+and propagates custom comparison errors. Only L/RGB are supported; P has a
+separate NotImplementedError. Other modes must fail at the public call.
+
+Four areas were attempted, then this visit stopped:
+
+1. **Parity repair:** retain numeric range before narrowing, use a ceiling for
+   fractional cutoffs, and handle the all/none cases. Exact built-in type guards
+   preserve subclass hooks. For custom values, the binding collects all 256
+   comparison results in reference order; Rust constructs and applies the LUT.
+   Clone the input handle after callbacks so their mutations remain visible.
+   The wrapper also retains Pillow's shallow metadata copy. The existing Rust
+   u8 API remains, with a host-neutral input variant for the broader contract.
+2. **CPU native bytes:** collect transformed L/RGB bytes directly into one
+   output. L no longer expands to RGB and converts back; RGB avoids cloning
+   before transforming. Other internal layouts retain their existing path.
+3. **SIMD trial, reverted:** direct vector writes through reserved Vec appends
+   removed a data pass but regressed L/RGB request medians from
+   0.065916/0.285292 to 0.120542/0.430500 ms. Release assembly retained a
+   capacity branch and a length store for each 16-byte append. A comparison/XOR
+   simplification also showed no consistent whole-request gain. The entire
+   SIMD trial was removed; no SIMD speedup is claimed from that attempt.
+4. **GPU native transport:** reuse the existing Multiply/Alpha Composite
+   transfer machinery for one L/RGB Solarize operation. Four independent bytes
+   share a shader word, including bytes crossing RGB pixel boundaries. Guard
+   the final partial dispatch row and exclude transfer padding from output.
+   The unary path has no secondary upload and keeps the three-binding shader.
+   Composed pipelines continue through their ordinary fusion/transport path.
+
+The retained release build passes **1,251/1,251 maintained comparisons** over
+417 cases, including 313 added input-only cases. The custom comparison and
+metadata audit passes **78/78** observations. Shared transport regressions pass
+**606/606 Multiply** and **528/528 Alpha Composite** comparisons. In the 313
+added cases, 227 record no arithmetic receipt; CPU executes the other 86.
+SIMD records 78 native cases and eight empty-image CPU fallbacks. GPU records
+74 native cases and 12 empty-image CPU fallbacks. Error parity and fallback
+passes are not acceleration proof.
+
+**Benchmark preflight defect:** the manifest's reflected integer annotation
+excluded fractional thresholds accepted by live Pillow and prevented the new
+negative-type cases from running through the normal validator. The generator
+now includes number, boolean, null, string and sequence inputs for this parameter
+only. Existing outputs, errors, tolerances, requirements and benchmark workloads
+are unchanged; no cases were removed. Regeneration also refreshed two existing
+Add/Subtract target signature annotations from the current binding. The final
+Solarize parity receipt uses the updated manifest. Static indices now contain
+13,038 cases, 24 plans, 773 workloads and 54 suites; no coverage was collected.
+
+Local receipts use `build/migration-parity/perf-solarize-20260925-` with
+`varied-initial-parity.json`, `checkpoint-parity.json`, `host-parity.json`,
+`repaired-throughput.json`, `native-throughput.json`, and
+`checkpoint-throughput.json`. The rejected SIMD trial remains in the native
+receipt and the intermediate `xor-gpu-throughput.json`. Related receipts use
+`perf-{multiply,alpha-composite}-20260925-solarize-regression-parity.json`.
+The unchanged 26-workload benchmark has initial run
+`migration-benchmark-7b273776da7b48a19efd8b454d4d465d` and final run
+`migration-benchmark-47b2915e03574d119b133f39c3e2b551`. Representative final medians in milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| `pipeline-op.solarize.benchmark-materialized` | 0.039397 | 0.012875 | 0.013479 | 0.280834 |
+| `pipeline-op.solarize.matrix-32x24` | 0.040625 | 0.011479 | 0.012103 | 0.279646 |
+| `pipeline-chain.simd-lut.l.1024x768` | 1.182916 | 0.317229 | 0.365313 | 2.173355 |
+| `pipeline-chain.simd-lut.l.1024x1024` | 1.544125 | 0.366999 | 0.399417 | 2.713604 |
+| `pipeline-chain.simd-lut.rgb.1024x768` | 3.488604 | 0.903292 | 0.757750 | 1.821438 |
+| `pipeline-chain.simd-lut.rgb.1024x1024` | 4.655126 | 1.175354 | 0.909271 | 2.217084 |
+
+All 25 materialized rows have native completion receipts. CPU misses its
+target on 8, SIMD misses 5× on 24, and GPU misses SIMD latency
+on 25. The remaining standard row is unmaterialized and cannot prove
+backend performance. The selected composed rows include other operations;
+changing Solarize alone does not remove their host/LUT preparation costs.
+
+The fresh-input diagnostic includes image construction, Solarize at threshold
+128, allocation, transfers, synchronization and output bytes. Both the repaired
+baseline and retained checkpoint pass **40,320/40,320 exact output checks**, with
+38,400 measured completions each. Source and runtime identities remain unchanged
+within each run. Every target request records the requested backend and one
+operation; GPU records one dispatch. Queue-one request median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU | Pillow / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 0.334917 | 0.058041 | 0.066062 | 0.343063 | 5.07× |
+| RGB | 1.397167 | 0.269417 | 0.217854 | 0.571105 | 6.41× |
+
+Relative to the parity-correct baseline, CPU improves
+13.80×/1.89× for L/RGB, and GPU improves
+4.53×/2.21×. Final GPU upload and readback are each
+786,432 bytes for L and 2,359,296 for RGB, down from 3,145,728 each. Parameters
+are 20 bytes and auxiliary bytes are zero. Native transport removes the format
+expansion; readback allocation and a full-frame copy remain. Zero host-buffer
+counters do not establish zero allocations.
+Aggregate completed images per second, including scheduling and receipt capture:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 2,911 | 14,971 | 13,434 | 2,975 |
+| L | 2 | 4,578 | 17,553 | 16,687 | 4,858 |
+| L | 4 | 5,974 | 18,411 | 17,517 | 6,940 |
+| RGB | 1 | 739 | 3,380 | 3,918 | 1,657 |
+| RGB | 2 | 1,163 | 5,284 | 5,032 | 2,393 |
+| RGB | 4 | 1,418 | 5,110 | 4,973 | 2,865 |
+
+Solarize remains incomplete. Checkpoint blockers:
+
+- **Small and composed calls:** CPU still loses on 8 maintained rows.
+  Attribute graph construction, per-band LUT composition, wrapper validation
+  and terminal export before changing the byte loop again. Native Solarize
+  transport does not accelerate a batch already fused into a generic Eval.
+- **SIMD output construction:** the retained kernel still copies before
+  transforming. Its replacement must avoid both that pass and per-vector
+  growth bookkeeping. Check exact-size collection/vectorization or an existing
+  owned-buffer path before adding unsafe initialization. A short-input result
+  or one near-5× large sample does not demonstrate the goal across all rows.
+- **GPU latency and throughput:** transfer reduction helps, but mapping,
+  submission, synchronization and host allocation remain. Additional queued
+  work improves throughput here but still falls below SIMD. Profile those
+  stages and composed native transport before another shader arithmetic change.
+- **Unproven scope:** empty-image native paths, additional shapes, bindings and
+  platforms, global matrix ingestion, and pre-push Rust/documentation checks
+  remain. No operation has every campaign target demonstrated.
+
+The optimization skill records why reserved append loops can lose to a copy
+plus a vector loop, and when exact-type specialization must preserve host
+comparison order, state mutation and parameter range. The next independent
+visit is module `PIL.Image.blend`; the earlier Blend checkpoint covered
+`ImageChops.blend`.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose
