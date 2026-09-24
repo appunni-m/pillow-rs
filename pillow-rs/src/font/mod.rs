@@ -435,6 +435,14 @@ impl FreeTypeFont {
         self.engine.size_pt
     }
 
+    /// Return the original bytes used to open this font face.
+    ///
+    /// Host bindings retain these for Pillow's memory-backed `font_bytes`
+    /// attribute. Variation and size changes do not modify the source bytes.
+    pub fn source_bytes(&self) -> &[u8] {
+        &self.engine.font_bytes
+    }
+
     /// Create a variant copy of this FreeType font, overriding the size when provided.
     pub fn font_variant(&self, size: Option<f32>) -> Result<Self, PilError> {
         imagingft::font_variant(self, size)
