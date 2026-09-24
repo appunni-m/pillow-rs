@@ -61,7 +61,17 @@ def merge(mode: str, bands):
 def blend(im1: Image, im2: Image, alpha: float) -> Image:
     """Linear interpolation between two images."""
     from . import _core
-    return Image(_core.image_blend(im1._rust_image, im2._rust_image, alpha))
+    result = Image(_core.image_blend(im1._rust_image, im2._rust_image, alpha))
+    # Pillow's im1._new copies first-image metadata even when alpha is 1.
+    # Nested values retain their identity; the returned mapping is independent.
+    if im1._transpose_loads_info:
+        im1.load()
+        im1.info
+    result._info = im1._info.copy()
+    result._native_info = im1._native_info
+    result._native_info_rebaseline = True
+    result._native_info_omitted = im1._native_info_omitted
+    return result
 
 
 def composite(image1: Image, image2: Image, mask: Image) -> Image:

@@ -579,8 +579,10 @@ pub fn op_blend_module(
     img: &DynamicImage,
     other: &Arc<Image>,
     alpha: f64,
-    _explicit_mode: Option<&str>,
+    explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let first_lab = explicit_mode == Some("LAB");
+    let second_lab = other.mode()?.as_str() == "LAB";
     let other_img = other.materialized_shared()?;
     // Public blend validates the mode family and dimensions before queuing.
     // Every stored byte participates, including LA/RGBA alpha and CMYK K.
@@ -598,6 +600,27 @@ pub fn op_blend_module(
     let second = other_img.as_bytes();
     if first.len() != second.len() || img.dimensions() != other_img.dimensions() {
         return Err(PilError::ValueError("images do not match".into()));
+    }
+    if first_lab || second_lab {
+        // Pillow blends its logical LAB samples. Our native LAB A/B bytes
+        // use the raw encoder's 128 bias; remove it on each LAB operand and
+        // restore it only when the first image (the result mode) is LAB.
+        let alpha = alpha as f32;
+        let output = first
+            .iter()
+            .zip(second)
+            .enumerate()
+            .map(|(index, (&left, &right))| {
+                let bias = if index % 3 == 0 { 0 } else { 128 };
+                let left = left ^ if first_lab { bias } else { 0 };
+                let right = right ^ if second_lab { bias } else { 0 };
+                let value = alpha
+                    .mul_add(f32::from(right) - f32::from(left), f32::from(left))
+                    .clamp(0.0, 255.0) as u8;
+                value ^ if first_lab { bias } else { 0 }
+            })
+            .collect();
+        return crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels);
     }
     let row_bytes = width as usize * channels;
     let mut output = vec![0u8; first.len()];

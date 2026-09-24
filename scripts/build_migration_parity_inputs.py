@@ -39850,6 +39850,8 @@ def build_nuanced_cases(
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
+    cases.extend(image_blend_native_parity_cases(surface_id))
+    cases.extend(lab_constructor_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
@@ -40132,6 +40134,86 @@ def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                 "steps": steps, "observations": ["image", "call", "materialize"],
             })
+    return cases
+
+
+def lab_constructor_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Keep constructor failures discovered while preparing LAB blend inputs."""
+    if surface_id != "PIL.Image":
+        return []
+    cases = []
+    for operation, size in (("new", [0, 1]), ("new", [1, 0]), ("frombytes", [2, 1])):
+        arguments = {"mode": literal("LAB"), "size": literal(size)}
+        assets = []
+        if operation == "frombytes":
+            raw = bytes(range(6))
+            arguments["data"] = asset_value("pixels")
+            assets.append({"id": "pixels", "kind": "inline", "encoding": "base64",
+                           "data": base64.b64encode(raw).decode(),
+                           "sha256": hashlib.sha256(raw).hexdigest(),
+                           "media_type": "application/octet-stream"})
+        cases.append({
+            "case_id": f"PIL.Image.{operation}.nuanced.lab-blend-setup-{size[0]}x{size[1]}",
+            "surface": surface_id, "operation": operation,
+            "covers": [f"PIL.Image.{operation}.behavior.default"],
+            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            "assets": assets,
+            "steps": [{"step_id": "call", "surface": surface_id, "operation": operation,
+                       "receiver": None, "arguments": arguments}],
+            "observations": ["call"],
+        })
+    return cases
+
+
+def image_blend_native_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Native mode families, LAB merge composition, extrapolation and byte tails."""
+    if surface_id != "PIL.Image":
+        return []
+    modes = {'1': 0, 'L': 1, 'LA': 2, 'La': 2, 'RGB': 3, 'LAB': 3, 'HSV': 3, 'YCbCr': 3, 'RGBA': 4, 'RGBa': 4, 'RGBX': 4, 'CMYK': 4, 'P': 1, 'PA': 2, 'I': 4, 'F': 4, 'I;16': 2, 'I;16L': 2, 'I;16B': 2, 'I;16N': 2}
+    cases = []
+
+    def make_case(mode1, mode2, alpha, label, size=(17, 17)):
+        steps = []
+        assets = []
+
+        def source(mode, name, offset):
+            if not all(size) and mode != 'LAB':
+                steps.append({'step_id': name, 'surface': 'PIL.Image', 'operation': 'new', 'receiver': None, 'arguments': {'mode': literal(mode), 'size': literal(list(size))}})
+                return
+
+            def raw_step(mode, name, channels):
+                if not all(size):
+                    steps.append({'step_id': name, 'surface': 'PIL.Image', 'operation': 'new', 'receiver': None, 'arguments': {'mode': literal(mode), 'size': literal(list(size))}})
+                    return
+                length = ((size[0] + 7) // 8 if mode == '1' else size[0] * channels) * size[1]
+                raw = bytes((i * 73 + offset & 255 for i in range(length)))
+                if mode == 'F':
+                    raw = b''.join((struct.pack('<f', i * 13.75 % 600 - 100) for i in range(size[0] * size[1])))
+                assets.append({'id': name, 'kind': 'inline', 'encoding': 'base64', 'data': base64.b64encode(raw).decode(), 'sha256': hashlib.sha256(raw).hexdigest(), 'media_type': 'application/octet-stream'})
+                steps.append({'step_id': name, 'surface': 'PIL.Image', 'operation': 'frombytes', 'receiver': None, 'arguments': {'mode': literal(mode), 'size': literal(list(size)), 'data': {'kind': 'asset', 'asset_id': name}}})
+            if mode == 'LAB':
+                for channel in range(3):
+                    raw_step('L', f'{name}-{channel}', 1)
+                steps.append({'step_id': name, 'surface': 'PIL.Image', 'operation': 'merge', 'receiver': None, 'arguments': {'mode': literal(mode), 'bands': {'kind': 'bindings', 'step_ids': [f'{name}-{c}' for c in range(3)]}}})
+            else:
+                raw_step(mode, name, modes[mode])
+        source(mode1, 'first', 29)
+        source(mode2, 'second', 163)
+        steps.extend([{'step_id': 'call', 'surface': 'PIL.Image', 'operation': 'blend', 'receiver': None, 'arguments': {'im1': binding('first'), 'im2': binding('second'), 'alpha': literal(alpha)}}, {'step_id': 'materialize', 'surface': 'PIL.Image.Image', 'operation': 'tobytes', 'receiver': binding('call'), 'arguments': {}}])
+        return {'case_id': f'PIL.Image.blend.nuanced.native-{mode1}-{mode2}-{label}', 'surface': 'PIL.Image', 'operation': 'blend', 'covers': ['PIL.Image.blend.behavior.default'], 'target_profiles': ['python-cpu', 'python-simd', 'python-gpu'], 'assets': assets, 'steps': steps, 'observations': ['call', 'materialize']}
+    for mode in modes:
+        for (factor_index, alpha) in enumerate((-1, 0, 0.3, 0.7, 1, 1.2, 3.33333)):
+            cases.append(make_case(mode, mode, alpha, f'factor{factor_index}'))
+    for family in [('L', '1', 'I'), ('LA', 'La'), ('RGB', 'LAB', 'HSV', 'YCbCr'), ('RGBA', 'RGBa', 'RGBX', 'CMYK')]:
+        for left in family:
+            for right in family:
+                if left != right:
+                    cases.append(make_case(left, right, 0.3, 'cross'))
+    for (left, right) in [('La', 'RGB'), ('RGB', 'La'), ('LAB', 'RGBA'), ('RGBA', 'LAB'), ('L', 'La'), ('LA', 'P'), ('P', 'LA'), ('RGB', 'F')]:
+        cases.append(make_case(left, right, 0.3, 'mismatch'))
+    for mode in ('L', 'La', 'LAB', 'RGBX'):
+        for (size_index, size) in enumerate(((0, 1), (1, 0), (1, 1), (3, 1), (7, 1), (9, 1), (1023, 1), (1025, 1))):
+            cases.append(make_case(mode, mode, 0.3, f'shape{size_index}', size))
     return cases
 
 

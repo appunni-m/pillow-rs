@@ -11505,13 +11505,16 @@ fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> boo
         // an opaque alpha for an alpha-bearing source. Image.blend (the
         // module operation) blends every stored channel, including alpha, so
         // all packed byte layouts use the same shader path.
-        PipelineOp::BlendModule { .. } => !matches!(
-            image,
-            DynamicImage::ImageLuma8(_)
-                | DynamicImage::ImageLumaA8(_)
-                | DynamicImage::ImageRgb8(_)
-                | DynamicImage::ImageRgba8(_)
-        ),
+        PipelineOp::BlendModule { other, .. } => {
+            other.mode().ok().as_deref() == Some("LAB")
+                || !matches!(
+                    image,
+                    DynamicImage::ImageLuma8(_)
+                        | DynamicImage::ImageLumaA8(_)
+                        | DynamicImage::ImageRgb8(_)
+                        | DynamicImage::ImageRgba8(_)
+                )
+        }
         // PutData and alpha promotion carry the logical source/target layout
         // in the operation. A direct core caller can construct a mismatched
         // pair; CPU converts according to that mode, while the packed shader

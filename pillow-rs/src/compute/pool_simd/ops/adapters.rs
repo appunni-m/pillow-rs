@@ -520,7 +520,8 @@ fn native_chops_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> 
 fn native_module_blend_mode_channels(mode: &str) -> Option<usize> {
     match mode {
         "L" => Some(1),
-        "LA" => Some(2),
+        "LA" | "La" => Some(2),
+        // LAB requires per-operand bias removal; keep it on the exact CPU path.
         "RGB" | "HSV" | "YCbCr" => Some(3),
         "RGBA" | "CMYK" | "RGBa" | "RGBX" => Some(4),
         _ => None,
@@ -5672,11 +5673,12 @@ fn concrete_simd_mode(img: &DynamicImage) -> Option<&'static str> {
     }
 }
 
-fn operation_target_mode(op: &PipelineOp) -> Option<&'static str> {
+fn operation_target_mode(op: &PipelineOp) -> Option<&str> {
     match op {
-        PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => {
-            Some(color_mode_name(mode))
-        }
+        PipelineOp::Convert { mode, .. } => Some(color_mode_name(mode)),
+        // A merge's storage family can differ from its logical mode (LAB
+        // uses RGB storage). Subsequent operations need the semantic tag.
+        PipelineOp::Merge { logical_mode, .. } => Some(logical_mode),
         PipelineOp::Color3DLut { target_mode, .. } => Some(pixel_mode_name(*target_mode)),
         // PutAlpha's `mode` field identifies the source image, not the
         // resulting logical mode.  In particular a CMYK image is stored as
@@ -8786,7 +8788,29 @@ fn native_module_blend_arithmetic_supported(alpha: f64) -> bool {
         && (alpha as f32).is_finite()
 }
 
-/// Blend two matching native byte images with eight-wide fused f32 arithmetic.
+/// Keep widening, clamping, truncation and packing in vector registers.
+/// Scalar extraction after each FMA adds branches and byte stores per lane.
+#[inline]
+fn native_module_blend_block(left: [u8; 16], right: [u8; 16], alpha: f32x8) -> [u8; 16] {
+    let left = u8x16::new(left);
+    let right = u8x16::new(right);
+    let blend = |left: i16x8, right: i16x8| {
+        let left = i32x8::from(left).round_float();
+        let right = i32x8::from(right).round_float();
+        let value = alpha
+            .mul_add(right - left, left)
+            .max(f32x8::ZERO)
+            .min(f32x8::splat(255.0));
+        i16x8::from_i32x8_truncate(value.trunc_int())
+    };
+    u8x16::narrow_i16x8(
+        blend(i16x8::from_u8x16_low(left), i16x8::from_u8x16_low(right)),
+        blend(i16x8::from_u8x16_high(left), i16x8::from_u8x16_high(right)),
+    )
+    .to_array()
+}
+
+/// Blend two matching native byte images with fused f32 vector arithmetic.
 ///
 /// Pillow's `Image.blend` interpolates every stored sample independently,
 /// including alpha and CMYK K. Since the formula has no row-dependent state,
@@ -8824,30 +8848,47 @@ fn native_module_blend(
         return None;
     }
     let mut output = vec![0u8; left.len()];
-    let vector_len = output.len() / 8 * 8;
-    let alpha_value = alpha;
-    let alpha = f32x8::splat(alpha_value as f32);
-    for start in (0..vector_len).step_by(8) {
-        let left_block = <[u8; 8]>::try_from(&left[start..start + 8]).ok()?;
-        let right_block = <[u8; 8]>::try_from(&right[start..start + 8]).ok()?;
-        let left_block = f32x8::from(left_block.map(f32::from));
-        let right_block = f32x8::from(right_block.map(f32::from));
-        let values = alpha.mul_add(right_block - left_block, left_block);
-        for (lane, value) in values.to_array().into_iter().enumerate() {
-            output[start + lane] = if value <= 0.0 {
-                0
-            } else if value >= 255.0 {
-                255
-            } else {
-                value as u8
-            };
+    let alpha_vector = f32x8::splat(alpha as f32);
+    let mut left_chunks = left.chunks_exact(16);
+    let mut right_chunks = right.chunks_exact(16);
+    let mut output_chunks = output.chunks_exact_mut(16);
+    for ((left, right), output) in left_chunks
+        .by_ref()
+        .zip(right_chunks.by_ref())
+        .zip(output_chunks.by_ref())
+    {
+        output.copy_from_slice(&native_module_blend_block(
+            left.try_into().expect("complete vector"),
+            right.try_into().expect("complete vector"),
+            alpha_vector,
+        ));
+    }
+    let remainder = output_chunks.into_remainder();
+    let mut vector_blocks = left.len() / 16;
+    let scalar_tail = if remainder.len() >= 8 {
+        // Retain the existing eight-byte admission boundary without reading
+        // beyond the final slice. Padding contributes no observable samples.
+        let mut left = [0; 16];
+        let mut right = [0; 16];
+        left[..remainder.len()].copy_from_slice(left_chunks.remainder());
+        right[..remainder.len()].copy_from_slice(right_chunks.remainder());
+        remainder.copy_from_slice(
+            &native_module_blend_block(left, right, alpha_vector)[..remainder.len()],
+        );
+        vector_blocks += 1;
+        0
+    } else {
+        for ((out, &left), &right) in remainder
+            .iter_mut()
+            .zip(left_chunks.remainder())
+            .zip(right_chunks.remainder())
+        {
+            *out = native_module_blend_byte(left, right, alpha);
         }
-    }
-    for index in vector_len..output.len() {
-        output[index] = native_module_blend_byte(left[index], right[index], alpha_value);
-    }
-    crate::compute::record_pipeline_operation_vector_blocks((vector_len / 8) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((output.len() - vector_len) as u64);
+        remainder.len()
+    };
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
     crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
         .ok()
