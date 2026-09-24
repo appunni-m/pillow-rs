@@ -176,8 +176,7 @@ class Image:
         box=None,
         reducing_gap=None,
     ) -> "Image":
-        del reducing_gap
-        return Image(self._rust_image.resize(size, resample, box))
+        return Image(self._rust_image.resize(size, resample, box, reducing_gap))
 
     def crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> "Image":
         return Image(self._rust_image.crop(box))

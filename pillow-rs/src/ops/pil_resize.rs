@@ -285,22 +285,33 @@ fn pil_resize_luma16_nearest(
     img: &ImageBuffer<Luma<u16>, Vec<u16>>,
     dst_w: u32,
     dst_h: u32,
+    bounds: Option<(f64, f64, f64, f64)>,
 ) -> DynamicImage {
     let sw = img.width();
     let sh = img.height();
-    let scale_x = sw as f64 / dst_w as f64;
-    let scale_y = sh as f64 / dst_h as f64;
     let mut result = ImageBuffer::new(dst_w, dst_h);
+    if sw == 0 || sh == 0 {
+        return DynamicImage::ImageLuma16(result);
+    }
+    let (left, top, scale_x, scale_y) = match bounds {
+        Some((left, top, right, bottom)) => (
+            f64::from(left as f32),
+            f64::from(top as f32),
+            f64::from(right as f32 - left as f32) / f64::from(dst_w),
+            f64::from(bottom as f32 - top as f32) / f64::from(dst_h),
+        ),
+        None => (0.0, 0.0, sw as f64 / dst_w as f64, sh as f64 / dst_h as f64),
+    };
 
     let mut xintab = Vec::with_capacity(dst_w as usize);
-    let mut xo = scale_x * 0.5;
+    let mut xo = left + scale_x * 0.5;
     for _ in 0..dst_w {
         let xi = xo as u32;
         xintab.push(if xi >= sw { sw - 1 } else { xi });
         xo += scale_x;
     }
 
-    let mut yo = scale_y * 0.5;
+    let mut yo = top + scale_y * 0.5;
     for dy in 0..dst_h {
         let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 };
         for dx in 0..dst_w {
@@ -404,14 +415,35 @@ fn pil_resize_luma16(
     dst_h: u32,
     filter: ResampleFilter,
     explicit_mode: Option<&str>,
+    bounds: Option<(f64, f64, f64, f64)>,
 ) -> DynamicImage {
     if matches!(filter, ResampleFilter::Nearest) {
-        return pil_resize_luma16_nearest(img, dst_w, dst_h);
+        return pil_resize_luma16_nearest(img, dst_w, dst_h, bounds);
     }
 
     let (kernel, support) = filter_from_resample(filter);
-    let h_coeffs = precompute_coeffs_f64(dst_w, img.width(), kernel, support);
-    let v_coeffs = precompute_coeffs_f64(dst_h, img.height(), kernel, support);
+    let (h_coeffs, v_coeffs) = match bounds {
+        Some((left, top, right, bottom)) => (
+            Arc::new(precompute_coeffs_f64_boxed(
+                dst_w,
+                img.width(),
+                left,
+                right,
+                filter,
+            )),
+            Arc::new(precompute_coeffs_f64_boxed(
+                dst_h,
+                img.height(),
+                top,
+                bottom,
+                filter,
+            )),
+        ),
+        None => (
+            precompute_coeffs_f64(dst_w, img.width(), kernel, support),
+            precompute_coeffs_f64(dst_h, img.height(), kernel, support),
+        ),
+    };
     let big_endian = luma16_resample_big_endian(explicit_mode);
 
     let mut intermediate = ImageBuffer::<Luma<u16>, Vec<u16>>::new(img.height(), dst_w);
@@ -1764,7 +1796,7 @@ pub fn pil_resize(
     // generic pixel accessor below is byte-oriented and would otherwise
     // convert this mode to RGBA8 before preserving only its mode label.
     if let DynamicImage::ImageLuma16(luma) = img {
-        return pil_resize_luma16(luma, dst_w, dst_h, filter, explicit_mode);
+        return pil_resize_luma16(luma, dst_w, dst_h, filter, explicit_mode, None);
     }
 
     // Retain original image for final mode preservation
@@ -1783,8 +1815,7 @@ pub fn pil_resize(
     let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
         && !is_cmyk
         && !is_fi
-        && !matches!(explicit_mode, Some("RGBa" | "RGBX"))
-        && explicit_mode != Some("PA")
+        && !matches!(explicit_mode, Some("RGBa" | "RGBX" | "La" | "PA"))
         && matches!(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
@@ -1819,7 +1850,7 @@ pub fn pil_resize(
             .checked_mul(dh as usize)
             .and_then(|pixels| pixels.checked_mul(channels))
             .unwrap_or(0);
-        let result = raw_to_dynamic(&vec![0; output_len], dw, dh, channels);
+        let result = raw_to_dynamic_owned(vec![0; output_len], dw, dh, channels);
         return pil_preserve_mode(orig_img, result);
     }
 
@@ -1912,7 +1943,7 @@ pub fn pil_resize(
             }
             yo += scale_y;
         }
-        let result = raw_to_dynamic(&out_bytes, dw, dh, channels);
+        let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
         return pil_preserve_mode(orig_img, result);
     }
 
@@ -1975,7 +2006,7 @@ pub fn pil_resize(
     }
 
     // Build DynamicImage from bytes
-    let result = raw_to_dynamic(&out_bytes, dw, dh, channels);
+    let result = raw_to_dynamic_owned(out_bytes, dw, dh, channels);
 
     pil_preserve_mode(orig_img, result)
 }
@@ -2049,7 +2080,7 @@ fn pil_resize_f_boxed(
             }
             source_y += scale_y;
         }
-        return raw_to_dynamic(&output, dst_w, dst_h, 4);
+        return raw_to_dynamic_owned(output, dst_w, dst_h, 4);
     }
 
     let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
@@ -2107,7 +2138,7 @@ fn pil_resize_f_boxed(
         .into_iter()
         .flat_map(f32::to_le_bytes)
         .collect();
-    raw_to_dynamic(&output, dst_w, dst_h, 4)
+    raw_to_dynamic_owned(output, dst_w, dst_h, 4)
 }
 
 /// Box-based resize: maps source region [box_left, box_right] × [box_top, box_bottom]
@@ -2152,7 +2183,7 @@ pub fn pil_resize_boxed(
     let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
         && !is_cmyk
         && !is_fi
-        && !matches!(explicit_mode, Some("RGBa" | "RGBX"))
+        && !matches!(explicit_mode, Some("RGBa" | "RGBX" | "La" | "PA"))
         && matches!(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
@@ -2171,6 +2202,19 @@ pub fn pil_resize_boxed(
         let left = box_left_f32 as u32;
         let top = box_top_f32 as u32;
         return img.crop_imm(left, top, dst_w, dst_h);
+    }
+
+    if let DynamicImage::ImageLuma16(luma) = img {
+        // A two-byte typed sample cannot enter the generic four-byte pixel
+        // transport. Reuse the native u16 passes with boxed coefficients.
+        return pil_resize_luma16(
+            luma,
+            dst_w,
+            dst_h,
+            filter,
+            explicit_mode,
+            Some((box_left, box_top, box_right, box_bottom)),
+        );
     }
 
     if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
@@ -2198,8 +2242,8 @@ pub fn pil_resize_boxed(
         if sw == 0 || sh == 0 {
             return pil_preserve_mode(
                 orig_img,
-                raw_to_dynamic(
-                    &vec![0; (dst_w as usize) * (dst_h as usize) * channels],
+                raw_to_dynamic_owned(
+                    vec![0; (dst_w as usize) * (dst_h as usize) * channels],
                     dst_w,
                     dst_h,
                     channels,
@@ -2236,7 +2280,10 @@ pub fn pil_resize_boxed(
             }
             source_y += scale_y;
         }
-        return pil_preserve_mode(orig_img, raw_to_dynamic(&out_bytes, dst_w, dst_h, channels));
+        return pil_preserve_mode(
+            orig_img,
+            raw_to_dynamic_owned(out_bytes, dst_w, dst_h, channels),
+        );
     }
 
     // Use box-parameter coefficients for both passes
@@ -2340,36 +2387,13 @@ pub fn pil_resize_boxed(
         );
     }
 
-    let result = raw_to_dynamic(&out_bytes, dst_w, dst_h, channels);
+    let result = raw_to_dynamic_owned(out_bytes, dst_w, dst_h, channels);
 
     pil_preserve_mode(orig_img, result)
 }
 
-/// Convert raw bytes to DynamicImage based on color type.
-fn raw_to_dynamic(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
-    match channels {
-        1 => DynamicImage::ImageLuma8(
-            crate::raster::GrayImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| crate::raster::GrayImage::new(w, h)),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            crate::raster::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| crate::raster::GrayAlphaImage::new(w, h)),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            crate::raster::RgbImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| crate::raster::RgbImage::new(w, h)),
-        ),
-        _ => DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
-        ),
-    }
-}
-
-/// Convert an owned native-byte resize result without copying its backing
-/// buffer. The borrowed helper remains for the convolution paths, which reuse
-/// their intermediate/output slices after constructing the image.
+/// Move a completed native-byte result into its image without allocating
+/// and copying the entire output a second time.
 fn raw_to_dynamic_owned(bytes: Vec<u8>, w: u32, h: u32, channels: usize) -> DynamicImage {
     match channels {
         1 => DynamicImage::ImageLuma8(

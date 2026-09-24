@@ -4287,6 +4287,7 @@ pub(crate) fn simd_supports_for_image(
             .is_some_and(|channels| {
                 has_empty_native_bytes(img, channels) || has_nonempty_byte_data(img, channels)
             }),
+        PipelineOp::ResizeBoxed { .. } => false,
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_image(img, *w, *h, *filter, mode)
         }
@@ -5799,6 +5800,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 shape_has_empty_native_bytes(shape, channels)
                     || shape_has_nonempty_byte_data(shape, channels)
             }),
+        PipelineOp::ResizeBoxed { .. } => false,
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_shape(shape, *w, *h, *filter, mode)
         }
@@ -17738,25 +17740,23 @@ fn resize_vertical_vector_row(
             if source_y >= source_height {
                 return None;
             }
-            let mut source_bases = [0usize; SIMD_RESIZE_LANES];
-            let mut active = [false; SIMD_RESIZE_LANES];
-            for lane in 0..SIMD_RESIZE_LANES {
-                if output_x + lane >= output_width {
-                    continue;
-                }
-                source_bases[lane] = source_y
-                    .checked_mul(output_width)?
-                    .checked_add(output_x + lane)?
-                    .checked_mul(channels)?;
-                active[lane] = true;
-            }
+            // Vertical taps read adjacent pixels from one intermediate row.
+            // Validate that contiguous span once instead of rebuilding eight
+            // absolute addresses and active flags for every tap and channel.
+            // Only the final short vector is padded; its missing samples keep
+            // the same zero contribution as the previous masked gather.
+            let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+            let source_start = source_y
+                .checked_mul(output_width)?
+                .checked_add(output_x)?
+                .checked_mul(channels)?;
+            let source_end = source_start.checked_add(count.checked_mul(channels)?)?;
+            let source_pixels = intermediate.get(source_start..source_end)?;
             let weight_vector = i32x8::splat(weight as i32);
             for channel in 0..channels {
                 let mut samples = [0i32; SIMD_RESIZE_LANES];
-                for lane in 0..SIMD_RESIZE_LANES {
-                    if active[lane] {
-                        samples[lane] = i32::from(*intermediate.get(source_bases[lane] + channel)?);
-                    }
+                for (lane, pixel) in source_pixels.chunks_exact(channels).enumerate() {
+                    samples[lane] = i32::from(pixel[channel]);
                 }
                 sums[channel] += i32x8::new(samples).widening_mul(weight_vector);
             }

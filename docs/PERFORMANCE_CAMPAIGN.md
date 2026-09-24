@@ -856,6 +856,144 @@ newly declared complete. The next bounded visit is `PIL.Image.Image.resize`,
 including its mapped pipeline workloads; Grayscale remains pending with the
 specific blockers above.
 
+## Resize visit
+
+This visit uses four bounded attempts: repair source-box/reduction semantics,
+repair typed and indexed sample handling, remove a CPU output copy, and simplify
+SIMD vertical sampling. The unchanged baseline contains 25 Resize workloads,
+including alpha, typed, repeated-geometry and loaded ten-operation pipelines.
+Its receipt is `migration-benchmark-e8cdb155b05547228c965d908223c062`, retained
+as `perf-resize-20260925-initial.json`. The initial 317 maintained Resize cases
+and 24 mapped workflows pass 1,023 CPU/SIMD/GPU comparisons, but that cohort
+misses several public argument behaviors.
+
+### Parity repairs
+
+A varied-pixel audit of floating/integer boxes, invalid bounds and reduction gaps
+fails 342 of 432 comparisons. The Python wrapper discarded `reducing_gap`, the
+binding accepted only integer boxes, and core cropped the source before
+resampling. An interior crop discards surrounding filter taps. The repair keeps
+floating bounds on a ResizeBoxed operation, reuses the existing boxed kernels,
+and validates bounds after Pillow's float32 narrowing. Integer pre-reduction
+retains the filter halo and transforms the original coordinates into the reduced
+image's coordinate system. LA/RGBA filtered resizing intentionally ignores a
+valid gap, matching Pillow's premultiplied recursive call. Direct encoded sources
+are decoded at resize() so malformed-image failures occur at the public call.
+
+The broader 16-mode/tall-source audit initially passes 1,179 of 1,224 comparisons.
+All 45 failures are PA: Pillow filters raw index/alpha bands, while pillow-rs
+forced nearest sampling. PA now retains its filter and palette. Reduction must
+also average those bands independently; the CPU alpha predicate and GPU's
+per-operation packed-mode word now preserve that rule. The targeted PA rerun,
+including retained palettes, passes all 72 comparisons.
+
+I;16 variants use the existing native two-byte boxed resampler and preserve its
+byte-order and clipping rules. Pillow rejects those modes only when reducing_gap
+actually selects integer reduction. La and RGBa are already premultiplied and
+must not be multiplied again. Very tall images follow Pillow's vertical-first
+pass order, retaining premultiplied samples across both passes. Intermediate
+rounding makes pass order and repeated alpha conversions observable.
+
+The generator adds 558 input-only regressions. No expected outputs, assertions,
+thresholds or existing workloads are changed. The floating-box/tall descriptor
+currently falls back to CPU; those comparisons establish output parity, not
+native SIMD/GPU support. The first argument and maintained scratch runs used the
+same receipt filename and one overwrote the other. Subsequent runs use distinct
+names; the initial failure receipt is retained and the cases are rerun through
+the permanent fixture cohort.
+
+### Performance changes
+
+CPU resampling previously constructed an owned output Vec, copied it into a
+second Vec inside the image constructor, then discarded the original. Moving
+the completed Vec into the existing owned constructor removes that allocation
+and full output copy, including boxed and typed-F results. The intermediate
+quantization and sampling loops are unchanged. The intermediate measurement is
+`migration-benchmark-a49c0a482d1a4efda71189cef8327380`, retained as
+`perf-resize-20260925-owned-output.json`.
+
+The fourth attempt removes repeated scalar address and mask construction from
+SIMD vertical taps. Adjacent pixels occupy one contiguous span of an intermediate
+row; validate that span once, then gather its channel samples. Short vectors
+retain zero padding and unchanged scalar tails. Fixed-point accumulation,
+rounding, clipping and alpha restoration are unchanged.
+
+### Resize checkpoint and remaining gaps
+
+All final selected comparisons pass: 2,697 Resize/workflow, 2,898 shared-kernel,
+and 300 strict native-backend tail cases. Receipts are
+`perf-resize-20260925-checkpoint-parity.json`,
+`perf-resize-20260925-checkpoint-shared-parity.json`, and
+`perf-resize-20260925-checkpoint-tails-parity.json`. The shared cohort covers
+reduce, thumbnail, fit, contain, cover, pad and scale. The strict tail cohort
+uses varied L/LA/RGB/RGBA inputs, five convolution filters, and output widths
+7, 8, 9, 16 and 17. Ordinary fallback cases remain separate from native proof.
+
+After all diagnostics and documentation generation finish, the unchanged 25-row
+benchmark completes as `migration-benchmark-010b26a78b4c441d8a88c3e8bf8c22e0`,
+retained in `perf-resize-20260925-checkpoint.json`. All 24 materialized rows have
+completed native CPU/SIMD/GPU receipts without fallback. The remaining standard
+row queues work without terminal materialization and has no native execution
+proof. Representative median milliseconds, including poor composed cases, are:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16 × 16 → 16 × 16 | 0.011833 | 0.013104 | 0.013167 | 0.321833 |
+| RGB 32 × 24 → 16 × 16 | 0.013688 | 0.012000 | 0.015938 | 0.296167 |
+| RGB 1 × 1 → 16 × 16 | 0.010042 | 0.011229 | 0.011437 | 0.306562 |
+| RGB 32 × 32 → 16 × 16 | 0.014417 | 0.011855 | 0.017792 | 0.302792 |
+| RGB 256 × 256 → 16 × 16 | 0.230791 | 0.064521 | 0.209187 | 0.560042 |
+| RGB 1024 × 768 → 16 × 16 | 2.591354 | 0.720958 | 1.035375 | 2.423188 |
+| Resize → Rotate → Crop | 0.024334 | 0.164000 | 0.213230 | 0.738458 |
+| RGBA Lanczos 256 × 256 | 0.668166 | 0.387271 | 0.478313 | 0.298084 |
+| LA Bicubic 256 × 256 | 0.340249 | 0.177792 | 0.231792 | 0.381667 |
+| RGBA Lanczos 1024 × 768 | 8.033646 | 3.624542 | 4.482855 | 1.842000 |
+| LA Bicubic 1024 × 768 | 4.583562 | 1.520666 | 1.764187 | 2.259875 |
+| F repeated geometry pipeline | 0.308729 | 0.083125 | 1.262042 | 12.662896 |
+| Loaded RGB JPEG ten-operation pipeline | 3.495854 | 3.928834 | 3.770625 | 3.144667 |
+| Loaded RGBA PNG ten-operation pipeline | 3.523499 | 3.883458 | 3.901354 | 5.718375 |
+
+The SIMD vertical change lowers the measured LA 1024 × 768 row from 1.940479 to
+1.764187 ms relative to the immediately preceding build, and RGBA Lanczos
+256 × 256 from 0.551083 to 0.478313 ms. Some tiny rows regress in the same run;
+these short samples do not establish statistical significance. CPU output
+ownership removes a proven copy, but timing changes also include environment
+variation: Pillow and unchanged GPU paths move between runs. GPU timing movement
+on these workloads is not a claimed kernel improvement.
+
+All 25 diagnostic rows still miss the SIMD 5× goal; nine miss CPU ≤ Pillow and
+20 miss GPU ≤ SIMD. Excluding the unmaterialized standard row leaves 24/24 SIMD,
+8/24 CPU and 19/24 GPU misses. Several basic benchmark inputs are uniform zero images. The varied-input audits
+prove their own exact outputs but do not establish varied-input speed. Real
+changing-input sustained throughput has not been measured for Resize, so there
+is no throughput claim or completed-operation claim. Small images, composed
+pipelines and typed resampling remain visible.
+
+The next Resize visit should address:
+
+- Native boxed/tall execution: reuse the existing accelerated boxed kernels with
+  complete bounds, typed-mode and pass-order admission. Current fallback timings
+  cannot satisfy a native acceleration requirement.
+- SIMD horizontal setup and gathers: the horizontal plan is rebuilt per call;
+  rows always enter the parallel scheduler, and channel gathers plus widened
+  accumulators remain expensive. Measure setup, scheduling and actual tap work
+  separately before choosing plan caching, row grouping or a different lane layout.
+- Typed and composed costs: repeated F geometry takes 1.262042 ms on SIMD versus
+  0.083125 ms on CPU. Preserve f64 accumulation/f32 storage and reference FMA
+  behavior while investigating the typed kernel. The Resize/Rotate/Crop chain
+  remains much slower than Pillow and motivates the next operation visit.
+- GPU preparation, transfers and completion: packed transport, coefficient
+  preparation, multiple passes and synchronous readback still dominate small
+  requests; the F repeated-geometry pipeline remains especially slow. A throughput
+  improvement needs fresh completed requests, exact outputs and transfer receipts.
+
+Four attempts are checkpointed; the campaign moves to Rotate. The reusable skill
+now includes dependency halos, coordinate changes after coarse reduction,
+quantized pass ordering and logical-mode propagation through packed transport.
+Generated contract counts are refreshed without collecting coverage. Pre-push
+Rust/documentation checks, cross-runtime verification and the global evidence
+matrix refresh remain pending; these focused receipts do not replace them.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose

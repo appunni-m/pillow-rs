@@ -39847,6 +39847,114 @@ def build_nuanced_cases(
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
+    cases.extend(resize_argument_parity_cases(surface_id))
+    cases.extend(resize_mode_parity_cases(surface_id))
+    return cases
+
+
+def resize_argument_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Expose filter-halo and integer-reduction behavior on varied pixels."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    cases = []
+    parameters = (
+        ("fractional-box", {"box": [0.25, 1.5, 31.75, 28.0]}),
+        ("integer-box", {"box": [1, 2, 30, 27]}),
+        ("negative-box", {"box": [-1, 0, 33, 29]}),
+        ("outside-box", {"box": [0, 0, 34, 29]}),
+        ("gap-half", {"reducing_gap": 0.5}),
+        ("gap-one", {"reducing_gap": 1.0}),
+        ("gap-two", {"reducing_gap": 2.0}),
+        ("gap-three", {"reducing_gap": 3.0}),
+    )
+    for mode, channels in (("L", 1), ("RGB", 3), ("RGBA", 4)):
+        data = random.Random(f"resize-args-{mode}").randbytes(33 * 29 * channels)
+        assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                   "data": base64.b64encode(data).decode("ascii"),
+                   "sha256": hashlib.sha256(data).hexdigest(),
+                   "media_type": "application/octet-stream"}]
+        for resample in range(6):
+            for name, arguments in parameters:
+                steps = [
+                    {"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+                     "receiver": None, "arguments": {"mode": literal(mode),
+                     "size": literal([33, 29]), "data": asset_value("pixels")}},
+                    {"step_id": "call", "surface": surface_id, "operation": "resize",
+                     "receiver": binding("image"), "arguments": {"size": literal([5, 3]),
+                     "resample": literal(resample), **{key: literal(value) for key, value in arguments.items()}}},
+                    {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ]
+                parameter = "box" if "box" in arguments else "reducing-gap"
+                cases.append({
+                    "case_id": f"{surface_id}.resize.nuanced.arguments-{mode}-{resample}-{name}",
+                    "surface": surface_id, "operation": "resize",
+                    "covers": [f"{surface_id}.resize.parameter.{parameter}"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
+    return cases
+
+
+def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Keep sample interpretation, palette retention and pass order observable."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    cases = []
+    modes = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "I": 4, "F": 4,
+             "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+    for geometry, size in (("normal", (33, 29)), ("tall", (2, 203))):
+        for mode, channels in modes.items():
+            if geometry == "tall" and mode in ("RGBX", "CMYK", "P", "PA", "I;16L", "I;16N"):
+                continue
+            width, height = size
+            rng = random.Random(f"resize-modes-{mode}-{geometry}")
+            if mode == "I":
+                raw = b"".join(struct.pack("<i", rng.randrange(-100000, 100000))
+                               for _ in range(width * height))
+            elif mode == "F":
+                raw = b"".join(struct.pack("<f", rng.uniform(-1000, 1000))
+                               for _ in range(width * height))
+            else:
+                raw = rng.randbytes(width * height * channels)
+            assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                       "data": base64.b64encode(raw).decode("ascii"),
+                       "sha256": hashlib.sha256(raw).hexdigest(),
+                       "media_type": "application/octet-stream"}]
+            bounds = [0.25, 1.5, width - 0.25, height - 1.0]
+            parameters = [("fractional-box", {"box": bounds}),
+                          ("fractional-box-gap", {"box": bounds, "reducing_gap": 2.0}),
+                          ("gap-two", {"reducing_gap": 2.0})]
+            if geometry == "tall":
+                parameters = [("full", {}), ("fractional-box", {"box": bounds})]
+            if mode == "PA":
+                parameters.append(("palette-box", {"box": bounds}))
+            for resample in range(6):
+                for name, arguments in parameters:
+                    steps = [{"step_id": "image", "surface": "PIL.Image",
+                              "operation": "frombytes", "receiver": None,
+                              "arguments": {"mode": literal(mode), "size": literal([width, height]),
+                                            "data": asset_value("pixels")}}]
+                    if name == "palette-box":
+                        steps.append({"step_id": "palette", "surface": surface_id,
+                                      "operation": "putpalette", "receiver": binding("image"),
+                                      "arguments": {"data": literal([(value * 73 + 11) % 256
+                                                                      for value in range(768)])}})
+                    steps.extend([
+                        {"step_id": "call", "surface": surface_id, "operation": "resize",
+                         "receiver": binding("image"), "arguments": {"size": literal([5, 3]),
+                         "resample": literal(resample), **{key: literal(value) for key, value in arguments.items()}}},
+                        {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                         "receiver": binding("call"), "arguments": {}},
+                    ])
+                    cases.append({
+                        "case_id": f"{surface_id}.resize.nuanced.modes-{mode}-{geometry}-{resample}-{name}",
+                        "surface": surface_id, "operation": "resize",
+                        "covers": [f"{surface_id}.resize.behavior.default"],
+                        "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                        "steps": steps, "observations": ["call", "materialize"],
+                    })
     return cases
 
 

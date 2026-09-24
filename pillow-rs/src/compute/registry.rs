@@ -118,7 +118,7 @@ pub fn registry() -> Result<&'static HashMap<&'static str, OpEntry>, PilError> {
 /// static so backend support checks avoid allocation.
 pub fn variant_key(op: &PipelineOp) -> &'static str {
     match op {
-        PipelineOp::Resize { .. } => "Resize",
+        PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. } => "Resize",
         PipelineOp::Crop { .. } => "Crop",
         PipelineOp::Rotate { .. } => "Rotate",
         PipelineOp::Transpose { .. } => "Transpose",
@@ -579,6 +579,8 @@ pub(crate) fn gpu_blend_alpha_params(alpha: f64) -> Option<u32> {
 #[cfg(feature = "gpu")]
 fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
     match op {
+        // The ordinary shader has no floating source-box parameters.
+        PipelineOp::ResizeBoxed { .. } => false,
         // NEAREST is a single-dispatch relocation. The other filters expand
         // into the pool's exact horizontal/vertical fixed-point kernels; the
         // registry entry remains the public operation marker while the pool
@@ -1185,6 +1187,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── Resize: dst_w, dst_h ──
         PipelineOp::Resize { w, h, .. } => vec![*w, *h],
+        PipelineOp::ResizeBoxed { .. } => vec![],
 
         // ── Transpose: op_code ──
         PipelineOp::Transpose { method } => {
@@ -1423,8 +1426,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         execute_min_filter_with_mode, execute_rank_filter_with_mode,
     };
     use crate::compute::pool_cpu::ops::geometry::{
-        execute_crop, execute_reduce, execute_resize, execute_rotate, execute_thumbnail,
-        execute_transpose,
+        execute_crop, execute_reduce, execute_resize, execute_resize_boxed, execute_rotate,
+        execute_thumbnail, execute_transpose,
     };
     use crate::compute::pool_cpu::ops::imageops::{
         op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize,
@@ -1440,10 +1443,17 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
              op: &PipelineOp,
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Resize { w, h, filter } = op {
-                    execute_resize(img, *w, *h, filter, mode)
-                } else {
-                    Err(PilError::ValueError("expected Resize op".into()))
+                match op {
+                    PipelineOp::Resize { w, h, filter } => {
+                        execute_resize(img, *w, *h, filter, mode)
+                    }
+                    PipelineOp::ResizeBoxed {
+                        w,
+                        h,
+                        filter,
+                        box_coords,
+                    } => execute_resize_boxed(img, *w, *h, *filter, *box_coords, mode),
+                    _ => Err(PilError::ValueError("expected Resize op".into())),
                 }
             },
             "resize_nearest.wgsl"
