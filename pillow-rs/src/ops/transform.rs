@@ -126,7 +126,7 @@ fn transform_fill_arity_error(mode: &str) -> PilError {
             "color must be int or single-element tuple"
         }
         "F" => "must be real number, not tuple",
-        "LA" | "PA" => "color must be int, or tuple of one or two elements",
+        "LA" | "La" | "PA" => "color must be int, or tuple of one or two elements",
         _ => "color must be int, or tuple of one, three or four elements",
     };
     PilError::TypeError(message.into())
@@ -322,7 +322,7 @@ impl Image {
         source.reduce(x_factor, y_factor)
     }
 
-    fn public_transform_fill(
+    pub(crate) fn public_transform_fill(
         &self,
         fillcolor: Option<TransformFill>,
     ) -> Result<((u8, u8, u8, u8), Option<u8>), PilError> {
@@ -399,7 +399,7 @@ impl Image {
                         }
                         _ => return Err(transform_fill_arity_error(&mode)),
                     },
-                    "LA" | "PA" => match values.as_slice() {
+                    "LA" | "La" | "PA" => match values.as_slice() {
                         [value] => (clamp_transform_component(*value), 0, 0, 0),
                         [gray, alpha] => (
                             clamp_transform_component(*gray),

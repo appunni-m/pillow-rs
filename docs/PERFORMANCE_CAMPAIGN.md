@@ -994,6 +994,119 @@ Generated contract counts are refreshed without collecting coverage. Pre-push
 Rust/documentation checks, cross-runtime verification and the global evidence
 matrix refresh remain pending; these focused receipts do not replace them.
 
+## Rotate four-attempt checkpoint — 2026-09-25
+
+This visit spent its four attempts on parity before performance. The original
+109 maintained Rotate cases plus nine mapped materialized workflows passed all
+354 backend comparisons, but a new seeded varied-pixel audit found 240 failures
+among 576 comparisons. Uniform or ordinary-mode examples had hidden these
+failures. The 192 input-only regressions now live in the deterministic fixture
+generator: 16 modes, three filters, and arbitrary, expanded, non-square right-angle,
+and custom center/translation/fill cases. They compare both image metadata and
+materialized bytes against the live isolated Pillow oracle.
+
+The retained changes are:
+
+1. Reuse Transform's native fill normalization, preserving LA/La/PA alpha,
+   RGBa/RGBX/CMYK's fourth byte and typed scalar bytes. Already-premultiplied La
+   bypasses another alpha round trip.
+2. Correct CPU filtered geometry: an unexpanded non-square 90/270-degree
+   rotation uses the affine sampler, PA uses the ordinary half-pixel offset,
+   and I;16 follows the reference's sample ABI. Nearest copies complete u16
+   samples using floating-point center coordinates; filtered I;16 samples the
+   first width bytes of each two-byte row and writes only the first byte of
+   each output sample, retaining the other fill byte. This surprising behavior
+   is present in Pillow's Geometry.c and is not treated as a test defect.
+3. Correct SIMD center mapping, bounds and ordered bilinear arithmetic; reuse
+   GPU's exact binary64 projective sampler by lowering filtered rotation to an
+   affine map with denominator one. Geometry preparation remains host work;
+   pixel interpolation stays on the GPU. Native backend proof is separate from
+   fallback parity.
+4. Preserve each typed interpolation intermediate: F subtraction rounds in f32
+   before widening, while I uses wrapping i32 subtraction and separate
+   multiply/add. Preserve fused byte/F arithmetic on targets where wide's
+   mul_add would otherwise split it. Make the lowered GPU default fill explicitly
+   zero in every band, including RGBX padding and empty-source fallback.
+
+The source contract was checked against Pillow 12.2.0's Image.rotate wrapper and
+[Geometry.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Geometry.c).
+
+The final Rotate cohort passes **930/930** exact comparisons. Strict native
+bilinear runs pass **72/72** comparisons across SIMD/GPU, and strict native GPU
+bicubic passes **36/36**, covering nine logical modes without fallback. The
+shared affine Transform cohort passes **2,241/2,241** comparisons; that receipt
+precedes the final Rotate-only typed helper and fill-lowering changes. Receipts:
+
+- `build/migration-parity/perf-rotate-20260925-checkpoint-parity.json`
+- `build/migration-parity/perf-rotate-20260925-checkpoint-strict-parity.json`
+- `build/migration-parity/perf-rotate-20260925-checkpoint-cubic-strict-parity.json`
+- `build/migration-parity/perf-transform-20260925-rotate-shared-parity.json`
+
+The unchanged ten-workload checkpoint is
+`migration-benchmark-e3a27269fe3940ccbebea447d91acfa6`, retained as
+`build/migration-parity/perf-rotate-20260925-checkpoint.json`. All 27 backend
+receipts for the nine materialized workloads report completed execution on the
+requested backend without fallback. The standard row only builds a lazy result.
+Selected medians in milliseconds on the Apple M3 Pro:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16 × 16 materialized | 0.015917 | 0.013938 | 0.015417 | 0.329521 |
+| RGB 32 × 24 | 0.013626 | 0.013855 | 0.016146 | 0.298208 |
+| RGB 32 × 32 | 0.013646 | 0.014605 | 0.018917 | 0.293751 |
+| RGB 256 × 256 | 0.083604 | 0.251209 | 0.345729 | 0.450146 |
+| RGB 1024 × 768 | 1.253251 | 1.042833 | 4.048084 | 1.769626 |
+| RGBA 1024 × 768 | 2.237209 | 1.549688 | 7.340833 | 2.627646 |
+| Loaded RGB JPEG ten-operation pipeline | 3.412229 | 3.868229 | 3.724000 | 3.259062 |
+| Loaded RGBA PNG ten-operation pipeline | 3.424500 | 3.833980 | 3.759709 | 5.721646 |
+
+Five of nine materialized rows miss CPU ≤ Pillow, all nine miss the SIMD 5×
+goal, and six miss GPU ≤ SIMD. Including the lazy row gives 5/10, 10/10 and
+6/10 misses respectively. These short diagnostic timings do not establish
+significant speed changes. The basic workloads mostly use nearest rotation and
+uniform pixels, so they do not measure the repaired varied-pixel filtered
+kernels. No real changing-input sustained throughput run was made for Rotate;
+the benchmark's reciprocal-latency field does not satisfy that requirement.
+Rotate remains incomplete, and the campaign still has no operation with every
+parity/performance/throughput target demonstrated.
+
+Concrete blockers and next-visit decisions:
+
+- **SIMD nearest work:** the current loop divides/modulos a flattened output
+  index for every pixel, multiplies fixed-point coordinates per lane, performs
+  scalar gathers, then constructs a byte vector that is immediately unpacked.
+  Investigate row traversal with coordinate increments and useful packed
+  coordinate arithmetic; inspect assembly before crediting vector execution.
+  Preserve the distinct floating-coordinate contract for I;16 nearest. Its
+  current accelerated admission still needs boundary-focused proof.
+- **CPU overhead:** ordinary rotation clones the source before a read-only
+  sampler when no premultiplication is needed. Borrow that buffer, then measure
+  row scheduling versus useful pixel work, especially the 256 × 256 crossover.
+  Do not attribute small timing movements from the parity repairs to this
+  unimplemented optimization.
+- **Filtered GPU cost:** the reused exact kernel has 13 geometry words per
+  output pixel (52 bytes before image traffic), host table construction and
+  software binary64 arithmetic. Measure the complete filtered path; replace
+  per-pixel geometry uploads with a compact exact coordinate plan only when
+  source selection and evaluation order remain identical. Native support for
+  La, I and I;16 filtered rotation remains incomplete.
+- **Small requests and pipelines:** approximately 0.3 ms GPU completion cost
+  dominates tiny requests. Measure allocation, transfers, mapping and host
+  output creation, then fresh concurrent completion throughput. Keep all of
+  these costs inside the comparison boundary.
+- **Proof still missing:** varied-input performance, real throughput, broader
+  typed/extreme/tail cases, other hardware and bindings, and the complete
+  operation matrix refresh. The focused passing cohorts are not universal
+  parity or acceleration declarations.
+
+The skill records the reusable decisions about intermediate types, geometric
+fast-path predicates, storage ABI, exact kernel reuse and parameter traffic.
+The fixture index now contains 12,022 cases, 24 static plans, 773 benchmark
+workloads and 54 suites. No coverage was collected. Pre-push Rust, docs and
+cross-runtime checks remain pending. Four attempts are checkpointed; the next
+operation is Transform, starting with its unchanged benchmark and the existing
+shared-parity receipt.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose

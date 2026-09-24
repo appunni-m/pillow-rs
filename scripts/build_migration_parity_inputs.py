@@ -39849,6 +39849,63 @@ def build_nuanced_cases(
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
+    cases.extend(rotate_mode_parity_cases(surface_id))
+    return cases
+
+
+
+def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Expose native sample bytes, alpha, edge coordinates and fill semantics."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    cases = []
+    modes = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "I": 4, "F": 4,
+             "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+    width, height = 17, 11
+    for mode, channels in modes.items():
+        rng = random.Random(f"rotate-modes-{mode}")
+        if mode == "I":
+            raw = b"".join(struct.pack("<i", rng.randrange(-100000, 100000))
+                           for _ in range(width * height))
+        elif mode == "F":
+            raw = b"".join(struct.pack("<f", rng.uniform(-1000, 1000))
+                           for _ in range(width * height))
+        else:
+            raw = rng.randbytes(width * height * channels)
+        assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                   "data": base64.b64encode(raw).decode("ascii"),
+                   "sha256": hashlib.sha256(raw).hexdigest(),
+                   "media_type": "application/octet-stream"}]
+        fill = (173 if channels == 1 or mode in ("I", "F") or mode.startswith("I;16")
+                else [173, 127] if channels == 2
+                else [17, 83, 149] if channels == 3 else [17, 83, 149, 127])
+        parameters = (
+            ("arbitrary", {"angle": 37.5}),
+            ("expanded", {"angle": 37.5, "expand": True}),
+            ("right-angle", {"angle": 90, "expand": False}),
+            ("custom", {"angle": 13.25, "center": [2.25, 7.0],
+                        "translate": [-1.5, 2.25], "fillcolor": fill}),
+        )
+        for resample in (0, 2, 3):
+            for name, arguments in parameters:
+                steps = [
+                    {"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+                     "receiver": None, "arguments": {"mode": literal(mode),
+                     "size": literal([width, height]), "data": asset_value("pixels")}},
+                    {"step_id": "call", "surface": surface_id, "operation": "rotate",
+                     "receiver": binding("image"), "arguments": {"resample": literal(resample),
+                     **{key: literal(value) for key, value in arguments.items()}}},
+                    {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ]
+                cases.append({
+                    "case_id": f"{surface_id}.rotate.nuanced.modes-{mode}-{resample}-{name}",
+                    "surface": surface_id, "operation": "rotate",
+                    "covers": [f"{surface_id}.rotate.behavior.default"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
     return cases
 
 

@@ -195,7 +195,28 @@ impl Image {
         } else {
             requested_filter
         };
-        let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &source_mode)?;
+        // Pillow rotate delegates filling to transform's image constructor.
+        // Reuse its mode-aware raw sample rules, including the fourth CMYK /
+        // RGBa / RGBX byte and both bytes of typed scalar samples.
+        let fillcolor = match fillcolor {
+            ImageOpsColor::None => None,
+            color => {
+                use crate::ops::transform::TransformFill;
+                let fill = match color {
+                    ImageOpsColor::Scalar(value) => TransformFill::Scalar(value),
+                    ImageOpsColor::Components(values) => TransformFill::Components(values),
+                    ImageOpsColor::Name(name) => TransformFill::Name(name),
+                    ImageOpsColor::Invalid => TransformFill::Invalid,
+                    ImageOpsColor::None => unreachable!(),
+                };
+                let (fill, _) = self.public_transform_fill(Some(fill))?;
+                Some(if matches!(source_mode.as_str(), "LA" | "La" | "PA") {
+                    (fill.0, fill.0, fill.0, fill.1)
+                } else {
+                    fill
+                })
+            }
+        };
         let center_truthy = center.is_truthy();
         let translate_truthy = translate.is_truthy();
         if center_truthy || translate_truthy {
