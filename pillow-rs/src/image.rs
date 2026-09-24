@@ -1401,7 +1401,7 @@ impl Image {
                 height,
                 crate::raster::Luma([color.0]),
             )),
-            "LA" => DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::from_pixel(
+            "LA" | "La" => DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::from_pixel(
                 width,
                 height,
                 crate::raster::LumaA([color.0, color.3]),
@@ -1477,6 +1477,7 @@ impl Image {
                 | "I"
                 | "F"
                 | "RGBa"
+                | "La"
                 | "RGBX"
                 | "PA"
                 | "1"
@@ -1581,7 +1582,7 @@ impl Image {
             "L" => FromBytesMode::L,
             // Pillow's Unpack.c PA/PA entry uses unpackLA for byte pairs. Keep
             // the physical LA layout without interpreting indices as luma.
-            "LA" | "PA" => FromBytesMode::LA,
+            "LA" | "La" | "PA" => FromBytesMode::LA,
             "I;16" | "I;16L" | "I;16B" | "I;16N" => FromBytesMode::L16,
             "RGB" => FromBytesMode::RGB,
             "RGBA" | "RGBa" | "RGBX" => FromBytesMode::RGBA,
@@ -1734,7 +1735,7 @@ impl Image {
             | FromBytesMode::I
             | FromBytesMode::F => Some(mode.to_string()),
             FromBytesMode::RGBA if matches!(mode, "RGBa" | "RGBX") => Some(mode.to_string()),
-            FromBytesMode::LA if mode == "PA" => Some(mode.to_string()),
+            FromBytesMode::LA if matches!(mode, "La" | "PA") => Some(mode.to_string()),
             FromBytesMode::L16 => Some(mode.to_string()),
             FromBytesMode::L
             | FromBytesMode::LA

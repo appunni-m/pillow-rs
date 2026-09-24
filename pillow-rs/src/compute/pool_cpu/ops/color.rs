@@ -21,7 +21,7 @@ pub fn op_convert(
     source_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     match mode {
-        ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?)),
+        ColorMode::L => super::imageops::op_grayscale(img, source_mode),
         ColorMode::LA => {
             let gray = pil_grayscale(img)?;
             let (w, h) = gray.dimensions();

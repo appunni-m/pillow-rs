@@ -106,6 +106,20 @@ with default scale 1 and offset 0. Their input sequence, window policy, and
 auxiliary-transfer checks are identical; each operation uses a distinct output
 path.
 
+Use `--operation grayscale` for fresh L/RGB inputs producing L output under
+the same window policy. GPU receipts check the full multichannel input upload
+and the smaller output readback separately. For exhaustive RGB arithmetic
+parity after `make build-parity`, run:
+
+```sh
+.venv/bin/python scripts/test_grayscale_rgb_domain.py \
+  --output-dir build/migration-parity/grayscale-rgb-domain
+```
+
+This diagnostic compares all 16,777,216 RGB triples with isolated live Pillow,
+requires native CPU/SIMD/GPU execution, and retains actual output bytes and
+binary identities. It does not measure throughput or collect coverage.
+
 For the fixed release-acceptance cohort:
 
 ```sh

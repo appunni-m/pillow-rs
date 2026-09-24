@@ -124005,6 +124005,1348 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-0",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                3
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-1",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC",
+          "sha256": "813480fcb4b137d10095041665c31a581f52cc7b4ea5012c0e74e11c0fbae1c8",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-7",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/",
+          "sha256": "0b2a1211e8a7094e669f7ae73a2a6dbf4b21c14313c52cf07528e4d5fa980c58",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                7,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-15",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/EUBvAFqJuAGj0gEC7BtKfzVkk4B+rdz+x/Yl/xA/bgBZiLcBotEAAusaSX80Y5KAfazb/sb1JP8PPm0AWIe2AaHQ/wLqGUh/M2KRgHyr2v7F9CP/Dj1sAFeGtQGgz/4C",
+          "sha256": "895d542deb133130fd92f5e36b98254e447df85b3516304d0796a23673b8e754",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                15,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-16",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/EUBvAFqJuAGj0gEC7BtKfzVkk4B+rdz+x/Yl/xA/bgBZiLcBotEAAusaSX80Y5KAfazb/sb1JP8PPm0AWIe2AaHQ/wLqGUh/M2KRgHyr2v7F9CP/Dj1sAFeGtQGgz/4C6RhHfzJhkIB7qtn+",
+          "sha256": "8ea633c1e9166b7eb49be045e282311b2032c0d9afd80f8c4534fcb300a17082",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-17",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/EUBvAFqJuAGj0gEC7BtKfzVkk4B+rdz+x/Yl/xA/bgBZiLcBotEAAusaSX80Y5KAfazb/sb1JP8PPm0AWIe2AaHQ/wLqGUh/M2KRgHyr2v7F9CP/Dj1sAFeGtQGgz/4C6RhHfzJhkIB7qtn+xPMi/w08awBWhbQB",
+          "sha256": "bdc6befcbb54b3c30b1ce358a2785a47a8e800fa95ba1ae05bc65c610e4dc42f",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                17,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-31",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/EUBvAFqJuAGj0gEC7BtKfzVkk4B+rdz+x/Yl/xA/bgBZiLcBotEAAusaSX80Y5KAfazb/sb1JP8PPm0AWIe2AaHQ/wLqGUh/M2KRgHyr2v7F9CP/Dj1sAFeGtQGgz/4C6RhHfzJhkIB7qtn+xPMi/w08awBWhbQBn879AugXRn8xYI+AeqnY/sPyIf8MO2oAVYSzAZ7N/ALnFkV/MF+OgHmo1/7C8SD/CzppAFSDsgGdzPsC5hVEfy9ejYB4p9b+wfAf/wo5aABTgrEBnMv6AuUUQ38uXYyAd6bV/sDvHv8JOGcAUoGwAZvK+QLkE0J/LVyLgHal1P6/7h3/CDdmAFGArwGayfgC4xJBfyxbioB1pNP+vu0c/wc2ZQBQf64B",
+          "sha256": "b3ec4505c6b31a1f8a3b6d37b8480cd94463cd3d25a9f7b22545b25e961e340f",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                31,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-32",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/EUBvAFqJuAGj0gEC7BtKfzVkk4B+rdz+x/Yl/xA/bgBZiLcBotEAAusaSX80Y5KAfazb/sb1JP8PPm0AWIe2AaHQ/wLqGUh/M2KRgHyr2v7F9CP/Dj1sAFeGtQGgz/4C6RhHfzJhkIB7qtn+xPMi/w08awBWhbQBn879AugXRn8xYI+AeqnY/sPyIf8MO2oAVYSzAZ7N/ALnFkV/MF+OgHmo1/7C8SD/CzppAFSDsgGdzPsC5hVEfy9ejYB4p9b+wfAf/wo5aABTgrEBnMv6AuUUQ38uXYyAd6bV/sDvHv8JOGcAUoGwAZvK+QLkE0J/LVyLgHal1P6/7h3/CDdmAFGArwGayfgC4xJBfyxbioB1pNP+vu0c/wc2ZQBQf64Bmcj3AuIRQH8rWomA",
+          "sha256": "1254e31530e332c1d5b93b453a487a3c2f9a8e8805baa0c5048c8be1b4726178",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                32,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-RGBa-33",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FENyAF2MuwGm1QQC7x5NfzhnloCBsN/+yvko/xNCcQBci7oBpdQDAu4dTH83ZpWAgK/e/sn4J/8SQXAAW4q5AaTTAgLtHEt/NmWUgH+u3f7I9yb/EUBvAFqJuAGj0gEC7BtKfzVkk4B+rdz+x/Yl/xA/bgBZiLcBotEAAusaSX80Y5KAfazb/sb1JP8PPm0AWIe2AaHQ/wLqGUh/M2KRgHyr2v7F9CP/Dj1sAFeGtQGgz/4C6RhHfzJhkIB7qtn+xPMi/w08awBWhbQBn879AugXRn8xYI+AeqnY/sPyIf8MO2oAVYSzAZ7N/ALnFkV/MF+OgHmo1/7C8SD/CzppAFSDsgGdzPsC5hVEfy9ejYB4p9b+wfAf/wo5aABTgrEBnMv6AuUUQ38uXYyAd6bV/sDvHv8JOGcAUoGwAZvK+QLkE0J/LVyLgHal1P6/7h3/CDdmAFGArwGayfgC4xJBfyxbioB1pNP+vu0c/wc2ZQBQf64Bmcj3AuIRQH8rWomAdKPS/r3sG/8GNWQA",
+          "sha256": "f246481e6b75b975097ed6cf51de157af6fde360bad338a622601676d970e439",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                33,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-0",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                3
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-1",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC",
+          "sha256": "116555f2f8393c4cbfb70d591c9e4af37e5ceefbd9fc37a7d8016051f365606a",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-7",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/",
+          "sha256": "3f546f2b5c94193f5eb6a15664184149102c3947d64f7e24dcbc51066fc81564",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                7,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-15",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/EQBaAaMC7H81gH7+x/8QAFkBogLrfzSAff7G/w8AWAGhAup/M4B8/sX/DgBXAaAC",
+          "sha256": "cc688e2d9d7b2b3aa1bf9b2aa66772eaa79ca49dded99cfd567016fd0f6275cc",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                15,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-16",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/EQBaAaMC7H81gH7+x/8QAFkBogLrfzSAff7G/w8AWAGhAup/M4B8/sX/DgBXAaAC6X8ygHv+",
+          "sha256": "61504376f3dd5aa439b577f08647537ebd6b6fab46eedb3a727e06b1d350176d",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-17",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/EQBaAaMC7H81gH7+x/8QAFkBogLrfzSAff7G/w8AWAGhAup/M4B8/sX/DgBXAaAC6X8ygHv+xP8NAFYB",
+          "sha256": "50f1be430b15ac70202d25188c3b47f6ecf3cf22c7f514798f3b6fd5f5c75527",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                17,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-31",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/EQBaAaMC7H81gH7+x/8QAFkBogLrfzSAff7G/w8AWAGhAup/M4B8/sX/DgBXAaAC6X8ygHv+xP8NAFYBnwLofzGAev7D/wwAVQGeAud/MIB5/sL/CwBUAZ0C5n8vgHj+wf8KAFMBnALlfy6Ad/7A/wkAUgGbAuR/LYB2/r//CABRAZoC438sgHX+vv8HAFAB",
+          "sha256": "c7c87d32bb5be726124cfcdee70ef3640da84a5413c46a42fe4bdf0f3f2fe1ee",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                31,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-32",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/EQBaAaMC7H81gH7+x/8QAFkBogLrfzSAff7G/w8AWAGhAup/M4B8/sX/DgBXAaAC6X8ygHv+xP8NAFYBnwLofzGAev7D/wwAVQGeAud/MIB5/sL/CwBUAZ0C5n8vgHj+wf8KAFMBnALlfy6Ad/7A/wkAUgGbAuR/LYB2/r//CABRAZoC438sgHX+vv8HAFABmQLifyuA",
+          "sha256": "2d82ca3f83c496d9655b31ce55630a4f66e2c71826054553e67017284477902c",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                32,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.grayscale.nuanced.grayscale-premultiplied-La-33",
+      "surface": "PIL.ImageOps",
+      "operation": "grayscale",
+      "covers": [
+        "PIL.ImageOps.grayscale.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "FABdAaYC7384gIH+yv8TAFwBpQLufzeAgP7J/xIAWwGkAu1/NoB//sj/EQBaAaMC7H81gH7+x/8QAFkBogLrfzSAff7G/w8AWAGhAup/M4B8/sX/DgBXAaAC6X8ygHv+xP8NAFYBnwLofzGAev7D/wwAVQGeAud/MIB5/sL/CwBUAZ0C5n8vgHj+wf8KAFMBnALlfy6Ad/7A/wkAUgGbAuR/LYB2/r//CABRAZoC438sgHX+vv8HAFABmQLifyuAdP69/wYA",
+          "sha256": "9b3378f7ffe9dec3d291949f4c7e44081afbf804b4155c10eb081f41c52f20a5",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "La"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                33,
+                3
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "grayscale",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "image"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "image",
+        "call",
+        "materialize"
+      ]
+    },
+    {
       "case_id": "pipeline-case.autocontrast.materialized-smoke",
       "surface": "PIL.ImageOps",
       "operation": "autocontrast",

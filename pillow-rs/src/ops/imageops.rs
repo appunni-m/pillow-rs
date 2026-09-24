@@ -634,9 +634,14 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
-/// materialization failures.
+/// Returns [`PilError::ValueError`] for Pillow's unsupported `La` to `L`
+/// conversion. Other materialization failures may be reported lazily.
 pub fn grayscale(image: &Image) -> Result<Image, PilError> {
+    if image.mode()? == "La" {
+        return Err(PilError::ValueError(
+            "conversion from La to L not supported".into(),
+        ));
+    }
     Ok(Image::push_op(image, PipelineOp::Grayscale))
 }
 

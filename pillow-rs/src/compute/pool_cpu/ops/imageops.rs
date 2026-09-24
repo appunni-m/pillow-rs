@@ -542,6 +542,14 @@ pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, Pi
 /// the new L-mode segment.
 pub fn op_grayscale(img: &DynamicImage, mode: Option<&str>) -> Result<DynamicImage, PilError> {
     let gray = match mode {
+        Some("La") => {
+            return Err(PilError::ValueError(
+                "conversion from La to L not supported".into(),
+            ));
+        }
+        // RGBa's fallback converter first restores RGB with integer division;
+        // alpha zero preserves the stored color and over-alpha samples clip.
+        Some("RGBa") => pil_grayscale(&crate::ops::pil_resize::unpremultiply_alpha(img))?,
         Some("I") => match crate::color::i_to_l(img) {
             DynamicImage::ImageLuma8(gray) => gray,
             _ => unreachable!("i_to_l always returns L mode"),

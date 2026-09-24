@@ -36,6 +36,10 @@ transpose default, stimulus, receipt rules, and timing policy are unchanged.
 under the same policy. It uses the full-range tile, preserves dimensions,
 and requires one public operation and one GPU dispatch per request.
 
+``--operation grayscale`` uses that same policy, producing L bytes from
+L/RGB inputs. GPU receipts must account for the complete multichannel input
+upload as well as the smaller L readback.
+
 ``--operation add`` and ``--operation subtract`` use the same two-image policy
 with default scale/offset.
 
@@ -165,6 +169,10 @@ def result_size(plan: dict[str, Any]) -> list[int]:
     return list(reversed(plan["size"]) if plan.get("operation", "transpose") == "transpose" else plan["size"])
 
 
+def result_mode(plan: dict[str, Any]) -> str:
+    return "L" if plan.get("operation") == "grayscale" else plan["mode"]
+
+
 def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             frame_id: int, request_id: int) -> dict[str, Any]:
     if core is not None:
@@ -176,6 +184,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].equalize(image)
         elif plan.get("operation") == "invert":
             image = plan["imageops_api"].invert(image)
+        elif plan.get("operation") == "grayscale":
+            image = plan["imageops_api"].grayscale(image)
         elif plan.get("operation") in ("blend", "add", "subtract"):
             other_data = plan["pair_inputs"][(frame_id + 1) % len(plan["pair_inputs"])]
             other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
@@ -205,7 +215,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
                 "error": f"{type(error).__name__}: {error}"}
 
 
-def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = "transpose") -> str | None:
+def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = "transpose",
+                  input_byte_count: int | None = None) -> str | None:
     if subject == "Pillow":
         return None
     backend = subject.removeprefix("python-")
@@ -223,7 +234,8 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         expected_dispatches = 4 if operation == "equalize" else 1
         if receipt.get("dispatch_count") != expected_dispatches:
             return f"GPU receipt does not contain {expected_dispatches} {operation} dispatch(es)"
-        if resource.get("upload_bytes", 0) < byte_count or resource.get("readback_bytes", 0) < byte_count:
+        upload_bytes = byte_count if input_byte_count is None else input_byte_count
+        if resource.get("upload_bytes", 0) < upload_bytes or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
         if operation in ("blend", "add", "subtract") and resource.get("auxiliary_bytes", 0) < byte_count:
             return "GPU binary-operation receipt does not account for the second image"
@@ -269,12 +281,13 @@ def window(executor: ThreadPoolExecutor, depth: int, image_api: Any, core: Any,
             continue
         frame_id = record["frame_id"]
         expected = references[frame_id]
-        same = (record["mode"] == plan["mode"]
+        same = (record["mode"] == result_mode(plan)
                 and record["size"] == result_size(plan)
                 and isinstance(output, bytes) and output == expected)
         record["exact_match"] = same
         record["reference_sha256"] = reference_metadata[frame_id]["sha256"]
-        error = receipt_error(subject, record["receipt"], len(expected), plan.get("operation", "transpose"))
+        error = receipt_error(subject, record["receipt"], len(expected),
+                              plan.get("operation", "transpose"), plan["frames"][frame_id]["length"])
         if not same:
             error = "output bytes, mode or dimensions differ from live Pillow"
             if isinstance(output, bytes):
@@ -320,7 +333,7 @@ def child(args: argparse.Namespace) -> int:
     subject = args.child_subject
     identity = parity.side_identity("source" if subject == "Pillow" else "target")
     image_api = importlib.import_module("PIL.Image")
-    if plan.get("operation") in ("equalize", "invert"):
+    if plan.get("operation") in ("equalize", "invert", "grayscale"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
     if plan.get("operation") in ("blend", "add", "subtract"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
@@ -342,7 +355,7 @@ def child(args: argparse.Namespace) -> int:
             if result["status"] != "completed":
                 raise RuntimeError(f"live Pillow reference failed: {result}")
             output = result.pop("output")
-            if result["mode"] != plan["mode"] or result["size"] != result_size(plan):
+            if result["mode"] != result_mode(plan) or result["size"] != result_size(plan):
                 raise RuntimeError("unexpected live Pillow output mode/dimensions")
             path = reference_path.parent / f"reference-{frame_id:02d}.bin"
             path.write_bytes(output)
@@ -353,7 +366,7 @@ def child(args: argparse.Namespace) -> int:
     metadata = json.loads(reference_path.read_text())
     if (len(metadata) != FRAMES
             or [item["frame_id"] for item in metadata] != list(range(FRAMES))
-            or any(item["mode"] != plan["mode"] or item["size"] != result_size(plan)
+            or any(item["mode"] != result_mode(plan) or item["size"] != result_size(plan)
                    for item in metadata)):
         raise RuntimeError("live Pillow reference inventory is incomplete or incompatible")
     references = [Path(item["path"]).read_bytes() for item in metadata]
@@ -434,7 +447,7 @@ def run(args: argparse.Namespace) -> int:
     operation = args.operation
     defaults = ["RGB", "RGBA"] if operation == "transpose" else ["L", "RGB"]
     modes = list(dict.fromkeys(args.mode or defaults))
-    if operation in ("equalize", "invert") and any(mode not in ("L", "RGB") for mode in modes):
+    if operation in ("equalize", "invert", "grayscale") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
     before = source_identity()
     result: dict[str, Any] = {
@@ -529,7 +542,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "blend", "add", "subtract"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "add", "subtract"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

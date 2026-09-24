@@ -39846,6 +39846,51 @@ def build_nuanced_cases(
     cases.extend(blend_rounding_parity_cases(surface_id))
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
+    cases.extend(grayscale_premultiplied_parity_cases(surface_id))
+    return cases
+
+
+def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Keep premultiplied storage distinct from RGBA/LA, including errors."""
+    if surface_id not in ("PIL.ImageOps", "PIL.Image.Image"):
+        return []
+    operation = "grayscale" if surface_id == "PIL.ImageOps" else "convert"
+    cases = []
+    for mode, channels in (("RGBa", 4), ("La", 2)):
+        for width in (0, 1, 7, 15, 16, 17, 31, 32, 33):
+            # Include zero alpha, opaque alpha, division boundaries, and
+            # samples above alpha. The live oracle determines all outputs.
+            alphas = (0, 1, 2, 127, 128, 254, 255)
+            data = bytes(value for pixel in range(width * 3) for value in (
+                *((pixel * 73 + channel * 47 + 20) % 256
+                  for channel in range(channels - 1)),
+                alphas[pixel % len(alphas)],
+            ))
+            assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                       "data": base64.b64encode(data).decode("ascii"),
+                       "sha256": hashlib.sha256(data).hexdigest(),
+                       "media_type": "application/octet-stream"}]
+            arguments = {"mode": literal(mode), "size": literal([width, 3])}
+            if width:
+                arguments["data"] = asset_value("pixels")
+            steps = [
+                {"step_id": "image", "surface": "PIL.Image",
+                 "operation": "frombytes" if width else "new", "receiver": None,
+                 "arguments": arguments},
+                {"step_id": "call", "surface": surface_id, "operation": operation,
+                 "receiver": binding("image") if operation == "convert" else None,
+                 "arguments": {"mode": literal("L")} if operation == "convert"
+                 else {"image": binding("image")}},
+                {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+                 "receiver": binding("call"), "arguments": {}},
+            ]
+            cases.append({
+                "case_id": f"{surface_id}.{operation}.nuanced.grayscale-premultiplied-{mode}-{width}",
+                "surface": surface_id, "operation": operation,
+                "covers": [f"{surface_id}.{operation}.behavior.default"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                "steps": steps, "observations": ["image", "call", "materialize"],
+            })
     return cases
 
 
