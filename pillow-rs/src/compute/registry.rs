@@ -358,47 +358,6 @@ pub(crate) fn gpu_sharpness_factor_int(factor: f64) -> Option<u32> {
     Some(factor_int)
 }
 
-/// Return the fixed-point factor when the Contrast WGSL blend is exact for
-/// every possible image midpoint and byte sample. Pillow computes the
-/// midpoint from the source image in scalar control code, then evaluates the
-/// per-channel blend in f64. The shader receives that midpoint and uses the
-/// same integer numerator; proving the complete byte domain here prevents a
-/// f32 or signed-division rounding difference from being presented as GPU
-/// parity.
-#[cfg(feature = "gpu")]
-pub(crate) fn gpu_contrast_factor_int(factor: f64) -> Option<u32> {
-    if !factor.is_finite() {
-        return None;
-    }
-    let scaled = factor * 1000.0;
-    if !scaled.is_finite() || scaled < f64::from(i32::MIN) || scaled > f64::from(i32::MAX) {
-        return None;
-    }
-    let factor_int = scaled as i32;
-    if f64::from(factor_int) != scaled {
-        return None;
-    }
-    // Bound the signed WGSL numerator for every midpoint/sample pair.
-    let max_factor = i64::from(i32::MAX) / 255;
-    let min_factor = i64::from(i32::MIN) / 255;
-    if i64::from(factor_int) > max_factor.saturating_sub(1000)
-        || i64::from(factor_int) < min_factor.saturating_add(1000)
-    {
-        return None;
-    }
-    for mean in 0..=255_i32 {
-        for sample in 0..=255_i32 {
-            let cpu = (f64::from(mean) + factor * f64::from(sample - mean)).clamp(0.0, 255.0) as u8;
-            let numerator = mean * (1000 - factor_int) + sample * factor_int;
-            let shader = numerator.div_euclid(1000).clamp(0, 255) as u8;
-            if cpu != shader {
-                return None;
-            }
-        }
-    }
-    Some(factor_int as u32)
-}
-
 /// Convert Pillow's f32 offset to the integer representation used by WGSL.
 ///
 /// The shader ABI carries this value as an i32. Fractional, non-finite, and
@@ -641,7 +600,7 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         | PipelineOp::EqualizeMasked { .. } => true,
         // Contrast receives Pillow's image-wide midpoint from scalar control
         // code and performs the channel blend in the real WGSL data path.
-        PipelineOp::Contrast { factor } => gpu_contrast_factor_int(*factor).is_some(),
+        PipelineOp::Contrast { factor } => gpu_blend_alpha_params(*factor).is_some(),
         // The convolution shaders are exact for bounded kernels whose
         // normalized coefficients are integers: byte products and sums stay
         // exactly representable in f32, including Pillow's +0.5 bias. The
@@ -1051,9 +1010,9 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![gpu_brightness_factor_int(*factor).unwrap_or(0)]
         }
 
-        // ── Contrast: scalar-proven factor * 1000 ──
+        // ── Contrast: Pillow float32 blend factor ──
         PipelineOp::Contrast { factor } => {
-            vec![gpu_contrast_factor_int(*factor).unwrap_or(0)]
+            vec![gpu_blend_alpha_params(*factor).unwrap_or(0)]
         }
 
         // ── ColorSaturation: scalar-proven factor * 1000 ──

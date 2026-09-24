@@ -9407,51 +9407,8 @@ fn gpu_mode_after_ops(mut mode: u32, ops: &[PipelineOp]) -> u32 {
 /// by `contrast.wgsl`. CMYK keeps its C/M/Y/K interpretation instead of
 /// treating the fourth packed byte as alpha.
 fn gpu_contrast_mean(img: &DynamicImage, logical_mode: Option<&str>) -> Option<u8> {
-    let (channels, cmyk) = match (img, logical_mode) {
-        (DynamicImage::ImageLuma8(_), None | Some("L")) => (1usize, false),
-        (DynamicImage::ImageLumaA8(_), None | Some("LA")) => (2, false),
-        (DynamicImage::ImageRgb8(_), None | Some("RGB")) => (3, false),
-        (DynamicImage::ImageRgba8(_), None | Some("RGBA")) => (4, false),
-        (DynamicImage::ImageRgba8(_), Some("CMYK")) => (4, true),
-        _ => return None,
-    };
-    let pixels = usize::try_from(img.width())
-        .ok()?
-        .checked_mul(usize::try_from(img.height()).ok()?)?;
-    if pixels == 0 {
-        return None;
-    }
-    let expected = pixels.checked_mul(channels)?;
-    let source = img.as_bytes();
-    if source.len() != expected {
-        return None;
-    }
-    let sum = if cmyk {
-        source
-            .chunks_exact(4)
-            .map(|pixel| {
-                let c = u32::from(pixel[0]);
-                let m = u32::from(pixel[1]);
-                let y = u32::from(pixel[2]);
-                let k = u32::from(pixel[3]);
-                let nk = 255u32.saturating_sub(k);
-                let r = (nk as i32 - crate::color::muldiv255(c, nk) as i32).clamp(0, 255) as u8;
-                let g = (nk as i32 - crate::color::muldiv255(m, nk) as i32).clamp(0, 255) as u8;
-                let b = (nk as i32 - crate::color::muldiv255(y, nk) as i32).clamp(0, 255) as u8;
-                u64::from(crate::color::rgb_to_luma_u8(r, g, b))
-            })
-            .sum::<u64>()
-    } else {
-        source
-            .chunks_exact(channels)
-            .map(|pixel| match channels {
-                1 | 2 => u64::from(pixel[0]),
-                3 | 4 => u64::from(crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])),
-                _ => 0,
-            })
-            .sum::<u64>()
-    };
-    Some(((sum as f64 / pixels as f64) + 0.5) as u8)
+    let base = crate::ops::enhance::contrast_base(img, logical_mode)?;
+    (!img.as_bytes().is_empty()).then_some(base.mean)
 }
 
 /// Compute Contrast's midpoint after a narrowly provable host prefix.
@@ -12144,7 +12101,7 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
         // parameterization. The helper checks every byte result against
         // Pillow's f64 contract before a dispatch is admitted.
         PipelineOp::Brightness { factor } => registry::gpu_brightness_factor_int(*factor).is_some(),
-        PipelineOp::Contrast { factor } => registry::gpu_contrast_factor_int(*factor).is_some(),
+        PipelineOp::Contrast { factor } => registry::gpu_blend_alpha_params(*factor).is_some(),
         PipelineOp::ColorSaturation { factor } => {
             registry::gpu_color_saturation_factor_int(*factor).is_some()
         }
@@ -20909,6 +20866,54 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu, "{mode} actual backend");
             assert_eq!(telemetry.6, Some(2), "{mode} dispatch count");
             assert_eq!(telemetry.7, None, "{mode} fallback reason");
+        }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn contrast_kernels_match_constructor_blend_for_varied_pixels() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4), ("CMYK", 4)] {
+            let bytes: Vec<u8> = (0..17 * 11 * channels)
+                .map(|i| ((i * 73 + (i / 17) * 11 + 29) & 255) as u8)
+                .collect();
+            let source = Image::frombytes(mode, (17, 11), &bytes).expect("varied source");
+            let base = source.contrast_degenerate().expect("reference base");
+            for factor in [0.1, 0.3, 0.7, 0.99999999, 1.00000001, 1.2, -1.0, 3.33333] {
+                let expected = crate::ops::module_fns::blend(&base, &source, factor)
+                    .expect("reference blend")
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .expect("reference bytes");
+                for backend in [Backend::Cpu, Backend::Simd, Backend::Gpu] {
+                    Backend::take_pipeline_telemetry();
+                    let actual = source
+                        .enhance_contrast(factor)
+                        .expect("native contrast")
+                        .use_backend(backend)
+                        .tobytes();
+                    let actual = match actual {
+                        Ok(bytes) => bytes,
+                        Err(error)
+                            if backend == Backend::Gpu
+                                && (error.to_string().contains("GPU adapter not available")
+                                    || error
+                                        .to_string()
+                                        .contains("GPU device initialization failed")) =>
+                        {
+                            continue;
+                        }
+                        Err(error) => panic!("{mode} factor={factor} {backend:?}: {error}"),
+                    };
+                    assert_eq!(actual, expected, "{mode} factor={factor} {backend:?}");
+                    let receipt = Backend::take_pipeline_telemetry().expect("native receipt");
+                    assert_eq!(receipt.1, backend, "{mode} factor={factor}");
+                    assert_eq!(receipt.7, None, "{mode} factor={factor}");
+                    if backend == Backend::Gpu {
+                        assert_eq!(receipt.6, Some(1));
+                    }
+                }
+            }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }

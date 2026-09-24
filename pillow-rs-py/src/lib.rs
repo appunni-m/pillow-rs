@@ -1705,6 +1705,14 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn contrast_degenerate(&self, py: Python<'_>) -> PyResult<PyImage> {
+        let inner = self.inner.clone();
+        let rs = py
+            .detach(|| inner.contrast_degenerate())
+            .map_err(map_error)?;
+        Ok(PyImage { inner: rs })
+    }
+
     fn enhance_contrast(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
         let rs =

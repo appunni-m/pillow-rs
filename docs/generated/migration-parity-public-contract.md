@@ -19,7 +19,7 @@ statement_status: declared
 - Public surfaces: 24
 - Operations: 209
 - Requirements: 1801
-- Indexed parity cases: 12482
+- Indexed parity cases: 12725
 - Indexed coverage plans: 24
 - Indexed benchmark workloads: 773
 

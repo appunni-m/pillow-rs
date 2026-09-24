@@ -25,8 +25,13 @@ class Color(_Enhance):
 
 class Contrast(_Enhance):
     """Adjust contrast. 1.0 = unchanged, 0.0 = solid gray."""
+    def __init__(self, image: Image):
+        super().__init__(image)
+        self.degenerate = Image(image._rust_image.contrast_degenerate())
+
     def _apply(self, factor):
-        return self.image._rust_image.enhance_contrast(factor)
+        from . import _core
+        return _core.image_blend(self.degenerate._rust_image, self.image._rust_image, factor)
 
 
 class Sharpness(_Enhance):
