@@ -3974,8 +3974,8 @@ impl Image {
         // image-slash-star currently retains the container format but not
         // exact JPEG density or WebP frame timing. JPEG's 72-dpi fallback is
         // added only when retained EXIF provenance makes that Pillow result
-        // observable. Pillow exposes WebP's zero timing defaults in Image.info
-        // before pixel materialization, so preserve them on lazy image handles.
+        // observable. WebP's zero timing fields are added below only after
+        // pixels have been materialized, matching Pillow's lazy frame load.
         let mut fields = match format {
             Some(ImageFormat::Jpeg) => {
                 let mut fields = vec![
@@ -4038,15 +4038,20 @@ impl Image {
                 ),
             ],
             Some(ImageFormat::WebP) => {
-                vec![
+                let mut fields = vec![
                     ("loop".to_owned(), ImageInfoValue::Integer(1)),
                     (
                         "background".to_owned(),
                         ImageInfoValue::IntegerTuple(vec![255, 255, 255, 255]),
                     ),
-                    ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
-                    ("duration".to_owned(), ImageInfoValue::Integer(0)),
-                ]
+                ];
+                if self.is_materialized() {
+                    fields.extend([
+                        ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+                        ("duration".to_owned(), ImageInfoValue::Integer(0)),
+                    ]);
+                }
+                fields
             }
             _ => Vec::new(),
         };
@@ -6619,7 +6624,7 @@ mod compatibility_info_tests {
     use super::{Image, ImageInfoValue, PilError};
 
     #[test]
-    fn webp_timing_defaults_are_available_before_and_after_load() -> Result<(), PilError> {
+    fn webp_timing_defaults_appear_only_after_load() -> Result<(), PilError> {
         let mut image = Image::open_bytes(
             include_bytes!("../tests/fixtures/assets/image/rgb-small.webp").to_vec(),
         )?;
@@ -6630,7 +6635,11 @@ mod compatibility_info_tests {
 
         assert!(!image.is_materialized());
         let lazy_info = image.compatibility_info();
-        assert!(expected.iter().all(|field| lazy_info.contains(field)));
+        assert!(
+            lazy_info
+                .iter()
+                .all(|(key, _)| key != "timestamp" && key != "duration")
+        );
 
         image.load()?;
         let loaded_info = image.compatibility_info();

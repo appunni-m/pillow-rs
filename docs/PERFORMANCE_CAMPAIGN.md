@@ -24,6 +24,15 @@ The wider input corpus currently contains 11,035 parity cases, 24 coverage
 plans, and 768 benchmark workloads. Those counts describe indexed inputs, not
 fresh full-corpus evidence. No coverage collection was run for this campaign.
 
+The WASM metadata adapter needed a correction for retained `Image.info`
+references. Pillow 12.2.0 omits WebP `timestamp` and `duration` immediately
+after open, then adds them to the same dictionary during load. A workflow
+that captures that dictionary before transpose observes the added fields
+when it serializes after transpose. An early adapter snapshot loses those
+updates. Keep the mutable mapping alive and synchronize actual decoder
+metadata; adding the fields to the Rust image before load changes the public
+behavior and is not a valid fix. The existing parity inputs remain unchanged.
+
 ## Current latency results
 
 The maintained RGB 1024 × 1024 quick pipeline has these median end-to-end
