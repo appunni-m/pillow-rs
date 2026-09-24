@@ -230,6 +230,46 @@ No font-variant performance target is complete. Related font metadata workloads
 also time font construction, so their shared loading bottleneck stays pending
 while the campaign gives the next image operation its bounded optimization visit.
 
+## Inversion visit
+
+The next visit covers `PIL.ImageOps.invert` and its mapped pipelines. All 46
+maintained workloads were measured without changing their policies (receipt
+`migration-benchmark-f0162ac92e9440378daba035278bb815`). For RGB 256 × 256,
+Pillow/CPU/SIMD/GPU medians were 0.118937/0.024230/0.102604/0.584146 ms.
+For RGB 1024 × 768 they were 1.269625/0.647584/0.613250/1.942063 ms.
+Single-sample long-chain rows remain noisy diagnostics; their declared policies
+were not changed. No inversion kernel optimization has been applied yet.
+
+Exact output comparison covered 85 public cases plus 43 mapped workflow cases
+on all three backends. It passed 381 of 384 comparisons. The failing workflow
+was `pipeline-chain.loaded-10.rgb-jpeg-512x384` on CPU, SIMD, and GPU. CPU/SIMD
+pixels were exact, but crop dropped all four JFIF metadata fields. On GPU the
+cropped result also differed in 8,539 bytes. The existing benchmark's successful
+execution gate did not detect these differences.
+
+Observing every intermediate step located metadata loss in crop's pipeline
+materialization boundary, where retained image information was explicitly set
+to `None`. The GPU pixel divergence begins at autocontrast, after inversion
+itself has matched Pillow. Its integer LUT mapping is not equivalent to Pillow's
+floating-point calculation: for a channel range of 164–255, input 255 becomes
+254 in Pillow and 255 in the shader. The exact rational result cannot substitute
+for the reference's floating-point rounding and truncation.
+
+Evidence is retained in `perf-invert-20260924-initial-parity.json`,
+`invert-loaded-jpeg-first-divergence-20260924.json`,
+`invert-loaded-jpeg-gpu-divergence-20260924.json`, and
+`invert-autocontrast-rounding-20260924.json`. Resolve these pipeline parity
+failures before accepting inversion speedups. The SIMD loop's repeated padding
+and copying of full vectors remains an untested performance hypothesis.
+
+Retaining source header information when materializing a pipeline fixes the
+crop metadata loss. The unchanged cohort then passes 383/384 comparisons:
+all CPU/SIMD cases pass, and GPU retains only the autocontrast pixel mismatch.
+The post-fix receipt is `perf-invert-20260924-crop-info-fix-parity.json`.
+A Rust regression covers JPEG metadata across invert followed by crop; it is
+added for the pre-push test run. Inversion's performance work remains gated on
+the composed pipeline's unresolved GPU parity failure.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose
