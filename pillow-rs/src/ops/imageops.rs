@@ -499,11 +499,27 @@ pub fn equalize(image: &Image) -> Result<Image, PilError> {
 
 /// Equalizes an image after validating an optional Pillow mask.
 pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, PilError> {
-    if matches!(&mask, ImageOpsMask::None) {
-        return equalize(image);
+    match mask {
+        ImageOpsMask::None => equalize(image),
+        ImageOpsMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
+            "'{type_name}' object has no attribute 'load'"
+        ))),
+        ImageOpsMask::Image(mask) => {
+            validate_imageops_mask(image, ImageOpsMask::Image(mask.clone()))?;
+            // Retain equalize's mode validation after mask validation, matching
+            // Pillow's histogram-before-LUT error order.
+            let mode = image.mode()?;
+            if mode != "L" && mode != "RGB" && mode != "P" {
+                return Err(PilError::OsError(format!("not supported for mode {mode}")));
+            }
+            Ok(Image::push_op(
+                image,
+                PipelineOp::EqualizeMasked {
+                    mask: Arc::new(*mask),
+                },
+            ))
+        }
     }
-    validate_imageops_mask(image, mask)?;
-    equalize(image)
 }
 
 /// Inverts all pixel values.

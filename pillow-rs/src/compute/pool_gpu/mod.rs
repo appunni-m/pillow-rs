@@ -5508,7 +5508,12 @@ impl GpuInner {
             }
 
             let op = &ops[index];
-            if matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize) {
+            if matches!(
+                op,
+                PipelineOp::Autocontrast { .. }
+                    | PipelineOp::Equalize
+                    | PipelineOp::EqualizeMasked { .. }
+            ) {
                 let clear = self.resolve_pipeline(
                     "__internal_histogram_clear",
                     "histogram_clear.wgsl",
@@ -5520,11 +5525,12 @@ impl GpuInner {
                         "autocontrast_histogram.wgsl",
                         include_str!("shaders/autocontrast_histogram.wgsl"),
                     )?,
-                    PipelineOp::Equalize => self.resolve_pipeline(
-                        "__internal_equalize_histogram",
-                        "equalize_histogram.wgsl",
-                        include_str!("shaders/equalize_histogram.wgsl"),
-                    )?,
+                    PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => self
+                        .resolve_pipeline(
+                            "__internal_equalize_histogram",
+                            "equalize_histogram.wgsl",
+                            include_str!("shaders/equalize_histogram.wgsl"),
+                        )?,
                     _ => unreachable!("histogram pipeline branch changed"),
                 };
                 let derive = match op {
@@ -5533,11 +5539,12 @@ impl GpuInner {
                         "autocontrast_cutoff.wgsl",
                         include_str!("shaders/autocontrast_cutoff.wgsl"),
                     )?,
-                    PipelineOp::Equalize => self.resolve_pipeline(
-                        "__internal_equalize_lut",
-                        "equalize_cdf.wgsl",
-                        include_str!("shaders/equalize_cdf.wgsl"),
-                    )?,
+                    PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => self
+                        .resolve_pipeline(
+                            "__internal_equalize_lut",
+                            "equalize_cdf.wgsl",
+                            include_str!("shaders/equalize_cdf.wgsl"),
+                        )?,
                     _ => unreachable!("histogram pipeline branch changed"),
                 };
                 let remap = self.resolve_pipeline(
@@ -6323,7 +6330,12 @@ impl GpuInner {
                 .ok_or_else(|| PilError::ValueError("GPU auxiliary arena size overflow".into()))?;
         }
 
-        if matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize) {
+        if matches!(
+            op,
+            PipelineOp::Autocontrast { .. }
+                | PipelineOp::Equalize
+                | PipelineOp::EqualizeMasked { .. }
+        ) {
             total = total
                 .checked_add(GPU_HISTOGRAM_BYTES)
                 .ok_or_else(|| PilError::ValueError("GPU histogram arena size overflow".into()))?;
@@ -6645,7 +6657,9 @@ impl GpuInner {
                 )?
             } else if matches!(
                 &ops[index],
-                PipelineOp::Autocontrast { .. } | PipelineOp::Equalize
+                PipelineOp::Autocontrast { .. }
+                    | PipelineOp::Equalize
+                    | PipelineOp::EqualizeMasked { .. }
             ) {
                 // Histogram-driven operations resolve to a multi-pass plan
                 // during encoding. Use the clear pass here because it has
@@ -6896,6 +6910,8 @@ impl GpuInner {
                     offset_x,
                     offset_y,
                 ]);
+            } else if matches!(op, PipelineOp::EqualizeMasked { .. }) {
+                params[3] = u32::from(auxiliary_images[index].third.is_some());
             } else if let PipelineOp::Autocontrast { cutoff, .. } = op {
                 let selected_pixels = gpu_autocontrast_selected_pixels(
                     cur_w,
@@ -7461,9 +7477,15 @@ impl GpuInner {
             "__internal_blur_v" => (output_dims.0, 1),
             "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
             "__internal_resize_v" => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
+            "__internal_equalize_histogram" => {
+                // About 16 packed pixels per lane amortizes each group's
+                // shared histogram. Cap groups to bound global bin merges;
+                // the shader grid-stride loop handles the remaining pixels.
+                let pixels = u64::from(input_dims.0) * u64::from(input_dims.1);
+                (pixels.div_ceil(4096).clamp(1, 256) as u32, 1)
+            }
             "__internal_histogram_clear"
             | "__internal_autocontrast_histogram"
-            | "__internal_equalize_histogram"
             | "__internal_autocontrast_lut"
             | "__internal_equalize_lut" => (1, 1),
             _ => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
@@ -9561,7 +9583,9 @@ fn extract_second_image(
 /// Returns shared materialized pixels ready for GPU upload.
 fn extract_third_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, PilError> {
     match op {
-        PipelineOp::CompositeModule { mask, .. } => mask.materialized_shared().map(Some),
+        PipelineOp::CompositeModule { mask, .. } | PipelineOp::EqualizeMasked { mask } => {
+            mask.materialized_shared().map(Some)
+        }
         PipelineOp::Paste { mask, .. } => mask
             .as_ref()
             .map(|image| image.materialized_shared())
@@ -9914,7 +9938,9 @@ fn gpu_dispatch_count(
             1
         } else if matches!(
             &ops[index],
-            PipelineOp::Autocontrast { .. } | PipelineOp::Equalize
+            PipelineOp::Autocontrast { .. }
+                | PipelineOp::Equalize
+                | PipelineOp::EqualizeMasked { .. }
         ) {
             // Histogram operations are one public step but four device
             // dispatches: clear, gather, LUT derivation, and remap.
@@ -11202,7 +11228,9 @@ fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> boo
         // for native L/RGB images.  Their scalar histogram control plane is
         // exact for those layouts; alpha and typed images have different
         // Pillow contracts and must be rejected before any GPU work starts.
-        PipelineOp::Autocontrast { .. } | PipelineOp::Equalize => !matches!(
+        PipelineOp::Autocontrast { .. }
+        | PipelineOp::Equalize
+        | PipelineOp::EqualizeMasked { .. } => !matches!(
             image,
             DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
         ),
@@ -11357,7 +11385,10 @@ fn gpu_auxiliary_modes_are_safe_for_color(
     current_color: crate::raster::ColorType,
     auxiliary: &AuxiliaryImages,
 ) -> bool {
-    if matches!(op, PipelineOp::Autocontrast { mask: Some(_), .. }) {
+    if matches!(
+        op,
+        PipelineOp::Autocontrast { mask: Some(_), .. } | PipelineOp::EqualizeMasked { .. }
+    ) {
         // ImageOps.autocontrast validates masks as mode 1/L. Both are
         // represented by the Luma8 transport, whose first byte is exactly the
         // nonzero selector consumed by the histogram gather shader.
@@ -14357,9 +14388,14 @@ impl GpuPool {
         // no-op without entering the device path or manufacturing a CPU
         // fallback receipt.
         if (img.width() == 0 || img.height() == 0)
-            && ops
-                .iter()
-                .all(|op| matches!(op, PipelineOp::Autocontrast { .. } | PipelineOp::Equalize))
+            && ops.iter().all(|op| {
+                matches!(
+                    op,
+                    PipelineOp::Autocontrast { .. }
+                        | PipelineOp::Equalize
+                        | PipelineOp::EqualizeMasked { .. }
+                )
+            })
         {
             crate::compute::record_pipeline_dispatch_count(0);
             return Ok(img.clone());
@@ -14458,7 +14494,7 @@ impl GpuPool {
                                 | PipelineOp::Resize {
                                     ..
                                 }
-                                | PipelineOp::Equalize
+                                | PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
                         )
                     }))
                 || gpu_palette_first_rgb_merge_is_supported(ops, mode)

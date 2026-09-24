@@ -136,7 +136,7 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::MinFilter { .. } => "MinFilter",
         PipelineOp::RankFilter { .. } => "RankFilter",
         PipelineOp::Autocontrast { .. } => "Autocontrast",
-        PipelineOp::Equalize => "Equalize",
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => "Equalize",
         PipelineOp::Invert => "Invert",
         PipelineOp::Flip => "Flip",
         PipelineOp::Mirror => "Mirror",
@@ -674,7 +674,9 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // expands them into their histogram/control/LUT/remap pass sequence.
         // The operation-level registry cannot inspect the source image, so
         // mode, mask, and dimensions remain contextual preflight checks.
-        PipelineOp::Autocontrast { .. } | PipelineOp::Equalize => true,
+        PipelineOp::Autocontrast { .. }
+        | PipelineOp::Equalize
+        | PipelineOp::EqualizeMasked { .. } => true,
         // Contrast receives Pillow's image-wide midpoint from scalar control
         // code and performs the channel blend in the real WGSL data path.
         PipelineOp::Contrast { factor } => gpu_contrast_factor_int(*factor).is_some(),
@@ -879,6 +881,7 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
             | PipelineOp::Sharpness { .. }
             | PipelineOp::Autocontrast { .. }
             | PipelineOp::Equalize
+            | PipelineOp::EqualizeMasked { .. }
             | PipelineOp::Eval { .. }
             | PipelineOp::RemapPalette { .. }
             | PipelineOp::PutData { .. }
@@ -1430,7 +1433,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         PipelineOp::Autocontrast { cutoff, .. } => vec![(*cutoff as f32).to_bits()],
 
         // ── Equalize: no params ──
-        PipelineOp::Equalize => vec![],
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => vec![],
 
         // ── Color3DLut: size dims ──
         PipelineOp::Color3DLut { size, .. } => vec![size.0, size.1, size.2],
@@ -1477,9 +1480,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         execute_transpose,
     };
     use crate::compute::pool_cpu::ops::imageops::{
-        op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize, op_expand,
-        op_fit, op_flip, op_grayscale, op_invert, op_mirror, op_pad, op_posterize, op_scale,
-        op_solarize,
+        op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize,
+        op_equalize_with_mask, op_expand, op_fit, op_flip, op_grayscale, op_invert, op_mirror,
+        op_pad, op_posterize, op_scale, op_solarize,
     };
 
     // ── Geometry ──
@@ -1817,10 +1820,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                         return Err(PilError::OsError(format!("not supported for mode {m}")));
                     }
                 }
-                if matches!(op, PipelineOp::Equalize) {
-                    op_equalize(img)
-                } else {
-                    Err(PilError::ValueError("expected Equalize op".into()))
+                match op {
+                    PipelineOp::Equalize => op_equalize(img),
+                    PipelineOp::EqualizeMasked { mask } => op_equalize_with_mask(img, Some(mask)),
+                    _ => Err(PilError::ValueError("expected Equalize op".into())),
                 }
             },
             "equalize.wgsl"

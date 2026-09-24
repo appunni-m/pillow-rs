@@ -191,6 +191,11 @@ pub enum PipelineOp {
     },
     /// Equalize image histogram.
     Equalize,
+    /// Equalize using only nonzero mask pixels to construct the histogram.
+    EqualizeMasked {
+        /// A validated `1`/`L` mask; the resulting LUT applies to every pixel.
+        mask: Arc<Image>,
+    },
     /// Invert image channels.
     Invert,
     /// Flip image top-to-bottom.

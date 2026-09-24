@@ -251,6 +251,7 @@ PIPELINE_OP_BENCHMARK_SPECS: dict[str, PipelineBenchmarkSpec] = {
     "RankFilter": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.nuanced.f-mode-rank-filter"),
     "Autocontrast": PipelineBenchmarkSpec("PIL.ImageOps", "autocontrast", "PIL.ImageOps.autocontrast.behavior.default"),
     "Equalize": PipelineBenchmarkSpec("PIL.ImageOps", "equalize", "PIL.ImageOps.equalize.behavior.default"),
+    "EqualizeMasked": PipelineBenchmarkSpec("PIL.ImageOps", "equalize", "PIL.ImageOps.equalize.nuanced.histogram-mask-l-l-half"),
     "Invert": PipelineBenchmarkSpec("PIL.ImageOps", "invert", "PIL.ImageOps.invert.behavior.default"),
     "Flip": PipelineBenchmarkSpec("PIL.ImageOps", "flip", "PIL.ImageOps.flip.behavior.default"),
     "Mirror": PipelineBenchmarkSpec("PIL.ImageOps", "mirror", "PIL.ImageOps.mirror.behavior.default"),
@@ -39839,6 +39840,64 @@ def build_nuanced_cases(
     cases.extend(transpose_tiled_parity_cases(surface_id))
     cases.extend(constructor_and_raw_export_parity_cases(surface_id))
     cases.extend(filtered_alpha_transform_parity_cases(surface_id))
+    cases.extend(equalize_mask_parity_cases(surface_id))
+    return cases
+
+
+def equalize_mask_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise histogram selection with nonuniform pixels and nonbinary masks.
+
+    Uniform images conceal a discarded mask because both LUTs are identities.
+    Keep all outputs live: these fixtures contain only image and mask inputs.
+    """
+    if surface_id != "PIL.ImageOps":
+        return []
+    cases = []
+    for mode in ("L", "RGB", "P"):
+        data = random.Random(713).randbytes(64 * 64 * (3 if mode == "RGB" else 1))
+        for mask_mode in ("L", "1"):
+            for pattern in ("empty", "full", "alternating", "half"):
+                selected = [0 if pattern == "empty" else 1 if pattern == "full"
+                            else i % 2 if pattern == "alternating" else int(i < 2048)
+                            for i in range(64 * 64)]
+                if mask_mode == "1":
+                    mask = bytes(sum(selected[i + bit] << (7 - bit) for bit in range(8))
+                                 for i in range(0, len(selected), 8))
+                else:
+                    # Every nonzero byte selects one sample; 1 is not a weight.
+                    mask = bytes(selected)
+                assets = [{"id": name, "kind": "inline", "encoding": "base64",
+                           "data": base64.b64encode(raw).decode("ascii"),
+                           "sha256": hashlib.sha256(raw).hexdigest(),
+                           "media_type": "application/octet-stream"}
+                          for name, raw in (("image", data), ("mask", mask))]
+                steps = [{"step_id": name, "surface": "PIL.Image", "operation": "frombytes",
+                          "receiver": None, "arguments": {"mode": literal(image_mode),
+                          "size": literal([64, 64]), "data": {"kind": "asset", "asset_id": name}}}
+                         for name, image_mode in (("image", mode), ("mask", mask_mode))]
+                if mode == "P":
+                    palette = bytes(value for i in range(256)
+                                    for value in (i, (i * 71) % 256, 255 - i))
+                    assets.append({"id": "palette", "kind": "inline", "encoding": "base64",
+                                   "data": base64.b64encode(palette).decode("ascii"),
+                                   "sha256": hashlib.sha256(palette).hexdigest(),
+                                   "media_type": "application/octet-stream"})
+                    steps.append({"step_id": "palette", "surface": "PIL.Image.Image",
+                                  "operation": "putpalette", "receiver": binding("image"),
+                                  "arguments": {"data": {"kind": "asset", "asset_id": "palette"}}})
+                steps.extend([
+                    {"step_id": "call", "surface": "PIL.ImageOps", "operation": "equalize",
+                     "receiver": None, "arguments": {"image": binding("image"), "mask": binding("mask")}},
+                    {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+                     "receiver": binding("call"), "arguments": {}},
+                ])
+                cases.append({
+                    "case_id": f"PIL.ImageOps.equalize.nuanced.histogram-mask-{mode.lower()}-{mask_mode.lower()}-{pattern}",
+                    "surface": "PIL.ImageOps", "operation": "equalize",
+                    "covers": ["PIL.ImageOps.equalize.parameter.mask"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                    "steps": steps, "observations": ["call", "materialize"],
+                })
     return cases
 
 

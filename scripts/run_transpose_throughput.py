@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure fresh public transpose requests with a bounded host worker queue.
+"""Measure fresh public transpose or equalize requests with a bounded host worker queue.
 
 The standalone ``pillow-rs/transpose-throughput-diagnostic@1`` JSON schema
 contains policy, source hashes, input/reference byte identities, and one child
@@ -24,6 +24,13 @@ Policy is fixed for every subject: queue depths 1/2/4, 16 frames per window,
 one window per depth and deliberately emits no timing summary. The ordinary
 migration benchmark schemas, workloads, and policies are unchanged. This
 diagnostic measures host queue concurrency, not simultaneous GPU kernels.
+
+``--operation equalize`` uses the same completed-work window policy for fresh
+``ImageOps.equalize`` calls in L/RGB. Its deterministic tile is reduced to 64
+levels before the per-frame offset to exercise nonidentity LUTs at the default
+size; reference metadata records whether each output changes. Equalize keeps
+input dimensions and requires one public operation and four GPU passes. The
+transpose default, stimulus, receipt rules, and timing policy are unchanged.
 
 Use ``make migration-parity-transpose-throughput`` to build the replacement
 without overwriting the Pillow oracle, or invoke this script after build-parity.
@@ -123,10 +130,12 @@ def stats(values: list[int | float]) -> dict[str, float | int] | None:
             "max": ordered[-1], "standard_deviation": statistics.pstdev(values)}
 
 
-def patterned_frames(mode: str, size: tuple[int, int], directory: Path) -> list[dict[str, Any]]:
+def patterned_frames(mode: str, size: tuple[int, int], directory: Path, operation: str = "transpose") -> list[dict[str, Any]]:
     """Fixed input generator; no reference/target output influences these bytes."""
     length = size[0] * size[1] * len(mode)
     tile = bytes((73 * index + 11 * (index // 17) + 29) & 255 for index in range(8192))
+    if operation == "equalize":
+        tile = bytes(value // 4 for value in tile)
     base = (tile * ((length + len(tile) - 1) // len(tile)))[:length]
     frames = []
     for frame_id in range(FRAMES):
@@ -141,6 +150,10 @@ def patterned_frames(mode: str, size: tuple[int, int], directory: Path) -> list[
     return frames
 
 
+def result_size(plan: dict[str, Any]) -> list[int]:
+    return list(plan["size"] if plan.get("operation") == "equalize" else reversed(plan["size"]))
+
+
 def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             frame_id: int, request_id: int) -> dict[str, Any]:
     if core is not None:
@@ -148,7 +161,10 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
     started = time.perf_counter_ns()
     try:
         image = image_api.frombytes(plan["mode"], tuple(plan["size"]), data)
-        image = image.transpose(0).transpose(2)
+        if plan.get("operation") == "equalize":
+            image = plan["imageops_api"].equalize(image)
+        else:
+            image = image.transpose(0).transpose(2)
         if core is not None:
             parity.lock_target_image_pipeline(image)
         output = image.tobytes()
@@ -168,7 +184,7 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
                 "error": f"{type(error).__name__}: {error}"}
 
 
-def receipt_error(subject: str, receipt: Any, byte_count: int) -> str | None:
+def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = "transpose") -> str | None:
     if subject == "Pillow":
         return None
     backend = subject.removeprefix("python-")
@@ -178,12 +194,14 @@ def receipt_error(subject: str, receipt: Any, byte_count: int) -> str | None:
         return "requested/actual backend does not match isolated subject"
     if receipt.get("fallback_reason") is not None:
         return "unexpected backend fallback"
-    if receipt.get("operation_count") != 2:
-        return "receipt does not contain both public transpose operations"
+    expected_operations = 1 if operation == "equalize" else 2
+    if receipt.get("operation_count") != expected_operations:
+        return f"receipt does not contain {expected_operations} public {operation} operation(s)"
     if backend == "gpu":
         resource = receipt.get("resource") or {}
-        if receipt.get("dispatch_count") != 1:
-            return "GPU receipt does not contain one fused transpose dispatch"
+        expected_dispatches = 4 if operation == "equalize" else 1
+        if receipt.get("dispatch_count") != expected_dispatches:
+            return f"GPU receipt does not contain {expected_dispatches} {operation} dispatch(es)"
         if resource.get("upload_bytes", 0) < byte_count or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
     return None
@@ -229,11 +247,11 @@ def window(executor: ThreadPoolExecutor, depth: int, image_api: Any, core: Any,
         frame_id = record["frame_id"]
         expected = references[frame_id]
         same = (record["mode"] == plan["mode"]
-                and record["size"] == list(reversed(plan["size"]))
+                and record["size"] == result_size(plan)
                 and isinstance(output, bytes) and output == expected)
         record["exact_match"] = same
         record["reference_sha256"] = reference_metadata[frame_id]["sha256"]
-        error = receipt_error(subject, record["receipt"], len(expected))
+        error = receipt_error(subject, record["receipt"], len(expected), plan.get("operation", "transpose"))
         if not same:
             error = "output bytes, mode or dimensions differ from live Pillow"
             if isinstance(output, bytes):
@@ -279,6 +297,8 @@ def child(args: argparse.Namespace) -> int:
     subject = args.child_subject
     identity = parity.side_identity("source" if subject == "Pillow" else "target")
     image_api = importlib.import_module("PIL.Image")
+    if plan.get("operation") == "equalize":
+        plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
     core = None if subject == "Pillow" else importlib.import_module("pillow_rs._core")
     if core is not None:
         core.set_pipeline_telemetry(True)  # once per process, never toggled by workers
@@ -295,17 +315,18 @@ def child(args: argparse.Namespace) -> int:
             if result["status"] != "completed":
                 raise RuntimeError(f"live Pillow reference failed: {result}")
             output = result.pop("output")
-            if result["mode"] != plan["mode"] or result["size"] != list(reversed(plan["size"])):
-                raise RuntimeError("unexpected live Pillow transpose mode/dimensions")
+            if result["mode"] != plan["mode"] or result["size"] != result_size(plan):
+                raise RuntimeError("unexpected live Pillow output mode/dimensions")
             path = reference_path.parent / f"reference-{frame_id:02d}.bin"
             path.write_bytes(output)
             metadata.append({"frame_id": frame_id, "path": str(path), "length": len(output),
+                             "differs_from_input": output != data,
                              "mode": result["mode"], "size": result["size"], "sha256": digest(output)})
         write_json(reference_path, metadata)
     metadata = json.loads(reference_path.read_text())
     if (len(metadata) != FRAMES
             or [item["frame_id"] for item in metadata] != list(range(FRAMES))
-            or any(item["mode"] != plan["mode"] or item["size"] != list(reversed(plan["size"]))
+            or any(item["mode"] != plan["mode"] or item["size"] != result_size(plan)
                    for item in metadata)):
         raise RuntimeError("live Pillow reference inventory is incomplete or incompatible")
     references = [Path(item["path"]).read_bytes() for item in metadata]
@@ -317,7 +338,7 @@ def child(args: argparse.Namespace) -> int:
                               "started_at": utc_now(), "reference": metadata, "queues": []}
     for depth in DEPTHS:
         windows = []
-        with ThreadPoolExecutor(max_workers=depth, thread_name_prefix="transpose-stream") as executor:
+        with ThreadPoolExecutor(max_workers=depth, thread_name_prefix=f"{plan.get('operation', 'transpose')}-stream") as executor:
             barrier = threading.Barrier(depth + 1)
             warm_threads = [executor.submit(barrier.wait) for _ in range(depth)]
             barrier.wait()
@@ -383,34 +404,40 @@ def comparisons(subjects: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def run(args: argparse.Namespace) -> int:
     if min(args.size) < 1:
         raise ValueError("--size requires positive dimensions")
-    modes = list(dict.fromkeys(args.mode or ["RGB", "RGBA"]))
+    operation = args.operation
+    defaults = ["L", "RGB"] if operation == "equalize" else ["RGB", "RGBA"]
+    modes = list(dict.fromkeys(args.mode or defaults))
+    if operation == "equalize" and any(mode not in ("L", "RGB") for mode in modes):
+        raise ValueError("equalize throughput supports L/RGB input")
     before = source_identity()
     result: dict[str, Any] = {
-        "schema": SCHEMA, "status": "completed", "started_at": utc_now(), "argv": sys.argv,
+        "schema": SCHEMA if operation == "transpose" else "pillow-rs/equalize-throughput-diagnostic@1", "status": "completed", "started_at": utc_now(), "argv": sys.argv,
         "environment": {"platform": platform.platform(), "machine": platform.machine(),
                         "python": sys.version, "cpu_count": os.cpu_count(),
                         "RAYON_NUM_THREADS": os.environ.get("RAYON_NUM_THREADS")},
         "source_before": before, "check_only": args.check_only,
         "policy": {"host_queue_depths": list(DEPTHS), "frames_per_window": FRAMES,
                    "warmup_windows": WARMUPS, "measurement_iterations_per_sample": ITERATIONS,
-                   "samples": SAMPLES, "methods": [0, 2],
+                   "samples": SAMPLES, "operation": operation, "methods": [0, 2] if operation == "transpose" else [],
                    "boundary": "fresh frombytes through terminal bytes, worker scheduling and receipt capture",
                    "comparison": "every output exactly matches live Pillow outside measured window",
                    "concurrency_claim": "host worker requests; simultaneous GPU kernels are not asserted",
                    "output_retention": "all outputs retained until window completion",
-                   "input_generator": "8192-byte tile (73*i+11*(i//17)+29)%256; frame j adds 41*j modulo 256",
+                   "input_generator": "8192-byte tile (73*i+11*(i//17)+29)%256; "
+                       + ("divide tile values by 4; " if operation == "equalize" else "")
+                       + "frame j adds 41*j modulo 256",
                    "build_profile": "expected release via build-parity; binary identity recorded separately",
                    "check_only_policy": "one verification window per depth; no performance summary",
                    "cache_state": "warm workers/backend; fresh image and graph per request"},
         "cases": [], "errors": [],
     }
-    with tempfile.TemporaryDirectory(prefix="pillow-transpose-throughput-") as temporary:
+    with tempfile.TemporaryDirectory(prefix=f"pillow-{operation}-throughput-") as temporary:
         root = Path(temporary)
         for mode in modes:
             directory = root / mode
             directory.mkdir()
-            frames = patterned_frames(mode, tuple(args.size), directory)
-            plan = {"mode": mode, "size": args.size, "frames": frames,
+            frames = patterned_frames(mode, tuple(args.size), directory, operation)
+            plan = {"operation": operation, "mode": mode, "size": args.size, "frames": frames,
                     "reference_manifest": str(directory / "references.json")}
             plan_path = directory / "plan.json"
             write_json(plan_path, plan)
@@ -471,8 +498,9 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--output", type=Path, default=ROOT / "build/migration-parity/transpose-throughput.json")
-    parser.add_argument("--mode", action="append", choices=("RGB", "RGBA"), help="select input mode(s); defaults to both")
+    parser.add_argument("--operation", choices=("transpose", "equalize"), default="transpose")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--mode", action="append", choices=("L", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))
     parser.add_argument("--timeout", type=int, default=900, help="deadline per isolated subject process")
     parser.add_argument("--check-only", action="store_true", help="verify one complete window per queue depth; emit no timing summary")
@@ -480,6 +508,8 @@ def main() -> int:
     parser.add_argument("--plan", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--child-output", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.output is None:
+        args.output = ROOT / f"build/migration-parity/{args.operation}-throughput.json"
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     try:

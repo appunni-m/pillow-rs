@@ -63,6 +63,39 @@ For a complete standard run:
 MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark
 ```
 
+To retain every declared public operation against the CPU ≤ Pillow, SIMD ≥ 5×
+Pillow, and GPU ≤ SIMD latency goals, generate the diagnostic matrix:
+
+```sh
+.venv/bin/python scripts/report_optimization_goals.py \
+  --result build/migration-parity/benchmark-result.json \
+  --parity build/migration-parity/benchmark-parity-result.json
+```
+
+This writes `build/migration-parity/optimization-goals.json` and `.md`. Missing
+workloads, missing backend-specific parity, fallback, and dirty provenance stay
+visible. Successful execution alone does not establish matching output. The
+benchmark runner's reciprocal-latency throughput values do not establish
+sustained concurrent throughput; that goal requires separate completed-work
+windows with changing inputs. The matrix retains all manifest rows, while
+public exports outside that selected contract still require inventory review.
+
+For equalize throughput after `make build-parity`, reuse the completed-request
+window diagnostic with the equalize selector:
+
+```sh
+.venv/bin/python scripts/run_transpose_throughput.py \
+  --operation equalize --size 1024 768 \
+  --output build/migration-parity/equalize-throughput.json
+```
+
+It measures fresh L/RGB requests over 16 changing inputs at queue depths 1, 2,
+and 4. Each request includes construction, equalize, and terminal bytes; each
+output is compared exactly with live Pillow outside the timing window. GPU
+receipts must include histogram/LUT/remap execution and complete transfers.
+`--check-only` verifies one window per depth without emitting timing summaries.
+The transpose selector remains the default with its existing workload policy.
+
 For the fixed release-acceptance cohort:
 
 ```sh
