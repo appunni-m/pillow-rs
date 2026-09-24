@@ -10952,6 +10952,13 @@ fn expand_gpu_geometry_ops(
             PipelineOp::Rotate { .. }
                 if gpu_rotate_requires_exact_host_control(image, logical_mode)
                     && !matches!(logical_mode, Some("1" | "P"))
+                    && !matches!(
+                        (op, logical_mode),
+                        (
+                            PipelineOp::Rotate { nearest: false, .. },
+                            Some("PA" | "RGBa" | "RGBX" | "CMYK" | "HSV" | "YCbCr" | "F")
+                        )
+                    )
                     && !gpu_rotate_has_exact_transpose_lowering(
                         op,
                         logical_mode,
@@ -11002,16 +11009,10 @@ fn expand_gpu_geometry_ops(
                     };
                     if let Some(method) = right_angle {
                         PipelineOp::Transpose { method }
-                    } else if !*nearest && !matches!(filter, ResampleFilter::Bilinear) {
-                        // The reviewed Transform lowering implements Pillow's
-                        // bilinear byte kernel only. Keep bicubic and any
-                        // future filtered rotate requests on the exact CPU
-                        // path until their arithmetic is separately proven.
-                        op.clone()
                     } else if let Some((affine, (w, h))) =
                         gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
                     {
-                        // `resolve_imageops_color` keeps LA/PA rotate colors
+                        // The public boundary keeps LA/PA rotate colors
                         // in the public RGBA-shaped tuple `(gray, gray,
                         // gray, alpha)`, while Transform's native two-band
                         // fill contract is `(gray, alpha, 0, 0)`. Normalize
@@ -11023,17 +11024,32 @@ fn expand_gpu_geometry_ops(
                         } else {
                             *fill
                         };
+                        let effective_nearest = *nearest || matches!(logical_mode, Some("1" | "P"));
+                        // Filtered rotation needs the binary64 sample arithmetic
+                        // of the projective kernel. A denominator of one preserves
+                        // the affine center mapping exactly; the host table contains
+                        // geometry only, and all pixel sampling stays on the device.
+                        let (method, data) = if effective_nearest {
+                            (TransformMethod::Affine, affine.to_vec())
+                        } else {
+                            let mut data = affine.to_vec();
+                            data.extend([0.0, 0.0]);
+                            (TransformMethod::Perspective, data)
+                        };
                         PipelineOp::Transform {
                             w,
                             h,
-                            method: TransformMethod::Affine,
-                            data: Arc::from(affine.to_vec()),
-                            filter: if *nearest || matches!(logical_mode, Some("1" | "P")) {
+                            method,
+                            data: Arc::from(data),
+                            filter: if effective_nearest {
                                 ResampleFilter::Nearest
                             } else {
                                 *filter
                             },
-                            fill: transform_fill,
+                            // Rotate's omitted fill is zero in every stored
+                            // band, including RGBX's fourth byte. Make it explicit
+                            // for both the device and any geometry-limit fallback.
+                            fill: Some(transform_fill.unwrap_or((0, 0, 0, 0))),
                             fill_is_none: fill.is_none(),
                             palette_fill: None,
                         }

@@ -4152,8 +4152,12 @@ fn rotate_uses_discrete_fast_path(
     angle: f64,
     center: Option<(f64, f64)>,
     translate: Option<(f64, f64)>,
+    expand: bool,
+    width: u32,
+    height: u32,
 ) -> bool {
-    rotate_discrete_fast_angle(angle, center, translate).is_some()
+    rotate_discrete_fast_angle(angle, center, translate)
+        .is_some_and(|degree| degree == 180 || expand || width == height)
 }
 
 fn rotate_discrete_fast_angle(
@@ -4200,7 +4204,7 @@ fn rotate_nearest_supported_for_shape(
     if !nearest
         || width == 0
         || height == 0
-        || rotate_uses_discrete_fast_path(angle, center, translate)
+        || rotate_uses_discrete_fast_path(angle, center, translate, expand, width, height)
     {
         return false;
     }
@@ -4232,7 +4236,7 @@ fn rotate_bilinear_supported_for_shape(
         || channels.is_none()
         || width == 0
         || height == 0
-        || rotate_uses_discrete_fast_path(angle, center, translate)
+        || rotate_uses_discrete_fast_path(angle, center, translate, expand, width, height)
     {
         return false;
     }
@@ -4640,7 +4644,14 @@ pub(crate) fn simd_supports_for_image(
                             expected != 0 && img.as_bytes().len() == expected as usize
                         })
                 })
-            } else if rotate_uses_discrete_fast_path(*angle, *center, *translate) {
+            } else if rotate_uses_discrete_fast_path(
+                *angle,
+                *center,
+                *translate,
+                *expand,
+                img.width(),
+                img.height(),
+            ) {
                 native_rotate_channels.is_some() && pixel_count != 0
             } else {
                 if nearest {
@@ -6153,7 +6164,14 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                         .and_then(|pixels| pixels.checked_mul(channels))
                         .is_some_and(|bytes| bytes != 0)
                 })
-            } else if rotate_uses_discrete_fast_path(*angle, *center, *translate) {
+            } else if rotate_uses_discrete_fast_path(
+                *angle,
+                *center,
+                *translate,
+                *expand,
+                shape.width,
+                shape.height,
+            ) {
                 shape_native_rotate_channels(shape, mode).is_some() && pixel_count != 0
             } else {
                 if nearest {
@@ -22295,47 +22313,16 @@ fn simd_rotate_sample_coordinates(
     x: usize,
     y: usize,
 ) -> SimdRotateSample {
-    simd_rotate_sample_coordinates_with_mode(affine, width, height, x, y, false)
-}
-
-#[inline]
-fn simd_rotate_sample_coordinates_with_mode(
-    affine: [f64; 6],
-    width: usize,
-    height: usize,
-    x: usize,
-    y: usize,
-    pa_mode: bool,
-) -> SimdRotateSample {
     let [a, b, c, d, e, f] = affine;
-    let source_x = a * (x as f64 + 0.5) + b * (y as f64 + 0.5) + c;
-    let source_y = d * (x as f64 + 0.5) + e * (y as f64 + 0.5) + f;
-    let (source_x, source_y) = if pa_mode {
-        (source_x, source_y)
-    } else {
-        (source_x - 0.5, source_y - 0.5)
-    };
-    let outside = if pa_mode {
-        source_x < 0.0 || source_x >= width as f64 || source_y < 0.0 || source_y >= height as f64
-    } else {
-        source_x < -0.5
-            || source_x >= width as f64 - 0.5
-            || source_y < -0.5
-            || source_y >= height as f64 - 0.5
-    };
-    if outside {
+    // Pillow evaluates the center mapping with a contracted multiply/add,
+    // rejects samples outside the image, then shifts every mode by half a pixel.
+    let source_x = a.mul_add(x as f64 + 0.5, b * (y as f64 + 0.5)) + c;
+    let source_y = d.mul_add(x as f64 + 0.5, e * (y as f64 + 0.5)) + f;
+    if source_x < 0.0 || source_x >= width as f64 || source_y < 0.0 || source_y >= height as f64 {
         return SimdRotateSample::default();
     }
-    let source_x = if pa_mode {
-        source_x
-    } else {
-        source_x.clamp(0.0, width as f64 - 1.0)
-    };
-    let source_y = if pa_mode {
-        source_y
-    } else {
-        source_y.clamp(0.0, height as f64 - 1.0)
-    };
+    let source_x = (source_x - 0.5).clamp(0.0, width as f64 - 1.0);
+    let source_y = (source_y - 0.5).clamp(0.0, height as f64 - 1.0);
     let x0 = source_x.floor() as usize;
     let y0 = source_y.floor() as usize;
     SimdRotateSample {
@@ -22351,7 +22338,32 @@ fn simd_rotate_sample_coordinates_with_mode(
 
 #[inline]
 fn bilinear_rotate_scalar(p00: f64, p10: f64, p01: f64, p11: f64, fx: f64, fy: f64) -> f64 {
-    (1.0 - fy) * ((1.0 - fx) * p00 + fx * p10) + fy * ((1.0 - fx) * p01 + fx * p11)
+    let top = (p10 - p00).mul_add(fx, p00);
+    let bottom = (p11 - p01).mul_add(fx, p01);
+    (bottom - top).mul_add(fy, top)
+}
+
+#[inline]
+fn rotate_fused_mul_add(a: f64x8, b: f64x8, c: f64x8) -> f64x8 {
+    // wide's mul_add uses two roundings without hardware FMA. Preserve the
+    // reference's single rounding on those targets as well.
+    #[cfg(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
+    {
+        a.mul_add(b, c)
+    }
+    #[cfg(not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
+    {
+        let (a, b, c) = (a.to_array(), b.to_array(), c.to_array());
+        f64x8::new(std::array::from_fn(|lane| {
+            a[lane].mul_add(b[lane], c[lane])
+        }))
+    }
 }
 
 #[inline]
@@ -22363,8 +22375,9 @@ fn bilinear_rotate_vector(
     fx: f64x8,
     fy: f64x8,
 ) -> f64x8 {
-    let one = f64x8::splat(1.0);
-    (one - fy) * ((one - fx) * p00 + fx * p10) + fy * ((one - fx) * p01 + fx * p11)
+    let top = rotate_fused_mul_add(p10 - p00, fx, p00);
+    let bottom = rotate_fused_mul_add(p11 - p01, fx, p01);
+    rotate_fused_mul_add(bottom - top, fy, top)
 }
 
 /// Gather a channel's four bilinear neighbors in native byte storage.
@@ -22458,15 +22471,39 @@ const SIMD_F64_LANES: usize = 8;
 
 #[inline]
 fn typed_bilinear_rotate_vector(
-    p00: f64x8,
-    p10: f64x8,
-    p01: f64x8,
-    p11: f64x8,
+    p00: [f64; SIMD_F64_LANES],
+    p10: [f64; SIMD_F64_LANES],
+    p01: [f64; SIMD_F64_LANES],
+    p11: [f64; SIMD_F64_LANES],
     fx: f64x8,
     fy: f64x8,
+    is_float: bool,
 ) -> f64x8 {
-    let one = f64x8::splat(1.0);
-    (one - fx) * (one - fy) * p00 + fx * (one - fy) * p10 + (one - fx) * fy * p01 + fx * fy * p11
+    // Geometry.c subtracts source samples in their native type before
+    // widening for interpolation. F rounds that subtraction to f32; I wraps
+    // the i32 difference and evaluates the subsequent multiply/add separately.
+    let difference = |right: [f64; SIMD_F64_LANES], left: [f64; SIMD_F64_LANES]| {
+        if is_float {
+            let difference = f32x8::new(right.map(|value| value as f32))
+                - f32x8::new(left.map(|value| value as f32));
+            f64x8::new(difference.to_array().map(f64::from))
+        } else {
+            let difference = i32x8::new(right.map(|value| value as i32))
+                - i32x8::new(left.map(|value| value as i32));
+            f64x8::new(difference.to_array().map(f64::from))
+        }
+    };
+    let top_delta = difference(p10, p00);
+    let bottom_delta = difference(p11, p01);
+    if is_float {
+        let top = rotate_fused_mul_add(top_delta, fx, f64x8::new(p00));
+        let bottom = rotate_fused_mul_add(bottom_delta, fx, f64x8::new(p01));
+        rotate_fused_mul_add(bottom - top, fy, top)
+    } else {
+        let top = top_delta * fx + f64x8::new(p00);
+        let bottom = bottom_delta * fx + f64x8::new(p01);
+        (bottom - top) * fy + top
+    }
 }
 
 /// Rotate native four-byte `I`/`F` samples without treating their scalar
@@ -22542,21 +22579,17 @@ fn simd_typed_bilinear_rotate_native(
 
             for lane in 0..active {
                 let x = destination_x + lane;
-                let sx = geometry.affine[0] * (x as f64 + 0.5)
-                    + geometry.affine[1] * (destination_y as f64 + 0.5)
-                    + geometry.affine[2]
-                    - 0.5;
-                let sy = geometry.affine[3] * (x as f64 + 0.5)
-                    + geometry.affine[4] * (destination_y as f64 + 0.5)
-                    + geometry.affine[5]
-                    - 0.5;
-                if sx >= 0.0 && sx < width as f64 && sy >= 0.0 && sy < height as f64 {
-                    let x0 = sx.floor() as usize;
-                    let y0 = sy.floor() as usize;
-                    let x1 = (x0 + 1).min(width - 1);
-                    let y1 = (y0 + 1).min(height - 1);
-                    fx[lane] = sx - x0 as f64;
-                    fy[lane] = sy - y0 as f64;
+                let sample = simd_rotate_sample_coordinates(
+                    geometry.affine,
+                    width,
+                    height,
+                    x,
+                    destination_y,
+                );
+                if sample.valid {
+                    let SimdRotateSample { x0, x1, y0, y1, .. } = sample;
+                    fx[lane] = sample.fx;
+                    fy[lane] = sample.fy;
                     let read = |source_x: usize, source_y: usize| {
                         let index = (source_y * width + source_x) * 4;
                         if is_float {
@@ -22583,12 +22616,13 @@ fn simd_typed_bilinear_rotate_native(
             }
 
             let values = typed_bilinear_rotate_vector(
-                f64x8::new(p00),
-                f64x8::new(p10),
-                f64x8::new(p01),
-                f64x8::new(p11),
+                p00,
+                p10,
+                p01,
+                p11,
                 f64x8::new(fx),
                 f64x8::new(fy),
+                is_float,
             )
             .to_array();
             for lane in 0..active {
@@ -22680,14 +22714,7 @@ fn simd_bilinear_rotate_native(
             let active = (destination_width - x).min(SIMD_F64_LANES);
             let samples = std::array::from_fn(|lane| {
                 if lane < active {
-                    simd_rotate_sample_coordinates_with_mode(
-                        geometry.affine,
-                        width,
-                        height,
-                        x + lane,
-                        y,
-                        pa_mode,
-                    )
+                    simd_rotate_sample_coordinates(geometry.affine, width, height, x + lane, y)
                 } else {
                     SimdRotateSample::default()
                 }
@@ -22757,14 +22784,7 @@ fn simd_bilinear_rotate_native(
             x += active;
         }
         while x < destination_width {
-            let sample = simd_rotate_sample_coordinates_with_mode(
-                geometry.affine,
-                width,
-                height,
-                x,
-                y,
-                pa_mode,
-            );
+            let sample = simd_rotate_sample_coordinates(geometry.affine, width, height, x, y);
             let output_start = output_row + x * channels;
             let mut alpha = 0u8;
             if let Some(alpha_channel) = alpha_channel {
@@ -23198,14 +23218,27 @@ pub fn simd_rotate(
             return Ok(preserve_mode(img, result));
         }
     }
-    if rotate_uses_discrete_fast_path(*angle, *center, *translate)
-        && let Some(result) =
-            simd_right_angle_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+    if rotate_uses_discrete_fast_path(
+        *angle,
+        *center,
+        *translate,
+        *expand,
+        img.width(),
+        img.height(),
+    ) && let Some(result) =
+        simd_right_angle_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
     {
         return Ok(result);
     }
     if nearest
-        && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
+        && !rotate_uses_discrete_fast_path(
+            *angle,
+            *center,
+            *translate,
+            *expand,
+            img.width(),
+            img.height(),
+        )
         && let Some(result) =
             simd_nearest_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
     {
@@ -23213,7 +23246,14 @@ pub fn simd_rotate(
     }
     if !nearest
         && matches!(filter, ResampleFilter::Bilinear)
-        && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
+        && !rotate_uses_discrete_fast_path(
+            *angle,
+            *center,
+            *translate,
+            *expand,
+            img.width(),
+            img.height(),
+        )
         && let Some(result) = simd_typed_bilinear_rotate_native(
             img, *angle, *expand, *fill, *center, *translate, mode,
         )?
@@ -23222,7 +23262,14 @@ pub fn simd_rotate(
     }
     if !nearest
         && matches!(filter, ResampleFilter::Bilinear)
-        && !rotate_uses_discrete_fast_path(*angle, *center, *translate)
+        && !rotate_uses_discrete_fast_path(
+            *angle,
+            *center,
+            *translate,
+            *expand,
+            img.width(),
+            img.height(),
+        )
         && let Some(result) =
             simd_bilinear_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
     {

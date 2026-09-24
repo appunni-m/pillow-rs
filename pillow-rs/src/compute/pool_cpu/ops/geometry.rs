@@ -929,9 +929,76 @@ fn rotate_arbitrary_generic(
         (aff_c, aff_f) = transform(shift_x, shift_y, aff_c, aff_f);
     }
 
+    if let DynamicImage::ImageLuma16(source) = img {
+        let fill_value = fill.map_or(0, |value| u16::from_le_bytes([value.0, value.1]));
+        let mut output = vec![fill_value; (dw as usize) * (dh as usize)];
+        if nearest {
+            // SPECIAL modes use Geometry.c's generic floating-point mapping,
+            // then copy both bytes. They bypass the ordinary 16.16 sampler.
+            for y in 0..dh {
+                for x in 0..dw {
+                    let (sx, sy) =
+                        sample_transform(f64::from(x) + 0.5, f64::from(y) + 0.5, aff_c, aff_f);
+                    if sx >= 0.0 && sx < sw && sy >= 0.0 && sy < sh {
+                        output[(y * dw + x) as usize] = source.get_pixel(sx as u32, sy as u32)[0];
+                    }
+                }
+            }
+        } else {
+            // Pillow's filtered I;16 path selects filter8: it samples the
+            // first `width` bytes of each two-byte source row and writes only
+            // byte zero of each destination sample. Preserve that observable
+            // byte ABI, including the untouched fill byte, instead of
+            // interpreting the filter as a numeric u16 convolution.
+            let big_endian = explicit_mode == Some("I;16B")
+                || (cfg!(target_endian = "big") && matches!(explicit_mode, Some("I;16" | "I;16N")));
+            let encode = |value: u16| {
+                if big_endian {
+                    value.to_be_bytes()
+                } else {
+                    value.to_le_bytes()
+                }
+            };
+            let fill_bytes = encode(fill_value);
+            let mut plane = Vec::with_capacity((w as usize) * (h as usize));
+            for y in 0..h as usize {
+                plane.extend(
+                    source.as_raw()[y * w as usize..(y + 1) * w as usize]
+                        .iter()
+                        .flat_map(|&value| encode(value))
+                        .take(w as usize),
+                );
+            }
+            let plane = crate::raster::GrayImage::from_raw(w, h, plane).ok_or_else(|| {
+                PilError::InternalError("rotate I;16 source shape mismatch".into())
+            })?;
+            let sampled = rotate_arbitrary_generic(
+                &DynamicImage::ImageLuma8(plane),
+                angle,
+                expand,
+                fill.map(|_| (fill_bytes[0], 0, 0, 0)),
+                filter,
+                false,
+                center,
+                translate,
+                Some("L"),
+            )?;
+            for (value, &byte) in output.iter_mut().zip(sampled.as_bytes()) {
+                let bytes = [byte, fill_bytes[1]];
+                *value = if big_endian {
+                    u16::from_be_bytes(bytes)
+                } else {
+                    u16::from_le_bytes(bytes)
+                };
+            }
+        }
+        return crate::raster::ImageBuffer::from_raw(dw, dh, output)
+            .map(DynamicImage::ImageLuma16)
+            .ok_or_else(|| PilError::InternalError("rotate I;16 result shape mismatch".into()));
+    }
+
     let raw = img.as_bytes();
     let fill_color = fill.unwrap_or((0, 0, 0, 0));
-    let pa_mode = explicit_mode == Some("PA");
 
     let mut out = CheckedDims::new(dw, dh, channels as u8)?.alloc_buffer();
 
@@ -967,33 +1034,19 @@ fn rotate_arbitrary_generic(
                 // source coordinates as Pillow's affine kernel.
                 let (sx_rel, sy_rel) =
                     sample_transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
-                let (sx_rel, sy_rel) = if explicit_mode == Some("PA") {
-                    // The palette-preserving PA pipeline has already
-                    // expressed its index samples in pixel-center space.
-                    // Keep that established convention while regular byte
-                    // modes follow Geometry.c's filter-side subtraction.
-                    (sx_rel, sy_rel)
-                } else {
-                    (sx_rel - 0.5, sy_rel - 0.5)
-                };
-
+                // Geometry.c subtracts half a pixel for every filtered
+                // byte layout, including PA's independent index/alpha bands.
+                let (sx_rel, sy_rel) = (sx_rel - 0.5, sy_rel - 0.5);
                 let out_idx = (dy * dw + dx) as usize * channels;
-
-                // Pillow's regular byte bilinear filter has a half-pixel
-                // footprint. PA keeps its established index/alpha sampling
-                // convention, so retain its integer-domain bounds here.
-                let in_filter_support = if pa_mode {
-                    sx_rel >= 0.0 && sx_rel < sw && sy_rel >= 0.0 && sy_rel < sh
-                } else {
-                    sx_rel >= -0.5 && sx_rel < sw - 0.5 && sy_rel >= -0.5 && sy_rel < sh - 0.5
-                };
+                let in_filter_support =
+                    sx_rel >= -0.5 && sx_rel < sw - 0.5 && sy_rel >= -0.5 && sy_rel < sh - 0.5;
                 if in_filter_support {
-                    let sx_rel = if pa_mode || matches!(filter, ResampleFilter::Bicubic) {
+                    let sx_rel = if matches!(filter, ResampleFilter::Bicubic) {
                         sx_rel
                     } else {
                         sx_rel.clamp(0.0, sw - 1.0)
                     };
-                    let sy_rel = if pa_mode || matches!(filter, ResampleFilter::Bicubic) {
+                    let sy_rel = if matches!(filter, ResampleFilter::Bicubic) {
                         sy_rel
                     } else {
                         sy_rel.clamp(0.0, sh - 1.0)
@@ -1600,12 +1653,9 @@ pub fn execute_rotate(
     } else {
         filter
     };
-    // Pillow's PA transform path samples the raw index/alpha bands directly;
-    // unlike LA and RGBA, it does not use a premultiplied intermediate. The
-    // public fillcolor arrives as (index, index, index, alpha) so the generic
-    // four-component record can represent it; normalize that record to the
-    // native two-band layout before either nearest or interpolated sampling.
-    let fill = if explicit_mode == Some("PA") {
+    // LA/La/PA use a public (gray, gray, gray, alpha) fill tuple. Normalize
+    // it to native two-band storage; PA and La bypass the alpha round trip.
+    let fill = if matches!(explicit_mode, Some("PA" | "LA" | "La")) {
         fill.map(|(index, _, _, alpha)| (index, alpha, 0, alpha))
     } else {
         fill
@@ -1613,8 +1663,8 @@ pub fn execute_rotate(
     // Fast path: exact 90-degree multiples
     // PIL rotates counterclockwise; image crate rotates clockwise.
     // PIL 90° CCW = image crate 270° CW, PIL 270° CCW = image crate 90° CW.
-    // For 90/270 with expand=False, compute the clipped result directly
-    // by pasting the expanded result centered in the original-sized canvas.
+    // Unexpanded non-square 90/270 rotations still use the affine sampler,
+    // including its filtered alpha round trip.
     let normalized_angle = angle.rem_euclid(360.0);
     let result = if !has_custom_transform && normalized_angle.abs() <= f64::EPSILON {
         // Pillow's public rotate() returns an exact copy at angle 0 (and
@@ -1622,7 +1672,10 @@ pub fn execute_rotate(
         // Keep this fast path ahead of filtered affine sampling so LA/RGBA
         // bytes and alpha channels are not rounded needlessly.
         img.clone()
-    } else if !has_custom_transform && normalized_angle == 90.0 {
+    } else if !has_custom_transform
+        && normalized_angle == 90.0
+        && (expand || img.width() == img.height())
+    {
         if expand {
             img.rotate270() // 270° CW = 90° CCW (PIL)
         } else {
@@ -1630,7 +1683,10 @@ pub fn execute_rotate(
         }
     } else if !has_custom_transform && normalized_angle == 180.0 {
         img.rotate180()
-    } else if !has_custom_transform && normalized_angle == 270.0 {
+    } else if !has_custom_transform
+        && normalized_angle == 270.0
+        && (expand || img.width() == img.height())
+    {
         if expand {
             img.rotate90() // 90° CW = 270° CCW (PIL)
         } else {
@@ -1644,7 +1700,13 @@ pub fn execute_rotate(
         let needs_alpha_roundtrip = !nearest
             && !matches!(
                 explicit_mode,
-                Some("PA") | Some("RGBa") | Some("RGBX") | Some("CMYK") | Some("F") | Some("I")
+                Some("PA")
+                    | Some("RGBa")
+                    | Some("La")
+                    | Some("RGBX")
+                    | Some("CMYK")
+                    | Some("F")
+                    | Some("I")
             )
             && matches!(
                 img.color(),
