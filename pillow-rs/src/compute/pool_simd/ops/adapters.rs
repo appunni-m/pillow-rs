@@ -6634,85 +6634,6 @@ fn native_enhance_gray(
     f64::from(value)
 }
 
-fn native_enhance_mean(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    channels: usize,
-    cmyk_color_path: bool,
-) -> Option<u8> {
-    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
-    if pixels == 0 {
-        return None;
-    }
-    let expected = pixels.checked_mul(channels)?;
-    let source = img.as_bytes();
-    if source.len() != expected {
-        return None;
-    }
-    let sum = (0..pixels)
-        .map(|pixel| native_enhance_gray(source, pixel, channels, mode, cmyk_color_path) as u64)
-        .sum::<u64>();
-    Some(((sum as f64 / pixels as f64) + 0.5) as u8)
-}
-
-fn vectorize_contrast_bytes(
-    source: &[u8],
-    output: &mut [u8],
-    channels: usize,
-    active_channels: usize,
-    mode: Option<&str>,
-    mean: u8,
-    factor: f64,
-) -> (u64, u64) {
-    let mut vector_blocks = 0u64;
-    for (block, chunk) in output.chunks_exact_mut(8).enumerate() {
-        let offset = block * 8;
-        let mut input = [0.0; 8];
-        let mut base = [0.0; 8];
-        for lane in 0..8 {
-            let index = offset + lane;
-            let channel = index % channels;
-            input[lane] = f64::from(source[index]);
-            base[lane] = if mode == Some("CMYK") {
-                if channel == 3 {
-                    255.0 - f64::from(mean)
-                } else {
-                    0.0
-                }
-            } else {
-                f64::from(mean)
-            };
-        }
-        let values = f64x8::new(base) * f64x8::splat(1.0 - factor)
-            + f64x8::new(input) * f64x8::splat(factor);
-        for (lane, value) in values.to_array().into_iter().enumerate() {
-            if lane % channels < active_channels {
-                chunk[lane] = clamp_trunc_u8(value);
-            }
-        }
-        vector_blocks += 1;
-    }
-    let full_len = output.len() / 8 * 8;
-    let remainder = &mut output[full_len..];
-    let offset = full_len;
-    for (lane, destination) in remainder.iter_mut().enumerate() {
-        let index = offset + lane;
-        let channel = index % channels;
-        if channel >= active_channels {
-            continue;
-        }
-        let base = if mode == Some("CMYK") && channel == 3 {
-            255.0 - f64::from(mean)
-        } else if mode == Some("CMYK") {
-            0.0
-        } else {
-            f64::from(mean)
-        };
-        *destination = clamp_trunc_u8(base * (1.0 - factor) + f64::from(source[index]) * factor);
-    }
-    (vector_blocks, remainder.len() as u64)
-}
-
 fn vectorize_color_bytes(
     source: &[u8],
     output: &mut [u8],
@@ -6789,8 +6710,6 @@ fn native_enhance_output(
     channels: usize,
     active_channels: usize,
     factor: f64,
-    contrast: bool,
-    mean: Option<u8>,
 ) -> Option<(DynamicImage, u64, u64)> {
     let source = img.as_bytes();
     let mut result = img.clone();
@@ -6798,19 +6717,8 @@ fn native_enhance_output(
     if output.len() != source.len() {
         return None;
     }
-    let (vector_blocks, scalar_tail) = if contrast {
-        vectorize_contrast_bytes(
-            source,
-            output,
-            channels,
-            active_channels,
-            mode,
-            mean?,
-            factor,
-        )
-    } else {
-        vectorize_color_bytes(source, output, channels, active_channels, mode, factor)
-    };
+    let (vector_blocks, scalar_tail) =
+        vectorize_color_bytes(source, output, channels, active_channels, mode, factor);
     Some((result, vector_blocks, scalar_tail))
 }
 
@@ -11454,9 +11362,7 @@ pub fn simd_brightness(
     Err(simd_unsupported("Brightness"))
 }
 
-/// Compute Pillow's scalar image-wide contrast midpoint, then apply the
-/// native interleaved blend with `f64x8`.  Alpha bytes remain untouched for
-/// LA/RGBA; CMYK's K byte uses the mode-specific degenerate value.
+/// Compute the exact native-mode base, then apply its float32 blend as byte LUTs.
 pub fn simd_contrast(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -11465,27 +11371,26 @@ pub fn simd_contrast(
     let PipelineOp::Contrast { factor } = op else {
         return Err(PilError::ValueError("expected Contrast op".into()));
     };
-    let Some((channels, active_channels)) = native_enhance_layout(img, mode) else {
-        return Err(simd_unsupported("Contrast"));
-    };
-    if !factor.is_finite() || !has_vectorized_float_bytes(img, channels) {
+    let base = crate::ops::enhance::contrast_base(img, mode)
+        .ok_or_else(|| simd_unsupported("Contrast"))?;
+    if !(*factor as f32).is_finite() || !has_vectorized_float_bytes(img, base.channels) {
         return Err(simd_unsupported("Contrast"));
     }
-    let mean = native_enhance_mean(img, mode, channels, false)
+    let lut = crate::ops::enhance::contrast_lut(&base, *factor);
+    let mut result = img.clone();
+    let output = result
+        .as_bytes_mut()
         .ok_or_else(|| simd_unsupported("Contrast"))?;
-    let Some((result, vector_blocks, scalar_tail)) = native_enhance_output(
-        img,
-        mode,
-        channels,
-        active_channels,
-        *factor,
-        true,
-        Some(mean),
-    ) else {
-        return Err(simd_unsupported("Contrast"));
-    };
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    let (blocks, tail) = native_lut_apply(
+        output,
+        img.width() as usize,
+        img.height() as usize,
+        base.channels,
+        &lut,
+    )
+    .ok_or_else(|| simd_unsupported("Contrast"))?;
+    crate::compute::record_pipeline_operation_vector_blocks(blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(tail);
     crate::compute::record_pipeline_operation_path("vector");
     Ok(result)
 }
@@ -11508,7 +11413,7 @@ pub fn simd_color_saturation(
         return Err(simd_unsupported("ColorSaturation"));
     }
     let Some((result, vector_blocks, scalar_tail)) =
-        native_enhance_output(img, mode, channels, active_channels, *factor, false, None)
+        native_enhance_output(img, mode, channels, active_channels, *factor)
     else {
         return Err(simd_unsupported("ColorSaturation"));
     };

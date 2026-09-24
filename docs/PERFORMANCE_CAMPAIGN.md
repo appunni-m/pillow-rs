@@ -1512,7 +1512,137 @@ The optimization skill now explains when a bounded approximate quotient can
 be corrected to an exact integer result, and when complete dependent tuples
 can share a transfer word. Static fixture indices now contain 12,482 cases,
 24 plans, 773 benchmark workloads and 54 suites. No coverage was collected.
-The next independent operation visit is Contrast.
+The next independent operation visit was Contrast, recorded below.
+
+## Contrast parity and performance checkpoint
+
+On 2026-09-25, the original 147 maintained comparisons passed, but a varied
+19-mode audit found **408 failures in 657 comparisons**. The old arithmetic
+used a binary64 weighted sum, while Pillow blends using a narrowed float32
+factor and fused multiply-add. Its constructor also retains an observable base
+image: later source mutations change the input, not the saved mean or alpha.
+The base differs by mode, including `(0, 0, mean)` for HSV,
+`(mean, 128, 128)` for YCbCr and `(0, 0, 0, 255-mean)` for CMYK. RGBX blends its
+X byte against 255. RGBa rejects conversion from L during construction; typed
+integer/float modes can construct an enhancer and reject enhancement later.
+
+This visit retained four areas of work, with corrective iterations for RGBX,
+RGBa error timing and the lazy core API before recording final measurements:
+
+1. **Preserve construction and mutation semantics.** The Python Contrast
+   object now retains its public `degenerate` image and delegates enhancement
+   to the existing Rust module blend. Changes or replacements to `image` and
+   `degenerate` remain observable. Algorithms stay in Rust. The one-shot Rust
+   API keeps its lazy Contrast descriptor so selecting a backend afterward
+   still controls pending source operations.
+2. **Remove intermediate frames from base construction.** For native L, LA,
+   RGB, RGBA, RGBX and CMYK, reduce the exact quantized luminance directly from
+   borrowed native pixels. Allocate the constant base once and copy alpha only
+   where required. This avoids a grayscale image and a second conversion of
+   that constant image. Other modes retain their conversion/error contract.
+3. **Use exact backend arithmetic.** Direct CPU/SIMD Contrast builds per-band
+   byte LUTs with the reference float32 expression and reuses existing LUT
+   kernels. The GPU Contrast shader uses the same fused expression. Removing
+   its old 65,536-pair admission scan eliminates repeated work that checked an
+   incorrect arithmetic contract. The host still computes the midpoint.
+4. **Borrow the blend source.** The CPU module blend reads a shared
+   materialization instead of cloning its second input. This also benefits
+   the stateful public Contrast path, whose terminal operation is BlendModule.
+
+The expanded maintained cohort passes **876/876 exact comparisons**, including
+243 added input-only cases for varied pixels, constructor observations,
+repeated enhancement, source mutation and empty images. Another **120/120**
+observations pass for source/base mutation and replacement, and **372/372**
+related module-blend/Color comparisons pass. Four focused Rust tests pass:
+direct CPU/SIMD/GPU kernels over five modes and eight factors, both pending
+PutPixel midpoint paths, and empty CMYK. The kernel test compares against the
+already-audited constructor-plus-blend path; it is not an independent oracle.
+GPU-unavailable hosts may skip that portion of the test.
+
+Passing parity does not establish native ownership for every case. Among the
+243 added cases, 33 record no arithmetic receipt. The other 210 cases record
+CPU execution; SIMD records 195 with only SIMD receipts and 15 with CPU
+conversion fallback. GPU records 157 with only GPU receipts and 53 with some
+CPU fallback. These counts describe recorded operations: native base reduction
+and allocation occur on the host and are not separate pipeline receipts.
+
+Local receipts use the prefix `build/migration-parity/perf-contrast-20260925-`:
+`varied-initial-parity.json`, `checkpoint-parity.json`, `state-parity.json`,
+`checkpoint.json`, and `checkpoint-throughput.json`. Shared-path evidence is
+`perf-contrast-related-20260925-checkpoint-parity.json`. The four unchanged
+benchmark workloads have initial run
+`migration-benchmark-627f51d39b624e5baa010dc25394b4a3` and final run
+`migration-benchmark-685846c3349341a690eda3c56fa489dc`. Final median milliseconds:
+
+| Materialized workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Operation | 0.029229 | 0.015542 | 0.016292 | 0.293188 |
+| Operation matrix 32 × 24 | 0.027292 | 0.014896 | 0.015230 | 0.312542 |
+
+Both rows complete the final blend on the requested backend without fallback.
+GPU improves 3.65×/2.54× from 1.071209/0.794708 ms. CPU beats Pillow on these
+rows; SIMD misses 5× and GPU misses SIMD latency on both. The constructor and
+unmaterialized enhancement standard rows have no completed backend receipt and
+cannot prove backend performance. Their final CPU/SIMD/GPU medians are
+0.009375/0.009584/0.009500 ms and 0.008792/0.009167/0.008958 ms, respectively.
+
+The fresh-input diagnostic includes `frombytes`, construction of the Contrast
+enhancer, `enhance(0.3)` and terminal bytes. It passes **40,320/40,320 exact
+output checks**, including warmup, with 38,400 measured completions. Source and
+runtime identities remain unchanged. Each target request's terminal receipt
+records the requested backend and one blend; GPU records one dispatch. This
+does not make the host base construction a GPU or SIMD kernel. Queue-one
+request median milliseconds, including all those host costs:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU | SIMD speedup over Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 0.683542 | 0.435396 | 0.862021 | 3.102604 | 0.79× |
+| RGB | 2.836375 | 0.933938 | 2.481313 | 3.172688 | 1.14× |
+
+Aggregate completed images per second includes worker scheduling and receipt
+capture, in addition to each request's work:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1,463 | 2,225 | 1,147 | 320 |
+| L | 2 | 1,744 | 3,254 | 1,323 | 327 |
+| L | 4 | 1,860 | 3,974 | 1,422 | 332 |
+| RGB | 1 | 350 | 1,022 | 399 | 306 |
+| RGB | 2 | 402 | 1,410 | 457 | 332 |
+| RGB | 4 | 426 | 1,666 | 484 | 342 |
+
+Contrast remains incomplete. Checkpoint blockers and next investigations:
+
+- **Public SIMD blend:** the large stateful path is 1.98×/2.66× slower than
+  CPU for L/RGB. Its terminal operation is BlendModule, so changing the direct
+  Contrast LUT kernel cannot fix this boundary. Attribute its vector packing,
+  widening, task scheduling and full-frame reads/copies first. The small-call
+  cost also prevents 5× on the maintained rows.
+- **Observable saved base:** a constant-base specialization must survive
+  source mutation while invalidating when the public base changes or is
+  replaced. Fusing the mean with the final blend would recompute state that
+  Pillow intentionally snapshots. Measure base creation separately before
+  choosing a specialization or a retained representation.
+- **GPU transport and ownership:** each fresh L/RGB request uploads, reads back
+  and supplies an auxiliary buffer of 3,145,728 bytes each, with 256 parameter
+  bytes. L expands fourfold, and RGB expands to four bytes per pixel. The
+  receipt also records a full-frame copy and mode conversion. Reuse the native
+  binary transfer path where its shader contract fits, then attribute mapping,
+  queue writes and waits. GPU remains 3.60×/1.28× slower than SIMD and has lower
+  sustained throughput. Zero host-buffer counters do not mean zero allocation.
+- **Direct kernels and remaining proof:** LUT setup and interleaved two/four
+  channel gathers still need size-dependent measurement; logical-mode and
+  empty-image fallbacks remain. Direct one-shot core kernels need their own
+  performance evidence, beyond Python's stateful blend. More shapes, factors,
+  bindings and platforms, integration into the complete results matrix, and
+  pre-push checks remain outstanding.
+
+The reusable skill now explains constructor snapshots versus live inputs,
+conversion fused into exact reductions, and the setup/gather tradeoff for
+finite-domain lookup tables. Static input indices contain 12,725 cases,
+24 plans, 773 workloads and 54 suites. No coverage was collected. This visit
+ends at its checkpoint; the next independent operation is Solarize. No public
+operation has every performance target demonstrated.
 
 ## Transpose verified behavior
 

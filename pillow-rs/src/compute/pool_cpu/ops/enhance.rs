@@ -141,93 +141,20 @@ pub fn op_enhance_contrast(
     factor: f64,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    // CMYK mode: stored as RGBA8 (C→R, M→G, Y→B, K→A)
-    if mode == Some("CMYK") {
-        // PIL: convert to L (via RGB), compute rounded mean, create uniform gray CMYK,
-        // then blend: degenerate * (1-factor) + original * factor
-        // PIL's degenerate for CMYK: C=0, M=0, Y=0, K=255-mean (NOT mean on all channels)
-        let gray = crate::color::cmyk_to_grayscale(img)?;
-        let pixels: Vec<u8> = gray.pixels().map(|p| p[0]).collect();
-        let n = pixels.len() as u64;
-        let mean = if n > 0 {
-            let sum: u64 = pixels.iter().map(|&p| p as u64).sum();
-            ((sum as f64 / n as f64) + 0.5) as u8
-        } else {
-            0
-        };
-        let k_val = 255u8.saturating_sub(mean) as f64;
-        let f = factor;
-        let mut rgba = img.to_rgba8();
-        let (width, height) = rgba.dimensions();
-        apply_enhance_rows(
-            rgba.as_mut(),
-            width as usize,
-            height as usize,
-            4,
-            |_y, row| {
-                for pixel in row.chunks_exact_mut(4) {
-                    // C, M, Y: degenerate=0, so blend = 0*(1-f) + orig*f = orig*f
-                    // K: degenerate = 255-mean
-                    pixel[0] = (pixel[0] as f64 * f).clamp(0.0, 255.0) as u8;
-                    pixel[1] = (pixel[1] as f64 * f).clamp(0.0, 255.0) as u8;
-                    pixel[2] = (pixel[2] as f64 * f).clamp(0.0, 255.0) as u8;
-                    pixel[3] = (k_val * (1.0 - f) + pixel[3] as f64 * f).clamp(0.0, 255.0) as u8;
-                }
-            },
-        );
-        return Ok(DynamicImage::ImageRgba8(rgba));
+    if (factor as f32).is_finite()
+        && let Some(base) = crate::ops::enhance::contrast_base(img, mode)
+    {
+        let lut = crate::ops::enhance::contrast_lut(&base, factor);
+        return super::effects::op_eval(img, &lut);
     }
-    // PIL: convert to L, compute rounded mean, create uniform gray degenerate,
-    // then blend: degenerate * (1-factor) + original * factor
-    let gray = pil_grayscale(img)?;
-    let pixels: Vec<u8> = gray.pixels().map(|p| p[0]).collect();
-    let n = pixels.len() as u64;
-    let mean = if n > 0 {
-        let sum: u64 = pixels.iter().map(|&p| p as u64).sum();
-        // int(mean + 0.5) matching PIL's ImageStat
-        ((sum as f64 / n as f64) + 0.5) as u8
-    } else {
-        0
-    };
-    let m = mean as f64;
-    let f = factor;
-    if matches!(
-        img,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) {
-        let mut rgba = img.to_rgba8();
-        let (width, height) = rgba.dimensions();
-        apply_enhance_rows(
-            rgba.as_mut(),
-            width as usize,
-            height as usize,
-            4,
-            |_y, row| {
-                for pixel in row.chunks_exact_mut(4) {
-                    for channel in pixel.iter_mut().take(3) {
-                        *channel = (m * (1.0 - f) + *channel as f64 * f).clamp(0.0, 255.0) as u8;
-                    }
-                }
-            },
-        );
-        return Ok(preserve_alpha_result(img, rgba));
-    }
-    let mut rgb = img.to_rgb8();
-    let (width, height) = rgb.dimensions();
-    apply_enhance_rows(
-        rgb.as_mut(),
-        width as usize,
-        height as usize,
-        3,
-        |_y, row| {
-            for pixel in row.chunks_exact_mut(3) {
-                for channel in pixel.iter_mut() {
-                    *channel = (m * (1.0 - f) + *channel as f64 * f).clamp(0.0, 255.0) as u8;
-                }
-            }
-        },
-    );
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+    // Rare logical modes use the same conversion and blend contract as the
+    // public constructor. Keep those nested operations on the requested CPU.
+    let image = crate::Image::from_dynamic(img.clone(), mode.map(str::to_owned))
+        .use_backend(crate::compute::Backend::Cpu);
+    let base = image.contrast_degenerate()?;
+    crate::ops::module_fns::blend(&base, &image, factor)?
+        .use_backend(crate::compute::Backend::Cpu)
+        .materialize_for_ops()
 }
 
 #[cfg(test)]

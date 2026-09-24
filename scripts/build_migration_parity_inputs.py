@@ -39848,6 +39848,7 @@ def build_nuanced_cases(
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(multiply_mode_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
+    cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
@@ -40130,6 +40131,80 @@ def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                 "steps": steps, "observations": ["image", "call", "materialize"],
             })
+    return cases
+
+
+def contrast_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Contrast's mode-dependent base, float32 blend and constructor snapshot."""
+    if surface_id != "PIL.ImageEnhance.Contrast":
+        return []
+    cases = []
+
+    def make_case(mode, channels, size, factor, label):
+        width, height = size
+        length = ((width + 7) // 8 if mode == "1" else width * channels) * height
+        raw = random.Random(f"contrast-{mode}-{label}").randbytes(length)
+        if mode == "F":
+            raw = b"".join(struct.pack("<f", (i * 13.75) % 600 - 100)
+                           for i in range(width * height))
+        steps = [
+            {"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+             "receiver": None, "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                                                "data": {"kind": "asset", "asset_id": "pixels"}}},
+            {"step_id": "enhancer", "surface": "PIL.ImageEnhance", "operation": "Contrast",
+             "receiver": None, "arguments": {"image": binding("image")}},
+            {"step_id": "call", "surface": surface_id, "operation": "enhance",
+             "receiver": binding("enhancer"), "arguments": {"factor": literal(factor)}},
+            {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+             "receiver": binding("call"), "arguments": {}},
+        ]
+        return {
+            "case_id": f"{surface_id}.enhance.nuanced.audit-{mode}-{label}-{factor}",
+            "surface": surface_id, "operation": "enhance",
+            "covers": [f"{surface_id}.enhance.behavior.default"],
+            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            "assets": [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                        "data": base64.b64encode(raw).decode(),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream"}],
+            "steps": steps, "observations": ["enhancer", "call", "materialize"],
+        }
+
+    modes = {"1": 0, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "HSV": 3, "YCbCr": 3,
+             "I": 4, "F": 4, "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+    for mode, channels in modes.items():
+        for factor in (0, 0.1, 0.3, 0.7, 0.99999999, 1, 1.00000001, 1.2, 2, -1, 3.33333):
+            cases.append(make_case(mode, channels, (17, 11), factor, "varied"))
+        if mode in ("L", "LA", "RGB", "RGBA", "CMYK"):
+            for size in ((0, 3), (3, 0)):
+                cases.append(make_case(mode, channels, size, 0.3, f"empty-{size[0]}x{size[1]}"))
+
+    for mode, channels in modes.items():
+        if mode not in ("L", "LA", "RGB", "RGBA", "RGBX", "CMYK", "HSV", "YCbCr"):
+            continue
+        for shape in ((0, 3), (3, 0)):
+            case = make_case(mode, channels, shape, 0.3, f"empty-new-{shape[0]}x{shape[1]}")
+            case["steps"][0]["operation"] = "new"
+            case["steps"][0]["arguments"].pop("data")
+            case["steps"][0]["arguments"]["color"] = literal(0)
+            case["assets"] = []
+            cases.append(case)
+        case = make_case(mode, channels, (17, 11), 0.3, "source-mutation")
+        value = [251, 13, 149, 19][:channels] if channels > 1 else 251
+        mutation = {"step_id": "mutate", "surface": "PIL.Image.Image", "operation": "putpixel",
+                    "receiver": binding("image"), "arguments": {"xy": literal([3, 4]), "value": literal(value)}}
+        case["steps"].insert(2, mutation)
+        case["steps"].extend([
+            {"step_id": "mutate-again", "surface": "PIL.Image.Image", "operation": "putpixel",
+             "receiver": binding("image"), "arguments": {"xy": literal([7, 2]), "value": literal(value)}},
+            {"step_id": "repeat", "surface": surface_id, "operation": "enhance",
+             "receiver": binding("enhancer"), "arguments": {"factor": literal(1.2)}},
+            {"step_id": "repeat-bytes", "surface": "PIL.Image.Image", "operation": "tobytes",
+             "receiver": binding("repeat"), "arguments": {}},
+        ])
+        case["observations"].extend(["repeat", "repeat-bytes"])
+        cases.append(case)
     return cases
 
 

@@ -581,7 +581,7 @@ pub fn op_blend_module(
     alpha: f64,
     _explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize_for_ops()?;
+    let other_img = other.materialized_shared()?;
     // Public blend validates the mode family and dimensions before queuing.
     // Every stored byte participates, including LA/RGBA alpha and CMYK K.
     // Borrow both native buffers instead of cloning them through conversions;
