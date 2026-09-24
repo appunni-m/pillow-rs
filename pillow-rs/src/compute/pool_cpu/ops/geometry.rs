@@ -1627,24 +1627,61 @@ fn should_tile_transpose(width: u32, height: u32) -> bool {
 
 /// Transpose a large byte image in bounded output-row tiles.
 ///
-/// A full output row fixes one source column, so the old row-oriented loop
-/// reads the source with a `width * channels` stride for its entire lifetime.
-/// Grouping output rows into small tiles lets the inner loop visit a compact
-/// source-row span before moving to the next tile.  Each Rayon chunk owns a
-/// complete group of output rows, so the write proof remains the same as
-/// `par_rows_mut!`; the small-image path deliberately keeps its old order.
-fn transpose_bytes_tiled(
+/// Each task owns complete output rows and visits bounded rectangles within
+/// them. Writing each row segment contiguously keeps destination indexing out
+/// of the pixel loop while the source gathers stay within one small rectangle.
+/// The small-image path deliberately keeps its old order.
+fn transpose_bytes_tiled<const CHANNELS: usize>(
     source: &[u8],
     output: &mut [u8],
     width: u32,
     height: u32,
-    channels: usize,
     method: &TransposeMethod,
 ) {
-    let output_stride = height as usize * channels;
+    let width = width as usize;
+    let height = height as usize;
+    let output_stride = height * CHANNELS;
+    let source_stride = width * CHANNELS;
     #[cfg(feature = "parallel")]
     let tile_stride = output_stride * TRANSPOSE_TILE_SIZE as usize;
-    let tile_rows = (width as usize).div_ceil(TRANSPOSE_TILE_SIZE as usize);
+    let tile_rows = width.div_ceil(TRANSPOSE_TILE_SIZE as usize);
+    let (reverse_x, reverse_y) = match method {
+        TransposeMethod::Transpose => (false, false),
+        TransposeMethod::Transverse => (true, true),
+        TransposeMethod::Rotate90 => (true, false),
+        TransposeMethod::Rotate270 => (false, true),
+        _ => unreachable!("unsupported tiled transpose method"),
+    };
+    let process_tile = |tile_index: usize, rows: &mut [u8]| {
+        for block_x in (0..height).step_by(TRANSPOSE_TILE_SIZE as usize) {
+            let end_x = (block_x + TRANSPOSE_TILE_SIZE as usize).min(height);
+            for (local_y, row) in rows.chunks_exact_mut(output_stride).enumerate() {
+                let output_y = tile_index * TRANSPOSE_TILE_SIZE as usize + local_y;
+                let source_x = if reverse_x {
+                    width - 1 - output_y
+                } else {
+                    output_y
+                };
+                let pixels = row[block_x * CHANNELS..end_x * CHANNELS].chunks_exact_mut(CHANNELS);
+                // Each segment contains complete native samples. Its source
+                // indices advance by one row, bounded by this rectangle even
+                // when the final tile is partial or the orientation reverses.
+                if reverse_y {
+                    let first = (height - 1 - block_x) * source_stride + source_x * CHANNELS;
+                    for (offset, pixel) in pixels.enumerate() {
+                        let source_index = first - offset * source_stride;
+                        pixel.copy_from_slice(&source[source_index..source_index + CHANNELS]);
+                    }
+                } else {
+                    let first = block_x * source_stride + source_x * CHANNELS;
+                    for (offset, pixel) in pixels.enumerate() {
+                        let source_index = first + offset * source_stride;
+                        pixel.copy_from_slice(&source[source_index..source_index + CHANNELS]);
+                    }
+                }
+            }
+        }
+    };
 
     #[cfg(feature = "parallel")]
     crate::par_rows_mut!(
@@ -1652,122 +1689,215 @@ fn transpose_bytes_tiled(
         tile_stride,
         tile_rows,
         |_row_start, _row_end, tile_index, rows| {
-            let output_y_start = tile_index as usize * TRANSPOSE_TILE_SIZE as usize;
-            let output_y_end = (output_y_start + TRANSPOSE_TILE_SIZE as usize).min(width as usize);
-            for output_x in 0..height as usize {
-                for output_y in output_y_start..output_y_end {
-                    let (source_x, source_y) = match method {
-                        TransposeMethod::Transpose => (output_y, output_x),
-                        TransposeMethod::Transverse => (
-                            width as usize - 1 - output_y,
-                            height as usize - 1 - output_x,
-                        ),
-                        TransposeMethod::Rotate90 => (width as usize - 1 - output_y, output_x),
-                        TransposeMethod::Rotate270 => (output_y, height as usize - 1 - output_x),
-                        _ => unreachable!("unsupported tiled transpose method"),
-                    };
-                    let source_index = (source_y * width as usize + source_x) * channels;
-                    let output_index =
-                        (output_y - output_y_start) * output_stride + output_x * channels;
-                    rows[output_index..output_index + channels]
-                        .copy_from_slice(&source[source_index..source_index + channels]);
-                }
-            }
+            process_tile(tile_index as usize, rows);
         }
     );
 
     #[cfg(not(feature = "parallel"))]
     for tile_index in 0..tile_rows {
         let output_y_start = tile_index * TRANSPOSE_TILE_SIZE as usize;
-        let output_y_end = (output_y_start + TRANSPOSE_TILE_SIZE as usize).min(width as usize);
+        let output_y_end = (output_y_start + TRANSPOSE_TILE_SIZE as usize).min(width);
         let row_start = output_y_start * output_stride;
         let row_end = output_y_end * output_stride;
         let rows = &mut output[row_start..row_end];
-        for output_x in 0..height as usize {
-            for output_y in output_y_start..output_y_end {
-                let (source_x, source_y) = match method {
-                    TransposeMethod::Transpose => (output_y, output_x),
-                    TransposeMethod::Transverse => (
-                        width as usize - 1 - output_y,
-                        height as usize - 1 - output_x,
-                    ),
-                    TransposeMethod::Rotate90 => (width as usize - 1 - output_y, output_x),
-                    TransposeMethod::Rotate270 => (output_y, height as usize - 1 - output_x),
-                    _ => unreachable!("unsupported tiled transpose method"),
-                };
-                let source_index = (source_y * width as usize + source_x) * channels;
-                let output_index =
-                    (output_y - output_y_start) * output_stride + output_x * channels;
-                rows[output_index..output_index + channels]
-                    .copy_from_slice(&source[source_index..source_index + channels]);
+        process_tile(tile_index, rows);
+    }
+}
+
+/// Transpose small native byte images with complete row and pixel slices.
+/// This avoids repeated coordinate validation and saturating arithmetic in
+/// generic pixel accessors. Trim trailing storage before reversing source
+/// rows: ImageBuffer permits extra samples after the logical raster.
+fn transpose_bytes_serial<const CHANNELS: usize>(
+    source: &[u8],
+    output: &mut [u8],
+    width: u32,
+    height: u32,
+    method: &TransposeMethod,
+) {
+    let source = &source[..output.len()];
+    let source_stride = width as usize * CHANNELS;
+    let output_stride = height as usize * CHANNELS;
+    let reverse_x = matches!(
+        method,
+        TransposeMethod::Rotate90 | TransposeMethod::Transverse
+    );
+    let reverse_y = matches!(
+        method,
+        TransposeMethod::Rotate270 | TransposeMethod::Transverse
+    );
+    for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
+        let source_x = if reverse_x { width as usize - 1 - y } else { y };
+        let offset = source_x * CHANNELS;
+        let source_rows = source.chunks_exact(source_stride);
+        if reverse_y {
+            for (pixel, original) in row.chunks_exact_mut(CHANNELS).zip(source_rows.rev()) {
+                pixel.copy_from_slice(&original[offset..offset + CHANNELS]);
+            }
+        } else {
+            for (pixel, original) in row.chunks_exact_mut(CHANNELS).zip(source_rows) {
+                pixel.copy_from_slice(&original[offset..offset + CHANNELS]);
             }
         }
     }
+}
+
+/// Copy complete native rows for flips and half turns. Pixel chunks keep
+/// channels (including opaque packed I/F words) together without repeated
+/// coordinate validation or a per-pixel image accessor.
+fn transpose_bytes_rows<const CHANNELS: usize>(
+    source: &[u8],
+    output: &mut [u8],
+    dimensions: &CheckedDims,
+    reverse_x: bool,
+    reverse_y: bool,
+) {
+    let height = dimensions.height as usize;
+    let stride = dimensions.row_stride();
+    let copy_rows = |first_y: usize, rows: &mut [u8]| {
+        for (local_y, row) in rows.chunks_exact_mut(stride).enumerate() {
+            let y = first_y + local_y;
+            let source_y = if reverse_y { height - 1 - y } else { y };
+            let input = &source[source_y * stride..(source_y + 1) * stride];
+            if reverse_x {
+                for (pixel, original) in row
+                    .chunks_exact_mut(CHANNELS)
+                    .zip(input.chunks_exact(CHANNELS).rev())
+                {
+                    pixel.copy_from_slice(original);
+                }
+            } else {
+                row.copy_from_slice(input);
+            }
+        }
+    };
+    #[cfg(feature = "parallel")]
+    if dimensions.total_pixels() >= TRANSPOSE_TILE_THRESHOLD_PIXELS {
+        // Group complete rows by bytes, so a tall one-pixel image does not
+        // create a task per tiny row. Checked output dimensions bound stride
+        // and every full group; the final group may contain fewer rows.
+        let rows_per_group = (32 * 1024usize).div_ceil(stride).min(height);
+        let group_stride = rows_per_group * stride;
+        let groups = height.div_ceil(rows_per_group);
+        crate::par_rows_mut!(
+            output,
+            group_stride,
+            groups,
+            |_row_start, _row_end, group, rows| {
+                copy_rows(group as usize * rows_per_group, rows);
+            }
+        );
+    } else {
+        copy_rows(0, output);
+    }
+    #[cfg(not(feature = "parallel"))]
+    copy_rows(0, output);
 }
 
 pub fn execute_transpose(
     img: &DynamicImage,
     method: &TransposeMethod,
 ) -> Result<DynamicImage, PilError> {
+    if matches!(
+        method,
+        TransposeMethod::FlipLeftRight
+            | TransposeMethod::FlipTopBottom
+            | TransposeMethod::Rotate180
+    ) && matches!(
+        img.color(),
+        crate::raster::ColorType::L8
+            | crate::raster::ColorType::La8
+            | crate::raster::ColorType::Rgb8
+            | crate::raster::ColorType::Rgba8
+    ) {
+        let (width, height) = img.dimensions();
+        if width != 0 && height != 0 {
+            let channels = img.color().channel_count() as usize;
+            let dimensions = CheckedDims::new(width, height, channels as u8)?;
+            let mut output = dimensions.alloc_buffer();
+            let reverse_x = !matches!(method, TransposeMethod::FlipTopBottom);
+            let reverse_y = !matches!(method, TransposeMethod::FlipLeftRight);
+            macro_rules! copy_rows {
+                ($channels:literal) => {
+                    transpose_bytes_rows::<$channels>(
+                        img.as_bytes(),
+                        &mut output,
+                        &dimensions,
+                        reverse_x,
+                        reverse_y,
+                    )
+                };
+            }
+            match channels {
+                1 => copy_rows!(1),
+                2 => copy_rows!(2),
+                3 => copy_rows!(3),
+                4 => copy_rows!(4),
+                _ => unreachable!("native byte image has one to four channels"),
+            }
+            return raw_bytes_to_image(width, height, output, channels);
+        }
+    }
+    if matches!(
+        method,
+        TransposeMethod::Rotate90
+            | TransposeMethod::Rotate270
+            | TransposeMethod::Transpose
+            | TransposeMethod::Transverse
+    ) && matches!(
+        img.color(),
+        crate::raster::ColorType::L8
+            | crate::raster::ColorType::La8
+            | crate::raster::ColorType::Rgb8
+            | crate::raster::ColorType::Rgba8
+    ) {
+        let (width, height) = img.dimensions();
+        if width != 0 && height != 0 && (width != 1 || height != 1) {
+            let channels = img.color().channel_count() as usize;
+            let mut output = CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
+            // Specialize the opaque pixel size once per image so each tile
+            // copies a fixed-size sample instead of calling a variable-size
+            // slice copy for every pixel.
+            macro_rules! transpose_bytes {
+                ($channels:literal) => {
+                    if should_tile_transpose(width, height) {
+                        transpose_bytes_tiled::<$channels>(
+                            img.as_bytes(),
+                            &mut output,
+                            width,
+                            height,
+                            method,
+                        );
+                    } else {
+                        transpose_bytes_serial::<$channels>(
+                            img.as_bytes(),
+                            &mut output,
+                            width,
+                            height,
+                            method,
+                        );
+                    }
+                };
+            }
+            match channels {
+                1 => transpose_bytes!(1),
+                2 => transpose_bytes!(2),
+                3 => transpose_bytes!(3),
+                4 => transpose_bytes!(4),
+                _ => unreachable!("native byte image has one to four channels"),
+            }
+            return raw_bytes_to_image(height, width, output, channels);
+        }
+    }
     match method {
         TransposeMethod::FlipLeftRight => Ok(img.fliph()),
         TransposeMethod::FlipTopBottom => Ok(img.flipv()),
         // PIL rotates counter-clockwise; image crate rotates clockwise.
         // PIL ROTATE_90 (CCW) = image crate rotate270 (CW)
         // PIL ROTATE_270 (CCW) = image crate rotate90 (CW)
-        TransposeMethod::Rotate90 => {
-            if matches!(
-                img.color(),
-                crate::raster::ColorType::L8
-                    | crate::raster::ColorType::La8
-                    | crate::raster::ColorType::Rgb8
-                    | crate::raster::ColorType::Rgba8
-            ) {
-                let (width, height) = img.dimensions();
-                if should_tile_transpose(width, height) {
-                    let channels = img.color().channel_count() as usize;
-                    let mut output =
-                        CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
-                    transpose_bytes_tiled(
-                        img.as_bytes(),
-                        &mut output,
-                        width,
-                        height,
-                        channels,
-                        method,
-                    );
-                    return raw_bytes_to_image(height, width, output, channels);
-                }
-            }
-            Ok(img.rotate270())
-        }
+        TransposeMethod::Rotate90 => Ok(img.rotate270()),
         TransposeMethod::Rotate180 => Ok(img.rotate180()),
-        TransposeMethod::Rotate270 => {
-            if matches!(
-                img.color(),
-                crate::raster::ColorType::L8
-                    | crate::raster::ColorType::La8
-                    | crate::raster::ColorType::Rgb8
-                    | crate::raster::ColorType::Rgba8
-            ) {
-                let (width, height) = img.dimensions();
-                if should_tile_transpose(width, height) {
-                    let channels = img.color().channel_count() as usize;
-                    let mut output =
-                        CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
-                    transpose_bytes_tiled(
-                        img.as_bytes(),
-                        &mut output,
-                        width,
-                        height,
-                        channels,
-                        method,
-                    );
-                    return raw_bytes_to_image(height, width, output, channels);
-                }
-            }
-            Ok(img.rotate90())
-        }
+        TransposeMethod::Rotate270 => Ok(img.rotate90()),
         TransposeMethod::Transpose | TransposeMethod::Transverse => {
             Ok(img.transpose_diagonal(matches!(method, TransposeMethod::Transverse)))
         }
@@ -2211,6 +2341,217 @@ mod tests {
     use super::{reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
+
+    #[test]
+    fn transpose_tiled_rows_preserve_native_pixels_edges_and_trailing_storage() {
+        use crate::pipeline::TransposeMethod;
+        use crate::raster::GrayAlphaImage;
+
+        for (width, height) in [
+            (1, 1),
+            (1, 257),
+            (257, 1),
+            (3, 7),
+            (9, 31),
+            (31, 9),
+            (31, 33),
+            (32, 32),
+            (33, 31),
+            (63, 65),
+            (127, 129),
+            (255, 257),
+            (511, 513),
+            (512, 512),
+            (513, 515),
+            (515, 513),
+        ] {
+            for channels in 1..=4 {
+                let length = width as usize * height as usize * channels;
+                // ImageBuffer permits extra samples after its logical raster.
+                // Both paths must copy only pixels within the declared shape.
+                let source: Vec<u8> = (0..length + channels * 3 + 1)
+                    .map(|index| ((index * 73 + index / 17 * 29) % 256) as u8)
+                    .collect();
+                let image = match channels {
+                    1 => DynamicImage::ImageLuma8(
+                        GrayImage::from_raw(width, height, source.clone()).unwrap(),
+                    ),
+                    2 => DynamicImage::ImageLumaA8(
+                        GrayAlphaImage::from_raw(width, height, source.clone()).unwrap(),
+                    ),
+                    3 => DynamicImage::ImageRgb8(
+                        RgbImage::from_raw(width, height, source.clone()).unwrap(),
+                    ),
+                    4 => DynamicImage::ImageRgba8(
+                        RgbaImage::from_raw(width, height, source.clone()).unwrap(),
+                    ),
+                    _ => unreachable!(),
+                };
+                for method in [
+                    TransposeMethod::Transpose,
+                    TransposeMethod::Transverse,
+                    TransposeMethod::Rotate90,
+                    TransposeMethod::Rotate270,
+                ] {
+                    let mut expected = vec![0u8; length];
+                    for source_y in 0..height as usize {
+                        for source_x in 0..width as usize {
+                            let (target_x, target_y) = match method {
+                                TransposeMethod::Transpose => (source_y, source_x),
+                                TransposeMethod::Transverse => (
+                                    height as usize - 1 - source_y,
+                                    width as usize - 1 - source_x,
+                                ),
+                                TransposeMethod::Rotate90 => {
+                                    (source_y, width as usize - 1 - source_x)
+                                }
+                                TransposeMethod::Rotate270 => {
+                                    (height as usize - 1 - source_y, source_x)
+                                }
+                                _ => unreachable!(),
+                            };
+                            let input = (source_y * width as usize + source_x) * channels;
+                            let output = (target_y * height as usize + target_x) * channels;
+                            expected[output..output + channels]
+                                .copy_from_slice(&source[input..input + channels]);
+                        }
+                    }
+                    // Directly exercise partial tiles even below admission,
+                    // and prove every output byte is written independently of
+                    // initialized storage contents.
+                    for sentinel in [0u8, 0xA5] {
+                        let mut output = vec![sentinel; length];
+                        macro_rules! transpose {
+                            ($channels:literal) => {
+                                super::transpose_bytes_tiled::<$channels>(
+                                    &source,
+                                    &mut output,
+                                    width,
+                                    height,
+                                    &method,
+                                )
+                            };
+                        }
+                        match channels {
+                            1 => transpose!(1),
+                            2 => transpose!(2),
+                            3 => transpose!(3),
+                            4 => transpose!(4),
+                            _ => unreachable!(),
+                        }
+                        assert_eq!(
+                            output, expected,
+                            "tiled {width}x{height} C{channels} {method:?}"
+                        );
+                    }
+                    let actual =
+                        super::execute_transpose(&image, &method).expect("native transpose");
+                    assert_eq!(actual.dimensions(), (height, width));
+                    assert_eq!(actual.color(), image.color());
+                    assert_eq!(
+                        actual.as_bytes(),
+                        expected,
+                        "dispatch {width}x{height} C{channels} {method:?}"
+                    );
+                    assert_eq!(image.as_bytes(), source, "source remains unchanged");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn transpose_row_copies_preserve_native_pixels_and_edges() {
+        use crate::pipeline::TransposeMethod;
+        for (width, height) in [
+            (0, 3),
+            (3, 0),
+            (1, 9),
+            (9, 1),
+            (9, 31),
+            (511, 513),
+            (512, 512),
+            (513, 515),
+            (1, 262145),
+            (262145, 1),
+        ] {
+            for channels in 1..=4 {
+                let length = width as usize * height as usize * channels;
+                let source: Vec<u8> = (0..length)
+                    .map(|index| ((index * 73 + index / 17 * 29) % 256) as u8)
+                    .collect();
+                let image = crate::image_utils::raw_bytes_to_image_allow_empty(
+                    width,
+                    height,
+                    source.clone(),
+                    channels,
+                )
+                .expect("native source shape");
+                for method in [
+                    TransposeMethod::FlipLeftRight,
+                    TransposeMethod::FlipTopBottom,
+                    TransposeMethod::Rotate180,
+                ] {
+                    let mut expected = vec![0u8; length];
+                    for y in 0..height as usize {
+                        for x in 0..width as usize {
+                            let (destination_x, destination_y) = match method {
+                                TransposeMethod::FlipLeftRight => (width as usize - 1 - x, y),
+                                TransposeMethod::FlipTopBottom => (x, height as usize - 1 - y),
+                                TransposeMethod::Rotate180 => {
+                                    (width as usize - 1 - x, height as usize - 1 - y)
+                                }
+                                _ => unreachable!(),
+                            };
+                            let input = (y * width as usize + x) * channels;
+                            let output =
+                                (destination_y * width as usize + destination_x) * channels;
+                            expected[output..output + channels]
+                                .copy_from_slice(&source[input..input + channels]);
+                        }
+                    }
+                    let actual = super::execute_transpose(&image, &method).expect("native flip");
+                    assert_eq!(actual.dimensions(), (width, height));
+                    assert_eq!(actual.color(), image.color());
+                    assert_eq!(
+                        actual.as_bytes(),
+                        expected,
+                        "{width}x{height} C{channels} {method:?}"
+                    );
+                    assert_eq!(image.as_bytes(), source, "source remains unchanged");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn transpose_row_copies_discard_trailing_storage() {
+        use crate::pipeline::TransposeMethod;
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(
+                2,
+                2,
+                vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 99, 98, 97],
+            )
+            .expect("trailing samples are permitted by ImageBuffer"),
+        );
+        for (method, expected) in [
+            (
+                TransposeMethod::FlipLeftRight,
+                [4, 5, 6, 1, 2, 3, 10, 11, 12, 7, 8, 9],
+            ),
+            (
+                TransposeMethod::FlipTopBottom,
+                [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6],
+            ),
+            (
+                TransposeMethod::Rotate180,
+                [10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3],
+            ),
+        ] {
+            let output = super::execute_transpose(&image, &method).expect("native flip");
+            assert_eq!(output.as_bytes(), expected);
+        }
+    }
 
     #[test]
     fn rotate_near_right_angle_uses_affine_sampling() {

@@ -66771,6 +66771,668 @@
       ]
     },
     {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-l-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 193
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-la-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                31,
+                207
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-rgb-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                17,
+                29,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-rgba-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                9,
+                33,
+                117,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-rgbx-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBX"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                41,
+                79,
+                137,
+                211
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-cmyk-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                11,
+                33,
+                99,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-i-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": -123456789
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-f-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": -0.0
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-i-16-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 65535
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-p-13x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                13,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 73
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-rgb-0x7",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                7
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                17,
+                29,
+                233
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.bulk-fill-l-5x0",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "source",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 193
+            }
+          }
+        },
+        {
+          "step_id": "fill-bytes",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "source"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "source",
+        "fill-bytes"
+      ]
+    },
+    {
       "case_id": "pipeline-case.merge.materialized-smoke",
       "surface": "PIL.Image",
       "operation": "merge",

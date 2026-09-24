@@ -173,7 +173,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- thumbnail.wgsl
 |   |   |   |       |-- transform.wgsl
 |   |   |   |       |-- transform_geometry.wgsl
-|   |   |   |       `-- transpose.wgsl
+|   |   |   |       |-- transpose.wgsl
+|   |   |   |       |-- transpose_rgb.wgsl
+|   |   |   |       `-- transpose_rgb_tiled.wgsl
 |   |   |   |-- pool_simd/
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
@@ -337,6 +339,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_migration_parity.py
     |-- run_migration_pillow_coverage.py
     |-- run_migration_rust_coverage.py
+    |-- run_transpose_throughput.py
     |-- select_docs_benchmark.py
     |-- test_coverage_context.py
     |-- test_docs_benchmark_selection.py

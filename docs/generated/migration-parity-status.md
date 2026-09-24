@@ -19,9 +19,9 @@ lane: parity
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `parity_outcome` | `python-cpu` | 0 | 11348 | `not_proven` |
-| `parity_outcome` | `python-simd` | 0 | 0 | `not_proven` |
-| `parity_outcome` | `python-gpu` | 0 | 0 | `not_proven` |
+| `parity_outcome` | `python-cpu` | 0 | 11035 | `not_proven` |
+| `parity_outcome` | `python-simd` | 0 | 163 | `not_proven` |
+| `parity_outcome` | `python-gpu` | 0 | 163 | `not_proven` |
 
 ## Interpretation
 

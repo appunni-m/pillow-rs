@@ -310,7 +310,12 @@ fn bicubic_quarter_channel(
 }
 
 fn projective_bicubic_quarter_constant() -> bool {
-    if params.filter_code != 2u {
+    // The quarter-grid polynomial below operates on raw bytes. The host
+    // admits straight-alpha Bicubic only for zero-weight relocations, whose
+    // exact premultiply/store/unpremultiply round trip is implemented by the
+    // projective bilinear sampler. Even an exact sample center can change a
+    // channel: LA (193, 222) becomes (192, 222) after Pillow's alpha round trip.
+    if params.filter_code != 2u || params.premultiply != 0u {
         return false;
     }
     if params.method == 1u {

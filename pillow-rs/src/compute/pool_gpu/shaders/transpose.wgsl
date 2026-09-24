@@ -21,6 +21,11 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> params: Params;
 
+// Swapped-axis methods stage a 16x16 tile with a padded row stride before
+// writing output rows. The padding avoids a power-of-two stride when lanes
+// read the tile's columns; storage contains complete packed pixel words.
+var<workgroup> tile: array<u32, 272>;
+
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 5u || m == 6u || m == 7u || m == 8u; }
@@ -43,9 +48,11 @@ fn get_src_coord(x: u32, y: u32, src_w: u32, src_h: u32, op: u32) -> vec2<u32> {
 }
 
 @compute @workgroup_size(16, 16)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if gid.x >= params.width || gid.y >= params.height { return; }
-
+fn main(
+    @builtin(global_invocation_id) gid: vec3<u32>,
+    @builtin(local_invocation_id) lid: vec3<u32>,
+    @builtin(workgroup_id) group: vec3<u32>,
+) {
     let w = params.width;
     let h = params.height;
     let op = params.op_code;
@@ -55,11 +62,32 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let in_w = select(w, h, swap);
     let in_h = select(h, w, swap);
 
-    let src = get_src_coord(gid.x, gid.y, in_w, in_h, op);
-    let src_idx = src.y * in_w + src.x;
-    let dst_idx = gid.y * w + gid.x;
+    var src_pixel = 0u;
+    if swap {
+        // Exchanging local output axes makes adjacent X lanes read adjacent
+        // (possibly reversed) source pixels instead of separate source rows.
+        let load_coord = group.xy * 16u + lid.yx;
+        var loaded = 0u;
+        if load_coord.x < w && load_coord.y < h {
+            let src = get_src_coord(load_coord.x, load_coord.y, in_w, in_h, op);
+            loaded = input[src.y * in_w + src.x];
+        }
+        tile[lid.y * 17u + lid.x] = loaded;
+        // Every invocation, including the inactive edge lanes, must reach
+        // this barrier. A valid output reads the slot whose loader checked
+        // that exact output coordinate, so it never consumes edge padding.
+        workgroupBarrier();
+        if gid.x >= w || gid.y >= h { return; }
+        src_pixel = tile[lid.x * 17u + lid.y];
+    } else {
+        // Flips and Rotate180 already read contiguous source rows and do
+        // not benefit from workgroup staging or synchronization.
+        if gid.x >= w || gid.y >= h { return; }
+        let src = get_src_coord(gid.x, gid.y, in_w, in_h, op);
+        src_pixel = input[src.y * in_w + src.x];
+    }
 
-    let src_pixel = input[src_idx];
+    let dst_idx = gid.y * w + gid.x;
     let src_r = src_pixel & 0xffu;
     let src_g = (src_pixel >> 8u) & 0xffu;
     let src_b = (src_pixel >> 16u) & 0xffu;

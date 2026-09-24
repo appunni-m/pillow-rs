@@ -113,6 +113,8 @@ MIGRATION_CHANGED_LINE_COVERAGE_OUTPUT ?= build/migration-parity/changed-line-co
 MIGRATION_PROFILE_ARGS ?=
 MIGRATION_CORE_BENCHMARK_ARGS ?=
 MIGRATION_CORE_BENCHMARK_OUTPUT ?= build/migration-parity/pipeline-core-benchmark.json
+MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT ?= build/migration-parity/transpose-throughput.json
+MIGRATION_TRANSPOSE_THROUGHPUT_ARGS ?=
 PILLOW_RS_PY_BENCHMARK_ARGS ?=
 PILLOW_RS_PY_BENCHMARK_OUTPUT ?= build/migration-parity/pillow-rs-py-binding-benchmark.json
 MIGRATION_BENCHMARK_QUICK_WORKLOADS := \
@@ -192,6 +194,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-crash-quarantine-check$(NC) Verify isolated crash inputs without executing them\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Compare Pillow vs CPU, SIMD, and GPU\n"
+	@printf "  $(CYAN)make migration-parity-transpose-throughput$(NC) Build parity facade; compare fresh transpose requests at host queue depths 1/2/4\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark-low-load$(NC) Run the fixed cohort with macOS utility/background scheduling\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark$(NC) Run the representative four-workload smoke benchmark\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark$(NC) Run the fixed 11-workload release acceptance cohort\n"
@@ -684,6 +687,11 @@ migration-parity-benchmark-low-load: ## Run a fixed benchmark under a stable low
 migration-parity-pipeline-core-benchmark: ## Run the direct pure-Rust pipeline boundary benchmark
 	@mkdir -p "$(dir $(MIGRATION_CORE_BENCHMARK_OUTPUT))"
 	$(CARGO) run --manifest-path $(CORE_SRC)/Cargo.toml --release --locked --example pipeline_layers -- $(MIGRATION_CORE_BENCHMARK_ARGS) > "$(MIGRATION_CORE_BENCHMARK_OUTPUT)"
+
+.PHONY: migration-parity-transpose-throughput
+migration-parity-transpose-throughput: build-parity ## Measure changing-input public transpose throughput with exact live-Pillow checks
+	$(PYTHON) scripts/run_transpose_throughput.py \
+		--output "$(MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT)" $(MIGRATION_TRANSPOSE_THROUGHPUT_ARGS)
 
 pillow-rs-py-binding-benchmark: build-parity ## Run the release-only PyO3 boundary benchmark
 	@mkdir -p "$(dir $(PILLOW_RS_PY_BENCHMARK_OUTPUT))"

@@ -4,7 +4,13 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
-## 12.2.0-alpha.1 - Unreleased
+## Unreleased
+
+- Refine transpose, flips, and right-angle rotations across CPU, SIMD, and GPU
+  paths while preserving parity on the selected regression cases; the wider
+  latency and throughput goals remain in progress.
+
+## 12.2.0-alpha.1 - 2026-09-16
 
 - Align Cargo, npm, Python manifests and runtime, and current documentation on
   one version targeting Pillow 12.2.0. Verify synchronization in CI and handle

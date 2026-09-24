@@ -56,6 +56,19 @@ pub fn normalize_transposed_font_input(input: TransposeInput) -> Option<String> 
 impl Image {
     /// Applies the Python-facing integer/name transpose contract.
     pub fn transpose_with_input(&self, input: TransposeInput) -> Result<Image, PilError> {
+        if let TransposeInput::Index(index) = input {
+            let method = match index {
+                0 => TransposeMethod::FlipLeftRight,
+                1 => TransposeMethod::FlipTopBottom,
+                2 => TransposeMethod::Rotate90,
+                3 => TransposeMethod::Rotate180,
+                4 => TransposeMethod::Rotate270,
+                5 => TransposeMethod::Transpose,
+                6 => TransposeMethod::Transverse,
+                _ => return Err(PilError::ValueError("No such transpose operation".into())),
+            };
+            return Ok(Image::push_op(self, PipelineOp::Transpose { method }));
+        }
         let method = normalize_transpose_input(input)?;
         self.transpose(&method)
     }

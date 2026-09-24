@@ -1,6 +1,6 @@
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE:
-//   The par_rows! macro and par_pixels! macro are the ONLY approved way to
+//   The pixel-loop macros in this module are the ONLY approved way to
 //   parallelize pixel loops. Direct use of rayon::par_iter() on raw pixel data
 //   is banned because it:
 //     (a) Can produce cache-thrashing access patterns when not row-aligned
@@ -121,6 +121,31 @@ macro_rules! par_rows_mut_typed {
                 let $row = _row;
                 $body
             });
+    }};
+}
+
+/// Collect fully initialized, fixed-size blocks of independent output rows.
+///
+/// The indexed iterator preserves row/block order and allocates one output
+/// vector. Each task gets private state from the initializer, which can cache
+/// rows computed from shared immutable source pixels. Every mapped block must
+/// be fully initialized; no task may depend on another task's output. Validate
+/// output and scratch dimensions before calling this macro. If the initializer
+/// allocates scratch storage, account for those allocations on the caller's
+/// thread rather than in worker-local telemetry.
+#[macro_export]
+macro_rules! par_row_blocks_collect {
+    ($blocks:expr, $min_blocks:expr, $initialize:expr, $map:expr) => {{
+        let _blocks: usize = $blocks;
+        let _min_blocks: usize = $min_blocks;
+        use rayon::iter::IndexedParallelIterator;
+        use rayon::iter::IntoParallelIterator;
+        use rayon::iter::ParallelIterator;
+        (0.._blocks)
+            .into_par_iter()
+            .with_min_len(_min_blocks)
+            .map_init($initialize, $map)
+            .collect::<Vec<_>>()
     }};
 }
 

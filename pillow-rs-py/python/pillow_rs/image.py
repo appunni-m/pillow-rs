@@ -1,4 +1,5 @@
 """Internal Python Image class that wraps the Rust implementation."""
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
 
@@ -104,6 +105,17 @@ class Image:
         # so ``Image.info`` can preserve format-specific fields exposed by
         # Pillow (DPI, compression, animation defaults, and similar values).
         self._info = {}
+        self._native_info = None
+        self._native_info_rebaseline = False
+        self._native_info_omitted = frozenset()
+        self._transpose_loads_info = False
+
+    def _sync_observed_info(self):
+        # A caller may retain the dictionary itself across an in-place core
+        # mutation. Refresh that same dictionary, while unobserved metadata
+        # stays lazy.
+        if self._native_info is not None:
+            self.info
 
     def _ensure_materialized(self):
         """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
@@ -129,7 +141,12 @@ class Image:
             raise
         except Exception as exc:
             raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
-        return cls(rust_image)
+        result = cls(rust_image)
+        # WebP frame timing becomes public metadata during Pillow's load in
+        # transpose. Cache that decoder requirement once when opening the
+        # file; ordinary images never need a format lookup in transpose.
+        result._transpose_loads_info = rust_image.format == "WEBP"
+        return result
 
     @classmethod
     def new(
@@ -180,8 +197,19 @@ class Image:
         return Image(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
+        if self._transpose_loads_info:
+            self.load()
+            self.info
         rust_image = self._rust_image.transpose(method)
-        return Image(rust_image)
+        result = Image(rust_image)
+        # Pillow's _new copies the mapping, while nested metadata values stay
+        # shared. Native metadata remains lazy for images whose info was never
+        # observed; the Rust transpose already retains that provenance.
+        result._info = self._info.copy()
+        result._native_info = self._native_info
+        result._native_info_rebaseline = True
+        result._native_info_omitted = self._native_info_omitted
+        return result
 
     def convert(
         self,
@@ -274,7 +302,9 @@ class Image:
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
+        self._sync_observed_info()
         self._rust_image.putalpha_input(alpha)
+        self._sync_observed_info()
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor through the Rust core."""
@@ -282,7 +312,9 @@ class Image:
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
+        self._sync_observed_info()
         self._rust_image.load()
+        self._sync_observed_info()
         return PixelAccess(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
@@ -341,7 +373,9 @@ class Image:
 
     def apply_transparency(self):
         """Commit P-mode transparency to its palette without changing pixels."""
+        self._sync_observed_info()
         result = self._rust_image.apply_transparency()
+        self._sync_observed_info()
         self.__dict__.pop("_palette_object", None)
         return result
 
@@ -379,7 +413,9 @@ class Image:
 
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
+        self._sync_observed_info()
         result = self._rust_image.putpalette(data, rawmode)
+        self._sync_observed_info()
         self.__dict__.pop("_palette_object", None)
         return result
 
@@ -620,9 +656,53 @@ class Image:
 
     @property
     def info(self) -> dict:
-        result = dict(self._info)
-        result.update(self._rust_image.compatibility_info())
-        return result
+        native = self._rust_image.compatibility_info()
+        previous = self._native_info
+        if previous is not None:
+            if self._native_info_rebaseline:
+                self._native_info_omitted = self._native_info_omitted.union(
+                    previous.keys() - native.keys()
+                )
+            # A lazy geometry child can temporarily omit loaded decoder
+            # fields. Retain their native baseline until they reappear, so a
+            # later load also preserves user edits and deleted-key tombstones.
+            self._native_info_omitted = self._native_info_omitted.difference(native)
+            native.update(
+                (key, previous[key]) for key in self._native_info_omitted
+            )
+        if previous is None:
+            for key, value in native.items():
+                self._info.setdefault(key, value)
+        elif self._native_info_rebaseline:
+            # Geometry retains the source's public metadata, even when the
+            # child is a lazy pipeline and native decoder fields temporarily
+            # disappear (for example loaded WebP frame timing). Existing
+            # native keys also include tombstones deleted by the caller.
+            for key, value in native.items():
+                if key not in previous:
+                    self._info.setdefault(key, value)
+        elif native != previous:
+            # Core mutations can add/remove transparency or load decoder
+            # fields. Unchanged native values must not overwrite user edits
+            # or restore keys the user deleted from the public mapping.
+            for key in previous.keys() - native.keys():
+                self._info.pop(key, None)
+            for key, value in native.items():
+                if key not in previous or value != previous[key]:
+                    self._info[key] = value
+        if previous is None or native != previous:
+            # Lists exposed in info remain mutable. The comparison snapshot
+            # must not share those values with the public dictionary.
+            self._native_info = deepcopy(native)
+        self._native_info_rebaseline = False
+        return self._info
+
+    @info.setter
+    def info(self, value: dict) -> None:
+        self._info = value
+        self._native_info = self._rust_image.compatibility_info()
+        self._native_info_rebaseline = False
+        self._native_info_omitted = frozenset()
 
     def __repr__(self) -> str:
         return self._rust_image.__repr__()

@@ -4,7 +4,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{PipelineOp, TransposeTransform};
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
@@ -281,8 +281,8 @@ impl BackendImpl for CpuPool {
         // Each operation already consumes an immutable input and produces its
         // own output buffer.  Do not clone the source merely to seed the
         // backend's accumulator: the first operation can read `img` directly.
-        // The only clone left is the degenerate zero-operation contract at the
-        // end of the loop.
+        // A borrowed all-identity result becomes independent only at return;
+        // an owned intermediate can cross an identity run without a copy.
         let mut result: Option<DynamicImage> = None;
         let mut resources = crate::compute::host_resource_telemetry(img);
         let mut index = 0usize;
@@ -294,6 +294,57 @@ impl BackendImpl for CpuPool {
         let mut current_mode = mode.map(str::to_owned);
         while index < ops.len() {
             let input = result.as_ref().unwrap_or(img);
+            // Transposes only permute opaque pixels, so composing adjacent
+            // methods is exact in every native mode, including indexed and
+            // typed samples. A cancelled run can retain an owned intermediate
+            // or keep borrowing the source until output storage is needed.
+            if let PipelineOp::Transpose { method } = &ops[index] {
+                let mut combined = TransposeTransform::Method(method.clone());
+                let mut consumed = 1usize;
+                while let Some(PipelineOp::Transpose { method: next }) = ops.get(index + consumed) {
+                    combined = combined.then(next);
+                    consumed += 1;
+                }
+                if consumed > 1
+                    && matches!(combined, TransposeTransform::Identity)
+                    && super::pool_simd::transpose_identity_can_reuse(input)
+                {
+                    for _ in 0..consumed {
+                        crate::compute::begin_pipeline_operation_telemetry("Transpose");
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                    }
+                    resources.fused_operation_count = resources
+                        .fused_operation_count
+                        .saturating_add(consumed as u64);
+                    index += consumed;
+                    continue;
+                }
+                if consumed > 1
+                    && let TransposeTransform::Method(combined) = combined
+                {
+                    for _ in 0..consumed {
+                        crate::compute::begin_pipeline_operation_telemetry("Transpose");
+                    }
+                    let next = registry::execute_cpu(
+                        &PipelineOp::Transpose { method: combined },
+                        input,
+                        current_mode.as_deref(),
+                    );
+                    for _ in 0..consumed {
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                    }
+                    let next = next?;
+                    crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+                    resources.fused_operation_count = resources
+                        .fused_operation_count
+                        .saturating_add(consumed as u64);
+                    result = Some(next);
+                    index += consumed;
+                    continue;
+                }
+            }
             if ops::draw::is_draw_op(&ops[index]) {
                 let mut end = index + 1;
                 while end < ops.len() && ops::draw::is_draw_op(&ops[end]) {
@@ -445,7 +496,71 @@ impl BackendImpl for CpuPool {
             );
             index += 1;
         }
+        let result = result.unwrap_or_else(|| {
+            let output = img.clone();
+            if !ops.is_empty() {
+                // Only checked, exact identity runs can leave a nonempty
+                // batch borrowing its input. Return an independent buffer.
+                crate::compute::record_pipeline_allocation(output.as_bytes().len());
+                crate::compute::account_host_buffer_boundary(&mut resources, img, &output);
+            }
+            output
+        });
         crate::compute::record_pipeline_resource_telemetry(resources);
-        Ok(result.unwrap_or_else(|| img.clone()))
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CpuPool;
+    use crate::compute::{BackendImpl, registry};
+    use crate::error::PilError;
+    use crate::image_utils::raw_bytes_to_image;
+    use crate::pipeline::{PipelineOp, TransposeMethod};
+    use crate::raster::GenericImageView;
+
+    #[test]
+    fn transpose_batches_preserve_sequential_pixels_and_dimensions() -> Result<(), PilError> {
+        let methods = [
+            TransposeMethod::FlipLeftRight,
+            TransposeMethod::FlipTopBottom,
+            TransposeMethod::Rotate90,
+            TransposeMethod::Rotate180,
+            TransposeMethod::Rotate270,
+            TransposeMethod::Transpose,
+            TransposeMethod::Transverse,
+        ];
+        for (width, height) in [(1u32, 7u32), (9, 1), (13, 19)] {
+            for (channels, mode) in [(1, "L"), (2, "LA"), (3, "RGB"), (4, "RGBA"), (4, "F")] {
+                let bytes: Vec<u8> = (0..width as usize * height as usize * channels)
+                    .map(|index| index.wrapping_mul(113).wrapping_add(index / 7) as u8)
+                    .collect();
+                let source = raw_bytes_to_image(width, height, bytes.clone(), channels)?;
+                for first in &methods {
+                    for second in &methods {
+                        let ops = [
+                            PipelineOp::Transpose {
+                                method: first.clone(),
+                            },
+                            PipelineOp::Transpose {
+                                method: second.clone(),
+                            },
+                        ];
+                        let intermediate = registry::execute_cpu(&ops[0], &source, Some(mode))?;
+                        let expected = registry::execute_cpu(&ops[1], &intermediate, Some(mode))?;
+                        let actual = CpuPool.execute_batch(&ops, &source, Some(mode))?;
+                        assert_eq!(actual.dimensions(), expected.dimensions());
+                        assert_eq!(
+                            actual.as_bytes(),
+                            expected.as_bytes(),
+                            "{mode} {first:?} {second:?}"
+                        );
+                    }
+                }
+                assert_eq!(source.as_bytes(), bytes);
+            }
+        }
+        Ok(())
     }
 }
