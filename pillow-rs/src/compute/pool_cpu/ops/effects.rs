@@ -43,8 +43,13 @@ fn apply_effect_rows<F>(
 
 #[inline]
 fn blend_row(first: &[u8], second: &[u8], output: &mut [u8], alpha: f64) {
+    // ImagingBlend accepts float alpha. The selected Pillow build contracts
+    // left + alpha * (right - left); weighted f64 terms change byte rounding.
+    let alpha = alpha as f32;
     for ((destination, &left), &right) in output.iter_mut().zip(first.iter()).zip(second.iter()) {
-        *destination = (left as f64 * (1.0 - alpha) + right as f64 * alpha).clamp(0.0, 255.0) as u8;
+        *destination = alpha
+            .mul_add(f32::from(right) - f32::from(left), f32::from(left))
+            .clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -606,110 +611,45 @@ pub fn op_blend_module(
     img: &DynamicImage,
     other: &Arc<Image>,
     alpha: f64,
-    explicit_mode: Option<&str>,
+    _explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize_for_ops()?;
-    // `Image::blend` validates both image dimensions before queuing this
-    // operation. A malformed `PipelineOp::BlendModule` is outside the
-    // supported module-level input boundary, so this executor does not repeat
-    // that validation.
-    // Pillow 12.2.0 `Blend.c::ImagingBlend` interpolates for alpha in [0, 1]
-    // and clips extrapolation results to [0, 255] for any other alpha.
-    let a = alpha;
-    // CMYK mode: blend all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
-    if explicit_mode == Some("CMYK") {
-        let rgba1 = img.to_rgba8();
-        let rgba2 = other_img.to_rgba8();
-        let (w, h) = (
-            rgba1.width().min(rgba2.width()),
-            rgba1.height().min(rgba2.height()),
-        );
-        let row_bytes = w as usize * 4;
-        let first = rgba1.as_raw();
-        let second = rgba2.as_raw();
-        let mut output = vec![0u8; row_bytes * h as usize];
-        apply_effect_rows(&mut output, w as usize, h as usize, 4, |row_index, row| {
+    // Public blend validates the mode family and dimensions before queuing.
+    // Every stored byte participates, including LA/RGBA alpha and CMYK K.
+    // Borrow both native buffers instead of cloning them through conversions;
+    // L does not need an RGB expansion followed by a grayscale conversion.
+    let channels = match img {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return Err(PilError::ValueError("image has wrong mode".into())),
+    };
+    let (width, height) = img.dimensions();
+    let first = img.as_bytes();
+    let second = other_img.as_bytes();
+    if first.len() != second.len() || img.dimensions() != other_img.dimensions() {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
+    let row_bytes = width as usize * channels;
+    let mut output = vec![0u8; first.len()];
+    apply_effect_rows(
+        &mut output,
+        width as usize,
+        height as usize,
+        channels,
+        |row_index, row| {
             let start = row_index * row_bytes;
             blend_row(
                 &first[start..start + row_bytes],
                 &second[start..start + row_bytes],
                 row,
-                a,
+                alpha,
             );
-        });
-        let out = RgbaImage::from_raw(w, h, output)
-            .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
-        return Ok(DynamicImage::ImageRgba8(out));
-    }
-
-    // Pillow blends every stored channel independently. Converting LA/RGBA
-    // through RGB manufactures an opaque alpha channel, which is observable
-    // even for transparent black inputs.
-    if matches!(img, DynamicImage::ImageLumaA8(_)) {
-        let first = img.to_luma_alpha8();
-        let second = other_img.to_luma_alpha8();
-        let (w, h) = (first.width(), first.height());
-        let row_bytes = w as usize * 2;
-        let first_bytes = first.as_raw();
-        let second_bytes = second.as_raw();
-        let mut output = vec![0u8; row_bytes * h as usize];
-        apply_effect_rows(&mut output, w as usize, h as usize, 2, |row_index, row| {
-            let start = row_index * row_bytes;
-            blend_row(
-                &first_bytes[start..start + row_bytes],
-                &second_bytes[start..start + row_bytes],
-                row,
-                a,
-            );
-        });
-        let out = GrayAlphaImage::from_raw(w, h, output)
-            .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
-        return Ok(DynamicImage::ImageLumaA8(out));
-    }
-    if matches!(img, DynamicImage::ImageRgba8(_)) {
-        let first = img.to_rgba8();
-        let second = other_img.to_rgba8();
-        let (w, h) = (first.width(), first.height());
-        let row_bytes = w as usize * 4;
-        let first_bytes = first.as_raw();
-        let second_bytes = second.as_raw();
-        let mut output = vec![0u8; row_bytes * h as usize];
-        apply_effect_rows(&mut output, w as usize, h as usize, 4, |row_index, row| {
-            let start = row_index * row_bytes;
-            blend_row(
-                &first_bytes[start..start + row_bytes],
-                &second_bytes[start..start + row_bytes],
-                row,
-                a,
-            );
-        });
-        let out = RgbaImage::from_raw(w, h, output)
-            .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
-        return Ok(DynamicImage::ImageRgba8(out));
-    }
-
-    let rgb1 = img.to_rgb8();
-    let rgb2 = other_img.to_rgb8();
-    let (w, h) = (
-        rgb1.width().min(rgb2.width()),
-        rgb1.height().min(rgb2.height()),
+        },
     );
-    let row_bytes = w as usize * 3;
-    let first = rgb1.as_raw();
-    let second = rgb2.as_raw();
-    let mut output = vec![0u8; row_bytes * h as usize];
-    apply_effect_rows(&mut output, w as usize, h as usize, 3, |row_index, row| {
-        let start = row_index * row_bytes;
-        blend_row(
-            &first[start..start + row_bytes],
-            &second[start..start + row_bytes],
-            row,
-            a,
-        );
-    });
-    let out = RgbImage::from_raw(w, h, output)
-        .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+    // Blend preserves zero-sized images, unlike the ordinary allocation API.
+    crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels)
 }
 
 // ── CompositeModule ──

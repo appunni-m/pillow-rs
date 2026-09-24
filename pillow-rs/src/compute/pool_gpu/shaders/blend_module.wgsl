@@ -1,4 +1,4 @@
-// Image.blend: (a * (255 - alpha) + b * alpha) / 255 per stored channel.
+// Image.blend: float32 fma(alpha, b - a, a), clamped and truncated per channel.
 // alpha param is the bit pattern of the f32 alpha value.
 // Mode-aware: only processes channels present in the image mode.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
@@ -43,14 +43,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let bb = (pb >> 16u) & 0xffu;
 
     let alpha = params.alpha;
-    let out_r = u32(clamp(f32(ar) * (1.0 - alpha) + f32(br) * alpha, 0.0, 255.0));
-    let out_g_raw = u32(clamp(f32(ag) * (1.0 - alpha) + f32(bg) * alpha, 0.0, 255.0));
-    let out_b_raw = u32(clamp(f32(ab) * (1.0 - alpha) + f32(bb) * alpha, 0.0, 255.0));
+    let out_r = u32(clamp(fma(alpha, f32(br) - f32(ar), f32(ar)), 0.0, 255.0));
+    let out_g_raw = u32(clamp(fma(alpha, f32(bg) - f32(ag), f32(ag)), 0.0, 255.0));
+    let out_b_raw = u32(clamp(fma(alpha, f32(bb) - f32(ab), f32(ab)), 0.0, 255.0));
 
     let out_g = select(ag, out_g_raw, mode_has_g(params.mode));
     let out_b = select(ab, out_b_raw, mode_has_b(params.mode));
     let ba = (pb >> 24u) & 0xffu;
-    let out_a_raw = u32(clamp(f32(aa) * (1.0 - alpha) + f32(ba) * alpha, 0.0, 255.0));
+    let out_a_raw = u32(clamp(fma(alpha, f32(ba) - f32(aa), f32(aa)), 0.0, 255.0));
     let out_a = select(255u, out_a_raw, mode_has_a(params.mode));
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);

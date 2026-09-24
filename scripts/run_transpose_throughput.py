@@ -36,6 +36,10 @@ transpose default, stimulus, receipt rules, and timing policy are unchanged.
 under the same policy. It uses the full-range tile, preserves dimensions,
 and requires one public operation and one GPU dispatch per request.
 
+``--operation blend`` measures ``ImageChops.blend`` at alpha 0.3. Each request
+constructs two fresh images from frame j and frame (j+1) modulo 16, blends them,
+and exports bytes. The GPU receipt must also account for the second image.
+
 Use ``make migration-parity-transpose-throughput`` to build the replacement
 without overwriting the Pillow oracle, or invoke this script after build-parity.
 """
@@ -169,6 +173,10 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].equalize(image)
         elif plan.get("operation") == "invert":
             image = plan["imageops_api"].invert(image)
+        elif plan.get("operation") == "blend":
+            other_data = plan["blend_inputs"][(frame_id + 1) % len(plan["blend_inputs"])]
+            other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
+            image = plan["imagechops_api"].blend(image, other, 0.3)
         else:
             image = image.transpose(0).transpose(2)
         if core is not None:
@@ -210,6 +218,8 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
             return f"GPU receipt does not contain {expected_dispatches} {operation} dispatch(es)"
         if resource.get("upload_bytes", 0) < byte_count or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
+        if operation == "blend" and resource.get("auxiliary_bytes", 0) < byte_count:
+            return "GPU blend receipt does not account for the second image"
     return None
 
 
@@ -305,11 +315,15 @@ def child(args: argparse.Namespace) -> int:
     image_api = importlib.import_module("PIL.Image")
     if plan.get("operation") in ("equalize", "invert"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
+    if plan.get("operation") == "blend":
+        plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
     core = None if subject == "Pillow" else importlib.import_module("pillow_rs._core")
     if core is not None:
         core.set_pipeline_telemetry(True)  # once per process, never toggled by workers
     binaries = runtime_files(subject)
     inputs = [Path(frame["path"]).read_bytes() for frame in plan["frames"]]
+    if plan.get("operation") == "blend":
+        plan["blend_inputs"] = inputs
     for frame, data in zip(plan["frames"], inputs):
         if len(data) != frame["length"] or digest(data) != frame["sha256"]:
             raise RuntimeError("input bytes differ from the declared stimulus")
@@ -425,13 +439,15 @@ def run(args: argparse.Namespace) -> int:
         "policy": {"host_queue_depths": list(DEPTHS), "frames_per_window": FRAMES,
                    "warmup_windows": WARMUPS, "measurement_iterations_per_sample": ITERATIONS,
                    "samples": SAMPLES, "operation": operation, "methods": [0, 2] if operation == "transpose" else [],
-                   "boundary": "fresh frombytes through terminal bytes, worker scheduling and receipt capture",
+                   "boundary": ("two fresh frombytes images, blend(alpha=0.3), terminal bytes, worker scheduling and receipt capture"
+                                if operation == "blend" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
                    "comparison": "every output exactly matches live Pillow outside measured window",
                    "concurrency_claim": "host worker requests; simultaneous GPU kernels are not asserted",
                    "output_retention": "all outputs retained until window completion",
                    "input_generator": "8192-byte tile (73*i+11*(i//17)+29)%256; "
                        + ("divide tile values by 4; " if operation == "equalize" else "")
-                       + "frame j adds 41*j modulo 256",
+                       + "frame j adds 41*j modulo 256"
+                       + ("; second image uses frame (j+1) modulo 16" if operation == "blend" else ""),
                    "build_profile": "expected release via build-parity; binary identity recorded separately",
                    "check_only_policy": "one verification window per depth; no performance summary",
                    "cache_state": "warm workers/backend; fresh image and graph per request"},
@@ -504,7 +520,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "blend"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

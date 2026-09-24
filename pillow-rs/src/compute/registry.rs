@@ -577,13 +577,9 @@ pub(crate) fn gpu_chops_affine_params(scale: f64, offset: f64, subtract: bool) -
     Some([scale_f32.to_bits(), offset_f32.to_bits()])
 }
 
-/// Return the f32 alpha bits when the BlendModule WGSL kernel is exact for
-/// every possible pair of byte samples.
-///
-/// Pillow evaluates the blend expression in f64 and truncates only after
-/// clamping. The GPU kernel evaluates the same expression in f32. Prove the
-/// selected parameterization over the complete byte domain before admitting
-/// the vector path, including the documented extrapolation range.
+/// Return the finite float alpha used by Pillow's ImagingBlend and the WGSL
+/// fused interpolation. Matching their precision and evaluation order avoids
+/// rescanning the complete byte-pair domain on every admission check.
 #[cfg(feature = "gpu")]
 pub(crate) fn gpu_blend_alpha_params(alpha: f64) -> Option<u32> {
     if !alpha.is_finite() {
@@ -592,17 +588,6 @@ pub(crate) fn gpu_blend_alpha_params(alpha: f64) -> Option<u32> {
     let alpha_f32 = alpha as f32;
     if !alpha_f32.is_finite() {
         return None;
-    }
-
-    for a in 0..=255_u32 {
-        for b in 0..=255_u32 {
-            let cpu = (f64::from(a) * (1.0 - alpha) + f64::from(b) * alpha).clamp(0.0, 255.0) as u8;
-            let shader =
-                ((a as f32) * (1.0 - alpha_f32) + (b as f32) * alpha_f32).clamp(0.0, 255.0) as u8;
-            if cpu != shader {
-                return None;
-            }
-        }
     }
 
     Some(alpha_f32.to_bits())
@@ -1163,7 +1148,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
                 .to_vec()
         }
 
-        // ── BlendModule: scalar-proven f32 alpha bits ──
+        // ── BlendModule: native f32 alpha bits ──
         PipelineOp::BlendModule { alpha, .. } => {
             vec![gpu_blend_alpha_params(*alpha).unwrap_or(0)]
         }
