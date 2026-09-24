@@ -392,38 +392,30 @@ fn alpha_composite_div255(value: u32) -> u32 {
 }
 
 #[inline]
-fn alpha_composite_channel(
-    source: u32,
-    destination: u32,
-    source_alpha: u32,
-    destination_alpha: u32,
-) -> u8 {
+fn alpha_composite_pixel<const CHANNELS: usize>(source: &[u8], destination: &mut [u8]) {
+    let source_alpha = u32::from(source[CHANNELS - 1]);
     if source_alpha == 0 {
-        return destination.min(255) as u8;
+        // The entire destination, including invisible color payload, survives.
+        return;
     }
+    let destination_alpha = u32::from(destination[CHANNELS - 1]);
     let blend = destination_alpha * (255 - source_alpha);
     let out_alpha_255 = source_alpha * 255 + blend;
     let coefficient_source = source_alpha * 255 * 255 * (1 << 7) / out_alpha_255;
     let coefficient_destination = (255 << 7) - coefficient_source;
-    let blended = source * coefficient_source + destination * coefficient_destination;
-    (alpha_composite_div255(blended + (0x80 << 7)) >> 7).min(255) as u8
-}
-
-#[inline]
-fn alpha_composite_alpha(source_alpha: u32, destination_alpha: u32) -> u8 {
-    if source_alpha == 0 {
-        return destination_alpha.min(255) as u8;
+    for channel in 0..CHANNELS - 1 {
+        let blended = u32::from(source[channel]) * coefficient_source
+            + u32::from(destination[channel]) * coefficient_destination;
+        destination[channel] = (alpha_composite_div255(blended + (0x80 << 7)) >> 7) as u8;
     }
-    let blend = destination_alpha * (255 - source_alpha);
-    let out_alpha_255 = source_alpha * 255 + blend;
-    alpha_composite_div255(out_alpha_255 + 0x80).min(255) as u8
+    destination[CHANNELS - 1] = alpha_composite_div255(out_alpha_255 + 0x80) as u8;
 }
 
 pub fn op_alpha_composite(
     img: &DynamicImage,
     source: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    let src_img = source.materialize_for_ops()?;
+    let src_img = source.materialized_shared()?;
     // Image::alpha_composite validates mode and dimensions before queuing this
     // operation; this executor only receives matching source and destination
     // images from supported public inputs.
@@ -431,7 +423,9 @@ pub fn op_alpha_composite(
     // LA mode: composite on native LA canvas, return LA (PIL behavior)
     if matches!(img.color(), crate::raster::ColorType::La8) {
         let mut dest_la = img.to_luma_alpha8();
-        let src_la = src_img.to_luma_alpha8();
+        let DynamicImage::ImageLumaA8(src_la) = src_img.as_ref() else {
+            return Err(PilError::ValueError("images do not match".into()));
+        };
         let (sw, sh) = src_la.dimensions();
         let width = sw.min(dest_la.width()) as usize;
         let height = sh.min(dest_la.height()) as usize;
@@ -441,22 +435,16 @@ pub fn op_alpha_composite(
             let source_start = row_index * source_stride;
             let source_row = &source[source_start..source_start + width * 2];
             for (sp, dp) in source_row.chunks_exact(2).zip(row.chunks_exact_mut(2)) {
-                let source_alpha = u32::from(sp[1]);
-                let destination_alpha = u32::from(dp[1]);
-                dp[0] = alpha_composite_channel(
-                    u32::from(sp[0]),
-                    u32::from(dp[0]),
-                    source_alpha,
-                    destination_alpha,
-                );
-                dp[1] = alpha_composite_alpha(source_alpha, destination_alpha);
+                alpha_composite_pixel::<2>(sp, dp);
             }
         });
         return Ok(DynamicImage::ImageLumaA8(dest_la));
     }
 
     let mut dest_rgba = img.to_rgba8();
-    let src_rgba = src_img.to_rgba8();
+    let DynamicImage::ImageRgba8(src_rgba) = src_img.as_ref() else {
+        return Err(PilError::ValueError("images do not match".into()));
+    };
     let (sw, sh) = src_rgba.dimensions();
     let width = sw.min(dest_rgba.width()) as usize;
     let height = sh.min(dest_rgba.height()) as usize;
@@ -466,27 +454,7 @@ pub fn op_alpha_composite(
         let source_start = row_index * source_stride;
         let source_row = &source[source_start..source_start + width * 4];
         for (sp, dp) in source_row.chunks_exact(4).zip(row.chunks_exact_mut(4)) {
-            let source_alpha = u32::from(sp[3]);
-            let destination_alpha = u32::from(dp[3]);
-            dp[0] = alpha_composite_channel(
-                u32::from(sp[0]),
-                u32::from(dp[0]),
-                source_alpha,
-                destination_alpha,
-            );
-            dp[1] = alpha_composite_channel(
-                u32::from(sp[1]),
-                u32::from(dp[1]),
-                source_alpha,
-                destination_alpha,
-            );
-            dp[2] = alpha_composite_channel(
-                u32::from(sp[2]),
-                u32::from(dp[2]),
-                source_alpha,
-                destination_alpha,
-            );
-            dp[3] = alpha_composite_alpha(source_alpha, destination_alpha);
+            alpha_composite_pixel::<4>(sp, dp);
         }
     });
     Ok(DynamicImage::ImageRgba8(dest_rgba))

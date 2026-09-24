@@ -1369,6 +1369,151 @@ contains 12,412 cases, 24 static plans, 773 benchmark workloads and 54 suites.
 No coverage was collected. The next independent operation visit is Alpha
 Composite; Screen's shared improvements do not mark its own goals complete.
 
+## Alpha Composite four-attempt checkpoint
+
+On 2026-09-25, both `Image.alpha_composite` and the in-place image method
+received a bounded optimization visit. The initial maintained cohort passed
+318 comparisons. Seventy new input-only cases also passed before changes:
+LA/RGBA varied colors, every source/destination alpha pair, transparent payloads,
+vector tails, empty images, rejected modes and cropped/out-of-bounds method
+arguments. Exhausting the alpha pairs does not exhaust all color combinations.
+No parity discrepancy was found in this cohort.
+
+Four attempts were retained:
+
+1. **CPU ownership and shared arithmetic:** borrow the source materialization
+   and its native pixels instead of cloning and converting it twice. Compute
+   the fixed-point coefficient once per pixel and reuse it across color bands.
+   A transparent source still preserves every destination byte.
+2. **SIMD coefficient and layout:** load complete LA/RGBA pixels as packed
+   words, extract channels with shifts, and replace eight f64 divisions with
+   f32 division plus exact integer correction. The numerator is
+   `(source_alpha * 65025) * 128`; its significant integer is below 2²⁴, so
+   both division operands are exactly representable. The quotient is at most
+   32640, and rounding can only raise its truncated value by one. Comparing
+   `quotient * denominator` with the original numerator corrects that case;
+   every product fits below 2³¹. A focused Rust test checks all 65,536 alpha
+   pairs against integer division. Constant vectors stay outside the hot loop.
+   Release assembly has packed f32 divides, integer products and masks, with
+   no memory-fill calls in either pixel loop. Pixels stream across row
+   boundaries; 64 KiB tiles are scheduled only from 1 MiB of output onward.
+3. **Full-canvas method:** after the existing coordinate, crop and empty-image
+   validation, a composite covering the entire destination queues the composite
+   directly. Its following unmasked full-canvas paste would only copy that
+   result. Cropped destinations retain their existing crop/composite/paste
+   behavior. Immutable graph ownership protects shared source data.
+4. **GPU transport:** extend the existing pooled native Multiply transfer path
+   to Alpha Composite. An internal shader mode packs two complete LA pixels
+   into each storage word, preserving their individual fixed-point arithmetic;
+   RGBA retains its ordinary packed pixel. Upload the overlay through the
+   mapped-input path where supported and initialize the destination buffer
+   directly. Bounds guard the final partial dispatch row, and host output
+   excludes alignment padding. This path applies only to one admitted operation
+   with matching native inputs on little-endian targets; other batches keep
+   the ordinary GPU path. Multiply keeps its existing four-binding shader.
+
+The final maintained cohort passes **528/528 comparisons**; six large varied
+inputs immediately below/at/above the SIMD tiling threshold pass another
+**18/18**. The shared-transfer change also passes **345/345 Multiply mode
+comparisons**. These are local release-extension results, not cross-platform
+proof. In the 70 added Alpha Composite cases, 52 reach recorded CPU execution;
+GPU executes those 52 natively. SIMD executes 48 natively and uses explicit CPU
+semantic fallback for four 1 × 1 cases. The other 18 cases produce no recorded
+arithmetic. Passing fallback is not acceleration.
+
+Local receipts under `build/migration-parity/` use the prefix
+`perf-alpha-composite-20260925-`: `checkpoint-parity.json`,
+`tiles-parity.json`, `initial-throughput.json`, and
+`checkpoint-throughput.json`. Related-operation evidence is
+`perf-multiply-20260925-alpha-regression-parity.json`. The unchanged ten-workload
+benchmark has initial run `migration-benchmark-946e57a65cdf409fa184835970cf0881`
+and final run `migration-benchmark-64905846cd40441798e4ba7df75762de`.
+Final median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.022229 | 0.036292 | 0.031708 | 0.866667 |
+| Operation matrix 32 × 24 | 0.020667 | 0.030063 | 0.031062 | 0.890958 |
+| Composed matrix 009 | 0.032771 | 0.033062 | 0.033854 | 1.054604 |
+| Composed matrix 021 | 0.023771 | 0.159584 | 0.135062 | 1.141188 |
+| LA 256 × 256 | 0.173125 | 0.086771 | 0.060062 | 0.238146 |
+| RGBA 256 × 256 | 0.189000 | 0.140729 | 0.086458 | 0.252083 |
+| LA 1024 × 768 | 2.281333 | 0.521230 | 0.490354 | 1.164438 |
+| RGBA 1024 × 768 | 2.485750 | 0.967604 | 0.710562 | 2.231834 |
+| In-place method standard | 0.019209 | 0.028396 | 0.030042 | 0.636479 |
+
+These nine rows have native completion receipts. CPU misses on five, SIMD
+misses 5× on all nine, and GPU misses SIMD latency on all nine. The tenth
+module-standard row does not materialize pixels and cannot prove backend speed.
+The 256² SIMD medians improved 3.62× for LA and 2.19× for RGBA relative to the
+initial implementation. Short samples and different stimulus/timing boundaries
+must not be mixed with the longer fresh-input diagnostic.
+
+The fresh-input diagnostic creates two new 1024 × 768 images per request,
+composites them, and exports terminal bytes. Both initial and final runs pass
+**40,320/40,320 exact output checks**, including warmup, with 38,400 measured
+completions each. All target requests record the requested native backend and
+one operation; GPU records one dispatch. Each run retains unchanged source and
+binary identities and consistent binaries across subjects. Request latency
+includes construction, allocation, transfer, synchronization and output export;
+window throughput additionally includes scheduling and receipt capture.
+Queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU | SIMD speedup over Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LA | 2.768583 | 0.435395 | 0.421208 | 0.789438 | 6.57× |
+| RGBA | 2.070625 | 0.809875 | 0.691979 | 1.383562 | 2.99× |
+
+Initial GPU request medians were 3.460145/2.675771 ms: improvements of
+4.38×/1.93×. Final GPU primary, secondary and result byte counts are each
+1,572,864 for LA and 3,145,728 for RGBA, with 24 parameter bytes. LA previously
+used 3,145,728 bytes for each image. Native transport eliminates that expansion;
+readback and host result allocation still occur. The zero host-buffer counters
+in this GPU receipt are not proof of zero allocations.
+Aggregate completed images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LA | 1 | 354 | 2,116 | 2,151 | 1,236 |
+| LA | 2 | 423 | 2,399 | 2,456 | 1,266 |
+| LA | 4 | 467 | 2,442 | 2,464 | 1,254 |
+| RGBA | 1 | 468 | 1,138 | 1,304 | 703 |
+| RGBA | 2 | 460 | 1,251 | 1,448 | 735 |
+| RGBA | 4 | 471 | 1,272 | 1,473 | 721 |
+
+Alpha Composite remains incomplete. The next visit should address:
+
+- **Small calls and composed workflows:** CPU still loses to Pillow on five
+  rows. Attribute host construction, repeated validation, graph traversal and
+  terminal work; widening the pixel loop will not remove their fixed cost.
+  Matrix 021 needs its remaining stages attributed separately.
+- **SIMD copies and arithmetic:** RGBA misses 5× even on the large fresh-input
+  boundary. Measure allocation/copy cost versus coefficient division, packing
+  and task scheduling before another instruction change. Four 1 × 1 cases
+  still route to CPU; those passes are not native SIMD proof.
+- **GPU completion and throughput:** queue-one request latency remains
+  1.87×/2.00× SIMD for LA/RGBA. More host concurrency provides little additional
+  GPU throughput here. Profile queue writes, mapping, command encoding and
+  serialized waits. Composed/cropped pipelines still use ordinary transport;
+  a fused regional compositor must preserve crop fill, clipping and every
+  intermediate rounding rule.
+- **Benchmark attribution defect:** the four
+  `pipeline-chain.alpha-composite.{la,rgba}-{256x256,1024x768}` workloads invoke
+  module `PIL.Image.alpha_composite`, but their requirement mapping points to
+  the in-place method. They are module-composite evidence, not proof of the
+  full-canvas method optimization. The workloads, requirements and thresholds
+  were left unchanged for this visit; correct the mapping in a separate audit
+  and add genuine in-place performance evidence without discarding these rows.
+- **Outstanding campaign proof:** additional shapes, platforms and bindings;
+  ingestion of focused receipts into the complete matrix; pre-push Rust/docs
+  checks. No public operation has every performance goal demonstrated.
+
+The optimization skill now explains when a bounded approximate quotient can
+be corrected to an exact integer result, and when complete dependent tuples
+can share a transfer word. Static fixture indices now contain 12,482 cases,
+24 plans, 773 benchmark workloads and 54 suites. No coverage was collected.
+The next independent operation visit is Contrast.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose

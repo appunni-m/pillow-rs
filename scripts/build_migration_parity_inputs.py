@@ -39847,6 +39847,7 @@ def build_nuanced_cases(
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(multiply_mode_parity_cases(surface_id))
+    cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
@@ -40129,6 +40130,68 @@ def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                 "steps": steps, "observations": ["image", "call", "materialize"],
             })
+    return cases
+
+
+def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Varied native pixels, all alpha pairs, vector tails and public cropping."""
+    if surface_id not in ("PIL.Image", "PIL.Image.Image"):
+        return []
+    cases = []
+    method = surface_id == "PIL.Image.Image"
+
+    def make_case(mode, size, label, dest=(0, 0), source=(0, 0), alpha=None):
+        assets, steps = [], []
+        channels = len(mode)
+        for side in range(2):
+            raw = bytearray(random.Random(f"alpha-{mode}-{label}-{side}").randbytes(
+                size[0] * size[1] * channels))
+            if label == "all-alpha-pairs":
+                for pixel in range(size[0] * size[1]):
+                    raw[pixel * channels + channels - 1] = pixel // 256 if side == 0 else pixel % 256
+            elif alpha is not None:
+                raw[channels - 1::channels] = bytes([alpha[side]]) * (size[0] * size[1])
+            assets.append({"id": f"pixels{side}", "kind": "inline", "encoding": "base64",
+                           "data": base64.b64encode(raw).decode("ascii"),
+                           "sha256": hashlib.sha256(raw).hexdigest(),
+                           "media_type": "application/octet-stream"})
+            steps.append({"step_id": f"image{side}", "surface": "PIL.Image", "operation": "frombytes",
+                          "receiver": None, "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                                                             "data": asset_value(f"pixels{side}")}})
+        arguments = ({"im": binding("image1"), "dest": literal(list(dest)), "source": literal(list(source))}
+                     if method else {"im1": binding("image0"), "im2": binding("image1")})
+        steps.extend([
+            {"step_id": "call", "surface": surface_id, "operation": "alpha_composite",
+             "receiver": binding("image0") if method else None, "arguments": arguments},
+            {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+             "receiver": binding("image0" if method else "call"), "arguments": {}},
+            {"step_id": "source_bytes", "surface": "PIL.Image.Image", "operation": "tobytes",
+             "receiver": binding("image1"), "arguments": {}},
+        ])
+        return {"case_id": f"{surface_id}.alpha_composite.nuanced.pixels-{mode}-{label}",
+                "surface": surface_id, "operation": "alpha_composite",
+                "covers": [f"{surface_id}.alpha_composite.behavior.default"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                "steps": steps, "observations": ["call", "materialize", "source_bytes"]}
+
+    for mode in ("LA", "RGBA"):
+        for size in ((1, 1), (7, 3), (8, 3), (9, 7), (17, 9), (0, 3), (3, 0)):
+            cases.append(make_case(mode, size, f"{size[0]}x{size[1]}"))
+        for label, alpha in (("transparent-source", (173, 0)), ("opaque-source", (43, 255)),
+                             ("transparent-destination", (0, 113)), ("both-transparent", (0, 0))):
+            cases.append(make_case(mode, (17, 9), label, alpha=alpha))
+        cases.append(make_case(mode, (256, 256), "all-alpha-pairs"))
+        if method:
+            for label, dest, source in (("cropped", (2, 1), (1, 2, 8, 7)),
+                                        ("negative-destination", (-3, -2), (0, 0)),
+                                        ("outside-destination", (20, 11), (0, 0)),
+                                        ("extended-source", (0, 0), (0, 0, 20, 11)),
+                                        ("empty-source", (0, 0), (4, 3, 4, 6)),
+                                        ("negative-source", (0, 0), (-1, 0)),
+                                        ("reversed-source", (0, 0), (8, 1, 2, 5))):
+                cases.append(make_case(mode, (17, 9), label, dest, source))
+    for mode in ("L", "RGB", "RGBa", "La"):
+        cases.append(make_case(mode, (9, 3), "unsupported-mode"))
     return cases
 
 
