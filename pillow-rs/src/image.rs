@@ -3974,8 +3974,8 @@ impl Image {
         // image-slash-star currently retains the container format but not
         // exact JPEG density or WebP frame timing. JPEG's 72-dpi fallback is
         // added only when retained EXIF provenance makes that Pillow result
-        // observable. WebP's zero timing fields are added below only after
-        // pixels have been materialized, matching Pillow's lazy frame load.
+        // observable. Pillow exposes WebP's zero timing defaults in Image.info
+        // before pixel materialization, so preserve them on lazy image handles.
         let mut fields = match format {
             Some(ImageFormat::Jpeg) => {
                 let mut fields = vec![
@@ -4038,20 +4038,15 @@ impl Image {
                 ),
             ],
             Some(ImageFormat::WebP) => {
-                let mut fields = vec![
+                vec![
                     ("loop".to_owned(), ImageInfoValue::Integer(1)),
                     (
                         "background".to_owned(),
                         ImageInfoValue::IntegerTuple(vec![255, 255, 255, 255]),
                     ),
-                ];
-                if self.is_materialized() {
-                    fields.extend([
-                        ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
-                        ("duration".to_owned(), ImageInfoValue::Integer(0)),
-                    ]);
-                }
-                fields
+                    ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+                    ("duration".to_owned(), ImageInfoValue::Integer(0)),
+                ]
             }
             _ => Vec::new(),
         };
@@ -6615,6 +6610,31 @@ mod byte_export_tests {
                 "{mode} export must stay immutable"
             );
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod compatibility_info_tests {
+    use super::{Image, ImageInfoValue, PilError};
+
+    #[test]
+    fn webp_timing_defaults_are_available_before_and_after_load() -> Result<(), PilError> {
+        let mut image = Image::open_bytes(
+            include_bytes!("../tests/fixtures/assets/image/rgb-small.webp").to_vec(),
+        )?;
+        let expected = [
+            ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+            ("duration".to_owned(), ImageInfoValue::Integer(0)),
+        ];
+
+        assert!(!image.is_materialized());
+        let lazy_info = image.compatibility_info();
+        assert!(expected.iter().all(|field| lazy_info.contains(field)));
+
+        image.load()?;
+        let loaded_info = image.compatibility_info();
+        assert!(expected.iter().all(|field| loaded_info.contains(field)));
         Ok(())
     }
 }

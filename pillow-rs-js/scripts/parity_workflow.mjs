@@ -9,6 +9,11 @@ function key(surface, operation) {
     return `${surface}::${operation}`;
 }
 
+// Python's Image.info mapping belongs to the host wrapper rather than the
+// Rust pixel object. Keep only explicitly supplied public metadata here, and
+// copy it across Pillow operations whose wrappers preserve info.
+const imageInfo = new WeakMap();
+
 function unsupportedError(message) {
     const error = new Error(message);
     error.name = 'NotImplementedError';
@@ -60,6 +65,7 @@ function decodeInputValue(value) {
         if (marker === 'NaN') return Number.NaN;
         if (marker === 'Infinity') return Number.POSITIVE_INFINITY;
         if (marker === '-Infinity') return Number.NEGATIVE_INFINITY;
+        if (value.__pillow_rs_negative_zero__ === true) return -0;
         // The manifest uses explicit protocols to preserve Python's list and
         // sequence inputs during source execution.  JavaScript has one
         // ordinary sequence representation, so decode those protocols before
@@ -77,6 +83,17 @@ function decodeInputValue(value) {
         }
         if (value.protocol === 'text-repeat') {
             return String(value.text ?? '').repeat(Number(value.repeat ?? 0));
+        }
+        if (value.protocol === 'image-with-info') {
+            return {
+                __pillow_rs_image_with_info__: {
+                    mode: value.mode,
+                    size: decodeInputValue(value.size),
+                    color: decodeInputValue(value.color),
+                    info: decodeInputValue(value.info ?? {}),
+                    assignment: value.assignment ?? 'update',
+                },
+            };
         }
         if (value.protocol === 'public-class') {
             return {
@@ -889,7 +906,14 @@ function imageMethod(receiver, operation, args, wasm) {
             Number(args.fill ?? 1),
             args.fillcolor ?? null,
         );
-        case 'transpose': return receiver.transpose(transposeName(args.method));
+        case 'transpose': {
+            const result = receiver.transpose(transposeName(args.method));
+            if (imageInfo.has(receiver)) {
+                // Pillow's Image._new makes a shallow copy of the mapping.
+                imageInfo.set(result, { ...imageInfo.get(receiver) });
+            }
+            return result;
+        }
         case 'toqimage':
         case 'toqpixmap': throw namedError('ImportError', 'Qt bindings are not installed');
         case 'unsharp_mask': return receiver.unsharpMask(args.radius, args.percent, args.threshold);
@@ -1753,7 +1777,12 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
 
 function callStep(wasm, step, bindings, operations, assets) {
     const args = argsOf(step, bindings, assets);
-    const receiver = step.receiver ? resolveDescriptor(step.receiver, bindings, assets) : null;
+    let receiver = step.receiver ? resolveDescriptor(step.receiver, bindings, assets) : null;
+    if (receiver?.__pillow_rs_image_with_info__) {
+        const input = receiver.__pillow_rs_image_with_info__;
+        receiver = newImage(wasm, input);
+        imageInfo.set(receiver, input.info);
+    }
     const info = operations[key(step.surface, step.operation)] ?? {};
     if (info.kind === 'property_get'
         && step.surface === 'PIL.Image.Image'
@@ -1766,7 +1795,10 @@ function callStep(wasm, step, bindings, operations, assets) {
             step.surface === 'PIL.Image.Image'
             && step.operation === 'info'
             && typeof receiver?.compatibilityInfo === 'function'
-        ) return receiver.compatibilityInfo();
+        ) {
+            if (imageInfo.has(receiver)) return jsonSafe(imageInfo.get(receiver));
+            return receiver.compatibilityInfo();
+        }
         if (typeof receiver?.toObject === 'function') return receiver.toObject()[step.operation] ?? null;
         if (step.operation === 'size' && typeof receiver?.size === 'function') return receiver.size();
         // Python's list exposes ``count`` as a bound method.  The workflow
@@ -1893,6 +1925,7 @@ function imageValue(value) {
     const info = typeof value.compatibilityInfo === 'function'
         ? jsonSafe(value.compatibilityInfo())
         : {};
+    if (imageInfo.has(value)) Object.assign(info, jsonSafe(imageInfo.get(value)));
     if (value.__pillow_rs_converted_info__ && typeof value.__pillow_rs_converted_info__ === 'object') {
         Object.assign(info, value.__pillow_rs_converted_info__);
     }

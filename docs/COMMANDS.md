@@ -3,6 +3,9 @@
 Run commands from the repository root with GNU Make 3.81 or newer. On Windows,
 use a shell with GNU Make and the required toolchains, as CI does. Start with
 `make help`; `make help-all` lists the specialized parity and coverage lanes.
+Push and pull-request CI runs parity without collecting coverage. To collect
+Python migration-parity coverage, manually dispatch CI with `run_coverage`
+enabled.
 
 | Task | Command | Effect |
 | --- | --- | --- |
