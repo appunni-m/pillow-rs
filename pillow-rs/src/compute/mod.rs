@@ -173,7 +173,9 @@ struct GpuShaderDispatchCounters {
 pub struct PipelineResourceTelemetry {
     /// Host bytes written to the backend input resource.
     pub upload_bytes: u64,
-    /// Bytes copied from the backend result into host-visible staging.
+    /// Result bytes made host-visible for readback, through a staging copy or
+    /// a directly mapped primary buffer. This is readback volume, not a count
+    /// of physical device copies; those are recorded by full_frame_copy_count.
     pub readback_bytes: u64,
     /// Padded bytes written for secondary images and LUT resources.
     pub auxiliary_bytes: u64,

@@ -39836,6 +39836,425 @@ def build_nuanced_cases(
     cases.extend(benchmark_pipeline_cases(surface_id))
     cases.extend(pipeline_composition_cases(surface_id, operations))
     cases.extend(release_cleanup_parity_cases(surface_id))
+    cases.extend(transpose_tiled_parity_cases(surface_id))
+    cases.extend(constructor_and_raw_export_parity_cases(surface_id))
+    cases.extend(filtered_alpha_transform_parity_cases(surface_id))
+    return cases
+
+
+def filtered_alpha_transform_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Observe premultiplied filtering at constant centers and image edges.
+
+    Varying color and alpha samples expose quantization during premultiplication
+    even when every destination pixel samples the same source pixel center.
+    Translated boundary controls also retain the explicit alpha fill behavior.
+    """
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    center_quad = [1.5, 4.5] * 4
+    transforms = (
+        ("perspective-center-bicubic", [8, 8], 2,
+         [0.0, 0.0, 1.5, 0.0, 0.0, 4.5, 0.0, 0.0], 3),
+        ("quad-center-bicubic", [9, 6], 3, center_quad, 3),
+        ("mesh-center-bicubic", [9, 6], 4,
+         [[[0, 0, 9, 6], center_quad]], 3),
+        ("perspective-boundary-bilinear", [8, 8], 2,
+         [1.0, 0.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0], 2),
+    )
+    cases = []
+    for mode, channels, fill in (
+        ("LA", 2, [199, 71]), ("RGBA", 4, [199, 71, 17, 83]),
+    ):
+        source = bytes((index * 29 + 7) % 256 for index in range(16 * 16 * channels))
+        for name, size, method, data, resample in transforms:
+            cases.append({
+                "case_id": f"{surface_id}.transform.nuanced.filtered-alpha-{mode.lower()}-{name}",
+                "surface": surface_id, "operation": "transform",
+                "covers": [f"{surface_id}.transform.behavior.default"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "assets": [{
+                    "id": "alpha-source", "kind": "inline", "encoding": "base64",
+                    "data": base64.b64encode(source).decode("ascii"),
+                    "sha256": hashlib.sha256(source).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }],
+                "steps": [{
+                    "step_id": "source", "surface": "PIL.Image", "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {"mode": literal(mode), "size": literal([16, 16]),
+                                  "data": asset_value("alpha-source")},
+                }, {
+                    "step_id": "transform", "surface": surface_id, "operation": "transform",
+                    "receiver": binding("source"),
+                    "arguments": {"size": literal(size), "method": literal(method),
+                                  "data": literal(data), "resample": literal(resample),
+                                  "fillcolor": literal(fill)},
+                }, {
+                    "step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                    "receiver": binding("transform"), "arguments": {},
+                }],
+                "observations": ["transform", "materialize"],
+            })
+    return cases
+
+
+def constructor_and_raw_export_parity_cases(
+    surface_id: str,
+) -> list[dict[str, Any]]:
+    """Exercise native fills and byte ownership through public image methods.
+
+    Odd pixel counts exercise partial bulk-fill blocks. Raw export workflows
+    retain the first bytes across source mutation and closure, then construct
+    another image from those bytes. Typed input words include signed zero and
+    distinct floating-point payloads without embedding any expected output.
+    """
+    cases = []
+    profiles = list(BENCHMARK_TARGET_PROFILES)
+    if surface_id == "PIL.Image":
+        fills = (
+            ("L", 193), ("LA", [31, 207]), ("RGB", [17, 29, 233]),
+            ("RGBA", [9, 33, 117, 231]), ("RGBX", [41, 79, 137, 211]),
+            ("CMYK", [11, 33, 99, 201]), ("I", -123456789),
+            ("F", -0.0), ("I;16", 65535), ("P", 73),
+        )
+        stimuli = [(mode, color, (13, 7)) for mode, color in fills]
+        stimuli.extend((("RGB", [17, 29, 233], (0, 7)), ("L", 193, (5, 0))))
+        for mode, color, size in stimuli:
+            name = f"bulk-fill-{slug(mode)}-{size[0]}x{size[1]}"
+            cases.append({
+                "case_id": f"{surface_id}.new.nuanced.{name}",
+                "surface": surface_id, "operation": "new",
+                "covers": [f"{surface_id}.new.behavior.default"],
+                "target_profiles": profiles, "assets": [],
+                "steps": [{
+                    "step_id": "source", "surface": surface_id,
+                    "operation": "new", "receiver": None,
+                    "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                                  "color": literal(color)},
+                }, {
+                    "step_id": "fill-bytes", "surface": "PIL.Image.Image",
+                    "operation": "tobytes", "receiver": binding("source"),
+                    "arguments": {},
+                }],
+                "observations": ["source", "fill-bytes"],
+            })
+        return cases
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    size = (7, 5)
+    byte_channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4,
+                     "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2}
+    replacements = {
+        "L": 219, "LA": [43, 197], "RGB": [7, 131, 239],
+        "RGBA": [7, 131, 239, 83], "RGBX": [7, 131, 239, 83],
+        "CMYK": [7, 131, 239, 83], "I": -7654321, "F": 17.25,
+        "I;16": 54321, "I;16B": 54321, "P": 193, "PA": [193, 71],
+    }
+    for mode, replacement in replacements.items():
+        data = bytearray()
+        for y in range(size[1]):
+            for x in range(size[0]):
+                index = y * size[0] + x
+                value = x * 37 + y * 67 + x * y * 13
+                if mode in byte_channels:
+                    data.extend((value + channel * 61) % 256
+                                for channel in range(byte_channels[mode]))
+                elif mode == "I":
+                    words = (0, 0x80000000, 0x7FFFFFFF, 0xFFFFFFFF, 0x12345678)
+                    data.extend(struct.pack("<I", words[index % len(words)]))
+                elif mode == "F":
+                    words = (0, 0x80000000, 0x00000001, 0x3F800000,
+                             0x7F800000, 0xFF800000, 0x7FC12345, 0xFF812345)
+                    data.extend(struct.pack("<I", words[index % len(words)]))
+                else:
+                    data.extend(struct.pack(">H" if mode == "I;16B" else "<H",
+                                            (value * 257 + 12345) % 65536))
+        cases.append({
+            "case_id": f"{surface_id}.tobytes.nuanced.shared-owned-{slug(mode)}",
+            "surface": surface_id, "operation": "tobytes",
+            "covers": [f"{surface_id}.tobytes.behavior.default"],
+            "target_profiles": profiles,
+            "assets": [{
+                "id": "raw-source", "kind": "inline", "encoding": "base64",
+                "data": base64.b64encode(data).decode("ascii"),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "media_type": "application/octet-stream",
+            }],
+            "steps": [{
+                "step_id": "source", "surface": "PIL.Image", "operation": "frombytes",
+                "receiver": None,
+                "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                              "data": asset_value("raw-source")},
+            }, {
+                "step_id": "before", "surface": surface_id, "operation": "tobytes",
+                "receiver": binding("source"), "arguments": {},
+            }, {
+                "step_id": "mutate", "surface": surface_id, "operation": "putpixel",
+                "receiver": binding("source"),
+                "arguments": {"xy": literal([2, 1]), "value": literal(replacement)},
+            }, {
+                "step_id": "after", "surface": surface_id, "operation": "tobytes",
+                "receiver": binding("source"), "arguments": {},
+            }, {
+                "step_id": "close-source", "surface": surface_id, "operation": "close",
+                "receiver": binding("source"), "arguments": {},
+            }, {
+                "step_id": "reopened", "surface": "PIL.Image", "operation": "frombytes",
+                "receiver": None,
+                "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                              "data": binding("before")},
+            }, {
+                "step_id": "reopened-bytes", "surface": surface_id, "operation": "tobytes",
+                "receiver": binding("reopened"), "arguments": {},
+            }],
+            "observations": ["before", "after", "reopened-bytes"],
+        })
+    return cases
+
+
+def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Observe heterogeneous native samples across transpose tile boundaries.
+
+    Small non-square inputs straddle common vector and cache tile widths;
+    larger inputs exercise row parallelism. Coordinate-dependent samples make
+    wrong row strides, channel permutations, and reversed tile tails visible.
+    Two-call workflows observe only their terminal image and bytes, retaining
+    adjacent transpose operations in the lazy graph on every target backend.
+    """
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    def patterned_bytes(mode: str, size: tuple[int, int], seed: int) -> bytes:
+        width, height = size
+        channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4,
+                    "RGBX": 4, "CMYK": 4}
+        data = bytearray()
+        for y in range(height):
+            for x in range(width):
+                value = (x * 37 + y * 67 + (x >> 4) * 19
+                         + (y >> 3) * 23 + x * y % 251 + seed * 13)
+                if mode in channels:
+                    data.extend((value + channel * 61) % 256
+                                for channel in range(channels[mode]))
+                elif mode == "I":
+                    word = (value * 2654435761) & 0xFFFFFFFF
+                    data.extend(struct.pack("<I", word))
+                elif mode == "F":
+                    sample = (value % 4093 - 2046) / 8.0
+                    # Signed zero is retained by raw transpose just like any
+                    # other finite word; no floating-point math is required.
+                    if (x + y) % 17 == 0:
+                        sample = -0.0
+                    data.extend(struct.pack("<f", sample))
+                elif mode in {"I;16", "I;16B"}:
+                    data.extend(struct.pack(">H" if mode == "I;16B" else "<H",
+                                            value * 257 % 65536))
+                else:
+                    raise ValueError(f"unsupported transpose stimulus mode: {mode}")
+        return bytes(data)
+
+    def make_case(
+        name: str,
+        mode: str,
+        size: tuple[int, int],
+        methods: tuple[int, ...],
+        seed: int,
+        resize: tuple[int, int] | None = None,
+    ) -> dict[str, Any]:
+        data = patterned_bytes(mode, size, seed)
+        steps = [{
+            "step_id": "source", "surface": "PIL.Image", "operation": "frombytes",
+            "receiver": None,
+            "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                          "data": asset_value("transpose-source")},
+        }]
+        receiver = "source"
+        if resize is not None:
+            steps.append({
+                "step_id": "resized", "surface": surface_id, "operation": "resize",
+                "receiver": binding(receiver),
+                "arguments": {"size": literal(list(resize)), "resample": literal(0)},
+            })
+            receiver = "resized"
+        for index, method in enumerate(methods):
+            step_id = f"transpose-{index}"
+            steps.append({
+                "step_id": step_id, "surface": surface_id, "operation": "transpose",
+                "receiver": binding(receiver), "arguments": {"method": literal(method)},
+            })
+            receiver = step_id
+        steps.append({
+            "step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+            "receiver": binding(receiver), "arguments": {},
+        })
+        return {
+            "case_id": f"{surface_id}.transpose.nuanced.tiled-{name}",
+            "surface": surface_id, "operation": "transpose",
+            "covers": [f"{surface_id}.transpose.behavior.default"],
+            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            "assets": [{
+                "id": "transpose-source", "kind": "inline", "encoding": "base64",
+                "data": base64.b64encode(data).decode("ascii"),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "media_type": "application/octet-stream",
+            }],
+            "steps": steps, "observations": [receiver, "materialize"],
+        }
+
+    cases = []
+    modes = ("L", "LA", "RGB", "RGBA")
+    sizes = ((1, 5), (3, 7), (4, 9), (5, 15), (7, 16), (8, 17),
+             (9, 31), (15, 32), (16, 33), (17, 4), (31, 8), (32, 3),
+             (33, 9), (5, 1))
+    for mode_index, mode in enumerate(modes):
+        for method in range(7):
+            size = sizes[(mode_index * 7 + method) % len(sizes)]
+            cases.append(make_case(
+                f"{mode.lower()}-{size[0]}x{size[1]}-method-{method}",
+                mode, size, (method,), mode_index * 7 + method,
+            ))
+    # Each method sees a heterogeneous image above the 256k-pixel parallel
+    # crossover. Odd dimensions leave both row and tile remainders.
+    for method in range(7):
+        mode = modes[method % len(modes)]
+        size = (513, 515) if method % 2 == 0 else (515, 513)
+        cases.append(make_case(
+            f"parallel-{mode.lower()}-{size[0]}x{size[1]}-method-{method}",
+            mode, size, (method,), 31 + method,
+        ))
+    cases.append(make_case(
+        "parallel-rgba-515x513-method-2", "RGBA", (515, 513), (2,), 41,
+    ))
+    # Complete four-pixel tiles also exercise the initialized-output path.
+    # Keep heterogeneous, non-square live-oracle inputs alongside the odd
+    # edge cases; a constant frame cannot detect a wrong tile permutation.
+    cases.append(make_case(
+        "aligned-rgb-768x772-method-2", "RGB", (768, 772), (2,), 43,
+    ))
+    cases.append(make_case(
+        "aligned-rgba-772x768-methods-5-0", "RGBA", (772, 768), (5, 0), 44,
+    ))
+    cases.append(make_case(
+        "identity-rgb-768x772-methods-2-4-0", "RGB", (768, 772), (2, 4, 0), 45,
+    ))
+    for method in (0, 1, 3):
+        cases.append(make_case(
+            f"row-rgb-513x515-method-{method}", "RGB", (513, 515), (method,), 161 + method,
+        ))
+    cases.append(make_case(
+        "row-rgba-515x513-method-3", "RGBA", (515, 513), (3,), 165,
+    ))
+    # Larger odd RGBA shapes exercise initialized SIMD collection with an
+    # incomplete final tile, both directly and through transpose composition.
+    cases.append(make_case(
+        "odd-rgba-768x769-method-2", "RGBA", (768, 769), (2,), 169,
+    ))
+    cases.append(make_case(
+        "odd-rgba-1025x1023-methods-5-0", "RGBA", (1025, 1023), (5, 0), 173,
+    ))
+    # Typed samples cover whole-word copies across the axis-swapping paths;
+    # RGBX and CMYK complement ordinary four-channel RGBA storage.
+    for mode_index, mode in enumerate(("I", "F", "I;16", "I;16B", "RGBX", "CMYK")):
+        for method in (2, 5, 6):
+            size = ((17, 9), (33, 15), (5, 31))[method % 3]
+            cases.append(make_case(
+                f"{mode.lower().replace(';', '-')}-{size[0]}x{size[1]}-method-{method}",
+                mode, size, (method,), 47 + mode_index * 7 + method,
+            ))
+    for mode_index, mode in enumerate((*modes, "I;16", "F")):
+        for methods in ((2, 2), (5, 0)):
+            size = (33, 17) if mode_index % 2 == 0 else (9, 31)
+            cases.append(make_case(
+                f"chain-{mode.lower().replace(';', '-')}-{size[0]}x{size[1]}-"
+                f"methods-{methods[0]}-{methods[1]}",
+                mode, size, methods, 97 + mode_index,
+            ))
+    # Transpose composition must use the dimensions at its own position in
+    # the graph, including after a shape-changing prefix and degenerate input.
+    for size, resized in (((1, 1), (3, 2)), ((3, 5), (7, 9))):
+        for methods in ((1, 2), (1, 1)):
+            cases.append(make_case(
+                f"resize-prefix-rgb-{size[0]}x{size[1]}-to-{resized[0]}x{resized[1]}-"
+                f"methods-{methods[0]}-{methods[1]}",
+                "RGB", size, methods, 131, resize=resized,
+            ))
+    # Cancelling prefixes still compose with following transposes. Keep
+    # heterogeneous samples and typed payloads in the live-oracle workflow.
+    for mode_index, mode in enumerate(("L", "LA", "RGB", "RGBA", "I;16", "F")):
+        for methods in ((2, 4), (2, 4, 0), (2, 4, 2, 4), (0, 0, 5)):
+            cases.append(make_case(
+                f"identity-{mode.lower().replace(';', '-')}-17x9-methods-"
+                + "-".join(map(str, methods)),
+                mode, (17, 9), methods, 149 + mode_index,
+            ))
+    # Pillow keeps info mutable and shallow-copies it into transpose results.
+    # Construct the same metadata-bearing source through public APIs on each
+    # side; outputs are generated live, never authored into the input corpus.
+    for assignment in ("update", "replace"):
+        for method in range(7):
+            cases.append({
+                "case_id": f"{surface_id}.transpose.nuanced.metadata-{assignment}-{method}",
+                "surface": surface_id, "operation": "transpose",
+                "covers": [f"{surface_id}.transpose.behavior.default"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": [],
+                "steps": [{
+                    "step_id": "transposed", "surface": surface_id,
+                    "operation": "transpose",
+                    "receiver": literal({
+                        "protocol": "image-with-info", "mode": "RGB",
+                        "size": [3, 5], "color": [17, 91, 203],
+                        "assignment": assignment,
+                        "info": {"tag": "transpose metadata", "dpi": [72, 96],
+                                 "nested": {"label": "shared value"}},
+                    }),
+                    "arguments": {"method": literal(method)},
+                }, {
+                    "step_id": "info", "surface": surface_id, "operation": "info",
+                    "receiver": binding("transposed"), "arguments": {},
+                }, {
+                    "step_id": "materialize", "surface": surface_id,
+                    "operation": "tobytes", "receiver": binding("transposed"),
+                    "arguments": {},
+                }],
+                "observations": ["transposed", "info", "materialize"],
+            })
+    for loaded in (False, True):
+        for method in range(7):
+            steps = [{
+                "step_id": "source", "surface": "PIL.Image", "operation": "open",
+                "receiver": None, "arguments": {"fp": asset_value("webp-source")},
+            }]
+            if loaded:
+                steps.append({
+                    "step_id": "load", "surface": surface_id, "operation": "load",
+                    "receiver": binding("source"), "arguments": {},
+                })
+            steps.extend([{
+                "step_id": "source-info", "surface": surface_id, "operation": "info",
+                "receiver": binding("source"), "arguments": {},
+            }, {
+                "step_id": "transposed", "surface": surface_id, "operation": "transpose",
+                "receiver": binding("source"), "arguments": {"method": literal(method)},
+            }, {
+                "step_id": "info", "surface": surface_id, "operation": "info",
+                "receiver": binding("transposed"), "arguments": {},
+            }, {
+                "step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                "receiver": binding("transposed"), "arguments": {},
+            }])
+            cases.append({
+                "case_id": f"{surface_id}.transpose.nuanced.metadata-webp-{int(loaded)}-{method}",
+                "surface": surface_id, "operation": "transpose",
+                "covers": [f"{surface_id}.transpose.behavior.default"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": [{"id": "webp-source", "kind": "builtin",
+                            "name": "encoded-webp-input"}],
+                "steps": steps,
+                "observations": ["source-info", "transposed", "info", "materialize"],
+            })
     return cases
 
 
@@ -41474,6 +41893,63 @@ def _quick_pipeline_workloads(
                 ),
             }
         )
+    return workloads
+
+
+def _transpose_tiled_benchmark_workloads(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Measure the same heterogeneous transposes at two explicit boundaries.
+
+    The operation boundary retains terminal materialization so deferred target
+    execution is timed together with Pillow's eager transpose. The paired
+    whole-workflow boundary additionally measures source construction.
+    """
+    definitions = (
+        ("rgb-513x515-rotate90", "parallel-rgb-513x515-method-2"),
+        ("rgba-515x513-rotate90", "parallel-rgba-515x513-method-2"),
+        ("rgba-9x31-transpose-mirror", "chain-rgba-9x31-methods-5-0"),
+        ("rgb-768x772-rotate90", "aligned-rgb-768x772-method-2"),
+        ("rgba-772x768-transpose-mirror", "aligned-rgba-772x768-methods-5-0"),
+        ("rgb-768x772-rotate-cancel-mirror", "identity-rgb-768x772-methods-2-4-0"),
+        ("rgb-513x515-mirror", "row-rgb-513x515-method-0"),
+        ("rgb-513x515-flip", "row-rgb-513x515-method-1"),
+        ("rgb-513x515-rotate180", "row-rgb-513x515-method-3"),
+        ("rgba-515x513-rotate180", "row-rgba-515x513-method-3"),
+        ("rgba-768x769-rotate90", "odd-rgba-768x769-method-2"),
+        ("rgba-1025x1023-transpose-mirror", "odd-rgba-1025x1023-methods-5-0"),
+    )
+    workloads = []
+    for name, case_suffix in definitions:
+        case_id = f"PIL.Image.Image.transpose.nuanced.tiled-{case_suffix}"
+        case = cases_by_id[case_id]
+        if set(case["target_profiles"]) != set(BENCHMARK_TARGET_PROFILES):
+            raise ValueError(f"transpose benchmark requires all backend profiles: {case_id}")
+        transpose_steps = [step["step_id"] for step in case["steps"]
+                           if step["operation"] == "transpose"]
+        context = _workflow_benchmark_context(
+            case, variant="Transpose", surface="PIL.Image.Image", operation="transpose",
+        )
+        context["chain_length"] = len(transpose_steps)
+        for suffix, boundary, step_ids in (
+            ("whole-workflow", "whole_workflow", []),
+            ("operation-materialized", "observed_steps", [*transpose_steps, "materialize"]),
+        ):
+            workloads.append({
+                "workload_id": f"pipeline-matrix.transpose-tiled.{name}.{suffix}",
+                "covers": [_performance_requirement(operations, "PIL.Image.Image", "transpose")],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    "boundary": boundary, "step_ids": step_ids,
+                    "metrics": ["latency", "throughput"],
+                    "warmup_iterations": 5, "measurement_iterations": 20,
+                    "samples": 5, "concurrency": 1, "cache_state": "warm",
+                    "correctness_gate": "source_target_match",
+                },
+                "context": copy.deepcopy(context),
+            })
     return workloads
 
 
@@ -43642,6 +44118,7 @@ def build_pipeline_benchmark_document(
         )
     quick_workloads = _quick_pipeline_workloads(operations, cases_by_id)
     lifecycle_workloads = _lifecycle_pipeline_workloads(cases_by_id)
+    transpose_tiled_workloads = _transpose_tiled_benchmark_workloads(operations, cases_by_id)
     return {
         "schema": "migration-parity/benchmark-input@1",
         "workloads": [
@@ -43685,6 +44162,7 @@ def build_pipeline_benchmark_document(
             *long_chain_workloads,
             *quick_workloads,
             *lifecycle_workloads,
+            *transpose_tiled_workloads,
         ],
         "suites": [
             {

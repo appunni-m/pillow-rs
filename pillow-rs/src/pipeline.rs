@@ -789,6 +789,59 @@ pub enum TransposeMethod {
     Transverse,
 }
 
+/// A composed transpose run, including its exact identity element.
+///
+/// Keeping identity explicit lets a cancelled prefix compose with later
+/// methods. Signed axis permutations are independent of image dimensions,
+/// including empty images and images with a one-pixel axis.
+#[derive(Debug, Clone)]
+pub(crate) enum TransposeTransform {
+    Identity,
+    Method(TransposeMethod),
+}
+
+impl TransposeTransform {
+    fn method_bits(method: &TransposeMethod) -> u8 {
+        // Low bits reverse the output x/y axes; bit 2 swaps the source axes.
+        match method {
+            TransposeMethod::FlipLeftRight => 1,
+            TransposeMethod::FlipTopBottom => 2,
+            TransposeMethod::Rotate180 => 3,
+            TransposeMethod::Transpose => 4,
+            TransposeMethod::Rotate270 => 5,
+            TransposeMethod::Rotate90 => 6,
+            TransposeMethod::Transverse => 7,
+        }
+    }
+
+    /// Append a method in public execution order.
+    pub(crate) fn then(&self, next: &TransposeMethod) -> Self {
+        let first = match self {
+            Self::Identity => 0,
+            Self::Method(method) => Self::method_bits(method),
+        };
+        let next = Self::method_bits(next);
+        // If the second method swaps axes, it also swaps the first method's
+        // reversal flags. Reversing an axis twice cancels by XOR.
+        let first = if next & 4 != 0 {
+            (first & 4) | ((first & 1) << 1) | ((first & 2) >> 1)
+        } else {
+            first
+        };
+        match first ^ next {
+            0 => Self::Identity,
+            1 => Self::Method(TransposeMethod::FlipLeftRight),
+            2 => Self::Method(TransposeMethod::FlipTopBottom),
+            3 => Self::Method(TransposeMethod::Rotate180),
+            4 => Self::Method(TransposeMethod::Transpose),
+            5 => Self::Method(TransposeMethod::Rotate270),
+            6 => Self::Method(TransposeMethod::Rotate90),
+            7 => Self::Method(TransposeMethod::Transverse),
+            _ => unreachable!("transpose composition uses only three bits"),
+        }
+    }
+}
+
 /// Coordinate transform algorithm.
 #[derive(Debug, Clone)]
 pub enum TransformMethod {
@@ -911,4 +964,88 @@ pub enum DitherMethod {
     None,
     /// Floyd-Steinberg error diffusion.
     FloydSteinberg,
+}
+
+#[cfg(test)]
+mod transpose_tests {
+    use super::{TransposeMethod, TransposeTransform};
+
+    fn forward(method: &TransposeMethod, width: u32, height: u32, x: u32, y: u32) -> (u32, u32) {
+        match method {
+            TransposeMethod::FlipLeftRight => (width - 1 - x, y),
+            TransposeMethod::FlipTopBottom => (x, height - 1 - y),
+            TransposeMethod::Rotate90 => (y, width - 1 - x),
+            TransposeMethod::Rotate180 => (width - 1 - x, height - 1 - y),
+            TransposeMethod::Rotate270 => (height - 1 - y, x),
+            TransposeMethod::Transpose => (y, x),
+            TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
+        }
+    }
+
+    fn dimensions(method: &TransposeMethod, width: u32, height: u32) -> (u32, u32) {
+        match method {
+            TransposeMethod::Rotate90
+            | TransposeMethod::Rotate270
+            | TransposeMethod::Transpose
+            | TransposeMethod::Transverse => (height, width),
+            _ => (width, height),
+        }
+    }
+
+    fn assert_composition(methods: &[&TransposeMethod], width: u32, height: u32) {
+        let composed = methods
+            .iter()
+            .fold(TransposeTransform::Identity, |state, next| state.then(next));
+        let expected_dimensions = methods
+            .iter()
+            .fold((width, height), |(w, h), method| dimensions(method, w, h));
+        let actual_dimensions = match &composed {
+            TransposeTransform::Identity => (width, height),
+            TransposeTransform::Method(method) => dimensions(method, width, height),
+        };
+        assert_eq!(actual_dimensions, expected_dimensions, "{methods:?}");
+        for y in 0..height {
+            for x in 0..width {
+                let (mut px, mut py) = (x, y);
+                let (mut w, mut h) = (width, height);
+                for method in methods {
+                    (px, py) = forward(method, w, h, px, py);
+                    (w, h) = dimensions(method, w, h);
+                }
+                let actual = match &composed {
+                    TransposeTransform::Identity => (x, y),
+                    TransposeTransform::Method(method) => forward(method, width, height, x, y),
+                };
+                assert_eq!(
+                    actual,
+                    (px, py),
+                    "{methods:?} at ({x},{y}) on {width}x{height}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn transpose_d4_all_pairs_and_triples_match_forward_coordinates() {
+        let methods = [
+            TransposeMethod::FlipLeftRight,
+            TransposeMethod::FlipTopBottom,
+            TransposeMethod::Rotate90,
+            TransposeMethod::Rotate180,
+            TransposeMethod::Rotate270,
+            TransposeMethod::Transpose,
+            TransposeMethod::Transverse,
+        ];
+        for (width, height) in [(0, 0), (0, 7), (7, 0), (1, 1), (1, 7), (9, 1), (13, 19)] {
+            for first in &methods {
+                assert_composition(&[first], width, height);
+                for second in &methods {
+                    assert_composition(&[first, second], width, height);
+                    for third in &methods {
+                        assert_composition(&[first, second, third], width, height);
+                    }
+                }
+            }
+        }
+    }
 }

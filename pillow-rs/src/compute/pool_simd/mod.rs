@@ -13,7 +13,9 @@
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
-use crate::pipeline::{PipelineOp, TransposeMethod};
+#[cfg(feature = "gpu")]
+use crate::pipeline::TransposeMethod;
+use crate::pipeline::{PipelineOp, TransposeTransform};
 use crate::raster::DynamicImage;
 
 pub(crate) mod ops;
@@ -105,80 +107,31 @@ fn fused_point_batch(
     (consumed >= 2).then_some((consumed, composed))
 }
 
-fn transpose_output_dimensions(method: &TransposeMethod, width: u32, height: u32) -> (u32, u32) {
-    match method {
-        TransposeMethod::Rotate90
-        | TransposeMethod::Rotate270
-        | TransposeMethod::Transpose
-        | TransposeMethod::Transverse => (height, width),
-        _ => (width, height),
-    }
-}
-
-/// Map one source coordinate to its output coordinate for a Pillow transpose.
-/// All seven methods are affine signed-axis permutations, so the four source
-/// corners are sufficient to prove a composition matches a candidate method.
-fn transpose_forward(
-    method: &TransposeMethod,
-    width: u32,
-    height: u32,
-    x: u32,
-    y: u32,
-) -> (u32, u32) {
-    match method {
-        TransposeMethod::FlipLeftRight => (width - 1 - x, y),
-        TransposeMethod::FlipTopBottom => (x, height - 1 - y),
-        TransposeMethod::Rotate90 => (y, width - 1 - x),
-        TransposeMethod::Rotate180 => (width - 1 - x, height - 1 - y),
-        TransposeMethod::Rotate270 => (height - 1 - y, x),
-        TransposeMethod::Transpose => (y, x),
-        TransposeMethod::Transverse => (height - 1 - y, width - 1 - x),
-    }
-}
-
-/// Compose two adjacent transpose operations into one D4 transform.
-///
-/// The implementation is deliberately independent of pixel storage. It is
-/// used by the SIMD executor before native bytes are traversed, so a chain
-/// such as `FlipLeftRight → Rotate90` performs one allocation and one pass.
-fn compose_transpose_methods(
+/// Compose methods for the existing GPU caller. Dimensions do not affect D4
+/// composition; `None` denotes its exact identity element.
+#[cfg(feature = "gpu")]
+pub(super) fn compose_transpose_methods(
     first: &TransposeMethod,
     second: &TransposeMethod,
-    width: u32,
-    height: u32,
+    _width: u32,
+    _height: u32,
 ) -> Option<TransposeMethod> {
-    if width == 0 || height == 0 {
-        return None;
+    match TransposeTransform::Method(first.clone()).then(second) {
+        TransposeTransform::Identity => None,
+        TransposeTransform::Method(method) => Some(method),
     }
-    let (middle_width, middle_height) = transpose_output_dimensions(first, width, height);
-    let output_dimensions = transpose_output_dimensions(second, middle_width, middle_height);
-    let corners = [
-        (0, 0),
-        (width - 1, 0),
-        (0, height - 1),
-        (width - 1, height - 1),
-    ];
-    let candidates = [
-        TransposeMethod::FlipLeftRight,
-        TransposeMethod::FlipTopBottom,
-        TransposeMethod::Rotate90,
-        TransposeMethod::Rotate180,
-        TransposeMethod::Rotate270,
-        TransposeMethod::Transpose,
-        TransposeMethod::Transverse,
-    ];
-    candidates.into_iter().find(|candidate| {
-        if transpose_output_dimensions(candidate, width, height) != output_dimensions {
-            return false;
-        }
-        corners.iter().all(|&(x, y)| {
-            let (middle_x, middle_y) = transpose_forward(first, width, height, x, y);
-            let expected =
-                transpose_forward(second, middle_width, middle_height, middle_x, middle_y);
-            let actual = transpose_forward(candidate, width, height, x, y);
-            expected == actual
-        })
-    })
+}
+
+/// An identity run can retain storage only if it is already tightly packed.
+/// `ImageBuffer::from_raw` also admits extra trailing samples; an actual
+/// transpose discards those samples, so such inputs retain the original path.
+pub(super) fn transpose_identity_can_reuse(img: &DynamicImage) -> bool {
+    crate::checked_dims::CheckedDims::new_allow_empty(
+        img.width(),
+        img.height(),
+        img.color().bytes_per_pixel(),
+    )
+    .is_ok_and(|dims| dims.total_bytes() == img.as_bytes().len())
 }
 
 fn normalize_palette_result(
@@ -249,19 +202,18 @@ impl BackendImpl for SimdPool {
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        let op_keys: Vec<&str> = ops.iter().map(|op| registry::variant_key(op)).collect();
         log::debug!(
             "[SIMD] {} op(s) {}x{}: {:?}",
             ops.len(),
             img.width(),
             img.height(),
-            op_keys
+            ops.iter().map(registry::variant_key).collect::<Vec<_>>()
         );
 
         // The first operation can read the materialized source directly.  Do
         // not clone the full frame merely to seed the accumulator; each
-        // adapter already returns an owned output buffer.  A zero-operation
-        // batch (kept for defensive internal callers) clones only at return.
+        // adapter already returns an owned output buffer. Empty batches and
+        // borrowed all-identity batches clone only at return.
         let mut current: Option<DynamicImage> = None;
         let mut current_mode = ops::adapters::simd_initial_mode(img, ops, mode);
         let mut resources = crate::compute::host_resource_telemetry(img);
@@ -325,35 +277,45 @@ impl BackendImpl for SimdPool {
                         }
                     }
                 }
-                if let PipelineOp::Transpose { method } = &ops[index] {
-                    let mut combined = method.clone();
-                    let mut consumed = 1usize;
-                    while index + consumed < ops.len() {
-                        let PipelineOp::Transpose { method: next } = &ops[index + consumed] else {
-                            break;
-                        };
-                        let Some(composed) = compose_transpose_methods(
-                            &combined,
-                            next,
-                            input.width(),
-                            input.height(),
-                        ) else {
-                            break;
-                        };
-                        combined = composed;
-                        consumed += 1;
+            }
+            if let PipelineOp::Transpose { method } = &ops[index] {
+                let mut combined = TransposeTransform::Method(method.clone());
+                let mut consumed = 1usize;
+                while index + consumed < ops.len() {
+                    let PipelineOp::Transpose { method: next } = &ops[index + consumed] else {
+                        break;
+                    };
+                    combined = combined.then(next);
+                    consumed += 1;
+                }
+                if consumed > 1 {
+                    if let Some(unsupported) = ops[index..index + consumed]
+                        .iter()
+                        .find(|op| !ops::adapters::simd_supports_for_image(input, op, op_mode))
+                    {
+                        let key = registry::variant_key(unsupported);
+                        crate::compute::record_pipeline_operation_unsupported(key);
+                        return Err(PilError::NotImplementedError(format!(
+                            "SIMD does not support {key} for the current image layout/mode"
+                        )));
                     }
-                    if consumed > 1 {
-                        if let Some(unsupported) = ops[index..index + consumed]
-                            .iter()
-                            .find(|op| !ops::adapters::simd_supports_for_image(input, op, op_mode))
-                        {
-                            let key = registry::variant_key(unsupported);
-                            crate::compute::record_pipeline_operation_unsupported(key);
-                            return Err(PilError::NotImplementedError(format!(
-                                "SIMD does not support {key} for the current image layout/mode"
-                            )));
+                    if matches!(combined, TransposeTransform::Identity)
+                        && transpose_identity_can_reuse(input)
+                    {
+                        for op in &ops[index..index + consumed] {
+                            crate::compute::begin_pipeline_operation_telemetry(
+                                registry::variant_key(op),
+                            );
+                            crate::compute::record_pipeline_operation_path("scalar-control");
+                            crate::compute::finish_pipeline_operation_telemetry();
                         }
+                        resources.fused_operation_count = resources
+                            .fused_operation_count
+                            .saturating_add(consumed as u64);
+                        index += consumed;
+                        continue;
+                    }
+                    if let TransposeTransform::Method(combined) = combined {
                         let fused = PipelineOp::Transpose { method: combined };
                         let key = registry::variant_key(&fused);
                         let entry = registry::registry()?.get(key).ok_or_else(|| {
@@ -508,7 +470,16 @@ impl BackendImpl for SimdPool {
         // a new multi-band image. Do not run its RGB/LA/RGBA result through
         // the P-mode normalizer, which is reserved for operations that retain
         // the source palette sample layout.
-        let current = current.unwrap_or_else(|| img.clone());
+        let current = current.unwrap_or_else(|| {
+            let output = img.clone();
+            if !ops.is_empty() {
+                // Identity admission checked the complete native allocation.
+                // An owned result is still required at the public boundary.
+                crate::compute::record_pipeline_allocation(output.as_bytes().len());
+                crate::compute::account_host_buffer_boundary(&mut resources, img, &output);
+            }
+            output
+        });
         let result = if ops.iter().any(|op| matches!(op, PipelineOp::Merge { .. })) {
             Ok(current)
         } else {
@@ -516,5 +487,304 @@ impl BackendImpl for SimdPool {
         }?;
         crate::compute::record_pipeline_resource_telemetry(resources);
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod transpose_tests {
+    use super::SimdPool;
+    use crate::compute::{Backend, BackendImpl, CpuPool, registry};
+    use crate::error::PilError;
+    use crate::image::Image;
+    use crate::image_utils::raw_bytes_to_image_allow_empty;
+    use crate::pipeline::{PipelineOp, TransposeMethod};
+    use crate::raster::{
+        DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb, Rgb32FImage, RgbImage,
+    };
+
+    const METHODS: [TransposeMethod; 7] = [
+        TransposeMethod::FlipLeftRight,
+        TransposeMethod::FlipTopBottom,
+        TransposeMethod::Rotate90,
+        TransposeMethod::Rotate180,
+        TransposeMethod::Rotate270,
+        TransposeMethod::Transpose,
+        TransposeMethod::Transverse,
+    ];
+
+    fn inverse(method: &TransposeMethod) -> TransposeMethod {
+        match method {
+            TransposeMethod::Rotate90 => TransposeMethod::Rotate270,
+            TransposeMethod::Rotate270 => TransposeMethod::Rotate90,
+            _ => method.clone(),
+        }
+    }
+
+    fn transpose_ops(methods: &[TransposeMethod]) -> Vec<PipelineOp> {
+        methods
+            .iter()
+            .map(|method| PipelineOp::Transpose {
+                method: method.clone(),
+            })
+            .collect()
+    }
+
+    fn assert_backends_match_sequential(
+        source: &DynamicImage,
+        mode: Option<&str>,
+        methods: &[TransposeMethod],
+    ) -> Result<(), PilError> {
+        let ops = transpose_ops(methods);
+        let expected = ops.iter().try_fold(source.clone(), |input, op| {
+            registry::execute_cpu(op, &input, mode)
+        })?;
+        for backend in [&CpuPool as &dyn BackendImpl, &SimdPool] {
+            let actual = backend.execute_batch(&ops, source, mode)?;
+            assert_eq!(actual.color(), expected.color(), "{methods:?} {mode:?}");
+            assert_eq!(
+                actual.dimensions(),
+                expected.dimensions(),
+                "{methods:?} {mode:?}"
+            );
+            assert_eq!(
+                actual.as_bytes(),
+                expected.as_bytes(),
+                "{methods:?} {mode:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn transpose_identity_all_pairs_and_continuations_preserve_native_pixels()
+    -> Result<(), PilError> {
+        for (width, height) in [(0, 0), (0, 7), (7, 0), (1, 1), (1, 7), (9, 1), (13, 19)] {
+            for (channels, mode) in [
+                (1, "L"),
+                (1, "P"),
+                (2, "LA"),
+                (2, "PA"),
+                (3, "RGB"),
+                (4, "RGBA"),
+                (4, "I"),
+                (4, "F"),
+            ] {
+                let bytes: Vec<u8> = (0..width as usize * height as usize * channels)
+                    .map(|index| index.wrapping_mul(113).wrapping_add(index / 7) as u8)
+                    .collect();
+                let source =
+                    raw_bytes_to_image_allow_empty(width, height, bytes.clone(), channels)?;
+                for first in &METHODS {
+                    for second in &METHODS {
+                        assert_backends_match_sequential(
+                            &source,
+                            Some(mode),
+                            &[first.clone(), second.clone()],
+                        )?;
+                        assert_backends_match_sequential(
+                            &source,
+                            Some(mode),
+                            &[first.clone(), inverse(first), second.clone()],
+                        )?;
+                    }
+                }
+                assert_eq!(source.as_bytes(), bytes);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn transpose_identity_preserves_typed_bits_and_native_variant() -> Result<(), PilError> {
+        let patterns = [
+            0x7f80_0001u32,
+            0x7fc1_2345,
+            0x8000_0000,
+            0,
+            0xff80_0000,
+            0xffc5_4321,
+        ];
+        let bytes: Vec<u8> = (0..9 * 31)
+            .flat_map(|index| patterns[(index * 3 + index / 7) % patterns.len()].to_ne_bytes())
+            .collect();
+        let packed = raw_bytes_to_image_allow_empty(9, 31, bytes.clone(), 4)?;
+        let samples: Vec<u16> = (0..9 * 31)
+            .map(|index| (index * 571 + index / 3 * 19) as u16)
+            .collect();
+        let sixteen = DynamicImage::ImageLuma16(
+            ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(9, 31, samples).unwrap(),
+        );
+        for first in &METHODS {
+            for second in &METHODS {
+                for mode in ["I", "F"] {
+                    assert_backends_match_sequential(
+                        &packed,
+                        Some(mode),
+                        &[first.clone(), second.clone()],
+                    )?;
+                }
+                for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
+                    assert_backends_match_sequential(
+                        &sixteen,
+                        Some(mode),
+                        &[first.clone(), second.clone()],
+                    )?;
+                }
+            }
+        }
+        assert_eq!(packed.as_bytes(), bytes);
+        Ok(())
+    }
+
+    #[test]
+    fn transpose_identity_does_not_skip_unsupported_simd_admission() {
+        let source = DynamicImage::ImageRgb32F(
+            Rgb32FImage::from_raw(2, 2, vec![f32::from_bits(0x7fc1_2345); 12]).unwrap(),
+        );
+        let ops = transpose_ops(&[TransposeMethod::Rotate90, TransposeMethod::Rotate270]);
+        assert!(matches!(
+            SimdPool.execute_batch(&ops, &source, None),
+            Err(PilError::NotImplementedError(_))
+        ));
+        let empty = DynamicImage::ImageLuma16(
+            ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(0, 7, Vec::new()).unwrap(),
+        );
+        assert!(matches!(
+            SimdPool.execute_batch(&ops, &empty, Some("I;16")),
+            Err(PilError::NotImplementedError(_))
+        ));
+        // CPU can preserve the actual float raster variant without interpreting its NaNs.
+        let result = CpuPool.execute_batch(&ops, &source, None).unwrap();
+        assert_eq!(result.color(), source.color());
+        assert_eq!(result.as_bytes(), source.as_bytes());
+    }
+
+    #[test]
+    fn transpose_identity_preserves_trailing_storage_normalization() -> Result<(), PilError> {
+        let source = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(3, 5, (0..52).map(|index| (index * 37) as u8).collect()).unwrap(),
+        );
+        assert!(!super::transpose_identity_can_reuse(&source));
+        for first in &METHODS {
+            assert_backends_match_sequential(
+                &source,
+                Some("RGB"),
+                &[first.clone(), inverse(first)],
+            )?;
+        }
+        assert_eq!(source.as_bytes().len(), 52);
+        Ok(())
+    }
+
+    #[test]
+    fn transpose_identity_preserves_ownership_and_reports_zero_kernel_work() -> Result<(), PilError>
+    {
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let bytes: Vec<u8> = (0..9 * 31 * 3)
+            .map(|index| (index * 37 + index / 11) as u8)
+            .collect();
+        let source = raw_bytes_to_image_allow_empty(9, 31, bytes.clone(), 3)?;
+        let identity = transpose_ops(&[TransposeMethod::Rotate90, TransposeMethod::Rotate270]);
+        let expected_invert = registry::execute_cpu(&PipelineOp::Invert, &source, Some("RGB"))?;
+        let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
+        for backend in [&CpuPool as &dyn BackendImpl, &SimdPool] {
+            crate::compute::reset_pipeline_operation_telemetry();
+            Backend::reset_pipeline_allocation_telemetry();
+            let mut result = backend.execute_batch(&identity, &source, Some("RGB"))?;
+            let records = crate::compute::take_pipeline_operation_telemetry();
+            assert_eq!(records.len(), 2);
+            for record in records {
+                assert_eq!(record.operation, "Transpose");
+                assert_eq!(record.vector_block_count, 0);
+                assert_eq!(record.scalar_tail_count, 0);
+                assert_eq!(record.mode_conversion_count, 0);
+                assert_eq!(record.handoff_count, 0);
+                assert_eq!(
+                    record.path,
+                    if backend.name() == Backend::Cpu {
+                        "cpu"
+                    } else {
+                        "scalar-control"
+                    }
+                );
+            }
+            let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
+            assert_eq!(resources.fused_operation_count, 2);
+            assert_eq!(resources.host_buffer_count, 2);
+            let allocations = Backend::take_pipeline_allocation_telemetry();
+            assert_eq!(allocations.allocation_count, 1);
+            assert_eq!(allocations.allocated_bytes, bytes.len() as u64);
+            assert_eq!(result.as_bytes(), bytes);
+            assert_ne!(result.as_bytes().as_ptr(), source.as_bytes().as_ptr());
+            result
+                .as_mut_rgb8()
+                .unwrap()
+                .put_pixel(0, 0, Rgb([1, 2, 3]));
+            let retained = result.as_bytes().to_vec();
+            assert_eq!(source.as_bytes(), bytes);
+
+            for leading_identity in [false, true] {
+                let ops = if leading_identity {
+                    vec![identity[0].clone(), identity[1].clone(), PipelineOp::Invert]
+                } else {
+                    vec![PipelineOp::Invert, identity[0].clone(), identity[1].clone()]
+                };
+                crate::compute::reset_pipeline_operation_telemetry();
+                let actual = backend.execute_batch(&ops, &source, Some("RGB"))?;
+                assert_eq!(actual.as_bytes(), expected_invert.as_bytes());
+                let records = crate::compute::take_pipeline_operation_telemetry();
+                assert_eq!(records.len(), 3);
+                for record in records
+                    .iter()
+                    .filter(|record| record.operation == "Transpose")
+                {
+                    assert_eq!(record.vector_block_count, 0);
+                    assert_eq!(record.scalar_tail_count, 0);
+                }
+                let resources = crate::compute::take_pipeline_resource_telemetry().unwrap();
+                assert_eq!(resources.fused_operation_count, 2);
+                assert_eq!(resources.host_buffer_count, 2);
+                assert_eq!(result.as_bytes(), retained);
+                assert_eq!(source.as_bytes(), bytes);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn transpose_identity_keeps_public_pa_materialization_boundaries() -> Result<(), PilError> {
+        let bytes: Vec<u8> = (0..9 * 31 * 2)
+            .map(|index| (index * 71 + index / 7) as u8)
+            .collect();
+        for backend in [Backend::Cpu, Backend::Simd] {
+            let source = Image::frombytes("PA", (9, 31), &bytes)?.use_backend(backend);
+            let first = source.transpose("ROTATE_90")?;
+            let second = first.transpose("ROTATE_270")?;
+            let Image::Pipeline {
+                source: boundary,
+                ops,
+                ..
+            } = &second
+            else {
+                panic!("transpose retains a public pipeline result");
+            };
+            assert_eq!(ops.len(), 1);
+            let Image::Pipeline {
+                ops: previous_ops, ..
+            } = boundary.as_ref()
+            else {
+                panic!("PA must retain its preceding materialization boundary");
+            };
+            assert_eq!(previous_ops.len(), 1);
+            assert_eq!(second.mode()?, "PA");
+            assert_eq!(second.tobytes()?, bytes);
+            assert_eq!(source.tobytes()?, bytes);
+        }
+        Ok(())
     }
 }

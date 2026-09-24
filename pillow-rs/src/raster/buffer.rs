@@ -886,11 +886,32 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     ///
     /// Panics when the resulting image is larger than the maximum size of a vector.
     pub fn from_pixel(width: u32, height: u32, pixel: P) -> ImageBuffer<P, Vec<P::Subpixel>> {
-        let mut buf = ImageBuffer::new(width, height);
-        for p in buf.pixels_mut() {
-            *p = pixel;
+        let Some(size) = Self::image_buffer_len(width, height) else {
+            panic!("Buffer length in `ImageBuffer::new` overflows usize");
+        };
+        let channels = usize::from(P::CHANNEL_COUNT);
+        // The former pixels_mut() iterator rejected a zero-sized pixel even
+        // for empty images. Keep that malformed Pixel contract rejected.
+        assert!(channels != 0, "chunk size must be non-zero");
+        let mut data = Vec::with_capacity(size);
+        if size != 0 {
+            // Seed through the same typed assignment as pixels_mut(), rather
+            // than assuming channels() exposes exactly CHANNEL_COUNT values.
+            // Only this first pixel needs initialization before assignment;
+            // every subsequent sample is copied from initialized storage.
+            data.resize(channels, P::Subpixel::DEFAULT_MIN_VALUE);
+            *P::from_slice_mut(&mut data) = pixel;
+            while data.len() < size {
+                let additional = data.len().min(size - data.len());
+                data.extend_from_within(..additional);
+            }
         }
-        buf
+        ImageBuffer {
+            data,
+            width,
+            height,
+            _phantom: PhantomData,
+        }
     }
 
     /// Constructs a new `ImageBuffer` by repeated application of the supplied function.
@@ -1090,3 +1111,134 @@ where
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::{GrayImage, ImageBuffer, Pixel};
+    use crate::raster::color::{Luma, LumaA, Rgb, Rgba};
+
+    #[test]
+    fn from_pixel_fills_complete_patterns_and_partial_doubling_blocks() {
+        for (width, height) in [(1, 1), (3, 5), (17, 19), (513, 515)] {
+            let pixels = width as usize * height as usize;
+            let luma = ImageBuffer::from_pixel(width, height, Luma([193u8]));
+            let la = ImageBuffer::from_pixel(width, height, LumaA([31u8, 207]));
+            let rgb = ImageBuffer::from_pixel(width, height, Rgb([17u8, 29, 233]));
+            let rgba = ImageBuffer::from_pixel(width, height, Rgba([9u8, 33, 117, 231]));
+            let wide = ImageBuffer::from_pixel(width, height, Rgba([0u16, 32767, 65535, 257]));
+            assert_eq!(luma.dimensions(), (width, height));
+            assert_eq!(luma.as_raw(), &vec![193u8; pixels]);
+            assert_eq!(la.as_raw(), &[31u8, 207].repeat(pixels));
+            assert_eq!(rgb.as_raw(), &[17u8, 29, 233].repeat(pixels));
+            assert_eq!(rgba.as_raw(), &[9u8, 33, 117, 231].repeat(pixels));
+            assert_eq!(wide.as_raw(), &[0u16, 32767, 65535, 257].repeat(pixels));
+        }
+    }
+
+    #[test]
+    fn from_pixel_preserves_float_payload_bits() {
+        let words32 = [0x8000_0000u32, 0x7f80_0001, 0x7fc1_2345, 0xff80_0000];
+        let image32 = ImageBuffer::from_pixel(17, 19, Rgba(words32.map(f32::from_bits)));
+        let actual32: Vec<u32> = image32
+            .as_raw()
+            .iter()
+            .map(|sample| sample.to_bits())
+            .collect();
+        assert_eq!(actual32, words32.repeat(17 * 19));
+
+        let words64 = [0x8000_0000_0000_0000u64, 0x7ff0_0000_0000_0001];
+        let image64 = ImageBuffer::from_pixel(9, 13, LumaA(words64.map(f64::from_bits)));
+        let actual64: Vec<u64> = image64
+            .as_raw()
+            .iter()
+            .map(|sample| sample.to_bits())
+            .collect();
+        assert_eq!(actual64, words64.repeat(9 * 13));
+    }
+
+    #[test]
+    fn from_pixel_preserves_empty_dimensions() {
+        for (width, height) in [(0, 0), (0, 17), (23, 0)] {
+            let image = ImageBuffer::from_pixel(width, height, Rgb([11u8, 99, 213]));
+            assert_eq!(image.dimensions(), (width, height));
+            assert!(image.as_raw().is_empty());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Buffer length in `ImageBuffer::new` overflows usize")]
+    fn from_pixel_rejects_dimension_overflow_before_allocation() {
+        let _ = ImageBuffer::from_pixel(u32::MAX, u32::MAX, Rgba([1u8, 2, 3, 4]));
+    }
+
+    /// A storage-compatible pixel whose channel accessor exposes a subset.
+    /// from_pixel must retain the original typed-assignment semantics rather
+    /// than silently shorten its storage to match this accessor.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    struct ChannelSubset([u8; 2]);
+
+    impl Pixel for ChannelSubset {
+        type Subpixel = u8;
+        const CHANNEL_COUNT: u8 = 2;
+        const COLOR_MODEL: &'static str = "test";
+
+        fn channels(&self) -> &[u8] {
+            &self.0[..1]
+        }
+        fn channels_mut(&mut self) -> &mut [u8] {
+            &mut self.0[..1]
+        }
+        fn from_slice(slice: &[u8]) -> &Self {
+            bytemuck::cast_ref(<&[u8; 2]>::try_from(slice).expect("two stored channels"))
+        }
+        fn from_slice_mut(slice: &mut [u8]) -> &mut Self {
+            bytemuck::cast_mut(<&mut [u8; 2]>::try_from(slice).expect("two stored channels"))
+        }
+        fn to_rgb(&self) -> Rgb<u8> {
+            LumaA(self.0).to_rgb()
+        }
+        fn to_rgba(&self) -> Rgba<u8> {
+            LumaA(self.0).to_rgba()
+        }
+        fn to_luma(&self) -> Luma<u8> {
+            LumaA(self.0).to_luma()
+        }
+        fn to_luma_alpha(&self) -> LumaA<u8> {
+            LumaA(self.0)
+        }
+        fn map<F: FnMut(u8) -> u8>(&self, f: F) -> Self {
+            Self(LumaA(self.0).map(f).0)
+        }
+        fn apply<F: FnMut(u8) -> u8>(&mut self, f: F) {
+            LumaA::from_slice_mut(&mut self.0).apply(f);
+        }
+        fn map_with_alpha<F: FnMut(u8) -> u8, G: FnMut(u8) -> u8>(&self, f: F, g: G) -> Self {
+            Self(LumaA(self.0).map_with_alpha(f, g).0)
+        }
+        fn apply_with_alpha<F: FnMut(u8) -> u8, G: FnMut(u8) -> u8>(&mut self, f: F, g: G) {
+            LumaA::from_slice_mut(&mut self.0).apply_with_alpha(f, g);
+        }
+        fn map2<F: FnMut(u8, u8) -> u8>(&self, other: &Self, f: F) -> Self {
+            Self(LumaA(self.0).map2(&LumaA(other.0), f).0)
+        }
+        fn apply2<F: FnMut(u8, u8) -> u8>(&mut self, other: &Self, f: F) {
+            LumaA::from_slice_mut(&mut self.0).apply2(&LumaA(other.0), f);
+        }
+        fn invert(&mut self) {
+            LumaA::from_slice_mut(&mut self.0).invert();
+        }
+        fn blend(&mut self, other: &Self) {
+            LumaA::from_slice_mut(&mut self.0).blend(&LumaA(other.0));
+        }
+    }
+
+    #[test]
+    fn from_pixel_copies_storage_instead_of_assuming_channel_accessor_length() {
+        let pixel = ChannelSubset([43, 219]);
+        assert_eq!(pixel.channels().len(), 1);
+        let image = ImageBuffer::from_pixel(13, 7, pixel);
+        assert_eq!(image.as_raw(), &[43u8, 219].repeat(13 * 7));
+        assert_eq!(GrayImage::from_pixel(3, 1, Luma([0])).as_raw(), &[0, 0, 0]);
+    }
+}

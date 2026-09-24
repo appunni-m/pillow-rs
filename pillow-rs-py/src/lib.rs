@@ -37,6 +37,7 @@ use pyo3::types::PyTuple;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 mod putdata;
@@ -921,9 +922,14 @@ impl PyImage {
 
     fn transpose(&self, method: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let input = transpose_input_from_python(method)?;
-        let rs = py
-            .detach(|| self.inner.transpose_with_input(input))
-            .map_err(map_error)?;
+        // Ordinary transpose only queues metadata. Paletted source cloning
+        // copies its index buffer, so keep that work outside the GIL.
+        let rs = if matches!(&self.inner, RsImage::Paletted(_)) {
+            py.detach(|| self.inner.transpose_with_input(input))
+        } else {
+            self.inner.transpose_with_input(input)
+        }
+        .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -1058,11 +1064,16 @@ impl PyImage {
         encoder_name: &str,
         args: Vec<String>,
         py: Python<'_>,
-    ) -> PyResult<Vec<u8>> {
+    ) -> PyResult<Py<PyBytes>> {
         let mode = mode.to_owned();
         let encoder_name = encoder_name.to_owned();
-        py.detach(|| self.inner.tobytes_encoded(&mode, &encoder_name, &args))
-            .map_err(map_error)
+        let bytes = py
+            .detach(|| {
+                self.inner
+                    .tobytes_encoded_shared(&mode, &encoder_name, &args)
+            })
+            .map_err(map_error)?;
+        Ok(PyBytes::new(py, bytes.as_ref()).unbind())
     }
 
     /// Lock a lazy image pipeline to the sole active compute backend.
@@ -1637,13 +1648,16 @@ impl PyImage {
     fn frombytes(
         mode: &str,
         size: (u32, u32),
-        data: Vec<u8>,
+        data: Cow<'_, [u8]>,
         decoder_name: &str,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let mode = mode.to_owned();
         let decoder_name = decoder_name.to_owned();
-        py.detach(|| pillow_rs::image_frombytes(&mode, size, &data, &decoder_name))
+        // PyO3 borrows immutable bytes for this call and retains the Vec
+        // extractor for other sequences. The core constructs owned image
+        // storage before returning, so no Python-backed slice escapes.
+        py.detach(|| pillow_rs::image_frombytes(&mode, size, data.as_ref(), &decoder_name))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }

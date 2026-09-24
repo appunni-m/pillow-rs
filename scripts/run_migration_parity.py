@@ -385,6 +385,20 @@ def decode_literal(
                     "public-class requires string surface and name"
                 )
             return getattr(import_surface(side, surface), name)
+        if protocol == "image-with-info":
+            # Input-only public object construction, identical on both sides.
+            # This permits metadata-bearing receivers without storing any
+            # expected result or using either implementation as a substitute.
+            image = import_surface(side, "PIL.Image").new(
+                value["mode"], tuple(value["size"]),
+                decode_literal(value.get("color"), side=side),
+            )
+            metadata = decode_literal(value["info"], side=side)
+            if value.get("assignment", "update") == "replace":
+                image.info = metadata
+            else:
+                image.info.update(metadata)
+            return image
         if protocol == "text-repeat":
             text = value.get("text")
             repeat = value.get("repeat")
