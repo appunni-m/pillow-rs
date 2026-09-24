@@ -39842,6 +39842,49 @@ def build_nuanced_cases(
     cases.extend(filtered_alpha_transform_parity_cases(surface_id))
     cases.extend(equalize_mask_parity_cases(surface_id))
     cases.extend(autocontrast_rounding_parity_cases(surface_id))
+    cases.extend(blend_rounding_parity_cases(surface_id))
+    return cases
+
+
+def blend_rounding_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Distinguish float32 fused interpolation from weighted/f64 formulas."""
+    if surface_id not in ("PIL.Image", "PIL.ImageChops"):
+        return []
+    cases = []
+    samples = (
+        (1, 1, 0, 10, 4, 16, 18, 15, 0, 255, 255, 127, 200, 3, 62, 17),
+        (31, 41, 90, 0, 34, 6, 8, 15, 255, 0, 255, 128, 9, 239, 2, 151),
+    )
+    names = ("im1", "im2") if surface_id == "PIL.Image" else ("image1", "image2")
+    for mode in ("L", "RGB"):
+        assets = []
+        for name, values in zip(names, samples):
+            data = bytes(values) if mode == "L" else bytes(
+                channel for value in values
+                for channel in (value, (value * 73 + 11) % 256, (value * 29 + 5) % 256)
+            )
+            assets.append({"id": name, "kind": "inline", "encoding": "base64",
+                           "data": base64.b64encode(data).decode("ascii"),
+                           "sha256": hashlib.sha256(data).hexdigest(),
+                           "media_type": "application/octet-stream"})
+        for alpha in (0.3, 0.7, 0.9, 1 / 3, 0.1000000001, -0.1, 1.1):
+            steps = [{"step_id": name, "surface": "PIL.Image", "operation": "frombytes",
+                      "receiver": None, "arguments": {"mode": literal(mode),
+                      "size": literal([16, 1]), "data": asset_value(name)}} for name in names]
+            steps.extend([
+                {"step_id": "call", "surface": surface_id, "operation": "blend",
+                 "receiver": None, "arguments": {**{name: binding(name) for name in names},
+                                                   "alpha": literal(alpha)}},
+                {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
+                 "receiver": binding("call"), "arguments": {}},
+            ])
+            cases.append({
+                "case_id": f"{surface_id}.blend.nuanced.fused-float32-{mode.lower()}-{alpha}",
+                "surface": surface_id, "operation": "blend",
+                "covers": [f"{surface_id}.blend.behavior.default"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
+                "steps": steps, "observations": ["call", "materialize"],
+            })
     return cases
 
 

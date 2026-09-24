@@ -362,6 +362,111 @@ and cross-runtime plus pre-push checks remain pending. The next bounded visit
 is `PIL.ImageChops.blend`, ranked by the remaining baseline gaps after excluding
 the already checkpointed equalize, inversion, and shared font-loading work.
 
+## Blend visit
+
+The next ranked operation is `PIL.ImageChops.blend`; its wrapper delegates to
+module-level `Image.blend`. The four unchanged maintained workloads measured
+under receipt `migration-benchmark-df26b330f3694581a5b4b63044f8ada3` include
+three materialized pipelines and one deferred construction row. The materialized
+16² workload measured Pillow/CPU/SIMD/GPU at
+0.015605/0.022250/0.021438/1.123354 ms. The deferred row cannot prove acceleration.
+
+The existing Chops cohort and mapped workflows pass 78 comparisons, but a
+complete byte-pair audit exposed rounding defects for seven of thirteen tested
+alpha values on every requested profile. CPU and SIMD used weighted f64 terms;
+the failing GPU cases were CPU semantic fallback, as their receipts show.
+Live Pillow's selected macOS build narrows alpha to float32 and uses fused
+`left + alpha * (right - left)` arithmetic. Weighted f64 and separately rounded
+float32 both differ on some extrapolating inputs. Evidence is retained in
+`blend-arithmetic-20260924.json` and
+`perf-blend-20260924-pairs-initial-parity.json`. The formula and float parameter
+also appear in [Pillow's Blend.c](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Blend.c).
+The live executable, rather than that moving source link, establishes the
+observed fused rounding behavior.
+
+CPU, SIMD, and GPU now use the same float32 fused interpolation. SIMD admission
+requires hardware on which wide's vector multiply-add is fused; builds without
+that feature remain an explicit acceleration gap instead of using its
+non-equivalent two-rounding fallback. Cross-platform reference behavior and
+those unsupported SIMD builds still require verification.
+
+The former GPU admission check recomputed 65,536 byte pairs for every call to
+compare two incorrect formulations. Matching the kernel arithmetic removes
+that scan; admission now checks finite float32 alpha. Twenty-eight permanent
+input-only regressions cover both public aliases, L/RGB, interpolation,
+extrapolation, and alpha narrowing. No old assertion or workload changed.
+
+After the arithmetic correction, both APIs and mapped workflows pass all 354
+comparisons. The complete 65,536 byte pairs at thirteen alpha values pass all
+39 backend comparisons, and every receipt records the requested hardware path
+without fallback. Receipts: `perf-blend-20260924-fma-shared-parity.json` and
+`perf-blend-20260924-fma-parity.json`. These exhaust byte pairs at the selected
+alpha values, not the entire float32 alpha domain.
+
+Maintained receipt `migration-benchmark-e1880f4d9d014f9e8bbc51d79103d2ba`
+measures the materialized 16² GPU sample at 0.283896 ms, down from 1.123354 ms
+(3.96×). The blend/difference/offset/invert pipeline drops from 3.086854 to
+1.037084 ms. CPU/SIMD
+materialized medians are 0.019855/0.018188 ms versus Pillow's 0.015083 ms;
+none of the full-operation targets is complete.
+
+The next change borrows native CPU input buffers, eliminating two input copies
+and the L→RGB→L round trip. Its first public check found 34 empty-image failures
+from using the ordinary raw-image constructor. The existing constructor that
+permits empty images restores the intended boundary. The final build passes
+all 354 shared comparisons and all 39 exhaustive byte-pair comparisons again;
+the latter record the requested backend without fallback. Artifacts:
+`perf-blend-20260924-native-final-shared-parity.json` and
+`perf-blend-20260924-native-final-pairs-parity.json`.
+
+### Blend checkpoint and remaining gaps
+
+This visit retains fused interpolation, constant-time GPU admission, and native
+CPU buffers, including the empty-image correction. All seven maintained
+workloads mapped to the two public aliases were measured with their original
+policies in `migration-benchmark-770e6c3c92ed49bda072f2a41654eaa7`. Two rows
+observe deferred construction and have no native execution proof. The five
+materialized rows have completed receipts for their requested backends.
+
+For the materialized Chops 16² sample, final Pillow/CPU/SIMD/GPU medians are
+0.015292/0.017792/0.019438/0.515271 ms. CPU improves 1.25× from its initial
+0.022250 ms but remains slower than Pillow. The corresponding GPU sample
+improves 2.18× from 1.123354 ms; its earlier 0.283896 ms observation shows
+substantial run-to-run variability and is not a stable latency guarantee.
+
+The two-image throughput diagnostic includes constructing both fresh images,
+blend at alpha 0.3, transfers, materialization, scheduling, and receipt capture.
+It passes 40,320 exact output checks, including 38,400 timed completions, with
+unchanged source hashes and consistent binaries. GPU receipts include the
+primary upload, auxiliary image, dispatch, and readback. Receipt:
+`blend-throughput-20260924-native-final.json`. Completed 1024 × 768 image pairs
+per second are:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1850.4 | 3628.1 | 1394.1 | 332.2 |
+| L | 2 | 1961.7 | 4037.6 | 1415.9 | 324.8 |
+| L | 4 | 1911.2 | 4074.9 | 1395.2 | 321.5 |
+| RGB | 1 | 354.7 | 1335.5 | 428.8 | 342.8 |
+| RGB | 2 | 394.0 | 1433.4 | 438.3 | 351.2 |
+| RGB | 4 | 388.8 | 1459.0 | 441.5 | 355.2 |
+
+Depth-one SIMD request medians are 0.708979/2.272396 ms for L/RGB, against
+Pillow's 0.528438/2.790312 ms. SIMD is slower than Pillow for L and only 1.23×
+faster for RGB. CPU medians are 0.251271/0.645500 ms; GPU medians are
+2.991396/2.781646 ms. GPU misses both SIMD targets at every depth. Increasing
+host concurrency barely improves SIMD/GPU throughput, so adding more requests
+alone does not solve the gap.
+
+The next visit should profile SIMD widening/packing and its serial pixel loop,
+shared host/secondary-image materialization boundaries, and GPU transfer and
+completion phases. It must also establish cross-platform fused arithmetic,
+restore exact native SIMD execution where hardware FMA is absent, and expand
+maintained size/mode workloads beyond the current tiny latency rows. These
+remain investigations rather than proven bottlenecks. No blend target is
+complete; pre-push and cross-runtime checks remain pending. The campaign moves
+to the next ranked operation, `PIL.ImageChops.add`.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose
@@ -371,7 +476,7 @@ and one case outside pipeline telemetry. The initial sandbox run had no
 enumerated adapters and returned adapter-unavailable errors; rerunning with
 host GPU access passed without changing source, cases, or assertions.
 
-The wider input corpus currently contains 11,080 parity cases, 24 coverage
+The wider input corpus currently contains 11,108 parity cases, 24 coverage
 plans, and 769 benchmark workloads. Those counts describe indexed inputs, not
 fresh full-corpus evidence. No coverage collection was run for this campaign.
 

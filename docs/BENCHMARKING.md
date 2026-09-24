@@ -98,6 +98,9 @@ The transpose selector remains the default with its existing workload policy.
 Use `--operation invert` and a separate output path for fresh L/RGB inversion
 under the same window policy. Inversion requires one GPU dispatch and complete
 transfers; it uses the original full-range input tile.
+Use `--operation blend` for two fresh images blended at alpha 0.3. The second
+image uses the next changing input frame; construction of both images is timed,
+and GPU receipts must include its auxiliary image transfer.
 
 For the fixed release-acceptance cohort:
 

@@ -911,7 +911,7 @@ fn simd_module_blend_supported(
     mode: Option<&str>,
     alpha: f64,
 ) -> bool {
-    if !alpha.is_finite() {
+    if !native_module_blend_arithmetic_supported(alpha) {
         return false;
     }
     let Some(channels) = native_module_blend_layout(img, mode) else {
@@ -5403,7 +5403,7 @@ fn shape_module_blend_supported(
     mode: Option<&str>,
     alpha: f64,
 ) -> bool {
-    if !alpha.is_finite() {
+    if !native_module_blend_arithmetic_supported(alpha) {
         return false;
     }
     let Some(channels) = shape_native_module_blend_channels(shape, mode) else {
@@ -8827,7 +8827,7 @@ fn native_chops_soft_light(
 
 #[inline]
 fn native_module_blend_byte(left: u8, right: u8, alpha: f64) -> u8 {
-    let value = f64::from(left) * (1.0 - alpha) + f64::from(right) * alpha;
+    let value = (alpha as f32).mul_add(f32::from(right) - f32::from(left), f32::from(left));
     if value <= 0.0 {
         0
     } else if value >= 255.0 {
@@ -8837,7 +8837,20 @@ fn native_module_blend_byte(left: u8, right: u8, alpha: f64) -> u8 {
     }
 }
 
-/// Blend two matching native byte images with eight-wide f64 arithmetic.
+/// Whether wide's mul_add guarantees fused float32 arithmetic on this target.
+/// Its non-FMA fallback has two roundings and differs on extrapolation.
+fn native_module_blend_arithmetic_supported(alpha: f64) -> bool {
+    cfg!(any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "fma"
+        )
+    )) && alpha.is_finite()
+        && (alpha as f32).is_finite()
+}
+
+/// Blend two matching native byte images with eight-wide fused f32 arithmetic.
 ///
 /// Pillow's `Image.blend` interpolates every stored sample independently,
 /// including alpha and CMYK K. Since the formula has no row-dependent state,
@@ -8849,6 +8862,9 @@ fn native_module_blend(
     other_mode: Option<&str>,
     alpha: f64,
 ) -> Option<DynamicImage> {
+    if !native_module_blend_arithmetic_supported(alpha) {
+        return None;
+    }
     let channels = native_module_blend_pair_channels(img, other, mode, other_mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
@@ -8873,15 +8889,14 @@ fn native_module_blend(
     }
     let mut output = vec![0u8; left.len()];
     let vector_len = output.len() / 8 * 8;
-    let inverse = f64x8::splat(1.0 - alpha);
     let alpha_value = alpha;
-    let alpha = f64x8::splat(alpha_value);
+    let alpha = f32x8::splat(alpha_value as f32);
     for start in (0..vector_len).step_by(8) {
         let left_block = <[u8; 8]>::try_from(&left[start..start + 8]).ok()?;
         let right_block = <[u8; 8]>::try_from(&right[start..start + 8]).ok()?;
-        let left_block = f64x8::from(left_block.map(f64::from));
-        let right_block = f64x8::from(right_block.map(f64::from));
-        let values = left_block * inverse + right_block * alpha;
+        let left_block = f32x8::from(left_block.map(f32::from));
+        let right_block = f32x8::from(right_block.map(f32::from));
+        let values = alpha.mul_add(right_block - left_block, left_block);
         for (lane, value) in values.to_array().into_iter().enumerate() {
             output[start + lane] = if value <= 0.0 {
                 0
