@@ -2382,9 +2382,8 @@ fn imagefont_source_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageFontSourceInput> {
     if let Some(path) = host_path_from_python(value)? {
-        let data = std::fs::read(&path).map_err(|error| {
-            pyo3::exceptions::PyOSError::new_err(format!("Cannot read font file: {}", error))
-        })?;
+        let data = std::fs::read(&path)
+            .map_err(|_| pyo3::exceptions::PyOSError::new_err("cannot open resource"))?;
         return Ok(pillow_rs::ImageFontSourceInput::Bytes(data));
     }
     if value.hasattr("read")? {
@@ -2860,6 +2859,10 @@ impl PyFont {
 
     fn get_size(&self) -> f32 {
         pillow_rs::imagefont_size(&self.inner)
+    }
+
+    fn _source_bytes(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, self.inner.source_bytes()).unbind()
     }
 }
 

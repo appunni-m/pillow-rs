@@ -181,6 +181,55 @@ These are investigations, not demonstrated hardware impossibility. Cross-runtime
 checks and the repository's pre-push verification remain pending for this
 checkpoint. No coverage collection was run.
 
+## Font variant checkpoint
+
+The next ranked workload, `pil-imagefont-freetypefont.font-variant.standard`,
+includes constructing the original font and its variant. A fresh unchanged-policy
+baseline measured Pillow at 0.040458 ms and the CPU profile at 3.930730 ms.
+The SIMD/GPU profiles call the same font loader without accelerated execution
+receipts; their timings cannot establish SIMD/GPU acceleration.
+
+The behavior audit found that the Python wrapper reused the native handle's
+original settings and bytes after public attributes or the source file changed.
+The correction resolves the current public size/index/encoding/layout settings,
+reopens path-backed sources, and preserves `font_bytes` for memory-backed sources.
+Unreadable font paths now produce Pillow's `OSError("cannot open resource")`.
+All 462 comparisons across the 154 existing ImageFont/FreeTypeFont cases pass.
+
+The added live-reference check, `scripts/test_font_variant_parity.py`, exercises
+14 source/state scenarios. Thirteen pass; the malformed-source scenario retains
+a real unresolved parser defect: `b"invalid font data"` yields
+`OSError("broken file")` in Pillow/FreeType 2.14.3 and `OSError("unknown file format")` through
+the pinned fontdone dependency. This is an implementation failure, not a test
+defect; the assertion remains failing. The reference BDF reader reaches EOF
+without a complete first line and reports `Invalid_File_Format`. Correcting
+driver probing/error precedence belongs in fontdone, not a special case in the
+Pillow wrapper. Do not push this checkpoint as passing until that failure is
+resolved and affected checks run.
+
+A release-mode phase diagnostic against the pinned fontdone library measured
+100 font opens after five warmups. For the benchmark's DejaVu Sans font, median
+face opening took 1.949666 ms; library initialization took 0.000042 ms, requesting
+the size 0.001125 ms, and destruction 0.001125 ms. The workflow opens two faces,
+explaining almost all its latency. The smaller render-coverage font still spent
+0.207541 ms opening its face. Receipt:
+`font-variant-load-phases-20260924.jsonl`. These are component diagnostics, not
+public latency or throughput claims.
+
+After the wrapper correction, the maintained workflow measured CPU at
+3.865917 ms versus Pillow at 0.037959 ms (receipt
+`migration-benchmark-6ce93ba54ccf42c3aa3457a4571b3ffb`). The change addresses
+parity; the large performance gap remains.
+
+The remaining work is in fontdone's face-opening path: correct malformed-input
+error precedence and reduce repeated parsing while keeping each face's mutable
+state independent. A shallow `FT_Face` clone shares `Rc<RefCell<...>>` state and
+cannot replace a newly opened variant. Any immutable parsing reuse must still
+honor changed path contents, selected face, encoding, and variation reset rules.
+No font-variant performance target is complete. Related font metadata workloads
+also time font construction, so their shared loading bottleneck stays pending
+while the campaign gives the next image operation its bounded optimization visit.
+
 ## Transpose verified behavior
 
 On 2026-09-24, the release extension passed the focused 368-case transpose

@@ -1,5 +1,7 @@
 """ImageFont — font loading and text rendering via the pure-Rust fontdone core."""
 from enum import IntEnum
+from io import BytesIO
+from os import PathLike
 
 from . import _core
 
@@ -221,6 +223,8 @@ class FreeTypeFont:
         self._rust_font = _core.ImageFont.truetype(
             font, float(size), int(index), encoding, layout_engine_name
         )
+        if not isinstance(font, (str, bytes, PathLike)):
+            self.font_bytes = self._rust_font._source_bytes()
         self.size = float(size)
         self.index = index
         self.encoding = encoding
@@ -236,6 +240,9 @@ class FreeTypeFont:
         font = object.__new__(cls)
         font.path = path
         font._rust_font = rust_font
+        if path is None:
+            font.font_bytes = rust_font._source_bytes()
+            font.path = BytesIO(font.font_bytes)
         font.size = float(size)
         font.index = index
         font.encoding = encoding
@@ -324,31 +331,19 @@ class FreeTypeFont:
         :raises OSError: If the font could not be read.
         """
         if font is None:
-            layout_engine_name = (
-                None
-                if layout_engine is None
-                else _normalize_layout_engine(layout_engine)
-            )
-            variant = self._rust_font.font_variant_with_options(
-                None,
-                size,
-                index,
-                encoding,
-                layout_engine_name,
-            )
-            return self._from_rust_font(
-                variant,
-                size=self.size if size is None else float(size),
-                index=self.index if index is None else index,
-                encoding=self.encoding if encoding is None else encoding,
-                path=self.path if isinstance(self.path, (str, bytes)) else None,
-            )
+            # Pillow reopens path-backed fonts, but memory-backed fonts retain
+            # their public source bytes. Resolve current public attributes;
+            # the native handle may still carry their earlier values.
+            try:
+                font = BytesIO(self.font_bytes)
+            except AttributeError:
+                font = self.path
         return FreeTypeFont(
             font=font,
             size=self.size if size is None else float(size),
             index=self.index if index is None else index,
             encoding=self.encoding if encoding is None else encoding,
-            layout_engine=layout_engine if layout_engine is not None else self.layout_engine,
+            layout_engine=layout_engine or self.layout_engine,
         )
 
     def get_variation_names(self):

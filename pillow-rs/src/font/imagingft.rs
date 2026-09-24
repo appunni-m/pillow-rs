@@ -23,7 +23,7 @@ const MAX_STRING_LENGTH: usize = 1_000_000;
 pub(super) struct FontEngine {
     library: ffi::FT_Library,
     face: ffi::FT_Face,
-    font_bytes: Vec<u8>,
+    pub(super) font_bytes: Vec<u8>,
     face_index: usize,
     pub(super) size_pt: f32,
     encoding: Option<String>,
