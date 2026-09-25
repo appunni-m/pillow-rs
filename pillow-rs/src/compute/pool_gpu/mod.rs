@@ -4067,7 +4067,7 @@ impl BufferPool {
         let histogram_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("gpu_histogram"),
             size: GPU_HISTOGRAM_BYTES as u64,
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let params_arena = ReusableGpuBuffer::new(
@@ -6656,9 +6656,9 @@ impl GpuInner {
             ) {
                 // Histogram-driven operations resolve to a multi-pass plan
                 // during encoding. Use the clear pass here because it has
-                // the same image-sized output contract as the public op,
-                // while the operation-specific cutoff/CDF parameters are
-                // still appended below.
+                // the same parameter contract as the public operation, while
+                // the operation-specific cutoff/CDF parameters are appended
+                // below.
                 self.resolve_pipeline(
                     "__internal_histogram_clear",
                     "histogram_clear.wgsl",
@@ -7687,6 +7687,17 @@ impl GpuInner {
                 }
                 continue;
             }
+            if matches!(pipeline, ResolvedPipeline::Histogram { .. })
+                && matches!(
+                    ops.get(index),
+                    Some(PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. })
+                )
+            {
+                // Clear the reusable histogram with the command encoder's
+                // native zero-fill operation instead of spending a compute
+                // dispatch on 1024 atomic stores.
+                encoder.clear_buffer(prepared.resources.histogram, 0, None);
+            }
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("gpu_batch_compute"),
                 timestamp_writes: None,
@@ -7792,15 +7803,17 @@ impl GpuInner {
                 remap,
             } = pipeline
             {
-                current_is_a = self.encode_dispatch(
-                    &mut cpass,
-                    clear,
-                    index,
-                    current_is_a,
-                    &prepared.resources,
-                    prepared.input_dims[index],
-                    prepared.output_dims[index],
-                )?;
+                if matches!(ops.get(index), Some(PipelineOp::Autocontrast { .. })) {
+                    current_is_a = self.encode_dispatch(
+                        &mut cpass,
+                        clear,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        prepared.input_dims[index],
+                        prepared.output_dims[index],
+                    )?;
+                }
                 current_is_a = self.encode_dispatch(
                     &mut cpass,
                     histogram,
@@ -10641,12 +10654,13 @@ fn gpu_dispatch_count(
             1
         } else if matches!(
             &ops[index],
-            PipelineOp::Autocontrast { .. }
-                | PipelineOp::Equalize
-                | PipelineOp::EqualizeMasked { .. }
+            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
         ) {
-            // Histogram operations are one public step but four device
-            // dispatches: clear, gather, LUT derivation, and remap.
+            // Equalize uses a command-buffer clear followed by gather, LUT
+            // derivation, and remap compute dispatches.
+            3
+        } else if matches!(&ops[index], PipelineOp::Autocontrast { .. }) {
+            // Autocontrast still clears its histogram with a compute dispatch.
             4
         } else if matches!(&ops[index], PipelineOp::Fit { .. })
             || matches!(&ops[index], PipelineOp::Resize { filter, .. }
