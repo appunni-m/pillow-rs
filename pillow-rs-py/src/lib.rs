@@ -35,6 +35,7 @@ use pyo3::types::PyListMethods;
 use pyo3::types::PyModuleMethods;
 use pyo3::types::PyString;
 use pyo3::types::PyTuple;
+use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
@@ -710,20 +711,127 @@ fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<Py<PyAny>> 
     })
 }
 
-fn putpixel_value_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PutPixelValue {
-    if let Ok(value) = value.extract::<i64>() {
-        return pillow_rs::PutPixelValue::Integer(value);
+fn putpixel_value_from_python(
+    value: &Bound<'_, PyAny>,
+    mode: &str,
+) -> PyResult<pillow_rs::PutPixelValue> {
+    use pillow_rs::PutPixelValue;
+    let tuple = value.cast::<PyTuple>().ok();
+    let scalar = if let Some(tuple) = tuple.filter(|tuple| tuple.len() == 1) {
+        tuple.get_item(0)?
+    } else {
+        value.clone()
+    };
+    if mode == "F" {
+        return scalar.extract::<f64>().map(PutPixelValue::Float);
     }
-    if let Ok(values) = value.extract::<Vec<i64>>() {
-        return pillow_rs::PutPixelValue::Components(values);
+    if scalar.is_instance_of::<PyInt>() {
+        return scalar
+            .extract::<i64>()
+            .map(PutPixelValue::Integer)
+            .map_err(|error| {
+                if error.is_instance_of::<PyOverflowError>(value.py()) {
+                    PyOverflowError::new_err("int too big to convert")
+                } else {
+                    error
+                }
+            });
     }
-    if let Ok(values) = value.extract::<Vec<f64>>() {
-        return pillow_rs::PutPixelValue::FloatComponents(values);
+    let single_band = matches!(mode, "1" | "L" | "P" | "I") || mode.starts_with("I;16");
+    // Only P/PA's public palette wrapper accepts RGB(A) lists. Ordinary
+    // getink accepts tuples, and unwraps a singleton before numeric coercion.
+    let palette_list = matches!(mode, "P" | "PA")
+        && value.is_instance_of::<PyList>()
+        && matches!(value.len()?, 3 | 4);
+    let length = if palette_list {
+        Some(value.len()?)
+    } else {
+        tuple.map(|t| t.len())
+    };
+    let palette_color = matches!(mode, "P" | "PA") && matches!(length, Some(3 | 4));
+    if single_band && !palette_color {
+        return Err(PyTypeError::new_err(
+            "color must be int or single-element tuple",
+        ));
     }
-    if let Ok(value) = value.extract::<f64>() {
-        return pillow_rs::PutPixelValue::Float(value);
+    let Some(length) = length else {
+        return Err(PyTypeError::new_err("color must be int or tuple"));
+    };
+    let two_band = matches!(mode, "LA" | "La" | "PA");
+    if !palette_color
+        && ((two_band && !matches!(length, 1 | 2)) || (!two_band && !matches!(length, 3 | 4)))
+    {
+        return Err(PyTypeError::new_err(if two_band {
+            "color must be int, or tuple of one or two elements"
+        } else {
+            "color must be int, or tuple of one, three or four elements"
+        }));
     }
-    pillow_rs::PutPixelValue::Invalid
+    if length == 1 {
+        return Err(pyo3::exceptions::PySystemError::new_err(
+            "new style getargs format but argument is not a tuple",
+        ));
+    }
+    if palette_color
+        && (0..length).any(|index| {
+            value
+                .get_item(index)
+                .is_ok_and(|component| component.is_instance_of::<PyFloat>())
+        })
+    {
+        return value
+            .extract::<Vec<f64>>()
+            .map(PutPixelValue::FloatComponents);
+    }
+    let mut components = Vec::with_capacity(length);
+    for index in 0..length {
+        let component = value.get_item(index)?;
+        let integer = if palette_color && index < 3 {
+            component.extract::<i64>().map_err(|error| {
+                if error.is_instance_of::<PyOverflowError>(value.py()) {
+                    PyValueError::new_err("bytes must be in range(0, 256)")
+                } else {
+                    error
+                }
+            })?
+        } else if index == 0 || palette_color {
+            component.extract::<i64>().map_err(|error| {
+                if error.is_instance_of::<PyOverflowError>(value.py()) {
+                    PyOverflowError::new_err("int too big to convert")
+                } else {
+                    error
+                }
+            })?
+        } else {
+            chops_offset_from_python(&component)? as i64
+        };
+        components.push(integer);
+    }
+    Ok(PutPixelValue::Components(components))
+}
+
+fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
+    let sequence = xy.cast::<pyo3::types::PySequence>().map_err(|_| {
+        let name = if xy.is_none() {
+            "None".into()
+        } else {
+            xy.get_type()
+                .name()
+                .map(|name| name.to_string())
+                .unwrap_or_default()
+        };
+        PyTypeError::new_err(format!("argument 1 must be 2-item sequence, not {name}"))
+    })?;
+    let length = sequence.len()?;
+    if length != 2 {
+        return Err(PyTypeError::new_err(format!(
+            "argument 1 must be sequence of length 2, not {length}"
+        )));
+    }
+    Ok((
+        chops_offset_from_python(&sequence.get_item(0)?)? as i32,
+        chops_offset_from_python(&sequence.get_item(1)?)? as i32,
+    ))
 }
 
 #[pymethods]
@@ -1735,7 +1843,19 @@ impl PyImage {
     }
 
     fn color_transparency(&self, value: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let value = putpixel_value_from_python(value);
+        // Color's metadata normalizer accepts component lists and converts
+        // invalid input into a warning; public putpixel has stricter errors.
+        let value = if let Ok(value) = value.extract::<i64>() {
+            pillow_rs::PutPixelValue::Integer(value)
+        } else if let Ok(value) = value.extract::<Vec<i64>>() {
+            pillow_rs::PutPixelValue::Components(value)
+        } else if let Ok(value) = value.extract::<Vec<f64>>() {
+            pillow_rs::PutPixelValue::FloatComponents(value)
+        } else if let Ok(value) = value.extract::<f64>() {
+            pillow_rs::PutPixelValue::Float(value)
+        } else {
+            pillow_rs::PutPixelValue::Invalid
+        };
         let value = self.inner.color_transparency(value).map_err(map_error)?;
         image_info_value_to_python(py, value)
     }
@@ -1772,10 +1892,88 @@ impl PyImage {
     }
 
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
-    fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let value = putpixel_value_from_python(value);
+    #[pyo3(signature = (xy, value, info=None))]
+    fn putpixel_mode(
+        &mut self,
+        xy: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+        info: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let mode = self.inner.mode().map_err(map_error)?;
+        let palette_color = matches!(mode.as_str(), "P" | "PA")
+            && (value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
+            && matches!(value.len()?, 3 | 4);
+        let deferred_alpha = if palette_color && mode == "PA" && value.len()? == 4 {
+            Some(value.get_item(3)?)
+        } else {
+            None
+        };
+        let prepared = if palette_color {
+            // The palette wrapper precedes coordinate parsing. PA's alpha
+            // conversion happens later, after allocation and bounds checks.
+            let rgb_only = mode == "PA" || self.inner.palette_mode() != Some("RGBA");
+            if mode == "P" && rgb_only && value.len()? == 4 && !value.get_item(3)?.eq(255)? {
+                return Err(PyValueError::new_err(
+                    "cannot add non-opaque RGBA color to RGB palette",
+                ));
+            }
+            let components = PyTuple::new(
+                value.py(),
+                (0..if rgb_only { 3 } else { value.len()? })
+                    .map(|index| value.get_item(index))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?;
+            let value = putpixel_value_from_python(components.as_any(), &mode)?;
+            let mut reserved = Vec::with_capacity(2);
+            if let Some(info) = info {
+                for key in ["background", "transparency"] {
+                    if let Some(value) = info.get_item(key)?
+                        && let Ok(value) = value.extract::<f64>()
+                        && value >= 0.0
+                        && value <= 255.0
+                        && value.fract() == 0.0
+                    {
+                        reserved.push(value as u32);
+                    }
+                }
+            }
+            Some(
+                self.inner
+                    .prepare_putpixel_palette(value, &reserved)
+                    .map_err(map_error)?,
+            )
+        } else {
+            None
+        };
+        let (x, y) = putpixel_coordinates_from_python(xy)?;
+        let (width, height) = self.inner.size().map_err(map_error)?;
+        let x = if x < 0 {
+            i64::from(width) + i64::from(x)
+        } else {
+            i64::from(x)
+        };
+        let y = if y < 0 {
+            i64::from(height) + i64::from(y)
+        } else {
+            i64::from(y)
+        };
+        if x < 0 || y < 0 || x >= i64::from(width) || y >= i64::from(height) {
+            return Err(pyo3::exceptions::PyIndexError::new_err(
+                "image index out of range",
+            ));
+        }
+        let value = match prepared {
+            Some(pillow_rs::PutPixelValue::Components(mut values)) if deferred_alpha.is_some() => {
+                if let Some(alpha) = deferred_alpha {
+                    values[1] = chops_offset_from_python(&alpha)? as i64;
+                }
+                pillow_rs::PutPixelValue::Components(values)
+            }
+            Some(value) => value,
+            None => putpixel_value_from_python(value, &mode)?,
+        };
         self.inner
-            .putpixel_value(xy.0, xy.1, value)
+            .putpixel_value(x as u32, y as u32, value)
             .map_err(map_error)
     }
 

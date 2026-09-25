@@ -2428,3 +2428,141 @@ row has no completed native receipt, and neither row proves sustained
 throughput. Source inspection shows the CPU executor clones the full image
 before writing one pixel; ownership and mutation semantics must be established
 before removing that copy. No coverage collection ran.
+
+## Putpixel parity checkpoint — 2026-09-25
+
+Four implementation attempts are complete. This visit repaired input and palette
+semantics before optimization; it does not claim an operation-wide speedup.
+The next operation is `ImageChops.screen`, the next unvisited image kernel in
+the baseline gap order. Font work retains its separate recorded blockers.
+
+1. Preserve signed coordinates and negative indexing; unpack multiband integer
+   ink; validate tuple arity and distinguish lists from tuples. Singleton tuples
+   follow scalar ink rules. Narrow I samples to signed 32 bits before any float
+   conversion, preserving the low bits of large signed integers. Match host
+   coercion errors, including C-int overflow and F-mode numeric conversion.
+2. Resolve PA RGB(A) colors through the attached palette instead of writing the
+   red component as its index. Validate new palette bytes and allocate before
+   coordinate checking, retaining allocation on later failure. Preserve RGBA
+   palette entries and separate PA pixel alpha from palette alpha.
+3. Refresh an already retained public palette object after allocation; preserve
+   its identity. Look up numerically equal integer/float keys before rejecting
+   float components for a new palette entry. Defer PA alpha coercion until after
+   allocation and bounds validation; accept opaque floating alpha on P/RGB
+   palettes through the reference's equality check. Reuse unused entries when
+   an RGBA palette is full.
+4. Honor host background/transparency indices during palette allocation and
+   preserve full-PA-palette allocation errors before new-byte validation.
+
+These rules were checked against live Pillow and its
+[`getink` implementation](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c),
+[public wrapper](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py),
+and [palette allocator](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImagePalette.py).
+Image algorithms and palette selection remain in Rust; Python/PyO3 handles
+host types, metadata, and retained wrapper objects.
+
+### Parity evidence
+
+The independent CPU input audit has 1,040 cases. Failures changed from
+**616 → 63 → 52 → 52 → 52** across the baseline and four attempts. The remaining
+52 cases cannot construct LAB images in the target; all 988 cases reaching
+putpixel pass. The palette-state audit has 280 cases, including retained palette
+identity, complete palette bytes, alpha errors, out-of-bounds writes, full
+palettes and reserved indices. Its failures changed **224 → 140 → 18 → 0**
+from attempt one through four. These are CPU audits, not backend acceleration
+proof. Receipts are `perf-putpixel-20260925-audit-*.json` and
+`perf-putpixel-20260925-palettes-*.json` under `build/migration-parity/`.
+
+The maintained generator now includes 1,164 additional input-only cases,
+including the failing LAB cases and palette boundary cases. With the existing
+161 cases and one benchmark workflow, the final run has **1,326 cases and
+3,978 backend comparisons: 3,825 pass, 153 fail**. Every failure belongs to
+one of 51 LAB setup cases on each of CPU/SIMD/GPU. No other maintained case
+regressed. Final receipt:
+`build/migration-parity/perf-putpixel-20260925-checkpoint-final-parity.json`.
+Color's shared pixel-normalization caller also passes **909/909 comparisons**
+in `perf-color-20260925-putpixel-regression-parity.json`.
+
+The benchmark runner initially rejected negative test inputs before executing
+anything: the annotation-derived manifest allowed neither null coordinates
+nor null/string colors. The manifest generator now explicitly admits those
+inputs for this endpoint's error tests. The cases, exact expected-error
+comparison and performance workloads were retained. Contract validation passes;
+the final manifest SHA-256 is
+`516ae7f0dc786e5f95b6c09ea869ec3d0d68b9341af1e25350343deb2ed0c0f6`.
+
+### Performance evidence and blockers
+
+Unchanged benchmark run `migration-benchmark-03715a3b5e5c4b9190c4f2e7d556dc78`
+is retained in `perf-putpixel-20260925-checkpoint.json`; its exact benchmark
+gate passes. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.012396 | 0.014146 | 0.014291 | 0.271250 |
+| Standard | 0.005750 | 0.007416 | 0.007771 | 0.007459 |
+
+The materialized row completes on each requested native backend without
+fallback, but misses all three latency targets. The standard row still has no
+completed native receipt. Small-row CPU/SIMD backend time is only 0.000813 /
+0.001146 ms respectively; most public latency lies outside those executors.
+
+The maintained throughput diagnostic now accepts `--operation putpixel`.
+It constructs each fresh input, writes its center pixel, and exports the entire
+result within timing. Its unchanged 16-frame windows, queue depths 1/2/4 and
+sample policy produced **40,320 exact comparisons**, including 38,400 measured
+requests, with stable source identity and native receipts without fallback.
+Receipt: `perf-putpixel-20260925-checkpoint-throughput.json`.
+Queue-depth-one median end-to-end milliseconds at 1024 × 768:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.087688 | 0.068354 | 0.067021 | 2.045729 |
+| RGB | 0.929896 | 0.349396 | 0.352188 | 1.419855 |
+
+CPU passes on these large inputs. SIMD reaches only 1.31× / 2.64× Pillow,
+missing 5×. GPU exceeds SIMD latency. Completed images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 10,060 | 12,959 | 13,119 | 404 |
+| L | 2 | 9,580 | 14,517 | 14,280 | 708 |
+| L | 4 | 9,200 | 14,501 | 14,476 | 913 |
+| RGB | 1 | 1,013 | 2,645 | 2,668 | 639 |
+| RGB | 2 | 1,334 | 3,122 | 3,958 | 1,039 |
+| RGB | 4 | 1,420 | 3,010 | 4,260 | 1,295 |
+
+GPU throughput remains below SIMD at every depth. Each GPU request uploads and
+reads back 3,145,728 bytes, plus 256 parameter bytes, one full-frame copy and
+one mode conversion. L contains only 786,432 native bytes. Its median GPU
+backend time is 1.964542 ms; RGB backend time is 1.167521 ms.
+
+Next-visit optimization decisions:
+
+- CPU clones the entire DynamicImage and SIMD copies the entire native byte
+  buffer before changing one pixel. The SIMD store already uses one masked
+  vector block. Investigate uniquely owned storage and detaching shared storage
+  once before tuning that store; retain snapshots and pending pipeline readers.
+  Consecutive writes should reuse an owned intermediate when permitted.
+- GPU format expansion, transfers and synchronization dominate this sparse
+  update. Investigate native byte transport and updates to uniquely owned
+  resident storage. Full result export still requires readback. A CPU fallback
+  or a submission-only timing cannot meet the GPU requirement.
+- Reduce the measured small-call host cost only after profiling construction,
+  binding coercion, pipeline creation and export separately. The new palette
+  checks preserve observable allocations and failures and cannot simply be
+  reordered or removed.
+- LAB construction, additional host protocols/state interactions, other sizes
+  and modes, composed pipelines, other bindings and platforms remain open.
+  Passing these probes is not exhaustive parity or performance proof.
+
+The reusable optimization skill now explains sparse-write ownership costs and
+lookup/validation ordering. Static indices contain 15,243 parity cases, 773
+workloads and 54 suites. No coverage collection ran. Generated evidence docs
+remain explicit about stale/missing broad evidence; focused results are not yet
+fully incorporated into the global acceptance matrix. The current-manifest
+matrix at `build/migration-parity/optimization-goals-current.json` retains all
+209 selected rows (208 operations and one constant), using the historical broad
+baseline as diagnostic evidence only. Exports outside that manifest remain
+pending. No public operation meets every target. No push or pre-push campaign
+is included in this local checkpoint.

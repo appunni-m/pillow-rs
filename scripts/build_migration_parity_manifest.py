@@ -959,6 +959,15 @@ def operation_contract(
                 # Pillow accepts an explicit None at runtime even though the
                 # annotation documents Palette.WEB as the default sentinel.
                 add_unique(parameter["value_types"], "null")
+    if endpoint.source_path == "PIL.Image.Image.putpixel":
+        # Negative input cases must reach Pillow's own validation. These
+        # inputs remain errors; admitting them to the test vocabulary does
+        # not change the accepted results or the exact-error comparison.
+        for parameter in parameters:
+            if parameter["id"] in ("xy", "value"):
+                add_unique(parameter["value_types"], "null")
+            if parameter["id"] == "value":
+                add_unique(parameter["value_types"], "string")
     if endpoint.source_path == "PIL.Image.open":
         # Keep the existing negative parity lane for the public host-type
         # diagnostic even though the typed source signature is string-only.

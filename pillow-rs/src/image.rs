@@ -2731,6 +2731,14 @@ impl Image {
     /// 256 colors. The returned palette is present only when allocation changed
     /// it.
     fn resolve_palette_color(&self, color: [u8; 3]) -> Result<(u8, Option<Vec<u8>>), PilError> {
+        self.resolve_palette_color_with_reserved(color, &[])
+    }
+
+    fn resolve_palette_color_with_reserved(
+        &self,
+        color: [u8; 3],
+        reserved: &[u32],
+    ) -> Result<(u8, Option<Vec<u8>>), PilError> {
         // Pillow's Image.putpixel creates an empty ImagePalette when a public
         // P-mode operation leaves no palette attached (for example, after
         // ImageDraw.bitmap). Treat the missing palette as an empty table so
@@ -2745,8 +2753,12 @@ impl Image {
         }
 
         let entries = palette.len() / 3;
-        let index = if entries < 256 {
-            entries
+        let mut next = entries;
+        while next < 256 && reserved.contains(&(next as u32)) {
+            next += 1;
+        }
+        let index = if next < 256 {
+            next
         } else {
             let mut used = [false; 256];
             for index in self.tobytes()? {
@@ -2758,13 +2770,17 @@ impl Image {
                 .map(|_| 0);
             (0..256)
                 .rev()
-                .find(|&index| !used[index] && Some(index) != transparent_index)
+                .find(|&index| {
+                    !used[index]
+                        && Some(index) != transparent_index
+                        && !reserved.contains(&(index as u32))
+                })
                 .ok_or_else(|| {
                     PilError::ValueError("cannot allocate more than 256 colors".into())
                 })?
         };
 
-        if index == entries {
+        if index >= entries {
             palette.extend_from_slice(&color);
         } else {
             palette[index * 3..index * 3 + 3].copy_from_slice(&color);
@@ -2876,27 +2892,192 @@ impl Image {
         self.putdata_value_at(pixel_index, &PutDataValue::Number(value), 1.0, 0.0)
     }
 
+    /// Resolves an RGB(A) palette color before coordinate validation.
+    ///
+    /// Pillow allocates the palette entry even when the subsequent pixel
+    /// coordinate fails. P returns its index; PA retains the separate alpha.
+    /// Other values pass through unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns a palette allocation or component-range error.
+    pub fn prepare_putpixel_palette(
+        &mut self,
+        value: PutPixelValue,
+        reserved: &[u32],
+    ) -> Result<PutPixelValue, PilError> {
+        if !self.has_palette_samples() {
+            return Ok(value);
+        }
+        if let PutPixelValue::FloatComponents(values) = &value {
+            // Python palette keys compare equal integer and float components
+            // before bytes(color) validates a newly allocated entry.
+            let rgba = self.palette_mode() == Some("RGBA");
+            let palette = if rgba {
+                self.getpalette_rgba()
+            } else {
+                self.extract_palette()
+            }
+            .unwrap_or_default();
+            let mut color = values.clone();
+            if rgba && color.len() == 3 {
+                color.push(255.0);
+            }
+            if let Some(index) = palette
+                .chunks_exact(if rgba { 4 } else { 3 })
+                .position(|entry| {
+                    entry.len() == color.len()
+                        && entry
+                            .iter()
+                            .zip(&color)
+                            .all(|(&byte, &value)| f64::from(byte) == value)
+                })
+            {
+                return Ok(if self.explicit_mode() == Some("PA") {
+                    PutPixelValue::Components(vec![index as i64, 255])
+                } else {
+                    PutPixelValue::Integer(index as i64)
+                });
+            }
+            if self.explicit_mode() == Some("PA") && palette.len() / if rgba { 4 } else { 3 } >= 256
+            {
+                return Err(PilError::ValueError(
+                    "cannot allocate more than 256 colors".into(),
+                ));
+            }
+            return Err(PilError::TypeError(
+                "'float' object cannot be interpreted as an integer".into(),
+            ));
+        }
+        let PutPixelValue::Components(ref values) = value else {
+            return Ok(value);
+        };
+        if !matches!(values.len(), 3 | 4) {
+            return Ok(value);
+        }
+        let pa = self.explicit_mode() == Some("PA");
+        let alpha = values.get(3).copied().unwrap_or(255);
+        let rgba_palette = self.palette_mode() == Some("RGBA");
+        if !pa && !rgba_palette && alpha != 255 {
+            return Err(PilError::ValueError(
+                "cannot add non-opaque RGBA color to RGB palette".into(),
+            ));
+        }
+        if pa {
+            let palette = if rgba_palette {
+                self.getpalette_rgba()
+            } else {
+                self.extract_palette()
+            }
+            .unwrap_or_default();
+            let channels = if rgba_palette { 4 } else { 3 };
+            if palette.len() / channels >= 256 {
+                // Allocation precedes bytes(color). A full PA palette cannot
+                // allocate through Pillow's histogram path, even if a later
+                // component conversion would fail for another reason.
+                if let Some(index) = palette.chunks_exact(channels).position(|entry| {
+                    entry[..3]
+                        .iter()
+                        .zip(&values[..3])
+                        .all(|(&byte, &value)| i64::from(byte) == value)
+                        && (!rgba_palette || entry[3] == 255)
+                }) {
+                    return Ok(PutPixelValue::Components(vec![index as i64, alpha]));
+                }
+                return Err(PilError::ValueError(
+                    "cannot allocate more than 256 colors".into(),
+                ));
+            }
+        }
+        let mut color = Vec::with_capacity(4);
+        for &value in &values[..3] {
+            color.push(
+                u8::try_from(value)
+                    .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))?,
+            );
+        }
+        let index = if rgba_palette {
+            color.push(if pa {
+                255
+            } else {
+                u8::try_from(alpha)
+                    .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))?
+            });
+            let mut palette = self.getpalette_rgba().unwrap_or_default();
+            if let Some(index) = palette.chunks_exact(4).position(|entry| entry == color) {
+                index as u8
+            } else {
+                let entries = palette.len() / 4;
+                let mut next = entries;
+                while next < 256 && reserved.contains(&(next as u32)) {
+                    next += 1;
+                }
+                let index = if next < 256 {
+                    next
+                } else if !pa {
+                    let mut used = [false; 256];
+                    for index in self.tobytes()? {
+                        used[usize::from(index)] = true;
+                    }
+                    (0..256)
+                        .rev()
+                        .find(|&index| !used[index] && !reserved.contains(&(index as u32)))
+                        .ok_or_else(|| {
+                            PilError::ValueError("cannot allocate more than 256 colors".into())
+                        })?
+                } else {
+                    return Err(PilError::ValueError(
+                        "cannot allocate more than 256 colors".into(),
+                    ));
+                };
+                if index >= entries {
+                    palette.extend_from_slice(&color);
+                } else {
+                    palette[index * 4..index * 4 + 4].copy_from_slice(&color);
+                }
+                self.putpalette(&palette, "RGBA")?;
+                index as u8
+            }
+        } else {
+            let (index, palette) =
+                self.resolve_palette_color_with_reserved([color[0], color[1], color[2]], reserved)?;
+            if let Some(palette) = palette {
+                self.putpalette(&palette, "RGB")?;
+            }
+            index
+        };
+        Ok(if pa {
+            PutPixelValue::Components(vec![i64::from(index), alpha])
+        } else {
+            PutPixelValue::Integer(i64::from(index))
+        })
+    }
+
     /// Applies Pillow's public `putpixel` scalar/tuple normalization.
     pub fn putpixel_value(&mut self, x: u32, y: u32, value: PutPixelValue) -> Result<(), PilError> {
+        let value = self.prepare_putpixel_palette(value, &[])?;
         let mode = self.mode()?;
         match value {
             PutPixelValue::Integer(value) => {
                 if is_l16_mode(&mode) {
                     return self.putpixel_l16(x, y, value);
                 }
-                if matches!(mode.as_str(), "I" | "F") {
+                if mode == "I" {
+                    // getink narrows the signed integer before storage. Going
+                    // through f64 first loses low bits and saturates on cast.
+                    return self.putpixel_mode_scalar(x, y, f64::from(value as i32), &mode);
+                }
+                if mode == "F" {
                     return self.putpixel_mode_scalar(x, y, value as f64, &mode);
                 }
-                // Pillow's _imaging.c byte coercion clips scalar indices for
-                // 1/L/P, while its multiband scalar path casts the first
-                // sample to a byte. Keep that distinction in the Rust core so
-                // every binding shares the same public behavior.
-                let value = if matches!(mode.as_str(), "1" | "L" | "P") {
-                    value.clamp(0, 255) as u8
-                } else {
-                    value as u8
-                };
-                self.putpixel_mode(x, y, value, &mode)
+                if matches!(mode.as_str(), "1" | "L" | "P") {
+                    return self.putpixel_mode(x, y, value.clamp(0, 255) as u8, &mode);
+                }
+                // Multiband integer ink is ABGR, including alpha in bits
+                // 24..31 for two-band images. A singleton tuple takes this
+                // same path; its member is not a clipped first component.
+                let bytes = value.to_le_bytes();
+                self.putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3])
             }
             PutPixelValue::Float(value) => {
                 if mode == "F" {
@@ -2918,45 +3099,40 @@ impl Image {
                     "color must be int, or tuple of one, three or four elements".into(),
                 )
             }),
-            PutPixelValue::Components(values) => match values.as_slice() {
-                [value] if is_l16_mode(&mode) => self.putpixel_l16(x, y, *value),
-                [value] if matches!(mode.as_str(), "I" | "F") => {
-                    self.putpixel_mode_scalar(x, y, *value as f64, &mode)
+            PutPixelValue::Components(values) => {
+                if let [value] = values.as_slice() {
+                    return self.putpixel_value(x, y, PutPixelValue::Integer(*value));
                 }
-                // Pillow's byte component coercion saturates each accepted
-                // tuple member to the 0..255 range.  Rust's `as u8` would
-                // wrap instead (for example, 256 -> 0), which is observable
-                // when a public setup pixel feeds a later operation such as
-                // Image.point.
-                [value] => self.putpixel_mode(x, y, putdata_clip_component((*value).into()), &mode),
-                [value, alpha] => self.putpixel(
-                    x,
-                    y,
-                    putdata_clip_component((*value).into()),
-                    0,
-                    0,
-                    putdata_clip_component((*alpha).into()),
-                ),
-                [r, g, b] => self.putpixel(
-                    x,
-                    y,
-                    putdata_clip_component((*r).into()),
-                    putdata_clip_component((*g).into()),
-                    putdata_clip_component((*b).into()),
-                    255,
-                ),
-                [r, g, b, a] => self.putpixel(
-                    x,
-                    y,
-                    putdata_clip_component((*r).into()),
-                    putdata_clip_component((*g).into()),
-                    putdata_clip_component((*b).into()),
-                    putdata_clip_component((*a).into()),
-                ),
-                _ => Err(PilError::TypeError(
-                    "color must be int, or tuple of one, three or four elements".into(),
-                )),
-            },
+                let bands = pillow_band_count(&mode);
+                let palette_color =
+                    matches!(mode.as_str(), "P" | "PA") && matches!(values.len(), 3 | 4);
+                if !palette_color
+                    && ((bands == 1)
+                        || (bands == 2 && values.len() != 2)
+                        || (bands >= 3 && !matches!(values.len(), 3 | 4)))
+                {
+                    return Err(PilError::TypeError(
+                        match bands {
+                            1 => "color must be int or single-element tuple",
+                            2 => "color must be int, or tuple of one or two elements",
+                            _ => "color must be int, or tuple of one, three or four elements",
+                        }
+                        .into(),
+                    ));
+                }
+                let bytes: Vec<u8> = values
+                    .iter()
+                    .map(|&value| value.clamp(0, 255) as u8)
+                    .collect();
+                match bytes.as_slice() {
+                    [value, alpha] => self.putpixel(x, y, *value, 0, 0, *alpha),
+                    [r, g, b] => self.putpixel(x, y, *r, *g, *b, 255),
+                    [r, g, b, a] => self.putpixel(x, y, *r, *g, *b, *a),
+                    _ => Err(PilError::InternalError(
+                        "validated putpixel arity changed".into(),
+                    )),
+                }
+            }
             PutPixelValue::FloatComponents(values) => match values.as_slice() {
                 [value] if mode == "F" => self.putpixel_mode_scalar(x, y, *value, &mode),
                 _ => Err(if mode.len() == 1 {
