@@ -363,9 +363,12 @@ pub fn op_chops_multiply(img: &DynamicImage, other: &Arc<Image>) -> Result<Dynam
 }
 
 pub fn op_chops_screen(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| {
-        (255u32 - ((255 - a as u32) * (255 - b as u32) / 255)) as u8
-    })
+    channel_op_binary_with_policy(
+        img,
+        other,
+        |a, b| (255u32 - ((255 - a as u32) * (255 - b as u32) / 255)) as u8,
+        true,
+    )
 }
 
 pub fn op_chops_darker(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {

@@ -39846,7 +39846,7 @@ def build_nuanced_cases(
     cases.extend(blend_rounding_parity_cases(surface_id))
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
-    cases.extend(multiply_mode_parity_cases(surface_id))
+    cases.extend(native_blend_mode_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
@@ -40580,7 +40580,7 @@ def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return cases
 
 
-def multiply_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Exercise stored-byte arithmetic, mode admission, clipping and vector tails."""
     if surface_id != "PIL.ImageChops":
         return []
@@ -40589,12 +40589,12 @@ def multiply_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
              "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "HSV": 3, "YCbCr": 3,
              "I": 4, "F": 4, "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
 
-    def make_case(mode, channels, size, other_size, label, raws=None):
+    def make_case(mode, channels, size, other_size, label, raws=None, operation="multiply"):
         assets, steps = [], []
         for index, (width, height) in enumerate((size, other_size)):
             length = ((width + 7) // 8 if mode == "1" else width * channels) * height
             raw = (raws[index] if raws is not None else
-                   random.Random(f"multiply-{mode}-{label}-{index}").randbytes(length))
+                   random.Random(f"{operation}-{mode}-{label}-{index}").randbytes(length))
             assets.append({"id": f"pixels{index}", "kind": "inline", "encoding": "base64",
                            "data": base64.b64encode(raw).decode("ascii"),
                            "sha256": hashlib.sha256(raw).hexdigest(),
@@ -40604,14 +40604,14 @@ def multiply_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                           "arguments": {"mode": literal(mode), "size": literal([width, height]),
                                         "data": asset_value(f"pixels{index}")}})
         steps.extend([
-            {"step_id": "call", "surface": surface_id, "operation": "multiply", "receiver": None,
+            {"step_id": "call", "surface": surface_id, "operation": operation, "receiver": None,
              "arguments": {"image1": binding("image0"), "image2": binding("image1")}},
             {"step_id": "materialize", "surface": "PIL.Image.Image", "operation": "tobytes",
              "receiver": binding("call"), "arguments": {}},
         ])
-        return {"case_id": f"{surface_id}.multiply.nuanced.{mode}-{label}",
-                "surface": surface_id, "operation": "multiply",
-                "covers": [f"{surface_id}.multiply.behavior.default"],
+        return {"case_id": f"{surface_id}.{operation}.nuanced.{mode}-{label}",
+                "surface": surface_id, "operation": operation,
+                "covers": [f"{surface_id}.{operation}.behavior.default"],
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                 "steps": steps, "observations": ["call", "materialize"]}
 
@@ -40622,9 +40622,14 @@ def multiply_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             ("zero-width", (0, 3), (0, 3)), ("zero-height", (3, 0), (3, 0)),
         ):
             cases.append(make_case(mode, channels, size, other_size, label))
+            # Retain the three existing La Screen cases and their input bytes
+            # below; the rest exercise native-byte transport independently.
+            if mode != "La" or label not in ("tail17", "clipped", "zero-width"):
+                cases.append(make_case(mode, channels, size, other_size, label, operation="screen"))
     raws = (bytes(left for left in range(256) for right in range(256)),
             bytes(right for left in range(256) for right in range(256)))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws))
+    cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "screen"))
     # La shares the byte-mode validator with the other binary Chops operations.
     for operation in ("add", "subtract", "screen", "darker", "lighter", "difference",
                       "add_modulo", "subtract_modulo", "overlay", "hard_light", "soft_light"):
@@ -40637,6 +40642,22 @@ def multiply_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             case["covers"] = [f"{surface_id}.{operation}.behavior.default"]
             case["steps"][2]["operation"] = operation
             cases.append(case)
+    # Exercise the shared-secondary fusion with varied bytes, including the
+    # complete finite input domain and logical modes that must retain guards.
+    def make_fused_case(mode, channels, size, label, raw_pair=None):
+        case = make_case(mode, channels, size, size, label, raw_pair, "screen")
+        case["case_id"] = case["case_id"].replace(".nuanced.", ".nuanced.multiply-then-")
+        case["steps"][2]["arguments"]["image1"] = binding("multiplied")
+        case["steps"].insert(2, {
+            "step_id": "multiplied", "surface": surface_id, "operation": "multiply",
+            "receiver": None,
+            "arguments": {"image1": binding("image0"), "image2": binding("image1")},
+        })
+        return case
+
+    for mode, channels in modes.items():
+        cases.append(make_fused_case(mode, channels, (17, 11), "tail17"))
+    cases.append(make_fused_case("L", 1, (256, 256), "exhaustive-pairs", raws))
     return cases
 
 

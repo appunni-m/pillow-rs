@@ -8204,6 +8204,7 @@ impl GpuInner {
         image: &DynamicImage,
         other: Option<&DynamicImage>,
         channels: u8,
+        fused_screen: bool,
         buffers: &mut BufferPool,
     ) -> Result<DynamicImage, PilError> {
         let (width, height) = image.dimensions();
@@ -8216,6 +8217,7 @@ impl GpuInner {
                     || other.as_bytes().len() != length
             })
             || other.is_none() != matches!(op, PipelineOp::Solarize { .. })
+            || (fused_screen && !matches!(op, PipelineOp::Multiply { .. }))
         {
             return Err(PilError::InternalError(
                 "GPU native byte operation layout mismatch".into(),
@@ -8242,14 +8244,24 @@ impl GpuInner {
         let in_place = matches!(op, PipelineOp::AlphaComposite { .. });
         let separate_secondary = matches!(
             op,
-            PipelineOp::Multiply { .. } | PipelineOp::BlendModule { .. }
+            PipelineOp::Multiply { .. }
+                | PipelineOp::Screen { .. }
+                | PipelineOp::BlendModule { .. }
         );
         let (variant, shader_file, shader_source) = match op {
+            PipelineOp::Multiply { .. } if fused_screen => (
+                "__internal_multiply_screen",
+                "multiply_screen.wgsl",
+                include_str!("shaders/multiply_screen.wgsl"),
+            ),
             PipelineOp::Multiply { .. } => (
                 "Multiply",
                 "multiply.wgsl",
                 include_str!("shaders/multiply.wgsl"),
             ),
+            PipelineOp::Screen { .. } => {
+                ("Screen", "screen.wgsl", include_str!("shaders/screen.wgsl"))
+            }
             PipelineOp::AlphaComposite { .. } => (
                 "AlphaComposite",
                 "alpha_composite.wgsl",
@@ -8272,7 +8284,7 @@ impl GpuInner {
             }
         };
         let cached = self.resolve_pipeline(variant, shader_file, shader_source)?;
-        // Multiply/Solarize/BlendModule mode 9 packs four independent bytes. AlphaComposite
+        // Multiply/Screen/Solarize/BlendModule mode 9 packs four independent bytes. AlphaComposite
         // mode 9 packs two complete LA pixels; RGBA keeps its ordinary mode code.
         let mode = if in_place && channels == 4 { 3 } else { 9 };
         let parameter = match op {
@@ -8447,6 +8459,7 @@ impl GpuInner {
                 + u64::from(!self.direct_primary_readback)
                 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
             mode_conversion_count: 0,
+            fused_operation_count: if fused_screen { 2 } else { 0 },
             ..PipelineResourceTelemetry::default()
         });
         crate::compute::record_pipeline_dispatch_count(1);
@@ -10024,7 +10037,9 @@ fn gpu_native_byte_op_channels(
     mode: Option<&str>,
 ) -> Option<u8> {
     match op {
-        PipelineOp::Multiply { .. } => gpu_native_multiply_channels(image, mode),
+        PipelineOp::Multiply { .. } | PipelineOp::Screen { .. } => {
+            gpu_native_multiply_channels(image, mode)
+        }
         PipelineOp::BlendModule { .. } => match image {
             DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
             DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "La")) => Some(2),
@@ -15439,14 +15454,22 @@ impl GpuPool {
             );
         }
         #[cfg(target_endian = "little")]
-        if let ([op], [auxiliary]) = (ops, auxiliary_images.as_slice())
+        let native_byte_op = match (ops, auxiliary_images.as_slice()) {
+            ([op], [auxiliary]) => Some((op, auxiliary, false)),
+            ([op, _], [auxiliary, _]) if can_fuse_gpu_multiply_screen(ops, 0) => {
+                Some((op, auxiliary, true))
+            }
+            _ => None,
+        };
+        #[cfg(target_endian = "little")]
+        if let Some((op, auxiliary, fused_screen)) = native_byte_op
             && let Some(channels) = gpu_native_byte_op_channels(op, img, mode)
             && auxiliary.second.as_deref().is_none_or(|other| {
                 img.color() == other.color() && img.dimensions() == other.dimensions()
             })
         {
             // Public/adapter guards have run. Keep native sample transport for
-            // one admitted operation; composed batches retain their normal path.
+            // one admitted operation or the exact shared-secondary blend pair.
             let bytes = CheckedDims::new(img.width(), img.height(), channels)?.total_bytes();
             let words = u32::try_from(bytes.div_ceil(4)).map_err(|_| {
                 PilError::ValueError("GPU native binary operation is too large".into())
@@ -15457,6 +15480,7 @@ impl GpuPool {
                 img,
                 auxiliary.second.as_deref(),
                 channels,
+                fused_screen,
                 &mut buffers,
             )?;
             gpu.recycle_buffers(buffers);

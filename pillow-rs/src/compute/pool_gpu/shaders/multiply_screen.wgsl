@@ -7,13 +7,13 @@
 struct Params {
     width: u32,
     height: u32,
-    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
-    _pad: u32,
+    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA; 9=four independent native bytes
+    _pad: u32,    // Native mode: valid word count, including a padded final word.
 }
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 9u; }
 
 fn multiply_screen(a: u32, b: u32) -> u32 {
     let multiplied = (a * b) / 255u;
@@ -30,6 +30,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    if params.mode == 9u && idx >= params._pad { return; }
     let pa = input_a[idx];
     let pb = input_b[idx];
     let ar = pa & 0xffu;
