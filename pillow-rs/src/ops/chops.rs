@@ -46,9 +46,8 @@ fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilEr
     if image1.mode()? != "1" || image2.mode()? != "1" {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
-    if image1.size()? != image2.size()? {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
+    // Pillow's mode-1 logical Chops clips each axis to the overlap, including
+    // an empty overlap. Mode compatibility does not require equal dimensions.
     Ok(())
 }
 
@@ -225,8 +224,8 @@ pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error if either input is not mode `1` or its mode cannot be read.
+/// Unequal dimensions clip to the overlap; execution errors are deferred.
 pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_logical_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -241,8 +240,8 @@ pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error if either input is not mode `1` or its mode cannot be read.
+/// Unequal dimensions clip to the overlap; execution errors are deferred.
 pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_logical_operands(image1, image2)?;
     Ok(Image::push_op(
@@ -257,8 +256,8 @@ pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
-/// materialization.
+/// Returns an error if either input is not mode `1` or its mode cannot be read.
+/// Unequal dimensions clip to the overlap; execution errors are deferred.
 pub fn logical_xor(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     validate_logical_operands(image1, image2)?;
     Ok(Image::push_op(

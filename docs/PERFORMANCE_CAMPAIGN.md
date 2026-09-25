@@ -3245,3 +3245,54 @@ Remaining blockers:
 - More modes, sizes, state interactions, composed pipelines, bindings and platforms remain unproven. No operation-wide target pass is claimed.
 
 The existing skill’s byte-cost scheduling, independent strides and compact-transport rules cover the retained changes. Inventory remains 15,941 parity cases and 789 workloads across 54 suites. The selected global matrix has 208 operations plus one constant and zero fully completed operations; broad evidence remains historical and focused-result integration remains pending. No coverage collection or push ran. Work moves to `ImageChops.logical_and`.
+
+## Logical Chops parity repair — 2026-09-25
+
+Work moved to `ImageChops.logical_and` after Subtract Modulo checkpoint
+`3e26475a1`. Its 13 original maintained cases and two workflow inputs passed
+45 comparisons, but a 19-mode shape audit exposed a real implementation bug:
+Pillow accepts unequal mode-1 dimensions and clips to their overlap; the Rust
+public validator returned `ValueError("images do not match")`. This affected
+CPU, SIMD and GPU before dispatch. No performance change was attempted first.
+
+A shared-validator audit confirmed the same behavior for AND, OR and XOR,
+including reversed widths, crossed width/height bounds and empty overlaps in
+either operand. The expanded unchanged-code comparison had **63 failures out
+of 1,203 comparisons** (21 per operation across three requested backends).
+The implementation now retains the mode-1 check and removes only the incorrect
+equal-size restriction. Existing execution paths already perform the clipping.
+Rust API documentation now describes the actual mode errors and clipped shape.
+
+Added **363 maintained cases** across the three affected operations, with zero
+existing cases modified or removed. These include 19 modes and six shapes,
+reversed/crossed clipping, unequal empty inputs and every packed-byte pair in
+mode-1 images. The pair inputs are decoded as binary pixels; no byte-oriented
+semantics are substituted for Logical Chops.
+
+The rebuilt implementation passes **1,203/1,203 shared comparisons**, plus
+**18/18 large Logical AND comparisons** covering scheduling boundaries,
+partial packed rows and both directions of unequal source widths. Evidence in
+`build/migration-parity/`:
+
+- `perf-logical-and-20260925-initial-parity.json`: original maintained baseline.
+- `perf-logical-and-20260925-initial-modes-parity.json`: first clipped-shape failure.
+- `perf-logical-shared-20260925-before-parity.json`: shared shape reproduction.
+- `perf-logical-all-20260925-before-parity.json`: expanded failing baseline.
+- `perf-logical-all-20260925-fixed-parity.json`: all shared cases pass.
+- `perf-logical-and-20260925-fixed-tiles-parity.json`: large boundaries pass.
+
+This is parity evidence, not proof of native acceleration for every clipped
+input. Backend admission and exact fallback remain separate from public input
+validity. The skill now states that distinction and separates output extent
+from each input stride. No assertions, thresholds or expected results were
+weakened. The isolated release build and formatting/public-boundary checks
+passed; generated docs were refreshed from existing evidence, without coverage
+collection. No push or pre-push campaign ran.
+
+Logical AND remains the current operation. This parity repair is its first
+implementation attempt; next collect size-varied and fresh mode-1 performance
+evidence before optimizing scheduling, transport or bit packing. Inventory is
+**16,304 parity cases and 789 workloads across 54 suites**. The selected global
+matrix still has 208 operations plus one constant and zero fully completed
+operations; broad evidence is historical and focused-result integration remains
+pending.
