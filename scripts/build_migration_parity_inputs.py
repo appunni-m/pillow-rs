@@ -39851,6 +39851,7 @@ def build_nuanced_cases(
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
+    cases.extend(putpixel_input_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
     cases.extend(image_blend_native_parity_cases(surface_id))
     cases.extend(lab_constructor_parity_cases(surface_id))
@@ -39861,6 +39862,82 @@ def build_nuanced_cases(
     cases.extend(transform_mode_parity_cases(surface_id))
     return cases
 
+
+
+def putpixel_input_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Retain mode, packed-ink, host-shape and coordinate boundary failures."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    modes = ("1", "L", "LA", "La", "P", "PA", "RGB", "RGBA", "RGBa", "RGBX",
+             "CMYK", "YCbCr", "HSV", "LAB", "I", "F", "I;16", "I;16L", "I;16B", "I;16N")
+    values = [0, 1, 255, 256, 0x44332211, -1, -256, 2**31, 2**32, 2**63 - 1,
+              -2**63, 2**63, 1.5, None, "red", [], [17], [-1], [256], [0x44332211],
+              [17, 34], [17, 34, 51], [17, 34, 51, 68], [1, 2, 3, 4, 5],
+              [-1, 256, 512], [1, 2**31, 3], [2**63, 2, 3], [1.5], [1, 2.5, 3],
+              *({"protocol": "list", "items": value} for value in
+                ([17], [17, 34], [17, 34, 51], [17, 34, 51, 68]))]
+    coordinates = [[-1, -1], [-2, -2], [-3, 0], [2, 0], [0, 2], [2**31, 0],
+                   [-2**31 - 1, 0], [0.5, 0], [0, 0.5],
+                   {"protocol": "list", "items": [0, 0]}, [0], 0, None, ["x", 0]]
+    cases = []
+    for mode in modes:
+        inputs = [(f"value-{index}", [0, 0], value, [2, 2])
+                  for index, value in enumerate(values)]
+        inputs.extend((f"xy-{index}", xy, 17, [2, 2])
+                      for index, xy in enumerate(coordinates))
+        inputs.extend((f"order-{index}", [99, 99], value, [2, 2])
+                      for index, value in enumerate((None, [1, 2],
+                          {"protocol": "list", "items": [1, 2, 3]}, [1, 2, 3, 4])))
+        if mode in ("L", "LA", "RGB", "RGBA"):
+            inputs.extend((f"tail-{width}", [-1, -1], 0x44332211, [width, 3])
+                          for width in (1, 3, 4, 5, 15, 16, 17, 33))
+        for name, xy, value, size in inputs:
+            cases.append({
+                "case_id": f"{surface_id}.putpixel.nuanced.input-audit-{mode}-{name}",
+                "surface": surface_id, "operation": "putpixel",
+                "covers": [f"{surface_id}.putpixel.behavior.default"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": [], "steps": [
+                    {"step_id": "image", "surface": "PIL.Image", "operation": "new",
+                     "receiver": None, "arguments": {"mode": literal(mode), "size": literal(size)}},
+                    {"step_id": "call", "surface": surface_id, "operation": "putpixel",
+                     "receiver": binding("image"), "arguments": {"xy": literal(xy), "value": literal(value)}},
+                    {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                     "receiver": binding("image"), "arguments": {}},
+                    {"step_id": "pixel", "surface": surface_id, "operation": "getpixel",
+                     "receiver": binding("image"), "arguments": {"xy": literal([0, 0])}},
+                ], "observations": ["call", "materialize", "pixel"],
+            })
+    for mode in ("P", "PA"):
+        for palette_mode in ("RGB", "RGBA"):
+            for count in (2, 256):
+                palette = [component for index in range(count) for component in
+                           ([index, 2 * index % 256, 3 * index % 256, 128]
+                            if palette_mode == "RGBA" else
+                            [index, 2 * index % 256, 3 * index % 256])]
+                for index, value in enumerate(([17, 34, 51], [17, 34, 51, 68],
+                        [17, 34, 51, 255], [17, 34, 51, 255.0],
+                        [17, 34, 51, 2**31], [-1, 256, 0], [17.0, 34.0, 51.0])):
+                    for xy in ([0, 0], [9, 9]):
+                        cases.append({
+                            "case_id": f"{surface_id}.putpixel.nuanced.palette-audit-{mode}-{palette_mode}-{count}-{index}-{xy[0]}",
+                            "surface": surface_id, "operation": "putpixel",
+                            "covers": [f"{surface_id}.putpixel.behavior.default"],
+                            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                            "assets": [], "steps": [
+                                {"step_id": "image", "surface": "PIL.Image", "operation": "new",
+                                 "receiver": None, "arguments": {"mode": literal(mode), "size": literal([2, 2])}},
+                                {"step_id": "palette", "surface": surface_id, "operation": "putpalette",
+                                 "receiver": binding("image"), "arguments": {"data": literal(palette), "rawmode": literal(palette_mode)}},
+                                {"step_id": "call", "surface": surface_id, "operation": "putpixel",
+                                 "receiver": binding("image"), "arguments": {"xy": literal(xy), "value": literal(value)}},
+                                {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+                                 "receiver": binding("image"), "arguments": {}},
+                                {"step_id": "palette-result", "surface": surface_id, "operation": "getpalette",
+                                 "receiver": binding("image"), "arguments": {"rawmode": literal("RGBA")}},
+                            ], "observations": ["call", "materialize", "palette-result"],
+                        })
+    return cases
 
 
 def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:

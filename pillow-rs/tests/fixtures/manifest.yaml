@@ -8473,6 +8473,7 @@ surfaces:
         value_types:
         - integer
         - sequence
+        - 'null'
         omission:
           kind: required
       - id: value
@@ -8481,6 +8482,8 @@ surfaces:
         - integer
         - number
         - sequence
+        - 'null'
+        - string
         omission:
           kind: required
       result:

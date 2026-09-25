@@ -43,6 +43,9 @@ upload as well as the smaller L readback.
 ``--operation convert`` explicitly converts L to RGB and RGB to L, including
 fresh construction and terminal export. It does not use the default-mode copy.
 
+``--operation putpixel`` updates the center pixel of each fresh image, then
+exports the complete result. Construction, mutation and export remain timed.
+
 ``--operation transform`` uses one nearest affine transform with fractional
 coefficients and explicit fill, retaining the input size. It exercises fresh
 source selection across the full image and requires one native GPU dispatch.
@@ -215,6 +218,10 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].grayscale(image)
         elif plan.get("operation") == "convert":
             image = image.convert(result_mode(plan))
+        elif plan.get("operation") == "putpixel":
+            value = {"L": 173, "LA": (173, 127), "RGB": (17, 83, 149),
+                     "RGBA": (17, 83, 149, 211)}[plan["mode"]]
+            image.putpixel((plan["size"][0] // 2, plan["size"][1] // 2), value)
         elif plan.get("operation") == "solarize":
             image = plan["imageops_api"].solarize(image, 128)
         elif plan.get("operation") in ("contrast", "color"):
@@ -598,7 +605,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "blend", "image-blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "blend", "image-blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

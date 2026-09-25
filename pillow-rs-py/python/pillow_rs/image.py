@@ -269,11 +269,18 @@ class Image:
     def putpixel(self, xy: Tuple[int, int], value):
         """Set pixel value at (x, y). Accepts int, tuple, or list.
 
-        PIL semantics for int values on multi-band images:
-        first band = value, remaining bands = 0.
-        Mode-aware expansion handled in Rust.
+        Multiband integers contain packed channel bytes. RGB(A) lists are
+        accepted for palette colors; ordinary component values use tuples.
+        Negative coordinates count from the right or bottom edge.
         """
-        self._rust_image.putpixel_mode(xy, value)
+        try:
+            self._rust_image.putpixel_mode(xy, value, self._info)
+        finally:
+            # A retained public palette observes allocation, including when
+            # coordinate or alpha validation subsequently raises.
+            palette = self.__dict__.get("_palette_object")
+            if palette is not None and isinstance(value, (tuple, list)) and len(value) in (3, 4):
+                palette.palette = bytearray(self.getpalette(palette.mode) or [])
 
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
