@@ -3124,3 +3124,50 @@ Fresh baseline `perf-add-modulo-20260925-initial-throughput.json` contains **40,
 CPU still uses general row scheduling. GPU expands each input and the result to four-byte transport. SIMD already uses wrapping packed-byte addition, so ordinary modulo arithmetic is not the first optimization target. Start with the measured scheduling/transport mechanisms while preserving native channel semantics, clipping and tail bytes. Further instruction or allocation changes need new public-path evidence; do not repeat the rejected Difference/Darker experiments.
 
 The input inventory is now **15,829 parity cases and 785 workloads across 54 suites**. Static declarations and generated docs were refreshed; no coverage collection ran. The selected global matrix retains 208 operations plus one constant and zero fully completed operations. Historical broad evidence and missing focused-result integration remain explicit limitations. No push or pre-push verification campaign ran.
+
+## Add Modulo checkpoint — 2026-09-25
+
+This visit retains two implementation attempts and moves on within the 3–4 attempt ceiling. CPU wrapping addition uses the existing cheap-byte scheduling policy: serial below 4 MiB, grouped rows above it. GPU now transports native bytes for both operands and the result, computing four independent samples per word with an explicit final-word guard. Logical-mode admission, byte-wise wrapping, clipping and the general transport fallback remain unchanged. SIMD already uses packed wrapping addition; no SIMD change was made.
+
+**549/549 focused comparisons pass**: 537 maintained/workflow cases and 12 large scheduling/tail comparisons. The release parity build and formatting/public-boundary checks passed. Evidence under `build/migration-parity/` uses prefix `perf-add-modulo-20260925-` with suffixes `attempts1-2-parity.json` and `attempts1-2-tiles-parity.json`. These files describe the retained code.
+
+All eight workloads complete in `migration-benchmark-a5fbd68c0b9b4e40833b9653c3c6f656`, artifact `perf-add-modulo-20260925-attempts1-2.json`; the existing exact benchmark gate passes. Seven materialized workloads have completed native requested-backend receipts without fallback; the ordinary standard row lacks terminal native proof. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015521 | 0.018084 | 0.018417 | 0.519396 |
+| 32 × 24 | 0.015166 | 0.017188 | 0.017334 | 0.203604 |
+| 1 × 1 | 0.013083 | 0.016792 | 0.016792 | 0.407855 |
+| 32 × 32 | 0.015104 | 0.016542 | 0.017146 | 0.397896 |
+| 256 × 256 | 0.136146 | 0.030375 | 0.034021 | 0.343145 |
+| 1024 × 768 | 1.882583 | 0.393687 | 0.421791 | 1.824021 |
+| SIMD Chops RGB workload | 2.858376 | 0.550708 | 0.542937 | 2.163125 |
+
+Fresh evidence `perf-add-modulo-20260925-attempts1-2-throughput.json` contains **40,320 exact output checks**, including **38,400 measured completions**, with unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.409042 | 0.098354 | 0.091063 | 0.461458 |
+| RGB | 2.370604 | 0.417854 | 0.385979 | 1.037562 |
+
+Completed fresh images per second from window wall time:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 2362.6 | 8944.3 | 9335.0 | 2118.5 |
+| L | 2 | 2449.2 | 11049.0 | 11223.7 | 3362.9 |
+| L | 4 | 2376.7 | 12071.3 | 11880.1 | 4694.7 |
+| RGB | 1 | 414.5 | 2199.1 | 2410.1 | 896.8 |
+| RGB | 2 | 483.0 | 2858.2 | 2946.5 | 1297.3 |
+| RGB | 4 | 536.0 | 2644.2 | 2684.4 | 1450.9 |
+
+Fresh CPU L/RGB latency improves from 0.210563/0.559729 to 0.098354/0.417854 ms. GPU improves from 2.856667/2.805334 to 0.461458/1.037562 ms (about 6.2×/2.7×), with higher throughput at every measured queue depth. Each GPU L/RGB primary upload, secondary upload and readback moves 786,432/2,359,296 bytes instead of 3,145,728. Parameters shrink from 256 to 16 bytes and transport mode conversions are zero. Construction, both inputs and full output materialization remain inside the public work boundary.
+
+Remaining blockers and decisions:
+
+- CPU still misses small calls. SIMD misses 5× on small/intermediate maintained rows and fresh L (about 4.49×); fresh RGB reaches about 6.14×. Fixed public call/validation/allocation costs and complete memory traffic need direct attribution before another inner-loop change.
+- GPU still loses to SIMD in latency and throughput at every measured queue depth. Some small GPU results regress relative to baseline. Separate encoding, device work, mapping/wait and host output creation; compact bytes do not remove fixed completion overhead.
+- A possible future shader formula separates each packed byte into low seven bits and a high bit: `((a & 0x7f7f7f7f) + (b & 0x7f7f7f7f)) ^ ((a ^ b) & 0x80808080)`. Low-bit sums cannot cross byte boundaries, and the XOR restores the high-bit contribution modulo 256. Independent checks of 131,072 words pass (`perf-add-modulo-20260925-packed-word-proof.json`). This is an arithmetic proof only; it was not installed or timed on the GPU. Do not count it as an optimization attempt or a speedup. Use it only if device execution is a meaningful measured cost.
+- Broader modes, sizes, state interactions, compositions, bindings and platforms remain unproven. No operation-wide target pass is claimed.
+
+The skill now explains carry isolation and the exact packed-add formula, including the limit of an instruction-count argument. The global selected matrix remains 208 operations plus one constant and zero completed operations. Inventory remains 15,829 parity cases and 785 workloads across 54 suites. Historical broad evidence and missing focused-result integration remain explicit. No coverage collection, push or pre-push verification campaign ran. Work moves to `ImageChops.subtract_modulo`.
