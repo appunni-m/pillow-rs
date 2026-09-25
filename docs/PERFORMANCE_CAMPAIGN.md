@@ -2934,3 +2934,92 @@ still expands native pixels to four-byte transport. Reuse the measured
 Difference findings, preserving Darker's mode/shape semantics. Do not repeat
 the rejected iterator or dispatch-layout experiments without a new hypothesis.
 No coverage collection or push ran.
+
+## Darker checkpoint — 2026-09-25
+
+This visit stops after three implementation attempts under the requested cap.
+CPU scheduling and GPU native transport are retained. The SIMD allocation
+candidate is rejected; no full-operation target pass is claimed.
+
+1. **Retain CPU scheduling for cheap bytes.** `op_chops_darker` now uses the
+   existing serial-under-4-MiB policy and grouped rows above that threshold.
+   Byte minima, source strides, clipped shapes and error behavior are unchanged.
+2. **Retain native GPU transport.** Darker reuses the validated byte layout and
+   separate second-input upload. The shader handles four independent bytes per
+   word and guards the valid final word. Logical mode admission stays in the
+   existing preflight. This removes expansion and the result conversion, while
+   preserving every active channel. Dispatch geometry is unchanged.
+3. **Reject typed-block SIMD output collection.** Fixed `[u8; 16]` slices and an
+   exact-size mapped iterator initialize vector blocks directly, flatten without
+   copying and reserve the padded tail. Unlike Difference's rejected dynamic
+   chunk iterator, assembly shows six-vector unrolling with paired loads/stores
+   and packed minima. The isolated allocating loop improves about 8–18% on
+   several larger sizes, with a small regression at exactly 4 MiB. Public
+   evidence does not justify retention: fresh L queue-one latency improves from
+   0.094251 to 0.084020 ms, but RGB worsens from 0.362583 to 0.391729 ms and RGB
+   throughput falls at all measured queue depths. The change affects a shared
+   helper; retain its patch and investigation while public performance remains unproven.
+
+Candidate evidence is `perf-darker-20260925-attempts1-3*.json` under
+`build/migration-parity/`, benchmark run
+`migration-benchmark-9e157cb2ce81409ea471212750e9e11a`.
+The allocation probe, assembly excerpt and rejected patch have suffixes
+`allocation-probe.rs`, `allocation-probe.log`, `allocation-asm.txt` and
+`attempt3-simd.patch` under the same operation/date prefix.
+Candidate parity passed **1,194 comparisons**: 507 Darker, 12 large threshold/tail
+cases and 675 shared SIMD cases. Fresh candidates passed **40,320 output checks**
+with unchanged sources and consistent runtimes. These are candidate results;
+retained-code evidence follows separately.
+
+Added **112 maintained Darker cases** for modes, clipped/empty shapes, vector
+boundaries and all 65,536 byte pairs. Existing cases are unchanged: zero removed
+or modified. The expanded pre-change Darker baseline passed 507 comparisons;
+the pre-change shared SIMD baseline passed 675. The fresh-input throughput
+runner now supports Darker with two newly constructed inputs, full output
+materialization and native execution receipts. Scheduling, receipt capture and
+both image uploads remain accounted for.
+
+The retained build passes **519/519 focused parity comparisons** (507 maintained/workflow and 12 large scheduling/tail comparisons). All eight benchmark workloads complete in `migration-benchmark-e2bef7620a1a4532bed6f7c1b21f8beb`, artifact `perf-darker-20260925-final.json`; the existing exact benchmark gate passes. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015750 | 0.015771 | 0.017417 | 0.514876 |
+| 32 × 24 | 0.014833 | 0.015270 | 0.016979 | 0.285146 |
+| 1 × 1 | 0.012563 | 0.015771 | 0.016001 | 0.209500 |
+| 32 × 32 | 0.015229 | 0.016084 | 0.016313 | 0.434563 |
+| 256 × 256 | 0.136728 | 0.031896 | 0.034313 | 0.316125 |
+| 1024 × 768 | 1.811813 | 0.427354 | 0.409750 | 1.714438 |
+| SIMD Chops RGB workload | 2.917125 | 0.536917 | 0.543563 | 2.147521 |
+
+These seven rows have terminal requested-backend receipts and no fallback. The ordinary standard row lacks terminal native evidence and cannot prove acceleration. The RGB workload named a chain contains one Darker operation, so it is not fusion evidence. Small CPU cases and most SIMD cases still miss their targets. GPU remains slower than SIMD, including the small cases whose timings vary markedly between runs.
+
+Final fresh evidence, `perf-darker-20260925-final-throughput.json`, includes **40,320 exact output checks**, of which **38,400 are measured completions**. Source hashes stay unchanged and runtime binaries agree across processes. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.396666 | 0.088667 | 0.091105 | 0.431104 |
+| RGB | 2.211708 | 0.395166 | 0.432605 | 1.052688 |
+
+Completed fresh images per second from window wall time:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 2441.3 | 9527.2 | 9372.9 | 2283.4 |
+| L | 2 | 2521.5 | 11739.0 | 11496.1 | 3566.6 |
+| L | 4 | 2481.8 | 12612.4 | 12493.9 | 5001.6 |
+| RGB | 1 | 445.3 | 2434.0 | 2052.7 | 836.0 |
+| RGB | 2 | 507.8 | 2636.1 | 2611.0 | 1199.0 |
+| RGB | 4 | 521.3 | 2335.9 | 2275.3 | 1364.1 |
+
+Fresh CPU L/RGB medians improve from 0.205833/0.539250 to 0.088667/0.395166 ms; GPU improves from 2.968126/2.839854 to 0.431104/1.052688 ms (about 6.9×/2.7×). Each native GPU L buffer moves 786,432 bytes and each RGB buffer 2,359,296, compared with 3,145,728 previously. This applies independently to the first upload, second upload and readback. Parameters shrink from 256 to 16 bytes; transport mode conversions drop to zero. GPU still trails SIMD at every measured queue depth. Final fresh SIMD reaches about 4.35× Pillow for L and 5.11× for RGB; these two samples do not establish operation-wide completion.
+
+The restored SIMD path is itself slower on final fresh RGB than the candidate (0.432605 versus 0.391729 ms), despite outperforming the candidate in the maintained large RGB workload (0.543563 versus 0.624938 ms). Therefore the initial apparent fresh RGB regression does not establish a causal regression from typed collection. Public evidence is inconsistent; the candidate remains out because a dependable end-to-end gain is unproven within this visit. No fourth implementation attempt is spent on that uncertainty.
+
+Next-visit blockers and decisions:
+
+- Small-input constructor, validation, object allocation and export costs still dominate the CPU/SIMD target gaps. Packed byte minima already exist; changing arithmetic is not the next attack.
+- Typed-block allocation removes loop bookkeeping, but whole-call results vary by workload and run. Profile allocation and surrounding copies, then use paired same-environment comparisons before revisiting it. Do not infer a public win from the microbenchmark or the lower initialized-byte count.
+- GPU launch, encoding, wait/mapping and host output creation remain after compact transport. Measure those stages before changing dispatch geometry again. Fresh throughput must still include two image constructions, both uploads and complete output export.
+- Additional sizes, mode/state combinations, composed pipelines, bindings and platforms remain unproven. None is silently excluded from the goal.
+
+The optimization skill records the typed-block decision, capacity for the padded tail and the need to reject unproven public gains. Static indices contain **15,605 parity cases, 777 workloads and 54 suites**. Generated documentation was refreshed from existing artifacts; no coverage collection ran. The global selected matrix still contains 208 operations plus one constant, with zero fully completed operations; broad evidence remains historical and focused-result integration remains pending. No push or pre-push verification campaign is part of this checkpoint. Work moves to `ImageChops.lighter`.

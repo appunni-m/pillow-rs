@@ -372,7 +372,7 @@ pub fn op_chops_screen(img: &DynamicImage, other: &Arc<Image>) -> Result<Dynamic
 }
 
 pub fn op_chops_darker(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| a.min(b))
+    channel_op_binary_with_policy(img, other, |a, b| a.min(b), true)
 }
 
 pub fn op_chops_lighter(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
