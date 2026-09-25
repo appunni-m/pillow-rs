@@ -8610,36 +8610,30 @@ fn native_chops_hard_light(
     native_chops_lut_formula(img, other, mode, true)
 }
 
-/// Evaluate eight exact Pillow SoftLight samples with integer SIMD lanes.
+/// Evaluate sixteen exact Pillow SoftLight samples with integer SIMD lanes.
 ///
 /// Pillow's CHOP2 implementation is:
 /// `((255-a)*a*b)/65536 + (a*(255-((255-a)*(255-b)/255)))/255`.
 /// The intermediate divisions are truncating integer divisions, so preserve
-/// them explicitly instead of using an approximate floating-point formula.
+/// their order. The divide-by-255 products fit in 16 bits; decompose the
+/// divide-by-65536 product into high and low bytes to keep it exact in 16 bits.
 #[inline]
-fn native_chops_soft_light_vector(left: [u8; 8], right: [u8; 8]) -> [u8; 8] {
-    let a = u32x8::new(left.map(u32::from));
-    let b = u32x8::new(right.map(u32::from));
-    let inverse_a = u32x8::splat(255) - a;
-    let term1 = (inverse_a * a * b) >> 16u32;
+fn native_chops_soft_light_vector(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
+    const MAX: u16x16 = u16x16::splat(255);
+    let a = u16x16::from(u8x16::new(left));
+    let b = u16x16::from(u8x16::new(right));
+    let inverse_a = MAX - a;
 
-    let inverse_product = inverse_a * (u32x8::splat(255) - b);
-    let divided_inverse = u32x8::new(
-        simd_div255_u16x8(u16x8::new(
-            inverse_product.to_array().map(|value| value as u16),
-        ))
-        .to_array()
-        .map(u32::from),
-    );
-    let term2_product = a * (u32x8::splat(255) - divided_inverse);
-    let term2 = u32x8::new(
-        simd_div255_u16x8(u16x8::new(
-            term2_product.to_array().map(|value| value as u16),
-        ))
-        .to_array()
-        .map(u32::from),
-    );
-    (term1 + term2).to_array().map(|value| value.min(255) as u8)
+    let inverse_product = inverse_a * (MAX - b);
+    let divided_inverse = simd_div255_u16x16(inverse_product);
+    let term2 = simd_div255_u16x16(a * (MAX - divided_inverse));
+
+    let complement_product = inverse_a * a;
+    let high = (complement_product >> 8u32) * b;
+    let low = (complement_product & MAX) * b;
+    let term1 = (high + (low >> 8u32)) >> 8u32;
+    let result = term1 + term2;
+    simd_pack_u16x16(result.simd_gt(MAX).select(MAX, result)).to_array()
 }
 
 /// Apply SoftLight directly to native interleaved bytes. Chops treats alpha
@@ -8663,17 +8657,42 @@ fn native_chops_soft_light(
         return Some(img.clone());
     }
     let mut output = vec![0u8; left.len()];
-    for (block_index, output_chunk) in output.chunks_mut(8).enumerate() {
-        let start = block_index * 8;
-        let active = output_chunk.len();
-        let mut left_padded = [0u8; 8];
-        let mut right_padded = [0u8; 8];
-        left_padded[..active].copy_from_slice(&left[start..start + active]);
-        right_padded[..active].copy_from_slice(&right[start..start + active]);
-        let values = native_chops_soft_light_vector(left_padded, right_padded);
-        output_chunk.copy_from_slice(&values[..active]);
+    let apply = |left: &[u8], right: &[u8], output: &mut [u8]| {
+        let (left_blocks, left_tail) = left.as_chunks::<16>();
+        let (right_blocks, right_tail) = right.as_chunks::<16>();
+        let (output_blocks, output_tail) = output.as_chunks_mut::<16>();
+        for ((left, right), output) in left_blocks.iter().zip(right_blocks).zip(output_blocks) {
+            *output = native_chops_soft_light_vector(*left, *right);
+        }
+        if !output_tail.is_empty() {
+            let active = output_tail.len();
+            let mut left_padded = [0u8; 16];
+            let mut right_padded = [0u8; 16];
+            left_padded[..active].copy_from_slice(left_tail);
+            right_padded[..active].copy_from_slice(right_tail);
+            let values = native_chops_soft_light_vector(left_padded, right_padded);
+            output_tail.copy_from_slice(&values[..active]);
+        }
+    };
+    #[cfg(feature = "parallel")]
+    if left.len() >= 1024 * 1024 {
+        const TILE_BYTES: usize = 64 * 1024;
+        let tiles = left.len().div_ceil(TILE_BYTES);
+        crate::par_rows_mut!(
+            &mut output,
+            TILE_BYTES,
+            tiles,
+            |start, _end, _tile, bytes| {
+                let end = start + bytes.len();
+                apply(&left[start..end], &right[start..end], bytes);
+            }
+        );
+    } else {
+        apply(left, right, &mut output);
     }
-    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(8) as u64);
+    #[cfg(not(feature = "parallel"))]
+    apply(left, right, &mut output);
+    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(16) as u64);
     crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
@@ -9117,6 +9136,12 @@ fn simd_div255(value: u16x16) -> u16x16 {
 #[inline]
 fn simd_div255_u16x8(value: u16x8) -> u16x8 {
     let incremented = value + u16x8::splat(1);
+    (incremented + (incremented >> 8u32)) >> 8u32
+}
+
+#[inline]
+fn simd_div255_u16x16(value: u16x16) -> u16x16 {
+    let incremented = value + u16x16::splat(1);
     (incremented + (incremented >> 8u32)) >> 8u32
 }
 

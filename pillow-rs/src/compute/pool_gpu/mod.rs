@@ -8248,6 +8248,7 @@ impl GpuInner {
                 | PipelineOp::Screen { .. }
                 | PipelineOp::Overlay { .. }
                 | PipelineOp::HardLight { .. }
+                | PipelineOp::SoftLight { .. }
                 | PipelineOp::Difference { .. }
                 | PipelineOp::Darker { .. }
                 | PipelineOp::Lighter { .. }
@@ -8281,6 +8282,11 @@ impl GpuInner {
                 "HardLight",
                 "hard_light.wgsl",
                 include_str!("shaders/hard_light.wgsl"),
+            ),
+            PipelineOp::SoftLight { .. } => (
+                "SoftLight",
+                "soft_light.wgsl",
+                include_str!("shaders/soft_light.wgsl"),
             ),
             PipelineOp::Difference { .. } => (
                 "Difference",
@@ -10099,6 +10105,7 @@ fn gpu_native_byte_op_channels(
         | PipelineOp::Screen { .. }
         | PipelineOp::Overlay { .. }
         | PipelineOp::HardLight { .. }
+        | PipelineOp::SoftLight { .. }
         | PipelineOp::Difference { .. }
         | PipelineOp::Darker { .. }
         | PipelineOp::Lighter { .. }

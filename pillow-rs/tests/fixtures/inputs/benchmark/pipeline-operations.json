@@ -37787,6 +37787,530 @@
       }
     },
     {
+      "workload_id": "pipeline-matrix.expanded.softlight.1x1",
+      "covers": [
+        "PIL.ImageChops.soft_light.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image1-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1,
+                  1
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "setup-image2-2",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1,
+                  1
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.ImageChops",
+            "operation": "soft_light",
+            "receiver": null,
+            "arguments": {
+              "image1": {
+                "kind": "binding",
+                "step_id": "setup-image1-1"
+              },
+              "image2": {
+                "kind": "binding",
+                "step_id": "setup-image2-2"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1,
+          1
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-matrix.expanded.softlight.32x32",
+      "covers": [
+        "PIL.ImageChops.soft_light.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image1-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  32,
+                  32
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "setup-image2-2",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  32,
+                  32
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.ImageChops",
+            "operation": "soft_light",
+            "receiver": null,
+            "arguments": {
+              "image1": {
+                "kind": "binding",
+                "step_id": "setup-image1-1"
+              },
+              "image2": {
+                "kind": "binding",
+                "step_id": "setup-image2-2"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          32
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-matrix.expanded.softlight.256x256",
+      "covers": [
+        "PIL.ImageChops.soft_light.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image1-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  256,
+                  256
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "setup-image2-2",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  256,
+                  256
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.ImageChops",
+            "operation": "soft_light",
+            "receiver": null,
+            "arguments": {
+              "image1": {
+                "kind": "binding",
+                "step_id": "setup-image1-1"
+              },
+              "image2": {
+                "kind": "binding",
+                "step_id": "setup-image2-2"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-matrix.expanded.softlight.1024x768",
+      "covers": [
+        "PIL.ImageChops.soft_light.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image1-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "setup-image2-2",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.ImageChops",
+            "operation": "soft_light",
+            "receiver": null,
+            "arguments": {
+              "image1": {
+                "kind": "binding",
+                "step_id": "setup-image1-1"
+              },
+              "image2": {
+                "kind": "binding",
+                "step_id": "setup-image2-2"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-matrix.expanded.difference.1x1",
       "covers": [
         "PIL.ImageChops.difference.performance.standard"
@@ -243721,6 +244245,22 @@
         },
         {
           "workload_id": "pipeline-matrix.expanded.hardlight.1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-matrix.expanded.softlight.1x1",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-matrix.expanded.softlight.32x32",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-matrix.expanded.softlight.256x256",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-matrix.expanded.softlight.1024x768",
           "weight": 1
         },
         {

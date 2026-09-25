@@ -3632,3 +3632,74 @@ Remaining blockers:
 - Run-to-run latency varies materially. The three attempt artifacts remain side by side. No all-size or all-mode performance claim is established; wider platforms and composed execution remain unproven.
 
 The optimization skill records exact bounded division and the rejected uniform shader branch lesson. The `RUSTC_WRAPPER= make build-parity` build passes. Formatting and public API boundary checks pass; parity and full-request benchmarks above pass. **No coverage collection or push ran.** The pre-existing operation-wide inventory remains **16,603 cases, 809 workloads, zero fully completed operations**. Focused results have not been merged into the global optimization matrix. SoftLight is next.
+
+## SoftLight baseline — 2026-09-25
+
+HardLight was checkpointed after three attempts in `3089962ec`. Work moves to `ImageChops.soft_light`; no SoftLight implementation change has been made yet. The baseline audit adds **127 parity cases** and **four benchmark workloads**, with zero existing cases or workloads changed or removed. Cases include every stored-byte pair, mutation-created mode-1 samples and raw result observations, 19 supported mode layouts, tails, clipping, empty inputs and composed execution. The expanded current implementation passes **543/543 comparisons** in `perf-softlight-20260925-baseline-parity.json`.
+
+The baseline run `migration-benchmark-b4dd7cf0394f4f6483ab048537d70d1c` (`perf-softlight-20260925-baseline.json`) completes all seven selected workloads. Six materialized rows have terminal requested-backend receipts without fallback; the standard deferred row remains a terminal-execution gap. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015875 | 0.020646 | 0.021104 | 0.266354 |
+| Existing 32 × 24 | 0.017167 | 0.018604 | 0.018041 | 0.345959 |
+| 1 × 1 | 0.012979 | 0.017396 | 0.017417 | 0.181688 |
+| 32 × 32 | 0.018250 | 0.017667 | 0.018687 | 0.295166 |
+| 256 × 256 | 0.311063 | 0.090355 | 0.107729 | 0.430812 |
+| 1024 × 768 | 4.514375 | 0.636875 | 0.806999 | 2.200229 |
+
+Fresh L/RGB 1024 × 768 baseline (`perf-softlight-20260925-baseline-throughput.json`) passes **40,320 exact checks**, including **38,400 measured completions**. Source hashes remain unchanged and runtime files match across isolated subjects. Median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| L | 0.981209 | 0.290583 | 1.461000 | 3.840666 |
+| RGB | 4.687188 | 0.853854 | 4.535812 | 3.782374 |
+
+The largest baseline row identifies the primary blockers: SIMD takes **4.783 ms** on 1024 × 768 versus Pillow at **4.420 ms**, and GPU takes **4.446 ms**. The fresh runner includes two input constructions, the SoftLight operation, complete export, scheduling and completion; it prevents a deferred result or native fallback from appearing as acceleration.
+
+## SoftLight checkpoint — 2026-09-25
+
+SoftLight completes **three attempts**, all retained. The operation remains incomplete and the next operation can start after this checkpoint.
+
+1. **Retained: 16-lane 16-bit SIMD arithmetic.** The original eight-lane kernel widened each byte to 32 bits and converted lane vectors to scalar arrays twice to call the exact `/255` helper. It also padded/copy-filled every full eight-byte block. Keep divide-by-255 products in 16-bit vectors: each is at most 65,025 and `floor(x/255) = (n + (n >> 8)) >> 8`, with `n = x + 1`; maximum folded numerator is 65,280. For term one, `c = (255-a)*a`, `h = c >> 8`, `l = c & 255`; then `floor(c*b/65536) = (h*b + ((l*b) >> 8)) >> 8`. This keeps the decomposition exact while the bounded intermediate sum fits 16 bits. Process full sixteen-byte blocks directly and pad only the final tail. Preserve Pillow's two intermediate truncations and final saturation.
+2. **Retained: native-byte GPU transport.** Treat each stored byte as an independent SoftLight sample and reuse the bounded native-byte executor. Pack four samples per word, guard the active word count and remove the four-channel expansion. Keep exact division order and exclude transport padding from the result.
+3. **Retained: tiled parallel SIMD above 1 MiB.** The SoftLight arithmetic is heavier than bytewise blends; give the parallel pool disjoint vector-aligned 64 KiB tiles only above the measured threshold. Keep small inputs serial. The 1 MiB L request stays serial; RGB crosses the threshold and improves measured latency and concurrent throughput. This SoftLight crossover is evidence for its compute-heavy kernel only; do not copy it to other operations.
+
+Every attempt passes **543/543 maintained comparisons**. Attempt-specific boundary probes each pass **30/30 comparisons** around vector, word, workgroup, threshold and clipping edges. Final odd-width fresh checks pass **384/384 outputs**. Exact parity includes the exhaustive L and mode-1 stored-byte cases; no existing assertion, case or threshold was changed. Artifacts include `perf-softlight-20260925-attempt3-parity.json`, `perf-softlight-20260925-attempt3-tiles-parity.json`, and `perf-softlight-20260925-final-odd-check.json`.
+
+The final retained benchmark `migration-benchmark-035e0d11b0ac4ea6be7699c769164ea5` (`perf-softlight-20260925-attempt3.json`) completes all seven workloads. Six materialized rows have terminal native backend receipts without fallback. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015875 | 0.020646 | 0.021104 | 0.266354 |
+| Existing 32 × 24 | 0.017167 | 0.018604 | 0.018041 | 0.345959 |
+| 1 × 1 | 0.012979 | 0.017396 | 0.017417 | 0.181688 |
+| 32 × 32 | 0.018250 | 0.017667 | 0.018687 | 0.295166 |
+| 256 × 256 | 0.311063 | 0.090355 | 0.107729 | 0.430812 |
+| 1024 × 768 | 4.514375 | 0.636875 | 0.806999 | 2.200229 |
+
+Final fresh L/RGB 1024 × 768 evidence (`perf-softlight-20260925-attempt3-throughput.json`) passes **40,320 checks**, including **38,400 measured completions**, with stable source hashes/runtime identities. Final queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| L | 0.954563 | 0.282875 | 0.413187 | 0.524875 |
+| RGB | 4.684730 | 0.742834 | 0.719187 | 1.315354 |
+
+Final completed fresh images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| L | 1 | 958.0 | 2966.9 | 2215.3 | 1409.0 |
+| L | 2 | 952.6 | 3698.4 | 3940.4 | 2190.7 |
+| L | 4 | 998.8 | 4788.0 | 5356.5 | 2944.3 |
+| RGB | 1 | 201.8 | 1043.9 | 1124.6 | 547.7 |
+| RGB | 2 | 230.4 | 1178.1 | 1366.8 | 834.3 |
+| RGB | 4 | 223.6 | 1268.8 | 1628.6 | 1064.2 |
+
+SIMD improves fresh queue-one latency from **1.461 to 0.413 ms in L** and **4.536 to 0.719 ms in RGB** (about **3.5×/6.3×** versus its starting implementation). At queue depth four, its throughput rises from **2,151 to 5,357 L images/s** and **623 to 1,629 RGB images/s**. GPU fresh latency falls from **3.841 to 0.525 ms in L** and **3.782 to 1.315 ms in RGB** after native-byte transport. GPU queue-depth-four throughput rises from **528 to 2,944 L images/s** and **458 to 1,064 RGB images/s**. The added SIMD tiling halves the materialized 1024 × 768 SIMD row from **1.507 to 0.807 ms** and increases fresh RGB SIMD throughput.
+
+Remaining blockers:
+
+- SIMD meets 5× only on fresh RGB and the maintained 1024 × 768 RGB row. It reaches only about **2.3×** on fresh L, and small maintained rows still miss the target.
+- GPU remains slower than SIMD in latency and completed throughput for both modes. Queue-one GPU latency is **0.525 vs 0.413 ms in L** and **1.315 vs 0.719 ms in RGB**. Submission, completion wait, readback and output creation remain; attribute these costs before further shader arithmetic work.
+- CPU is faster than Pillow at larger sizes, but misses the smallest fixed-cost rows. That does not come from this SIMD/GPU work and needs its own call-phase diagnosis.
+- Timings vary across runs. The same-policy baseline and each attempt remain side-by-side. No wide-platform, all-composition or all-size completion claim is established.
+
+The reusable skill now records the bounded 16-bit division/reduction used to remove scalar SIMD lane extraction, including the intermediate limits needed to preserve exact truncation. The release `build-parity` build, formatting and public API boundary checks pass. **No coverage collection or push ran.** Inventory is now **16,730 cases and 813 workloads across 54 suites**. The operation-wide manifest remains 208 operations plus one constant with zero fully completed operations; focused results are not integrated into its broad historical matrix. Next is operation selection from the remaining ranked gaps.
