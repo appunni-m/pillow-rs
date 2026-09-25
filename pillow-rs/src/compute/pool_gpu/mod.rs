@@ -10542,6 +10542,41 @@ fn fuse_gpu_transpose_ops(ops: &[PipelineOp]) -> Vec<PipelineOp> {
     fused
 }
 
+/// Collapse adjacent CropBorder operations to one source-relative crop.
+/// Removing the intermediate raster avoids a dispatch and full-frame write;
+/// the checked sum preserves the original sequence if malformed internal
+/// descriptors would overflow.
+fn fuse_gpu_crop_border_ops(ops: &[PipelineOp]) -> Vec<PipelineOp> {
+    let mut fused = Vec::with_capacity(ops.len());
+    let mut index = 0usize;
+    while index < ops.len() {
+        let PipelineOp::CropBorder { border } = &ops[index] else {
+            fused.push(ops[index].clone());
+            index += 1;
+            continue;
+        };
+        let mut combined = *border;
+        let mut consumed = 1usize;
+        while index + consumed < ops.len() {
+            let PipelineOp::CropBorder { border: next } = &ops[index + consumed] else {
+                break;
+            };
+            let Some(sum) = combined.checked_add(*next) else {
+                break;
+            };
+            combined = sum;
+            consumed += 1;
+        }
+        if consumed == 1 {
+            fused.push(ops[index].clone());
+        } else {
+            fused.push(PipelineOp::CropBorder { border: combined });
+        }
+        index += consumed;
+    }
+    fused
+}
+
 /// Return whether two adjacent public Chops operations can share one exact
 /// dual-input GPU traversal.  The source identity guard is important: the
 /// fused shader consumes the same secondary image for both formulas, so two
@@ -15012,6 +15047,7 @@ impl GpuPool {
                 return Ok(img.clone());
             }
         }
+        dispatch_ops = fuse_gpu_crop_border_ops(&dispatch_ops);
         // Normalize geometry wrappers before deriving operation-aligned
         // auxiliary inputs and preflight state.  Thumbnail can expand into a
         // Reduce + Resize pair, so postponing this step would leave those
@@ -17373,6 +17409,42 @@ mod tests {
         assert_eq!(expected.dimensions(), (2, 3));
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.as_bytes(), expected.as_bytes());
+    }
+
+    #[test]
+    fn gpu_crop_border_fusion_matches_ordered_execution() {
+        use crate::compute::registry;
+
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                11,
+                11,
+                (0..11 * 11 * 4)
+                    .map(|index| (index * 37 + index / 11) as u8)
+                    .collect(),
+            )
+            .unwrap(),
+        );
+        let ops = [
+            PipelineOp::CropBorder { border: 1 },
+            PipelineOp::CropBorder { border: 2 },
+            PipelineOp::Invert,
+            PipelineOp::CropBorder { border: 0 },
+            PipelineOp::CropBorder { border: 1 },
+        ];
+        let sequential = |ops: &[PipelineOp]| {
+            ops.iter()
+                .try_fold(source.clone(), |image, op| {
+                    registry::execute_cpu(op, &image, None)
+                })
+                .unwrap()
+        };
+        let expected = sequential(&ops);
+        let fused_ops = super::fuse_gpu_crop_border_ops(&ops);
+        let actual = sequential(&fused_ops);
+        assert_eq!(fused_ops.len(), 3);
+        assert_eq!(expected.dimensions(), actual.dimensions());
+        assert_eq!(expected.as_bytes(), actual.as_bytes());
     }
 
     #[test]
