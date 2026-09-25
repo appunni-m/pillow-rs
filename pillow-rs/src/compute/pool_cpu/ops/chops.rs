@@ -440,7 +440,9 @@ pub fn op_chops_logical_xor(
     img: &DynamicImage,
     other: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| a ^ b)
+    // XOR compares truth, not stored bits: nonzero samples 1 and 2 are equal
+    // as booleans and therefore produce zero.
+    channel_op_binary_with_policy(img, other, |a, b| u8::from((a != 0) ^ (b != 0)) * 255, true)
 }
 
 pub fn op_chops_constant(img: &DynamicImage, value: u8) -> DynamicImage {

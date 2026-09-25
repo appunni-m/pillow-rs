@@ -688,6 +688,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "SubtractModulo",
     "LogicalAnd",
     "LogicalOr",
+    "LogicalXor",
     "Brightness",
 )
 PIPELINE_EXPANDED_MATRIX_SIZES: tuple[tuple[int, int], ...] = (
@@ -40660,9 +40661,9 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             cases.append(make_case("1", 0, size, other_size, label, operation=operation))
     # Packed frombytes inputs contain only 0/255 samples after decoding. Public
     # putdata can retain every byte in mode 1; logical operators test truth, then
-    # writes canonical 0/255. Observe stored output too: packed export alone
+    # write canonical 0/255. Observe stored output too: packed export alone
     # would hide a noncanonical nonzero result.
-    for operation in ("logical_and", "logical_or"):
+    for operation in ("logical_and", "logical_or", "logical_xor"):
         for size, other_size, label, exhaustive, chain in (
             ((256, 256), (256, 256), "all-byte-pairs", True, False),
             ((256, 256), (256, 256), "all-byte-pairs-materialized", True, False),

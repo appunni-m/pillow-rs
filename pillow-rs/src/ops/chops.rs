@@ -252,7 +252,7 @@ pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Applies bitwise XOR.
+/// Applies logical XOR, writing 255 when exactly one stored sample is nonzero.
 ///
 /// # Errors
 ///
