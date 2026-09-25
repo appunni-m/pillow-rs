@@ -4180,3 +4180,82 @@ Receipts: `parity-imageops-grayscale-simd-20260926-checkpoint.json`,
 `build/migration-parity/`. The next operation should come from the current
 incomplete-operation ranking; this checkpoint does not clear the outstanding
 CPU, SIMD, GPU, or throughput goals.
+
+## Colorize four-attempt checkpoint — 2026-09-26
+
+The selected operation was `PIL.ImageOps.colorize`. Its 43-case focused CPU,
+SIMD, and GPU parity cohorts pass. No reference behavior or assertions were
+changed. A separate deterministic size sweep (1 × 1, 16 × 16, 32 × 24,
+256 × 256, and 1024 × 768; varied `L` bytes; two endpoints, a midpoint, and
+non-default control points) also produced byte-identical RGB results between
+Pillow 12.2.0 and the strict GPU backend at every size. All five GPU executions
+used one real dispatch with no fallback.
+
+Four bounded attempts established the useful limits:
+
+1. The GPU shader previously performed three piecewise integer divisions for
+   every pixel. It now uploads the exact CPU-built 256-entry RGB mapping as
+   packed opaque words and performs one indexed read per pixel. This preserves
+   the reference's floor division and clamp because the LUT is built by the
+   already parity-tested mapping function. At 1024 × 768, the receipt still
+   records a 3 MiB input upload, a 3 MiB readback, and one full-frame copy;
+   public latency is therefore dominated by transport/completion rather than
+   just the removed divisions. Repeated small official measurements did not
+   show a stable GPU latency improvement.
+2. The CPU path now borrows native `L` samples instead of cloning them through
+   `to_luma8()`, and emits the final interleaved RGB buffer in one pass. Other
+   modes retain the previous Pillow-compatible `to_luma8()` fallback. Strict
+   CPU parity passes 43/43. In the seven-repeat 1024 × 768 diagnostic, backend
+   time moved from 0.864 to 0.656 ms and whole-workflow time from 2.412 to
+   2.259 ms. The three tiny official workloads are noisy and do not establish a
+   consistent CPU gain.
+3. SIMD's three 16-lane LUT results were originally repacked through four more
+   vector shuffles and temporary blocks per input block. Writing those lanes
+   directly improved the 256 × 256 diagnostic by 19% and the 1024 × 768 backend
+   by 20%, but regressed the 16 × 16 diagnostic by about 9% and the small
+   official cohort by roughly 2–5%.
+4. The SIMD implementation now keeps the original interleave path below 65,536
+   pixels and uses direct channel stores at or above that size. Strict SIMD
+   parity passes 43/43. Seven-repeat medians for the large path moved from
+   1.377 to 1.126 ms backend time and from 2.793 to 2.595 ms whole-workflow
+   time at 1024 × 768; 256 × 256 moved from 0.252 to 0.213 ms whole-workflow.
+   The thresholded path leaves tiny cases on the old kernel. The threshold is
+   a measured crossover for this target, not a portable hardware guarantee.
+
+The final three-workload official run measured 75–79 µs for Pillow, 18–21 µs
+for CPU, 19–21 µs for SIMD, and 316–376 µs for GPU. These small-sample medians
+varied across runs, but no backend lost Pillow parity. CPU remained faster than
+Pillow, while SIMD reached only about 3.8–4.0× Pillow, below the 5× target. GPU
+was about 17–19× slower than SIMD. At 1024 × 768, the last seven-repeat
+diagnostic measured whole-workflow medians of 2.704 ms Pillow, 2.259 ms CPU,
+2.595 ms SIMD, and 3.245 ms GPU. These are latency samples only; no
+changing-input concurrent throughput run was made.
+
+The measurements were collected on a MacBook Pro (Apple M3 Pro, 12 CPU cores
+with six performance and six efficiency cores, 18-core GPU, 18 GB RAM) running
+macOS 15.7.7. The oracle and target used Python 3.12.13 and Pillow 12.2.0; the
+Rust release build used rustc 1.96.1 / LLVM 22.1.2, with `wgpu` 24 and `wide`
+1.6.1. The official workloads were 16 × 16 `L`, 16 × 16 materialized `L`, and
+32 × 24 `L`; each used five warmups, 20 measured iterations per sample, five
+samples, warm cache, single-request concurrency, and the whole-workflow
+boundary. The size sweep used seven repetitions per side and size, with no
+concurrent request load. These numbers describe this machine and workload set.
+
+The next SIMD revisit should first attack `native_lut_chunk`: each channel
+currently lowers to sixteen byte swizzles and a serial select chain, three
+times per block. Evaluate a safe wider-table lookup or an exact vectorized
+piecewise formula, then inspect generated instructions and measure both sides
+of the 65,536-pixel crossover. The next GPU revisit should measure packed
+transport and host/device wait separately, retain the grayscale source layout
+instead of expanding each source sample into packed words if the executor can
+preserve exact RGB output, and test changing-input throughput at queue depth.
+Do not spend another attempt on shader arithmetic until the 3 MiB upload and
+readback path is reduced or a device-side timestamp proves arithmetic remains
+the dominant cost. The Colorize CPU/Pillow objective is met, but the SIMD and
+GPU goals remain open; move to the next ranked operation for its first pass.
+
+Receipts and timing artifacts are under `build/migration-parity/`, including
+`parity-imageops-colorize-cpu-20260926-onepass.json`,
+`parity-imageops-colorize-simd-20260926-threshold.json`,
+`parity-imageops-colorize-gpu-20260926-threshold.json`, and
+`perf-imageops-colorize-20260926-threshold.json`. No coverage collection ran.

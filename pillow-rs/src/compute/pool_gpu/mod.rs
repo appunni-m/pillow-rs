@@ -7061,6 +7061,11 @@ impl GpuInner {
                     gpu_resize_channel_count(op_mode),
                     nearest_mode,
                 ]);
+            } else if matches!(op, PipelineOp::Colorize { .. }) {
+                // Colorize's exact 256-entry mapping is uploaded through the
+                // dedicated LUT binding below. The shader needs only dimensions
+                // and source mode, so avoid copying its six public parameters
+                // into every aligned uniform record.
             } else {
                 params.extend(registry::extract_params(op));
             }
@@ -10252,6 +10257,32 @@ fn extract_lut(op: &PipelineOp, mode: u32) -> Option<[u32; 256]> {
         for (entry, &value) in packed.iter_mut().zip(inverse.iter()) {
             let value = u32::from(value);
             *entry = value | (value << 8) | (value << 16) | (value << 24);
+        }
+        return Some(packed);
+    }
+    if let PipelineOp::Colorize {
+        black,
+        white,
+        mid,
+        blackpoint,
+        midpoint,
+        whitepoint,
+    } = op
+    {
+        let channels = crate::compute::pool_cpu::ops::imageops::colorize_lut(
+            black,
+            white,
+            *mid,
+            *blackpoint,
+            *midpoint,
+            *whitepoint,
+        );
+        let mut packed = [0u32; 256];
+        for (index, entry) in packed.iter_mut().enumerate() {
+            *entry = u32::from(channels[0][index])
+                | (u32::from(channels[1][index]) << 8)
+                | (u32::from(channels[2][index]) << 16)
+                | (u32::from(u8::MAX) << 24);
         }
         return Some(packed);
     }

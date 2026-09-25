@@ -687,18 +687,28 @@ pub fn op_colorize(
     midpoint: u8,
     whitepoint: u8,
 ) -> Result<DynamicImage, PilError> {
-    let gray = img.to_luma8();
-    let (w, h) = gray.dimensions();
-    let mut out = crate::raster::RgbImage::new(w, h);
+    // L is already the exact input domain for ImageOps.colorize. Borrow its
+    // samples instead of cloning the whole grayscale image; all other modes
+    // retain the established Pillow-compatible conversion path.
+    let gray: std::borrow::Cow<'_, [u8]> = match img {
+        DynamicImage::ImageLuma8(gray) => std::borrow::Cow::Borrowed(gray.as_raw()),
+        _ => std::borrow::Cow::Owned(img.to_luma8().into_raw()),
+    };
+    let (w, h) = (img.width(), img.height());
     let lut = colorize_lut(black, white, mid, blackpoint, midpoint, whitepoint);
-    for y in 0..h {
-        for x in 0..w {
-            let g = gray.get_pixel(x, y)[0] as usize;
-            out.put_pixel(x, y, crate::raster::Rgb([lut[0][g], lut[1][g], lut[2][g]]));
-        }
+    let output_len = gray
+        .len()
+        .checked_mul(3)
+        .ok_or_else(|| PilError::ValueError("colorize output is too large".into()))?;
+    let mut output = Vec::with_capacity(output_len);
+    for &sample in gray.iter() {
+        let index = usize::from(sample);
+        output.extend_from_slice(&[lut[0][index], lut[1][index], lut[2][index]]);
     }
     // Colorize always outputs RGB (PIL behavior)
-    Ok(DynamicImage::ImageRgb8(out))
+    crate::raster::RgbImage::from_raw(w, h, output)
+        .map(DynamicImage::ImageRgb8)
+        .ok_or_else(|| PilError::InternalError("colorize buffer mismatch".into()))
 }
 
 /// Contain: resize to fit within (w, h) preserving aspect ratio.
