@@ -3584,3 +3584,51 @@ Completed fresh images per second:
 GPU latency is about **15.7× SIMD in L** and **4.3× in RGB**, and its throughput trails SIMD at every tested depth. It still expands the inputs to RGBA transport. First investigate admitting eligible equal-size HardLight work to the established native-byte executor, preserving its distinct branch condition on the second sample and active-word bounds. CPU retains a 64 KiB pair LUT and fine-row scheduling; compare its scheduling cost with sequential/grouped work before borrowing the cheap-byte threshold. SIMD reaches about **6.3× Pillow in fresh RGB**, but only **4.7× in L** and under 5× on every maintained row. Do not repeat Overlay's rejected internal parallelism experiment without new evidence that resolves the concurrency tradeoff.
 
 Generated documentation was refreshed from existing evidence; input generation updated static coverage declarations only. **No coverage collection or push ran.** Inventory is now **16,603 parity cases and 809 workloads across 54 suites**. The selected matrix retains 208 operations plus one constant and zero fully completed operations. Broad timings remain historical; merging focused results into the global matrix and auditing public exports outside the manifest remain pending.
+
+## HardLight checkpoint — 2026-09-25
+
+HardLight completes **three attempts**. Attempts one and two are retained; attempt three is rejected. Work moves to SoftLight; HardLight remains incomplete.
+
+1. **Native-byte GPU route.** Admit one eligible equal-size HardLight operation to the existing executor. Treat each stored byte as an independent sample, preserve HardLight's condition on operand two, handle partial words with an active-word guard, and leave composed/unsupported layouts on their existing correct route. This removes RGBA expansion and the mode conversion.
+2. **Exact branch-selected arithmetic.** Before multiplying, select the active side's operands. One factor is then at most 127 and the other at most 255, bounding the product at 32,385. Replace branch-local division and two possible products with `n = product + 1; q = (n + (n >> 7) + (n >> 14)) >> 7`, which exactly computes floor division by 127 on this bounded domain. Return `q` on the low branch and `255 - q` on the high branch. Maximum intermediate is 32,640. This improves measured concurrent GPU throughput.
+3. **Rejected native-byte mode branch.** A dedicated mode-9 branch removed the existing channel `select`s, but did not help. Against attempt two, L fresh queue-depth-four throughput fell from **4,197 to 3,933 images/s**, and RGB fell from **1,358 to 1,198**. It is removed. An extra per-invocation mode branch can outweigh a few uniform channel selects; inspect generated shader and measure full-request throughput before adding a specialization.
+
+After the final restore, the release parity build succeeds. Exact parity passes **540/540 maintained comparisons**, **30/30 large boundary comparisons**, and **384/384 fresh odd-width L/RGB outputs**. The retained arithmetic candidate separately passes the same 540+30 comparisons. Artifacts: `perf-hardlight-20260925-final-parity.json`, `perf-hardlight-20260925-attempt2-tiles-parity.json`, and `perf-hardlight-20260925-final-odd-check.json`. The attempt-three branch also passes parity; its timing is the reason for rejecting it, not a correctness issue. No existing assertion or workload changed.
+
+Final retained benchmark `migration-benchmark-58c184625ba243029670fe87eb1d218a` (`perf-hardlight-20260925-attempt2.json`) completes all seven selected workloads. Six materialized rows have terminal native CPU/SIMD/GPU receipts with no fallback; the standard deferred row still lacks terminal execution evidence. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015875 | 0.017937 | 0.019584 | 0.440229 |
+| Existing 32 × 24 | 0.015855 | 0.018625 | 0.018313 | 0.201603 |
+| 1 × 1 | 0.012688 | 0.016417 | 0.016792 | 0.390000 |
+| 32 × 32 | 0.017063 | 0.017563 | 0.017813 | 0.204438 |
+| 256 × 256 | 0.250625 | 0.090833 | 0.056334 | 0.614771 |
+| 1024 × 768 | 3.866313 | 0.756500 | 0.835646 | 2.235292 |
+
+Fresh L/RGB 1024 × 768 evidence (`perf-hardlight-20260925-attempt2-throughput.json`) passes **40,320 exact checks**, including **38,400 measured completions**, with stable source hashes and runtime identities. Both input constructions, HardLight, full output export, scheduling and completion stay inside the request. Queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| L | 0.899729 | 0.235292 | 0.202583 | 0.507333 |
+| RGB | 4.449999 | 0.623375 | 0.687208 | 1.191208 |
+
+Completed fresh images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| L | 1 | 1073.4 | 3745.0 | 4653.2 | 1863.8 |
+| L | 2 | 1097.7 | 5511.0 | 6912.3 | 2873.7 |
+| L | 4 | 1094.9 | 6464.4 | 8981.2 | 4197.1 |
+| RGB | 1 | 221.0 | 1311.0 | 1357.8 | 785.6 |
+| RGB | 2 | 242.7 | 1733.8 | 2071.8 | 1207.6 |
+| RGB | 4 | 254.9 | 1782.1 | 2596.3 | 1357.8 |
+
+Against the fresh baseline, GPU latency falls from **3.006 to 0.507 ms in L** and **2.993 to 1.191 ms in RGB** (about **5.9×/2.5×**). At queue depth four, GPU throughput rises from **591 to 4,197 L images/s** and **563 to 1,358 RGB images/s**. Each GPU input/readback transfers 786,432 L bytes or 2,359,296 RGB bytes; the former route transferred 3,145,728 bytes for each mode/input. Uniform/native mode uses 16 parameter bytes with no format conversion. These changes preserve exact sample values.
+
+Remaining blockers:
+
+- GPU still trails SIMD in fresh latency and throughput at every measured queue depth. The arithmetic and transport gains do not meet the GPU target. Launch, completion, output creation and remaining transfers need phase attribution before further shader work.
+- SIMD reaches about **4.4× Pillow in L** and **6.5× in RGB** on the final fresh request. It misses 5× in L and misses 5× on the small maintained rows. Shared arithmetic is already narrowed to sixteen 16-bit lanes, so inspect wrapper/materialization and complete-request costs before more lane-level tuning.
+- CPU misses Pillow on tiny maintained calls; CPU is already faster on larger calls. That small-call floor is shared binding/allocation work and needs direct phase evidence.
+- Run-to-run latency varies materially. The three attempt artifacts remain side by side. No all-size or all-mode performance claim is established; wider platforms and composed execution remain unproven.
+
+The optimization skill records exact bounded division and the rejected uniform shader branch lesson. The `RUSTC_WRAPPER= make build-parity` build passes. Formatting and public API boundary checks pass; parity and full-request benchmarks above pass. **No coverage collection or push ran.** The pre-existing operation-wide inventory remains **16,603 cases, 809 workloads, zero fully completed operations**. Focused results have not been merged into the global optimization matrix. SoftLight is next.
