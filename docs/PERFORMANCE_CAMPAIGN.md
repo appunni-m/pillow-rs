@@ -3413,3 +3413,43 @@ Remaining blockers:
 - Logical XOR still needs its own stored-sample audit. Wider bindings/platforms and composed pipelines remain unproven. The known LAB conversion failures remain at their earlier checkpoint; this OR-only audit did not rerun conversion.
 
 The optimization skill now explains when truth normalization can move across an operator, allowing less work without changing the result. The isolated release build and formatting/public-boundary checks passed; documentation refresh uses existing evidence only. **No coverage collection or push ran.** Inventory is **16,334 parity cases and 797 workloads across 54 suites**. The selected matrix remains 208 operations plus one constant, with zero fully completed operations; broad timing evidence remains historical and focused-result integration remains pending.
+
+## Logical XOR checkpoint — 2026-09-25
+
+Logical OR is committed as `eec8a8608`. Logical XOR completes **three attempts**, all retained, then moves to Overlay under the attempt cap. Shared bit-I/O improvements from Logical AND are inherited baseline behavior.
+
+1. **Stored-sample parity repair.** Two different nonzero mode-1 bytes are both true, so their logical XOR is false. The old bitwise kernels disagreed. Fifteen new maintained cases reproduce **39 failures in 45 comparisons** (`perf-logical-xor-stored-20260925-before-parity.json`). CPU, SIMD (including in-place and scalar helper paths), and GPU now compare operand truths and produce canonical 0/255 output. SIMD XORs zero-comparison masks directly: complementing both boolean inputs leaves XOR unchanged and avoids separate inversions.
+2. **CPU scheduling.** Reuse the cheap-byte policy below/above 4 MiB of decoded output, retaining separate input strides and complete-row grouping. This changes scheduling without changing the repaired formula.
+3. **GPU native-byte transport.** Reuse the existing executor for a single equal-size mode-1 XOR. Keep one nonzero flag per stored byte, XOR those flags, and expand only the final flags to 0/255. Word-count guards and returned lengths exclude transport padding; composed/unsupported layouts retain their existing correct paths.
+
+Added **15 parity cases and four benchmark workloads**, with zero existing parity cases changed or removed. New cases cover every stored-byte pair, raw outputs and unchanged source samples, composed and pre-materialized inputs, partial vectors/words/grids, unequal strides and empty overlaps. The repaired baseline and final implementation each pass **459/459 maintained/workflow comparisons** plus **18/18 large boundary comparisons**. Final artifacts are `perf-logical-xor-20260925-final-parity.json` and `perf-logical-xor-20260925-final-tiles-parity.json`. Clipped/invalid parity cases are not claimed as native acceleration evidence.
+
+Baseline run `migration-benchmark-65fd8d650463420f9f9c5eec61b73270` and final run `migration-benchmark-9584e6abc7184a3583c614a316dd69a5` complete all seven selected workloads (`perf-logical-xor-20260925-baseline.json` and `perf-logical-xor-20260925-final.json`). Six materialized rows have native completed receipts without fallback; the standard row still lacks terminal evidence. Final median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.013479 | 0.016688 | 0.016855 | 0.304500 |
+| 1 × 1 | 0.012042 | 0.014813 | 0.015896 | 0.521479 |
+| 32 × 32 | 0.013459 | 0.018792 | 0.015708 | 0.302479 |
+| 256 × 256 | 0.062480 | 0.026146 | 0.024250 | 0.542938 |
+| 1024 × 768 | 0.599292 | 0.165417 | 0.123500 | 0.918917 |
+| SIMD Chops mode-1 workload | 0.753292 | 0.193020 | 0.188292 | 0.967938 |
+
+Fresh 1024 × 768 baseline/final runs (`perf-logical-xor-20260925-{baseline,final}-throughput.json`) each pass **20,160 exact checks**, including **19,200 measured completions**, with unchanged source hashes and consistent runtime binaries. Final queue-one medians are Pillow **0.979624 ms**, CPU **0.116958 ms**, SIMD **0.121584 ms**, GPU **0.509729 ms**. Final completed images per second:
+
+| Queue depth | Pillow | CPU | SIMD | GPU |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1008.4 | 7419.6 | 7207.0 | 1867.5 |
+| 2 | 1266.9 | 12210.4 | 12004.7 | 3113.4 |
+| 4 | 1460.9 | 17936.9 | 17695.1 | 5268.2 |
+
+CPU fresh latency improves from **0.283063 to 0.116958 ms** (about 2.4×); GPU improves from **3.172708 to 0.509729 ms** (about 6.2×), with higher throughput at every measured depth. SIMD remains close to baseline (**0.122583 → 0.121584 ms**). Each GPU input/readback is **786,432 bytes** instead of 3,145,728; parameters shrink from 256 to 16 bytes and mode conversions from one to zero. The fresh runner includes both imports, full packed export, synchronization and receipts. The final odd-width 1031 × 769 check passes **192/192 outputs** in `perf-logical-xor-20260925-final-packed-check.json`.
+
+Remaining blockers:
+
+- CPU still misses small public calls; some small timings regress or vary. Large scheduling wins do not establish the all-input CPU target.
+- SIMD reaches about **8.1× Pillow** on the fresh large workload, but every maintained row still misses 5×, including 1024 × 768 at about 4.85×. Fixed caller/materialization costs and memory passes remain.
+- GPU still trails SIMD in latency and throughput at all measured depths. The 1 × 1 GPU row regresses relative to baseline, and 256 × 256 is slightly slower. Launch/wait/output costs and decoded-byte transport remain unresolved; resident/packed execution must include conversion and preserve canonical truth samples.
+- Wider bindings/platforms and composed pipelines remain unproven. The earlier LAB conversion blockers remain; this XOR-only audit did not rerun conversion.
+
+The skill records keeping predicates compact until the final store and cancelling shared XOR inversions. The isolated release build and formatting/public-boundary checks passed. Generated documentation was refreshed from existing evidence only. **No coverage collection or push ran.** Inventory is **16,349 parity cases and 801 workloads across 54 suites**. The selected matrix still has 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending. Next is `ImageChops.overlay`, whose historical selected rows show CPU, SIMD and GPU deficits; collect current parity and baseline evidence before changing it.

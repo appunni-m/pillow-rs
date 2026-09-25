@@ -7283,8 +7283,8 @@ pub(crate) fn simd_execute_in_place(
                 img,
                 &other,
                 mode,
-                |left, right| left ^ right,
-                |left, right| left ^ right,
+                native_logical_xor_vector,
+                |left, right| u8::from((left != 0) ^ (right != 0)) * 255,
             ))
         }
         PipelineOp::Add {
@@ -9077,10 +9077,21 @@ native_bytewise_chops!(
     native_logical_or_vector,
     |left: u8, right: u8| u8::from((left | right) != 0) * 255
 );
+#[inline]
+fn native_logical_xor_vector(left: u8x16, right: u8x16) -> u8x16 {
+    // Complementing both boolean operands leaves XOR unchanged. Comparing
+    // with zero directly supplies canonical byte masks without inversions.
+    left.simd_eq(u8x16::ZERO)
+        .select(u8x16::splat(255), u8x16::ZERO)
+        ^ right
+            .simd_eq(u8x16::ZERO)
+            .select(u8x16::splat(255), u8x16::ZERO)
+}
+
 native_bytewise_chops!(
     native_chops_logical_xor,
-    |left: u8x16, right: u8x16| left ^ right,
-    |left: u8, right: u8| left ^ right
+    native_logical_xor_vector,
+    |left: u8, right: u8| u8::from((left != 0) ^ (right != 0)) * 255
 );
 
 /// Fuse `multiply(other) → screen(other)` for matching native 8-bit layouts.

@@ -499,7 +499,7 @@ pub fn logical_or(pixels: &mut [u32], mode: u32, other: &[u32]) {
     }
 }
 
-/// Logical XOR: bitwise `a ^ b` per channel.
+/// Logical XOR: differing input truths produce 255, otherwise zero, per channel.
 /// Dual-input: operates on `pixels` and `other` element-wise.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
@@ -516,14 +516,14 @@ pub fn logical_xor(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let bb = (*o >> 16) & 0xFF;
         let ba = (*o >> 24) & 0xFF;
 
-        let out_r = ar ^ br;
-        let out_g_raw = ag ^ bg;
-        let out_b_raw = ab ^ bb;
+        let out_r = u32::from((ar != 0) ^ (br != 0)) * 255;
+        let out_g_raw = u32::from((ag != 0) ^ (bg != 0)) * 255;
+        let out_b_raw = u32::from((ab != 0) ^ (bb != 0)) * 255;
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
         let out_a = if has_a {
-            ((aa >> 24) ^ ba) << 24
+            (u32::from((aa != 0) ^ (ba != 0)) * 255) << 24
         } else {
             0xFF00_0000
         };
