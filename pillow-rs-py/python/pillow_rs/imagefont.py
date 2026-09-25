@@ -335,9 +335,40 @@ class FreeTypeFont:
             # their public source bytes. Resolve current public attributes;
             # the native handle may still carry their earlier values.
             try:
-                font = BytesIO(self.font_bytes)
+                source_bytes = BytesIO(self.font_bytes).getvalue()
+                source_path = None
             except AttributeError:
-                font = self.path
+                if isinstance(self.path, (str, PathLike)):
+                    try:
+                        with open(self.path, "rb") as source:
+                            source_bytes = source.read()
+                        source_path = self.path
+                    except OSError:
+                        source_bytes = None
+                else:
+                    source_bytes = None
+            if source_bytes is not None:
+                variant_size = float(self.size if size is None else size)
+                variant_index = int(self.index if index is None else index)
+                variant_encoding = self.encoding if encoding is None else encoding
+                variant_layout_engine = _normalize_layout_engine(
+                    layout_engine or self.layout_engine
+                )
+                rust_font = self._rust_font.font_variant_with_options(
+                    source_bytes,
+                    variant_size,
+                    variant_index,
+                    variant_encoding,
+                    variant_layout_engine,
+                )
+                return FreeTypeFont._from_rust_font(
+                    rust_font,
+                    variant_size,
+                    index=variant_index,
+                    encoding=variant_encoding,
+                    path=source_path,
+                )
+            font = self.path
         return FreeTypeFont(
             font=font,
             size=self.size if size is None else float(size),

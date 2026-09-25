@@ -73,9 +73,18 @@ def observations():
     capture("memory_ignores_path", font.font_variant)
     font.font_bytes = alternate
     capture("changed_public_source_bytes", font.font_variant)
+    font.font_bytes = b""
+    capture("empty_public_source_bytes", font.font_variant)
+    font.font_bytes = b"invalid font dat"
+    capture("short_public_source_bytes", font.font_variant)
     font.font_bytes = b"invalid font data"
     capture("invalid_public_source_bytes", font.font_variant)
     capture("default_font_variant", ImageFont.load_default().font_variant)
+
+    independent_source = ImageFont.truetype(BytesIO(source), 20)
+    independent_variant = independent_source.font_variant(size=31)
+    capture("base_after_sized_variant", lambda: independent_source)
+    capture("sized_variant_after_creation", lambda: independent_variant)
     return records
 
 
