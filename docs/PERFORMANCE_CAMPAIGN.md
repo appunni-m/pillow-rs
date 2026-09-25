@@ -2570,11 +2570,11 @@ is included in this local checkpoint.
 ## Screen baseline — 2026-09-25
 
 Work moved to `ImageChops.screen` after putpixel checkpoint `7b85bbe66`.
-No Screen implementation attempt has been made in this visit. The maintained
+This baseline precedes the Screen implementation attempts below. The maintained
 cases plus 23 benchmark workflows pass **573/573 comparisons** on CPU/SIMD/GPU
 in `build/migration-parity/perf-screen-20260925-initial-parity.json`.
 This is the starting corpus; the finite byte domain, broader mode/shape audit
-and fresh sustained-throughput measurement remain pending.
+and fresh sustained-throughput measurement were still pending at this baseline.
 
 All 24 selected standalone/composed workloads completed as
 `migration-benchmark-acd42003d2334983b4debe9e71193a90`, retained in
@@ -2605,3 +2605,127 @@ costs before duplicating arithmetic. GPU Screen still uses the four-byte
 transport shader; the shared native-byte executor used by Multiply is a
 candidate once exact mode/shape behavior is verified. No coverage collection
 or push ran.
+
+## Screen four-attempt checkpoint — 2026-09-25
+
+Screen remains incomplete and this visit stops after four implementation
+attempts. The next operation is `ImageChops.difference`. Retained changes:
+
+1. Execute standalone GPU Screen on native bytes. Four independent samples fit
+   each word instead of expanding each logical pixel to four bytes. Preserve
+   logical modes, rounded word bounds and the exact final output length.
+2. Use the existing CPU cheap-byte scheduling policy: serial work below 4 MiB,
+   grouped rows above it, with each clipped source retaining its own stride.
+3. Carry native bytes through the existing Multiply→Screen GPU fusion. Keep
+   Multiply's intermediate truncation and require the same secondary execution
+   source. Receipts report two public operations and one completed dispatch.
+4. Stream the fused SIMD kernel across contiguous rows, scheduling 64 KiB tiles
+   at 4 MiB instead of individual rows at 256 KiB. Use the actual partial-tile
+   length and record the vector work and final scalar tail actually executed.
+
+The preliminary mode audit passed 345 comparisons, including all 65,536 byte
+pairs. The generator now retains 132 additional cases: 112 standalone mode,
+shape and exhaustive-domain cases, plus 20 fused cases. All existing cases and
+benchmark policies are unchanged. Final maintained/workflow parity passes
+**975/975 comparisons**, and standalone/fused large-buffer boundary probes pass
+**24/24**, including sizes below, at and above the parallel threshold. These
+are exact live-Pillow comparisons across CPU/SIMD/GPU; rejected/empty cases
+without native receipts do not establish acceleration.
+
+Final parity artifacts under `build/migration-parity/` are
+`perf-screen-20260925-final-maintained-parity.json`,
+`perf-screen-20260925-final-extra-parity.json`,
+`perf-screen-20260925-final-tiles-parity.json` and
+`perf-screen-fused-20260925-final-tiles-parity.json`.
+
+All original 24 workloads completed in
+`migration-benchmark-91517a38c15d4612a97c428a478e24ad`, retained as
+`perf-screen-20260925-final.json`. A content audit found two more Screen-containing
+workflows, `pipeline-chain.matrix-006` and `pipeline-chain.matrix-007`, omitted
+from the original name-based selection. Their unchanged workloads and exact
+parity are recorded separately in `perf-screen-20260925-final-extra.json` and
+its parity artifacts. Thus all 26 currently identified Screen-containing
+workloads have final diagnostic timings; the two additions have no paired
+pre-change measurement. Future inventories must inspect workflow steps too.
+
+Representative final medians in milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015541 | 0.017104 | 0.017688 | 0.182542 |
+| 1 × 1 | 0.013376 | 0.015605 | 0.016188 | 0.180625 |
+| 32 × 32 | 0.016042 | 0.016396 | 0.017209 | 0.176292 |
+| 256 × 256 | 0.146250 | 0.036667 | 0.042605 | 0.698187 |
+| 1024 × 768 | 2.208166 | 0.555375 | 0.600271 | 1.860625 |
+| Multiply→Screen, L 1024 × 1024 | 1.389937 | 0.300917 | 0.320667 | 0.897958 |
+| Multiply→Screen, RGB 1024 × 1024 | 6.948604 | 0.991292 | 1.069729 | 2.221833 |
+| Multiply→Screen, RGBA 1024 × 1024 | 7.183084 | 1.665042 | 1.394167 | 3.185604 |
+| 260-operation auxiliary chain | 0.882542 | 1.096604 | 1.144001 | 8.185291 |
+
+The ordinary standard row still has no terminal native receipt; the resident
+row reuses materialized results. Neither proves accelerated fresh execution.
+The two existing exact benchmark gates pass. All workloads retain their original
+policies; workflow-level output parity is recorded separately above.
+
+Across the visit, standalone 1024 × 768 CPU latency changed from 0.664625 to
+0.555375 ms and GPU from 4.838229 to 1.860625 ms. Fused L/RGB GPU latency changed
+from 5.474208/4.615875 to 0.897958/2.221833 ms. SIMD fusion gains are modest:
+L/RGB/RGBA 1024² medians changed from 0.338229/1.099958/1.481041 immediately
+before attempt four to 0.320667/1.069729/1.394167 afterward. These individual
+runs vary; they do not establish stable guarantees. Some small GPU medians
+regressed, including 256² from 0.468063 to 0.698187 ms. This is retained as an
+open performance gap, not hidden by the larger-image improvements.
+
+The fresh-output diagnostic completed **40,320 exact checks**, including
+**38,400 measured completions**, with unchanged source hashes and consistent
+runtime binaries. `perf-screen-20260925-final-throughput.json` includes two
+fresh input constructions, execution, synchronization, complete export, worker
+scheduling and receipt capture. Queue-one median request milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.821021 | 0.119063 | 0.153355 | 0.454729 |
+| RGB | 3.713250 | 0.534521 | 0.575917 | 1.102271 |
+
+Completed fresh images per second, measured from window wall time:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1187.3 | 7470.3 | 5148.3 | 1705.1 |
+| L | 2 | 1238.5 | 9546.1 | 8484.8 | 2227.3 |
+| L | 4 | 1234.1 | 10897.0 | 10384.8 | 3108.1 |
+| RGB | 1 | 264.2 | 1723.9 | 1598.9 | 642.1 |
+| RGB | 2 | 289.7 | 2491.2 | 2456.1 | 916.5 |
+| RGB | 4 | 301.2 | 2645.8 | 2684.5 | 1085.0 |
+
+Fresh GPU request medians fell from 3.251584/3.418896 ms for L/RGB to
+0.454729/1.102271 ms. Each L upload, auxiliary upload and readback now moves
+786,432 bytes, versus 3,145,728 previously; RGB moves 2,359,296 bytes per buffer.
+Parameter bytes fell from 256 to 16 and transport mode conversion from one to
+zero. CPU meets Pillow latency and SIMD exceeds 5× on these two fresh samples,
+but that does not replace the failed small/standard-boundary results. GPU
+still misses SIMD latency and throughput at every measured queue depth.
+
+Remaining blockers and next-visit decisions:
+
+- Small-call CPU overhead and standalone SIMD's 5× target remain unresolved.
+  Profile construction, binding, allocation and export separately from the
+  already packed byte arithmetic. CPU can beat the explicit SIMD route on these
+  fresh inputs; inspect generated loops and handoffs before adding instructions.
+- GPU launch, mapping, readback and host creation remain after eliminating
+  expansion. Measure those phases and small-input variability; another arithmetic
+  rewrite cannot remove their fixed cost. Required full host output remains timed.
+- Distinct-secondary, longer mixed pipelines and the 260-operation chain retain
+  the general transport path. Remove repeated intermediate traffic only while
+  preserving secondary identities, observable quantization and completion.
+- Additional modes/state interactions, sizes, composed pipelines, bindings,
+  hardware and platforms remain unproven. No operation-wide completion is claimed.
+
+The optimization skill now explains retuning task granularity after fusion and
+checking whether composed dispatch bypasses compact primitive transport. Static
+indices contain 15,375 parity cases, 773 workloads and 54 suites. Generated
+specification/evidence docs were refreshed from existing artifacts; no coverage
+collection ran. The complete selected-operation matrix still contains 208
+operations plus one constant and reports zero completed operations. Integrating
+all focused receipts and auditing exports outside that manifest remain pending.
+This is a local checkpoint; pre-push verification and a push were not run.

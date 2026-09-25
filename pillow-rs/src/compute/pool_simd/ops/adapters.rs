@@ -9170,15 +9170,21 @@ pub(crate) fn simd_fused_multiply_screen(
     if row_stride == 0 || row_stride.checked_mul(height as usize) != Some(output.len()) {
         return Ok(None);
     }
-    let vector_blocks = (row_stride / 16).saturating_mul(height as usize);
-    let scalar_tail = (row_stride % 16).saturating_mul(height as usize);
+    // Both operands are tightly packed and each byte is independent. Stream
+    // across rows; only the final tile needs a tail. Cheap fused arithmetic
+    // must amortize scheduling just like the standalone native blend path.
+    let vector_blocks = output.len() / 16;
+    let scalar_tail = output.len() % 16;
     #[cfg(feature = "parallel")]
-    if output.len() >= 256 * 1024 {
+    if output.len() >= 4 * 1024 * 1024 {
+        const TILE_BYTES: usize = 64 * 1024;
+        let tiles = output.len().div_ceil(TILE_BYTES);
         crate::par_rows_mut!(
             &mut output,
-            row_stride,
-            height as usize,
-            |row_start, row_end, _y, row| {
+            TILE_BYTES,
+            tiles,
+            |row_start, _row_end, _y, row| {
+                let row_end = row_start + row.len();
                 let _ = simd_fused_multiply_screen_row(
                     &left_bytes[row_start..row_end],
                     &right_bytes[row_start..row_end],
