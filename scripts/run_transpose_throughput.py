@@ -32,6 +32,13 @@ size; reference metadata records whether each output changes. Equalize keeps
 input dimensions and requires one public operation and four GPU passes. The
 transpose default, stimulus, receipt rules, and timing policy are unchanged.
 
+``--operation autocontrast`` measures fresh ``ImageOps.autocontrast`` calls in
+L/RGB at cutoff zero. Its deterministic tile spans 32 levels and shifts by
+eight levels per frame, so each reference exercises a nonidentity contrast
+range. The output preserves dimensions. On fresh unmasked native L/RGB inputs,
+the GPU derives the Pillow-compatible LUT on the host and applies it in one
+native dispatch; masked or unsupported inputs retain the four-pass GPU path.
+
 ``--operation invert`` measures fresh ``ImageOps.invert`` calls in L/RGB
 under the same policy. It uses the full-range tile, preserves dimensions,
 and requires one public operation and one GPU dispatch per request.
@@ -200,10 +207,13 @@ def patterned_frames(mode: str, size: tuple[int, int], directory: Path,
                  for index in range(8192))
     if operation == "equalize":
         tile = bytes(value // 4 for value in tile)
+    elif operation == "autocontrast":
+        tile = bytes(value // 8 for value in tile)
     base = (tile * ((length + len(tile) - 1) // len(tile)))[:length]
     frames = []
     for frame_id in range(FRAMES):
-        table = bytes((value + 41 * frame_id) & 255 for value in range(256))
+        frame_offset = 8 * frame_id if operation == "autocontrast" else 41 * frame_id
+        table = bytes((value + frame_offset) & 255 for value in range(256))
         data = base.translate(table)
         path = directory / f"input-{frame_id:02d}.bin"
         path.write_bytes(data)
@@ -233,6 +243,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
         image = image_api.frombytes(plan["mode"], tuple(plan["size"]), data)
         if plan.get("operation") == "equalize":
             image = plan["imageops_api"].equalize(image)
+        elif plan.get("operation") == "autocontrast":
+            image = plan["imageops_api"].autocontrast(image, cutoff=0)
         elif plan.get("operation") == "invert":
             image = plan["imageops_api"].invert(image)
         elif plan.get("operation") == "grayscale":
@@ -445,7 +457,7 @@ def child(args: argparse.Namespace) -> int:
     subject = args.child_subject
     identity = parity.side_identity("source" if subject == "Pillow" else "target")
     image_api = importlib.import_module("PIL.Image")
-    if plan.get("operation") in ("equalize", "invert", "grayscale", "solarize"):
+    if plan.get("operation") in ("equalize", "autocontrast", "invert", "grayscale", "solarize"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
     if plan.get("operation") in ("composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
@@ -573,7 +585,7 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError(f"{operation} throughput requires mode 1")
     if operation not in ("logical-and", "logical-or", "logical-xor") and "1" in modes:
         raise ValueError("mode 1 throughput currently requires logical-and, logical-or, or logical-xor")
-    if operation in ("equalize", "invert", "grayscale", "convert", "transform") and any(mode not in ("L", "RGB") for mode in modes):
+    if operation in ("equalize", "autocontrast", "invert", "grayscale", "convert", "transform") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
     if operation == "alpha-composite" and any(mode not in ("LA", "RGBA") for mode in modes):
         raise ValueError("alpha-composite throughput supports LA/RGBA input")
@@ -590,6 +602,7 @@ def run(args: argparse.Namespace) -> int:
                    "warmup_windows": WARMUPS, "measurement_iterations_per_sample": ITERATIONS,
                    "samples": SAMPLES, "operation": operation, "methods": [0, 2] if operation == "transpose" else [],
                    "contrast_factor": 0.3 if operation in ("contrast", "color") else None,
+                   "autocontrast_cutoff": 0 if operation == "autocontrast" else None,
                    "solarize_threshold": 128 if operation == "solarize" else None,
                    "affine_coefficients": TRANSFORM_DATA if operation == "transform" else None,
                    "boundary": ("three fresh frombytes images, ImageChops.composite with independent L mask, terminal bytes, worker scheduling and receipt capture"
@@ -610,13 +623,16 @@ def run(args: argparse.Namespace) -> int:
                                 if operation in ("logical-and", "logical-or", "logical-xor") else "two fresh frombytes images, alpha_composite, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "alpha-composite" else "fresh frombytes image, Contrast constructor including host mean and base allocation, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "contrast" else "fresh frombytes image, Color constructor and saved base, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
-                                if operation == "color" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
+                                if operation == "color" else "fresh frombytes image, autocontrast(cutoff=0), terminal bytes, worker scheduling and receipt capture"
+                                if operation == "autocontrast" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
                    "comparison": "every output exactly matches live Pillow outside measured window",
                    "concurrency_claim": "host worker requests; simultaneous GPU kernels are not asserted",
                    "output_retention": "all outputs retained until window completion",
                    "input_generator": "8192-byte tile (73*i+11*(i//17)+29)%256; "
-                       + ("divide tile values by 4; " if operation == "equalize" else "")
-                       + "frame j adds 41*j modulo 256"
+                       + ("divide tile values by 4; " if operation == "equalize" else
+                          "divide tile values by 8; " if operation == "autocontrast" else "")
+                       + ("frame j adds 8*j without wrapping; " if operation == "autocontrast" else
+                          "frame j adds 41*j modulo 256")
                        + ("; mode 1 has ceil(width/8) MSB-first bytes per row" if operation in ("logical-and", "logical-or", "logical-xor") else "")
                        + ("; second image uses frame (j+1) modulo 16" if operation in ("composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite") else "")
                        + ("; independent L mask uses frame (j+7) modulo 16 and salt 113" if operation == "composite" else ""),
@@ -698,7 +714,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "autocontrast", "invert", "grayscale", "convert", "putpixel", "composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("1", "L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

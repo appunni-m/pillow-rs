@@ -3798,3 +3798,93 @@ evidence IDs and three stale/incompatible artifacts; focused Composite receipts
 are not integrated into that global evidence schema. The work is checkpointed
 here so optimization can move to the next operation and revisit Composite only
 when new profiling evidence targets one of these remaining limits.
+
+## Autocontrast four-attempt checkpoint — 2026-09-25
+
+The next operation is `PIL.ImageOps.autocontrast`, selected from the ranked
+image-kernel gaps after Composite. Before optimization, its cohort passed
+187/187 CPU comparisons and 20/20 strict SIMD plus 20/20 strict GPU comparisons.
+Each GPU parity run selected the GPU backend without fallback. The full focused
+cohort spans L/RGB, cutoffs, masks and histogram edge cases. No expected value,
+comparison threshold, or coverage target changed; no coverage was collected.
+
+The baseline's receipt-backed materialized timings exposed two distinct costs.
+The CPU histogram was a scalar per-pixel/per-channel dependency loop, while
+the old GPU histogram kernel dispatched one workgroup whose active lanes each
+scanned most of the image and atomically updated global bins. GPU launch,
+transfer, wait and export costs also remained large after fixing that kernel.
+At RGB 1024 × 768 the baseline medians were 2.635 ms Pillow, 1.597 ms CPU,
+1.464 ms SIMD and 8.421 ms GPU. At RGB 256 × 256, CPU lost to Pillow
+(0.309 vs 0.191 ms), while GPU took 1.807 ms.
+
+The retained changes and bounded trials were:
+
+1. **Retained native CPU/SIMD histogram construction.** For unmasked native
+   L/RGB input, use the existing parity-tested per-channel histogram path and
+   preserve the original mask-aware generic path. This removed scalar channel
+   bookkeeping and reused the banked histogram implementation. It cut the
+   1024 × 768 RGB CPU/SIMD rows to 0.896/0.816 ms in the first post-change run.
+   The exact binary64 LUT formula, clipping and channel cutoffs remain unchanged.
+2. **Retained parallel GPU histogram.** Reuse the equalize shader's private
+   workgroup histograms and grid-stride input distribution instead of the
+   one-workgroup, full-image scan. Keep the reduction, cutoff and remap stages
+   separate so workgroups never depend on an in-dispatch global barrier. This
+   changed the general GPU route from a serial scan to four native passes and
+   passed strict GPU parity 20/20.
+3. **Retained one-dispatch path for fresh unmasked L/RGB.** Derive the same
+   exact LUT from host-visible native bytes, lower the operation to the existing
+   GPU LUT remap, and reduce four dispatches to one. This path requires finite
+   cutoff, nonempty L/RGB bytes, and no mask. Masked and unsupported layouts
+   keep the general four-pass GPU path. Strict GPU parity remained 20/20; a
+   40,320-output fresh-input run matched Pillow byte-for-byte, recorded exactly
+   one GPU dispatch per request, and reported no fallbacks.
+4. **Rejected SIMD lookup-selection tree.** Replace 15 repeated high-nibble
+   equality selects with a four-level bit-selection tree around the same 16
+   nibble tables. Strict SIMD parity passed 20/20, but receipt-backed RGB
+   1024 × 768 latency changed from 0.741 to 0.772 ms and queue-four throughput
+   moved only about 0–3% across L/RGB. The table-swizzle count did not change;
+   this trial was reverted. The locked `wide` crate also lacks the newer
+   multi-vector shuffle API, and this crate rejects unsafe intrinsics, so no
+   dependency or unsafe-code change was justified by the measured headroom.
+
+The best retained materialized run is attempt 3. Its median milliseconds are:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 256 × 256 | 0.259 | 0.202 | 0.110 | 0.454 |
+| RGB 1024 × 768 | 2.828 | 1.052 | 0.741 | 1.712 |
+
+CPU is faster than Pillow on these two rows, but the small-to-large crossover
+and every supported mode/shape still need broader confirmation. SIMD is only
+2.35× Pillow at 256 × 256 and 3.82× at 1024 × 768, below 5×. GPU remains 4.13×
+slower than SIMD at 256 × 256 and 2.31× slower at 1024 × 768.
+
+The same fresh 1024 × 768 L/RGB workload uses 16 changing frames per window,
+queue depths 1/2/4, five warmups and five samples of 20 measured windows.
+The 40,320 exact outputs include 38,400 timed requests. Source and runtime
+hashes were stable. Median completed fresh requests per second were:
+
+| Mode | Queue | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1,630 | 2,271 | 2,652 | 487 |
+| L | 2 | 2,731 | 3,745 | 4,127 | 717 |
+| L | 4 | 3,942 | 4,941 | 5,635 | 959 |
+| RGB | 1 | 336 | 830 | 908 | 488 |
+| RGB | 2 | 583 | 1,208 | 1,378 | 774 |
+| RGB | 4 | 861 | 1,487 | 1,742 | 1,071 |
+
+The host-derived LUT saved isolated GPU latency, but it did not make GPU
+throughput catch SIMD: queue-four GPU remained 5.9× behind SIMD for L and 1.6×
+behind for RGB. Against attempt 2's four-pass route, attempt 3 raised L
+queue-four rate by 7% and lowered RGB by 11%. This mode-to-mode split and small
+run-to-run changes mean dispatch count alone does not predict completed
+throughput. The host histogram is now on the GPU request's critical path; a
+future attempt should attribute host histogram, submission, completion and
+readback separately before changing the route again.
+
+Evidence is retained under `build/migration-parity/perf-autocontrast-20260925-`.
+The focused parity cohort is exact on CPU/SIMD/GPU. The checkpoint is incomplete:
+SIMD misses 5×, GPU misses SIMD latency and throughput, and CPU requires small,
+masked and broader mode/shape verification. Continue with the next ranked
+untouched operation; revisit Autocontrast only when profiling can target its
+measured LUT or GPU host/device bottleneck.

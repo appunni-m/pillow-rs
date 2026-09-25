@@ -69,17 +69,45 @@ pub(crate) fn autocontrast_lut(
     let stride = w as usize * channels;
     let mut histograms = [[0usize; 256]; 4];
 
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            if let Some(mask) = mask.as_ref() {
-                if mask.get_pixel(x as u32, y as u32)[0] == 0 {
-                    continue;
-                }
-                selected_pixels += 1;
+    // The SIMD adapter shares this scalar control plane, so keep its hot
+    // unmasked L/RGB case on the existing banked native-byte histogram. The
+    // independent counters reduce the dependency chain for repeated samples;
+    // the mask and other native layouts retain the general semantic loop.
+    let expected_len = image_pixels.checked_mul(channels);
+    let native_histogram = if mask.is_none()
+        && expected_len == Some(raw.len())
+        && matches!(
+            (img, channels),
+            (DynamicImage::ImageLuma8(_), 1) | (DynamicImage::ImageRgb8(_), 3)
+        ) {
+        let counts = if image_pixels < 16_384 {
+            equalize_histogram::<1>(raw, channels)
+        } else {
+            equalize_histogram::<4>(raw, channels)
+        };
+        for channel in 0..channels {
+            for bin in 0..256 {
+                histograms[channel][bin] = counts[channel][bin] as usize;
             }
-            let index = y * stride + x * channels;
-            for c in 0..channels {
-                histograms[c][raw[index + c] as usize] += 1;
+        }
+        true
+    } else {
+        false
+    };
+
+    if !native_histogram {
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                if let Some(mask) = mask.as_ref() {
+                    if mask.get_pixel(x as u32, y as u32)[0] == 0 {
+                        continue;
+                    }
+                    selected_pixels += 1;
+                }
+                let index = y * stride + x * channels;
+                for c in 0..channels {
+                    histograms[c][raw[index + c] as usize] += 1;
+                }
             }
         }
     }

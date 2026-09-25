@@ -5519,20 +5519,15 @@ impl GpuInner {
                     "histogram_clear.wgsl",
                     include_str!("shaders/histogram_clear.wgsl"),
                 )?;
-                let histogram = match op {
-                    PipelineOp::Autocontrast { .. } => self.resolve_pipeline(
-                        "__internal_autocontrast_histogram",
-                        "autocontrast_histogram.wgsl",
-                        include_str!("shaders/autocontrast_histogram.wgsl"),
-                    )?,
-                    PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => self
-                        .resolve_pipeline(
-                            "__internal_equalize_histogram",
-                            "equalize_histogram.wgsl",
-                            include_str!("shaders/equalize_histogram.wgsl"),
-                        )?,
-                    _ => unreachable!("histogram pipeline branch changed"),
-                };
+                // Autocontrast and Equalize need the same per-band counts.
+                // Share the workgroup-local histogram gather so a large
+                // image is spread across device workgroups instead of making
+                // one workgroup scan the complete image serially.
+                let histogram = self.resolve_pipeline(
+                    "__internal_equalize_histogram",
+                    "equalize_histogram.wgsl",
+                    include_str!("shaders/equalize_histogram.wgsl"),
+                )?;
                 let derive = match op {
                     PipelineOp::Autocontrast { .. } => self.resolve_pipeline(
                         "__internal_autocontrast_lut",
@@ -6030,9 +6025,7 @@ impl GpuInner {
                 binding: 2,
                 resource: params,
             });
-        } else if cached.variant_name == "__internal_autocontrast_histogram"
-            || cached.variant_name == "__internal_equalize_histogram"
-        {
+        } else if cached.variant_name == "__internal_equalize_histogram" {
             entries.push(wgpu::BindGroupEntry {
                 binding: 0,
                 resource: input_buf.as_entire_binding(),
@@ -7494,7 +7487,6 @@ impl GpuInner {
                 (pixels.div_ceil(4096).clamp(1, 256) as u32, 1)
             }
             "__internal_histogram_clear"
-            | "__internal_autocontrast_histogram"
             | "__internal_autocontrast_lut"
             | "__internal_equalize_lut" => (1, 1),
             _ => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
@@ -7508,7 +7500,6 @@ impl GpuInner {
         let keeps_image_buffer = matches!(
             cached.variant_name,
             "__internal_histogram_clear"
-                | "__internal_autocontrast_histogram"
                 | "__internal_equalize_histogram"
                 | "__internal_autocontrast_lut"
                 | "__internal_equalize_lut"
@@ -14957,11 +14948,44 @@ impl GpuPool {
         // logical mode matches the source's native byte layout.  The helper
         // below excludes palette and typed modes whose public point contract
         // is not represented by the batch-wide GPU mode word.
-        let mut dispatch_ops: Vec<PipelineOp> = ops
-            .iter()
-            .filter(|op| !gpu_reduce_is_identity(op))
-            .cloned()
-            .collect();
+        // For unmasked native L/RGB inputs, histogram selection is small
+        // control-plane work compared with the packed full-frame GPU path.
+        // Derive Pillow's exact LUT on the host, then keep the complete pixel
+        // remap on the GPU as one native lookup dispatch. Masked and other
+        // layouts keep the four-pass GPU histogram implementation.
+        let host_autocontrast_lut = if let [PipelineOp::Autocontrast { cutoff, mask }] = ops {
+            let native_layout = matches!(
+                img,
+                DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
+            ) && (mode.is_none()
+                || (matches!(img, DynamicImage::ImageLuma8(_)) && mode == Some("L"))
+                || (matches!(img, DynamicImage::ImageRgb8(_)) && mode == Some("RGB")));
+            if mask.is_none()
+                && cutoff.is_finite()
+                && native_layout
+                && img.width() != 0
+                && img.height() != 0
+            {
+                Some(PipelineOp::Eval {
+                    lut: crate::compute::pool_cpu::ops::imageops::autocontrast_lut(
+                        img, *cutoff, None,
+                    )?
+                    .into(),
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let mut dispatch_ops: Vec<PipelineOp> = if let Some(op) = host_autocontrast_lut {
+            vec![op]
+        } else {
+            ops.iter()
+                .filter(|op| !gpu_reduce_is_identity(op))
+                .cloned()
+                .collect()
+        };
         if dispatch_ops.is_empty() {
             // There are no pixel invocations for Reduce(1, 1). Return the
             // independent Pillow result without forcing an unsupported native

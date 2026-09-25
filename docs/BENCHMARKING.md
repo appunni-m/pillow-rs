@@ -114,6 +114,14 @@ image2 and mask transfers as well as the primary upload and result readback.
 Select `--mode RGB` or `--mode L` for separate channel-width comparisons; use a
 distinct output path for each run.
 
+Use `--operation autocontrast` for fresh L/RGB `ImageOps.autocontrast` requests
+at cutoff zero. The changing-input corpus spans 32 levels with distinct frame
+offsets so each output exercises a nonidentity LUT. The diagnostic checks every
+output against live Pillow and checks complete input/readback accounting. The
+unmasked native L/RGB path derives the exact LUT on the host and requires one
+GPU remap dispatch; masked or unsupported layouts retain the four-dispatch
+native histogram/cutoff/remap path.
+
 Use `--operation grayscale` for fresh L/RGB inputs producing L output under
 the same window policy. GPU receipts check the full multichannel input upload
 and the smaller output readback separately. For exhaustive RGB arithmetic
