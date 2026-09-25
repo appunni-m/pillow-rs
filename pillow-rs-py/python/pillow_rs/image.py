@@ -109,6 +109,7 @@ class Image:
         self._native_info_rebaseline = False
         self._native_info_omitted = frozenset()
         self._transpose_loads_info = False
+        self._verify_encoded_source = False
 
     def _sync_observed_info(self):
         # A caller may retain the dictionary itself across an in-place core
@@ -142,6 +143,7 @@ class Image:
         except Exception as exc:
             raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
         result = cls(rust_image)
+        result._verify_encoded_source = True
         # WebP frame timing becomes public metadata during Pillow's load in
         # transpose. Cache that decoder requirement once when opening the
         # file; ordinary images never need a format lookup in transpose.
@@ -619,7 +621,12 @@ class Image:
 
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""
-        self._rust_image.verify()
+        # Pillow's base Image.verify() is a no-op; file-backed ImageFile
+        # instances provide the verification behavior. Derived and in-memory
+        # images use the base contract, even when their Rust representation is
+        # a deferred pipeline.
+        if self._verify_encoded_source:
+            self._rust_image.verify()
 
     @property
     def size(self) -> Tuple[int, int]:
