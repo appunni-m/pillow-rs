@@ -3048,3 +3048,50 @@ These seven rows have terminal native receipts without fallback. The standard ro
 | RGB | 2.292312 | 0.537875 | 0.387854 | 2.804813 |
 
 CPU uses the general row policy despite inexpensive byte maxima. GPU still expands both inputs and the output transport to four-byte pixels. SIMD already uses packed maxima and the shared bytewise helper; do not repeat Darker’s inconclusive allocation experiment without new evidence. CPU small calls, most SIMD sizes and all GPU latency/throughput comparisons remain unmet. No implementation attempt, coverage collection or push is included in this baseline. Static inventory is now **15,717 parity cases and 781 benchmark workloads across 54 suites**.
+
+## Lighter checkpoint — 2026-09-25
+
+This visit retains two implementation attempts and moves on within the 3–4 attempt ceiling. The existing cheap-byte CPU scheduling policy removes per-row task overhead below 4 MiB and groups rows above it. Native GPU byte transport removes pixel expansion for both inputs and result conversion; four independent bytes share each word, with an explicit final-word bound and the existing logical-mode preflight. Arithmetic, clipping, invalid-input behavior and dispatch geometry are unchanged. SIMD already uses packed maxima; Darker’s inconclusive allocation candidate is not repeated.
+
+**522/522 focused parity comparisons pass**: 510 maintained/workflow and 12 large threshold/tail comparisons. Artifacts are `perf-lighter-20260925-final-parity.json` and `perf-lighter-20260925-final-tiles-parity.json` under `build/migration-parity/`. The isolated release parity build completed and formatting/public-boundary checks passed.
+
+All eight workloads complete in `migration-benchmark-aa3687126a0f4bc49d0444dfcd5b6a80`, artifact `perf-lighter-20260925-final.json`; the exact benchmark gate passes. Seven materialized workloads have completed requested-backend receipts without fallback. The standard row still lacks terminal native evidence. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015812 | 0.016438 | 0.017708 | 0.508792 |
+| 32 × 24 | 0.014687 | 0.016584 | 0.017146 | 0.211542 |
+| 1 × 1 | 0.012750 | 0.016000 | 0.016167 | 0.207375 |
+| 32 × 32 | 0.015125 | 0.016459 | 0.017791 | 0.441709 |
+| 256 × 256 | 0.136730 | 0.031145 | 0.033563 | 0.321375 |
+| 1024 × 768 | 1.897541 | 0.505417 | 0.412645 | 1.800937 |
+| SIMD Chops RGB workload | 2.858084 | 0.589729 | 0.549750 | 2.049542 |
+
+`perf-lighter-20260925-final-throughput.json` records **40,320 exact fresh-output checks**, including **38,400 measured completions**, with unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.405604 | 0.081958 | 0.098417 | 0.432895 |
+| RGB | 2.266437 | 0.402375 | 0.384292 | 0.992666 |
+
+Completed fresh images per second from window wall time:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 2404.6 | 10549.9 | 9196.2 | 2273.9 |
+| L | 2 | 2388.1 | 11701.6 | 11193.6 | 3500.6 |
+| L | 4 | 2547.3 | 12767.8 | 12960.5 | 4934.8 |
+| RGB | 1 | 436.9 | 2373.2 | 2470.1 | 950.9 |
+| RGB | 2 | 506.7 | 3047.1 | 3136.6 | 1404.9 |
+| RGB | 4 | 554.1 | 2678.5 | 2951.6 | 1549.9 |
+
+Fresh CPU L/RGB medians improve from 0.212062/0.537875 to 0.081958/0.402375 ms. GPU improves from 2.965104/2.804813 to 0.432895/0.992666 ms (about 6.8×/2.8×), and throughput improves at every measured queue depth. Each GPU L/RGB upload, secondary upload and readback now uses 786,432/2,359,296 bytes instead of 3,145,728. Parameters use 16 instead of 256 bytes, and transport mode conversions are zero. All timings still include fresh inputs and complete output export.
+
+Remaining blockers:
+
+- CPU misses small public calls. SIMD misses 5× on small/intermediate rows and fresh L (about 4.12×); fresh RGB reaches about 5.90×, which is only one workload. Constructor, validation, allocation and export costs need direct attribution before another arithmetic change.
+- GPU still trails SIMD in both latency and sustained throughput at every measured queue depth. Separate command encoding, launch, device work, wait/mapping and host output creation next. Small GPU timings vary and some regress relative to the baseline; compact transport does not solve fixed completion overhead.
+- Binding mode lookups can materialize lazy data. Do not remove thread release or change borrowed-versus-snapshotted ownership merely because a normal metadata call looks cheap. No binding behavior was changed in this visit.
+- Broader modes, sizes, state interactions, compositions, bindings and platforms remain unproven. The operation is not complete.
+
+These decisions reuse the existing skill’s byte-cost scheduling, compact transport and public-boundary rules. No speculative extra attempt was made to fill the attempt budget. The global selected matrix remains 208 operations plus one constant, with zero fully completed operations; it includes 781 workloads and historical broad timings. Focused-result integration remains pending. No coverage collection or push ran. Work moves to `ImageChops.add_modulo`.

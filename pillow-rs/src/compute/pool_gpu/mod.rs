@@ -8248,6 +8248,7 @@ impl GpuInner {
                 | PipelineOp::Screen { .. }
                 | PipelineOp::Difference { .. }
                 | PipelineOp::Darker { .. }
+                | PipelineOp::Lighter { .. }
                 | PipelineOp::BlendModule { .. }
         );
         let (variant, shader_file, shader_source) = match op {
@@ -8272,6 +8273,11 @@ impl GpuInner {
             PipelineOp::Darker { .. } => {
                 ("Darker", "darker.wgsl", include_str!("shaders/darker.wgsl"))
             }
+            PipelineOp::Lighter { .. } => (
+                "Lighter",
+                "lighter.wgsl",
+                include_str!("shaders/lighter.wgsl"),
+            ),
             PipelineOp::AlphaComposite { .. } => (
                 "AlphaComposite",
                 "alpha_composite.wgsl",
@@ -10050,7 +10056,8 @@ fn gpu_native_byte_op_channels(
         PipelineOp::Multiply { .. }
         | PipelineOp::Screen { .. }
         | PipelineOp::Difference { .. }
-        | PipelineOp::Darker { .. } => gpu_native_multiply_channels(image, mode),
+        | PipelineOp::Darker { .. }
+        | PipelineOp::Lighter { .. } => gpu_native_multiply_channels(image, mode),
         PipelineOp::BlendModule { .. } => match image {
             DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
             DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "La")) => Some(2),

@@ -6,15 +6,15 @@
 struct Params {
     width: u32,
     height: u32,
-    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
-    _pad: u32,
+    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA; 9=four independent native bytes
+    _pad: u32,    // Native mode: valid word count, including a padded final word.
 }
 
 // ── Mode helpers ──
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 9u; }
 
 @group(0) @binding(0) var<storage, read> input_a: array<u32>;
 @group(0) @binding(1) var<storage, read> input_b: array<u32>;
@@ -26,6 +26,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    if params.mode == 9u && idx >= params._pad { return; }
 
     let pa = input_a[idx];
     let pb = input_b[idx];
