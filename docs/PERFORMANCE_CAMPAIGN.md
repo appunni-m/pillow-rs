@@ -3023,3 +3023,28 @@ Next-visit blockers and decisions:
 - Additional sizes, mode/state combinations, composed pipelines, bindings and platforms remain unproven. None is silently excluded from the goal.
 
 The optimization skill records the typed-block decision, capacity for the padded tail and the need to reject unproven public gains. Static indices contain **15,605 parity cases, 777 workloads and 54 suites**. Generated documentation was refreshed from existing artifacts; no coverage collection ran. The global selected matrix still contains 208 operations plus one constant, with zero fully completed operations; broad evidence remains historical and focused-result integration remains pending. No push or pre-push verification campaign is part of this checkpoint. Work moves to `ImageChops.lighter`.
+
+## Lighter baseline — 2026-09-25
+
+Work moved to `ImageChops.lighter` after Darker checkpoint `9a1c90f47`. Before implementation changes, 162 original maintained/workflow comparisons and 345 independent mode/shape/exhaustive-byte-pair comparisons pass. Added 112 maintained parity cases and four deterministic size workloads, with zero existing cases/workloads changed or removed. The expanded unchanged-code baseline passes **510/510 comparisons**. Artifacts are `perf-lighter-20260925-initial-parity.json`, `initial-modes-parity.json` and `initial-expanded-parity.json` under `build/migration-parity/` with the same operation/date prefix.
+
+All eight selected workloads complete in `migration-benchmark-6904e6b7b1de461280732bf77cc0962a`, artifact `perf-lighter-20260925-initial.json`. Selection inspects workflow contents as well as names. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.014124 | 0.015917 | 0.016292 | 0.286354 |
+| 32 × 24 | 0.014396 | 0.015979 | 0.015875 | 0.540812 |
+| 1 × 1 | 0.012854 | 0.014542 | 0.014979 | 0.248437 |
+| 32 × 32 | 0.015959 | 0.015937 | 0.016334 | 0.217709 |
+| 256 × 256 | 0.136146 | 0.031208 | 0.032250 | 0.718687 |
+| 1024 × 768 | 1.921520 | 0.705375 | 0.490687 | 3.415541 |
+| SIMD Chops RGB workload | 3.068459 | 0.946604 | 0.526438 | 4.044875 |
+
+These seven rows have terminal native receipts without fallback. The standard row lacks that proof; the RGB workload contains one Lighter operation despite its chain name. Fresh evidence is `perf-lighter-20260925-initial-throughput.json`, with **40,320 exact checks**, **38,400 measured completions**, unchanged sources and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.396062 | 0.212062 | 0.084687 | 2.965104 |
+| RGB | 2.292312 | 0.537875 | 0.387854 | 2.804813 |
+
+CPU uses the general row policy despite inexpensive byte maxima. GPU still expands both inputs and the output transport to four-byte pixels. SIMD already uses packed maxima and the shared bytewise helper; do not repeat Darker’s inconclusive allocation experiment without new evidence. CPU small calls, most SIMD sizes and all GPU latency/throughput comparisons remain unmet. No implementation attempt, coverage collection or push is included in this baseline. Static inventory is now **15,717 parity cases and 781 benchmark workloads across 54 suites**.
