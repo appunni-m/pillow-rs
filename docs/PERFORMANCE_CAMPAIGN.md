@@ -2729,3 +2729,40 @@ collection ran. The complete selected-operation matrix still contains 208
 operations plus one constant and reports zero completed operations. Integrating
 all focused receipts and auditing exports outside that manifest remain pending.
 This is a local checkpoint; pre-push verification and a push were not run.
+
+## Difference baseline — 2026-09-25
+
+Work moved to `ImageChops.difference` after Screen checkpoint `054218947`.
+No Difference implementation attempt has been made yet. The maintained cases
+and five workflow inputs pass **180/180 comparisons**; the independent mode,
+shape and finite-domain probe passes **345/345**, including all 65,536 byte
+pairs. Artifacts are `perf-difference-20260925-initial-parity.json` and
+`perf-difference-20260925-initial-modes-parity.json` under
+`build/migration-parity/`. Retaining the new probe inputs in the generator and
+collecting fresh sustained-throughput evidence are the next preparation steps.
+
+Selection inspected workload inputs as well as names. All six identified
+workloads completed in `migration-benchmark-cbf8911a083b4281ada18333b54e62f6`,
+retained in `perf-difference-20260925-initial.json`; its existing exact parity
+gate passes. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015625 | 0.017354 | 0.019750 | 0.780104 |
+| 32 × 24 | 0.015667 | 0.016292 | 0.016917 | 0.324250 |
+| Mixed pipeline `matrix-020` | 0.055813 | 0.041688 | 0.044875 | 1.124417 |
+| Mixed pipeline `matrix-032` | 0.021001 | 0.023730 | 0.024938 | 0.333688 |
+| SIMD Chops RGB chain | 4.087459 | 0.939063 | 0.735438 | 4.539250 |
+
+These five rows have completed requested-backend receipts without fallback.
+The sixth, ordinary standard row, has no terminal native receipt and is not
+acceleration evidence. CPU misses small-operation targets; SIMD exceeds 5× only
+on the measured larger RGB chain; GPU trails SIMD throughout. The corpus does
+not yet establish standalone size scaling or sustained throughput.
+
+Inspect the existing native SIMD Difference helper and its callers before
+adding arithmetic. GPU still uses the four-byte-per-pixel Difference transport;
+Screen's shared native-byte route is a candidate after preserving Difference's
+mode guards and exact partial-word behavior. CPU still uses the general row
+scheduling policy. Start from measured transfers, allocation and scheduling
+costs, and cap this visit at four attempts. No coverage collection ran.
