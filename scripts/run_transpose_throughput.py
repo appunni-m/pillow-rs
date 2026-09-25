@@ -60,7 +60,9 @@ that policy for exact per-byte absolute differences. ``--operation darker``
 uses the same policy for per-byte minima; ``--operation lighter`` computes
 per-byte maxima. ``--operation add-modulo`` uses the same fresh-pair policy
 for byte addition modulo 256; ``--operation subtract-modulo`` measures byte
-subtraction modulo 256 with the same policy.
+subtraction modulo 256 with the same policy. ``--operation logical-and``
+uses mode-1 inputs packed MSB-first with each row padded to complete bytes;
+fresh decoding, the logical operation and packed terminal export are timed.
 
 ``--operation blend`` measures ``ImageChops.blend`` at alpha 0.3. Each request
 constructs two fresh images from frame j and frame (j+1) modulo 16, blends them,
@@ -183,7 +185,8 @@ def stats(values: list[int | float]) -> dict[str, float | int] | None:
 
 def patterned_frames(mode: str, size: tuple[int, int], directory: Path, operation: str = "transpose") -> list[dict[str, Any]]:
     """Fixed input generator; no reference/target output influences these bytes."""
-    length = size[0] * size[1] * len(mode)
+    row_bytes = (size[0] + 7) // 8 if mode == "1" else size[0] * len(mode)
+    length = row_bytes * size[1]
     tile = bytes((73 * index + 11 * (index // 17) + 29) & 255 for index in range(8192))
     if operation == "equalize":
         tile = bytes(value // 4 for value in tile)
@@ -239,7 +242,7 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             fill = 173 if plan["mode"] == "L" else (17, 83, 149)
             image = image.transform(tuple(plan["size"]), 0, TRANSFORM_DATA,
                                     resample=0, fillcolor=fill)
-        elif plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "alpha-composite"):
+        elif plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "alpha-composite"):
             other_data = plan["pair_inputs"][(frame_id + 1) % len(plan["pair_inputs"])]
             other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
             image = (image_api.alpha_composite(image, other)
@@ -264,6 +267,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
                      if plan["operation"] == "add-modulo"
                      else plan["imagechops_api"].subtract_modulo(image, other)
                      if plan["operation"] == "subtract-modulo"
+                     else plan["imagechops_api"].logical_and(image, other)
+                     if plan["operation"] == "logical-and"
                      else plan["imagechops_api"].multiply(image, other))
         else:
             image = image.transpose(0).transpose(2)
@@ -308,7 +313,7 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         upload_bytes = byte_count if input_byte_count is None else input_byte_count
         if resource.get("upload_bytes", 0) < upload_bytes or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
-        if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "alpha-composite", "contrast", "color") and resource.get("auxiliary_bytes", 0) < byte_count:
+        if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "alpha-composite", "contrast", "color") and resource.get("auxiliary_bytes", 0) < byte_count:
             return "GPU binary-operation receipt does not account for the second image"
     return None
 
@@ -406,7 +411,7 @@ def child(args: argparse.Namespace) -> int:
     image_api = importlib.import_module("PIL.Image")
     if plan.get("operation") in ("equalize", "invert", "grayscale", "solarize"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
-    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "alpha-composite"):
+    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "alpha-composite"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
     if plan.get("operation") in ("contrast", "color"):
         plan["imageenhance_api"] = importlib.import_module("PIL.ImageEnhance")
@@ -415,7 +420,7 @@ def child(args: argparse.Namespace) -> int:
         core.set_pipeline_telemetry(True)  # once per process, never toggled by workers
     binaries = runtime_files(subject)
     inputs = [Path(frame["path"]).read_bytes() for frame in plan["frames"]]
-    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "alpha-composite"):
+    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "alpha-composite"):
         plan["pair_inputs"] = inputs
     for frame, data in zip(plan["frames"], inputs):
         if len(data) != frame["length"] or digest(data) != frame["sha256"]:
@@ -519,8 +524,13 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError("--size requires positive dimensions")
     operation = args.operation
     defaults = (["RGB", "RGBA"] if operation == "transpose" else
+                ["1"] if operation == "logical-and" else
                 ["LA", "RGBA"] if operation == "alpha-composite" else ["L", "RGB"])
     modes = list(dict.fromkeys(args.mode or defaults))
+    if operation == "logical-and" and modes != ["1"]:
+        raise ValueError("logical-and throughput requires mode 1")
+    if operation != "logical-and" and "1" in modes:
+        raise ValueError("mode 1 throughput currently requires logical-and")
     if operation in ("equalize", "invert", "grayscale", "convert", "transform") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
     if operation == "alpha-composite" and any(mode not in ("LA", "RGBA") for mode in modes):
@@ -548,7 +558,8 @@ def run(args: argparse.Namespace) -> int:
                                 if operation == "darker" else "two fresh frombytes images, lighter, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "lighter" else "two fresh frombytes images, add_modulo, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "add-modulo" else "two fresh frombytes images, subtract_modulo, terminal bytes, worker scheduling and receipt capture"
-                                if operation == "subtract-modulo" else "two fresh frombytes images, alpha_composite, terminal bytes, worker scheduling and receipt capture"
+                                if operation == "subtract-modulo" else "two fresh packed frombytes mode-1 images, logical_and, packed terminal bytes, worker scheduling and receipt capture"
+                                if operation == "logical-and" else "two fresh frombytes images, alpha_composite, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "alpha-composite" else "fresh frombytes image, Contrast constructor including host mean and base allocation, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "contrast" else "fresh frombytes image, Color constructor and saved base, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "color" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
@@ -558,7 +569,8 @@ def run(args: argparse.Namespace) -> int:
                    "input_generator": "8192-byte tile (73*i+11*(i//17)+29)%256; "
                        + ("divide tile values by 4; " if operation == "equalize" else "")
                        + "frame j adds 41*j modulo 256"
-                       + ("; second image uses frame (j+1) modulo 16" if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "alpha-composite") else ""),
+                       + ("; mode 1 has ceil(width/8) MSB-first bytes per row" if operation == "logical-and" else "")
+                       + ("; second image uses frame (j+1) modulo 16" if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "alpha-composite") else ""),
                    "build_profile": "expected release via build-parity; binary identity recorded separately",
                    "check_only_policy": "one verification window per depth; no performance summary",
                    "cache_state": "warm workers/backend; fresh image and graph per request"},
@@ -631,9 +643,9 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--mode", action="append", choices=("L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
+    parser.add_argument("--mode", action="append", choices=("1", "L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))
     parser.add_argument("--timeout", type=int, default=900, help="deadline per isolated subject process")
     parser.add_argument("--check-only", action="store_true", help="verify one complete window per queue depth; emit no timing summary")
