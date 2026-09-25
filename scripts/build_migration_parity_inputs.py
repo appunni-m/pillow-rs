@@ -39850,6 +39850,7 @@ def build_nuanced_cases(
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
+    cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
     cases.extend(image_blend_native_parity_cases(surface_id))
     cases.extend(lab_constructor_parity_cases(surface_id))
@@ -39860,6 +39861,67 @@ def build_nuanced_cases(
     cases.extend(transform_mode_parity_cases(surface_id))
     return cases
 
+
+
+def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cross real source/destination modes, retaining failing public contracts."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    modes = {"1": 0, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
+             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "HSV": 3, "YCbCr": 3,
+             "I": 4, "F": 4, "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
+    cases = []
+
+    def make_case(mode, target, size, raw, label):
+        steps = [
+            {"step_id": "image", "surface": "PIL.Image", "operation": "frombytes",
+             "receiver": None, "arguments": {"mode": literal(mode), "size": literal(list(size)),
+                                                "data": {"kind": "asset", "asset_id": "pixels"}}},
+            {"step_id": "call", "surface": surface_id, "operation": "convert",
+             "receiver": binding("image"), "arguments": {"mode": literal(target)}},
+            {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
+             "receiver": binding("call"), "arguments": {}},
+        ]
+        assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
+                   "data": base64.b64encode(raw).decode(),
+                   "sha256": hashlib.sha256(raw).hexdigest(),
+                   "media_type": "application/octet-stream"}]
+        if not all(size):
+            steps[0]["operation"] = "new"
+            steps[0]["arguments"].pop("data")
+            assets = []
+        return {"case_id": f"{surface_id}.convert.nuanced.mode-audit-{mode}-to-{target}-{label}",
+                "surface": surface_id, "operation": "convert",
+                "covers": [f"{surface_id}.convert.behavior.default"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": assets, "steps": steps, "observations": ["call", "materialize"]}
+
+    for mode, channels in modes.items():
+        sizes = [(17, 3)]
+        if mode in ("L", "LA", "RGB", "RGBA"):
+            sizes.extend(((0, 3), (3, 0)))
+        for width, height in sizes:
+            length = ((width + 7) // 8 if mode == "1" else width * channels) * height
+            raw = random.Random("convert-" + mode).randbytes(length)
+            if mode == "F":
+                raw = b"".join(struct.pack("<f", (i * 13.75) % 600 - 100)
+                               for i in range(width * height))
+            for target in [*modes, "LAB"]:
+                cases.append(make_case(mode, target, (width, height), raw, f"{width}x{height}"))
+    values = (0, 1, 2, 7, 13, 63, 64, 127, 128, 129, 191, 254, 255)
+    for mode, target in (("LA", "La"), ("La", "LA"), ("RGBA", "RGBa"),
+                         ("RGBa", "RGBA"), ("RGBa", "RGB"), ("RGBA", "RGBX"),
+                         ("LA", "RGBX")):
+        raw = bytes(component for value in values for alpha in values
+                    for component in ([value, alpha] if modes[mode] == 2
+                                      else [value, value ^ 137, 255 - value, alpha]))
+        cases.append(make_case(mode, target, (len(values), len(values)), raw, "alpha-boundaries"))
+    words = (0, 1, 2, 7, 11, 127, 128, 254, 255, 256, 257, 1023, 32768, 65535)
+    for mode in ("I;16", "I;16L", "I;16B", "I;16N"):
+        raw = struct.pack(">14H" if mode == "I;16B" else "<14H", *words)
+        for target in ("I", "F", "P", "PA", "HSV", "YCbCr"):
+            cases.append(make_case(mode, target, (7, 2), raw, "typed-boundaries"))
+    return cases
 
 
 def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:

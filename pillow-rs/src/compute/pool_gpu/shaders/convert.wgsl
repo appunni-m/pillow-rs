@@ -69,47 +69,77 @@ fn source_rgb_b(src: u32, r: u32, b: u32) -> u32 {
     return b;
 }
 
-// Pillow's rgb2hsv path uses f32 for the channel ratios and stores the hue
-// back to f32 before the final truncating conversion.  Keep the arithmetic in
-// separate f32 temporaries so WGSL follows that same contraction order.
+// Correctly rounded positive n/d in [0,1]. HSV's denominator is at most
+// 6*2^24, so normalization and doubled remainders fit u32. Construct the
+// significand with integer division steps, retaining ties-to-even rounding;
+// Metal's reciprocal-based float division can otherwise change output bytes.
+fn hsv_ratio(n: u32, d: u32) -> f32 {
+    if n == 0u { return 0.0; }
+    var remainder = n;
+    var exponent = 0i;
+    while remainder < d {
+        remainder = remainder << 1u;
+        exponent = exponent - 1i;
+    }
+    remainder = remainder - d;
+    var significand = 1u << 23u;
+    for (var bit = 22i; bit >= 0i; bit = bit - 1i) {
+        remainder = remainder << 1u;
+        if remainder >= d {
+            remainder = remainder - d;
+            significand = significand | (1u << u32(bit));
+        }
+    }
+    let twice = remainder * 2u;
+    if twice > d || (twice == d && (significand & 1u) != 0u) {
+        significand = significand + 1u;
+    }
+    if significand == (1u << 24u) {
+        significand = significand >> 1u;
+        exponent = exponent + 1i;
+    }
+    return bitcast<f32>((u32(exponent + 127i) << 23u) | (significand & 0x7fffffu));
+}
+
+// Pillow promotes the stored float to double for *255, then truncates.
+// Its 24-bit significand times 255 fits u32; shifting that exact product
+// avoids the extra rounding from a float32 multiplication at byte boundaries.
+fn hsv_byte(value: f32) -> u32 {
+    if value == 0.0 { return 0u; }
+    let bits = bitcast<u32>(value);
+    let exponent = i32((bits >> 23u) & 255u) - 127i;
+    let shift = 23i - exponent;
+    if shift >= 32i { return 0u; }
+    return (((bits & 0x7fffffu) | 0x800000u) * 255u) >> u32(shift);
+}
+
 fn rgb_to_hsv_pixel(r: u32, g: u32, b: u32) -> vec3<u32> {
     let maxc = max(r, max(g, b));
     let minc = min(r, min(g, b));
-    if minc == maxc {
-        return vec3<u32>(0u, 0u, maxc);
-    }
-
-    let range = f32(maxc - minc);
-    let rc = (f32(maxc) - f32(r)) / range;
-    let gc = (f32(maxc) - f32(g)) / range;
-    let bc = (f32(maxc) - f32(b)) / range;
+    if minc == maxc { return vec3<u32>(0u, 0u, maxc); }
+    let range = maxc - minc;
+    // One ratio is zero and another is one. Eliminate those exact terms
+    // before narrowing the sector to f32, matching Pillow's double-constant
+    // arithmetic without separately rounding 2+rc or 4+gc first.
     var h: f32;
     if r == maxc {
-        h = bc - gc;
+        if b == minc { h = 1.0 - hsv_ratio(maxc - g, range); }
+        else { h = hsv_ratio(maxc - b, range) - 1.0; }
     } else if g == maxc {
-        h = 2.0 + rc - bc;
+        if b == minc { h = 1.0 + hsv_ratio(maxc - r, range); }
+        else { h = 3.0 - hsv_ratio(maxc - b, range); }
     } else {
-        h = 4.0 + gc - rc;
+        if r == minc { h = 3.0 + hsv_ratio(maxc - g, range); }
+        else { h = 5.0 - hsv_ratio(maxc - r, range); }
     }
-    // colorsys.rgb_to_hsv wraps (h / 6 + 1) with fmod.  For the red-max
-    // sector, evaluating that expression in f32 can lose an exact boundary
-    // (for example RGB(119,118,114) should produce H=34, while the direct
-    // f32 fmod sequence produces 33).  The equivalent sector-local scale
-    // keeps the bounded ratio in the same f32 precision while avoiding that
-    // extra rounding step.  Other sectors retain the direct colorsys shape.
-    var hue: f32;
-    if r == maxc {
-        hue = h * 42.5;
-        if h < 0.0 {
-            hue = hue + 255.0;
-        }
-    } else {
-        h = h / 6.0 + 1.0;
-        h = h - floor(h);
-        hue = h * 255.0;
-    }
-    let s = range / f32(maxc);
-    return vec3<u32>(u32(hue), u32(s * 255.0), maxc);
+    // The sector float is an exact multiple of 2^-24. Form its wrapped
+    // h/6 as an integer rational, then round once to the stored hue float.
+    // This also preserves negative red sectors and halfway ties.
+    let magnitude = u32(abs(h) * 16777216.0);
+    var numerator = magnitude;
+    if h < 0.0 { numerator = 100663296u - magnitude; }
+    let hue = hsv_ratio(numerator, 100663296u);
+    return vec3<u32>(hsv_byte(hue), hsv_byte(hsv_ratio(range, maxc)), maxc);
 }
 
 // Construct the correctly rounded IEEE-754 f32 bit pattern for the positive

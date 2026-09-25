@@ -2245,3 +2245,153 @@ and per-block shuffle-index construction, padding and append bookkeeping in
 L→RGB. A previously verified packed grayscale helper already exists and should
 be considered before adding another RGB→L implementation. These performance
 investigations remain behind the parity repairs. No coverage collection ran.
+
+## Conversion parity checkpoint — 2026-09-25
+
+Four implementation attempts were used, with parity taking priority over the
+planned SIMD loop optimization. The visit is checkpointed as incomplete and
+the next operation is `Image.putpixel`. Results in this section supersede the
+conversion baseline only for their stated inputs and boundaries.
+
+| Varied audit, unchanged 540 cases | Passed comparisons | Failed comparisons |
+| --- | ---: | ---: |
+| Initial | 1,099 | 521 |
+| 1. Mode routing and premultiplied alpha | 1,391 | 229 |
+| 2. Direct palette exceptions and typed samples | 1,464 | 156 |
+| 3. Empty conversions | 1,540 | 80 |
+| 4. Exact GPU HSV arithmetic | 1,542 | 78 |
+
+Retained changes and their reasons:
+
+1. **Direct routes versus normalization.** RGBX, RGBa and La destinations now
+   follow the source-specific conversion route. LA→RGBX preserves alpha;
+   RGBA→RGBX supplies opaque padding. RGBA→RGBa and LA→La premultiply;
+   RGBa→RGBA and La→LA unpremultiply with the existing exact helpers. Other
+   RGBa routes normalize through RGB and drop alpha; unsupported La routes
+   report the reference's failed La→L conversion. Palette-attached alpha is
+   distinct from a pending transparency entry when producing RGBX.
+2. **Palette and typed exceptions.** The first normalization trial regressed
+   RGBa→P/PA: those direct converters consume stored samples. That exception
+   is corrected, with no remaining regression against the original varied
+   audit. PA→P preserves indices and palette instead of requantizing. Explicit
+   core P→P now copies. I;16/I;16L/I;16B→I/F preserve numeric values above 255;
+   I;16N follows the reference's clipped L fallback. Other typed destinations
+   use clipped luma and identity palette indices. YCbCr→I;16-family normalizes
+   through RGB, unlike the direct Y-band conversion to L.
+3. **Empty images.** SIMD conversion admits supported empty layouts and
+   records `scalar-control` with no vector blocks. WEB palette conversion
+   returns the ordinary palette and empty indices without allocating diffusion
+   scratch. These are correctness repairs, not accelerated pixel-work evidence.
+4. **GPU HSV.** The old shader changed Pillow's mixed float32/float64
+   arithmetic and used approximate device division. Each hue sector has two
+   ratios known to be zero or one; eliminating those terms leaves one ratio
+   and one correctly rounded sector operation. Integer quotient construction
+   produces the exact float32 ratios, including ties to even. The sector is
+   represented in units of 2^-24 for wrapping and division by six. An integer
+   significand product and shift then reproduce the reference's promoted
+   multiply by 255 and truncation. This avoids introducing a general software
+   float64 implementation; its integer-loop cost still needs performance work.
+
+### Exact evidence and unresolved parity
+
+There are 571 new maintained input-only cases: the 540-case source/destination
+audit, seven alpha-boundary cases, and 24 typed-boundary cases. Known failures
+are retained, not removed or relabeled. All receipts below are under local
+`build/migration-parity/`.
+
+- The maintained selection now has 1,380 cases including benchmark workflows:
+  **4,062/4,140 comparisons pass**. All 78 failures are the 26 unsupported LAB
+  destination cases across three backends. Receipt:
+  `perf-convert-20260925-checkpoint-parity.json`.
+- The unchanged varied audit passes **1,542/1,620**, with the same 78 LAB
+  failures. Receipt: `perf-convert-20260925-varied-checkpoint-parity.json`.
+- The dependent public Color selection passes **909/909** comparisons.
+  Receipt: `perf-color-20260925-convert-regression-parity.json`.
+- All **16,777,216 RGB triples** produce exact HSV bytes on actual CPU, SIMD
+  and GPU execution. The GPU receipt records one dispatch, no fallback, and
+  a complete upload/readback. The independent integer formulation also matches
+  live Pillow over that domain. Receipts:
+  `perf-convert-20260925-domains-checkpoint.json` and
+  `perf-convert-20260925-hsv-integer-proof.json`.
+- In the domains receipt, all 24 alpha comparisons and all 72 typed
+  comparisons pass. The alpha inputs exhaust 65,536 value/alpha pairs across
+  eight conversion routes; typed inputs exhaust every unsigned-16 value across
+  four source spellings and six destinations. These eager and fallback routes
+  are not all native acceleration evidence.
+- The domains receipt totals **105/111 exact comparisons passed**. Six fail
+  on metadata: P→RGBX with either RGB or RGBA attached palette and
+  `info["transparency"] = 37` loses that dictionary entry on each backend.
+  Pixel bytes match, but those cases remain failures. The Python conversion
+  wrapper reconstructs metadata from core information and omits the host
+  overlay; it needs a contract-aware metadata repair.
+
+LAB remains unsupported in core conversion. The reference routes these
+destinations through ImageCms profiles and a color-management transform;
+an equivalent Rust implementation is still needed. Further metadata forms,
+matrix paths, cross-binding behavior and other platforms remain unproven.
+
+### Performance checkpoint
+
+The seven existing conversion benchmarks still exercise default-mode copies;
+their definitions and thresholds are unchanged. A new `--operation convert`
+option in the existing fresh-throughput diagnostic explicitly measures L→RGB
+and RGB→L. It preserves the 16-frame, queue-depth 1/2/4, five-warmup-window,
+five-by-twenty measurement policy and exact live-reference output checks.
+
+`perf-convert-20260925-checkpoint-throughput.json` completes **40,320 exact
+output checks**, including warmup, and 38,400 measured requests. Source and
+runtime identities remain stable. Every target request records one native
+conversion, and GPU records one dispatch without fallback. Queue-one request
+medians include fresh construction, conversion, allocation, transfer and export:
+
+| Conversion, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L→RGB | 0.579958 ms | 0.232208 ms | 2.371188 ms | 1.396750 ms |
+| RGB→L | 0.572375 ms | 0.237104 ms | 2.220959 ms | 1.823292 ms |
+
+CPU meets the latency target on these large cases. SIMD is slower than Pillow
+and misses 5× in both directions. GPU meets SIMD latency here but remains
+slower than Pillow. Completed images per second:
+
+| Conversion | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L→RGB | 1 | 1,593 | 3,980 | 414 | 628 |
+| L→RGB | 2 | 1,677 | 4,741 | 763 | 844 |
+| L→RGB | 4 | 1,701 | 4,497 | 1,315 | 949 |
+| RGB→L | 1 | 1,684 | 3,795 | 424 | 501 |
+| RGB→L | 2 | 2,584 | 5,783 | 858 | 686 |
+| RGB→L | 4 | 3,102 | 7,096 | 1,545 | 987 |
+
+GPU's best measured throughput remains below SIMD in both directions. This is
+host request throughput, not proof of simultaneous device kernels. The original
+instrumented stage boundary was also rerun: 432 exact comparisons pass in
+`perf-convert-20260925-checkpoint-stages.json`. Timings varied across runs,
+including Pillow; this parity-focused visit claims no CPU/SIMD speedup from
+those between-run differences and does not equate the serial diagnostic with
+sustained throughput.
+
+Concrete remaining performance work:
+
+- Reuse the already verified packed grayscale helper for RGB→L rather than
+  scalar gathering and reconstructing wide constants in the current converter.
+  For layout-only conversion, hoist shuffle plans, load complete blocks directly,
+  pad only the final tail, and remove per-block append/capacity bookkeeping.
+- GPU uploads and reads back 3,145,728 bytes for both directions, with 256
+  parameter bytes, one full-frame copy and one transport conversion. L input
+  and L output each need only 786,432 bytes. A native-byte path must account
+  for different input/output layouts, not assume the matching buffers required
+  by the existing binary-operation helper.
+- The earlier Color constructor stage receipt records two conversions with
+  6,291,456 bytes uploaded and read back, two copies and two dispatches. Inspect
+  mode queries and materialization boundaries before implementing device
+  residency or a fused round trip; preserve the intermediate quantized luma.
+- Measure the exact HSV shader separately before tuning its integer loops or
+  replacing bounded arithmetic with shared tables. Small-call CPU overhead,
+  more sizes/distributions, composed pipelines, and the complete results-matrix
+  refresh remain pending.
+
+The reusable skill records direct-route versus fallback representation rules
+and bounded mixed-precision reductions. Static indices now contain 14,079
+parity cases, 24 coverage declarations, 773 workloads and 54 suites. No coverage
+collection ran. Pre-push checks have not been run for this local checkpoint;
+no push is included. No public operation has every performance target proven.

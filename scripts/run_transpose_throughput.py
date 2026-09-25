@@ -40,6 +40,9 @@ and requires one public operation and one GPU dispatch per request.
 L/RGB inputs. GPU receipts must account for the complete multichannel input
 upload as well as the smaller L readback.
 
+``--operation convert`` explicitly converts L to RGB and RGB to L, including
+fresh construction and terminal export. It does not use the default-mode copy.
+
 ``--operation transform`` uses one nearest affine transform with fractional
 coefficients and explicit fill, retaining the input size. It exercises fresh
 source selection across the full image and requires one native GPU dispatch.
@@ -192,6 +195,8 @@ def result_size(plan: dict[str, Any]) -> list[int]:
 
 
 def result_mode(plan: dict[str, Any]) -> str:
+    if plan.get("operation") == "convert":
+        return "RGB" if plan["mode"] == "L" else "L"
     return "L" if plan.get("operation") == "grayscale" else plan["mode"]
 
 
@@ -208,6 +213,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].invert(image)
         elif plan.get("operation") == "grayscale":
             image = plan["imageops_api"].grayscale(image)
+        elif plan.get("operation") == "convert":
+            image = image.convert(result_mode(plan))
         elif plan.get("operation") == "solarize":
             image = plan["imageops_api"].solarize(image, 128)
         elif plan.get("operation") in ("contrast", "color"):
@@ -487,7 +494,7 @@ def run(args: argparse.Namespace) -> int:
     defaults = (["RGB", "RGBA"] if operation == "transpose" else
                 ["LA", "RGBA"] if operation == "alpha-composite" else ["L", "RGB"])
     modes = list(dict.fromkeys(args.mode or defaults))
-    if operation in ("equalize", "invert", "grayscale", "transform") and any(mode not in ("L", "RGB") for mode in modes):
+    if operation in ("equalize", "invert", "grayscale", "convert", "transform") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
     if operation == "alpha-composite" and any(mode not in ("LA", "RGBA") for mode in modes):
         raise ValueError("alpha-composite throughput supports LA/RGBA input")
@@ -591,7 +598,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "image-blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "blend", "image-blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

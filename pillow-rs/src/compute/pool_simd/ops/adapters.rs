@@ -7429,7 +7429,7 @@ fn native_convert_luma16_supported(
         && matches!(img, DynamicImage::ImageLuma16(_))
         && (img.width() as usize)
             .checked_mul(img.height() as usize)
-            .is_some_and(|pixels| pixels != 0)
+            .is_some()
 }
 
 /// Convert native unsigned-16-bit luma to the byte L/LA destinations.
@@ -7583,8 +7583,9 @@ fn native_convert_supported_for_image(
     // one-pixel images: the inactive lanes are zero-filled and never copied
     // to the output, so a short public input still exercises the real SIMD
     // data path instead of being rejected solely for its width.
-    let pixel_count_supported = pixel_count != 0;
-    pixel_count_supported && img.as_bytes().len() == expected_bytes
+    // Empty conversions are valid scalar control in this executor; they
+    // perform no vector work and retain their destination shape/mode.
+    img.as_bytes().len() == expected_bytes
 }
 
 fn native_convert_shape_layout(
@@ -7636,15 +7637,15 @@ fn native_convert_supported_for_shape(
     {
         return (shape.width as usize)
             .checked_mul(shape.height as usize)
-            .is_some_and(|pixels| pixels != 0);
+            .is_some();
     }
     let Some(_layout) = native_convert_shape_layout(shape, target, mode) else {
         return false;
     };
-    let pixel_count = (shape.width as usize).saturating_mul(shape.height as usize);
-    // The image adapter zero-pads incomplete final blocks, so shape-only
-    // preflight must admit the same nonempty inputs.
-    pixel_count != 0
+    // Match image preflight, including empty control-only conversions.
+    (shape.width as usize)
+        .checked_mul(shape.height as usize)
+        .is_some()
 }
 
 /// Convert native byte luma/RGB-family samples to Pillow's four-byte CMYK
@@ -23761,6 +23762,20 @@ pub fn simd_convert(
     else {
         return Err(PilError::ValueError("expected Convert op".into()));
     };
+    if (img.width() == 0 || img.height() == 0)
+        && native_convert_supported_for_image(img, target, matrix.as_deref(), mode)
+    {
+        let Some((channels, ..)) = native_convert_target(target) else {
+            return Err(simd_unsupported("Convert"));
+        };
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        return crate::image_utils::raw_bytes_to_image_allow_empty(
+            img.width(),
+            img.height(),
+            Vec::new(),
+            channels,
+        );
+    }
     if let Some((output, vector_blocks, scalar_tail)) =
         native_convert_luma16_bytes(img, target, mode)
     {
