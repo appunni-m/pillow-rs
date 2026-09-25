@@ -2395,3 +2395,36 @@ and bounded mixed-precision reductions. Static indices now contain 14,079
 parity cases, 24 coverage declarations, 773 workloads and 54 suites. No coverage
 collection ran. Pre-push checks have not been run for this local checkpoint;
 no push is included. No public operation has every performance target proven.
+
+## Putpixel baseline — 2026-09-25
+
+The next visit starts after conversion checkpoint `ca766a6a3`; no putpixel
+implementation attempt has been made yet. Its 161 maintained cases plus one
+benchmark workflow pass **486/486 comparisons** in
+`build/migration-parity/perf-putpixel-20260925-initial-parity.json`.
+
+Three additional public RGB checks all fail against live Pillow on CPU:
+`putpixel((-1, -1), (1, 2, 3))` should address the last pixel but raises an
+unsigned-coordinate conversion error; integer `0x332211` should write
+`(17, 34, 51)` but writes `(17, 0, 0)`; and the tuple `(1, 2)` should raise
+`TypeError` but is accepted. Receipt:
+`build/migration-parity/perf-putpixel-20260925-smoke-parity.json`.
+The first repair must address coordinate coercion, packed integer ink, and
+mode-dependent tuple validation before performance changes.
+
+The two unchanged benchmark workloads ran as
+`migration-benchmark-4d3508912ace44198684e757698e021e`, retained in
+`build/migration-parity/perf-putpixel-20260925-initial.json`; the existing exact
+gate passes. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.010896 | 0.012271 | 0.014500 | 0.321583 |
+| Standard | 0.005520 | 0.007459 | 0.007833 | 0.006958 |
+
+Only the materialized row proves execution on the requested native backend,
+without fallback. It misses CPU, SIMD and GPU latency targets. The standard
+row has no completed native receipt, and neither row proves sustained
+throughput. Source inspection shows the CPU executor clones the full image
+before writing one pixel; ownership and mutation semantics must be established
+before removing that copy. No coverage collection ran.
