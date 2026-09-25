@@ -645,16 +645,15 @@ pub fn op_blend_module(
 
 // ── CompositeModule ──
 
-fn composite_mask(mask: &Arc<Image>, mask_alpha: bool) -> Result<GrayImage, PilError> {
-    let materialized = mask.materialize_for_ops()?;
+fn composite_mask(mask: &DynamicImage, mask_alpha: bool) -> GrayImage {
     if !mask_alpha {
-        return Ok(materialized.to_luma8());
+        return mask.to_luma8();
     }
 
-    let rgba = materialized.to_rgba8();
-    Ok(GrayImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+    let rgba = mask.to_rgba8();
+    GrayImage::from_fn(rgba.width(), rgba.height(), |x, y| {
         crate::raster::Luma([rgba.get_pixel(x, y)[3]])
-    }))
+    })
 }
 
 #[inline]
@@ -664,6 +663,95 @@ fn composite_blend(source: u8, destination: u8, mask: u8) -> u8 {
     // Pillow 12.2.0 Paste.c applies ImagingUtils.h's BLEND/DIV255 macro to
     // every active destination band.
     ((u16::from(source) * mask + u16::from(destination) * inverse + 127) / 255) as u8
+}
+
+/// Blend the native byte layouts used by the common L/LA/RGB/RGBA composite
+/// path. Pillow keeps image2's canvas and changes only the source/mask
+/// intersection, so starting with its bytes also handles clipping and empty
+/// overlap without materializing RGB conversions or per-pixel image wrappers.
+fn composite_native_byte_fast_path(
+    img: &DynamicImage,
+    other: &DynamicImage,
+    mask: &DynamicImage,
+    mask_alpha: bool,
+) -> Option<DynamicImage> {
+    let channels = match img {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return None,
+    };
+    if img.color() != other.color() {
+        return None;
+    }
+    let (mask_channels, mask_channel) = match mask {
+        DynamicImage::ImageLuma8(_) if !mask_alpha => (1, 0),
+        DynamicImage::ImageLumaA8(_) if mask_alpha => (2, 1),
+        DynamicImage::ImageRgba8(_) if mask_alpha => (4, 3),
+        _ => return None,
+    };
+
+    let (source_width, source_height) = img.dimensions();
+    let (destination_width, destination_height) = other.dimensions();
+    let (mask_width, mask_height) = mask.dimensions();
+    let source_width = source_width as usize;
+    let source_height = source_height as usize;
+    let destination_width = destination_width as usize;
+    let destination_height = destination_height as usize;
+    let mask_width = mask_width as usize;
+    let mask_height = mask_height as usize;
+    let overlap_width = source_width.min(destination_width).min(mask_width);
+    let overlap_height = source_height.min(destination_height).min(mask_height);
+    let source_stride = source_width.checked_mul(channels)?;
+    let destination_stride = destination_width.checked_mul(channels)?;
+    let mask_stride = mask_width.checked_mul(mask_channels)?;
+    let overlap_bytes = overlap_width.checked_mul(channels)?;
+    let overlap_mask_bytes = overlap_width.checked_mul(mask_channels)?;
+    let source = img.as_bytes();
+    let mask = mask.as_bytes();
+    let mut output = other.as_bytes().to_vec();
+    if source.len() != source_stride.checked_mul(source_height)?
+        || output.len() != destination_stride.checked_mul(destination_height)?
+        || mask.len() != mask_stride.checked_mul(mask_height)?
+    {
+        return None;
+    }
+
+    apply_effect_rows(
+        &mut output,
+        destination_width,
+        destination_height,
+        channels,
+        |row_index, output_row| {
+            if row_index >= overlap_height {
+                return;
+            }
+            let source_start = row_index * source_stride;
+            let mask_start = row_index * mask_stride;
+            let source_row = &source[source_start..source_start + overlap_bytes];
+            let mask_row = &mask[mask_start..mask_start + overlap_mask_bytes];
+            for ((output_pixel, source_pixel), mask_pixel) in output_row[..overlap_bytes]
+                .chunks_exact_mut(channels)
+                .zip(source_row.chunks_exact(channels))
+                .zip(mask_row.chunks_exact(mask_channels))
+            {
+                let mask_value = mask_pixel[mask_channel];
+                for (destination, &source) in output_pixel.iter_mut().zip(source_pixel) {
+                    *destination = composite_blend(source, *destination, mask_value);
+                }
+            }
+        },
+    );
+
+    crate::image_utils::raw_bytes_to_image_allow_empty(
+        destination_width as u32,
+        destination_height as u32,
+        output,
+        channels,
+    )
+    .ok()
+    .map(|result| preserve_mode(img, result))
 }
 
 pub fn op_composite_module(
@@ -676,11 +764,13 @@ pub fn op_composite_module(
     // PIL composite: copy image2, then paste image1 onto it with mask at (0,0).
     // The output uses image2's size. Smaller images are pasted into the top-left.
     // Paste.c uses the alpha byte for LA/RGBA/RGBa masks and the luma byte for
-    // 1/L masks. The choice is captured before backend dispatch.
-    let mask_gray = composite_mask(mask, mask_alpha)?;
+    // 1/L masks. The choice is captured before backend dispatch. Keep the
+    // source storage intact for the byte fast path's selected mask channel.
+    let mask_image = mask.materialize_for_ops()?;
 
     // P-mode: composite on palette indices (PIL operates on indices, not colors)
     if explicit_mode == Some("P") {
+        let mask_gray = composite_mask(&mask_image, mask_alpha);
         let gray1 = img.to_luma8();
         let other_indices = other.materialize_indices()?;
         let gray2 = other_indices.to_luma8();
@@ -701,6 +791,12 @@ pub fn op_composite_module(
     }
 
     let other_img = other.materialize_for_ops()?;
+
+    if let Some(result) = composite_native_byte_fast_path(img, &other_img, &mask_image, mask_alpha)
+    {
+        return Ok(result);
+    }
+    let mask_gray = composite_mask(&mask_image, mask_alpha);
 
     // RGBA and four-byte compatibility modes (CMYK/I/F) blend every stored
     // band. In particular, RGBA alpha is output data, not merely metadata.

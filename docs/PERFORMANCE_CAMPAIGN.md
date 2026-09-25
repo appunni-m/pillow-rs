@@ -3703,3 +3703,98 @@ Remaining blockers:
 - Timings vary across runs. The same-policy baseline and each attempt remain side-by-side. No wide-platform, all-composition or all-size completion claim is established.
 
 The reusable skill now records the bounded 16-bit division/reduction used to remove scalar SIMD lane extraction, including the intermediate limits needed to preserve exact truncation. The release `build-parity` build, formatting and public API boundary checks pass. **No coverage collection or push ran.** Inventory is now **16,730 cases and 813 workloads across 54 suites**. The operation-wide manifest remains 208 operations plus one constant with zero fully completed operations; focused results are not integrated into its broad historical matrix. Next is operation selection from the remaining ranked gaps.
+
+## ImageChops Composite four-attempt checkpoint — 2026-09-25
+
+The next operation visit is `PIL.ImageChops.composite`, shared with
+`PIL.Image.composite` through `CompositeModule`. The input generator adds 31
+input-only pixel cases and four L benchmark sizes. The expanded cohort contains
+47 composite comparisons and passes **47/47 on CPU, 47/47 on SIMD, and 47/47
+on Metal GPU** under strict backend selection. No assertion, threshold or
+expected output was weakened. Expanding the mask/destination matrix exposed a
+SIMD empty-overlap bug: disjoint source and destination must return an
+image2-sized copy, including zero-sized outputs. Both image and shape planners
+now encode empty intersection as a valid zero-area region; the result builder
+admits empty dimensions. The implementation retains that parity fix.
+
+The baseline identified three avoidable costs: CPU widened L data to RGB and
+then narrowed it again while calling `get_pixel`/`put_pixel` per sample; CPU
+and SIMD materialized the L mask before use; GPU expanded all inputs/results
+to packed RGBA and moved six times as many bytes as the native L case requires.
+The 1024 × 768 L medians by bounded attempt are:
+
+| Run | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.438625 | 3.629125 | 0.740146 | 8.345083 |
+| Attempt 1 | 0.456375 | 0.847521 | 0.718562 | 6.534021 |
+| Attempt 2 | 0.402021 | 0.588000 | 0.722083 | 5.645917 |
+| Attempt 3 trial | 0.399083 | 0.576167 | 0.901250 | 5.484250 |
+| Attempt 4 | 0.334833 | 0.477209 | 0.698230 | 1.193020 |
+
+Four attempts were made and the checkpoint is ready for the next operation:
+
+1. **Retained CPU native-byte path.** For matching L/LA/RGB/RGBA operands,
+   borrow stored samples, copy image2's native bytes for the required output
+   canvas, and blend only the overlap. This removes RGB expansion and per-pixel
+   image accessors. It cuts the large L request from 3.63 ms to 0.85 ms, but
+   remains slower than Pillow.
+2. **Retained direct mask reads and row parallelism.** For an L mask, read its
+   byte directly; for supported LA/RGBA alpha masks, select the stored alpha
+   band. This avoids a full GrayImage conversion. Reuse the existing
+   `apply_effect_rows` threshold for large destinations while keeping small
+   images serial. CPU L falls to 0.59 ms and fresh RGB throughput rises above
+   Pillow at each measured host queue depth.
+3. **Rejected SIMD one-pass output construction.** Appending newly blended
+   vector blocks to a capacity-reserved Vec avoided copying image2 into an
+   initialized output first. Exact parity held, but 1024 × 768 L latency
+   regressed from 0.72 to 0.90 ms. The experiment was reverted. The copy plus
+   vector-update path remains.
+4. **Retained native-byte GPU composite.** For full-size, same-mode operands
+   and supported L/alpha masks, pack four output bytes per storage word and
+   move source, image2, mask and output in their native layouts. Dispatch one
+   guarded shader and exclude transfer padding from the returned image. On
+   1024 × 768 L, input traffic falls from 3,145,728 to 2,359,296 bytes,
+   auxiliary traffic from 6,291,456 to 1,572,864 bytes, readback from
+   3,145,728 to 786,432 bytes, and mode-conversion count from one to zero.
+   Latency falls from 5.65 to 1.19 ms. Clipping, empty images, palette and
+   mixed-mode operands, and other mask layouts retain their existing route.
+
+Attempt 4 also measures seven maintained L workloads. CPU remains slower than
+Pillow on all seven, including 1 × 1, 32 × 32, 256 × 256 and 1024 × 768. SIMD
+does not meet the 5× requirement on any measured row. At 1024 × 768, it is
+0.70 ms versus Pillow's 0.33 ms (2.1× slower). GPU launch cost dominates small
+materialized calls: 16 × 16 is about 0.56 ms versus Pillow's 0.02 ms.
+
+Fresh three-input request windows verify L and RGB separately at 1024 × 768.
+Each run uses 16 changing inputs, queue depths 1/2/4, five warmup windows and
+five samples of 20 windows. Queue-one through queue-four completed operations
+per second are:
+
+| Mode | Queue | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 3,138 | 2,007 | 1,414 | 1,200 |
+| L | 2 | 4,027 | 2,445 | 1,436 | 1,225 |
+| L | 4 | 4,829 | 2,289 | 1,444 | 1,207 |
+| RGB | 1 | 483 | 954 | 463 | 517 |
+| RGB | 2 | 705 | 990 | 476 | 536 |
+| RGB | 4 | 895 | 1,064 | 478 | 540 |
+
+CPU throughput is **0.47–0.64× Pillow in L** and **1.19–1.97× in RGB**.
+SIMD ranges from **0.30–0.45× Pillow in L** and **0.53–0.96× in RGB**, far
+below 5×. The native GPU route is **0.84–0.85× SIMD in L** and **1.11–1.13×
+SIMD in RGB**. Thus the GPU now exceeds SIMD RGB throughput but still misses
+the L throughput and all-mode latency goals. It remains slower than SIMD in
+both large L latency (1.19 versus 0.70 ms) and most small workloads.
+
+Local parity and performance receipts use `perf-composite-20260925-` under
+`build/migration-parity/`. The current blocker list is CPU L latency and L
+throughput; SIMD's 5× target across both modes and sizes; GPU L throughput and
+latency plus its small-request launch floor; and broad composed/API coverage.
+The native GPU eligibility and fallback boundary are part of the evidence;
+passing fallback does not count as acceleration. No coverage was collected and
+no push ran. Generated contract docs now index **16,761 parity cases and 817
+benchmark workloads**. Aggregating existing receipts reports zero compatible
+evidence IDs and three stale/incompatible artifacts; focused Composite receipts
+are not integrated into that global evidence schema. The work is checkpointed
+here so optimization can move to the next operation and revisit Composite only
+when new profiling evidence targets one of these remaining limits.

@@ -78,6 +78,10 @@ and exports bytes. The GPU receipt must also account for the second image.
 ``--operation alpha-composite`` uses that two-image policy with native LA/RGBA
 inputs and ``Image.alpha_composite``; every request completes one composite.
 
+``--operation composite`` measures ``ImageChops.composite`` with three fresh
+images: two same-mode operands and an independent L mask. It validates the
+complete output and GPU receipts for both auxiliary inputs.
+
 ``--operation contrast`` includes construction of ``ImageEnhance.Contrast``
 from each fresh image and ``enhance(0.3)`` before exporting bytes. Base-image
 construction and its host mean calculation are inside the measured boundary.
@@ -187,11 +191,13 @@ def stats(values: list[int | float]) -> dict[str, float | int] | None:
             "max": ordered[-1], "standard_deviation": statistics.pstdev(values)}
 
 
-def patterned_frames(mode: str, size: tuple[int, int], directory: Path, operation: str = "transpose") -> list[dict[str, Any]]:
+def patterned_frames(mode: str, size: tuple[int, int], directory: Path,
+                     operation: str = "transpose", seed_offset: int = 0) -> list[dict[str, Any]]:
     """Fixed input generator; no reference/target output influences these bytes."""
     row_bytes = (size[0] + 7) // 8 if mode == "1" else size[0] * len(mode)
     length = row_bytes * size[1]
-    tile = bytes((73 * index + 11 * (index // 17) + 29) & 255 for index in range(8192))
+    tile = bytes((73 * index + 11 * (index // 17) + 29 + seed_offset) & 255
+                 for index in range(8192))
     if operation == "equalize":
         tile = bytes(value // 4 for value in tile)
     base = (tile * ((length + len(tile) - 1) // len(tile)))[:length]
@@ -246,6 +252,12 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             fill = 173 if plan["mode"] == "L" else (17, 83, 149)
             image = image.transform(tuple(plan["size"]), 0, TRANSFORM_DATA,
                                     resample=0, fillcolor=fill)
+        elif plan.get("operation") == "composite":
+            other_data = plan["pair_inputs"][(frame_id + 1) % len(plan["pair_inputs"])]
+            mask_data = plan["mask_inputs"][(frame_id + 7) % len(plan["mask_inputs"])]
+            other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
+            mask = image_api.frombytes(plan["mask_mode"], tuple(plan["size"]), mask_data)
+            image = plan["imagechops_api"].composite(image, other, mask)
         elif plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):
             other_data = plan["pair_inputs"][(frame_id + 1) % len(plan["pair_inputs"])]
             other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
@@ -306,7 +318,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
 
 
 def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = "transpose",
-                  input_byte_count: int | None = None) -> str | None:
+                  input_byte_count: int | None = None,
+                  auxiliary_byte_count: int | None = None) -> str | None:
     if subject == "Pillow":
         return None
     backend = subject.removeprefix("python-")
@@ -327,6 +340,8 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         upload_bytes = byte_count if input_byte_count is None else input_byte_count
         if resource.get("upload_bytes", 0) < upload_bytes or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
+        if operation == "composite" and resource.get("auxiliary_bytes", 0) < (auxiliary_byte_count or 0):
+            return "GPU composite receipt does not account for image2 and the mask"
         if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite", "contrast", "color") and resource.get("auxiliary_bytes", 0) < byte_count:
             return "GPU binary-operation receipt does not account for the second image"
     return None
@@ -376,8 +391,15 @@ def window(executor: ThreadPoolExecutor, depth: int, image_api: Any, core: Any,
                 and isinstance(output, bytes) and output == expected)
         record["exact_match"] = same
         record["reference_sha256"] = reference_metadata[frame_id]["sha256"]
+        auxiliary_bytes = None
+        if plan.get("operation") == "composite":
+            pair_id = (frame_id + 1) % len(plan["pair_inputs"])
+            mask_id = (frame_id + 7) % len(plan["mask_inputs"])
+            auxiliary_bytes = (len(plan["pair_inputs"][pair_id])
+                               + len(plan["mask_inputs"][mask_id]))
         error = receipt_error(subject, record["receipt"], len(expected),
-                              plan.get("operation", "transpose"), plan["frames"][frame_id]["length"])
+                              plan.get("operation", "transpose"), plan["frames"][frame_id]["length"],
+                              auxiliary_bytes)
         if not same:
             error = "output bytes, mode or dimensions differ from live Pillow"
             if isinstance(output, bytes):
@@ -425,7 +447,7 @@ def child(args: argparse.Namespace) -> int:
     image_api = importlib.import_module("PIL.Image")
     if plan.get("operation") in ("equalize", "invert", "grayscale", "solarize"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
-    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):
+    if plan.get("operation") in ("composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
     if plan.get("operation") in ("contrast", "color"):
         plan["imageenhance_api"] = importlib.import_module("PIL.ImageEnhance")
@@ -434,8 +456,13 @@ def child(args: argparse.Namespace) -> int:
         core.set_pipeline_telemetry(True)  # once per process, never toggled by workers
     binaries = runtime_files(subject)
     inputs = [Path(frame["path"]).read_bytes() for frame in plan["frames"]]
-    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):
+    if plan.get("operation") in ("composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):
         plan["pair_inputs"] = inputs
+    if plan.get("operation") == "composite":
+        plan["mask_inputs"] = [Path(frame["path"]).read_bytes() for frame in plan["mask_frames"]]
+        for frame, data in zip(plan["mask_frames"], plan["mask_inputs"]):
+            if len(data) != frame["length"] or digest(data) != frame["sha256"]:
+                raise RuntimeError("mask bytes differ from the declared stimulus")
     for frame, data in zip(plan["frames"], inputs):
         if len(data) != frame["length"] or digest(data) != frame["sha256"]:
             raise RuntimeError("input bytes differ from the declared stimulus")
@@ -539,7 +566,8 @@ def run(args: argparse.Namespace) -> int:
     operation = args.operation
     defaults = (["RGB", "RGBA"] if operation == "transpose" else
                 ["1"] if operation in ("logical-and", "logical-or", "logical-xor") else
-                ["LA", "RGBA"] if operation == "alpha-composite" else ["L", "RGB"])
+                ["LA", "RGBA"] if operation == "alpha-composite" else
+                ["L", "RGB", "RGBA"] if operation == "composite" else ["L", "RGB"])
     modes = list(dict.fromkeys(args.mode or defaults))
     if operation in ("logical-and", "logical-or", "logical-xor") and modes != ["1"]:
         raise ValueError(f"{operation} throughput requires mode 1")
@@ -549,6 +577,8 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError(f"{operation} throughput supports L/RGB input")
     if operation == "alpha-composite" and any(mode not in ("LA", "RGBA") for mode in modes):
         raise ValueError("alpha-composite throughput supports LA/RGBA input")
+    if operation == "composite" and any(mode not in ("L", "RGB", "RGBA") for mode in modes):
+        raise ValueError("composite throughput supports L/RGB/RGBA operands with an L mask")
     before = source_identity()
     result: dict[str, Any] = {
         "schema": SCHEMA if operation == "transpose" else f"pillow-rs/{operation}-throughput-diagnostic@1", "status": "completed", "started_at": utc_now(), "argv": sys.argv,
@@ -562,7 +592,8 @@ def run(args: argparse.Namespace) -> int:
                    "contrast_factor": 0.3 if operation in ("contrast", "color") else None,
                    "solarize_threshold": 128 if operation == "solarize" else None,
                    "affine_coefficients": TRANSFORM_DATA if operation == "transform" else None,
-                   "boundary": ("two fresh frombytes images, blend(alpha=0.3), terminal bytes, worker scheduling and receipt capture"
+                   "boundary": ("three fresh frombytes images, ImageChops.composite with independent L mask, terminal bytes, worker scheduling and receipt capture"
+                                if operation == "composite" else "two fresh frombytes images, blend(alpha=0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation in ("blend", "image-blend") else "two fresh frombytes images, add(scale=1, offset=0), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "add" else "two fresh frombytes images, subtract(scale=1, offset=0), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "subtract" else "two fresh frombytes images, multiply, terminal bytes, worker scheduling and receipt capture"
@@ -587,7 +618,8 @@ def run(args: argparse.Namespace) -> int:
                        + ("divide tile values by 4; " if operation == "equalize" else "")
                        + "frame j adds 41*j modulo 256"
                        + ("; mode 1 has ceil(width/8) MSB-first bytes per row" if operation in ("logical-and", "logical-or", "logical-xor") else "")
-                       + ("; second image uses frame (j+1) modulo 16" if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite") else ""),
+                       + ("; second image uses frame (j+1) modulo 16" if operation in ("composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite") else "")
+                       + ("; independent L mask uses frame (j+7) modulo 16 and salt 113" if operation == "composite" else ""),
                    "build_profile": "expected release via build-parity; binary identity recorded separately",
                    "check_only_policy": "one verification window per depth; no performance summary",
                    "cache_state": "warm workers/backend; fresh image and graph per request"},
@@ -601,6 +633,12 @@ def run(args: argparse.Namespace) -> int:
             frames = patterned_frames(mode, tuple(args.size), directory, operation)
             plan = {"operation": operation, "mode": mode, "size": args.size, "frames": frames,
                     "reference_manifest": str(directory / "references.json")}
+            if operation == "composite":
+                mask_directory = directory / "mask"
+                mask_directory.mkdir()
+                plan["mask_mode"] = "L"
+                plan["mask_frames"] = patterned_frames(
+                    "L", tuple(args.size), mask_directory, seed_offset=113)
             plan_path = directory / "plan.json"
             write_json(plan_path, plan)
             case = {"mode": mode, "size": args.size, "input_frames": frames, "subjects": []}
@@ -660,7 +698,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("1", "L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

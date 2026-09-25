@@ -106,6 +106,14 @@ with default scale 1 and offset 0. Their input sequence, window policy, and
 auxiliary-transfer checks are identical; each operation uses a distinct output
 path.
 
+Use `--operation composite` for fresh L/RGB/RGBA `ImageChops.composite`
+requests. It constructs two same-mode operands and an independent changing L
+mask, times all three constructions plus the composite and terminal bytes, and
+checks every output exactly against live Pillow. GPU receipts must account for
+image2 and mask transfers as well as the primary upload and result readback.
+Select `--mode RGB` or `--mode L` for separate channel-width comparisons; use a
+distinct output path for each run.
+
 Use `--operation grayscale` for fresh L/RGB inputs producing L output under
 the same window policy. GPU receipts check the full multichannel input upload
 and the smaller output readback separately. For exhaustive RGB arithmetic

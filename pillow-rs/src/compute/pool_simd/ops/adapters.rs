@@ -1386,6 +1386,8 @@ fn native_composite_plan_for_image(
     if mask.size().ok()? != img.dimensions() {
         return None;
     }
+    // A disjoint source and image2 still produce image2.copy() in Pillow;
+    // zero-area overlap is a valid no-op paste, not a reason to fall back.
     let region = native_paste_region(
         destination_width,
         destination_height,
@@ -1393,7 +1395,15 @@ fn native_composite_plan_for_image(
         img.height(),
         0,
         0,
-    )?;
+    )
+    .unwrap_or(NativePasteRegion {
+        source_left: 0,
+        source_top: 0,
+        destination_left: 0,
+        destination_top: 0,
+        width: 0,
+        height: 0,
+    });
     Some(NativePastePlan {
         layout,
         mask: Some(mask_layout),
@@ -1427,7 +1437,15 @@ fn native_composite_plan_for_shape(
         shape.height,
         0,
         0,
-    )?;
+    )
+    .unwrap_or(NativePasteRegion {
+        source_left: 0,
+        source_top: 0,
+        destination_left: 0,
+        destination_top: 0,
+        width: 0,
+        height: 0,
+    });
     Some(NativePastePlan {
         layout,
         mask: Some(mask_layout),
@@ -2115,7 +2133,7 @@ pub fn simd_composite_module(
     }
     crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(copy_tail);
-    let result = crate::image_utils::raw_bytes_to_image(
+    let result = crate::image_utils::raw_bytes_to_image_allow_empty(
         destination.width(),
         destination.height(),
         output,
