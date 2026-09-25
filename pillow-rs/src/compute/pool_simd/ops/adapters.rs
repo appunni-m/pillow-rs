@@ -355,16 +355,19 @@ fn native_autocontrast_layout(img: &DynamicImage, mode: Option<&str>) -> Option<
 
 /// Return the native source layout accepted by ImageOps.grayscale.
 ///
-/// Grayscale ignores alpha and produces a new `L` image.  RGBX is admitted
-/// because its fourth byte is padding, while palette, color-space, CMYK, and
-/// typed modes are rejected until their mode-specific conversions can stay
-/// native rather than widening through a packed scalar representation.
+/// Grayscale produces a new `L` image. RGBa has a dedicated integer
+/// unpremultiplication pre-stage; ordinary RGBA ignores alpha, and RGBX's
+/// fourth byte is padding. Palette, color-space, CMYK, and typed modes are
+/// rejected until their mode-specific conversions can stay native rather
+/// than widening through a packed scalar representation.
 fn native_grayscale_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
         DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "RGBX")) => Some(4),
+        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa")) => {
+            Some(4)
+        }
         _ => None,
     }
 }
@@ -5234,7 +5237,7 @@ fn shape_native_grayscale_channels(shape: SimdImageShape, mode: Option<&str>) ->
         SimdLayout::Luma8 if matches!(mode, None | Some("L")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some(2),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB")) => Some(3),
-        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX")) => Some(4),
+        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa")) => Some(4),
         _ => None,
     }
 }
@@ -11197,7 +11200,7 @@ fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8
         3 => grayscale_interleaved::<3>(source, &mut output),
         4 => grayscale_interleaved::<4>(source, &mut output),
         _ => return None,
-    }
+    };
     Some((output, pixels.div_ceil(16) as u64, 0))
 }
 
@@ -11278,7 +11281,11 @@ pub fn simd_grayscale(
     let Some(channels) = native_grayscale_layout(img, mode) else {
         return Err(simd_unsupported("Grayscale"));
     };
-    let Some((output, vector_blocks, scalar_tail)) = native_grayscale_bytes(img, channels) else {
+    let unpremultiplied =
+        matches!(mode, Some("RGBa")).then(|| crate::ops::pil_resize::unpremultiply_alpha(img));
+    let source = unpremultiplied.as_ref().unwrap_or(img);
+    let Some((output, vector_blocks, scalar_tail)) = native_grayscale_bytes(source, channels)
+    else {
         return Err(simd_unsupported("Grayscale"));
     };
     crate::compute::record_pipeline_operation_path(if vector_blocks == 0 {
