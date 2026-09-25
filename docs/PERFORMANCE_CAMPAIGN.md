@@ -2032,3 +2032,150 @@ lowers to library calls. Static indices contain 13,253 parity cases,
 24 coverage declarations, 773 workloads and 54 suites. No coverage collection
 ran. This operation is checkpointed as incomplete; the next operation is
 Color enhancement. No public operation has every performance target demonstrated.
+
+## Color enhancement checkpoint — 2026-09-25
+
+Four areas were addressed before checkpointing: public state and native
+arithmetic parity, transparency metadata, packed SIMD module blending, and
+native-byte GPU module-blend transport. Color remains incomplete. The next
+operation is `Image.convert`: the stage measurements below identify its two
+constructor conversions as the dominant remaining RGB cost. This dependency
+takes priority over the next baseline-ranked operation, `Image.putpixel`.
+
+The old 48-case selection passed 144 comparisons, but a varied 219-case probe
+passed only 255 of 657 comparisons. The implementation had no observable
+`degenerate` base or `intermediate_mode`, used different arithmetic, and did not
+preserve constructor snapshots. Pillow aliases the original image for L/LA;
+other accepted modes retain a converted base. Later calls read the current
+`image` and `degenerate`, including mutations and replacement of either object.
+Color now retains that state and delegates public enhancement to module blend.
+RGBX's converted padding becomes 255. CMYK conversion uses rounded MULDIV255
+before quantized grayscale. Direct CPU/SIMD/GPU Color kernels now use the
+reference's fused float32 blend rather than float64 or thousandths arithmetic.
+The GPU admission path no longer scans 65,536 sample pairs on every call.
+
+Metadata requires conversion too: an RGB transparent color becomes its gray
+RGB tuple, while a palette transparency index becomes the converted gray
+index. Packed RGB integer ink is unpacked before component coercion. Byte
+transparency follows the reference warning/removal behavior. Pixel conversion
+remains in Rust; the Python wrapper preserves public object and metadata state.
+
+The shared SIMD blend now extracts four byte positions from packed vector
+words, applies fused float32 arithmetic, clamps/truncates, and packs the words
+back. Explicit constants remove the two `_memset_pattern16` calls and associated
+spills previously emitted per sixteen-byte block. Release assembly shows packed
+arithmetic and stores without calls in the main loop. Byte order and scalar
+tails remain explicit. This improves public Color through its module-blend
+dependency; it does not establish a new standalone Image.blend timing result.
+
+GPU module blend now reuses the existing native-byte transfer helper. Each word
+carries four independent samples, with an explicit word bound for a padded
+dispatch row. It preserves all stored channels and the 32-byte parameter layout.
+Existing mode/precision preflight and exact fallbacks remain. The final blend
+receipt records upload/auxiliary/readback of 786,432 bytes each for L and
+2,359,296 bytes each for RGB, zero transport mode conversions, one full-frame
+copy, and 32 parameter bytes. Constructor transfers are separate; these counters
+are not totals for the complete Color request.
+
+### Parity evidence
+
+All receipts below are local under `build/migration-parity/`. There are 255 new
+maintained input-only cases, generated from independent live-oracle workflows:
+varied modes/factors, valid empty images, mutation, repeated enhancement, and
+native-word/dispatch-row tails. Existing tests and thresholds were not weakened.
+
+| Evidence | Exact comparisons passed | Receipt |
+| --- | ---: | --- |
+| Maintained Color selection, 303 cases | 909/909 | `perf-color-20260925-checkpoint-parity.json` |
+| Constructor alias/snapshot and replacement | 144/144 | `perf-color-20260925-state-parity.json` |
+| Direct core Color kernels | 252/252 | `perf-color-20260925-kernel-parity.json` |
+| Public metadata and packed transparency | 54/54 | `perf-color-20260925-metadata-parity.json` |
+| Shared module-blend regression | 876/876 | `perf-image-blend-20260925-color-regression-parity.json` |
+| Exhaustive byte-pair/factor and length probe | 147/147 | `perf-color-20260925-blend-domain-parity.json` |
+
+The last probe exercises every byte pair at sixteen factors, plus lengths
+1–33; it refreshed the older untagged domain receipt, so the Color-tagged copy
+identifies this binary's evidence. Shared Multiply, Alpha Composite and Solarize
+transport probes each pass 384 exact outputs at 1025 × 3, with no timing claim;
+their receipts use `perf-color-20260925-*-transfer-check.json`. Nonfinite factors
+and unsupported modes can use exact fallback. These parity counts do not prove
+native acceleration for every mode or parameter. The previously documented LAB
+constructor failures remain outside this repair.
+
+### Measured results and blockers
+
+The four maintained workload definitions are unchanged. Final run
+`migration-benchmark-31e1fa4c4f774fe5ac6a3b7926323ecd` is retained as
+`perf-color-20260925-checkpoint.json`; its two exact benchmark gates pass.
+Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015583 | 0.021334 | 0.023876 | 0.757500 |
+| Materialized matrix 32 × 24 | 0.015459 | 0.019397 | 0.023604 | 0.769584 |
+| Constructor standard | 0.009750 | 0.013396 | 0.016459 | 0.425188 |
+| Enhance standard | 0.009834 | 0.013167 | 0.016333 | 0.397833 |
+
+All target rows record the requested native backend without fallback. The first
+two complete one terminal blend and miss all three latency targets. The last
+two now execute the two constructor conversions; they do not materialize the
+subsequent enhancement and cannot establish complete enhancement performance.
+The original faster lazy wrapper skipped observable construction work; its
+timings are not a parity-correct optimization baseline. Small-call overhead
+remains a CPU blocker after the correctness repair.
+
+The fresh-input diagnostic includes new `frombytes`, Color construction,
+`enhance(0.3)`, and terminal bytes. The parity-correct baseline and final runs
+each pass **40,320 exact output checks**, including warmup, with 38,400 measured
+completions. Both retain stable source/runtime identities. Receipts are
+`perf-color-20260925-repaired-throughput.json` and
+`perf-color-20260925-checkpoint-throughput.json`. Queue-one medians:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU | Pillow / SIMD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 0.466625 ms | 0.183562 ms | 0.189021 ms | 0.393646 ms | 2.47× |
+| RGB | 2.523917 ms | 0.652375 ms | 4.833458 ms | 3.667854 ms | 0.52× |
+
+SIMD improves from 0.361958/5.354396 ms and GPU from 2.889104/5.468334 ms for
+L/RGB. CPU is essentially unchanged. CPU meets the large-input latency target;
+SIMD still misses 5× in both modes. GPU meets SIMD latency only in RGB, where
+SIMD itself is slower than Pillow. Completed images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 2,116 | 5,293 | 5,066 | 2,610 |
+| L | 2 | 2,269 | 5,701 | 4,970 | 2,575 |
+| L | 4 | 2,210 | 5,738 | 4,899 | 2,588 |
+| RGB | 1 | 398 | 1,417 | 206 | 267 |
+| RGB | 2 | 432 | 1,704 | 356 | 345 |
+| RGB | 4 | 455 | 1,781 | 549 | 390 |
+
+GPU fails the sustained-throughput target: its best observed throughput remains
+below SIMD for both modes. These are completed host requests, not a claim about
+simultaneous device kernels.
+
+A separate instrumented stage probe passes 216 exact comparisons and retains
+individual constructor/final receipts in `perf-color-20260925-stages.json`.
+For fresh RGB 1024 × 768, constructor medians are 0.270146 ms for Pillow,
+0.221167 ms for CPU, 3.900209 ms for SIMD and 3.028584 ms for GPU. Each target
+constructor records two native conversion operations; GPU records two
+dispatches. Final blend/export medians are 0.389167/0.516209/0.916230 ms for
+CPU/SIMD/GPU. These separately instrumented medians are diagnostic and should
+not be substituted for the complete request measurements. They identify
+RGB→L→RGB base construction as the next cost to investigate. Inspect individual
+conversion layouts, copies, scheduling and transfers before another blend trial.
+
+Other remaining work: reduce small-call and GPU synchronization/readback cost;
+replace scalar gathers and repeated per-channel gray construction in the direct
+SIMD Color kernel; extend evidence to remaining metadata forms, composed paths,
+bindings and platforms. The final-receipt throughput schema omits earlier
+constructor receipts, so use the stage probe for that ownership evidence.
+Complete matrix integration and pre-push verification remain pending.
+
+The reusable skill now distinguishes conditional aliases from saved snapshots,
+uses constructor timing to redirect optimization toward dependencies, and
+compares packed-word byte extraction with widening/shuffle costs. Duplicate
+constant-setup advice was removed. Static indices contain 13,508 parity cases,
+24 coverage declarations, 773 workloads and 54 suites. No coverage collection
+ran. Color is checkpointed as incomplete; no public operation has every target
+demonstrated.

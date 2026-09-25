@@ -12,6 +12,35 @@ pub(crate) struct ContrastBase {
     pub(crate) alpha: Option<usize>,
 }
 
+/// Per-pixel L/LA round trip for canonical byte modes, before float blending.
+pub(crate) fn color_pixel_base(pixel: &[u8], mode: Option<&str>) -> [u8; 4] {
+    if pixel.len() <= 2 {
+        return [pixel[0], *pixel.get(1).unwrap_or(&0), 0, 0];
+    }
+    let cmyk = mode == Some("CMYK");
+    let gray = if cmyk {
+        let nk = 255 - u32::from(pixel[3]);
+        let rgb = |c: u8| (nk - crate::color::muldiv255(u32::from(c), nk)) as u8;
+        crate::color::rgb_to_luma_u8(rgb(pixel[0]), rgb(pixel[1]), rgb(pixel[2]))
+    } else {
+        crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
+    };
+    if cmyk {
+        [0, 0, 0, 255 - gray]
+    } else {
+        [
+            gray,
+            gray,
+            gray,
+            if mode == Some("RGBX") {
+                255
+            } else {
+                *pixel.get(3).unwrap_or(&255)
+            },
+        ]
+    }
+}
+
 /// Native-mode equivalent of convert-to-L, rounded mean, and L-to-source base.
 pub(crate) fn contrast_base(img: &DynamicImage, mode: Option<&str>) -> Option<ContrastBase> {
     let (channels, alpha, cmyk) = match (img, mode) {
@@ -88,6 +117,91 @@ fn validate_mode(image: &Image, palette_rejects: bool) -> Result<(), PilError> {
 }
 
 impl Image {
+    /// Converts a color enhancer's single transparent color through its L base.
+    ///
+    /// # Errors
+    ///
+    /// Returns the source pixel coercion, palette, or conversion error.
+    pub fn color_transparency(
+        &self,
+        value: crate::image::PutPixelValue,
+    ) -> Result<crate::image::ImageInfoValue, PilError> {
+        let mode = self.mode()?;
+        // Pillow's RGB integer ink packs R/G/B into the low three bytes.
+        // The general scalar pixel API accepts only a native byte, so retain
+        // the full integer here before delegating to its component coercion.
+        let value = match value {
+            crate::image::PutPixelValue::Integer(value) if mode == "RGB" => {
+                crate::image::PutPixelValue::Components(vec![
+                    value & 255,
+                    (value >> 8) & 255,
+                    (value >> 16) & 255,
+                ])
+            }
+            value => value,
+        };
+        let mut pixel = Image::new(1, 1, &mode, (0, 0, 0, 0))?;
+        if mode == "P" {
+            if let Some(palette) = self.palette() {
+                pixel.putpalette(&palette, "RGB")?;
+            }
+        }
+        pixel.putpixel_value(0, 0, value)?;
+        let gray = pixel.convert("L", None, None, None, None)?;
+        let gray = gray.materialized_shared()?.as_bytes()[0];
+        Ok(if mode == "RGB" {
+            crate::image::ImageInfoValue::IntegerTuple(vec![i64::from(gray); 3])
+        } else {
+            crate::image::ImageInfoValue::Integer(i64::from(gray))
+        })
+    }
+
+    /// Builds the converted base retained by a Pillow color enhancer.
+    ///
+    /// L and LA return the same core value; host wrappers preserve public
+    /// object identity for those modes. Other modes snapshot an L/LA round trip.
+    ///
+    /// # Errors
+    ///
+    /// Returns conversion or materialization failures during construction.
+    pub fn color_degenerate(&self) -> Result<Image, PilError> {
+        let mode = self.mode()?;
+        let intermediate = if self.getbands()?.iter().any(|band| band == "A") {
+            "LA"
+        } else {
+            "L"
+        };
+        if mode == intermediate {
+            return Ok(self.clone());
+        }
+        let mut base = self.convert(intermediate, None, None, None, None)?;
+        if mode == "RGBa" {
+            return Err(PilError::ValueError(
+                "conversion from L to RGBa not supported".into(),
+            ));
+        }
+        if mode == "RGBX" {
+            // RGBX's padding sample becomes 255 through L conversion and
+            // participates in the later blend, unlike uppercase alpha.
+            let gray = base.materialized_shared()?;
+            let bytes = gray
+                .as_bytes()
+                .iter()
+                .flat_map(|&v| [v, v, v, 255])
+                .collect();
+            let image = crate::image_utils::raw_bytes_to_image_allow_empty(
+                gray.width(),
+                gray.height(),
+                bytes,
+                4,
+            )?;
+            return Ok(Image::from_dynamic(image, Some(mode)));
+        }
+        base = base.convert(&mode, None, None, None, None)?;
+        base.load()?;
+        Ok(base)
+    }
+
     /// Adjusts brightness by `factor`.
     ///
     /// `1.0` is unchanged and `0.0` produces black.
@@ -202,11 +316,17 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns mode or base-conversion errors. Deferred pipeline execution can
+    /// report additional materialization failures.
     pub fn enhance_color(&self, factor: f64) -> Result<Image, PilError> {
-        validate_mode(self, false)?;
-        Ok(Image::push_op(self, PipelineOp::ColorSaturation { factor }))
+        if matches!(
+            self.mode()?.as_str(),
+            "L" | "LA" | "RGB" | "RGBA" | "RGBX" | "CMYK"
+        ) {
+            return Ok(Image::push_op(self, PipelineOp::ColorSaturation { factor }));
+        }
+        let base = self.color_degenerate()?;
+        crate::ops::module_fns::blend(&base, self, factor)
     }
 
     /// Adjusts sharpness by `factor`.

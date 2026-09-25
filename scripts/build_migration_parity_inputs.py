@@ -39849,6 +39849,7 @@ def build_nuanced_cases(
     cases.extend(multiply_mode_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
+    cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
     cases.extend(image_blend_native_parity_cases(surface_id))
     cases.extend(lab_constructor_parity_cases(surface_id))
@@ -40266,6 +40267,41 @@ def solarize_threshold_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             for threshold in (0, 127.5, 256):
                 cases.append(make_case(mode, channels, threshold,
                                        f"{size[0]}x{size[1]}-{threshold}", size))
+    return cases
+
+
+def color_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Reuse the varied enhancement inputs for Color's independent oracle run."""
+    target = "PIL.ImageEnhance.Color"
+    if surface_id != target:
+        return []
+    source = "PIL.ImageEnhance.Contrast"
+    cases = contrast_pixel_parity_cases(source)
+    for case in cases:
+        case["case_id"] = case["case_id"].replace(source, target)
+        case["surface"] = target
+        case["covers"] = [value.replace(source, target) for value in case["covers"]]
+        for step in case["steps"]:
+            if step["surface"] == source:
+                step["surface"] = target
+            if step["surface"] == "PIL.ImageEnhance" and step["operation"] == "Contrast":
+                step["operation"] = "Color"
+    # Native GPU transport groups four bytes per word and at most 1024
+    # words per dispatch row. Exercise the partially populated next row.
+    for mode, channels, widths in (("L", 1, (4095, 4098, 4101)),
+                                    ("LA", 2, (2047, 2049, 2051)),
+                                    ("RGB", 3, (1365, 1366, 1367)),
+                                    ("RGBA", 4, (1023, 1025, 1027))):
+        prototype = next(case for case in cases
+                         if case["case_id"] == f"{target}.enhance.nuanced.audit-{mode}-varied-0.3")
+        for width in widths:
+            case = copy.deepcopy(prototype)
+            case["case_id"] = f"{target}.enhance.nuanced.native-transfer-{mode}-{width}"
+            case["steps"][0]["arguments"]["size"] = literal([width, 1])
+            raw = random.Random(case["case_id"]).randbytes(width * channels)
+            case["assets"][0]["data"] = base64.b64encode(raw).decode()
+            case["assets"][0]["sha256"] = hashlib.sha256(raw).hexdigest()
+            cases.append(case)
     return cases
 
 

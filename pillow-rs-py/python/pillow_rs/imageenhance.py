@@ -19,8 +19,29 @@ class Brightness(_Enhance):
 
 class Color(_Enhance):
     """Adjust color saturation. 1.0 = unchanged, 0.0 = grayscale."""
-    def _apply(self, factor):
-        return self.image._rust_image.enhance_color(factor)
+    def __init__(self, image: Image):
+        super().__init__(image)
+        self.intermediate_mode = "LA" if "A" in image.getbands() else "L"
+        if self.intermediate_mode == image.mode:
+            self.degenerate = image
+        else:
+            self.degenerate = Image(image._rust_image.color_degenerate())
+            self.degenerate._info = image._info.copy()
+            self.degenerate._native_info = image._native_info
+            self.degenerate._native_info_rebaseline = True
+            self.degenerate._native_info_omitted = image._native_info_omitted
+            if image.mode in ("RGB", "P") and "transparency" in image.info:
+                transparency = image.info["transparency"]
+                if isinstance(transparency, bytes):
+                    import warnings
+                    warnings.warn("Palette images with Transparency expressed in bytes should be converted to RGBA images")
+                    self.degenerate._info.pop("transparency", None)
+                elif transparency is not None:
+                    self.degenerate._info["transparency"] = image._rust_image.color_transparency(transparency)
+
+    def enhance(self, factor: float):
+        from .operations import blend
+        return blend(self.degenerate, self.image, factor)
 
 
 class Contrast(_Enhance):

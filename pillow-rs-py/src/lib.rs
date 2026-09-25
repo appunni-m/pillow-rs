@@ -1728,6 +1728,18 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn color_degenerate(&self, py: Python<'_>) -> PyResult<PyImage> {
+        let inner = self.inner.clone();
+        let rs = py.detach(|| inner.color_degenerate()).map_err(map_error)?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn color_transparency(&self, value: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let value = putpixel_value_from_python(value);
+        let value = self.inner.color_transparency(value).map_err(map_error)?;
+        image_info_value_to_python(py, value)
+    }
+
     fn enhance_sharpness(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
         let rs = Python::attach(|py| py.detach(|| inner.enhance_sharpness(factor)))
