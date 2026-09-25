@@ -3171,3 +3171,30 @@ Remaining blockers and decisions:
 - Broader modes, sizes, state interactions, compositions, bindings and platforms remain unproven. No operation-wide target pass is claimed.
 
 The skill now explains carry isolation and the exact packed-add formula, including the limit of an instruction-count argument. The global selected matrix remains 208 operations plus one constant and zero completed operations. Inventory remains 15,829 parity cases and 785 workloads across 54 suites. Historical broad evidence and missing focused-result integration remain explicit. No coverage collection, push or pre-push verification campaign ran. Work moves to `ImageChops.subtract_modulo`.
+
+## Subtract Modulo baseline — 2026-09-25
+
+Work moved to `ImageChops.subtract_modulo` after Add Modulo checkpoint `ce5f0db28`. No implementation attempt has been made yet. The original maintained/workflow comparison passes **186/186**, and the independent 19-mode shape/byte-pair audit passes **345/345**. Added **112 maintained cases and four size workloads**, with no existing inputs modified or removed. The expanded unchanged-code baseline passes **534/534 comparisons**. Large scheduling boundaries, partial tiles and both directions of unequal source widths pass **18/18**. Artifacts use `perf-subtract-modulo-20260925-` under `build/migration-parity/`, with suffixes `initial-parity.json`, `initial-modes-parity.json`, `initial-expanded-parity.json`, `initial-tiles-parity.json` and the retained `tiles-probe.py`.
+
+All eight workloads selected by names and workflow contents complete in `migration-benchmark-e07afaff7b83411da0548da5028aa1c7`, artifact `perf-subtract-modulo-20260925-initial.json`. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015479 | 0.017479 | 0.018021 | 0.524271 |
+| 32 × 24 | 0.015000 | 0.016479 | 0.018020 | 0.222625 |
+| 1 × 1 | 0.014292 | 0.016188 | 0.016375 | 0.258999 |
+| 32 × 32 | 0.015249 | 0.016667 | 0.017105 | 0.464021 |
+| 256 × 256 | 0.134937 | 0.032583 | 0.032438 | 0.472521 |
+| 1024 × 768 | 1.977896 | 0.879916 | 0.478021 | 3.507167 |
+| SIMD Chops RGB workload | 2.918646 | 0.776645 | 0.576645 | 4.160250 |
+
+These seven rows have terminal native requested-backend receipts without fallback. The standard row lacks terminal native proof. The RGB workload contains one operation despite its chain name. CPU small cases miss Pillow, SIMD misses 5× on most rows, and GPU trails SIMD throughout.
+
+Fresh baseline `perf-subtract-modulo-20260925-initial-throughput.json` includes **40,320 exact output checks**, **38,400 measured completions**, unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.378250 | 0.212374 | 0.084041 | 2.891187 |
+| RGB | 2.184792 | 0.537791 | 0.404313 | 2.796771 |
+
+CPU uses general row scheduling and GPU expands transport to four bytes per pixel. SIMD already uses wrapping packed subtraction. Reuse the validated cheap-byte scheduling and compact transport mechanisms first, preserving independent source strides and every active byte. No coverage collection or push ran. Inventory is now **15,941 parity cases and 789 workloads across 54 suites**. The selected matrix still has 208 operations plus one constant, with zero fully completed operations; broad evidence is historical and focused-result integration remains pending.
