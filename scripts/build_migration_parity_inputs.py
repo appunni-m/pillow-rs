@@ -682,6 +682,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "Overlay",
     "HardLight",
     "SoftLight",
+    "Composite",
     "Difference",
     "Add",
     "Subtract",
@@ -39858,6 +39859,7 @@ def build_nuanced_cases(
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(native_blend_mode_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
+    cases.extend(composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
@@ -40587,6 +40589,212 @@ def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 cases.append(make_case(mode, (17, 9), label, dest, source))
     for mode in ("L", "RGB", "RGBa", "La"):
         cases.append(make_case(mode, (9, 3), "unsupported-mode"))
+    return cases
+
+
+def composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Sweep exact masked-blend arithmetic and CompositeModule shape/layout edges."""
+    if surface_id != "PIL.ImageChops":
+        return []
+
+    cases = []
+    channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4}
+
+    def pixels(mode: str, size: tuple[int, int], label: str, plane: int) -> bytes:
+        width, height = size
+        count = width * height
+        if mode == "1":
+            packed = bytearray(((width + 7) // 8) * height)
+            for y in range(height):
+                for x in range(width):
+                    if (x * 37 + y * 19 + plane) & 1:
+                        packed[y * ((width + 7) // 8) + x // 8] |= 1 << (7 - x % 8)
+            return bytes(packed)
+        raw = bytearray(random.Random(f"composite-{label}-{plane}").randbytes(
+            count * channels.get(mode, len(mode))
+        ))
+        if mode in ("LA", "RGBA", "RGBa"):
+            raw[len(mode) - 1::len(mode)] = bytes(
+                (pixel * 67 + plane * 31 + 3) & 0xFF for pixel in range(count)
+            )
+        return bytes(raw)
+
+    def make_case(
+        label: str,
+        source_size: tuple[int, int],
+        destination_size: tuple[int, int],
+        mask_mode: str,
+        *,
+        source_mode: str = "L",
+        destination_mode: str = "L",
+        raw_inputs: tuple[bytes, bytes, bytes] | None = None,
+    ) -> dict[str, Any]:
+        specs = (
+            ("image1", source_mode, source_size),
+            ("image2", destination_mode, destination_size),
+            ("mask", mask_mode, source_size),
+        )
+        assets = []
+        steps = []
+        for index, (step_id, mode, size) in enumerate(specs):
+            raw = (
+                raw_inputs[index]
+                if raw_inputs is not None
+                else pixels(mode, size, label, index)
+            )
+            asset_id = f"{step_id}-pixels"
+            assets.append(
+                {
+                    "id": asset_id,
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            )
+            steps.append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal(list(size)),
+                        "data": asset_value(asset_id),
+                    },
+                }
+            )
+        steps.extend(
+            [
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "composite",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("image1"),
+                        "image2": binding("image2"),
+                        "mask": binding("mask"),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ]
+        )
+        return {
+            "case_id": f"{surface_id}.composite.nuanced.optimization-{label}",
+            "surface": surface_id,
+            "operation": "composite",
+            "covers": [f"{surface_id}.composite.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": assets,
+            "steps": steps,
+            "observations": ["call", "materialize"],
+        }
+
+    # Exercise every stored mode channel with all supported mask encodings.
+    # The source is 17x11 while the destination is larger, so the result must
+    # retain the destination canvas and blend only the upper-left overlap.
+    for mode in channels:
+        for mask_mode in ("1", "L", "LA", "RGBA"):
+            cases.append(
+                make_case(
+                    f"{mode.lower()}-mask-{mask_mode.lower()}-tail-copy",
+                    (17, 11),
+                    (19, 13),
+                    mask_mode,
+                    source_mode=mode,
+                    destination_mode=mode,
+                )
+            )
+
+    # A smaller destination checks clipping. These mode conversions exercise
+    # Pillow's conversion of image1 to image2's mode before the masked paste.
+    for mode in channels:
+        cases.append(
+            make_case(
+                f"{mode.lower()}-mask-l-destination-clips",
+                (19, 13),
+                (13, 9),
+                "L",
+                source_mode=mode,
+                destination_mode=mode,
+            )
+        )
+    cases.append(
+        make_case(
+            "rgb-source-to-l-destination-alpha-mask",
+            (17, 11),
+            (19, 13),
+            "RGBA",
+            source_mode="RGB",
+            destination_mode="L",
+        )
+    )
+    cases.append(
+        make_case(
+            "l-source-to-rgb-destination-la-mask",
+            (19, 13),
+            (13, 9),
+            "LA",
+            source_mode="L",
+            destination_mode="RGB",
+        )
+    )
+    cases.append(
+        make_case(
+            "empty-source-copy",
+            (0, 3),
+            (17, 11),
+            "L",
+        )
+    )
+    cases.append(
+        make_case(
+            "empty-destination",
+            (17, 11),
+            (0, 3),
+            "LA",
+        )
+    )
+
+    # The six mask values cover the full (source,destination) byte-pair domain
+    # at the exact arithmetic boundaries. A separate mask sweep exercises
+    # every mask byte against a varied operand pair on each backend.
+    source_pairs = bytes(value & 0xFF for value in range(256 * 256))
+    destination_pairs = bytes(value >> 8 for value in range(256 * 256))
+    for mask_value in (0, 1, 127, 128, 254, 255):
+        constant_mask = bytes([mask_value]) * (256 * 256)
+        label = f"l-exhaustive-operands-mask-{mask_value}"
+        cases.append(
+            make_case(
+                label,
+                (256, 256),
+                (256, 256),
+                "L",
+                raw_inputs=(source_pairs, destination_pairs, constant_mask),
+            )
+        )
+    sample_count = 256 * 256
+    mask_sweep = bytes(value & 0xFF for value in range(sample_count))
+    source_sweep = bytes((value * 73 + 19) & 0xFF for value in range(sample_count))
+    destination_sweep = bytes((value * 151 + 7) & 0xFF for value in range(sample_count))
+    cases.append(
+        make_case(
+            "l-all-mask-values",
+            (256, 256),
+            (256, 256),
+            "L",
+            raw_inputs=(source_sweep, destination_sweep, mask_sweep),
+        )
+    )
     return cases
 
 
