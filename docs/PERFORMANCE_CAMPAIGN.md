@@ -3453,3 +3453,42 @@ Remaining blockers:
 - Wider bindings/platforms and composed pipelines remain unproven. The earlier LAB conversion blockers remain; this XOR-only audit did not rerun conversion.
 
 The skill records keeping predicates compact until the final store and cancelling shared XOR inversions. The isolated release build and formatting/public-boundary checks passed. Generated documentation was refreshed from existing evidence only. **No coverage collection or push ran.** Inventory is **16,349 parity cases and 801 workloads across 54 suites**. The selected matrix still has 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending. Next is `ImageChops.overlay`, whose historical selected rows show CPU, SIMD and GPU deficits; collect current parity and baseline evidence before changing it.
+
+## Overlay baseline — 2026-09-25
+
+Logical XOR is committed as `8906fed2c`; work moves to `ImageChops.overlay`. **No Overlay implementation attempt has been made yet.** The original 48 cases plus two workflows pass **150/150 comparisons**. The expanded audit adds **127 maintained cases** without changing or removing existing cases: 19 modes and six shapes, all stored-byte pairs in L, mutation-created mode-1 samples with raw result/input observations, materialized and composed execution, and tails/clipping/empty inputs. Four benchmark size variants are also added without changing prior workloads. The expanded current implementation passes **543/543 comparisons** in `perf-overlay-20260925-expanded-parity.json`.
+
+Run `migration-benchmark-63f0094bcb14472d9735d8de5f1f20b5` (`perf-overlay-20260925-baseline.json`) completes all seven selected workloads. Six materialized rows have completed native backend receipts without fallback; the standard row remains a terminal-evidence gap. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015438 | 0.017167 | 0.018812 | 0.361396 |
+| Existing 32 × 24 | 0.016229 | 0.015938 | 0.021917 | 0.542542 |
+| 1 × 1 | 0.013000 | 0.014729 | 0.015292 | 0.313688 |
+| 32 × 32 | 0.016937 | 0.016021 | 0.023459 | 0.357480 |
+| 256 × 256 | 0.254750 | 0.100730 | 0.530729 | 0.713459 |
+| 1024 × 768 | 3.438416 | 0.726271 | 6.463729 | 3.471583 |
+
+The maintained fresh runner now supports Overlay with both fresh inputs and full output/receipt accounting. L/RGB 1024 × 768 baseline `perf-overlay-20260925-baseline-throughput.json` passes **40,320 exact checks**, including **38,400 measured completions**, with unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.902249 | 0.237917 | 2.178729 | 3.186229 |
+| RGB | 4.449333 | 0.617021 | 6.704125 | 2.993438 |
+
+Completed fresh images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1083.8 | 3844.7 | 453.9 | 306.9 |
+| L | 2 | 1130.1 | 5836.3 | 859.7 | 466.2 |
+| L | 4 | 1129.2 | 6547.0 | 1567.1 | 672.4 |
+| RGB | 1 | 221.2 | 1347.6 | 146.7 | 318.9 |
+| RGB | 2 | 245.2 | 1672.4 | 278.3 | 491.1 |
+| RGB | 4 | 255.3 | 1780.4 | 486.6 | 679.2 |
+
+SIMD is substantially slower than both CPU and Pillow. Its current shared Overlay/HardLight loop pads and copies every eight-byte block, widens to 32-bit lanes, evaluates both branches, and narrows through scalar arrays. Selecting the active branch before multiplication bounds at least one factor by 127 and the other by 255, so the product is at most 32,385. The candidate exact quotient `n = product + 1; (n + (n >> 7) + (n >> 14)) >> 7` matches integer division by 127 for all **32,386** possible products; its maximum sum is 32,640. This math-only check is retained as `perf-overlay-20260925-div127-proof.json`, and is neither an implementation attempt nor a performance claim. If applied to the shared helper, HardLight must receive affected parity verification too.
+
+GPU still transports 3,145,728 bytes for each input and readback in both modes, with 256 parameter bytes and one mode conversion. Native-byte transport is a candidate after the SIMD bottleneck. CPU uses a 64 KiB pair lookup table; do not assume the cheap arithmetic scheduling crossover applies without measurement. Tiny caller overhead, true composed throughput, wider modes/bindings/platforms and the global targets remain unresolved.
+
+Generated documentation is refreshed from existing evidence only. **No coverage collection or push ran.** Inventory is **16,476 parity cases and 805 workloads across 54 suites**. The selected matrix remains 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending.
