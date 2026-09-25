@@ -39,7 +39,7 @@ pub(super) struct FontEngine {
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
-    load_truetype_with_index(data, size, 0, None, None)
+    load_truetype_with_index(data, size, 0, None, None, None)
 }
 
 pub(super) fn load_truetype_with_options(
@@ -53,6 +53,7 @@ pub(super) fn load_truetype_with_options(
         options.index.unwrap_or(0),
         options.encoding.clone(),
         options.layout_engine.clone(),
+        None,
     )
 }
 
@@ -62,6 +63,7 @@ fn load_truetype_with_index(
     face_index: usize,
     encoding: Option<String>,
     layout_engine: Option<String>,
+    variant_source: Option<&FreeTypeFont>,
 ) -> Result<FreeTypeFont, PilError> {
     if !(size > 0.0) {
         return Err(PilError::ValueError(format!(
@@ -77,8 +79,22 @@ fn load_truetype_with_index(
     let library = ffi::FT_Init_FreeType();
     let face_index_ffi = ffi::FT_Long::try_from(face_index)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
-    let mut face =
-        ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size).map_err(ft_error_to_pil)?;
+    let mut face = if let Some(source) = variant_source {
+        match ffi::FT_New_Memory_Face_From_Source(
+            &library,
+            &source.engine.face,
+            &data,
+            face_index_ffi,
+        )
+        .map_err(ft_error_to_pil)?
+        {
+            Some(face) => face,
+            None => ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size)
+                .map_err(ft_error_to_pil)?,
+        }
+    } else {
+        ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size).map_err(ft_error_to_pil)?
+    };
 
     // Pillow's `getfont` selects a requested FreeType charmap immediately
     // after opening the face.  Keep the tag translation in the Rust core so
@@ -532,13 +548,16 @@ pub(crate) fn font_variant_with_options(
             .clone()
             .or_else(|| font.engine.layout_engine.clone()),
     };
-    load_truetype_with_options(
+    load_truetype_with_index(
         options
             .font_bytes
             .clone()
             .unwrap_or_else(|| font.engine.font_bytes.clone()),
         options.size.unwrap_or(font.engine.size_pt),
-        &load_options,
+        load_options.index.unwrap_or(0),
+        load_options.encoding,
+        load_options.layout_engine,
+        Some(font),
     )
 }
 
