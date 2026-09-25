@@ -415,7 +415,7 @@ pub fn op_chops_subtract_modulo(
     img: &DynamicImage,
     other: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| a.wrapping_sub(b))
+    channel_op_binary_with_policy(img, other, u8::wrapping_sub, true)
 }
 
 pub fn op_chops_logical_and(
