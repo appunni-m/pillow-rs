@@ -3742,7 +3742,11 @@ impl GpuAuxiliaryCache {
                         // byte-oriented operation could otherwise reuse the
                         // same image with the wrong packing.
                         if !gpu_luma16_paste_source(op, *op_mode, second) {
-                            let values = pack_rgba(&second.to_rgba8(), capacity)?;
+                            let values = if matches!(op, PipelineOp::ConvertLab { .. }) {
+                                crate::lab::gpu_table_words().to_vec()
+                            } else {
+                                pack_rgba(&second.to_rgba8(), capacity)?
+                            };
                             if cache.total_bytes().saturating_add(values.len() * 4)
                                 <= MAX_GPU_AUXILIARY_CACHE_BYTES
                             {
@@ -7235,7 +7239,23 @@ impl GpuInner {
                         Some(range)
                     }
                 } else if let Some(second) = auxiliary_images[index].second.as_ref() {
-                    if gpu_luma16_paste_source(op, op_mode, second) {
+                    if matches!(op, PipelineOp::ConvertLab { .. }) {
+                        let key = Arc::as_ptr(second) as usize;
+                        if let Some(range) = auxiliary_cache.second_ranges.get(&key).copied() {
+                            Some(range)
+                        } else if let Some(range) = second_cache.get(&key).copied() {
+                            Some(range)
+                        } else {
+                            let mut range = append_arena_slice(
+                                &mut img2_arena,
+                                crate::lab::gpu_table_words(),
+                                storage_alignment,
+                            );
+                            range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
+                            second_cache.insert(key, range);
+                            Some(range)
+                        }
+                    } else if gpu_luma16_paste_source(op, op_mode, second) {
                         let DynamicImage::ImageLuma16(source) = second.as_ref() else {
                             return Err(PilError::InternalError(
                                 "GPU typed Paste source was admitted without an ImageLuma16 buffer"
@@ -9735,6 +9755,9 @@ fn gpu_mode_after_op(mode: u32, op: &PipelineOp) -> u32 {
         PipelineOp::Color3DLut { target_mode, .. } => {
             gpu_pixel_mode_code(*target_mode).unwrap_or(mode)
         }
+        // LAB shares RGB's native three-byte storage after its fixed-point
+        // transform, so later packed-byte shaders use the RGB mode code.
+        PipelineOp::ConvertLab { .. } => 2,
         _ => mode,
     }
 }
@@ -9892,6 +9915,7 @@ fn gpu_batch_has_nonterminal_mode_change(ops: &[PipelineOp]) -> bool {
                     | PipelineOp::PutAlpha { .. }
                     | PipelineOp::PutAlphaData { .. }
                     | PipelineOp::Convert { .. }
+                    | PipelineOp::ConvertLab { .. }
                     | PipelineOp::EffectNoise { .. }
             )
     })
@@ -9913,6 +9937,7 @@ fn gpu_first_nonterminal_mode_change(ops: &[PipelineOp]) -> Option<usize> {
                     | PipelineOp::PutAlpha { .. }
                     | PipelineOp::PutAlphaData { .. }
                     | PipelineOp::Convert { .. }
+                    | PipelineOp::ConvertLab { .. }
                     | PipelineOp::EffectNoise { .. }
             ))
         .then_some(index)
@@ -9945,6 +9970,7 @@ fn gpu_logical_mode_after_op(
             ColorMode::P => Some("P"),
             ColorMode::Mode1 => Some("1"),
         },
+        PipelineOp::ConvertLab { .. } => Some("LAB"),
         PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => match mode {
             PixelMode::L | PixelMode::LA => Some("LA"),
             PixelMode::RGB | PixelMode::RGBA | PixelMode::YCbCr | PixelMode::HSV => Some("RGBA"),
@@ -9995,6 +10021,9 @@ fn extract_second_image(
     primary_dimensions: Option<(u32, u32)>,
     draw_source: Option<&DynamicImage>,
 ) -> Result<Option<Arc<DynamicImage>>, PilError> {
+    if matches!(op, PipelineOp::ConvertLab { .. }) {
+        return Ok(Some(crate::lab::gpu_table_image()));
+    }
     if crate::compute::pool_cpu::ops::draw::is_draw_op(op) {
         let rendered = if let Some(rendered) = draw_source {
             rendered.clone()
@@ -11401,6 +11430,13 @@ fn gpu_auxiliary_shapes_are_safe(
                         .and_then(|words| u32::try_from(words.len()).ok())
                         .map(|width| (width, 1))
         }
+        PipelineOp::ConvertLab { .. } => {
+            auxiliary.third.is_none()
+                && second
+                    == u32::try_from(crate::lab::GPU_TABLE_WORDS)
+                        .ok()
+                        .map(|width| (width, 1))
+        }
         PipelineOp::Paste { w, h, mask, .. } => {
             if *w <= 0 || *h <= 0 {
                 return false;
@@ -12125,6 +12161,7 @@ fn gpu_color_after_op(
             PixelMode::RGBA | PixelMode::CMYK => crate::raster::ColorType::Rgba8,
             _ => current,
         },
+        PipelineOp::ConvertLab { .. } => crate::raster::ColorType::Rgb8,
         _ => current,
     }
 }
@@ -16083,6 +16120,10 @@ impl GpuPool {
                 PipelineOp::Convert { mode, .. } => {
                     put_alpha_mode = None;
                     out_mode = gpu_output_color_type(mode);
+                }
+                PipelineOp::ConvertLab { .. } => {
+                    put_alpha_mode = None;
+                    out_mode = Some(crate::raster::ColorType::Rgb8);
                 }
                 PipelineOp::Colorize { .. } => {
                     put_alpha_mode = None;

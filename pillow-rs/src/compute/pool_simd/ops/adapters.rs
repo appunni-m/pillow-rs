@@ -4366,6 +4366,13 @@ pub(crate) fn simd_supports_for_image(
             matrix,
             dither: _,
         } => native_convert_supported_for_image(img, target, matrix.as_deref(), mode),
+        PipelineOp::ConvertLab { .. } => {
+            matches!(img, DynamicImage::ImageRgb8(_))
+                && matches!(mode, None | Some("RGB"))
+                && (img.width() as usize)
+                    .checked_mul(img.height() as usize)
+                    .is_some_and(|pixels| img.as_bytes().len() == pixels.saturating_mul(3))
+        }
         PipelineOp::Reduce { x_factor, y_factor } => {
             native_reduce_supported_for_image(img, *x_factor, *y_factor, mode)
         }
@@ -5565,6 +5572,7 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
                 _ => SimdLayout::Unsupported,
             };
         }
+        PipelineOp::ConvertLab { .. } => next.layout = SimdLayout::Rgb8,
         PipelineOp::Reduce { x_factor, y_factor } => {
             next.width = shape.width.div_ceil((*x_factor).max(1));
             next.height = shape.height.div_ceil((*y_factor).max(1));
@@ -5694,6 +5702,7 @@ fn concrete_simd_mode(img: &DynamicImage) -> Option<&'static str> {
 fn operation_target_mode(op: &PipelineOp) -> Option<&str> {
     match op {
         PipelineOp::Convert { mode, .. } => Some(color_mode_name(mode)),
+        PipelineOp::ConvertLab { .. } => Some("LAB"),
         // A merge's storage family can differ from its logical mode (LAB
         // uses RGB storage). Subsequent operations need the semantic tag.
         PipelineOp::Merge { logical_mode, .. } => Some(logical_mode),
@@ -5888,6 +5897,13 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             matrix,
             dither: _,
         } => native_convert_supported_for_shape(shape, target, matrix.as_deref(), mode),
+        PipelineOp::ConvertLab { .. } => {
+            matches!(shape.layout, SimdLayout::Rgb8)
+                && matches!(mode, None | Some("RGB"))
+                && (shape.width as usize)
+                    .checked_mul(shape.height as usize)
+                    .is_some()
+        }
         PipelineOp::Solarize { .. } | PipelineOp::Posterize { .. } => {
             shape_native_byte_channels(shape, mode)
                 .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels))
@@ -23902,6 +23918,21 @@ pub fn simd_convert(
         output,
         layout.target_channels,
     )
+}
+
+pub fn simd_convert_lab(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if !matches!(op, PipelineOp::ConvertLab { .. }) {
+        return Err(PilError::ValueError("expected ConvertLab op".into()));
+    }
+    if !matches!(img, DynamicImage::ImageRgb8(_)) || !matches!(mode, None | Some("RGB")) {
+        return Err(simd_unsupported("ConvertLab"));
+    }
+    crate::compute::record_pipeline_operation_path("scalar-control");
+    crate::lab::convert_rgb_image(img)
 }
 
 #[inline]

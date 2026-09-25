@@ -119,6 +119,8 @@ mod image;
 mod image_sequence;
 /// Shared helpers for converting between image buffers and modes.
 mod image_utils;
+/// Exact Pillow-compatible RGB-to-LAB byte conversion.
+mod lab;
 /// Reusable image operation implementations.
 mod ops;
 #[cfg(feature = "parallel")]

@@ -168,6 +168,11 @@ pub fn op_convert(
     }
 }
 
+/// Convert normalized RGB8 pixels to Pillow's packed LAB representation.
+pub fn op_convert_lab(img: &DynamicImage) -> Result<DynamicImage, PilError> {
+    crate::lab::convert_rgb_image(img)
+}
+
 /// Remap palette indices according to a destination map.
 /// PIL builds inverse lookup: inverse[dest_map[i]] = i, all else -> 0
 pub fn op_remap_palette(

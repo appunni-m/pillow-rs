@@ -121,6 +121,14 @@ pub enum PipelineOp {
         /// Optional dither method.
         dither: Option<DitherMethod>,
     },
+    /// Convert normalized RGB8 pixels to Pillow's packed LAB byte format.
+    ///
+    /// LAB uses RGB storage at the raster boundary, so it has a dedicated
+    /// operation instead of being represented as an ordinary `ColorMode`.
+    ConvertLab {
+        /// Output identity profile Pillow installs in `Image.info`.
+        icc_profile: Arc<[u8]>,
+    },
     /// Remap palette indices through a destination map.
     RemapPalette {
         /// Destination palette index map.
