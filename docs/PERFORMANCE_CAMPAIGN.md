@@ -2898,3 +2898,39 @@ ran. The selected-operation matrix retains 208 operations plus one constant,
 with zero fully completed operations. Broad evidence remains historical;
 focused-result integration and exports outside the manifest remain pending.
 No push or pre-push campaign is included in this checkpoint.
+
+## Darker baseline — 2026-09-25
+
+Work moved to `ImageChops.darker` after Difference checkpoint `b4074be28`.
+No Darker implementation attempt has been made yet. Maintained cases plus
+seven workflow inputs pass **171/171 comparisons**. The independent 19-mode
+shape audit and all 65,536 byte pairs pass **345/345**. Artifacts under
+`build/migration-parity/` are `perf-darker-20260925-initial-parity.json` and
+`perf-darker-20260925-initial-modes-parity.json`. Retaining those additional
+inputs and measuring fresh sustained throughput remain the next preparation.
+
+All eight workloads selected by names and workflow contents completed in
+`migration-benchmark-03e2e8d07b9b43c389084e317db7421c`, retained as
+`perf-darker-20260925-initial.json`; its existing exact benchmark gate passes.
+Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.014313 | 0.016459 | 0.017334 | 0.598313 |
+| 32 × 24 | 0.013917 | 0.015396 | 0.016063 | 0.297855 |
+| 1 × 1 | 0.012125 | 0.014521 | 0.015042 | 0.543417 |
+| 32 × 32 | 0.014104 | 0.015083 | 0.015501 | 0.327562 |
+| 256 × 256 | 0.122646 | 0.030813 | 0.030604 | 0.768625 |
+| 1024 × 768 | 1.708708 | 0.688480 | 0.371437 | 3.337708 |
+| SIMD Chops RGB chain | 2.688646 | 0.694458 | 0.556709 | 4.058229 |
+
+These seven rows have completed requested-backend receipts without fallback.
+The ordinary standard row has no terminal native receipt. CPU misses small
+inputs, SIMD misses 5× on every measured row, and GPU trails SIMD throughout.
+The current SIMD helper already performs packed byte minima and shares the
+secondary operand. Inspect output construction and public overhead before
+changing arithmetic. CPU still uses the general row scheduling policy, and GPU
+still expands native pixels to four-byte transport. Reuse the measured
+Difference findings, preserving Darker's mode/shape semantics. Do not repeat
+the rejected iterator or dispatch-layout experiments without a new hypothesis.
+No coverage collection or push ran.
