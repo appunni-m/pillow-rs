@@ -3095,3 +3095,32 @@ Remaining blockers:
 - Broader modes, sizes, state interactions, compositions, bindings and platforms remain unproven. The operation is not complete.
 
 These decisions reuse the existing skill’s byte-cost scheduling, compact transport and public-boundary rules. No speculative extra attempt was made to fill the attempt budget. The global selected matrix remains 208 operations plus one constant, with zero fully completed operations; it includes 781 workloads and historical broad timings. Focused-result integration remains pending. No coverage collection or push ran. Work moves to `ImageChops.add_modulo`.
+
+## Add Modulo baseline — 2026-09-25
+
+Work moved to `ImageChops.add_modulo` after Lighter checkpoint `0622ee10e`. No implementation attempt has been made yet. Original maintained/workflow cases pass **189/189 comparisons**, and an independent 19-mode shape audit plus every byte pair passes **345/345**. Added **112 maintained parity cases and four size workloads**, with zero existing cases/workloads modified or removed. The expanded unchanged-code baseline passes **537/537 comparisons**. Artifacts under `build/migration-parity/` use prefix `perf-add-modulo-20260925-` and suffixes `initial-parity.json`, `initial-modes-parity.json` and `initial-expanded-parity.json`.
+
+All eight workloads selected by names and workflow contents complete in `migration-benchmark-e69c90c1ecb44407b1a0498948aea429`, artifact `perf-add-modulo-20260925-initial.json`. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015375 | 0.016354 | 0.016730 | 0.547313 |
+| 32 × 24 | 0.015083 | 0.015604 | 0.016105 | 0.231375 |
+| 1 × 1 | 0.012938 | 0.014625 | 0.015666 | 0.539208 |
+| 32 × 32 | 0.015166 | 0.015626 | 0.015833 | 0.219812 |
+| 256 × 256 | 0.135167 | 0.033834 | 0.030583 | 0.602812 |
+| 1024 × 768 | 1.757334 | 0.683979 | 0.426584 | 3.290188 |
+| SIMD Chops RGB workload | 2.832792 | 0.852125 | 0.573416 | 3.888375 |
+
+These seven rows have completed native requested-backend receipts without fallback. The standard row lacks terminal native proof. The workload named a chain contains one Add Modulo operation; no fusion result is claimed. CPU misses small calls, SIMD misses 5× on every maintained row, and GPU trails SIMD throughout.
+
+Fresh baseline `perf-add-modulo-20260925-initial-throughput.json` contains **40,320 exact checks**, **38,400 measured completions**, unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.401062 | 0.210563 | 0.090083 | 2.856667 |
+| RGB | 2.244854 | 0.559729 | 0.401437 | 2.805334 |
+
+CPU still uses general row scheduling. GPU expands each input and the result to four-byte transport. SIMD already uses wrapping packed-byte addition, so ordinary modulo arithmetic is not the first optimization target. Start with the measured scheduling/transport mechanisms while preserving native channel semantics, clipping and tail bytes. Further instruction or allocation changes need new public-path evidence; do not repeat the rejected Difference/Darker experiments.
+
+The input inventory is now **15,829 parity cases and 785 workloads across 54 suites**. Static declarations and generated docs were refreshed; no coverage collection ran. The selected global matrix retains 208 operations plus one constant and zero fully completed operations. Historical broad evidence and missing focused-result integration remain explicit limitations. No push or pre-push verification campaign ran.

@@ -58,7 +58,8 @@ policy with Pillow's truncated byte product.
 and complete-output policy used by multiply. ``--operation difference`` uses
 that policy for exact per-byte absolute differences. ``--operation darker``
 uses the same policy for per-byte minima; ``--operation lighter`` computes
-per-byte maxima.
+per-byte maxima. ``--operation add-modulo`` uses the same fresh-pair policy
+for byte addition modulo 256.
 
 ``--operation blend`` measures ``ImageChops.blend`` at alpha 0.3. Each request
 constructs two fresh images from frame j and frame (j+1) modulo 16, blends them,
@@ -237,7 +238,7 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             fill = 173 if plan["mode"] == "L" else (17, 83, 149)
             image = image.transform(tuple(plan["size"]), 0, TRANSFORM_DATA,
                                     resample=0, fillcolor=fill)
-        elif plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "alpha-composite"):
+        elif plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "alpha-composite"):
             other_data = plan["pair_inputs"][(frame_id + 1) % len(plan["pair_inputs"])]
             other = image_api.frombytes(plan["mode"], tuple(plan["size"]), other_data)
             image = (image_api.alpha_composite(image, other)
@@ -258,6 +259,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
                      if plan["operation"] == "darker"
                      else plan["imagechops_api"].lighter(image, other)
                      if plan["operation"] == "lighter"
+                     else plan["imagechops_api"].add_modulo(image, other)
+                     if plan["operation"] == "add-modulo"
                      else plan["imagechops_api"].multiply(image, other))
         else:
             image = image.transpose(0).transpose(2)
@@ -302,7 +305,7 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         upload_bytes = byte_count if input_byte_count is None else input_byte_count
         if resource.get("upload_bytes", 0) < upload_bytes or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
-        if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "alpha-composite", "contrast", "color") and resource.get("auxiliary_bytes", 0) < byte_count:
+        if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "alpha-composite", "contrast", "color") and resource.get("auxiliary_bytes", 0) < byte_count:
             return "GPU binary-operation receipt does not account for the second image"
     return None
 
@@ -400,7 +403,7 @@ def child(args: argparse.Namespace) -> int:
     image_api = importlib.import_module("PIL.Image")
     if plan.get("operation") in ("equalize", "invert", "grayscale", "solarize"):
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
-    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "alpha-composite"):
+    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "alpha-composite"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
     if plan.get("operation") in ("contrast", "color"):
         plan["imageenhance_api"] = importlib.import_module("PIL.ImageEnhance")
@@ -409,7 +412,7 @@ def child(args: argparse.Namespace) -> int:
         core.set_pipeline_telemetry(True)  # once per process, never toggled by workers
     binaries = runtime_files(subject)
     inputs = [Path(frame["path"]).read_bytes() for frame in plan["frames"]]
-    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "alpha-composite"):
+    if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "alpha-composite"):
         plan["pair_inputs"] = inputs
     for frame, data in zip(plan["frames"], inputs):
         if len(data) != frame["length"] or digest(data) != frame["sha256"]:
@@ -540,7 +543,8 @@ def run(args: argparse.Namespace) -> int:
                                 if operation == "screen" else "two fresh frombytes images, difference, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "difference" else "two fresh frombytes images, darker, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "darker" else "two fresh frombytes images, lighter, terminal bytes, worker scheduling and receipt capture"
-                                if operation == "lighter" else "two fresh frombytes images, alpha_composite, terminal bytes, worker scheduling and receipt capture"
+                                if operation == "lighter" else "two fresh frombytes images, add_modulo, terminal bytes, worker scheduling and receipt capture"
+                                if operation == "add-modulo" else "two fresh frombytes images, alpha_composite, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "alpha-composite" else "fresh frombytes image, Contrast constructor including host mean and base allocation, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "contrast" else "fresh frombytes image, Color constructor and saved base, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
                                 if operation == "color" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
@@ -550,7 +554,7 @@ def run(args: argparse.Namespace) -> int:
                    "input_generator": "8192-byte tile (73*i+11*(i//17)+29)%256; "
                        + ("divide tile values by 4; " if operation == "equalize" else "")
                        + "frame j adds 41*j modulo 256"
-                       + ("; second image uses frame (j+1) modulo 16" if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "alpha-composite") else ""),
+                       + ("; second image uses frame (j+1) modulo 16" if operation in ("blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "alpha-composite") else ""),
                    "build_profile": "expected release via build-parity; binary identity recorded separately",
                    "check_only_policy": "one verification window per depth; no performance summary",
                    "cache_state": "warm workers/backend; fresh image and graph per request"},
@@ -623,7 +627,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "convert", "putpixel", "blend", "image-blend", "add", "subtract", "multiply", "screen", "difference", "darker", "lighter", "add-modulo", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))
