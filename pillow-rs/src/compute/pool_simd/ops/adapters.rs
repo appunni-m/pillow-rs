@@ -11226,48 +11226,71 @@ fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Ve
         native_lut_tables(&lut[1])?,
         native_lut_tables(&lut[2])?,
     ];
-    let interleave = u8x16::new([0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15]);
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
-    for start in (0..pixels).step_by(16) {
-        let active = (pixels - start).min(16);
-        let mut padded = [0u8; 16];
-        padded[..active].copy_from_slice(&source[start..start + active]);
-        let input = u8x16::new(padded);
-        let red = native_lut_chunk(input, &tables[0]).to_array();
-        let green = native_lut_chunk(input, &tables[1]).to_array();
-        let blue = native_lut_chunk(input, &tables[2]).to_array();
+    if pixels >= 65_536 {
+        for start in (0..pixels).step_by(16) {
+            let active = (pixels - start).min(16);
+            let mut padded = [0u8; 16];
+            padded[..active].copy_from_slice(&source[start..start + active]);
+            let input = u8x16::new(padded);
+            let red = native_lut_chunk(input, &tables[0]).to_array();
+            let green = native_lut_chunk(input, &tables[1]).to_array();
+            let blue = native_lut_chunk(input, &tables[2]).to_array();
 
-        for group in 0..4 {
-            let lane = group * 4;
-            let packed = u8x16::new([
-                red[lane],
-                red[lane + 1],
-                red[lane + 2],
-                red[lane + 3],
-                green[lane],
-                green[lane + 1],
-                green[lane + 2],
-                green[lane + 3],
-                blue[lane],
-                blue[lane + 1],
-                blue[lane + 2],
-                blue[lane + 3],
-                0,
-                0,
-                0,
-                0,
-            ])
-            .swizzle_relaxed(interleave)
-            .to_array();
-            let group_pixels = active.saturating_sub(lane).min(4);
-            if group_pixels != 0 {
+            // Large outputs benefit from writing the already-computed channel
+            // lanes directly: this avoids four vector interleave shuffles per
+            // block and the associated temporary 16-byte packs.
+            for lane in 0..active {
                 let output_start = (start + lane) * 3;
-                let output_len = group_pixels * 3;
-                output[output_start..output_start + output_len]
-                    .copy_from_slice(&packed[..output_len]);
+                output[output_start] = red[lane];
+                output[output_start + 1] = green[lane];
+                output[output_start + 2] = blue[lane];
             }
-            vector_blocks = vector_blocks.saturating_add(1);
+            vector_blocks = vector_blocks.saturating_add(4);
+        }
+    } else {
+        let interleave = u8x16::new([0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 13, 14, 15]);
+        for start in (0..pixels).step_by(16) {
+            let active = (pixels - start).min(16);
+            let mut padded = [0u8; 16];
+            padded[..active].copy_from_slice(&source[start..start + active]);
+            let input = u8x16::new(padded);
+            let red = native_lut_chunk(input, &tables[0]).to_array();
+            let green = native_lut_chunk(input, &tables[1]).to_array();
+            let blue = native_lut_chunk(input, &tables[2]).to_array();
+
+            for group in 0..4 {
+                let lane = group * 4;
+                let packed = u8x16::new([
+                    red[lane],
+                    red[lane + 1],
+                    red[lane + 2],
+                    red[lane + 3],
+                    green[lane],
+                    green[lane + 1],
+                    green[lane + 2],
+                    green[lane + 3],
+                    blue[lane],
+                    blue[lane + 1],
+                    blue[lane + 2],
+                    blue[lane + 3],
+                    0,
+                    0,
+                    0,
+                    0,
+                ])
+                .swizzle_relaxed(interleave)
+                .to_array();
+                let group_pixels = active.saturating_sub(lane).min(4);
+                if group_pixels != 0 {
+                    let output_start = (start + lane) * 3;
+                    let output_len = group_pixels * 3;
+                    output[output_start..output_start + output_len]
+                        .copy_from_slice(&packed[..output_len]);
+                }
+                vector_blocks = vector_blocks.saturating_add(1);
+            }
         }
     }
     Some((output, vector_blocks, 0))

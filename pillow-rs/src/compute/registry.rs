@@ -604,8 +604,8 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
             gpu_color_saturation_factor_params(*factor).is_some()
         }
         // Colorize uses the same integer floor-division LUT construction as
-        // Pillow's ImageOps._lut path.  The shader consumes all six public
-        // parameters, including the optional midpoint color.
+        // Pillow's ImageOps._lut path. The GPU packs that exact mapping into a
+        // per-sample RGB lookup table before the image dispatch.
         PipelineOp::Colorize {
             mid,
             blackpoint,
