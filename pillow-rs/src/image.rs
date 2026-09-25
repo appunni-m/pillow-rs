@@ -910,6 +910,129 @@ enum FromBytesMode {
     Mode1,
 }
 
+const MODE1_BYTE_PIXELS: [[u8; 8]; 256] = {
+    let mut table = [[0; 8]; 256];
+    let mut value = 0;
+    while value < 256 {
+        let mut bit = 0;
+        while bit < 8 {
+            table[value][bit] = if value & (128 >> bit) == 0 { 0 } else { 255 };
+            bit += 1;
+        }
+        value += 1;
+    }
+    table
+};
+
+/// Expand complete, validated mode-1 rows; input padding never becomes pixels.
+pub(crate) fn unpack_mode1_rows(packed: &[u8], width: usize, pixels: &mut [u8]) {
+    if width == 0 {
+        return;
+    }
+    let row_bytes = width.div_ceil(8);
+    debug_assert!(pixels.len().is_multiple_of(width));
+    debug_assert!(packed.len() >= row_bytes * (pixels.len() / width));
+    for (source, destination) in packed
+        .chunks_exact(row_bytes)
+        .zip(pixels.chunks_exact_mut(width))
+    {
+        let (blocks, tail) = destination.as_chunks_mut::<8>();
+        for (block, &byte) in blocks.iter_mut().zip(source) {
+            *block = MODE1_BYTE_PIXELS[usize::from(byte)];
+        }
+        if !tail.is_empty() {
+            tail.copy_from_slice(
+                &MODE1_BYTE_PIXELS[usize::from(source[blocks.len()])][..tail.len()],
+            );
+        }
+    }
+}
+
+/// Pack validated luma rows using Pillow's nonzero-pixel rule and MSB order.
+pub(crate) fn pack_mode1_rows(pixels: &[u8], width: usize, height: usize) -> Vec<u8> {
+    if width == 0 || height == 0 {
+        return Vec::new();
+    }
+    debug_assert!(pixels.len() >= width * height);
+    let row_bytes = width.div_ceil(8);
+    let mut packed = vec![0; row_bytes * height];
+    for (source, destination) in pixels
+        .chunks_exact(width)
+        .zip(packed.chunks_exact_mut(row_bytes))
+    {
+        let (blocks, tail) = source.as_chunks::<8>();
+        for (block, byte) in blocks.iter().zip(destination.iter_mut()) {
+            let word = u64::from_le_bytes(*block);
+            // Low-seven-bit sums cannot carry between bytes. Combining the
+            // sum's high bit with the original high bit tests every byte for
+            // nonzero, including values other than the usual 0/255 pair.
+            let flags = (((word & 0x7f7f_7f7f_7f7f_7f7f) + 0x7f7f_7f7f_7f7f_7f7f) | word)
+                & 0x8080_8080_8080_8080;
+            // Gather byte flags into MSB-first pixel order. Discarding the
+            // product's upper bits is intentional; input byte order is explicit.
+            *byte = ((flags >> 7).wrapping_mul(0x8040_2010_0804_0201) >> 56) as u8;
+        }
+        if !tail.is_empty() {
+            destination[blocks.len()] = tail.iter().enumerate().fold(0, |byte, (bit, &pixel)| {
+                byte | (u8::from(pixel != 0) << (7 - bit))
+            });
+        }
+    }
+    packed
+}
+
+#[cfg(test)]
+mod mode1_byte_block_tests {
+    use super::{pack_mode1_rows, unpack_mode1_rows};
+
+    #[test]
+    fn every_packed_byte_expands_in_msb_order() {
+        for value in 0..=255u8 {
+            let mut pixels = [0; 8];
+            unpack_mode1_rows(&[value], 8, &mut pixels);
+            for (bit, pixel) in pixels.into_iter().enumerate() {
+                assert_eq!(pixel, if value & (128 >> bit) != 0 { 255 } else { 0 });
+            }
+        }
+    }
+
+    #[test]
+    fn every_nonzero_byte_packs_as_a_set_bit() {
+        for position in 0..8 {
+            for background in [0, 1, 127, 128, 255] {
+                for value in 0..=255u8 {
+                    let mut pixels = [background; 8];
+                    pixels[position] = value;
+                    let expected = pixels.iter().enumerate().fold(0, |byte, (bit, &pixel)| {
+                        byte | (u8::from(pixel != 0) << (7 - bit))
+                    });
+                    assert_eq!(pack_mode1_rows(&pixels, 8, 1), [expected]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rows_keep_padding_separate_at_each_byte_boundary() {
+        for width in 0usize..=33 {
+            for height in 0..=3 {
+                let row_bytes = width.div_ceil(8);
+                let mut expected: Vec<u8> = (0..row_bytes * height)
+                    .map(|index| (index * 73 + 29) as u8)
+                    .collect();
+                let mut pixels = vec![0; width * height];
+                unpack_mode1_rows(&expected, width, &mut pixels);
+                if !width.is_multiple_of(8) {
+                    for row in expected.chunks_exact_mut(row_bytes) {
+                        row[row_bytes - 1] &= 255 << (8 - width % 8);
+                    }
+                }
+                assert_eq!(pack_mode1_rows(&pixels, width, height), expected);
+            }
+        }
+    }
+}
+
 pub(crate) enum ScalarImageSamples {
     Integer(Vec<i32>),
     Float(Vec<f64>),
@@ -1708,21 +1831,8 @@ impl Image {
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             FromBytesMode::Mode1 => {
-                // PIL packs 8 pixels per byte, MSB first, rows padded to byte boundary
-                let row_bytes = (w as usize).div_ceil(8);
                 let mut pixels = CheckedDims::new(w, h, 1)?.alloc_buffer();
-                for y in 0..h as usize {
-                    for x in 0..w as usize {
-                        let byte_idx = y * row_bytes + x / 8;
-                        let bit_idx = 7 - (x % 8); // MSB first
-                        let val = if (data[byte_idx] >> bit_idx) & 1 != 0 {
-                            255
-                        } else {
-                            0
-                        };
-                        pixels[y * w as usize + x] = val;
-                    }
-                }
+                unpack_mode1_rows(&data[..expected], w as usize, &mut pixels);
                 DynamicImage::ImageLuma8(
                     crate::raster::GrayImage::from_raw(w, h, pixels)
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
@@ -3668,21 +3778,11 @@ impl Image {
 
         // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
         if mode == "1" && img.color() == crate::raster::ColorType::L8 {
-            let gray = img.to_luma8();
-            let (w, h) = gray.dimensions();
-            let row_bytes = w.div_ceil(8) as usize;
-            let mut packed = vec![0u8; row_bytes * h as usize];
-            for y in 0..h as usize {
-                for x in 0..w as usize {
-                    let pixel = gray.get_pixel(x as u32, y as u32)[0];
-                    if pixel != 0 {
-                        let byte_idx = y * row_bytes + x / 8;
-                        let bit_idx = 7 - (x % 8);
-                        packed[byte_idx] |= 1 << bit_idx;
-                    }
-                }
-            }
-            return Ok(packed);
+            return Ok(pack_mode1_rows(
+                img.as_bytes(),
+                img.width() as usize,
+                img.height() as usize,
+            ));
         }
         Ok(img.as_bytes().to_vec())
     }

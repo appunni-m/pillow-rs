@@ -3325,3 +3325,49 @@ A separate phase diagnostic retained as `perf-logical-and-20260925-phases.py` an
 The source explains the next attacks: default mode-1 `frombytes` extracts and stores one bit at a time; `tobytes` clones the grayscale image and then repeatedly updates output bytes per pixel. Attempts two and three will target byte-block unpacking and borrowed block packing. Reserve the fourth attempt for GPU transport, which currently moves 3,145,728 bytes for each input and readback despite the packed public input being 98,304 bytes. CPU/SIMD tiny calls and every GPU target remain unresolved.
 
 No coverage collection or push ran. Inventory is **16,304 parity cases and 793 workloads across 54 suites**. The selected global matrix retains 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending.
+
+## Logical AND checkpoint — 2026-09-25
+
+Four implementation attempts are complete, counting the earlier shared clipping repair. This visit stops here under the attempt cap and moves to Logical OR; no operation-wide pass is claimed.
+
+1. **Parity first:** the shared unequal-size validation repair was retained in `35fa60a64`.
+2. **Packed input decoding:** replace eight per-pixel bit extractions with one 2 KiB lookup table entry and an eight-byte store. Retain MSB-first ordering and independent row padding.
+3. **Packed output encoding:** borrow the existing luma bytes, removing the full image clone. Test eight stored bytes for nonzero with carry-isolated word arithmetic, then gather the flags into one output byte. Preserve all nonzero sample values, not only 255; handle partial rows separately. Both I/O changes are retained.
+4. **GPU native-byte transport:** reuse the existing native-byte executor for a single equal-size mode-1 Logical AND, eliminating expanded RGBA transport. While checking its semantic admission, a stronger raw-sample audit found another parity defect. The fourth attempt includes the required correction on CPU, SIMD (including in-place and scalar helper paths), and both GPU layouts: Pillow tests each stored sample for truth and produces canonical 0/255 output. SIMD uses an unsigned minimum followed by a zero comparison; GPU uses carry-isolated per-byte truth flags. No fifth performance experiment was attempted.
+
+Mode-1 public `putdata`/`putpixel` can retain 1 and 2 as stored samples. Pillow Logical AND returns 255 for that pair, whereas the former bitwise implementation returned zero. Packed `frombytes` fixtures cannot expose this because they decode only 0/255 pixels; packed output alone also conceals noncanonical nonzero results. The first 13 new cases reproduce **33 failures in 39 comparisons**, retained in `perf-logical-and-stored-20260925-before-parity.json`. Fifteen maintained cases now cover every stored-byte pair, raw output and unchanged input observations, vector/word/grid tails, clipped strides, empty inputs, materialized inputs and composed execution. **Zero existing cases were modified or removed.**
+
+The final shared bit-I/O audit passes **1,839/1,842 comparisons**, including **45/45 new stored-sample comparisons**. Its only failures are exactly the same three pre-existing `1 → LAB` conversion failures recorded before these changes and at the earlier conversion checkpoint. They remain visible in `perf-mode1-io-20260925-final-parity.json`; this is not an all-green shared audit. The new materialized exhaustive case has a native GPU receipt with 65,536-byte inputs/readback, no fallback and canonical output. All **18/18 large Logical AND boundary comparisons** pass in `perf-logical-and-20260925-final-tiles-parity.json`. The focused Rust bit-I/O tests also pass: all 256 input bytes, 10,240 nonzero packing vectors and widths 0–33 with multiple row counts.
+
+The final unchanged seven-workload benchmark completes as `migration-benchmark-8e427dbc6ace48b4b166a2440032192d`, artifact `perf-logical-and-20260925-final.json`. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.016521 | 0.017417 | 0.019958 | 0.302458 |
+| 1 × 1 | 0.012708 | 0.015625 | 0.016855 | 0.536208 |
+| 32 × 32 | 0.013375 | 0.015771 | 0.016396 | 0.224500 |
+| 256 × 256 | 0.053334 | 0.025729 | 0.030291 | 0.295083 |
+| 1024 × 768 | 0.484083 | 0.338000 | 0.139229 | 0.858125 |
+| SIMD Chops mode-1 workload | 0.764334 | 0.363792 | 0.234979 | 0.911459 |
+
+Six materialized rows retain completed native requested-backend evidence without fallback. The standard row remains a terminal-evidence gap. Fresh 1024 × 768 evidence in `perf-logical-and-20260925-final-throughput.json` passes **20,160 exact checks**, including **19,200 measured completions**, with unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds are Pillow **1.234104**, CPU **0.286459**, SIMD **0.124667**, GPU **0.526583**. Completed fresh images per second:
+
+| Queue depth | Pillow | CPU | SIMD | GPU |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 797.0 | 3328.7 | 6976.2 | 1759.5 |
+| 2 | 975.6 | 6445.2 | 11583.8 | 3074.1 |
+| 4 | 1050.6 | 9353.2 | 16828.5 | 4768.5 |
+
+CPU/SIMD/GPU fresh medians improve from **1.407895/1.275750/4.361625 ms** to **0.286459/0.124667/0.526583 ms**. SIMD is about **9.9×** faster than Pillow for this fresh workload; that does not satisfy the smaller maintained workload requirements. GPU improves about **8.3×** against its baseline and increases throughput at every tested depth, but remains slower than SIMD. Each GPU input and readback now transfers **786,432 bytes**, down from 3,145,728; parameter bytes fall from 256 to 16 and mode conversions to zero. Stored samples remain byte-oriented; the packed public image is 98,304 bytes. Both imports, complete export, synchronization and allocation remain included. The odd-width 1031 × 769 fresh check adds **192/192 passing outputs** in `perf-logical-and-20260925-final-packed-check.json`.
+
+Intermediate evidence `perf-logical-and-20260925-attempts2-3*.json` isolates the retained I/O changes. Its SIMD phase diagnostic reduces the two imports from **404.000 + 419.584 µs** to **23.792 + 24.500 µs**, and lazy execution/export from **448.125 µs** to **69.271 µs**. The final diagnostic (`perf-logical-and-20260925-final-phases.json`, 512 exact outputs) records SIMD imports **24.562 + 25.667 µs**, execution/export **81.416 µs**, and GPU execution/export **465.750 µs** versus the initial 3,412.021 µs. These are diagnostic call phases, not isolated kernel comparisons: Pillow is eager and Rust is lazy.
+
+Remaining blockers and next decisions:
+
+- CPU still misses the smallest public calls. At larger sizes, CPU execution/export is about 184.687 µs in the final diagnostic; its old fine-row scheduling remains unchanged in this visit. Attribute fixed wrapper/allocation costs and use the existing measured cheap-byte scheduling policy when revisiting.
+- SIMD misses 5× on the maintained rows despite the fresh 1024 × 768 win. Further work must reduce caller/materialization overhead and memory passes, with separate tiny-input evidence.
+- GPU still misses SIMD latency and completed throughput at all measured queue depths. The byte path removes expansion but retains launch, mapping, output creation and eight stored bits per logical pixel. A packed-bit/resident route must count packing/unpacking and preserve canonical result samples and composed behavior. Host wait phases require direct attribution before changing completion policy. Small GPU timings also vary or regress; no universal improvement is claimed.
+- The stronger truth audit must be applied to Logical OR and XOR on their turns. Existing binary-decoded fixtures alone do not prove their stored-sample contract.
+- The three known LAB conversion failures remain at the conversion checkpoint. More bindings, modes, sizes, composed pipelines and platforms remain unproven.
+
+The reusable optimization skill now records byte-domain lookup expansion, carry-isolated bit packing, borrowing before materialization, row padding, eager/lazy attribution and mutation-created semantic states. The isolated release build and formatting/public-boundary checks passed. Generated documentation was refreshed from existing evidence; input generation updated static coverage declarations only. **No coverage collection or push ran.** Inventory is **16,319 parity cases and 793 workloads across 54 suites**. The selected global matrix still has 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending.

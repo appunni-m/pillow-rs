@@ -7263,8 +7263,8 @@ pub(crate) fn simd_execute_in_place(
                 img,
                 &other,
                 mode,
-                |left, right| left & right,
-                |left, right| left & right,
+                native_logical_and_vector,
+                |left, right| u8::from(left != 0 && right != 0) * 255,
             ))
         }
         PipelineOp::LogicalOr { other } => {
@@ -9051,10 +9051,19 @@ native_bytewise_chops!(
     |left: u8x16, right: u8x16| left.saturating_sub(right),
     |left: u8, right: u8| left.saturating_sub(right)
 );
+// A mode-1 sample need not be 0/255. The minimum is nonzero exactly when both
+// unsigned operands are nonzero; the comparison emits canonical result bytes.
+#[inline]
+fn native_logical_and_vector(left: u8x16, right: u8x16) -> u8x16 {
+    left.min(right)
+        .simd_eq(u8x16::ZERO)
+        .select(u8x16::ZERO, u8x16::splat(255))
+}
+
 native_bytewise_chops!(
     native_chops_logical_and,
-    |left: u8x16, right: u8x16| left & right,
-    |left: u8, right: u8| left & right
+    native_logical_and_vector,
+    |left: u8, right: u8| u8::from(left != 0 && right != 0) * 255
 );
 native_bytewise_chops!(
     native_chops_logical_or,
