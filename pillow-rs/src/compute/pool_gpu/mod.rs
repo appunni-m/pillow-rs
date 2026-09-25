@@ -8215,7 +8215,7 @@ impl GpuInner {
                     || image.color() != other.color()
                     || other.as_bytes().len() != length
             })
-            || other.is_some() != !matches!(op, PipelineOp::Solarize { .. })
+            || other.is_none() != matches!(op, PipelineOp::Solarize { .. })
         {
             return Err(PilError::InternalError(
                 "GPU native byte operation layout mismatch".into(),
@@ -8240,7 +8240,10 @@ impl GpuInner {
             ));
         }
         let in_place = matches!(op, PipelineOp::AlphaComposite { .. });
-        let separate_secondary = matches!(op, PipelineOp::Multiply { .. });
+        let separate_secondary = matches!(
+            op,
+            PipelineOp::Multiply { .. } | PipelineOp::BlendModule { .. }
+        );
         let (variant, shader_file, shader_source) = match op {
             PipelineOp::Multiply { .. } => (
                 "Multiply",
@@ -8251,6 +8254,11 @@ impl GpuInner {
                 "AlphaComposite",
                 "alpha_composite.wgsl",
                 include_str!("shaders/alpha_composite.wgsl"),
+            ),
+            PipelineOp::BlendModule { .. } => (
+                "BlendModule",
+                "blend_module.wgsl",
+                include_str!("shaders/blend_module.wgsl"),
             ),
             PipelineOp::Solarize { .. } => (
                 "Solarize",
@@ -8264,15 +8272,18 @@ impl GpuInner {
             }
         };
         let cached = self.resolve_pipeline(variant, shader_file, shader_source)?;
-        // Multiply/Solarize mode 9 packs four independent bytes. AlphaComposite
+        // Multiply/Solarize/BlendModule mode 9 packs four independent bytes. AlphaComposite
         // mode 9 packs two complete LA pixels; RGBA keeps its ordinary mode code.
         let mode = if in_place && channels == 4 { 3 } else { 9 };
-        let threshold = match op {
+        let parameter = match op {
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
+            PipelineOp::BlendModule { alpha, .. } => (*alpha as f32).to_bits(),
             _ => 0,
         };
-        let parameters = [columns, rows, mode, words, threshold, 0];
-        let parameter_words = if in_place {
+        let parameters = [columns, rows, mode, words, parameter, 0, 0, 0];
+        let parameter_words = if matches!(op, PipelineOp::BlendModule { .. }) {
+            8
+        } else if in_place {
             6
         } else if separate_secondary {
             4
@@ -10014,6 +10025,19 @@ fn gpu_native_byte_op_channels(
 ) -> Option<u8> {
     match op {
         PipelineOp::Multiply { .. } => gpu_native_multiply_channels(image, mode),
+        PipelineOp::BlendModule { .. } => match image {
+            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
+            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "La")) => Some(2),
+            DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
+                Some(3)
+            }
+            DynamicImage::ImageRgba8(_)
+                if matches!(mode, None | Some("RGBA" | "RGBa" | "RGBX" | "CMYK")) =>
+            {
+                Some(4)
+            }
+            _ => None,
+        },
         PipelineOp::Solarize { .. } => match image {
             DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
             DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
@@ -12136,7 +12160,7 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
         PipelineOp::Brightness { factor } => registry::gpu_brightness_factor_int(*factor).is_some(),
         PipelineOp::Contrast { factor } => registry::gpu_blend_alpha_params(*factor).is_some(),
         PipelineOp::ColorSaturation { factor } => {
-            registry::gpu_color_saturation_factor_int(*factor).is_some()
+            registry::gpu_color_saturation_factor_params(*factor).is_some()
         }
         PipelineOp::Sharpness { factor } => registry::gpu_sharpness_factor_int(*factor).is_some(),
         PipelineOp::Add { scale, offset, .. } => {

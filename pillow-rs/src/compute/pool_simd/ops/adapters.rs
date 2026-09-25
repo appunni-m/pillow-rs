@@ -6576,134 +6576,47 @@ where
     Some(result)
 }
 
-#[inline]
-fn clamp_trunc_u8(value: f64) -> u8 {
-    if value <= 0.0 {
-        0
-    } else if value >= 255.0 {
-        255
-    } else {
-        value as u8
-    }
-}
-
-#[inline]
-fn cmyk_contrast_gray(source: &[u8], start: usize) -> u8 {
-    let c = u32::from(source[start]);
-    let m = u32::from(source[start + 1]);
-    let y = u32::from(source[start + 2]);
-    let k = u32::from(source[start + 3]);
-    let nk = 255u32.saturating_sub(k);
-    let r = (nk as i32 - crate::color::muldiv255(c, nk) as i32).clamp(0, 255) as u8;
-    let g = (nk as i32 - crate::color::muldiv255(m, nk) as i32).clamp(0, 255) as u8;
-    let b = (nk as i32 - crate::color::muldiv255(y, nk) as i32).clamp(0, 255) as u8;
-    crate::color::rgb_to_luma_u8(r, g, b)
-}
-
-#[inline]
-fn cmyk_color_gray(source: &[u8], start: usize) -> u8 {
-    let c = u32::from(source[start]);
-    let m = u32::from(source[start + 1]);
-    let y = u32::from(source[start + 2]);
-    let k = u32::from(source[start + 3]);
-    let nk = 255u32.saturating_sub(k);
-    // ImageEnhance.Color's CMYK path uses integer floor division while the
-    // Contrast path uses the shared MULDIV255 conversion. Keep both Pillow
-    // control-plane contracts explicit before vectorizing the blend below.
-    let r = ((255 - c) * nk / 255) as u8;
-    let g = ((255 - m) * nk / 255) as u8;
-    let b = ((255 - y) * nk / 255) as u8;
-    crate::color::rgb_to_luma_u8(r, g, b)
-}
-
-#[inline]
-fn native_enhance_gray(
-    source: &[u8],
-    pixel: usize,
-    channels: usize,
-    mode: Option<&str>,
-    cmyk_color_path: bool,
-) -> f64 {
-    let start = pixel * channels;
-    let value = match (channels, mode) {
-        (1 | 2, _) => source[start],
-        (3, _) => crate::color::rgb_to_luma_u8(source[start], source[start + 1], source[start + 2]),
-        (4, Some("CMYK")) if cmyk_color_path => cmyk_color_gray(source, start),
-        (4, Some("CMYK")) => cmyk_contrast_gray(source, start),
-        (4, _) => crate::color::rgb_to_luma_u8(source[start], source[start + 1], source[start + 2]),
-        _ => 0,
-    };
-    f64::from(value)
-}
-
 fn vectorize_color_bytes(
     source: &[u8],
     output: &mut [u8],
     channels: usize,
-    active_channels: usize,
+    _active_channels: usize,
     mode: Option<&str>,
     factor: f64,
 ) -> (u64, u64) {
-    let mut vector_blocks = 0u64;
-    for (block, chunk) in output.chunks_exact_mut(8).enumerate() {
+    let alpha = f32x8::splat(factor as f32);
+    let vector_bytes = output.len() / 8 * 8;
+    for (block, chunk) in output[..vector_bytes].chunks_exact_mut(8).enumerate() {
         let offset = block * 8;
-        let mut input = [0.0; 8];
-        let mut base = [0.0; 8];
-        for lane in 0..8 {
+        let input = f32x8::new(std::array::from_fn(|lane| f32::from(source[offset + lane])));
+        let base = f32x8::new(std::array::from_fn(|lane| {
             let index = offset + lane;
-            let channel = index % channels;
-            input[lane] = f64::from(source[index]);
-            let gray = native_enhance_gray(
-                source,
-                index / channels,
-                channels,
-                mode,
-                mode == Some("CMYK"),
-            );
-            base[lane] = if mode == Some("CMYK") && channel == 3 {
-                255.0 - gray
-            } else if mode == Some("CMYK") {
-                0.0
-            } else {
-                gray
-            };
+            let start = index / channels * channels;
+            f32::from(
+                crate::ops::enhance::color_pixel_base(&source[start..start + channels], mode)
+                    [index % channels],
+            )
+        }));
+        let values = alpha.mul_add(input - base, base);
+        for (out, value) in chunk.iter_mut().zip(values.to_array()) {
+            *out = value.clamp(0.0, 255.0) as u8;
         }
-        let input = f64x8::new(input);
-        let base = f64x8::new(base);
-        let values = base + f64x8::splat(factor) * (input - base);
-        for (lane, value) in values.to_array().into_iter().enumerate() {
-            if lane % channels < active_channels {
-                chunk[lane] = clamp_trunc_u8(value);
-            }
-        }
-        vector_blocks += 1;
     }
-    let full_len = output.len() / 8 * 8;
-    let remainder = &mut output[full_len..];
-    let offset = full_len;
-    for (lane, destination) in remainder.iter_mut().enumerate() {
-        let index = offset + lane;
-        let channel = index % channels;
-        if channel >= active_channels {
-            continue;
-        }
-        let gray = native_enhance_gray(
-            source,
-            index / channels,
-            channels,
-            mode,
-            mode == Some("CMYK"),
+    for (lane, out) in output[vector_bytes..].iter_mut().enumerate() {
+        let index = vector_bytes + lane;
+        let start = index / channels * channels;
+        let base = f32::from(
+            crate::ops::enhance::color_pixel_base(&source[start..start + channels], mode)
+                [index % channels],
         );
-        let base = if mode == Some("CMYK") && channel == 3 {
-            255.0 - gray
-        } else if mode == Some("CMYK") {
-            0.0
-        } else {
-            gray
-        };
-        *destination = clamp_trunc_u8(base + factor * (f64::from(source[index]) - base));
+        *out = (factor as f32)
+            .mul_add(f32::from(source[index]) - base, base)
+            .clamp(0.0, 255.0) as u8;
     }
-    (vector_blocks, remainder.len() as u64)
+    (
+        (vector_bytes / 8) as u64,
+        (output.len() - vector_bytes) as u64,
+    )
 }
 
 fn native_enhance_output(
@@ -8788,26 +8701,29 @@ fn native_module_blend_arithmetic_supported(alpha: f64) -> bool {
         && (alpha as f32).is_finite()
 }
 
-/// Keep widening, clamping, truncation and packing in vector registers.
-/// Scalar extraction after each FMA adds branches and byte stores per lane.
+/// Blend independent bytes in four packed words. Extracting a byte position
+/// from each word avoids scalar gathers and widening/repacking temporary arrays.
 #[inline]
-fn native_module_blend_block(left: [u8; 16], right: [u8; 16], alpha: f32x8) -> [u8; 16] {
-    let left = u8x16::new(left);
-    let right = u8x16::new(right);
-    let blend = |left: i16x8, right: i16x8| {
-        let left = i32x8::from(left).round_float();
-        let right = i32x8::from(right).round_float();
+fn native_module_blend_block(left: [u8; 16], right: [u8; 16], alpha: f32x4) -> [u8; 16] {
+    const BYTE: u32x4 = u32x4::new([255; 4]);
+    const MAX: f32x4 = f32x4::new([255.0; 4]);
+    let left: [u32; 4] = bytemuck::cast(left);
+    let right: [u32; 4] = bytemuck::cast(right);
+    let left = u32x4::new(left.map(u32::from_le));
+    let right = u32x4::new(right.map(u32::from_le));
+    let channel = |shift: u32| {
+        let a: wide::i32x4 = bytemuck::cast((left >> shift) & BYTE);
+        let b: wide::i32x4 = bytemuck::cast((right >> shift) & BYTE);
+        let a = a.round_float();
         let value = alpha
-            .mul_add(right - left, left)
-            .max(f32x8::ZERO)
-            .min(f32x8::splat(255.0));
-        i16x8::from_i32x8_truncate(value.trunc_int())
+            .mul_add(b.round_float() - a, a)
+            .max(f32x4::ZERO)
+            .min(MAX);
+        let result: u32x4 = bytemuck::cast(value.trunc_int());
+        result << shift
     };
-    u8x16::narrow_i16x8(
-        blend(i16x8::from_u8x16_low(left), i16x8::from_u8x16_low(right)),
-        blend(i16x8::from_u8x16_high(left), i16x8::from_u8x16_high(right)),
-    )
-    .to_array()
+    let result = channel(0) | channel(8) | channel(16) | channel(24);
+    bytemuck::cast(result.to_array().map(u32::to_le))
 }
 
 /// Blend two matching native byte images with fused f32 vector arithmetic.
@@ -8848,7 +8764,7 @@ fn native_module_blend(
         return None;
     }
     let mut output = vec![0u8; left.len()];
-    let alpha_vector = f32x8::splat(alpha as f32);
+    let alpha_vector = f32x4::splat(alpha as f32);
     let mut left_chunks = left.chunks_exact(16);
     let mut right_chunks = right.chunks_exact(16);
     let mut output_chunks = output.chunks_exact_mut(16);
@@ -11450,7 +11366,9 @@ pub fn simd_color_saturation(
     let Some((channels, active_channels)) = native_enhance_layout(img, mode) else {
         return Err(simd_unsupported("ColorSaturation"));
     };
-    if !factor.is_finite() || !has_vectorized_float_bytes(img, channels) {
+    if !native_module_blend_arithmetic_supported(*factor)
+        || !has_vectorized_float_bytes(img, channels)
+    {
         return Err(simd_unsupported("ColorSaturation"));
     }
     let Some((result, vector_blocks, scalar_tail)) =

@@ -62,6 +62,9 @@ inputs and ``Image.alpha_composite``; every request completes one composite.
 from each fresh image and ``enhance(0.3)`` before exporting bytes. Base-image
 construction and its host mean calculation are inside the measured boundary.
 
+``--operation color`` includes construction of ``ImageEnhance.Color`` and its
+observable converted base, then ``enhance(0.3)`` and terminal bytes.
+
 ``--operation solarize`` applies ``ImageOps.solarize(image, 128)`` to each
 fresh L/RGB image before exporting its bytes.
 
@@ -207,8 +210,9 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             image = plan["imageops_api"].grayscale(image)
         elif plan.get("operation") == "solarize":
             image = plan["imageops_api"].solarize(image, 128)
-        elif plan.get("operation") == "contrast":
-            image = plan["imageenhance_api"].Contrast(image).enhance(0.3)
+        elif plan.get("operation") in ("contrast", "color"):
+            enhancer = plan["imageenhance_api"].Contrast if plan["operation"] == "contrast" else plan["imageenhance_api"].Color
+            image = enhancer(image).enhance(0.3)
         elif plan.get("operation") == "transform":
             fill = 173 if plan["mode"] == "L" else (17, 83, 149)
             image = image.transform(tuple(plan["size"]), 0, TRANSFORM_DATA,
@@ -270,7 +274,7 @@ def receipt_error(subject: str, receipt: Any, byte_count: int, operation: str = 
         upload_bytes = byte_count if input_byte_count is None else input_byte_count
         if resource.get("upload_bytes", 0) < upload_bytes or resource.get("readback_bytes", 0) < byte_count:
             return "GPU receipt does not account for a complete upload and readback"
-        if operation in ("blend", "image-blend", "add", "subtract", "multiply", "alpha-composite", "contrast") and resource.get("auxiliary_bytes", 0) < byte_count:
+        if operation in ("blend", "image-blend", "add", "subtract", "multiply", "alpha-composite", "contrast", "color") and resource.get("auxiliary_bytes", 0) < byte_count:
             return "GPU binary-operation receipt does not account for the second image"
     return None
 
@@ -370,7 +374,7 @@ def child(args: argparse.Namespace) -> int:
         plan["imageops_api"] = importlib.import_module("PIL.ImageOps")
     if plan.get("operation") in ("blend", "image-blend", "add", "subtract", "multiply", "alpha-composite"):
         plan["imagechops_api"] = importlib.import_module("PIL.ImageChops")
-    if plan.get("operation") == "contrast":
+    if plan.get("operation") in ("contrast", "color"):
         plan["imageenhance_api"] = importlib.import_module("PIL.ImageEnhance")
     core = None if subject == "Pillow" else importlib.import_module("pillow_rs._core")
     if core is not None:
@@ -497,7 +501,7 @@ def run(args: argparse.Namespace) -> int:
         "policy": {"host_queue_depths": list(DEPTHS), "frames_per_window": FRAMES,
                    "warmup_windows": WARMUPS, "measurement_iterations_per_sample": ITERATIONS,
                    "samples": SAMPLES, "operation": operation, "methods": [0, 2] if operation == "transpose" else [],
-                   "contrast_factor": 0.3 if operation == "contrast" else None,
+                   "contrast_factor": 0.3 if operation in ("contrast", "color") else None,
                    "solarize_threshold": 128 if operation == "solarize" else None,
                    "affine_coefficients": TRANSFORM_DATA if operation == "transform" else None,
                    "boundary": ("two fresh frombytes images, blend(alpha=0.3), terminal bytes, worker scheduling and receipt capture"
@@ -506,7 +510,8 @@ def run(args: argparse.Namespace) -> int:
                                 if operation == "subtract" else "two fresh frombytes images, multiply, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "multiply" else "two fresh frombytes images, alpha_composite, terminal bytes, worker scheduling and receipt capture"
                                 if operation == "alpha-composite" else "fresh frombytes image, Contrast constructor including host mean and base allocation, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
-                                if operation == "contrast" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
+                                if operation == "contrast" else "fresh frombytes image, Color constructor and saved base, enhance(0.3), terminal bytes, worker scheduling and receipt capture"
+                                if operation == "color" else "fresh frombytes through terminal bytes, worker scheduling and receipt capture"),
                    "comparison": "every output exactly matches live Pillow outside measured window",
                    "concurrency_claim": "host worker requests; simultaneous GPU kernels are not asserted",
                    "output_retention": "all outputs retained until window completion",
@@ -586,7 +591,7 @@ def run(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "image-blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "solarize"), default="transpose")
+    parser.add_argument("--operation", choices=("transpose", "equalize", "invert", "grayscale", "blend", "image-blend", "add", "subtract", "multiply", "transform", "alpha-composite", "contrast", "color", "solarize"), default="transpose")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mode", action="append", choices=("L", "LA", "RGB", "RGBA"), help="select input mode(s); defaults depend on operation")
     parser.add_argument("--size", nargs=2, type=int, default=[1024, 1024], metavar=("WIDTH", "HEIGHT"))

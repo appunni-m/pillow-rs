@@ -276,46 +276,10 @@ pub(crate) fn gpu_brightness_factor_int(factor: f64) -> Option<u32> {
     Some(factor_int)
 }
 
-/// Return the fixed-point factor when the Color enhancement WGSL kernel is
-/// exact for every possible byte sample and grayscale value.  Pillow computes
-/// the grayscale anchor with integer BT.601 arithmetic, then evaluates the
-/// channel blend in f64 and truncates after clamping.  The shader uses the
-/// same integer luma and a factor scaled by 1000; proving the two byte
-/// contracts in scalar preflight avoids admitting a neighboring rounding
-/// result as a GPU implementation.
+/// Color and module blend use the same fused float32 byte arithmetic.
 #[cfg(feature = "gpu")]
-pub(crate) fn gpu_color_saturation_factor_int(factor: f64) -> Option<u32> {
-    if !factor.is_finite() || factor < 0.0 {
-        return None;
-    }
-    let scaled = factor * 1000.0;
-    if !scaled.is_finite() || scaled > f64::from(i32::MAX) || scaled < 0.0 {
-        return None;
-    }
-    let factor_int = scaled as u32;
-    // The WGSL affine expression multiplies a byte by the factor numerator
-    // in i32.  Bound the numerator before the proof so every intermediate is
-    // representable on the device as well as in this host calculation.
-    if factor_int > (i32::MAX as u32) / 255 {
-        return None;
-    }
-    if f64::from(factor_int) != scaled {
-        return None;
-    }
-    let factor_int = factor_int as i32;
-    for luma in 0..=255_i32 {
-        for channel in 0..=255_i32 {
-            let cpu =
-                (f64::from(luma) + factor * f64::from(channel - luma)).clamp(0.0, 255.0) as u8;
-            let shader = (luma * (1000 - factor_int) + channel * factor_int)
-                .div_euclid(1000)
-                .clamp(0, 255) as u8;
-            if cpu != shader {
-                return None;
-            }
-        }
-    }
-    Some(factor_int as u32)
+pub(crate) fn gpu_color_saturation_factor_params(factor: f64) -> Option<u32> {
+    gpu_blend_alpha_params(factor)
 }
 
 /// Return the fixed-point factor when the Sharpness WGSL blend is exact for
@@ -630,10 +594,10 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // helper admits every factor whose 256 byte results match Pillow,
         // rather than restricting the real vector kernel to endpoints.
         PipelineOp::Brightness { factor } => gpu_brightness_factor_int(*factor).is_some(),
-        // Color saturation uses an integer luma anchor followed by the
-        // scalar-proven fixed-point blend represented by the real shader.
+        // Color saturation uses an integer luma anchor followed by the same
+        // fused float32 byte blend as the module operation.
         PipelineOp::ColorSaturation { factor } => {
-            gpu_color_saturation_factor_int(*factor).is_some()
+            gpu_color_saturation_factor_params(*factor).is_some()
         }
         // Colorize uses the same integer floor-division LUT construction as
         // Pillow's ImageOps._lut path.  The shader consumes all six public
@@ -1015,9 +979,9 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![gpu_blend_alpha_params(*factor).unwrap_or(0)]
         }
 
-        // ── ColorSaturation: scalar-proven factor * 1000 ──
+        // ── ColorSaturation: exact float32 factor bits ──
         PipelineOp::ColorSaturation { factor } => {
-            vec![gpu_color_saturation_factor_int(*factor).unwrap_or(0)]
+            vec![gpu_color_saturation_factor_params(*factor).unwrap_or(0)]
         }
 
         // ── Sharpness: scalar-proven fixed-point factor ──

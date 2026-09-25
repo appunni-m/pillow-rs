@@ -9,7 +9,7 @@ struct Params {
     height: u32,
     mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
     _pad: u32,
-    factor_int: u32,
+    factor: f32,
 }
 
 // ── Mode helpers ──
@@ -18,19 +18,14 @@ fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
-fn lerp_fn(ch: u32, luma: u32, f: u32) -> u32 {
-    // The public enhancement API permits factors above 1.0. Signed math
-    // preserves the extrapolation without unsigned underflow; the host
-    // safety bound keeps these products inside i32.
-    let fi = i32(f);
-    let value = i32(luma) * (1000i - fi) + i32(ch) * fi;
-    return u32(clamp(value / 1000i, 0i, 255i));
+fn lerp_fn(ch: u32, luma: u32, factor: f32) -> u32 {
+    return u32(clamp(fma(factor, f32(ch) - f32(luma), f32(luma)), 0.0, 255.0));
 }
 
-fn cmyk_component(value: u32, base: u32, f: u32) -> u32 {
-    let fi = i32(f);
-    let result = i32(base) * (1000i - fi) + i32(value) * fi;
-    return u32(clamp(result / 1000i, 0i, 255i));
+fn cmyk_rgb(c: u32, k: u32) -> u32 {
+    let nk = 255u - k;
+    let product = c * nk + 128u;
+    return nk - ((product + (product >> 8u)) >> 8u);
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -52,14 +47,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     // builds the Color enhancer's degenerate image through CMYK->RGB->L and
     // back to CMYK, so K has a different grayscale anchor from C/M/Y.
     if params.mode == 4u {
-        let cmyk_r = (255u - r) * (255u - a) / 255u;
-        let cmyk_g = (255u - g) * (255u - a) / 255u;
-        let cmyk_b = (255u - b) * (255u - a) / 255u;
+        let cmyk_r = cmyk_rgb(r, a);
+        let cmyk_g = cmyk_rgb(g, a);
+        let cmyk_b = cmyk_rgb(b, a);
         let gray = (19595u * cmyk_r + 38470u * cmyk_g + 7471u * cmyk_b + 32768u) >> 16u;
-        let out_c = cmyk_component(r, 0u, params.factor_int);
-        let out_m = cmyk_component(g, 0u, params.factor_int);
-        let out_y = cmyk_component(b, 0u, params.factor_int);
-        let out_k = cmyk_component(a, 255u - gray, params.factor_int);
+        let out_c = lerp_fn(r, 0u, params.factor);
+        let out_m = lerp_fn(g, 0u, params.factor);
+        let out_y = lerp_fn(b, 0u, params.factor);
+        let out_k = lerp_fn(a, 255u - gray, params.factor);
         output[idx] = out_c | (out_m << 8u) | (out_y << 16u) | (out_k << 24u);
         return;
     }
@@ -68,7 +63,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     // used because those modes are passed through below.
     let luma = (19595u * r + 38470u * g + 7471u * b + 32768u) >> 16u;
 
-    let f = params.factor_int;
+    let f = params.factor;
     let val_r = lerp_fn(r, luma, f);
     let val_g = lerp_fn(g, luma, f);
     let val_b = lerp_fn(b, luma, f);

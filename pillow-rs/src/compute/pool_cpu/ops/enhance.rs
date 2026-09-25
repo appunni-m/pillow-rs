@@ -1,6 +1,5 @@
 // ── Enhance operations extracted from image.rs execute_op() ──
 
-use crate::color::pil_grayscale;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::raster::{DynamicImage, GrayAlphaImage, RgbaImage};
@@ -184,90 +183,44 @@ pub fn op_enhance_color_saturation(
     factor: f64,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    // CMYK mode: stored as RGBA8 (C→R, M→G, Y→B, K→A).
-    // PIL Color: convert CMYK→L→CMYK to create grayscale degenerate, then blend.
-    // PIL's CMYK→L→CMYK round-trip: C=0, M=0, Y=0, K=255-L (NOT (L,L,L,255-L)).
-    if mode == Some("CMYK") {
-        let rgba = img.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        let mut out = rgba.clone();
-        let f = factor;
-        let source = rgba.as_raw();
-        apply_enhance_rows(out.as_mut(), w as usize, h as usize, 4, |row_index, row| {
-            let source_row = &source[row_index * w as usize * 4..(row_index + 1) * w as usize * 4];
-            for (pixel, source_pixel) in row.chunks_exact_mut(4).zip(source_row.chunks_exact(4)) {
-                // CMYK→RGB: R = (255-C)*(255-K)/255, G = (255-M)*(255-K)/255, B = (255-Y)*(255-K)/255
-                let c = source_pixel[0] as u32;
-                let m = source_pixel[1] as u32;
-                let y_ = source_pixel[2] as u32;
-                let k = source_pixel[3] as u32;
-                let r = (255 - c) * (255 - k) / 255;
-                let g = (255 - m) * (255 - k) / 255;
-                let b = (255 - y_) * (255 - k) / 255;
-                // BT.601 grayscale: Y = (19595*R + 38470*G + 7471*B + 32768) >> 16
-                let gray_val = ((19595 * r + 38470 * g + 7471 * b + 32768) >> 16).min(255) as f64;
-                // PIL degenerate for CMYK: C=0, M=0, Y=0, K=255-gray_val
-                // Blend: degenerate * (1-f) + original * f
-                // C = 0 * (1-f) + orig_C * f
-                pixel.copy_from_slice(&[
-                    (source_pixel[0] as f64 * f).clamp(0.0, 255.0) as u8,
-                    (source_pixel[1] as f64 * f).clamp(0.0, 255.0) as u8,
-                    (source_pixel[2] as f64 * f).clamp(0.0, 255.0) as u8,
-                    ((255.0 - gray_val) * (1.0 - f) + source_pixel[3] as f64 * f).clamp(0.0, 255.0)
-                        as u8,
-                ]);
-            }
-        });
-        return Ok(DynamicImage::ImageRgba8(out));
-    }
-    // Use PIL's rounded grayscale conversion (to_luma8 truncates)
-    let gray = pil_grayscale(img)?;
-    if matches!(
-        img,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) {
-        let mut rgba = img.to_rgba8();
-        let f = factor;
-        let gray = gray.as_raw();
-        let (width, height) = rgba.dimensions();
-        apply_enhance_rows(
-            rgba.as_mut(),
-            width as usize,
-            height as usize,
-            4,
-            |row_index, row| {
-                let gray_row = &gray[row_index * width as usize..(row_index + 1) * width as usize];
-                for (pixel, &gray_pixel) in row.chunks_exact_mut(4).zip(gray_row.iter()) {
-                    let g = gray_pixel as f64;
-                    for channel in pixel.iter_mut().take(3) {
-                        *channel = (g + f * (*channel as f64 - g)).clamp(0.0, 255.0) as u8;
-                    }
-                }
-            },
-        );
-        return Ok(preserve_alpha_result(img, rgba));
-    }
-    let mut rgb = img.to_rgb8();
-    let f = factor;
-    let gray = gray.as_raw();
-    let (width, height) = rgb.dimensions();
+    let channels = match img {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return Err(PilError::ValueError("image has wrong mode".into())),
+    };
+    let source = img.as_bytes();
+    let mut result = img.clone();
+    let output = result
+        .as_bytes_mut()
+        .ok_or_else(|| PilError::ValueError("image has wrong mode".into()))?;
+    let factor = factor as f32;
     apply_enhance_rows(
-        rgb.as_mut(),
-        width as usize,
-        height as usize,
-        3,
+        output,
+        img.width() as usize,
+        img.height() as usize,
+        channels,
         |row_index, row| {
-            let gray_row = &gray[row_index * width as usize..(row_index + 1) * width as usize];
-            for (pixel, &gray_pixel) in row.chunks_exact_mut(3).zip(gray_row.iter()) {
-                let g = gray_pixel as f64;
-                // blend formula: gray * (1-factor) + original * factor
-                for channel in pixel.iter_mut() {
-                    *channel = (g + f * (*channel as f64 - g)).clamp(0.0, 255.0) as u8;
+            let start = row_index * img.width() as usize * channels;
+            let end = start + row.len();
+            for (pixel, original) in row
+                .chunks_exact_mut(channels)
+                .zip(source[start..end].chunks_exact(channels))
+            {
+                let base = crate::ops::enhance::color_pixel_base(original, mode);
+                for channel in 0..channels {
+                    let base = f32::from(base[channel]);
+                    // Image.blend narrows factor to f32 and contracts the multiply
+                    // and addition. Even equal alpha samples become zero for NaN.
+                    pixel[channel] = factor
+                        .mul_add(f32::from(original[channel]) - base, base)
+                        .clamp(0.0, 255.0) as u8;
                 }
             }
         },
     );
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+    Ok(result)
 }
 
 pub fn op_enhance_sharpness(
