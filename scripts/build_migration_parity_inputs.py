@@ -686,6 +686,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "Lighter",
     "AddModulo",
     "SubtractModulo",
+    "LogicalAnd",
     "Brightness",
 )
 PIPELINE_EXPANDED_MATRIX_SIZES: tuple[tuple[int, int], ...] = (

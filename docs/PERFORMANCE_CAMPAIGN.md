@@ -3296,3 +3296,32 @@ evidence before optimizing scheduling, transport or bit packing. Inventory is
 matrix still has 208 operations plus one constant and zero fully completed
 operations; broad evidence is historical and focused-result integration remains
 pending.
+
+## Logical AND performance baseline — 2026-09-25
+
+The shared clipping parity repair is committed as `35fa60a64` and counts as attempt one. Four additional mode-1 size workloads were added without changing existing workloads; all **420/420** selected maintained/workflow comparisons pass after the repair. The throughput runner now accepts Logical AND with packed MSB-first mode-1 input rows, including padding at each row boundary. An odd-width 1031 × 769 check passes **192/192 outputs** with native execution receipts. Other operation/mode contracts are unchanged.
+
+All seven selected workloads complete in `migration-benchmark-ea0ca1b388a44ee8adbe11d0c351a40a`, artifact `perf-logical-and-20260925-baseline.json`. Six materialized workloads have terminal native requested-backend receipts without fallback. The standard row lacks terminal native evidence. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.014604 | 0.015562 | 0.018188 | 0.422188 |
+| 1 × 1 | 0.013042 | 0.014458 | 0.017000 | 0.267437 |
+| 32 × 32 | 0.013396 | 0.014999 | 0.017500 | 0.265397 |
+| 256 × 256 | 0.052979 | 0.049125 | 0.053979 | 0.425792 |
+| 1024 × 768 | 0.489355 | 0.692396 | 0.493479 | 4.325875 |
+| SIMD Chops mode-1 workload | 0.764187 | 0.885667 | 0.675437 | 5.420647 |
+
+Fresh evidence `perf-logical-and-20260925-baseline-throughput.json` records **20,160 exact checks**, including **19,200 measured completions**, with unchanged source hashes and consistent runtime binaries. Queue-one mode-1 medians at 1024 × 768 are Pillow **1.253333 ms**, CPU **1.407895 ms**, SIMD **1.275750 ms** and GPU **4.361625 ms**. Completed fresh images per second:
+
+| Queue depth | Pillow | CPU | SIMD | GPU |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 762.7 | 691.9 | 768.4 | 212.8 |
+| 2 | 956.8 | 1343.0 | 1482.8 | 344.6 |
+| 4 | 1057.0 | 2482.8 | 2647.9 | 564.6 |
+
+A separate phase diagnostic retained as `perf-logical-and-20260925-phases.py` and `perf-logical-and-20260925-baseline-phases.json` uses eight depth-one verification windows, discards the first two for stage medians and checks all outputs. It is not a performance gate. SIMD input construction takes **404.000 + 419.584 µs**, while lazy execution plus export takes **448.125 µs**. CPU input construction takes **427.812 + 438.396 µs**, execution/export **569.979 µs**. GPU input construction takes **395.938 + 411.312 µs**, execution/export **3,412.021 µs**. Pillow performs the logical kernel during its operation call; Rust defers it to export, so these individual call phases are not like-for-like kernel comparisons. The full public timings remain the primary evidence.
+
+The source explains the next attacks: default mode-1 `frombytes` extracts and stores one bit at a time; `tobytes` clones the grayscale image and then repeatedly updates output bytes per pixel. Attempts two and three will target byte-block unpacking and borrowed block packing. Reserve the fourth attempt for GPU transport, which currently moves 3,145,728 bytes for each input and readback despite the packed public input being 98,304 bytes. CPU/SIMD tiny calls and every GPU target remain unresolved.
+
+No coverage collection or push ran. Inventory is **16,304 parity cases and 793 workloads across 54 suites**. The selected global matrix retains 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending.
