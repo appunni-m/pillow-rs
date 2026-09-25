@@ -40631,6 +40631,8 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             if mode != "La" or label not in ("tail17", "clipped", "zero-width"):
                 for operation in ("screen", "difference", "darker", "lighter", "add_modulo", "subtract_modulo"):
                     cases.append(make_case(mode, channels, size, other_size, label, operation=operation))
+            for operation in ("logical_and", "logical_or", "logical_xor"):
+                cases.append(make_case(mode, channels, size, other_size, label, operation=operation))
     raws = (bytes(left for left in range(256) for right in range(256)),
             bytes(right for left in range(256) for right in range(256)))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws))
@@ -40640,6 +40642,20 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "lighter"))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "add_modulo"))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "subtract_modulo"))
+    for operation in ("logical_and", "logical_or", "logical_xor"):
+        # Mode 1 accepts packed input bytes. Exhaust all byte pairs while the
+        # operation still acts on individual binary pixels after decoding.
+        cases.append(make_case("1", 0, (2048, 256), (2048, 256),
+                               "packed-byte-pairs", raws, operation))
+        for size, other_size, label in (
+            ((13, 9), (17, 11), "clipped-reverse"),
+            ((17, 9), (13, 11), "clipped-cross"),
+            ((0, 3), (17, 11), "empty-left"),
+            ((17, 11), (0, 3), "empty-right"),
+            ((17, 0), (13, 9), "empty-height-left"),
+            ((13, 9), (17, 0), "empty-height-right"),
+        ):
+            cases.append(make_case("1", 0, size, other_size, label, operation=operation))
     # Native GPU words cross one workgroup and the compact-grid cutoff here.
     # Include a partial final word and rectangular row, not only pixel tails.
     for mode, channels, size, label in (
