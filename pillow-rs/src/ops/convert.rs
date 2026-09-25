@@ -259,18 +259,22 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
+        let src_mode = self.mode()?;
+        if src_mode == "La" && !matches!(mode, "La" | "LA") && matrix.is_none() {
+            // Only La->LA has a direct converter. All other destinations
+            // retry through the L base, which Pillow cannot produce from La.
+            return Err(PilError::ValueError(
+                "conversion from La to L not supported".into(),
+            ));
+        }
         // Validate the target before source-specific conversion dispatch. The
         // Python wrapper used to reject unknown modes first, which made this
         // public Rust error path unreachable and allowed an unknown target to
         // slip through for some non-standard source modes. PA is handled by
         // the explicit palette-alpha path below but is not a ColorMode enum.
-        if mode != "PA" && !is_luma16_mode(mode) {
+        if !matches!(mode, "PA" | "RGBX" | "RGBa" | "La") && !is_luma16_mode(mode) {
             parse_mode(mode).map_err(|_| PilError::ValueError("image has wrong mode".into()))?;
         }
-
-        // PIL: convert() without mode arg keeps same mode for most types,
-        // but converts P→RGB (palette images default to RGB when no mode given).
-        let src_mode = self.mode()?;
 
         // Pillow stores bilevel "1" pixels as 0/255; our core keeps the raw
         // 0/1 bytes, so every conversion FROM "1" must map 1 -> 255 first
@@ -295,16 +299,122 @@ impl Image {
                 .map(|result| Image::from_dynamic(result, explicit_mode_for(mode)));
         }
 
-        if mode == src_mode && src_mode != "P" {
+        if mode == src_mode {
             return Ok(self.copy());
         }
 
-        if src_mode == "La" && mode == "L" {
-            // Pillow cannot drop premultiplied luma's alpha directly, even
-            // for empty input. Reject at the public call, before queuing work.
-            return Err(PilError::ValueError(
-                "conversion from La to L not supported".into(),
+        if src_mode == "La" || (src_mode == "RGBa" && !matches!(mode, "P" | "PA")) {
+            let straight =
+                crate::ops::pil_resize::unpremultiply_alpha(self.materialized_shared()?.as_ref());
+            if matches!((src_mode.as_str(), mode), ("La", "LA") | ("RGBa", "RGBA")) {
+                return Ok(Image::from_dynamic(straight, None));
+            }
+            // RGBa has a direct RGB converter. Its other destinations retry
+            // through RGB, so a later LA conversion installs opaque alpha.
+            return Image::from_dynamic(DynamicImage::ImageRgb8(straight.to_rgb8()), None)
+                .convert(mode, None, dither, _palette, _colors);
+        }
+        // RGBa has direct palette converters that quantize its stored RGB
+        // samples; unlike the RGB fallback they do not unpremultiply first.
+
+        if matches!(mode, "RGBa" | "La") {
+            if src_mode == "P" {
+                return Err(PilError::ValueError("conversion not supported".into()));
+            }
+            if matches!((src_mode.as_str(), mode), ("RGBA", "RGBa") | ("LA", "La")) {
+                let premultiplied =
+                    crate::ops::pil_resize::premultiply_alpha(self.materialized_shared()?.as_ref());
+                return Ok(Image::from_dynamic(premultiplied, Some(mode.to_owned())));
+            }
+            if matches!(src_mode.as_str(), "1" | "L" | "LA" | "I" | "F")
+                || is_luma16_mode(&src_mode)
+            {
+                return Err(PilError::ValueError(format!(
+                    "conversion from L to {mode} not supported"
+                )));
+            }
+            // RGB has direct opaque RGBa/La converters. RGBA->La and the
+            // other color modes first normalize to RGB, discarding alpha.
+            let rgb = self.convert("RGB", None, dither, _palette, _colors)?;
+            let rgb = rgb.materialized_shared()?;
+            let converted = if mode == "RGBa" {
+                DynamicImage::ImageRgba8(rgb.to_rgba8())
+            } else {
+                DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&rgb)?)
+            };
+            return Ok(Image::from_dynamic(converted, Some(mode.to_owned())));
+        }
+
+        if mode == "RGBX" {
+            // LA/PA preserve their alpha in X; RGBA's direct converter
+            // instead supplies 255. Palette X consumes attached palette
+            // alpha, but does not promote info["transparency"].
+            let target = if matches!(src_mode.as_str(), "LA" | "PA") {
+                "RGBA"
+            } else {
+                "RGB"
+            };
+            let converted = self.convert(target, None, dither, _palette, _colors)?;
+            let mut rgba = converted.materialized_shared()?.to_rgba8();
+            if src_mode == "P" {
+                if let Some(alpha) = self.palette_alpha() {
+                    let indices = self.materialized_shared()?;
+                    for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
+                        pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
+                    }
+                }
+            }
+            return Ok(Image::from_dynamic(
+                DynamicImage::ImageRgba8(rgba),
+                Some(mode.to_owned()),
             ));
+        }
+
+        if src_mode == "PA" && mode == "P" {
+            // Dropping PA alpha preserves indices and the existing palette;
+            // expanding and requantizing colors can change both.
+            return Ok(Image::Loaded(crate::image::LoadedData {
+                image: std::sync::Arc::new(DynamicImage::ImageLuma8(
+                    self.materialized_shared()?.to_luma8(),
+                )),
+                explicit_mode: Some("P".to_owned()),
+                decoded_mode: crate::raster::ColorType::L8.into(),
+                palette: self.palette(),
+                palette_alpha: self.palette_alpha(),
+                source_format: self.source_format(),
+                info: self.image_info(),
+                exif: self.exif_metadata(),
+            }));
+        }
+
+        if is_luma16_mode(&src_mode) && matches!(mode, "I" | "F" | "P" | "PA" | "HSV" | "YCbCr") {
+            if src_mode != "I;16N" && matches!(mode, "I" | "F") {
+                let source = self.materialized_shared()?;
+                let DynamicImage::ImageLuma16(samples) = source.as_ref() else {
+                    return Err(PilError::InternalError(
+                        "invalid unsigned-16 storage".into(),
+                    ));
+                };
+                let mut result = crate::raster::RgbaImage::new(samples.width(), samples.height());
+                for (output, sample) in result.pixels_mut().zip(samples.pixels()) {
+                    // I;16/I;16L/I;16B have direct numeric I/F converters.
+                    // I;16N retries through L, clipping before widening.
+                    output.0 = if mode == "I" {
+                        i32::from(sample[0]).to_le_bytes()
+                    } else {
+                        f32::from(sample[0]).to_le_bytes()
+                    };
+                }
+                return Ok(Image::from_dynamic(
+                    DynamicImage::ImageRgba8(result),
+                    Some(mode.to_owned()),
+                ));
+            }
+            // The remaining destinations retry through clipped L. Palette
+            // results use identity gray indices; YCbCr copies that L sample
+            // rather than recomputing Y from an RGB expansion.
+            let luma = self.convert("L", None, None, None, None)?;
+            return luma.convert(mode, None, dither, _palette, _colors);
         }
 
         // Pillow's typed I;16 converters consume an 8-bit luma sample as the
@@ -334,7 +444,14 @@ impl Image {
                     || PilError::InternalError("I;16 conversion buffer shape mismatch".into()),
                 )?
             } else {
-                let luma = self
+                // YCbCr has a direct Y-band converter only for L/LA. Its
+                // unsigned-16 destinations retry through RGB before luma.
+                let source = if src_mode == "YCbCr" {
+                    self.convert("RGB", None, None, None, None)?
+                } else {
+                    self.clone()
+                };
+                let luma = source
                     .convert("L", None, None, None, None)?
                     .materialize()?
                     .to_luma8();
@@ -348,13 +465,6 @@ impl Image {
                 Some(mode.to_owned()),
             ));
         }
-        // P-mode same-mode: PIL defaults to RGB
-        let mode = if mode == src_mode && src_mode == "P" {
-            "RGB"
-        } else {
-            mode
-        };
-
         // Handle conversion from non-standard modes (CMYK, HSV, YCbCr, I, F, P).
         // These modes store pixel data in standard DynamicImage containers but with
         // a different interpretation (e.g., CMYK values stored as RGBA). We must

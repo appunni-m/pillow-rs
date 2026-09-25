@@ -1830,8 +1830,13 @@ pub fn web_palette_quantize(
     h: u32,
     dither: bool,
 ) -> Result<(Vec<u8>, Vec<u8>), PilError> {
-    let dims_pixels = CheckedDims::new(w, h, 1)?;
+    let dims_pixels = CheckedDims::new_allow_empty(w, h, 1)?;
     let mut out = dims_pixels.alloc_buffer();
+    if w == 0 || h == 0 {
+        // Empty conversion still installs the normal WEB palette but has
+        // neither pixel work nor a row of diffusion errors to allocate.
+        return Ok((out, WEB_PALETTE.to_vec()));
+    }
 
     if dither {
         // PIL-identical Floyd-Steinberg dither with WEB palette.
