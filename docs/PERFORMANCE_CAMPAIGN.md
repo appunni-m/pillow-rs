@@ -4259,3 +4259,48 @@ Receipts and timing artifacts are under `build/migration-parity/`, including
 `parity-imageops-colorize-simd-20260926-threshold.json`,
 `parity-imageops-colorize-gpu-20260926-threshold.json`, and
 `perf-imageops-colorize-20260926-threshold.json`. No coverage collection ran.
+
+## Verify checkpoint — 2026-09-26
+
+The focused `PIL.Image.Image.verify` cohort passes 25/25 on strict CPU. The
+oracle distinguishes the generic `Image.verify()` no-op from file-backed
+`ImageFile.verify()` behavior. The wrapper now records whether an image came
+from `Image.open()` and delegates verification only for that encoded source;
+new and derived images follow the generic no-op contract even when their Rust
+representation is a deferred pipeline. This prevents `verify()` from forcing
+the same deferred pipeline a second time. It preserves the file-backed path,
+and no parity assertions or fixtures changed.
+
+Two bounded attempts were enough to locate the useful boundary. A PyO3 fast
+path that avoided releasing the GIL for already-loaded images did not produce
+a measurable public-latency gain and was reverted. The provenance guard was
+retained because it removes redundant work on derived pipelines and expresses
+the source API's class behavior. The extension was rebuilt after reverting the
+first attempt so the final measurements match the checked-in source.
+
+The official whole-workflow run used five warmups, 20 iterations per sample,
+five samples for the standard row; the three matrix rows used one warmup, three
+iterations per sample, and two samples. Median latency is in microseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 16 × 16 RGB new + verify | 4.375 | 5.750 | 5.875 | 5.417 |
+| matrix-030, two-operation chain | 17.979 | 20.208 | 22.313 | 335.855 |
+| matrix-031, two-operation chain | 12.605 | 13.334 | 14.146 | 295.188 |
+| matrix-034, three-operation chain | 19.188 | 22.604 | 23.500 | 592.042 |
+
+Only the standard Verify workload has a parity-pass benchmark gate. Matrix rows
+passed their successful-execution gates; the separate 25-case strict cohort is
+the Verify parity evidence. The standard workflow still loses to Pillow on all
+target backends. Phase medians attribute most of its deficit to setup: Pillow
+spends 3.167 µs in setup versus 4.042 µs on CPU, while a direct method-only
+measurement puts the wrapper's conditional no-op overhead at about 0.020 µs.
+The next operation is therefore `PIL.Image.new`, which constructs that image;
+further micro-optimizing the no-op method cannot recover the workflow gap.
+GPU matrix latency is dominated by terminal dispatch/completion and is not a
+Verify cost. These runs did not measure changing-input concurrent throughput.
+
+Receipts are `build/migration-parity/parity-verify-20260926-final.json` and
+`build/migration-parity/perf-image-verify-20260926-final.json`. The final
+benchmark artifact passes schema validation, and `RUSTC_WRAPPER= make build-parity`
+succeeds. No coverage collection ran.
