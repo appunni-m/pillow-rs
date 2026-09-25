@@ -8246,6 +8246,7 @@ impl GpuInner {
             op,
             PipelineOp::Multiply { .. }
                 | PipelineOp::Screen { .. }
+                | PipelineOp::Overlay { .. }
                 | PipelineOp::Difference { .. }
                 | PipelineOp::Darker { .. }
                 | PipelineOp::Lighter { .. }
@@ -8270,6 +8271,11 @@ impl GpuInner {
             PipelineOp::Screen { .. } => {
                 ("Screen", "screen.wgsl", include_str!("shaders/screen.wgsl"))
             }
+            PipelineOp::Overlay { .. } => (
+                "Overlay",
+                "overlay.wgsl",
+                include_str!("shaders/overlay.wgsl"),
+            ),
             PipelineOp::Difference { .. } => (
                 "Difference",
                 "difference.wgsl",
@@ -10085,6 +10091,7 @@ fn gpu_native_byte_op_channels(
     match op {
         PipelineOp::Multiply { .. }
         | PipelineOp::Screen { .. }
+        | PipelineOp::Overlay { .. }
         | PipelineOp::Difference { .. }
         | PipelineOp::Darker { .. }
         | PipelineOp::Lighter { .. }
