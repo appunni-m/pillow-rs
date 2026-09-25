@@ -93,7 +93,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- alpha_composite.wgsl
 |   |   |   |       |-- autocontrast.wgsl
 |   |   |   |       |-- autocontrast_cutoff.wgsl
-|   |   |   |       |-- autocontrast_histogram.wgsl
 |   |   |   |       |-- autocontrast_remap.wgsl
 |   |   |   |       |-- blend_module.wgsl
 |   |   |   |       |-- box_blur.wgsl
@@ -104,6 +103,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- color_saturation.wgsl
 |   |   |   |       |-- colorize.wgsl
 |   |   |   |       |-- composite_module.wgsl
+|   |   |   |       |-- composite_native.wgsl
 |   |   |   |       |-- constant.wgsl
 |   |   |   |       |-- contain.wgsl
 |   |   |   |       |-- contrast.wgsl
@@ -350,6 +350,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_docs_site.py
     |-- test_font_native_cases.py
     |-- test_font_variant_parity.py
+    |-- test_grayscale_rgb_domain.py
     |-- test_optimization_goals.py
     |-- test_parity_reduction.py
     |-- test_receipt_state.py
