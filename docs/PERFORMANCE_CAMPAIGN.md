@@ -2179,3 +2179,69 @@ constant-setup advice was removed. Static indices contain 13,508 parity cases,
 24 coverage declarations, 773 workloads and 54 suites. No coverage collection
 ran. Color is checkpointed as incomplete; no public operation has every target
 demonstrated.
+
+## Conversion baseline and parity findings — 2026-09-25
+
+This visit starts after Color commit `cd5c14bd6`. No conversion implementation
+attempt has been made yet. The first repair will address mode routing and
+premultiplied sample interpretation before performance changes. The visit still
+has the same three-to-four-attempt limit; unresolved families must remain
+documented when the campaign moves on.
+
+The maintained 803 conversion cases plus six workflow benchmarks pass
+**2,427/2,427 comparisons**, retained as
+`build/migration-parity/perf-convert-20260925-initial-parity.json`.
+A separate varied audit crosses 19 source modes with 20 destination modes at
+17 × 3, plus zero-width/height cases for L, LA, RGB and RGBA: 540 cases and
+1,620 backend comparisons. It passes **1,099** and fails **521**, retained in
+`perf-convert-20260925-varied-initial-parity.json` under that same directory.
+
+| Requested backend | Passing comparisons | Failing comparisons |
+| --- | ---: | ---: |
+| CPU | 392 | 148 |
+| SIMD | 317 | 223 |
+| GPU | 390 | 150 |
+
+The varied probe explicitly locks terminal pipelines to the requested backend.
+Its SIMD failures include 89 `NotImplementedError` outcomes for unsupported
+layouts/modes, which are capability or validation-order gaps, not all pixel
+arithmetic failures. The CPU failures already establish independent public
+parity defects. Principal groups to repair or retain as blockers:
+
+- Destination admission rejects RGBX, RGBa, La and LAB, including conversions
+  Pillow accepts and cases with different required error text.
+- RGBa conversion often treats premultiplied channels as straight RGB; La→LA
+  also returns different pixels. Some La routes accept inputs Pillow rejects.
+- Typed I;16→I/F/P/PA, YCbCr→I;16-family, and PA→P have differing sample or
+  palette semantics. Empty RGB→P/PA incorrectly rejects zero dimensions.
+- Two additional GPU pixel mismatches appear in CMYK→HSV and YCbCr→HSV.
+  Unsupported SIMD routing must be distinguished from an exact CPU fallback.
+
+Seven unchanged benchmark workloads ran as
+`migration-benchmark-0a136aca3c714381b82dea21b06a21b2`, retained in
+`perf-convert-20260925-initial.json`; its one existing exact gate passes.
+Inspection shows that **all seven call `convert()` with no destination mode**.
+They validly measure the copy/default-mode behavior, but none records native
+conversion execution. They cannot establish RGB→L or L→RGB latency, SIMD
+speedup, or GPU capability. This is a workload representativeness gap; the
+existing definitions and thresholds were left unchanged.
+
+An additional explicit-conversion stage probe uses 72 fresh requests per
+subject/direction, with eight warmup requests, and passes **432/432 exact
+comparisons**. It includes fresh `frombytes`, conversion and terminal export;
+every target request records one native operation, with one GPU dispatch and
+no fallback. Receipt: `perf-convert-20260925-initial-stages.json`. Median total
+milliseconds at 1024 × 768:
+
+| Conversion | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB→L | 0.460813 | 0.141417 | 2.019209 | 1.935730 |
+| L→RGB | 0.631500 | 0.267167 | 2.237250 | 1.743792 |
+
+This serial, instrumented diagnostic is not sustained-throughput evidence.
+Both SIMD directions are substantially slower than CPU and Pillow. The source
+inspection identifies repeated scalar gathers and wide constants in RGB→L,
+and per-block shuffle-index construction, padding and append bookkeeping in
+L→RGB. A previously verified packed grayscale helper already exists and should
+be considered before adding another RGB→L implementation. These performance
+investigations remain behind the parity repairs. No coverage collection ran.
