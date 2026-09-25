@@ -383,9 +383,7 @@ pub fn op_chops_difference(
     img: &DynamicImage,
     other: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| {
-        (a as i16 - b as i16).unsigned_abs() as u8
-    })
+    channel_op_binary_with_policy(img, other, u8::abs_diff, true)
 }
 
 pub fn op_chops_overlay(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {

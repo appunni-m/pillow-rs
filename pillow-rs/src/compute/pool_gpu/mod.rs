@@ -8246,6 +8246,7 @@ impl GpuInner {
             op,
             PipelineOp::Multiply { .. }
                 | PipelineOp::Screen { .. }
+                | PipelineOp::Difference { .. }
                 | PipelineOp::BlendModule { .. }
         );
         let (variant, shader_file, shader_source) = match op {
@@ -8262,6 +8263,11 @@ impl GpuInner {
             PipelineOp::Screen { .. } => {
                 ("Screen", "screen.wgsl", include_str!("shaders/screen.wgsl"))
             }
+            PipelineOp::Difference { .. } => (
+                "Difference",
+                "difference.wgsl",
+                include_str!("shaders/difference.wgsl"),
+            ),
             PipelineOp::AlphaComposite { .. } => (
                 "AlphaComposite",
                 "alpha_composite.wgsl",
@@ -8284,8 +8290,8 @@ impl GpuInner {
             }
         };
         let cached = self.resolve_pipeline(variant, shader_file, shader_source)?;
-        // Multiply/Screen/Solarize/BlendModule mode 9 packs four independent bytes. AlphaComposite
-        // mode 9 packs two complete LA pixels; RGBA keeps its ordinary mode code.
+        // Bytewise mode 9 packs four independent samples. AlphaComposite mode 9
+        // packs two complete LA pixels; RGBA keeps its ordinary mode code.
         let mode = if in_place && channels == 4 { 3 } else { 9 };
         let parameter = match op {
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
@@ -10037,7 +10043,7 @@ fn gpu_native_byte_op_channels(
     mode: Option<&str>,
 ) -> Option<u8> {
     match op {
-        PipelineOp::Multiply { .. } | PipelineOp::Screen { .. } => {
+        PipelineOp::Multiply { .. } | PipelineOp::Screen { .. } | PipelineOp::Difference { .. } => {
             gpu_native_multiply_channels(image, mode)
         }
         PipelineOp::BlendModule { .. } => match image {
