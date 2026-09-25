@@ -8522,32 +8522,31 @@ where
     true
 }
 
-/// Exact integer division by 127 for the product range used by Overlay and
-/// HardLight.  For `0 <= value <= 255 * 255`, the reciprocal multiply below
-/// produces `floor(value / 127)` for every lane; it is not the common `/ 255`
-/// approximation used by the other blend modes.
+/// Exact division by 127 for a branch-selected Overlay/HardLight product.
+/// At least one factor is at most 127, so `value <= 127 * 255`. Folding the
+/// powers of 128 in `value + 1` gives the exact quotient across that finite
+/// range; the largest intermediate is 32640 and fits in a 16-bit lane.
 #[inline]
-fn simd_div127(value: u32x8) -> u32x8 {
-    ((value + u32x8::splat(1)) * u32x8::splat(16_513)) >> 21u32
+fn simd_div127(value: u16x16) -> u16x16 {
+    const ONE: u16x16 = u16x16::splat(1);
+    let value = value + ONE;
+    (value + (value >> 7u32) + (value >> 14u32)) >> 7u32
 }
 
 #[inline]
-fn native_chops_lut_vector(left: [u8; 8], right: [u8; 8], hard_light: bool) -> [u8; 8] {
-    let left = u32x8::new(left.map(u32::from));
-    let right = u32x8::new(right.map(u32::from));
-    let low = simd_div127(left * right);
-    let inverse_left = u32x8::splat(255) - left;
-    let inverse_right = u32x8::splat(255) - right;
-    let high = u32x8::splat(255) - simd_div127(inverse_left * inverse_right);
+fn native_chops_lut_vector(left: [u8; 16], right: [u8; 16], hard_light: bool) -> [u8; 16] {
+    const MAX: u16x16 = u16x16::splat(255);
+    const SPLIT: u16x16 = u16x16::splat(128);
+    let left = u16x16::from(u8x16::new(left));
+    let right = u16x16::from(u8x16::new(right));
     let low_condition = if hard_light {
-        right.simd_lt(u32x8::splat(128))
+        right.simd_lt(SPLIT)
     } else {
-        left.simd_lt(u32x8::splat(128))
+        left.simd_lt(SPLIT)
     };
-    low_condition
-        .select(low, high)
-        .to_array()
-        .map(|value| value as u8)
+    let product = low_condition.select(left, MAX - left) * low_condition.select(right, MAX - right);
+    let quotient = simd_div127(product);
+    simd_pack_u16x16(low_condition.select(quotient, MAX - quotient)).to_array()
 }
 
 /// Apply Pillow's exact 256×256 Overlay/HardLight LUT formula to native
@@ -8572,17 +8571,22 @@ fn native_chops_lut_formula(
         return Some(img.clone());
     }
     let mut output = vec![0u8; left.len()];
-    for (block_index, output_chunk) in output.chunks_mut(8).enumerate() {
-        let start = block_index * 8;
-        let active = output_chunk.len();
-        let mut left_padded = [0u8; 8];
-        let mut right_padded = [0u8; 8];
-        left_padded[..active].copy_from_slice(&left[start..start + active]);
-        right_padded[..active].copy_from_slice(&right[start..start + active]);
-        let values = native_chops_lut_vector(left_padded, right_padded, hard_light);
-        output_chunk.copy_from_slice(&values[..active]);
+    let (left_blocks, left_tail) = left.as_chunks::<16>();
+    let (right_blocks, right_tail) = right.as_chunks::<16>();
+    let (output_blocks, output_tail) = output.as_chunks_mut::<16>();
+    for ((left, right), output) in left_blocks.iter().zip(right_blocks).zip(output_blocks) {
+        *output = native_chops_lut_vector(*left, *right, hard_light);
     }
-    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(8) as u64);
+    if !output_tail.is_empty() {
+        let active = output_tail.len();
+        let mut left_padded = [0u8; 16];
+        let mut right_padded = [0u8; 16];
+        left_padded[..active].copy_from_slice(left_tail);
+        right_padded[..active].copy_from_slice(right_tail);
+        let values = native_chops_lut_vector(left_padded, right_padded, hard_light);
+        output_tail.copy_from_slice(&values[..active]);
+    }
+    crate::compute::record_pipeline_operation_vector_blocks(output.len().div_ceil(16) as u64);
     crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
@@ -24052,6 +24056,34 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn div127_matches_every_selected_blend_product() {
+        for start in (0..=32385u16).step_by(16) {
+            let values = std::array::from_fn(|lane| (start + lane as u16).min(32385));
+            let actual = super::simd_div127(wide::u16x16::new(values)).to_array();
+            assert_eq!(actual, values.map(|value| value / 127));
+        }
+    }
+
+    #[test]
+    fn overlay_and_hardlight_vectors_match_all_byte_pairs() {
+        let tables: [(bool, &[u8; 65536]); 2] = [
+            (false, include_bytes!("../../../ops/lut_overlay.bin")),
+            (true, include_bytes!("../../../ops/lut_hardlight.bin")),
+        ];
+        for (hard_light, table) in tables {
+            for start in (0..65536usize).step_by(16) {
+                let left = std::array::from_fn(|lane| ((start + lane) >> 8) as u8);
+                let right = std::array::from_fn(|lane| (start + lane) as u8);
+                assert_eq!(
+                    super::native_chops_lut_vector(left, right, hard_light),
+                    table[start..start + 16],
+                    "hard_light={hard_light} pair_start={start}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn alpha_composite_coefficient_matches_integer_division_for_all_alpha_pairs() {
         for source in 0..=255u32 {

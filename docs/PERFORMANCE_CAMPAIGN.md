@@ -3492,3 +3492,56 @@ SIMD is substantially slower than both CPU and Pillow. Its current shared Overla
 GPU still transports 3,145,728 bytes for each input and readback in both modes, with 256 parameter bytes and one mode conversion. Native-byte transport is a candidate after the SIMD bottleneck. CPU uses a 64 KiB pair lookup table; do not assume the cheap arithmetic scheduling crossover applies without measurement. Tiny caller overhead, true composed throughput, wider modes/bindings/platforms and the global targets remain unresolved.
 
 Generated documentation is refreshed from existing evidence only. **No coverage collection or push ran.** Inventory is **16,476 parity cases and 805 workloads across 54 suites**. The selected matrix remains 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending.
+
+## Overlay checkpoint — 2026-09-25
+
+Overlay completes **three implementation attempts** after baseline commit `fa69c7ce3`. Two are retained and the third is rejected. Work moves to HardLight; Overlay remains incomplete.
+
+1. **Retained: narrower exact SIMD arithmetic and complete blocks.** Select the low/high branch operands before multiplying, so at least one factor is at most 127. Products are at most 32,385, allowing sixteen 16-bit lanes instead of eight 32-bit lanes. For `n = product + 1`, `(n + (n >> 7) + (n >> 14)) >> 7` is exact division by 127 over this range, with a maximum intermediate sum of 32,640. Widen and narrow with existing vector helpers, process complete sixteen-byte arrays directly, and pad only the final partial block. This removes duplicated branch arithmetic and per-block padded copies without approximating Pillow's formula. HardLight shares the helper and receives affected parity checks.
+2. **Retained: native-byte GPU transport.** Reuse the existing byte executor for one eligible equal-size Overlay operation. Four independent stored samples occupy each word; guard the active word count and exclude transport padding from output. Preserve the existing admission checks and correct routes for other layouts/composed work. The shader's exact arithmetic is unchanged.
+3. **Rejected: parallel SIMD tiles from 1 MiB.** Disjoint 64 KiB vector-aligned tiles preserve parity. Relative to attempt two, fresh RGB queue-one latency falls from **0.691834 to 0.561084 ms**, but queue-depth-four throughput falls from **2,532.5 to 2,245.2 images/s**. The maintained large SIMD row barely changes (**0.835209 → 0.820813 ms**). The experiment does not establish a sufficient latency-and-throughput gain and is removed. Subsequent final measurements are slower for several unchanged subjects too; the timing variability prevents attributing all differences to scheduling. The rejected candidate and both surrounding runs remain available, rather than selecting only the favorable medians. No fourth tuning attempt is made.
+
+The finite-domain proofs check all **32,386 possible products** against integer division and all **65,536 byte pairs for each of Overlay and HardLight** against live Pillow and the existing lookup tables. Two focused Rust tests exercise the actual SIMD helpers and pass. The proof artifacts are `perf-overlay-20260925-div127-proof.json` and `perf-overlay-20260925-selected-branch-proof.json`.
+
+The restored final runtime passes **543/543 Overlay comparisons**, **666/666 affected HardLight comparisons**, and **384/384 fresh odd-width L/RGB outputs**. Artifacts are `perf-overlay-20260925-final-parity.json`, `perf-overlay-hardlight-20260925-final-parity.json`, and `perf-overlay-20260925-final-odd-check.json`. Earlier retained attempt two also passes **18/18 large Overlay boundary comparisons**. The rejected parallel candidate separately passes **30/30 Overlay and 30/30 HardLight threshold/tail/clipped-stride comparisons**; those are candidate evidence, not additional final-run comparisons. No existing assertions, cases, workloads or thresholds were weakened. Invalid/clipped parity cases are not all claimed as native acceleration.
+
+Final unchanged-policy benchmark `migration-benchmark-6bcb0be15f7f47a6a723c184e07832d0` (`perf-overlay-20260925-final.json`) completes all seven workloads. Six materialized rows have completed native backend receipts without fallback; the standard deferred row still lacks terminal execution evidence. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.018458 | 0.017959 | 0.021354 | 0.437416 |
+| Existing 32 × 24 | 0.017313 | 0.017375 | 0.017688 | 0.217145 |
+| 1 × 1 | 0.012854 | 0.016146 | 0.017125 | 0.196333 |
+| 32 × 32 | 0.017188 | 0.017354 | 0.017792 | 0.389541 |
+| 256 × 256 | 0.258124 | 0.097271 | 0.066959 | 0.372271 |
+| 1024 × 768 | 3.545459 | 0.701792 | 0.819020 | 1.826626 |
+
+Fresh L/RGB 1024 × 768 final evidence (`perf-overlay-20260925-final-throughput.json`) passes **40,320 exact checks**, including **38,400 measured completions**, with unchanged source hashes and consistent runtime binaries. Both fresh imports, the operation, full export, allocation and synchronization remain inside the request boundary. Final queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.951063 | 0.248833 | 0.231062 | 0.484521 |
+| RGB | 4.771959 | 0.740187 | 0.790021 | 1.454937 |
+
+Final completed fresh images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1004.2 | 3643.2 | 4082.3 | 1664.7 |
+| L | 2 | 1045.4 | 5384.7 | 6579.8 | 2388.2 |
+| L | 4 | 1035.5 | 6072.4 | 8531.9 | 3803.0 |
+| RGB | 1 | 197.3 | 1045.5 | 1165.9 | 540.0 |
+| RGB | 2 | 227.8 | 1394.3 | 1136.9 | 1000.2 |
+| RGB | 4 | 241.9 | 1383.9 | 1153.9 | 1020.0 |
+
+Against the original fresh baseline, final SIMD latency improves from **2.178729 to 0.231062 ms in L** and **6.704125 to 0.790020 ms in RGB** (about **9.4×/8.5×**). GPU improves from **3.186229 to 0.484521 ms in L** and **2.993438 to 1.454938 ms in RGB** (about **6.6×/2.1×**). GPU transfers each input/readback as **786,432 L bytes** or **2,359,296 RGB bytes**, formerly 3,145,728 in both modes; parameters fall from 256 to 16 bytes and mode conversions from one to zero. CPU is unchanged in this visit. The intermediate `attempt1`, `attempt2` and `attempt3` benchmark/throughput artifacts isolate each decision and expose run-to-run variability.
+
+Remaining blockers and next decisions:
+
+- CPU still misses several tiny public-call rows. It retains the 64 KiB pair LUT and its original scheduling; applying a cheap-byte crossover without measuring lookup/cache costs is not justified.
+- SIMD exceeds 5× Pillow on the final fresh RGB workload (about **6.0×**), but reaches only about **4.1×** in fresh L and misses 5× on every final maintained row. Attribute allocation, caller/materialization costs and memory passes before another instruction-level rewrite.
+- GPU remains slower than SIMD in both latency and throughput at every final measured queue depth. Native transport removes expansion, but launch, mapping/waits and output construction remain. Attribute those phases and evaluate resident/composed work with complete transfer and fresh-output accounting.
+- Small timings vary and some regress. The rejected scheduling experiment has no proven universal crossover; future work needs controlled concurrency/bandwidth evidence rather than assuming more threads help. Wider bindings, platforms, modes and composed pipelines still lack complete performance proof.
+- The pre-existing mode-1 to LAB parity failures remain at their earlier conversion checkpoint. This Overlay audit does not claim to repair or rerun that separate operation.
+
+The skill now explains selecting branch operands before range reduction, exact bounded division and why internal parallelism must be evaluated under request concurrency. The isolated release build and formatting/public-boundary checks pass. **No coverage collection or push ran.** Inventory remains **16,476 parity cases and 805 workloads across 54 suites**; the selected matrix retains 208 operations plus one constant and **zero fully completed operations**. Broad timing evidence remains historical and focused-result integration remains pending. HardLight is next, inheriting the verified shared SIMD improvement as its starting point.

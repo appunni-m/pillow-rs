@@ -1,21 +1,21 @@
 // Overlay: CRITICAL — divide by 127 not 255
 // if a < 128: (a*b)/127  else: 255 - ((255-a)*(255-b)/127)
 // Mode-aware: only processes channels present in the image mode.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 9=four independent stored bytes
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
     width: u32,
     height: u32,
     mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
-    _pad: u32,
+    word_count: u32, // Active words for native byte mode; zero for pixel transport.
 }
 
 // ── Mode helpers ──
 
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 9u; }
 
 fn overlay_ch(a: u32, b: u32) -> u32 {
     var result: u32;
@@ -37,6 +37,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    if params.mode == 9u && idx >= params.word_count { return; }
 
     let pa = input_a[idx];
     let pb = input_b[idx];
