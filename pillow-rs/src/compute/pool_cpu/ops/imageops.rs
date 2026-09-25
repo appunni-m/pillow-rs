@@ -1116,11 +1116,10 @@ pub fn op_pad(
 
 /// CropBorder: remove `border` pixels from all four sides.
 pub fn op_crop_border(img: &DynamicImage, border: u32) -> Result<DynamicImage, PilError> {
-    let b = border;
     let (w, h) = (img.width(), img.height());
     // Pillow permits a border exactly half the image size and returns a
     // zero-sized image; only a strictly oversized border is invalid.
-    if 2 * b > w {
+    if border > w / 2 {
         // Pillow delegates this invalid box to Image.crop(), whose public
         // contract reports the right edge being left of the left edge when
         // the width is the first invalid dimension.
@@ -1128,14 +1127,59 @@ pub fn op_crop_border(img: &DynamicImage, border: u32) -> Result<DynamicImage, P
             "Coordinate 'right' is less than 'left'".into(),
         ));
     }
-    if 2 * b > h {
+    if border > h / 2 {
         // Keep the height-specific crop error observable for rectangular
         // inputs instead of collapsing it into the width diagnostic above.
         return Err(PilError::ValueError(
             "Coordinate 'lower' is less than 'upper'".into(),
         ));
     }
-    Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
+
+    // DynamicImage::crop_imm dispatches through generic pixel access, which
+    // makes this byte-preserving operation several times slower than Pillow
+    // for large rasters. Copy complete native rows instead. Typed and
+    // floating-point images retain the image crate's existing behavior.
+    let channels = match img {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return Ok(img.crop_imm(border, border, w - 2 * border, h - 2 * border)),
+    };
+    let output_width = w - 2 * border;
+    let output_height = h - 2 * border;
+    let output_dims = CheckedDims::new_allow_empty(output_width, output_height, channels as u8)?;
+    let source_stride = (w as usize)
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("CropBorder source stride overflow".into()))?;
+    let output_stride = (output_width as usize)
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("CropBorder output stride overflow".into()))?;
+    // The crop overwrites every output byte; reserve without zero-filling the
+    // destination so each pixel is written only once.
+    let mut output = Vec::with_capacity(output_dims.total_bytes());
+    let source = img.as_bytes();
+    let x_offset = border as usize * channels;
+    for y in 0..output_height as usize {
+        let source_start = (border as usize + y)
+            .checked_mul(source_stride)
+            .and_then(|offset| offset.checked_add(x_offset))
+            .ok_or_else(|| PilError::ValueError("CropBorder source offset overflow".into()))?;
+        let source_end = source_start
+            .checked_add(output_stride)
+            .ok_or_else(|| PilError::ValueError("CropBorder source range overflow".into()))?;
+        let source_row = source.get(source_start..source_end).ok_or_else(|| {
+            PilError::InternalError("CropBorder source buffer shape mismatch".into())
+        })?;
+        output.extend_from_slice(source_row);
+    }
+    let result = crate::image_utils::raw_bytes_to_image_allow_empty(
+        output_width,
+        output_height,
+        output,
+        channels,
+    )?;
+    Ok(preserve_mode(img, result))
 }
 
 /// Scale: resize by a floating-point factor.

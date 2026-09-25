@@ -21715,27 +21715,24 @@ fn native_crop_bytes(
     let output_len = output_stride
         .checked_mul(height as usize)
         .ok_or_else(|| PilError::ValueError("SIMD crop output length overflow".into()))?;
-    let mut output = vec![0u8; output_len];
+    // Cropping is a full overwrite. Allocate capacity once instead of
+    // zero-filling a buffer that the row copies immediately replace.
+    let mut output = Vec::with_capacity(output_len);
     let source = img.as_bytes();
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
     for y in 0..height as usize {
         let source_start = (top as usize + y)
             .checked_mul(source_stride)
             .and_then(|offset| offset.checked_add(left as usize * channels))
             .ok_or_else(|| PilError::ValueError("SIMD crop source offset overflow".into()))?;
-        let output_start = y * output_stride;
-        let (blocks, tail) = copy_native_bytes(
-            &source[source_start..source_start + output_stride],
-            &mut output[output_start..output_start + output_stride],
-        )
-        .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
+        let source_end = source_start
+            .checked_add(output_stride)
+            .ok_or_else(|| PilError::ValueError("SIMD crop source range overflow".into()))?;
+        let source_row = source
+            .get(source_start..source_end)
+            .ok_or_else(|| PilError::InternalError("SIMD crop buffer shape mismatch".into()))?;
+        output.extend_from_slice(source_row);
     }
     crate::compute::record_pipeline_operation_path("native-copy");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::image_utils::raw_bytes_to_image(width, height, output, channels).map(Some)
 }
 

@@ -3888,3 +3888,76 @@ SIMD misses 5×, GPU misses SIMD latency and throughput, and CPU requires small,
 masked and broader mode/shape verification. Continue with the next ranked
 untouched operation; revisit Autocontrast only when profiling can target its
 measured LUT or GPU host/device bottleneck.
+
+## ImageOps CropBorder four-attempt checkpoint — 2026-09-25
+
+`PIL.ImageOps.crop` lowers to `PipelineOp::CropBorder`. Its eight-workload
+baseline showed CPU latency 0.46–1.05 ms on 1024 × 768 L/LA/RGB/RGBA, SIMD
+0.09–0.44 ms, and GPU 1.12–1.76 ms. Inspection separated the costs: CPU's
+`DynamicImage::crop_imm` traversed generic pixels; SIMD manually loaded and
+stored every 16-byte block; GPU uploaded a four-byte-per-pixel RGBA expansion
+even for L/LA/RGB, then synchronously mapped a 2.2 MB output. Small requests
+were already near the Python-call floor.
+
+Four attempts are checkpointed. Exact Pillow parity remains fixed:
+
+1. **Retained CPU native-row copy.** For L/LA/RGB/RGBA byte buffers, compute
+   checked source and output strides and copy complete cropped row spans. Keep
+   `crop_imm` for typed and floating-point images. Use division-based
+   width-first then height validation so `2 * border` cannot wrap and preserve
+   Pillow's exact-half empty result. This removes generic per-pixel access on
+   native layouts.
+2. **Retained SIMD native slice copy.** Replace the hand-built `wide::u8x16`
+   load/store loop with Rust's optimized slice copy for each row. Crop is data
+   movement, not arithmetic; manual vector construction and per-block array
+   extraction added instructions around a copy the compiler/runtime can lower
+   to native memory movement.
+3. **Retained uninitialized-capacity output construction.** Reserve the exact
+   validated byte length and append each copied row. Both paths previously
+   zero-filled every destination byte and immediately overwrote it. The output
+   is fully initialized by the checked row loop before reconstruction; no
+   padding reaches the result.
+4. **Retained GPU adjacent-border fusion.** Sum only contiguous CropBorder
+   descriptors with checked addition before resource allocation. Do not cross
+   another operation. The two-border RGBA chain now dispatches once instead of
+   twice and copies only the final region; its GPU median moved from 1.243 to
+   1.047 ms in the paired diagnostic runs (about 16%).
+
+Focused exact parity passes **15/15 CPU**, **15/15 strict SIMD**, and **15/15
+strict GPU** on the final implementations. A GPU fusion unit test compares
+ordered operations with the lowered plan, including an intervening Invert. The
+unchanged eight-workload benchmark completes on every attempt. Attempt 2's
+ordinary rerun varied 1.2–2.6× even for Pillow; its low-priority utility
+repeat also slowed all subjects and is not used for a performance claim. Use
+the baseline and final receipt as diagnostic bounds rather than treating their
+small medians as stable estimates.
+
+The baseline and final attempt-4 median milliseconds for large native modes
+are:
+
+| Workload | Pillow baseline | CPU baseline | SIMD baseline | GPU baseline | Pillow final | CPU final | SIMD final | GPU final |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L 1024 × 768 | 0.127 | 0.462 | 0.094 | 1.681 | 0.092 | 0.037 | 0.036 | 1.537 |
+| LA 1024 × 768 | 0.717 | 0.900 | 0.179 | 1.764 | 0.493 | 0.110 | 0.136 | 1.940 |
+| RGB 1024 × 768 | 0.813 | 1.050 | 0.315 | 1.260 | 0.679 | 0.229 | 0.213 | 1.240 |
+| RGBA 1024 × 768 | 0.892 | 1.052 | 0.436 | 1.124 | 0.697 | 0.322 | 0.301 | 1.125 |
+| Two successive RGBA crops | 0.919 | 2.126 | 0.593 | 1.120 | 1.073 | 0.418 | 0.408 | 1.047 |
+
+The retained CPU path is faster than Pillow on the four large single-crop rows
+and on the chain. The small 32 × 24 materialized CPU row remains slightly
+slower (0.0116 vs 0.0111 ms), within the observed run noise but not proven to
+meet the bound. SIMD is faster than Pillow on large rows, but reaches only
+2.3–3.6× on final medians, below the 5× target. GPU continues to execute
+without fallback, but single-crop latency is 1.12–1.94 ms and remains 3.7–42×
+slower than SIMD depending on mode. Its 3,145,728-byte upload and 2,293,760-byte
+readback stay four-channel even for native L/LA/RGB. The chain fusion saves one
+dispatch, not the fixed submission/map/output cost. This byte-moving operation
+has no queue-depth changing-input throughput evidence; reciprocal request
+latency is not a sustained-throughput result.
+
+Artifacts use `build/migration-parity/perf-imageops-crop-20260925-`. Core and
+GPU-feature checks, the focused fusion unit test, release `make build-parity`,
+and `cargo fmt --all -- --check` pass. No coverage was run. The next visit
+should move to a different ranked operation. Revisit CropBorder only with new
+evidence for the small-call CPU gap, a native-channel GPU transfer/readback
+path, or a complete changing-input throughput workload.
