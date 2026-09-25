@@ -181,6 +181,59 @@ These are investigations, not demonstrated hardware impossibility. Cross-runtime
 checks and the repository's pre-push verification remain pending for this
 checkpoint. No coverage collection was run.
 
+### Equalize blocker revisit (2026-09-25)
+
+Three bounded attempts revisited the remaining GPU and small-input SIMD gaps.
+Strict public parity passed all 181 selected equalize cases on CPU, SIMD, and
+GPU after the retained changes. No coverage collection was run.
+
+The first attempt replaced Equalize's histogram-clear compute dispatch with
+`CommandEncoder::clear_buffer`. Its strict GPU receipt reports three compute
+dispatches instead of four. The initial paired workload run measured backend
+medians of 342/287/402/1,264 µs for masked L 64 × 64 and RGB 32 × 32, 256 × 256,
+and 1024 × 768; after the clear they were 423/288/386/1,286 µs. This removes
+device work but does not demonstrate a latency or throughput win. Later samples
+varied more, so the structural dispatch reduction is retained without claiming
+faster requests. Autocontrast keeps its compute clear.
+
+The second attempt fused histogram construction, the exact integer CDF scan,
+and remapping into one workgroup for native L/RGB inputs up to 4,096 pixels,
+including masks. It passed all 181 strict cases after excluding the internal
+shader from host LUT extraction. The one-workgroup backend medians were 745 µs
+for masked L 64 × 64 and 591 µs for RGB 32 × 32, versus 342 and 287 µs before
+fusion. The fused shader was removed: its local atomics and cross-lane scan
+underused the device, so the extra synchronization cost outweighed two fewer
+dispatches.
+
+The third attempt uses direct scalar table reads for Equalize's Luma8 SIMD
+path at up to 4,096 samples, where the portable 16-lane LUT expands each block
+into sixteen swizzles and a chain of lane selects. The focused SIMD backend
+median moved from 4.6 to 4.0 µs across the two receipts, but the whole masked
+workflow measured 36.5 to 38.3 µs; that is not a demonstrated end-to-end win.
+RGB remains on the vector path because the scalar experiment showed no clear
+benefit for its interleaved three-channel layout. This is a size/layout-specific
+tradeoff, not evidence that scalar LUT application is generally faster.
+
+The final unchanged-policy receipt is
+`build/migration-parity/perf-imageops-equalize-20260925-attempt3b.json` with its
+parity sidecar. Its measured whole-workflow medians are:
+
+| Equalize workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Masked L 64 × 64 | 0.0635 | 0.0384 | 0.0383 | 0.3920 |
+| RGB 32 × 32 | 0.0534 | 0.0134 | 0.0138 | 0.3590 |
+| RGB 256 × 256 | 0.2062 | 0.0318 | 0.0314 | 0.6035 |
+| RGB 1024 × 768 | 2.5772 | 0.4844 | 0.5319 | 2.0311 |
+
+CPU remains faster than Pillow on these four rows. SIMD reaches 5× only for
+RGB 256 × 256 in this receipt; masked and tiny inputs remain below 5×, and the
+large RGB row is just under 5×. GPU remains slower than SIMD on every row.
+Across reruns, Pillow, CPU and GPU medians varied substantially, so the table is
+diagnostic rather than stable throughput evidence. The equalize operation is
+still incomplete; blockers remain the small/masked SIMD gap, GPU latency and
+throughput relative to SIMD, and performance outside this cohort. The next
+ranked operation remains `PIL.ImageFont.FreeTypeFont.font_variant`.
+
 ## Font variant checkpoint
 
 The next ranked workload, `pil-imagefont-freetypefont.font-variant.standard`,

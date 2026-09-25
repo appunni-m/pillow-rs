@@ -11676,18 +11676,31 @@ pub fn simd_equalize(
     let Some(bytes) = result.as_bytes_mut() else {
         return Err(simd_unsupported("Equalize"));
     };
-    let Some((vector_blocks, scalar_tail)) = native_lut_apply(
-        bytes,
-        img.width() as usize,
-        img.height() as usize,
-        channels,
-        &lut,
-    ) else {
-        return Err(simd_unsupported("Equalize"));
+    let source = img.as_bytes();
+    let (vector_blocks, scalar_tail, path) = if channels == 1 && source.len() <= 4096 {
+        // The portable byte-vector LUT expands each lookup into sixteen
+        // swizzles and lane selects. For small frames, a direct L1 table read
+        // avoids that setup and shuffle cost; larger images retain the vector
+        // path where its work amortizes over enough pixels.
+        for (output, &value) in bytes.iter_mut().zip(source) {
+            *output = lut[usize::from(value)];
+        }
+        (0, source.len() as u64, "scalar-lut")
+    } else {
+        let Some((vector_blocks, scalar_tail)) = native_lut_apply(
+            bytes,
+            img.width() as usize,
+            img.height() as usize,
+            channels,
+            &lut,
+        ) else {
+            return Err(simd_unsupported("Equalize"));
+        };
+        (vector_blocks, scalar_tail, "vector")
     };
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_path(path);
     Ok(result)
 }
 
