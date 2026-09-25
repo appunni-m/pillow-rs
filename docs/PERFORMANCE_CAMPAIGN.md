@@ -3961,3 +3961,53 @@ and `cargo fmt --all -- --check` pass. No coverage was run. The next visit
 should move to a different ranked operation. Revisit CropBorder only with new
 evidence for the small-call CPU gap, a native-channel GPU transfer/readback
 path, or a complete changing-input throughput workload.
+
+## ImageOps Invert four-attempt checkpoint — 2026-09-25
+
+`PIL.ImageOps.invert` has 84 focused parity fixtures. Before editing, all 84
+passed on strict CPU, SIMD, and GPU lanes. The old global priority row
+`pipeline-chain.long-point.invert-1` has one sample and no warmup, so its
+237× GPU factor was not a trustworthy baseline. Focused release measurements
+used the same 1024 × 768 RGB single-operation workload and required an actual
+backend receipt.
+
+Four attempts:
+
+1. **Rejected CPU zero-filled parallel destination.** Mapping source bytes into
+   `vec![0; len]` removed the source clone, but added a complete zero-fill pass.
+   Its first measured CPU result was noisy and did not show a reliable whole-
+   request gain; do not treat destination allocation alone as copy elimination.
+2. **Retained exact-size CPU collection.** Collect `raw.iter().map(|v| 255 - v)`
+   directly into the output. This avoids both the full input clone and the
+   separate in-place inversion read/write pass. Two focused runs moved CPU
+   backend median from 0.231 ms baseline to 0.161 and 0.166 ms. A later final
+   sample was 0.103 ms; the whole request was 0.290 ms versus Pillow 1.327 ms
+   in that run. Keep this only with the strict parity evidence below; report
+   run variance rather than treating the lowest sample as a fixed speedup.
+3. **Rejected SIMD block append.** Writing each transformed `u8x16` into an
+   exact-capacity `Vec` removed the clone in source, but measured SIMD backend
+   time stayed around 0.26 ms and later varied up to 0.29 ms. Per-block vector
+   append bookkeeping erased the expected gain, so the SIMD path remains the
+   previous clone-plus-in-place vector loop.
+4. **Retained GPU native-byte lowering.** For L/LA/RGB/RGBA byte images,
+   execute invert through the existing native bytewise Solarize shader at
+   threshold zero in four-independent-samples mode. This preserves all stored
+   bytes, including alpha, while avoiding RGBA expansion. The 1024 × 768 RGB
+   receipt dropped upload and readback from 3,145,728 to 2,359,296 bytes each,
+   mode conversions from one to zero, and uniform parameters from 256 to 20
+   bytes. Dispatch count stays one. Final GPU latency was 0.677 ms versus
+   1.758 ms baseline; the paired run still puts GPU 1.18× slower than SIMD
+   (0.572 ms). Timing spread is material across runs.
+
+Final parity passes **84/84 strict CPU**, **84/84 strict SIMD**, and **84/84
+strict GPU**. The final focused release build completed; `cargo check` with the
+GPU feature and `cargo fmt --all -- --check` pass. No coverage was run.
+
+The operation is checkpointed, not complete. CPU meets its Pillow bound on the
+measured large RGB case. SIMD is only 2.3× Pillow, below 5×. GPU latency still
+exceeds SIMD, and no changing-input queue-depth benchmark proves higher GPU
+throughput. Those gaps remain for a later revisit; useful next evidence is a
+SIMD profile that isolates result materialization from the vector loop and a
+changing-input GPU queue-depth run that records completed requests per second.
+Receipts are under `build/migration-parity/perf-imageops-invert-20260925-*` and
+`build/migration-parity/parity-imageops-invert-*-20260925.json`.

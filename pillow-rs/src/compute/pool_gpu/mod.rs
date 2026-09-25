@@ -8435,7 +8435,7 @@ impl GpuInner {
                     || image.color() != other.color()
                     || other.as_bytes().len() != length
             })
-            || other.is_none() != matches!(op, PipelineOp::Solarize { .. })
+            || other.is_none() != matches!(op, PipelineOp::Invert | PipelineOp::Solarize { .. })
             || (fused_screen && !matches!(op, PipelineOp::Multiply { .. }))
         {
             return Err(PilError::InternalError(
@@ -8560,6 +8560,14 @@ impl GpuInner {
                 "solarize.wgsl",
                 include_str!("shaders/solarize.wgsl"),
             ),
+            // The native bytewise shader treats a u32 as four independent
+            // samples (mode 9); threshold zero makes Solarize exactly invert
+            // every stored byte, including alpha and a partial final word.
+            PipelineOp::Invert => (
+                "InvertNativeBytes",
+                "solarize.wgsl",
+                include_str!("shaders/solarize.wgsl"),
+            ),
             _ => {
                 return Err(PilError::InternalError(
                     "unsupported native binary GPU operation".into(),
@@ -8572,6 +8580,7 @@ impl GpuInner {
         let mode = if in_place && channels == 4 { 3 } else { 9 };
         let parameter = match op {
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
+            PipelineOp::Invert => 0,
             PipelineOp::BlendModule { alpha, .. } => (*alpha as f32).to_bits(),
             _ => 0,
         };
@@ -10320,6 +10329,13 @@ fn gpu_native_byte_op_channels(
     mode: Option<&str>,
 ) -> Option<u8> {
     match op {
+        PipelineOp::Invert => match image {
+            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
+            DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
+            DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
+            DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
+            _ => None,
+        },
         PipelineOp::Multiply { .. }
         | PipelineOp::Screen { .. }
         | PipelineOp::Overlay { .. }

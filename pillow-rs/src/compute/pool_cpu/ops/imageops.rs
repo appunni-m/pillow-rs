@@ -301,13 +301,6 @@ pub(crate) fn equalize_lut(
 }
 
 #[inline]
-fn invert_bytes_serial(bytes: &mut [u8]) {
-    for value in bytes {
-        *value = u8::MAX - *value;
-    }
-}
-
-#[inline]
 fn apply_autocontrast_row(
     raw: &[u8],
     raw_start: usize,
@@ -475,24 +468,7 @@ pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
     let raw = img.as_bytes();
-    let mut out = raw.to_vec();
-    #[cfg(feature = "parallel")]
-    let stride = w as usize * channels;
-    #[cfg(feature = "parallel")]
-    if (w as usize).saturating_mul(h as usize) >= POINT_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
-            &mut out,
-            stride,
-            h as usize,
-            |_row_start, _row_end, _y, row| {
-                invert_bytes_serial(row);
-            }
-        );
-    } else {
-        invert_bytes_serial(&mut out);
-    }
-    #[cfg(not(feature = "parallel"))]
-    invert_bytes_serial(&mut out);
+    let out = raw.iter().map(|value| u8::MAX - *value).collect();
     let result = match channels {
         1 => crate::raster::GrayImage::from_raw(w, h, out)
             .map(DynamicImage::ImageLuma8)
