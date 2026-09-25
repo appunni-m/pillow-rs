@@ -7273,8 +7273,8 @@ pub(crate) fn simd_execute_in_place(
                 img,
                 &other,
                 mode,
-                |left, right| left | right,
-                |left, right| left | right,
+                native_logical_or_vector,
+                |left, right| u8::from((left | right) != 0) * 255,
             ))
         }
         PipelineOp::LogicalXor { other } => {
@@ -9065,10 +9065,17 @@ native_bytewise_chops!(
     native_logical_and_vector,
     |left: u8, right: u8| u8::from(left != 0 && right != 0) * 255
 );
+#[inline]
+fn native_logical_or_vector(left: u8x16, right: u8x16) -> u8x16 {
+    (left | right)
+        .simd_eq(u8x16::ZERO)
+        .select(u8x16::ZERO, u8x16::splat(255))
+}
+
 native_bytewise_chops!(
     native_chops_logical_or,
-    |left: u8x16, right: u8x16| left | right,
-    |left: u8, right: u8| left | right
+    native_logical_or_vector,
+    |left: u8, right: u8| u8::from((left | right) != 0) * 255
 );
 native_bytewise_chops!(
     native_chops_logical_xor,

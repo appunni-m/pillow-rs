@@ -431,7 +431,9 @@ pub fn op_chops_logical_or(
     img: &DynamicImage,
     other: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| a | b)
+    // Logical Chops canonicalizes truth even when public writes retained
+    // nonzero mode-1 samples other than 255.
+    channel_op_binary_with_policy(img, other, |a, b| u8::from((a | b) != 0) * 255, true)
 }
 
 pub fn op_chops_logical_xor(

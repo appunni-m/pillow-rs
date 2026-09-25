@@ -236,7 +236,7 @@ pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Applies bitwise OR.
+/// Applies logical OR, writing 255 when either stored sample is nonzero.
 ///
 /// # Errors
 ///
