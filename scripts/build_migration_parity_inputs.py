@@ -679,6 +679,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "PointOp",
     "Multiply",
     "Screen",
+    "Difference",
     "Add",
     "Subtract",
     "Darker",
@@ -40622,14 +40623,27 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             ("zero-width", (0, 3), (0, 3)), ("zero-height", (3, 0), (3, 0)),
         ):
             cases.append(make_case(mode, channels, size, other_size, label))
-            # Retain the three existing La Screen cases and their input bytes
+            # Retain the existing La cases and their input bytes
             # below; the rest exercise native-byte transport independently.
             if mode != "La" or label not in ("tail17", "clipped", "zero-width"):
-                cases.append(make_case(mode, channels, size, other_size, label, operation="screen"))
+                for operation in ("screen", "difference"):
+                    cases.append(make_case(mode, channels, size, other_size, label, operation=operation))
     raws = (bytes(left for left in range(256) for right in range(256)),
             bytes(right for left in range(256) for right in range(256)))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "screen"))
+    cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "difference"))
+    # Native GPU words cross one workgroup and the compact-grid cutoff here.
+    # Include a partial final word and rectangular row, not only pixel tails.
+    for mode, channels, size, label in (
+        ("L", 1, (1023, 1), "native-word-group-below"),
+        ("L", 1, (1025, 1), "native-word-group-above"),
+        ("RGB", 3, (343, 1), "native-word-group-rgb-tail"),
+        ("RGBA", 4, (257, 1), "native-word-group-rgba-tail"),
+        ("L", 1, (257, 255), "native-grid-below"),
+        ("L", 1, (257, 256), "native-grid-above"),
+    ):
+        cases.append(make_case(mode, channels, size, size, label, operation="difference"))
     # La shares the byte-mode validator with the other binary Chops operations.
     for operation in ("add", "subtract", "screen", "darker", "lighter", "difference",
                       "add_modulo", "subtract_modulo", "overlay", "hard_light", "soft_light"):

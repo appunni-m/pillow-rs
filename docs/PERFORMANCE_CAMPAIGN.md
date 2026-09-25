@@ -2766,3 +2766,135 @@ Screen's shared native-byte route is a candidate after preserving Difference's
 mode guards and exact partial-word behavior. CPU still uses the general row
 scheduling policy. Start from measured transfers, allocation and scheduling
 costs, and cap this visit at four attempts. No coverage collection ran.
+
+## Difference four-attempt checkpoint — 2026-09-25
+
+Difference remains incomplete. This visit ends after four attempts, including
+two rejected experiments; the next operation is `ImageChops.darker`.
+
+1. **Retained:** native-byte GPU Difference through the existing shared executor.
+   Read, compute and return every stored byte without expanding each logical
+   pixel to four bytes. Mode admission, paired dimensions and final-word guards
+   remain explicit; no arithmetic or fallback contract changed.
+2. **Retained:** CPU cheap-byte scheduling, serial below 4 MiB and grouped rows
+   above it. Use exact `u8::abs_diff`, retaining independently clipped source
+   strides and partial final groups.
+3. **Rejected:** construct SIMD output through a pre-reserved vector of 16-byte
+   arrays, iterator extension and flattening instead of zero-fill plus stores.
+   The isolated loop was 2.6–4.0× slower on 2,304–4,196,352-byte inputs. Its
+   out-of-line iterator fold retained chunk-state loads/stores and repeated
+   block-size checks. The deployed loop already emits `uabd.16b`; substituting
+   an intrinsic would not remove arithmetic instructions. No SIMD implementation
+   change from this experiment was retained.
+4. **Rejected:** compact the native-word grid into fuller 16×16 GPU workgroups.
+   This reduced a 32 × 24 RGB request from 36 groups to three and passed exact
+   parity, but public timing did not establish a dependable improvement.
+   Its 32 × 24 median changed from 0.207229 to 0.536854 ms; the retained-layout
+   rerun was also 0.533583 ms. Variability prevents attributing that slowdown to
+   geometry. Fewer dispatched lanes alone was insufficient evidence to retain
+   the change. The original dispatch layout is restored.
+
+The rejected allocation source, timings and assembly are retained locally as
+`perf-difference-20260925-allocation-*` and
+`perf-difference-20260925-native-asm.txt` under `build/migration-parity/`.
+Rejected GPU-layout results use the `perf-difference-20260925-attempt4` prefix;
+they are not the final retained binary's results.
+
+The generator retains 118 new Difference cases, including all 65,536 byte pairs,
+mode/shape/tail cases and six word/workgroup-boundary inputs. Four additional
+size workloads use the existing matrix policy. All pre-existing cases and
+workloads are unchanged. The ten-workload pre-change baseline is
+`migration-benchmark-1ca949aed659484a8670c972da8e4b71`, retained as
+`perf-difference-20260925-initial-expanded.json`.
+
+On the final retained build, exact parity passes **546/546 Difference
+comparisons**, **12/12 large-buffer threshold comparisons**, and **1,245/1,245
+GPU comparisons** for the shared executor's other maintained operations.
+Artifacts are `perf-difference-20260925-final-parity.json`,
+`perf-difference-20260925-final-tiles-parity.json` and
+`perf-native-byte-layout-20260925-retained-parity.json`. The earlier CPU/SIMD/GPU
+shared-executor cohort also passed 3,735 comparisons both before and during
+the rejected layout trial. Rejected/error/empty cases lacking terminal native
+receipts establish behavior only, not acceleration.
+
+All ten retained-code workloads completed in
+`migration-benchmark-2d2e63c68bd745788828d4c7faf1d6bc`, stored as
+`perf-difference-20260925-final.json`. The existing exact benchmark gate passes;
+workflow output comparisons are included in the separate parity cohort above.
+Final median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015355 | 0.016771 | 0.016854 | 0.526188 |
+| 32 × 24 | 0.015542 | 0.015250 | 0.015541 | 0.533583 |
+| 1 × 1 | 0.012792 | 0.014604 | 0.015041 | 0.292854 |
+| 32 × 32 | 0.015750 | 0.015229 | 0.016938 | 0.485958 |
+| 256 × 256 | 0.186416 | 0.032542 | 0.030770 | 0.437979 |
+| 1024 × 768 | 2.420937 | 0.437709 | 0.380459 | 1.848542 |
+| Mixed pipeline `matrix-020` | 0.051896 | 0.037187 | 0.043708 | 0.902771 |
+| Mixed pipeline `matrix-032` | 0.020479 | 0.021313 | 0.022667 | 0.317667 |
+| SIMD Chops RGB chain | 3.813479 | 0.593750 | 0.564291 | 2.221105 |
+
+These rows have completed native requested-backend receipts without fallback.
+The tenth, ordinary standard row, still has no terminal native receipt. CPU's
+1024 × 768 median improved from 0.801292 to 0.437709 ms and GPU's from
+3.221687 to 1.848542 ms. Some small GPU results are worse than the initial run;
+those gaps and the observed variability remain unresolved. SIMD exceeds 5× on
+256², 1024 × 768 and the larger RGB chain, while small and mixed rows miss.
+
+Fresh sustained-throughput evidence is
+`perf-difference-20260925-final-throughput.json`: **40,320 exact output checks**,
+including **38,400 measured completions**, with unchanged source hashes and
+consistent runtime binaries. Each request constructs both inputs, executes,
+waits for completion and exports the full result. Window time includes worker
+scheduling and receipt capture. Queue-one median milliseconds:
+
+| Mode, 1024 × 768 | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.553167 | 0.100895 | 0.097001 | 0.473354 |
+| RGB | 2.870188 | 0.418708 | 0.485291 | 1.258771 |
+
+Completed fresh images per second from window wall time:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1761.2 | 8753.3 | 9306.8 | 2063.8 |
+| L | 2 | 1893.0 | 10826.4 | 12106.9 | 3244.8 |
+| L | 4 | 1869.8 | 12149.4 | 12526.6 | 4584.0 |
+| RGB | 1 | 346.1 | 2270.6 | 2004.7 | 746.9 |
+| RGB | 2 | 391.8 | 3011.3 | 2652.4 | 1172.0 |
+| RGB | 4 | 414.8 | 3248.4 | 2289.7 | 1322.1 |
+
+Fresh CPU L/RGB medians changed from 0.216417/0.613750 to
+0.100895/0.418708 ms; GPU from 3.376729/2.883208 to 0.473354/1.258771 ms.
+Each GPU L upload, secondary upload and readback now moves 786,432 bytes rather
+than 3,145,728; RGB moves 2,359,296 bytes per buffer. Parameters use 16 bytes
+rather than 256, with zero transport mode conversions. SIMD exceeds 5× on these
+two fresh samples. GPU still loses to SIMD in latency and throughput at every
+measured queue depth; this is not an operation-wide target pass.
+
+Next-visit blockers and decisions:
+
+- Small-call CPU overhead, small/mixed SIMD latency and GPU latency/throughput
+  remain unmet. Profile public construction, validation, allocation and export;
+  the packed absolute-difference instruction is already present.
+- Allocation removal needs code-generation evidence. Fixed-size typed blocks
+  or a loop visible to the optimizer may avoid the rejected iterator's dynamic
+  state, but that alternative was not attempted within this visit's cap.
+- Separate GPU encoding, launch, device execution, mapping/polling and host
+  creation before further grid changes. Measure enough paired runs to resolve
+  the small-input variability; arithmetic and lane counts do not identify the
+  dominant completion cost.
+- Mixed pipelines still use general transport. Any compact composed route must
+  retain every operation's logical mode, intermediate semantics and secondary
+  operand. Additional sizes, state interactions, bindings and platforms remain
+  unproven.
+
+The skill now explains instruction recognition, iterator state and useful GPU
+lanes, including rejecting work reductions without measured gains.
+Static indices contain 15,493 parity cases, 777 workloads and 54 suites.
+Generated docs were refreshed using existing artifacts; no coverage collection
+ran. The selected-operation matrix retains 208 operations plus one constant,
+with zero fully completed operations. Broad evidence remains historical;
+focused-result integration and exports outside the manifest remain pending.
+No push or pre-push campaign is included in this checkpoint.
