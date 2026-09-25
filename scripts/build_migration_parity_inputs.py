@@ -40626,13 +40626,14 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             # Retain the existing La cases and their input bytes
             # below; the rest exercise native-byte transport independently.
             if mode != "La" or label not in ("tail17", "clipped", "zero-width"):
-                for operation in ("screen", "difference"):
+                for operation in ("screen", "difference", "darker"):
                     cases.append(make_case(mode, channels, size, other_size, label, operation=operation))
     raws = (bytes(left for left in range(256) for right in range(256)),
             bytes(right for left in range(256) for right in range(256)))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "screen"))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "difference"))
+    cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "darker"))
     # Native GPU words cross one workgroup and the compact-grid cutoff here.
     # Include a partial final word and rectangular row, not only pixel tails.
     for mode, channels, size, label in (
