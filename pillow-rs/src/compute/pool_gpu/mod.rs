@@ -8252,6 +8252,7 @@ impl GpuInner {
                 | PipelineOp::AddModulo { .. }
                 | PipelineOp::SubtractModulo { .. }
                 | PipelineOp::LogicalAnd { .. }
+                | PipelineOp::LogicalOr { .. }
                 | PipelineOp::BlendModule { .. }
         );
         let (variant, shader_file, shader_source) = match op {
@@ -8295,6 +8296,11 @@ impl GpuInner {
                 "LogicalAnd",
                 "logical_and.wgsl",
                 include_str!("shaders/logical_and.wgsl"),
+            ),
+            PipelineOp::LogicalOr { .. } => (
+                "LogicalOr",
+                "logical_or.wgsl",
+                include_str!("shaders/logical_or.wgsl"),
             ),
             PipelineOp::AlphaComposite { .. } => (
                 "AlphaComposite",
@@ -10078,7 +10084,7 @@ fn gpu_native_byte_op_channels(
         | PipelineOp::Lighter { .. }
         | PipelineOp::AddModulo { .. }
         | PipelineOp::SubtractModulo { .. } => gpu_native_multiply_channels(image, mode),
-        PipelineOp::LogicalAnd { .. }
+        PipelineOp::LogicalAnd { .. } | PipelineOp::LogicalOr { .. }
             if mode == Some("1") && matches!(image, DynamicImage::ImageLuma8(_)) =>
         {
             Some(1)

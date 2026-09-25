@@ -687,6 +687,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "AddModulo",
     "SubtractModulo",
     "LogicalAnd",
+    "LogicalOr",
     "Brightness",
 )
 PIPELINE_EXPANDED_MATRIX_SIZES: tuple[tuple[int, int], ...] = (
@@ -40658,61 +40659,62 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         ):
             cases.append(make_case("1", 0, size, other_size, label, operation=operation))
     # Packed frombytes inputs contain only 0/255 samples after decoding. Public
-    # putdata can retain every byte in mode 1; logical AND tests truth, then
+    # putdata can retain every byte in mode 1; logical operators test truth, then
     # writes canonical 0/255. Observe stored output too: packed export alone
     # would hide a noncanonical nonzero result.
-    for size, other_size, label, exhaustive, chain in (
-        ((256, 256), (256, 256), "all-byte-pairs", True, False),
-        ((256, 256), (256, 256), "all-byte-pairs-materialized", True, False),
-        ((1, 1), (1, 1), "single", False, False),
-        ((15, 7), (15, 7), "vector-below", False, False),
-        ((16, 7), (16, 7), "vector-at", False, False),
-        ((17, 11), (17, 11), "vector-tail", False, False),
-        ((17, 11), (13, 9), "clipped", False, False),
-        ((13, 9), (17, 11), "clipped-reverse", False, False),
-        ((17, 9), (13, 11), "clipped-cross", False, False),
-        ((1025, 1), (1025, 1), "native-word-tail", False, False),
-        ((1025, 1), (1025, 1), "native-word-tail-materialized", False, False),
-        ((257, 256), (257, 256), "native-grid-tail", False, False),
-        ((17, 11), (17, 11), "composed-tail", False, True),
-        ((0, 3), (17, 11), "empty-left", False, False),
-        ((17, 11), (0, 3), "empty-right", False, False),
-    ):
-        case = make_case("1", 0, size, other_size, f"stored-samples-{label}",
-                         operation="logical_and")
-        setup = []
-        for index, shape in enumerate((size, other_size)):
-            raw = (raws[index] if exhaustive else
-                   bytes((pixel * (73 + index * 18) + index + 1) % 256
-                         for pixel in range(shape[0] * shape[1])))
-            case["assets"][index].update(data=base64.b64encode(raw).decode("ascii"),
-                                         sha256=hashlib.sha256(raw).hexdigest())
-            setup.extend([
-                {"step_id": f"image{index}", "surface": "PIL.Image", "operation": "new",
-                 "receiver": None, "arguments": {"mode": literal("1"), "size": literal(list(shape))}},
-                {"step_id": f"write{index}", "surface": "PIL.Image.Image", "operation": "putdata",
-                 "receiver": binding(f"image{index}"), "arguments": {"data": asset_value(f"pixels{index}")}},
-            ])
-            if label.endswith("-materialized"):
-                setup.append({"step_id": f"load{index}", "surface": "PIL.Image.Image",
-                              "operation": "tobytes", "receiver": binding(f"image{index}"),
-                              "arguments": {}})
-        case["steps"] = setup + case["steps"][2:]
-        if chain:
-            case["steps"].insert(-1, {
-                "step_id": "second", "surface": surface_id, "operation": "logical_and", "receiver": None,
-                "arguments": {"image1": binding("call"), "image2": binding("image1")},
-            })
-            case["steps"][-1]["receiver"] = binding("second")
-        for index, receiver in enumerate(("second" if chain else "call", "image0", "image1")):
-            case["steps"].extend([
-                {"step_id": f"samples{index}", "surface": "PIL.Image.Image", "operation": "getdata",
-                 "receiver": binding(receiver), "arguments": {}},
-                {"step_id": f"sample-bytes{index}", "surface": "PIL.Image.Image", "operation": "tobytes",
-                 "receiver": binding(f"samples{index}"), "arguments": {}},
-            ])
-            case["observations"].append(f"sample-bytes{index}")
-        cases.append(case)
+    for operation in ("logical_and", "logical_or"):
+        for size, other_size, label, exhaustive, chain in (
+            ((256, 256), (256, 256), "all-byte-pairs", True, False),
+            ((256, 256), (256, 256), "all-byte-pairs-materialized", True, False),
+            ((1, 1), (1, 1), "single", False, False),
+            ((15, 7), (15, 7), "vector-below", False, False),
+            ((16, 7), (16, 7), "vector-at", False, False),
+            ((17, 11), (17, 11), "vector-tail", False, False),
+            ((17, 11), (13, 9), "clipped", False, False),
+            ((13, 9), (17, 11), "clipped-reverse", False, False),
+            ((17, 9), (13, 11), "clipped-cross", False, False),
+            ((1025, 1), (1025, 1), "native-word-tail", False, False),
+            ((1025, 1), (1025, 1), "native-word-tail-materialized", False, False),
+            ((257, 256), (257, 256), "native-grid-tail", False, False),
+            ((17, 11), (17, 11), "composed-tail", False, True),
+            ((0, 3), (17, 11), "empty-left", False, False),
+            ((17, 11), (0, 3), "empty-right", False, False),
+        ):
+            case = make_case("1", 0, size, other_size, f"stored-samples-{label}",
+                             operation=operation)
+            setup = []
+            for index, shape in enumerate((size, other_size)):
+                raw = (raws[index] if exhaustive else
+                       bytes((pixel * (73 + index * 18) + index + 1) % 256
+                             for pixel in range(shape[0] * shape[1])))
+                case["assets"][index].update(data=base64.b64encode(raw).decode("ascii"),
+                                             sha256=hashlib.sha256(raw).hexdigest())
+                setup.extend([
+                    {"step_id": f"image{index}", "surface": "PIL.Image", "operation": "new",
+                     "receiver": None, "arguments": {"mode": literal("1"), "size": literal(list(shape))}},
+                    {"step_id": f"write{index}", "surface": "PIL.Image.Image", "operation": "putdata",
+                     "receiver": binding(f"image{index}"), "arguments": {"data": asset_value(f"pixels{index}")}},
+                ])
+                if label.endswith("-materialized"):
+                    setup.append({"step_id": f"load{index}", "surface": "PIL.Image.Image",
+                                  "operation": "tobytes", "receiver": binding(f"image{index}"),
+                                  "arguments": {}})
+            case["steps"] = setup + case["steps"][2:]
+            if chain:
+                case["steps"].insert(-1, {
+                    "step_id": "second", "surface": surface_id, "operation": operation, "receiver": None,
+                    "arguments": {"image1": binding("call"), "image2": binding("image1")},
+                })
+                case["steps"][-1]["receiver"] = binding("second")
+            for index, receiver in enumerate(("second" if chain else "call", "image0", "image1")):
+                case["steps"].extend([
+                    {"step_id": f"samples{index}", "surface": "PIL.Image.Image", "operation": "getdata",
+                     "receiver": binding(receiver), "arguments": {}},
+                    {"step_id": f"sample-bytes{index}", "surface": "PIL.Image.Image", "operation": "tobytes",
+                     "receiver": binding(f"samples{index}"), "arguments": {}},
+                ])
+                case["observations"].append(f"sample-bytes{index}")
+            cases.append(case)
     # Native GPU words cross one workgroup and the compact-grid cutoff here.
     # Include a partial final word and rectangular row, not only pixel tails.
     for mode, channels, size, label in (

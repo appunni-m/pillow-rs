@@ -3371,3 +3371,45 @@ Remaining blockers and next decisions:
 - The three known LAB conversion failures remain at the conversion checkpoint. More bindings, modes, sizes, composed pipelines and platforms remain unproven.
 
 The reusable optimization skill now records byte-domain lookup expansion, carry-isolated bit packing, borrowing before materialization, row padding, eager/lazy attribution and mutation-created semantic states. The isolated release build and formatting/public-boundary checks passed. Generated documentation was refreshed from existing evidence; input generation updated static coverage declarations only. **No coverage collection or push ran.** Inventory is **16,319 parity cases and 793 workloads across 54 suites**. The selected global matrix still has 208 operations plus one constant and zero fully completed operations; broad timings remain historical and focused-result integration remains pending.
+
+## Logical OR checkpoint — 2026-09-25
+
+Logical AND checkpoint `24e1e4b5f` is complete. Logical OR receives **three attempts**, all retained; work now moves to Logical XOR under the attempt cap. The inherited packed-bit I/O improvements are part of this operation's starting implementation, not new Logical OR gains.
+
+1. **Repair stored-sample parity before timing.** Public mode-1 writes retain arbitrary byte samples. Pillow Logical OR returns canonical 255 whenever either input is nonzero; the former bitwise result could be any nonzero byte. Fifteen new maintained cases expose **39 failures in 45 comparisons** before the fix (`perf-logical-or-stored-20260925-before-parity.json`). CPU, SIMD (including in-place and scalar helper paths), and GPU now canonicalize truth. The SIMD path tests the combined byte against zero. Raw output observations prevent packed serialization from concealing this defect.
+2. **CPU scheduling.** Reuse the measured cheap-byte scheduling policy: sequential work below 4 MiB of decoded output, grouped complete rows above it. Retain each source's independent stride when clipping dimensions. The truth formula remains exact.
+3. **GPU transport.** Admit a single equal-size mode-1 Logical OR to the existing native-byte executor. Pack four stored samples per GPU word, guard the active word count and truncate transport padding. Truth commutes with OR, so combine source words before one carry-isolated per-byte truth normalization; this shortcut is invalid for AND or XOR.
+
+Added **15 parity cases and four size-varied benchmark workflows**, with zero existing parity cases changed or removed. The fresh throughput runner now accepts Logical OR with the same complete-request policy as AND: two fresh packed imports, operation, full packed export, synchronization, worker scheduling and receipt capture. It still rejects unsupported modes and requires actual native execution and full image/secondary transfer accounting.
+
+After the repair, **462/462 maintained/workflow comparisons** and **18/18 large boundary comparisons** pass. Both suites pass again after scheduling/transport changes, including all 65,536 stored-byte pairs, raw output/input observations, a composed operation, native word/grid tails and both clipped source-stride directions. Final artifacts are `perf-logical-or-20260925-final-parity.json` and `perf-logical-or-20260925-final-tiles-parity.json`. This does not assert native execution for every clipped/invalid parity case.
+
+The parity-correct baseline is `migration-benchmark-e57e2a7b607d461fa4166687c829782f` (`perf-logical-or-20260925-baseline.json`). Final run `migration-benchmark-d24f86c4afa14756baf3b9f4449a6ce7` (`perf-logical-or-20260925-final.json`) completes all seven workloads. Six materialized rows have native completed receipts without fallback; the standard row still lacks terminal native evidence. Final median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.014750 | 0.018626 | 0.016438 | 0.262354 |
+| 1 × 1 | 0.014938 | 0.014584 | 0.015271 | 0.517458 |
+| 32 × 32 | 0.013917 | 0.014875 | 0.015292 | 0.198729 |
+| 256 × 256 | 0.061125 | 0.024396 | 0.024562 | 0.283334 |
+| 1024 × 768 | 0.522958 | 0.131791 | 0.123667 | 0.971230 |
+| SIMD Chops mode-1 workload | 0.637438 | 0.179500 | 0.179209 | 1.034020 |
+
+Fresh 1024 × 768 runs `perf-logical-or-20260925-baseline-throughput.json` and `perf-logical-or-20260925-final-throughput.json` each pass **20,160 exact checks**, including **19,200 measured completions**, with unchanged source hashes and consistent runtime binaries. Final queue-one medians are Pillow **1.128938 ms**, CPU **0.118417 ms**, SIMD **0.118437 ms**, GPU **0.502938 ms**. Final completed fresh images per second:
+
+| Queue depth | Pillow | CPU | SIMD | GPU |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 874.3 | 7174.4 | 7337.9 | 1920.6 |
+| 2 | 1065.8 | 12159.8 | 11979.4 | 3514.6 |
+| 4 | 1183.1 | 17377.1 | 17210.5 | 5104.8 |
+
+Fresh CPU latency improves from **0.267729 to 0.118417 ms** (about 2.3×); GPU improves from **3.186021 to 0.502938 ms** (about 6.3×). SIMD remains essentially unchanged at **0.118583 → 0.118437 ms**. GPU throughput improves at every measured depth. Each GPU input/readback falls from 3,145,728 to **786,432 bytes**, parameters from 256 to 16, and mode conversions from one to zero. The odd-width 1031 × 769 fresh check passes **192/192 outputs** in `perf-logical-or-20260925-final-packed-check.json`.
+
+Remaining blockers:
+
+- CPU still misses the materialized small-operation and 32 × 32 rows. The 1 × 1 win in this run is not a universal fixed-overhead solution.
+- SIMD reaches about **9.5× Pillow** on the fresh large workload, but misses 5× on the maintained rows. Wrapper/materialization costs and extra memory passes remain.
+- GPU remains slower than SIMD in latency and throughput at every measured depth despite removing expansion. Launch, completion waits, allocation/output creation and decoded-byte transport remain. Resident or packed-bit execution must preserve canonical samples and count host conversion costs; the current gains do not prove those paths.
+- Logical XOR still needs its own stored-sample audit. Wider bindings/platforms and composed pipelines remain unproven. The known LAB conversion failures remain at their earlier checkpoint; this OR-only audit did not rerun conversion.
+
+The optimization skill now explains when truth normalization can move across an operator, allowing less work without changing the result. The isolated release build and formatting/public-boundary checks passed; documentation refresh uses existing evidence only. **No coverage collection or push ran.** Inventory is **16,334 parity cases and 797 workloads across 54 suites**. The selected matrix remains 208 operations plus one constant, with zero fully completed operations; broad timing evidence remains historical and focused-result integration remains pending.
