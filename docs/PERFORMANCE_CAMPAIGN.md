@@ -4126,3 +4126,57 @@ nondeterministic ICC timestamp comparison, a vectorized SIMD implementation,
 small-image GPU routing or batching, and a concurrent changing-input GPU
 throughput measurement. Revisit LAB only with evidence addressing one of those
 gaps; the next first-pass operation remains the highest-ranked incomplete row.
+
+## Grayscale SIMD blocker revisit — 2026-09-26
+
+The bounded revisit selected `PIL.ImageOps.grayscale` because the earlier
+checkpoint still had a large RGB SIMD gap. The SIMD adapter now admits logical
+`RGBa` after applying Pillow's integer unpremultiplication, then runs the native
+vector luma path. Its strict focused cohort passes 26/26 cases. CPU and GPU
+grayscale lanes were unchanged and retain their earlier focused parity results.
+An accidental broad selector also ran 1,737 ImageOps cases: 1,729 passed; the
+eight failures are `solarize` empty-image status mismatches, outside this
+operation.
+
+The fixed serial SIMD path was rebuilt with `make build-parity`, passed
+`cargo check -p pillow-rs --all-targets --all-features --locked`, and passed the
+strict SIMD cohort. The six unchanged whole-workflow benchmarks all record six
+executions on their requested CPU, SIMD, or GPU backend with no fallback. The
+benchmark correctness gate is successful execution; strict output parity is
+reported separately. Median milliseconds are:
+
+| Grayscale workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 1 × 1 | 0.0100 | 0.0108 | 0.0114 | 0.2898 |
+| RGB 16 × 16 | 0.0128 | 0.0127 | 0.0126 | 0.2995 |
+| RGB 32 × 24 | 0.0108 | 0.0114 | 0.0121 | 0.2919 |
+| RGB 32 × 32 | 0.0108 | 0.0112 | 0.0119 | 0.3548 |
+| RGB 256 × 256 | 0.0284 | 0.0291 | 0.0339 | 0.5570 |
+| RGB 1024 × 768 | 0.4378 | 0.2176 | 0.2666 | 2.2034 |
+
+These short samples vary: the preceding serial receipt measured 0.2610/0.1845/
+0.3034/2.2327 ms on the largest row. Both runs show the same limits: CPU is
+competitive on large RGB but loses on some small rows; SIMD does not approach
+5× Pillow; and GPU is far slower than SIMD. In the latest large sample, SIMD
+backend execution is 154.9 µs, while terminal byte export is 167.6 µs. GPU
+backend execution is 2.086 ms, consistent with its measured readback/completion
+cost. No changing-input throughput claim was collected in this revisit.
+
+Two bounded kernel experiments were rejected. First, enabling
+`par_rows_mut!` above 262,144 pixels raised the 1024 × 768 SIMD backend median
+from 147.2 to 399.1 µs; the whole workflow rose from 0.3034 to 0.6681 ms.
+The serial vector loop is the better path here, so the parallel branch was
+removed. Second, an AArch64 `vld3q_u8` structure-load prototype could avoid the
+portable RGB deinterleave shuffles, but compilation is rejected by the crate's
+`-D unsafe-code` policy. No lint suppression or unsafe exception was added, and
+the non-building prototype was removed. A future revisit needs a safe locked
+API for structure loads or a measured safe shuffle/layout change, plus a
+separate investigation of terminal export cost. The grayscale operation
+remains incomplete; no coverage was run.
+
+Receipts: `parity-imageops-grayscale-simd-20260926-checkpoint.json`,
+`execution-imageops-grayscale-simd-20260926-checkpoint.json`, and
+`perf-imageops-grayscale-20260926-checkpoint.json` under
+`build/migration-parity/`. The next operation should come from the current
+incomplete-operation ranking; this checkpoint does not clear the outstanding
+CPU, SIMD, GPU, or throughput goals.
