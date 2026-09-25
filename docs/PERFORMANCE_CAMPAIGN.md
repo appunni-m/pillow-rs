@@ -2566,3 +2566,42 @@ matrix at `build/migration-parity/optimization-goals-current.json` retains all
 baseline as diagnostic evidence only. Exports outside that manifest remain
 pending. No public operation meets every target. No push or pre-push campaign
 is included in this local checkpoint.
+
+## Screen baseline — 2026-09-25
+
+Work moved to `ImageChops.screen` after putpixel checkpoint `7b85bbe66`.
+No Screen implementation attempt has been made in this visit. The maintained
+cases plus 23 benchmark workflows pass **573/573 comparisons** on CPU/SIMD/GPU
+in `build/migration-parity/perf-screen-20260925-initial-parity.json`.
+This is the starting corpus; the finite byte domain, broader mode/shape audit
+and fresh sustained-throughput measurement remain pending.
+
+All 24 selected standalone/composed workloads completed as
+`migration-benchmark-acd42003d2334983b4debe9e71193a90`, retained in
+`perf-screen-20260925-initial.json`; the two existing exact benchmark gates pass.
+Representative median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.014875 | 0.021208 | 0.017417 | 0.299000 |
+| 1 × 1 | 0.012854 | 0.015584 | 0.015916 | 0.198167 |
+| 32 × 32 | 0.015229 | 0.016834 | 0.017084 | 0.271438 |
+| 256 × 256 | 0.146250 | 0.039083 | 0.042396 | 0.468063 |
+| 1024 × 768 | 2.179542 | 0.664625 | 0.560812 | 4.838229 |
+| Multiply→Screen, RGB 1024 × 1024 | 6.858959 | 1.131229 | 1.098208 | 4.615875 |
+| 260-operation auxiliary chain | 0.857292 | 1.153500 | 1.212583 | 7.815896 |
+
+These rows have completed native execution without fallback. The ordinary
+standard row has no terminal native receipt; the resident lifecycle row
+reuses materialized results and cannot prove accelerated fresh work. CPU misses
+small-input and long-chain targets. Standalone SIMD misses 5× at every measured
+size; some composed rows exceed 5× but do not establish the operation-wide
+claim. GPU misses SIMD latency throughout these rows. Reciprocal benchmark
+latency does not establish sustained throughput.
+
+The SIMD implementation already shares Multiply's packed 16-byte blend helper
+and fused Multiply→Screen path. Inspect their callers and allocation/scheduling
+costs before duplicating arithmetic. GPU Screen still uses the four-byte
+transport shader; the shared native-byte executor used by Multiply is a
+candidate once exact mode/shape behavior is verified. No coverage collection
+or push ran.
