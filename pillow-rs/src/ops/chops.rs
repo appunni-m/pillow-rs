@@ -220,7 +220,7 @@ pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Applies bitwise AND.
+/// Applies logical AND, writing 255 when both stored samples are nonzero.
 ///
 /// # Errors
 ///

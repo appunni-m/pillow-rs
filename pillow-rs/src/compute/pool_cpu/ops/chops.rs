@@ -422,7 +422,9 @@ pub fn op_chops_logical_and(
     img: &DynamicImage,
     other: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| a & b)
+    // Mode 1 can retain noncanonical samples through putdata/putpixel. Pillow
+    // tests each stored byte for truth and writes a canonical 0/255 result.
+    channel_op_binary(img, other, |a, b| u8::from(a != 0 && b != 0) * 255)
 }
 
 pub fn op_chops_logical_or(
