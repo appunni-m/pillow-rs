@@ -3545,3 +3545,42 @@ Remaining blockers and next decisions:
 - The pre-existing mode-1 to LAB parity failures remain at their earlier conversion checkpoint. This Overlay audit does not claim to repair or rerun that separate operation.
 
 The skill now explains selecting branch operands before range reduction, exact bounded division and why internal parallelism must be evaluated under request concurrency. The isolated release build and formatting/public-boundary checks pass. **No coverage collection or push ran.** Inventory remains **16,476 parity cases and 805 workloads across 54 suites**; the selected matrix retains 208 operations plus one constant and **zero fully completed operations**. Broad timing evidence remains historical and focused-result integration remains pending. HardLight is next, inheriting the verified shared SIMD improvement as its starting point.
+
+## HardLight baseline — 2026-09-25
+
+Overlay is checkpointed after three attempts as `30c0ac522`. Work moves to `ImageChops.hard_light`; **zero HardLight-specific implementation attempts** have been made. The exact sixteen-lane SIMD helper retained during Overlay is inherited baseline behavior, not a new HardLight gain.
+
+The maintained audit adds **127 cases** and **four benchmark workloads**, with zero existing cases or workloads changed or removed. It exercises 19 modes, vector tails, clipping and empty inputs, exhaustive L byte pairs, mutation-created mode-1 samples with raw result/input observations, materialized inputs and composed execution. The expanded baseline passes **540/540 comparisons** in `perf-hardlight-20260925-baseline-parity.json`. The earlier shared-helper audit additionally established exact HardLight SIMD arithmetic across every byte pair.
+
+All seven selected workloads complete in `migration-benchmark-acfc50eae75844aebac94b9cc4b5008e`, artifact `perf-hardlight-20260925-baseline.json`. Six materialized rows have completed native CPU/SIMD/GPU receipts without fallback; the standard deferred row remains a terminal-evidence gap. Median milliseconds:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized operation | 0.015500 | 0.018479 | 0.018917 | 0.527625 |
+| Existing 32 × 24 | 0.017062 | 0.017500 | 0.016375 | 0.269021 |
+| 1 × 1 | 0.013083 | 0.016792 | 0.015584 | 0.267583 |
+| 32 × 32 | 0.017271 | 0.017355 | 0.016771 | 0.398208 |
+| 256 × 256 | 0.256917 | 0.090083 | 0.054208 | 0.644563 |
+| 1024 × 768 | 3.438063 | 0.648062 | 0.741958 | 3.286375 |
+
+The fresh runner now supports HardLight with the same complete two-input policy and receipt accounting. L/RGB 1024 × 768 baseline `perf-hardlight-20260925-baseline-throughput.json` passes **40,320 exact checks**, including **38,400 measured completions**, with unchanged source hashes and consistent runtime binaries. Queue-one median milliseconds:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.893750 | 0.230313 | 0.191459 | 3.005875 |
+| RGB | 4.435291 | 0.678646 | 0.700354 | 2.993021 |
+
+Completed fresh images per second:
+
+| Mode | Queue depth | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1 | 1105.2 | 4004.2 | 4886.9 | 283.9 |
+| L | 2 | 1139.6 | 5992.4 | 7453.2 | 480.1 |
+| L | 4 | 1131.1 | 6947.7 | 9835.6 | 591.2 |
+| RGB | 1 | 223.8 | 1259.2 | 1396.1 | 276.4 |
+| RGB | 2 | 223.1 | 1694.8 | 2152.0 | 455.1 |
+| RGB | 4 | 249.2 | 1850.8 | 2762.3 | 563.1 |
+
+GPU latency is about **15.7× SIMD in L** and **4.3× in RGB**, and its throughput trails SIMD at every tested depth. It still expands the inputs to RGBA transport. First investigate admitting eligible equal-size HardLight work to the established native-byte executor, preserving its distinct branch condition on the second sample and active-word bounds. CPU retains a 64 KiB pair LUT and fine-row scheduling; compare its scheduling cost with sequential/grouped work before borrowing the cheap-byte threshold. SIMD reaches about **6.3× Pillow in fresh RGB**, but only **4.7× in L** and under 5× on every maintained row. Do not repeat Overlay's rejected internal parallelism experiment without new evidence that resolves the concurrency tradeoff.
+
+Generated documentation was refreshed from existing evidence; input generation updated static coverage declarations only. **No coverage collection or push ran.** Inventory is now **16,603 parity cases and 809 workloads across 54 suites**. The selected matrix retains 208 operations plus one constant and zero fully completed operations. Broad timings remain historical; merging focused results into the global matrix and auditing public exports outside the manifest remain pending.
