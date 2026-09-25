@@ -679,6 +679,7 @@ PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
     "PointOp",
     "Multiply",
     "Screen",
+    "Overlay",
     "Difference",
     "Add",
     "Subtract",
@@ -40632,7 +40633,7 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             # Retain the existing La cases and their input bytes
             # below; the rest exercise native-byte transport independently.
             if mode != "La" or label not in ("tail17", "clipped", "zero-width"):
-                for operation in ("screen", "difference", "darker", "lighter", "add_modulo", "subtract_modulo"):
+                for operation in ("screen", "difference", "darker", "lighter", "add_modulo", "subtract_modulo", "overlay"):
                     cases.append(make_case(mode, channels, size, other_size, label, operation=operation))
             for operation in ("logical_and", "logical_or", "logical_xor"):
                 cases.append(make_case(mode, channels, size, other_size, label, operation=operation))
@@ -40645,6 +40646,7 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "lighter"))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "add_modulo"))
     cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "subtract_modulo"))
+    cases.append(make_case("L", 1, (256, 256), (256, 256), "exhaustive-pairs", raws, "overlay"))
     for operation in ("logical_and", "logical_or", "logical_xor"):
         # Mode 1 accepts packed input bytes. Exhaust all byte pairs while the
         # operation still acts on individual binary pixels after decoding.
@@ -40660,10 +40662,10 @@ def native_blend_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         ):
             cases.append(make_case("1", 0, size, other_size, label, operation=operation))
     # Packed frombytes inputs contain only 0/255 samples after decoding. Public
-    # putdata can retain every byte in mode 1; logical operators test truth, then
-    # write canonical 0/255. Observe stored output too: packed export alone
-    # would hide a noncanonical nonzero result.
-    for operation in ("logical_and", "logical_or", "logical_xor"):
+    # putdata can retain every byte in mode 1. Observe stored output too: packed
+    # export alone hides whether logical results are canonical and whether raw
+    # byte blends retain their exact intermediate sample values.
+    for operation in ("logical_and", "logical_or", "logical_xor", "overlay"):
         for size, other_size, label, exhaustive, chain in (
             ((256, 256), (256, 256), "all-byte-pairs", True, False),
             ((256, 256), (256, 256), "all-byte-pairs-materialized", True, False),
