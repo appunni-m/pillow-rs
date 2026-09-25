@@ -125,6 +125,7 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::Thumbnail { .. } => "Thumbnail",
         PipelineOp::Reduce { .. } => "Reduce",
         PipelineOp::Convert { .. } => "Convert",
+        PipelineOp::ConvertLab { .. } => "ConvertLab",
         PipelineOp::RemapPalette { .. } => "RemapPalette",
         PipelineOp::Filter3x3 { .. } => "Filter3x3",
         PipelineOp::Filter5x5 { .. } => "Filter5x5",
@@ -502,6 +503,9 @@ pub(crate) fn gpu_blend_alpha_params(alpha: f64) -> Option<u32> {
 #[cfg(feature = "gpu")]
 fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
     match op {
+        // The bundled LCMS CLUT is uploaded as a read-only auxiliary buffer;
+        // the shader reproduces its fixed-point tetrahedral interpolation.
+        PipelineOp::ConvertLab { .. } => true,
         // The ordinary shader has no floating source-box parameters.
         PipelineOp::ResizeBoxed { .. } => false,
         // NEAREST is a single-dispatch relocation. The other filters expand
@@ -748,6 +752,7 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
             | PipelineOp::Transform { .. }
             | PipelineOp::Pad { .. }
             | PipelineOp::Convert { .. }
+            | PipelineOp::ConvertLab { .. }
             | PipelineOp::Reduce { .. }
             | PipelineOp::Solarize { .. }
             | PipelineOp::Posterize { .. }
@@ -1329,7 +1334,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         op_chops_offset, op_chops_overlay, op_chops_screen, op_chops_soft_light, op_chops_subtract,
         op_chops_subtract_modulo,
     };
-    use crate::compute::pool_cpu::ops::color::{op_convert, op_extract_band, op_remap_palette};
+    use crate::compute::pool_cpu::ops::color::{
+        op_convert, op_convert_lab, op_extract_band, op_remap_palette,
+    };
     use crate::compute::pool_cpu::ops::draw::{
         op_draw_arc, op_draw_chord, op_draw_circle, op_draw_ellipse, op_draw_line,
         op_draw_pieslice, op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
@@ -1500,6 +1507,22 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                 }
             },
             "convert.wgsl"
+        ),
+    );
+    m.insert(
+        "ConvertLab",
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if matches!(op, PipelineOp::ConvertLab { .. }) {
+                    op_convert_lab(img)
+                } else {
+                    Err(PilError::ValueError("expected ConvertLab op".into()))
+                }
+            },
+            "rgb_to_lab.wgsl"
         ),
     );
     m.insert(
@@ -2912,6 +2935,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Transform", adapters::simd_transform)?;
     simd_set(m, "Pad", adapters::simd_pad)?;
     simd_set(m, "Convert", adapters::simd_convert)?;
+    simd_set(m, "ConvertLab", adapters::simd_convert_lab)?;
     simd_set(m, "Reduce", adapters::simd_reduce)?;
     simd_set(m, "EffectNoise", adapters::simd_effect_noise)?;
     simd_set(m, "EffectSpread", adapters::simd_effect_spread)?;

@@ -267,6 +267,7 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
                 ColorMode::RGBA => "RGBA",
                 _ => return None,
             },
+            PipelineOp::ConvertLab { .. } => "LAB",
             PipelineOp::Grayscale => "L",
             PipelineOp::Colorize { .. } => "RGB",
             PipelineOp::Constant { .. } => "L",
@@ -431,6 +432,7 @@ fn known_pipeline_op_dimensions(
         // secondary-image validation.  Keeping them here is what makes long
         // point/filter/draw chains answer `size()` without replaying pixels.
         PipelineOp::Convert { .. }
+        | PipelineOp::ConvertLab { .. }
         | PipelineOp::RemapPalette { .. }
         | PipelineOp::Color3DLut { .. }
         | PipelineOp::ExtractBand { .. }
@@ -2559,6 +2561,7 @@ impl Image {
                 PipelineOp::Grayscale
                 | PipelineOp::Constant { .. }
                 | PipelineOp::Convert { .. }
+                | PipelineOp::ConvertLab { .. }
                 | PipelineOp::ExtractBand { .. } => None,
                 _ => source.explicit_mode().map(str::to_owned),
             }
@@ -4353,7 +4356,32 @@ impl Image {
         if let Some(transparency) = self.pending_transparency_info() {
             fields.push(("transparency".to_owned(), transparency));
         }
+        // Pillow's Image.convert("LAB") stores the generated output profile
+        // in the result's info dictionary. Carry it on the conversion op so
+        // the profile's creation timestamp stays tied to that conversion.
+        if self.explicit_mode() == Some("LAB")
+            && let Some(profile) = self.pipeline_lab_icc_profile()
+        {
+            fields.push((
+                "icc_profile".to_owned(),
+                ImageInfoValue::Bytes(profile.to_vec()),
+            ));
+        }
         fields
+    }
+
+    fn pipeline_lab_icc_profile(&self) -> Option<&[u8]> {
+        match self {
+            Image::Pipeline { source, ops, .. } => ops
+                .iter()
+                .rev()
+                .find_map(|op| match op {
+                    PipelineOp::ConvertLab { icc_profile } => Some(icc_profile.as_ref()),
+                    _ => None,
+                })
+                .or_else(|| source.pipeline_lab_icc_profile()),
+            _ => None,
+        }
     }
 
     /// Returns conversion-time transparency metadata in Pillow's public

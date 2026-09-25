@@ -272,7 +272,7 @@ impl Image {
         // public Rust error path unreachable and allowed an unknown target to
         // slip through for some non-standard source modes. PA is handled by
         // the explicit palette-alpha path below but is not a ColorMode enum.
-        if !matches!(mode, "PA" | "RGBX" | "RGBa" | "La") && !is_luma16_mode(mode) {
+        if !matches!(mode, "PA" | "RGBX" | "RGBa" | "La" | "LAB") && !is_luma16_mode(mode) {
             parse_mode(mode).map_err(|_| PilError::ValueError("image has wrong mode".into()))?;
         }
 
@@ -301,6 +301,30 @@ impl Image {
 
         if mode == src_mode {
             return Ok(self.copy());
+        }
+
+        if mode == "LAB" {
+            // Pillow's LAB converter consumes RGB samples. Unsigned-16 luma
+            // has no direct LAB converter, so follow Pillow's clipped L
+            // fallback before expanding to RGB; every other source uses its
+            // existing RGB conversion path (palette, scalar, alpha, and
+            // non-standard source handling included).
+            let rgb = if is_luma16_mode(&src_mode) {
+                self.convert("L", None, None, None, None)?
+                    .convert("RGB", None, None, None, None)?
+            } else {
+                self.convert("RGB", None, None, None, None)?
+            };
+            let mut result = Image::push_op(
+                &rgb,
+                PipelineOp::ConvertLab {
+                    icc_profile: crate::lab::pillow_lab_icc_profile().into(),
+                },
+            );
+            if let Image::Pipeline { explicit_mode, .. } = &mut result {
+                *explicit_mode = Some("LAB".to_owned());
+            }
+            return Ok(result);
         }
 
         if src_mode == "La" || (src_mode == "RGBa" && !matches!(mode, "P" | "PA")) {
@@ -1074,7 +1098,7 @@ fn convert_to_palette_alpha(
 
 fn explicit_mode_for(mode: &str) -> Option<String> {
     match mode {
-        "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
+        "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "LAB" => Some(mode.to_string()),
         _ => None,
     }
 }
