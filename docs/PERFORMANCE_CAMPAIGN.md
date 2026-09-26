@@ -5038,3 +5038,71 @@ exact parity on each backend. `make fmt clippy` and both focused Rust
 `extract_band` tests pass. No coverage ran. `getchannel` remains incomplete:
 small-call CPU overhead, SIMD channel-gather throughput, and packed GPU
 transfers are explicit blockers for a later revisit.
+
+## Image.Image.getcolors checkpoint — 2026-09-26
+
+Four bounded implementation attempts are checkpointed. First, histogram,
+scalar, and multiband scans stop as soon as the `(maxcolors + 1)`th distinct
+value appears; this avoids scanning the remaining pixels when Pillow will
+return `None`. Second, multiband and scalar maps reserve only the bounded
+working set for `maxcolors <= 256` on images of at least 64 KiB. This avoids
+growth during common large-image rejection, but the measured operation still
+misses CPU parity. Third, skipping PyO3's GIL detach for small resident images
+showed no stable gain and was removed. Fourth, an early uniform-image scan for
+tiny RGB/LA/RGBA images was removed: a second pass over a varied 16 × 16 input
+still cost about 31 µs against Pillow's 10 µs.
+
+Parity inspection found that Pillow's multiband result order follows occupied
+slots in `ImagingGetColors`' hash table, despite the public documentation
+describing the list as unsorted. Its table size, packed pixel key, and probe
+sequence are observable through result order. LA keys replicate luminance into
+the first three packed bytes and put alpha in the fourth; `I` and `F` preserve
+raw 32-bit sample keys, including distinct positive and negative zero bit
+patterns. The implementation now matches those rules rather than sorting or
+using first-seen order. Negative `maxcolors` returns `None`; a requested table
+beyond Pillow's supported size raises `MemoryError`. Thirty-six focused input
+cases cover these contracts, mode variants, high cardinality, and the table
+limit. The pinned [Pillow 12.2.0 `GetBBox.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/GetBBox.c),
+[`Unpack.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c),
+and [public `getcolors` documentation](https://pillow.readthedocs.io/en/12.2.0/reference/Image.html#PIL.Image.Image.getcolors)
+are the behavior references.
+
+All 36 focused cases pass against Pillow under CPU, SIMD, and GPU profile
+labels (108 comparisons), and Node/WASM passes all 36 cases as well. The Node
+run exposed and fixed an unsigned JS `maxcolors` parameter that converted `-1`
+into a large positive limit, so the combined parity evidence is 144 comparisons.
+Each of the three measured workloads also passes
+its exact-output gate. `perf-getcolors-final.json` records five-sample medians
+of 100 calls per subject. Focused parity receipts are
+`getcolors-final-cpu.json`, `getcolors-final-simd.json`,
+`getcolors-final-gpu.json`, and `getcolors-final-node.json` under
+`build/migration-parity/`:
+
+| Workload | Pillow | CPU | SIMD profile | GPU profile |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16 × 16, uniform | 0.001959 ms | 0.003625 ms | 0.003417 ms | 0.003500 ms |
+| RGB 16 × 16, varied | 0.010083 ms | 0.031521 ms | 0.030625 ms | 0.030500 ms |
+| RGB 1,024 × 768, high cardinality | 0.004500 ms | 0.007146 ms | 0.007376 ms | 0.007437 ms |
+
+The CPU path remains 1.59–3.13× slower than Pillow on these rows. `getcolors`
+is an eager host-side API; receipts show `actual_backend: null` for all three
+target profile labels, so the SIMD and GPU rows prove neither SIMD execution
+nor GPU acceleration. The high-cardinality early exit limits pixel visits, but
+still costs more than Pillow's C loop. The varied 16 × 16 case must count all
+256 colors and build the output. Code inspection leaves the main revisit
+candidates: the Rust `HashMap` performs a second hash/probe to represent
+Pillow's already computed table slots; native `.pixels()` iteration adds
+per-pixel wrapper work; and each returned multiband color is copied into a
+small `Vec` before PyO3 builds Python tuples. These are hypotheses from the
+current path, not profile attribution. A revisit should measure scan, slot
+lookup, and Python result construction separately before changing the table
+representation or return layout.
+
+`getcolors` remains incomplete after four attempts. No coverage collection ran.
+The generated status pages now use the refreshed manifest and report three
+stale historical aggregate artifacts with no compatible project-wide evidence;
+the focused receipts above are recorded here but are not ingested into that
+aggregate. The manifest refresh records the current enum defaults for resize,
+rotate, and thumbnail and does not change runtime behavior.
+The next unvisited high-ranked workload is `PIL.ImageFont.FreeTypeFont`, the
+direct font-class constructor; work moves there after this checkpoint.

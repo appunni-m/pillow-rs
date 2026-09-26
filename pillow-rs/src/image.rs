@@ -733,6 +733,129 @@ pub enum FormattedPixelValue {
     Components(Vec<u8>),
 }
 
+/// Pillow's `ImagingGetColors` hash-table sizes and associated probing
+/// polynomials, indexed by the first table size greater than `maxcolors`.
+const PILLOW_COLOR_TABLE_SIZES: &[(u32, u32)] = &[
+    (4, 3),
+    (8, 3),
+    (16, 3),
+    (32, 5),
+    (64, 3),
+    (128, 3),
+    (256, 29),
+    (512, 17),
+    (1024, 9),
+    (2048, 5),
+    (4096, 83),
+    (8192, 27),
+    (16384, 43),
+    (32768, 3),
+    (65536, 45),
+    (131072, 9),
+    (262144, 39),
+    (524288, 39),
+    (1048576, 9),
+    (2097152, 5),
+    (4194304, 3),
+    (8388608, 33),
+    (16777216, 27),
+    (33554432, 9),
+    (67108864, 71),
+    (134217728, 39),
+    (268435456, 9),
+    (536870912, 5),
+    (1073741824, 83),
+];
+
+fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)> {
+    PILLOW_COLOR_TABLE_SIZES
+        .iter()
+        .find(|(size, _)| *size > maxcolors)
+        .map(|(size, polynomial)| (size - 1, *polynomial))
+}
+
+/// Insert one Pillow-packed pixel using the exact probe sequence used by
+/// `ImagingGetColors`. The map stores occupied Pillow slots sparsely, so large
+/// `maxcolors` values do not force a table allocation proportional to the
+/// requested limit.
+fn count_pillow_color(
+    table: &mut std::collections::HashMap<u32, (u32, u32)>,
+    colors: &mut usize,
+    pixel: u32,
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> bool {
+    let mut slot = (!pixel) & code_mask;
+    let mut increment = 0u32;
+    let mut first_conflict = true;
+
+    loop {
+        match table.entry(slot) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let (stored_pixel, count) = entry.get_mut();
+                if *stored_pixel == pixel {
+                    *count += 1;
+                    return true;
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                if *colors == maxcolors {
+                    return false;
+                }
+                entry.insert((pixel, 1));
+                *colors += 1;
+                return true;
+            }
+        }
+
+        if first_conflict {
+            increment = (pixel ^ (pixel >> 3)) & code_mask;
+            if increment == 0 {
+                increment = code_mask;
+            }
+            first_conflict = false;
+        } else {
+            increment <<= 1;
+            if increment > code_mask {
+                increment ^= code_polynomial;
+            }
+        }
+        slot = (slot + increment) & code_mask;
+    }
+}
+
+fn pillow_color_components(pixel: u32, bands: usize) -> Vec<u8> {
+    let bytes = pixel.to_ne_bytes();
+    match bands {
+        // Pillow's four-byte LA storage places alpha in the final byte.
+        2 => vec![bytes[0], bytes[3]],
+        3 => vec![bytes[0], bytes[1], bytes[2]],
+        4 => bytes.to_vec(),
+        _ => unreachable!("getcolors only supports one through four bands"),
+    }
+}
+
+fn pillow_color_pixel(components: &[u8]) -> u32 {
+    let mut bytes = [0u8; 4];
+    match components {
+        [luma, alpha] => {
+            bytes[0] = *luma;
+            // Pillow expands L into the three color bytes of its internal
+            // 32-bit LA pixel before placing alpha in the final byte.
+            bytes[1] = *luma;
+            bytes[2] = *luma;
+            bytes[3] = *alpha;
+        }
+        [first, second, third] => bytes[..3].copy_from_slice(&[*first, *second, *third]),
+        [first, second, third, fourth] => {
+            bytes.copy_from_slice(&[*first, *second, *third, *fourth])
+        }
+        _ => unreachable!("getcolors only supports one through four bands"),
+    }
+    u32::from_ne_bytes(bytes)
+}
+
 /// Pillow's flat versus multiband `getdata` result after core formatting.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormattedImageData {
@@ -5778,108 +5901,110 @@ impl Image {
             crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
             _ => 4,
         };
-        // Pack fixed-width byte tuples into one integer instead of allocating
-        // a temporary Vec for every pixel. The packed order is identical to
-        // Pillow's lexicographic byte order, so the public result ordering is
-        // preserved while the hot loop performs only one hash lookup.
-        let mut counts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-        let mut count_pixel = |key: u32| {
-            *counts.entry(key).or_insert(0) += 1;
+        let (code_mask, code_polynomial) = pillow_color_table_parameters(maxcolors)
+            .ok_or_else(|| PilError::MemoryError(String::new()))?;
+        // Pillow emits multiband colors in its ImagingGetColors hash-table
+        // slot order, which is neither insertion nor lexicographic order.
+        // Keep Pillow's probe sequence while storing only occupied slots.
+        let max_distinct_colors = maxcolors as usize;
+        // Large images with the usual small color limit reject after at most
+        // 257 distinct colors. Reserve only that bounded working set once.
+        let initial_capacity = if maxcolors <= 256 && img.as_bytes().len() >= 64 * 1024 {
+            max_distinct_colors + 1
+        } else {
+            0
+        };
+        let mut counts: std::collections::HashMap<u32, (u32, u32)> =
+            std::collections::HashMap::with_capacity(initial_capacity);
+        let mut distinct_colors = 0usize;
+        let mut count_pixel = |pixel: u32| {
+            count_pillow_color(
+                &mut counts,
+                &mut distinct_colors,
+                pixel,
+                max_distinct_colors,
+                code_mask,
+                code_polynomial,
+            )
         };
         match (n_bands, img.as_ref()) {
             (2, crate::raster::DynamicImage::ImageLumaA8(image)) => {
                 for pixel in image.pixels() {
-                    count_pixel((u32::from(pixel[0]) << 8) | u32::from(pixel[1]));
+                    if !count_pixel(pillow_color_pixel(&pixel.0)) {
+                        return Ok(None);
+                    }
                 }
             }
             (3, crate::raster::DynamicImage::ImageRgb8(image)) => {
                 for pixel in image.pixels() {
-                    count_pixel(
-                        (u32::from(pixel[0]) << 16)
-                            | (u32::from(pixel[1]) << 8)
-                            | u32::from(pixel[2]),
-                    );
+                    if !count_pixel(pillow_color_pixel(&pixel.0)) {
+                        return Ok(None);
+                    }
                 }
             }
             (4, crate::raster::DynamicImage::ImageRgba8(image)) => {
                 for pixel in image.pixels() {
-                    count_pixel(
-                        (u32::from(pixel[0]) << 24)
-                            | (u32::from(pixel[1]) << 16)
-                            | (u32::from(pixel[2]) << 8)
-                            | u32::from(pixel[3]),
-                    );
+                    if !count_pixel(pillow_color_pixel(&pixel.0)) {
+                        return Ok(None);
+                    }
                 }
             }
             (2, _) => {
                 let la = img.to_luma_alpha8();
                 for pixel in la.pixels() {
-                    count_pixel((u32::from(pixel[0]) << 8) | u32::from(pixel[1]));
+                    if !count_pixel(pillow_color_pixel(&pixel.0)) {
+                        return Ok(None);
+                    }
                 }
             }
             (3, _) => {
                 let rgb = img.to_rgb8();
                 for pixel in rgb.pixels() {
-                    count_pixel(
-                        (u32::from(pixel[0]) << 16)
-                            | (u32::from(pixel[1]) << 8)
-                            | u32::from(pixel[2]),
-                    );
+                    if !count_pixel(pillow_color_pixel(&pixel.0)) {
+                        return Ok(None);
+                    }
                 }
             }
             (4, _) => {
                 let rgba = img.to_rgba8();
                 for pixel in rgba.pixels() {
-                    count_pixel(
-                        (u32::from(pixel[0]) << 24)
-                            | (u32::from(pixel[1]) << 16)
-                            | (u32::from(pixel[2]) << 8)
-                            | u32::from(pixel[3]),
-                    );
+                    if !count_pixel(pillow_color_pixel(&pixel.0)) {
+                        return Ok(None);
+                    }
                 }
             }
             _ => unreachable!("getcolors only supports one through four bands"),
         }
-        if counts.len() > maxcolors as usize {
-            return Ok(None);
-        }
-        let mut result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
-        // PIL sorts by color value descending.
-        // For LA mode, PIL's C getcolors32 produces odds-descending then evens-descending
-        // (due to its internal hash-table ordering with A+L*256 encoding).
-        if n_bands == 2 {
-            result.sort_by(|a, b| {
-                // Primary: parity of first byte (odd first = 1 before 0)
-                let a_odd = ((a.1 >> 8) as u8) & 1;
-                let b_odd = ((b.1 >> 8) as u8) & 1;
-                if a_odd != b_odd {
-                    return b_odd.cmp(&a_odd);
-                }
-                // Secondary: full value descending
-                b.1.cmp(&a.1)
-            });
-        } else {
-            result.sort_by(|a, b| b.1.cmp(&a.1));
-        }
+        let mut result: Vec<_> = counts.into_iter().collect();
+        result.sort_unstable_by_key(|(slot, _)| *slot);
         Ok(Some(
             result
                 .into_iter()
-                .map(|(count, color)| {
-                    let components = match n_bands {
-                        2 => vec![(color >> 8) as u8, color as u8],
-                        3 => vec![(color >> 16) as u8, (color >> 8) as u8, color as u8],
-                        4 => vec![
-                            (color >> 24) as u8,
-                            (color >> 16) as u8,
-                            (color >> 8) as u8,
-                            color as u8,
-                        ],
-                        _ => unreachable!("getcolors only supports one through four bands"),
-                    };
-                    (count, FormattedPixelValue::Components(components))
+                .map(|(_, (pixel, count))| {
+                    (
+                        count,
+                        FormattedPixelValue::Components(pillow_color_components(pixel, n_bands)),
+                    )
                 })
                 .collect(),
         ))
+    }
+
+    /// Applies Pillow's signed `maxcolors` argument semantics for bindings.
+    /// Negative limits still load and validate the image, then return `None`.
+    pub fn getcolors_with_signed_limit(
+        &self,
+        maxcolors: i32,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        if maxcolors >= 0 {
+            return self.getcolors(maxcolors as u32);
+        }
+        let mode = self.mode()?;
+        if is_l16_mode(&mode) {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        self.materialized_shared()?;
+        Ok(None)
     }
 
     /// Returns `getcolors` with Pillow's scalar/tuple color shape applied.
@@ -5892,6 +6017,14 @@ impl Image {
         maxcolors: u32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
         self.getcolors(maxcolors)
+    }
+
+    /// Returns formatted colors using Pillow's signed `maxcolors` limit.
+    pub fn getcolors_formatted_with_signed_limit(
+        &self,
+        maxcolors: i32,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        self.getcolors_with_signed_limit(maxcolors)
     }
 
     /// Returns extrema using Pillow's one-pair versus per-band result shape.
@@ -5982,8 +6115,17 @@ impl Image {
         // coverage region without changing the result.
         let mut hist = [0u32; 256];
         let luma = img.to_luma8();
+        let max_distinct_colors = maxcolors as usize;
+        let mut distinct_colors = 0usize;
         for p in luma.pixels() {
-            hist[p[0] as usize] += 1;
+            let count = &mut hist[p[0] as usize];
+            if *count == 0 {
+                distinct_colors += 1;
+                if distinct_colors > max_distinct_colors {
+                    return Ok(None);
+                }
+            }
+            *count += 1;
         }
         // Build result: [(count, pixel_value)] in pixel value ascending order
         let result: Vec<(u32, FormattedPixelValue)> = (0..=255u8)
@@ -6003,46 +6145,43 @@ impl Image {
         mode: &str,
         img: &DynamicImage,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        if mode == "I" {
-            let mut counts = std::collections::HashMap::<i32, u32>::new();
-            for sample in img.as_bytes().chunks_exact(4) {
-                let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                *counts.entry(value).or_insert(0) += 1;
-            }
-            if counts.len() > maxcolors as usize {
+        let (code_mask, code_polynomial) = pillow_color_table_parameters(maxcolors)
+            .ok_or_else(|| PilError::MemoryError(String::new()))?;
+        let max_distinct_colors = maxcolors as usize;
+        let initial_capacity = if maxcolors <= 256 && img.as_bytes().len() >= 64 * 1024 {
+            max_distinct_colors + 1
+        } else {
+            0
+        };
+        let mut counts: std::collections::HashMap<u32, (u32, u32)> =
+            std::collections::HashMap::with_capacity(initial_capacity);
+        let mut distinct_colors = 0usize;
+        for sample in img.as_bytes().chunks_exact(4) {
+            let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
+            if !count_pillow_color(
+                &mut counts,
+                &mut distinct_colors,
+                pixel,
+                max_distinct_colors,
+                code_mask,
+                code_polynomial,
+            ) {
                 return Ok(None);
             }
-            let mut result: Vec<_> = counts.into_iter().collect();
-            // Pillow's scalar ImagingCore colors are returned in descending
-            // sample order for the deterministic values used by this API.
-            result.sort_by(|a, b| b.0.cmp(&a.0));
-            return Ok(Some(
-                result
-                    .into_iter()
-                    .map(|(value, count)| (count, FormattedPixelValue::Integer(value)))
-                    .collect(),
-            ));
         }
-
-        let mut counts = std::collections::HashMap::<u32, u32>::new();
-        for sample in img.as_bytes().chunks_exact(4) {
-            let bits = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-            // C float equality treats positive and negative zero as equal.
-            let key = if f32::from_bits(bits) == 0.0 { 0 } else { bits };
-            *counts.entry(key).or_insert(0) += 1;
-        }
-        if counts.len() > maxcolors as usize {
-            return Ok(None);
-        }
-        let mut result: Vec<_> = counts
-            .into_iter()
-            .map(|(bits, count)| (f32::from_bits(bits) as f64, count))
-            .collect();
-        result.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let mut result: Vec<_> = counts.into_iter().collect();
+        result.sort_unstable_by_key(|(slot, _)| *slot);
         Ok(Some(
             result
                 .into_iter()
-                .map(|(value, count)| (count, FormattedPixelValue::Float(value)))
+                .map(|(_, (pixel, count))| {
+                    let value = if mode == "I" {
+                        FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes()))
+                    } else {
+                        FormattedPixelValue::Float(f32::from_bits(pixel) as f64)
+                    };
+                    (count, value)
+                })
                 .collect(),
         ))
     }

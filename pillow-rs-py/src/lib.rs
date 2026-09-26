@@ -1574,12 +1574,12 @@ impl PyImage {
     /// Return getcolors formatted as PIL expects.
     fn getcolors_formatted(
         &mut self,
-        maxcolors: Option<u32>,
+        maxcolors: Option<i32>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
         let maxcolors = maxcolors.unwrap_or(256);
         let formatted = py
-            .detach(|| self.inner.getcolors_formatted(maxcolors))
+            .detach(|| self.inner.getcolors_formatted_with_signed_limit(maxcolors))
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             None => Ok(None),
@@ -2069,6 +2069,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::OverflowError(msg) => pyo3::exceptions::PyOverflowError::new_err(msg),
         PilError::DecompressionBombError(msg) => DecompressionBombError::new_err(msg),
+        PilError::MemoryError(msg) => pyo3::exceptions::PyMemoryError::new_err(msg),
         PilError::UnicodeEncodeError {
             encoding,
             object,

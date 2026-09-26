@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 516ae7f0dc786e5f95b6c09ea869ec3d0d68b9341af1e25350343deb2ed0c0f6
+manifest_sha256: c3c3c6c6c25ca8bbd51f7b37cf9dccdf86bc983bf2768cd8ed45ac75cb8860d7
 statement_status: declared
 ```
 
@@ -18,10 +18,10 @@ statement_status: declared
 - Target profiles: `python-cpu`, `python-simd`, `python-gpu`
 - Public surfaces: 24
 - Operations: 209
-- Requirements: 1801
-- Indexed parity cases: 16761
+- Requirements: 1803
+- Indexed parity cases: 16783
 - Indexed coverage plans: 24
-- Indexed benchmark workloads: 817
+- Indexed benchmark workloads: 825
 
 ## Declared operations
 
@@ -35,7 +35,7 @@ statement_status: declared
 | `PIL.Image` | `eval` | `function` | `PIL.Image.eval` | `pillow_rs.eval` | 12 |
 | `PIL.Image` | `fromarray` | `function` | `PIL.Image.fromarray` | `pillow_rs.fromarray` | 8 |
 | `PIL.Image` | `frombuffer` | `function` | `PIL.Image.frombuffer` | `pillow_rs.frombuffer` | 8 |
-| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 15 |
+| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 16 |
 | `PIL.Image` | `linear_gradient` | `function` | `PIL.Image.linear_gradient` | `pillow_rs.linear_gradient` | 5 |
 | `PIL.Image` | `merge` | `function` | `PIL.Image.merge` | `pillow_rs.merge` | 10 |
 | `PIL.Image` | `new` | `function` | `PIL.Image.new` | `pillow_rs.new` | 28 |
@@ -52,7 +52,7 @@ statement_status: declared
 | `PIL.Image.Image` | `entropy` | `method` | `PIL.Image.Image.entropy` | `pillow_rs.Image.entropy` | 12 |
 | `PIL.Image.Image` | `filter` | `method` | `PIL.Image.Image.filter` | `pillow_rs.Image.filter` | 27 |
 | `PIL.Image.Image` | `format` | `property_get` | `PIL.Image.Image.format` | `pillow_rs.Image.format` | 2 |
-| `PIL.Image.Image` | `frombytes` | `method` | `PIL.Image.Image.frombytes` | `pillow_rs.Image.frombytes` | 10 |
+| `PIL.Image.Image` | `frombytes` | `method` | `PIL.Image.Image.frombytes` | `pillow_rs.Image.frombytes` | 11 |
 | `PIL.Image.Image` | `get_child_images` | `method` | `PIL.Image.Image.get_child_images` | `pillow_rs.Image.get_child_images` | 5 |
 | `PIL.Image.Image` | `get_flattened_data` | `method` | `PIL.Image.Image.get_flattened_data` | `pillow_rs.Image.get_flattened_data` | 6 |
 | `PIL.Image.Image` | `getbands` | `method` | `PIL.Image.Image.getbands` | `pillow_rs.Image.getbands` | 9 |
