@@ -4974,3 +4974,67 @@ official cohort to rank this operation. The next revisit should first attribute
 small-call fixed costs, then test a selection network or specialized 3×3
 median kernel and measure the GPU transfer/dispatch crossover. This operation
 is checkpointed, not complete. No coverage ran.
+
+## Image.Image.getchannel checkpoint — 2026-09-26
+
+Four bounded performance attempts are checkpointed. The first changed CPU
+`L`/`RGB` extraction to allocate the one-byte result directly. RGB no longer
+expands into a full RGBA temporary before discarding three of every four
+bytes. A prior 1,024 × 768 RGB sample moved from CPU 0.248 ms against Pillow
+0.180 ms to CPU 0.045 ms. The direct `L` path also copies only the logical
+`width × height` samples, preserving Pillow's output length if the source
+buffer contains trailing data.
+
+The SIMD work exposed the cost of interleaved channel extraction. An explicit
+five-pixel RGB shuffle rebuilt padded vectors and spilled selected lanes
+through scalar arrays; it measured 1.259 ms for RGB, 0.514 ms for LA, and
+0.719 ms for RGBA at 1,024 × 768. Replacing it with channel-constant strided
+gathers reduced RGB to 0.345 ms. Parallelizing independent rows above 262,144
+pixels then reduced the three large final samples to about 0.166–0.169 ms.
+The fourth attempt tried a 16-pixel shuffle and regressed all three large
+layouts, so that SIMD code was removed. The retained SIMD path is the direct
+gather/parallel-gather implementation; the small and large samples show that
+it still needs a genuinely faster lane-selection kernel to meet the 5× target.
+The gathers do not use explicit wide-vector operations, so their receipts now
+record zero vector blocks and identify scalar versus parallel gather work.
+Backend receipts prove the SIMD route was selected without fallback; they do
+not prove that this particular kernel emitted SIMD instructions.
+
+The GPU attempt reads each packed output pixel's first byte directly into the
+returned `L` image, avoiding a second full-frame RGBA-to-L host copy. The
+shader still uses packed RGBA working storage: a 1,024 × 768 run uploads
+3,145,728 bytes and reads back 3,145,728 bytes for a 786,432-byte result.
+Consequently it executes natively but remains dominated by dispatch,
+synchronization, and full-frame transfers. Reducing transfer width requires a
+native one-byte GPU working/output path or fusing extraction with an adjacent
+GPU producer; another host-side repack cannot remove that bottleneck.
+
+The original standard workload timed only lazy `getchannel()` construction,
+then materialized outside the clock, so it did not measure the operation's
+pixel work. The generated standard case now times both the call and
+`tobytes()`. Three additional 1,024 × 768 RGB, LA, and RGBA cases use that same
+materialized boundary. Receipt
+`migration-benchmark-af6462b5496a4f679896a39489121616` reports these median
+latencies in milliseconds after correcting vector-path telemetry:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16 × 16 | 0.004917 | 0.005959 | 0.006333 | 0.208625 |
+| RGB 1,024 × 768 | 0.184792 | 0.051083 | 0.184834 | 0.945855 |
+| LA 1,024 × 768 | 0.158917 | 0.093855 | 0.189209 | 1.247813 |
+| RGBA 1,024 × 768 | 0.194459 | 0.105437 | 0.216979 | 0.911334 |
+
+These are five-sample medians with 100 timed executions per subject. Receipts
+show the requested native CPU, SIMD, and GPU backend for every sample and no
+fallback. The small CPU row is 1.21× Pillow latency. At large sizes CPU is
+1.7–3.6× faster than Pillow. SIMD throughput is only 0.84–1.00× Pillow,
+far below 5×. GPU latency is 4.2–6.6× SIMD latency on large cases and about
+33× on the tiny case; reciprocal-latency throughput is correspondingly lower.
+Sustained changing-input throughput has not been measured.
+
+All 134 focused `getchannel` parity cases pass exactly on strict CPU, SIMD, and
+GPU (402 comparisons total). The four materialized benchmark cases also pass
+exact parity on each backend. `make fmt clippy` and both focused Rust
+`extract_band` tests pass. No coverage ran. `getchannel` remains incomplete:
+small-call CPU overhead, SIMD channel-gather throughput, and packed GPU
+transfers are explicit blockers for a later revisit.

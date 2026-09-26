@@ -83,6 +83,33 @@ fn native_extract_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize
     }
 }
 
+#[inline(always)]
+fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(source: &[u8]) -> Vec<u8> {
+    source
+        .chunks_exact(CHANNELS)
+        .map(|pixel| pixel[CHANNEL])
+        .collect()
+}
+
+#[cfg(feature = "parallel")]
+#[inline]
+fn gather_channel_parallel<const CHANNELS: usize, const CHANNEL: usize>(
+    source: &[u8],
+    width: usize,
+    height: usize,
+) -> Vec<u8> {
+    let row_stride = width * CHANNELS;
+    let mut output = vec![0; width * height];
+    crate::par_rows_mut!(&mut output, width, height, |_start, _end, y, row| {
+        let source_start = y as usize * row_stride;
+        let source_row = &source[source_start..source_start + row_stride];
+        for (destination, pixel) in row.iter_mut().zip(source_row.chunks_exact(CHANNELS)) {
+            *destination = pixel[CHANNEL];
+        }
+    });
+    output
+}
+
 fn native_typed_filter_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     matches!(img, DynamicImage::ImageRgba8(_))
         .then_some(())
@@ -11852,95 +11879,56 @@ pub fn simd_extract_band(
     // Keep the CPU operation's defensive clamping for direct internal
     // PipelineOp callers while using the native storage stride here.
     let channel = usize::from(*index).min(channels - 1);
-    let mut output = vec![0u8; pixel_count];
-    if channels == 4 {
-        // RGBA-family extraction can load four packed words at once and use
-        // a lane shift/mask; unlike a byte shuffle this keeps the hot path on
-        // the integer SIMD unit while preserving the packed byte order.
-        let shift = u32x4::splat((channel * 8) as u32);
-        let mask = u32x4::splat(0xff);
-        let mut pixel = 0usize;
-        while pixel + 4 <= pixel_count {
-            let source_start = pixel * channels;
-            let words = u32x4::new([
-                u32::from_le_bytes([
-                    source[source_start],
-                    source[source_start + 1],
-                    source[source_start + 2],
-                    source[source_start + 3],
-                ]),
-                u32::from_le_bytes([
-                    source[source_start + 4],
-                    source[source_start + 5],
-                    source[source_start + 6],
-                    source[source_start + 7],
-                ]),
-                u32::from_le_bytes([
-                    source[source_start + 8],
-                    source[source_start + 9],
-                    source[source_start + 10],
-                    source[source_start + 11],
-                ]),
-                u32::from_le_bytes([
-                    source[source_start + 12],
-                    source[source_start + 13],
-                    source[source_start + 14],
-                    source[source_start + 15],
-                ]),
-            ]);
-            let selected = ((words >> shift) & mask).to_array();
-            for (offset, value) in selected.into_iter().enumerate() {
-                output[pixel + offset] = value as u8;
+    // Keep both the pixel stride and selected lane constant in each hot loop.
+    // The previous explicit shuffle rebuilt a padded 16-byte block for every
+    // five RGB pixels and spilled each shuffled vector through a scalar array.
+    let (width_usize, height_usize) = (width as usize, height as usize);
+    macro_rules! gather {
+        ($channels:literal, $channel:literal) => {{
+            #[cfg(feature = "parallel")]
+            {
+                if pixel_count >= 256 * 1024 && height > 1 {
+                    gather_channel_parallel::<$channels, $channel>(
+                        source,
+                        width_usize,
+                        height_usize,
+                    )
+                } else {
+                    gather_channel::<$channels, $channel>(source)
+                }
             }
-            pixel += 4;
-        }
-        for pixel in pixel..pixel_count {
-            output[pixel] = source[pixel * channels + channel];
-        }
-        let vector_blocks = pixel_count / 4;
-        let scalar_tail = pixel_count % 4;
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
-        crate::compute::record_pipeline_operation_path("vector");
-
-        return GrayImage::from_raw(width, height, output)
-            .map(DynamicImage::ImageLuma8)
-            .ok_or_else(|| {
-                PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
-            });
+            #[cfg(not(feature = "parallel"))]
+            {
+                gather_channel::<$channels, $channel>(source)
+            }
+        }};
     }
-
-    // One shuffle consumes at most 16 source bytes.  The native layouts have
-    // one to four bytes per pixel, so this processes 16, 8, 5, or 4 pixels
-    // per vector respectively.
-    let pixels_per_vector = 16 / channels;
-    let indices =
-        std::array::from_fn(|lane| ((lane % pixels_per_vector) * channels + channel) as u8);
-    let mut pixel = 0usize;
-    while pixel + pixels_per_vector <= pixel_count {
-        let source_start = pixel * channels;
-        let source_bytes = pixels_per_vector * channels;
-        let mut source_block = [0u8; 16];
-        source_block[..source_bytes]
-            .copy_from_slice(&source[source_start..source_start + source_bytes]);
-        let extracted = u8x16::new(source_block)
-            .swizzle_relaxed(u8x16::new(indices))
-            .to_array();
-        output[pixel..pixel + pixels_per_vector].copy_from_slice(&extracted[..pixels_per_vector]);
-        pixel += pixels_per_vector;
+    let output = match (channels, channel) {
+        (1, _) => source.to_vec(),
+        (2, 0) => gather!(2, 0),
+        (2, 1) => gather!(2, 1),
+        (3, 0) => gather!(3, 0),
+        (3, 1) => gather!(3, 1),
+        (3, _) => gather!(3, 2),
+        (4, 0) => gather!(4, 0),
+        (4, 1) => gather!(4, 1),
+        (4, 2) => gather!(4, 2),
+        (4, _) => gather!(4, 3),
+        _ => unreachable!("native extract layout has one to four channels"),
+    };
+    // This route currently uses scalar byte gathers (possibly split across
+    // rows), not explicit wide-vector operations. Do not report synthetic
+    // vector blocks based only on the number of pixels processed.
+    if pixel_count != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(pixel_count as u64);
     }
-    for pixel in pixel..pixel_count {
-        output[pixel] = source[pixel * channels + channel];
-    }
-    let vector_blocks = pixel_count / pixels_per_vector;
-    let scalar_tail = pixel_count % pixels_per_vector;
-    if vector_blocks != 0 {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
-    }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
-    }
-    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_path(if pixel_count == 0 {
+        "scalar-control"
+    } else if cfg!(feature = "parallel") && pixel_count >= 256 * 1024 && height > 1 {
+        "parallel-gather"
+    } else {
+        "scalar-gather"
+    });
 
     GrayImage::from_raw(width, height, output)
         .map(DynamicImage::ImageLuma8)
@@ -25688,7 +25676,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_band_rgba_integer_vector_matches_packed_bytes() {
+    fn extract_band_rgba_gather_matches_packed_bytes() {
         let pixel_count = 10;
         let raw: Vec<u8> = (0..pixel_count)
             .flat_map(|pixel| {

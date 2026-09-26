@@ -133,6 +133,7 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image.radial-gradient.standard": "PIL.Image.radial_gradient.mode.l",
     "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
     "pil-image-image.frombytes.standard": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
+    "pil-image-image.getchannel.standard": "PIL.Image.Image.getchannel.nuanced.performance-rgb-16x16",
     "pil-image-image.point.standard": "PIL.Image.Image.point.mode.l",
     "pil-image-image.putalpha.standard": "PIL.Image.Image.putalpha.nuanced.rgb-scalar",
     "pil-image-image.putdata.standard": "PIL.Image.Image.putdata.nuanced.l-bytes",
@@ -168,6 +169,16 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imageops.colorize.standard": "PIL.ImageOps.colorize.nuanced.two-color",
     "pil-imagepalette-imagepalette.getcolor.standard": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
 }
+
+# Materialized public ``getchannel`` workflows used by the operation benchmark.
+# Setup stays outside the timed boundary; the call plus ``tobytes`` are timed so
+# lazy target backends pay for actual extraction, synchronization, and readback.
+GETCHANNEL_PERFORMANCE_CASES = (
+    ("rgb-16x16", "RGB", [16, 16], [13, 73, 211], 1),
+    ("rgb-1024x768", "RGB", [1024, 768], [13, 73, 211], 1),
+    ("la-1024x768", "LA", [1024, 768], [13, 211], 1),
+    ("rgba-1024x768", "RGBA", [1024, 768], [13, 73, 211, 143], 3),
+)
 BENCHMARK_SUCCESS_WORKFLOW_IDS = {
     "pil-image.frombuffer.standard",
     "pil-imagefont-imagefont.getbbox.standard",
@@ -14550,6 +14561,24 @@ def build_nuanced_cases(
         # Every selector is valid for its source image and the result is
         # materialized through the maintained parity observation.
         *(getchannel_coverage_spec(pattern) for pattern in range(100)),
+        # Materialized performance cases keep public setup outside the timed
+        # call+observation boundary and parity-gate every execution backend.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getchannel",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "uniform-fill",
+                "pixel": pixel,
+                "values": {"channel": literal(channel)},
+                "observe_result": "tobytes",
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, pixel, channel in GETCHANNEL_PERFORMANCE_CASES
+        ),
         # Coverage batch 2026-08-14av: exercise valid explicit-band reads for
         # public P/PA/CMYK/HSV/YCbCr images. These are the supported
         # non-native byte layouts that enter Image.getdata's RGBA fallback;
@@ -39828,43 +39857,44 @@ def build_nuanced_cases(
                 f".{spec['requirement_suffix']}"
             )
         prefix = operation_prefix(*key)
-        cases.append(
-            build_parity_case(
-                spec["surface"],
-                operation,
-                requirement,
-                operations,
-                assets_root,
-                case_id=f"{prefix}.nuanced.{slug(spec['name'])}",
-                scenario_values=spec.get("values"),
-                scenario_mode=spec.get("mode"),
-                scenario_draw_mode=spec.get("draw_mode"),
-                scenario_edge=spec.get("edge"),
-                scenario_pixel=spec.get("pixel"),
-                scenario_font=spec.get("font"),
-                scenario_font_size=spec.get("font_size"),
-                scenario_transposed_orientation=spec.get("orientation"),
-                scenario_bitmap_mode=spec.get("bitmap_mode"),
-                scenario_bitmap_color=spec.get("bitmap_color"),
-                scenario_size=spec.get("size"),
-                scenario_im_mode=spec.get("im_mode"),
-                scenario_mask_mode=spec.get("mask_mode"),
-                scenario_noise_seed=spec.get("seed"),
-                scenario_asset=spec.get("scenario_asset"),
-                scenario_inline_image=spec.get("scenario_inline_image"),
-                scenario_inline_mask_image=spec.get("scenario_inline_mask_image"),
-                scenario_exif_variant=spec.get("exif_variant"),
-                scenario_chain=spec.get("chain"),
-                scenario_observe_result=spec.get("observe_result"),
-                scenario_observe_receiver=spec.get("observe_receiver", False),
-                scenario_observe_stat_properties=spec.get(
-                    "observe_stat_properties", False
-                ),
-                scenario_outline_curve=spec.get("outline_curve", False),
-                scenario_outline_empty=spec.get("outline_empty", False),
-                scenario_comparisons=spec.get("comparisons"),
-            )
+        case = build_parity_case(
+            spec["surface"],
+            operation,
+            requirement,
+            operations,
+            assets_root,
+            case_id=f"{prefix}.nuanced.{slug(spec['name'])}",
+            scenario_values=spec.get("values"),
+            scenario_mode=spec.get("mode"),
+            scenario_draw_mode=spec.get("draw_mode"),
+            scenario_edge=spec.get("edge"),
+            scenario_pixel=spec.get("pixel"),
+            scenario_font=spec.get("font"),
+            scenario_font_size=spec.get("font_size"),
+            scenario_transposed_orientation=spec.get("orientation"),
+            scenario_bitmap_mode=spec.get("bitmap_mode"),
+            scenario_bitmap_color=spec.get("bitmap_color"),
+            scenario_size=spec.get("size"),
+            scenario_im_mode=spec.get("im_mode"),
+            scenario_mask_mode=spec.get("mask_mode"),
+            scenario_noise_seed=spec.get("seed"),
+            scenario_asset=spec.get("scenario_asset"),
+            scenario_inline_image=spec.get("scenario_inline_image"),
+            scenario_inline_mask_image=spec.get("scenario_inline_mask_image"),
+            scenario_exif_variant=spec.get("exif_variant"),
+            scenario_chain=spec.get("chain"),
+            scenario_observe_result=spec.get("observe_result"),
+            scenario_observe_receiver=spec.get("observe_receiver", False),
+            scenario_observe_stat_properties=spec.get(
+                "observe_stat_properties", False
+            ),
+            scenario_outline_curve=spec.get("outline_curve", False),
+            scenario_outline_empty=spec.get("outline_empty", False),
+            scenario_comparisons=spec.get("comparisons"),
         )
+        if "target_profiles" in spec:
+            case["target_profiles"] = list(spec["target_profiles"])
+        cases.append(case)
     cases.extend(benchmark_pipeline_cases(surface_id))
     cases.extend(pipeline_composition_cases(surface_id, operations))
     cases.extend(release_cleanup_parity_cases(surface_id))
@@ -46260,6 +46290,9 @@ def build_inputs(
                 case_id = pipeline_workload["case_id"]
             case_id = case_aliases.get(case_id, case_id)
             workflow_override = _benchmark_success_workflow(workload_id)
+            materialized_getchannel = (
+                workload_id == "pil-image-image.getchannel.standard"
+            )
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46286,8 +46319,16 @@ def build_inputs(
                     ],
                     "input": input_spec,
                     "measurement": {
-                        "boundary": "whole_workflow",
-                        "step_ids": [],
+                        "boundary": (
+                            "observed_steps"
+                            if materialized_getchannel
+                            else "whole_workflow"
+                        ),
+                        "step_ids": (
+                            ["call", "observe-result"]
+                            if materialized_getchannel
+                            else []
+                        ),
                         "metrics": operation["benchmark"]["metrics"],
                         "warmup_iterations": 5,
                         "measurement_iterations": 20,
@@ -46309,6 +46350,57 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+        if surface_id == "PIL.Image.Image":
+            getchannel_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "getchannel"
+                ),
+                None,
+            )
+            if getchannel_benchmark is not None:
+                operation, requirement = getchannel_benchmark
+                for name, _mode, _size, _pixel, _channel in (
+                    GETCHANNEL_PERFORMANCE_CASES[1:]
+                ):
+                    workload_id = (
+                        f"{storage_slug}.getchannel.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.getchannel.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-result"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"getchannel-{slug(name)}",
+                                surface=surface_id,
+                                operation="getchannel",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
         benchmark_relative = f"inputs/benchmark/{storage_slug}.json"
         benchmark_path = output_root / benchmark_relative
         suites = (
