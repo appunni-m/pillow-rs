@@ -959,6 +959,55 @@ def benchmark_workflow_case(
     }
 
 
+def select_workloads(
+    workloads: dict[str, dict[str, Any]],
+    *,
+    pipeline: bool,
+    workload_ids: list[str] | None,
+    limit: int | None,
+) -> list[dict[str, Any]]:
+    """Select benchmark workloads while applying filters independently."""
+
+    selected = list(workloads.values())
+    if pipeline:
+        selected = [
+            workload
+            for workload in selected
+            if workload["workload_id"].startswith(
+                (
+                    "pipeline-op.",
+                    "pipeline-chain.",
+                    "pipeline-lifecycle.",
+                    "pipeline-matrix.",
+                    "pipeline.quick.",
+                )
+            )
+        ]
+
+    if workload_ids:
+        missing = [
+            workload_id for workload_id in workload_ids if workload_id not in workloads
+        ]
+        if missing:
+            raise ValueError(f"unknown benchmark workload: {missing[0]}")
+        selected_ids = {workload["workload_id"] for workload in selected}
+        outside_selection = [
+            workload_id
+            for workload_id in workload_ids
+            if workload_id not in selected_ids
+        ]
+        if outside_selection:
+            raise ValueError(
+                f"benchmark workload is not in the selected pipeline set: "
+                f"{outside_selection[0]}"
+            )
+        selected = [workloads[workload_id] for workload_id in workload_ids]
+
+    if limit is not None:
+        selected = selected[:limit]
+    return selected
+
+
 def validate_selected_workloads(
     selected_workloads: list[dict[str, Any]],
 ) -> None:
@@ -991,30 +1040,12 @@ def run(args: argparse.Namespace) -> int:
     manifest_data = load_manifest(manifest)
     cases_by_id, case_inputs = load_parity_cases(manifest_data)
     workloads, suites_input, workload_inputs = load_benchmarks(manifest_data)
-    selected_workloads = list(workloads.values())
-    if args.pipeline:
-        selected_workloads = [
-            workload
-            for workload in selected_workloads
-            if workload["workload_id"].startswith(
-                (
-                    "pipeline-op.",
-                    "pipeline-chain.",
-                    "pipeline-lifecycle.",
-                    "pipeline-matrix.",
-                    "pipeline.quick.",
-                )
-            )
-        ]
-    elif args.workload_id:
-        selected_workloads = [
-            workloads[item] for item in args.workload_id if item in workloads
-        ]
-        missing_workloads = [item for item in args.workload_id if item not in workloads]
-        if missing_workloads:
-            raise ValueError(f"unknown benchmark workload: {missing_workloads[0]}")
-    if args.limit is not None:
-        selected_workloads = selected_workloads[: args.limit]
+    selected_workloads = select_workloads(
+        workloads,
+        pipeline=args.pipeline,
+        workload_ids=args.workload_id,
+        limit=args.limit,
+    )
     validate_selected_workloads(selected_workloads)
 
     workload_cases: dict[str, dict[str, Any]] = {}

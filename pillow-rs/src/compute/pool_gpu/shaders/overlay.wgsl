@@ -18,13 +18,15 @@ fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 9u; }
 
 fn overlay_ch(a: u32, b: u32) -> u32 {
-    var result: u32;
-    if a < 128u {
-        result = (a * b) / 127u;
-    } else {
-        result = 255u - ((255u - a) * (255u - b) / 127u);
-    }
-    return result;
+    let lower_half = a < 128u;
+    let selected_a = select(255u - a, a, lower_half);
+    let selected_b = select(255u - b, b, lower_half);
+    // One selected operand is at most 127, so the product is at most 32,385.
+    // This bounded reciprocal is exact for every product in that range.
+    let product = selected_a * selected_b;
+    let numerator = product + 1u;
+    let quotient = (numerator + (numerator >> 7u) + (numerator >> 14u)) >> 7u;
+    return select(255u - quotient, quotient, lower_half);
 }
 
 @group(0) @binding(0) var<storage, read> input_a: array<u32>;

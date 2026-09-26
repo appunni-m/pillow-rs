@@ -71,6 +71,18 @@ For a complete standard run:
 MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark
 ```
 
+For a single pipeline workload while debugging one operation, combine the
+pipeline profile with its workload ID:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-matrix.expanded.overlay.1024x768" \
+make migration-parity-benchmark
+```
+
+The runner applies the workload filter inside the pipeline selection and tests
+that behavior before each benchmark run.
+
 To retain every declared public operation against the CPU ≤ Pillow, SIMD ≥ 5×
 Pillow, and GPU ≤ SIMD latency goals, generate the diagnostic matrix:
 
