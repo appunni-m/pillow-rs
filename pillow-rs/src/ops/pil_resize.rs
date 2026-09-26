@@ -1525,10 +1525,37 @@ fn horizontal_pass_boxed_rows(
     output_width: u32,
     intermediate: &mut [u8],
     premultiplied_alpha: bool,
+    parallel_pixel_threshold: usize,
 ) {
+    let _ = parallel_pixel_threshold;
     let source_stride = source_width as usize * channels;
     let output_stride = output_width as usize * channels;
     if source_row_count == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[cfg(feature = "parallel")]
+    if (source_row_count as usize).saturating_mul(output_width as usize) < parallel_pixel_threshold
+    {
+        for row_index in 0..source_row_count as usize {
+            let source_y = first_source_row as usize + row_index;
+            let source_start = source_y * source_stride;
+            let output_start = row_index * output_stride;
+            let source_row = &work_bytes[source_start..source_start + source_stride];
+            let output_row = &mut intermediate[output_start..output_start + output_stride];
+            if premultiplied_alpha {
+                horizontal_pass_row_alpha(source_row, channels, coeffs, output_width, output_row);
+            } else {
+                horizontal_pass_row(
+                    source_row,
+                    source_width,
+                    channels,
+                    coeffs,
+                    output_width,
+                    output_row,
+                );
+            }
+        }
         return;
     }
 
@@ -1592,9 +1619,33 @@ fn vertical_pass_rows(
     channels: usize,
     coeffs: &FilterCoeffs,
     output: &mut [u8],
+    parallel_pixel_threshold: usize,
 ) {
+    let _ = parallel_pixel_threshold;
     let output_stride = output_width as usize * channels;
     if output_height == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[cfg(feature = "parallel")]
+    if (output_width as usize).saturating_mul(output_height as usize) < parallel_pixel_threshold {
+        for y in 0..output_height as usize {
+            let output_start = y * output_stride;
+            let row = &mut output[output_start..output_start + output_stride];
+            for dx in 0..output_width {
+                let value = vertical_pass_col(
+                    intermediate,
+                    source_rows,
+                    dx,
+                    output_width,
+                    channels,
+                    coeffs,
+                    y,
+                );
+                let start = dx as usize * channels;
+                row[start..start + channels].copy_from_slice(&value[..channels]);
+            }
+        }
         return;
     }
 
@@ -1718,11 +1769,42 @@ fn vertical_pass_rows_alpha(
     channels: usize,
     coeffs: &FilterCoeffs,
     output: &mut [u8],
+    parallel_pixel_threshold: usize,
 ) {
+    let _ = parallel_pixel_threshold;
     debug_assert!(matches!(channels, 2 | 4));
     let output_stride = output_width as usize * channels;
     let alpha_channel = channels - 1;
     if output_height == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[cfg(feature = "parallel")]
+    if (output_width as usize).saturating_mul(output_height as usize) < parallel_pixel_threshold {
+        for y in 0..output_height as usize {
+            let output_start = y * output_stride;
+            let row = &mut output[output_start..output_start + output_stride];
+            for dx in 0..output_width {
+                let value = vertical_pass_col(
+                    intermediate,
+                    source_rows,
+                    dx,
+                    output_width,
+                    channels,
+                    coeffs,
+                    y,
+                );
+                let start = dx as usize * channels;
+                let alpha = value[alpha_channel];
+                for c in 0..channels {
+                    row[start + c] = if c == alpha_channel {
+                        alpha
+                    } else {
+                        unpremultiply_channel(value[c], alpha)
+                    };
+                }
+            }
+        }
         return;
     }
 
@@ -2103,6 +2185,7 @@ pub fn pil_resize(
             channels,
             &v_coeffs,
             &mut out_bytes,
+            0,
         );
     } else {
         vertical_pass_rows(
@@ -2113,6 +2196,7 @@ pub fn pil_resize(
             channels,
             &v_coeffs,
             &mut out_bytes,
+            0,
         );
     }
 
@@ -2264,6 +2348,34 @@ pub fn pil_resize_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
     explicit_mode: Option<&str>,
+) -> DynamicImage {
+    pil_resize_boxed_with_parallel_pixel_threshold(
+        img,
+        dst_w,
+        dst_h,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        explicit_mode,
+        0,
+    )
+}
+
+/// Box-based resize with an operation-specific cutoff for Rayon row dispatch.
+/// A zero threshold preserves the general resize scheduler behavior.
+pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+    parallel_pixel_threshold: usize,
 ) -> DynamicImage {
     let orig_img = img;
     // Pillow narrows the source box to float32 before `_resize` sees it. Keep
@@ -2484,6 +2596,7 @@ pub fn pil_resize_boxed(
             dst_w,
             &mut intermediate,
             needs_alpha,
+            parallel_pixel_threshold,
         );
     }
 
@@ -2519,6 +2632,7 @@ pub fn pil_resize_boxed(
             channels,
             &v_coeffs,
             &mut out_bytes,
+            parallel_pixel_threshold,
         );
     } else {
         vertical_pass_rows(
@@ -2529,6 +2643,7 @@ pub fn pil_resize_boxed(
             channels,
             &v_coeffs,
             &mut out_bytes,
+            parallel_pixel_threshold,
         );
     }
 

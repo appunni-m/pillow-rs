@@ -1,5 +1,7 @@
 """Enumerations and constants matching Pillow's API."""
 
+from enum import IntEnum
+
 from . import _core
 
 
@@ -30,15 +32,22 @@ class ImageFormat:
     AVIF = "AVIF"
 
 
-class Resampling:
-    NEAREST = "NEAREST"
-    BILINEAR = "BILINEAR"
-    BICUBIC = "BICUBIC"
-    LANCZOS = "LANCZOS"
-    NEAREST_INT = 0
-    BILINEAR_INT = 1
-    BICUBIC_INT = 2
-    LANCZOS_INT = 3
+class Resampling(IntEnum):
+    """Pillow-compatible resampling filter codes."""
+
+    NEAREST = 0
+    LANCZOS = 1
+    BILINEAR = 2
+    BICUBIC = 3
+    BOX = 4
+    HAMMING = 5
+
+    # Preserve the former target-facade names as aliases. Their values now
+    # follow Pillow's public enum codes instead of the old internal ordering.
+    NEAREST_INT = NEAREST
+    LANCZOS_INT = LANCZOS
+    BILINEAR_INT = BILINEAR
+    BICUBIC_INT = BICUBIC
 
 class Transpose:
     FLIP_LEFT_RIGHT = "FLIP_LEFT_RIGHT"

@@ -4792,3 +4792,62 @@ checkpoint: CPU is still 6–14% slower than Pillow in the recorded 16 × 16
 whole-workflow samples, and the standard SIMD/GPU samples are lazy operations
 without execution evidence. Move on to `PIL.ImageOps.fit` as already queued;
 keep `putpixel` on the explicit latency blocker list.
+
+## ImageOps.fit checkpoint — 2026-09-26
+
+Four bounded performance attempts are checkpointed. Attempt 1 added the
+SIMD-only all-zero byte-image shortcut before boxed coefficient construction;
+the maintained black 32 × 24 → 16 × 16 workload showed SIMD whole-call median
+falling from 138.6 µs to 14.5 µs, with exact output and an actual SIMD receipt.
+Its terminal phase fell from 117.6 µs to 4.6 µs. Attempt 2 kept the same vector
+kernel but ran Fit's small horizontal and vertical row sets serially below
+1,024 output pixels. `ResizeBoxed` and `Thumbnail` pass a zero cutoff and keep
+their prior scheduling. Attempt 3 applied that operation-scoped cutoff to CPU
+Fit's scalar boxed-resize passes, again leaving general boxed-resize scheduling
+unchanged. Attempt 4 admitted only L and opaque RGB to the existing native GPU
+Fit path; straight-alpha and typed layouts remain on their exact host paths.
+
+The parity fix found while testing the public API was that the target exported
+resampling names as strings, while `ImageOps.fit` correctly rejects raw strings
+to match Pillow. Consequently `Image.Resampling.BILINEAR` itself was unusable.
+`Resampling` is now an `IntEnum` with Pillow's codes (NEAREST 0, LANCZOS 1,
+BILINEAR 2, BICUBIC 3, BOX 4, HAMMING 5); legacy `*_INT` names remain aliases
+to those values. The direct public `ImageOps.fit(...,
+method=Image.Resampling.BILINEAR)` invocation now succeeds and returns exactly
+the oracle bytes.
+
+All 84 applicable Fit cases pass exact parity on CPU and SIMD. Strict GPU
+parity passes the RGB bilinear Fit case, and patterned non-zero RGB inputs were
+compared byte-for-byte across Pillow, CPU, SIMD, and GPU. A 101-repeat small
+whole-call diagnostic (32 × 24 → 16 × 16) measured Pillow at 5.17 µs, CPU at
+8.25 µs, SIMD at 8.75 µs, and actual GPU at 215.96 µs. GPU telemetry confirms
+two device dispatches and no fallback. The small CPU and SIMD whole-call
+latencies remain above Pillow.
+
+Larger patterned cases show the scale-dependent ceiling. At 1,024 × 768 →
+512 × 512, medians were Pillow 1,988 µs, CPU 1,148 µs, SIMD 790 µs, and GPU
+1,893 µs. At 2,048 × 1,536 → 1,024 × 1,024, medians were Pillow 8,250 µs, CPU
+3,973 µs, SIMD 3,038 µs, and GPU 6,424 µs. Every output hash matched. The GPU
+executed natively in both cases but moved 3.1/12.6 MB to the device and read
+back 1.0/4.2 MB across two dispatches. It remains about 2.1× slower than SIMD
+at the larger size. SIMD reaches only about 2.7× Pillow there, short of the
+5× goal. The maintained zero-filled 32 × 24 workload measured whole-workflow
+medians of Pillow 17.83 µs, CPU 15.96 µs, SIMD 13.96 µs, and GPU 314.77 µs;
+GPU has an actual-device receipt, but this zero-input row is not representative
+of resampling arithmetic.
+
+Fit is checkpointed after four performance attempts. Remaining blockers are
+small-call CPU/SIMD overhead, SIMD throughput below 5× Pillow, and GPU host
+transfer/readback plus two-pass dispatch cost. Revisit GPU only with a design
+that reduces staging or fuses passes; do not expand straight-alpha admission
+without strict device parity. The retained evidence is in
+`build/migration-parity/fit-*20260926.json` and the direct patterned-input
+measurements recorded above. No coverage ran.
+
+The latest pushed checkpoint, [`30eb32f`](https://github.com/appunni-m/pillow-rs/actions/runs/36227483462),
+has unrelated CI parity failures: both Python jobs report 27 LAB conversion
+cases; Node and browser WASM report 570 each. Their reported failures include
+the same LAB cases and additional resize cases. Rust, documentation, Windows
+type-check, and parity-build jobs pass. Handle the LAB and WASM resize failures
+as separate correctness blockers before the next push; do not alter their
+expected results or weaken strict comparisons.

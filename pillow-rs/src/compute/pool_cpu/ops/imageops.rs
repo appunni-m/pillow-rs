@@ -28,11 +28,13 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::pil_resize;
-use crate::ops::pil_resize::pil_resize_boxed;
+use crate::ops::pil_resize::pil_resize_boxed_with_parallel_pixel_threshold;
 use crate::pipeline::ResampleFilter;
 
 #[cfg(feature = "parallel")]
 const POINT_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
+const CPU_FIT_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 #[inline]
 fn histogram_value_at(histogram: &[usize; 256], index: usize, fallback: u8) -> u8 {
@@ -865,7 +867,7 @@ pub fn op_fit(
     } else {
         filter
     };
-    let result = pil_resize_boxed(
+    let result = pil_resize_boxed_with_parallel_pixel_threshold(
         img,
         w,
         h,
@@ -875,6 +877,7 @@ pub fn op_fit(
         crop_top + crop_h,
         resize_filter,
         explicit_mode,
+        CPU_FIT_PARALLEL_PIXEL_THRESHOLD,
     );
     Ok(preserve_mode(img, result))
 }
