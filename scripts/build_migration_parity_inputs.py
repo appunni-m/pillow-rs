@@ -46371,6 +46371,10 @@ def build_inputs(
             isolated_transposedfont = (
                 workload_id == "pil-imagefont.transposedfont.standard"
             )
+            # Measure the getter after loading and wrapping its source font.
+            isolated_transposed_getlength = (
+                workload_id == "pil-imagefont-transposedfont.getlength.standard"
+            )
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46403,6 +46407,7 @@ def build_inputs(
                             or eager_getcolors
                             or isolated_getmetrics
                             or isolated_transposedfont
+                            or isolated_transposed_getlength
                             else "whole_workflow"
                         ),
                         "step_ids": (
@@ -46412,6 +46417,7 @@ def build_inputs(
                             if eager_getcolors
                             or isolated_getmetrics
                             or isolated_transposedfont
+                            or isolated_transposed_getlength
                             else []
                         ),
                         "metrics": operation["benchmark"]["metrics"],

@@ -5243,6 +5243,62 @@ medians of 99.69 ns for pillow-rs and 106.29 ns for Pillow across seven
 This direct measurement is a cross-check, not an acceptance artifact; because
 it disagrees with the official adapter result, the CPU goal stays open.
 
-The operation is checkpointed after two attempts with the benchmark-boundary
-and backend-eligibility blockers recorded. The next ranked font function is
-`PIL.ImageFont.TransposedFont.getlength`.
+The constructor operation is checkpointed after two attempts with the
+benchmark-boundary and backend-eligibility blockers recorded. The next ranked
+font function is `PIL.ImageFont.TransposedFont.getlength`.
+
+## ImageFont.TransposedFont.getlength checkpoint — 2026-09-26
+
+The original observed-step measurement included `FreeTypeFont` and wrapper
+construction, so its 2.027 ms CPU median was not a `getlength` measurement.
+The generated workload now observes only the `call` step after font setup.
+The fixture's arguments and correctness oracle are unchanged. The corrected
+baseline was Pillow 45.458 µs versus pillow-rs CPU 2,026.687 µs; focused
+parity passes for default, positional and keyword arguments, and the rotated
+font error.
+
+The first hot-path cost was fontdone's lazy public glyph-to-script map. Every
+ordinary glyph load forced the complete Unicode script-range map to be built
+and copied into per-face autohint state, even though default hinted TrueType
+loads did not use it. The retained fontdone change defers this synchronization
+until the map property has been explicitly exposed or x-height has been
+configured. Explicit map and x-height behavior keep the full synchronization
+path. This reduced the corrected cold operation median to 35.354 µs while
+passing the focused map, x-height, default-load, and getlength parity cases.
+
+The next avoidable cost was loading each glyph into an FFI slot and copying its
+outline even though BASIC `getlength` uses only the advance. The retained
+length-only path requests the same hinted advance with `FT_Get_Advance`, then
+applies the same per-pair kerning and 26.6 rounding in the same glyph order.
+On a warmed, same-font direct-call diagnostic this changed the median from
+15.472 µs to 13.560 µs; Pillow measured 6.180 µs. The benefit was real but not
+enough for repeated calls.
+
+The third attempt adds a bounded per-font cache of codepoint-to-glyph,
+hinted-advance, and pair-kerning results. It stores at most 512 entries in
+each map; variation setters clear the size-dependent advance and kerning
+entries before changing the active variation. Glyph lookup entries remain
+valid because changing variation coordinates does not change the selected
+charmap. Cache invalidation was checked locally with the variable SFNS system
+font: after warming the default width, changing axes produced lengths 90.0,
+35.0, and 145.0 in both implementations. This system-font check is a local
+diagnostic, not a portable fixture. The warmed direct-call median is now
+0.479 µs for pillow-rs versus 6.180 µs for Pillow, with both returning 63.0.
+This is 12.9× faster on that repeated-input path.
+
+The final official correctness-gated workload also passes. Its observed-step
+medians are 44.958 µs for Pillow and 27.000 µs for CPU, about 1.67× the
+throughput. This official measurement remains the acceptance result; the
+direct-call number isolates repeated same-font cache hits. The CPU is faster
+than Pillow in both measurements. The SIMD and GPU profile rows have
+`actual_backend: null`: character lookup and font metrics are scalar host-side
+work, so this operation cannot provide SIMD/GPU acceleration evidence.
+
+One measurement lesson is to rebuild the installed extension after every Rust
+edit before running either parity or benchmarks. A run made before rebuilding
+after the advance-only edit still used the prior binary and is excluded from
+the evidence above. Do not rank from a workload that includes constructor
+setup, and do not use requested SIMD/GPU profiles as proof when their backend
+receipt is null. This operation is checkpointed after three implementation
+attempts; its CPU parity/performance target is met, with SIMD/GPU applicability
+recorded as a blocker. Continue to the next ranked operation.
