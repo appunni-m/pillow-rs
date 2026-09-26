@@ -38,6 +38,13 @@ resource, and timing data where the adapter exposes them. A result is usable
 only when its manifest/input hashes, runtime identity, requested/actual backend,
 and terminal receipts are compatible with the comparison.
 
+For font metrics, the default image-font `getlength` workload measures the
+`getlength` call as an observed step; `load_default()` setup has its own
+workload. The loader still runs to create the font, but its time is excluded
+from the call-only latency. Use the full workflow when comparing end-to-end
+construction plus measurement. Font metrics do not necessarily enter the image
+SIMD/GPU kernels, so interpret those rows with their actual-backend receipts.
+
 The maintained operation matrix currently contains 88 canonical workloads:
 the active `PipelineOp` variants (with `BoxBlurXY` sharing `BoxBlur`) plus five
 public operations that execute eagerly. `EqualizeMasked` and `ResizeBoxed` were
