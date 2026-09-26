@@ -11882,6 +11882,7 @@ pub fn simd_extract_band(
     // Keep both the pixel stride and selected lane constant in each hot loop.
     // The previous explicit shuffle rebuilt a padded 16-byte block for every
     // five RGB pixels and spilled each shuffled vector through a scalar array.
+    #[cfg(feature = "parallel")]
     let (width_usize, height_usize) = (width as usize, height as usize);
     macro_rules! gather {
         ($channels:literal, $channel:literal) => {{

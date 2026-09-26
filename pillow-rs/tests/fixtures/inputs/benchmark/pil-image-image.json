@@ -933,8 +933,10 @@
         "case_id": "PIL.Image.Image.getcolors.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -3086,6 +3088,116 @@
         "cache_state": "warm",
         "build_profile": "release"
       }
+    },
+    {
+      "workload_id": "pil-image-image.getcolors.materialized.varied-rgb-16x16",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.performance-varied-rgb-16x16"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-image-image.getcolors.materialized.high-cardinality-rgb-1024x768",
+      "covers": [
+        "PIL.Image.Image.getcolors.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.getcolors.nuanced.performance-high-cardinality-rgb-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
     }
   ],
   "suites": [
@@ -3323,6 +3435,14 @@
         },
         {
           "workload_id": "pil-image-image.getchannel.materialized.rgba-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-image-image.getcolors.materialized.varied-rgb-16x16",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-image-image.getcolors.materialized.high-cardinality-rgb-1024x768",
           "weight": 1
         }
       ]

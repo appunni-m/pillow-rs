@@ -135,6 +135,10 @@ pub enum PilError {
     #[error("IO error: {0}")]
     Io(Arc<std::io::Error>),
 
+    /// Allocation or implementation limit failure reported as Pillow MemoryError.
+    #[error("{0}")]
+    MemoryError(String),
+
     // ============================================================================
     // AS PER DESIGN — DO NOT REMOVE:
     //   Below variants were added per the docs/ARCHITECTURE.md audit to eliminate

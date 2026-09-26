@@ -179,6 +179,16 @@ GETCHANNEL_PERFORMANCE_CASES = (
     ("la-1024x768", "LA", [1024, 768], [13, 211], 1),
     ("rgba-1024x768", "RGBA", [1024, 768], [13, 73, 211, 143], 3),
 )
+GETCOLORS_PERFORMANCE_CASES = (
+    ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
+    ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
+)
+GETCOLORS_SLOT_ORDER_CASES = (
+    ("varied-la-slot-order", "LA", [8, 8], 20260924),
+    ("varied-rgba-slot-order", "RGBA", [8, 8], 20260923),
+    ("varied-i-slot-order", "I", [8, 8], 20260922),
+    ("varied-f-slot-order", "F", [8, 8], 20260921),
+)
 BENCHMARK_SUCCESS_WORKFLOW_IDS = {
     "pil-image.frombuffer.standard",
     "pil-imagefont-imagefont.getbbox.standard",
@@ -2742,10 +2752,9 @@ class WorkflowBuilder:
             self._image_steps[cache_key] = step_id
             return step_id
         if self.edge == "noise-fill":
-            # Deterministic diverse images (used by quantize MAXCOVERAGE and
-            # median-cut cases) are built through the public frombytes
-            # endpoint with an inline base64 payload so both the oracle and
-            # the target decode the exact same pixels.
+            # Deterministic diverse images are built through the public
+            # frombytes endpoint with inline bytes so the oracle and target
+            # decode the exact same samples.
             size = self.scenario_size or [16, 16]
             rng = random.Random(self.scenario_noise_seed or 0)
             n_pixels = size[0] * size[1]
@@ -2753,8 +2762,19 @@ class WorkflowBuilder:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
             elif requested_mode == "RGBA":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
+            elif requested_mode == "LA":
+                data = bytes(rng.randrange(256) for _ in range(n_pixels * 2))
             elif requested_mode == "L":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels))
+            elif requested_mode == "I":
+                data = b"".join(
+                    struct.pack("<i", rng.randrange(-32, 32)) for _ in range(n_pixels)
+                )
+            elif requested_mode == "F":
+                values = (-7.5, -3.25, -1.0, -0.0, 0.0, 0.125, 0.5, 2.0, 9.25)
+                data = b"".join(
+                    struct.pack("<f", rng.choice(values)) for _ in range(n_pixels)
+                )
             else:
                 raise ValueError(f"noise-fill edge unsupported for mode {requested_mode}")
             data_desc = self.inline_bytes(
@@ -14578,6 +14598,34 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
             for name, mode, size, pixel, channel in GETCHANNEL_PERFORMANCE_CASES
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in GETCOLORS_PERFORMANCE_CASES
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "requirement_suffix": "behavior.default",
+                "name": name,
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in GETCOLORS_SLOT_ORDER_CASES
         ),
         # Coverage batch 2026-08-14av: exercise valid explicit-band reads for
         # public P/PA/CMYK/HSV/YCbCr images. These are the supported
@@ -34315,6 +34363,26 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "requirement_suffix": "parameter.maxcolors",
+            "name": "negative-maxcolors",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "values": {"maxcolors": literal(-1)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "parameter.maxcolors",
+            "name": "maxcolors-table-memory-limit",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "values": {"maxcolors": literal(1073741824)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "parameter.maxcolors",
             "name": "f-two-colors-limit",
             "mode": "F",
             "edge": "nonzero-pixel",
@@ -46293,6 +46361,7 @@ def build_inputs(
             materialized_getchannel = (
                 workload_id == "pil-image-image.getchannel.standard"
             )
+            eager_getcolors = workload_id == "pil-image-image.getcolors.standard"
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46321,12 +46390,14 @@ def build_inputs(
                     "measurement": {
                         "boundary": (
                             "observed_steps"
-                            if materialized_getchannel
+                            if materialized_getchannel or eager_getcolors
                             else "whole_workflow"
                         ),
                         "step_ids": (
                             ["call", "observe-result"]
                             if materialized_getchannel
+                            else ["call"]
+                            if eager_getcolors
                             else []
                         ),
                         "metrics": operation["benchmark"]["metrics"],
@@ -46397,6 +46468,54 @@ def build_inputs(
                                 variant=f"getchannel-{slug(name)}",
                                 surface=surface_id,
                                 operation="getchannel",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+            getcolors_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "getcolors"
+                ),
+                None,
+            )
+            if getcolors_benchmark is not None:
+                operation, requirement = getcolors_benchmark
+                for name, _mode, _size, _seed in GETCOLORS_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.getcolors.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.getcolors.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"getcolors-{slug(name)}",
+                                surface=surface_id,
+                                operation="getcolors",
                             ),
                         }
                     )

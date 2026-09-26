@@ -30,6 +30,7 @@ fn err(e: pillow_rs::PilError) -> JsValue {
         pillow_rs::PilError::ValueError(_) => "ValueError",
         pillow_rs::PilError::OverflowError(_) => "OverflowError",
         pillow_rs::PilError::DecompressionBombError(_) => "DecompressionBombError",
+        pillow_rs::PilError::MemoryError(_) => "MemoryError",
         pillow_rs::PilError::UnicodeEncodeError { .. } => "UnicodeEncodeError",
         pillow_rs::PilError::ZeroDivisionError(_) => "ZeroDivisionError",
         pillow_rs::PilError::TypeError(_) => "TypeError",
@@ -1637,8 +1638,8 @@ impl Image {
         self.inner.entropy_with_mask(Some(&mask.inner)).map_err(err)
     }
     #[wasm_bindgen(js_name = "getcolors")]
-    pub fn getcolors(&mut self, m: u32) -> Result<JsValue, JsValue> {
-        match self.inner.getcolors(m).map_err(err)? {
+    pub fn getcolors(&mut self, m: i32) -> Result<JsValue, JsValue> {
+        match self.inner.getcolors_with_signed_limit(m).map_err(err)? {
             Some(colors) => {
                 let arr = js_sys::Array::new();
                 for (count, color) in &colors {
