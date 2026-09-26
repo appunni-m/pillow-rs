@@ -5372,3 +5372,8 @@ for the changed-coordinate workload. Reopen this blocker when that ownership
 split can be made without changing MVAR metrics, glyph output, named-instance
 behavior, or independent-face semantics. The next operation should be selected
 from the corrected latency ranking, not by extension of this setter work.
+
+The Windows binding check caught that FreeType `FT_Long` follows native
+`c_long` width: 32 bits on Windows and 64 bits on LP64 systems. Keep variation
+flag conversion in a width shared by both targets before widening it back to
+`FT_Long`; the exact Windows Python binding type-check then passes.
