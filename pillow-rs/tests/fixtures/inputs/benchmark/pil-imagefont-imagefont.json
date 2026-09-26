@@ -189,8 +189,10 @@
         "case_id": "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

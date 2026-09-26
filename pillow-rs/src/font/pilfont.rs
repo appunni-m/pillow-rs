@@ -172,6 +172,35 @@ impl PilFontMask {
             }
         }
     }
+
+    /// Transfers a freshly rendered mask into image storage without a packed
+    /// mode-1 round trip or a copy of its expanded pixels.
+    pub(crate) fn into_image(self) -> Result<Image, PilError> {
+        if self.width == 0 || self.height == 0 {
+            return Image::new(self.width, self.height, self.mode.as_str(), (0, 0, 0, 0));
+        }
+
+        match self.mode {
+            PilFontMode::Luma => {
+                Image::frombytes_owned("L", (self.width, self.height), self.pixels)
+            }
+            PilFontMode::One => {
+                // Mode-1 conversion maps every nonzero sample to 255. Keep
+                // that rule in-place, then retain the expanded raster instead
+                // of packing it and immediately unpacking it in Image::frombytes.
+                let mut pixels = self.pixels;
+                for pixel in &mut pixels {
+                    *pixel = if *pixel == 0 { 0 } else { 255 };
+                }
+                let image = crate::raster::GrayImage::from_raw(self.width, self.height, pixels)
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?;
+                Ok(Image::from_dynamic(
+                    crate::raster::DynamicImage::ImageLuma8(image),
+                    Some("1".to_owned()),
+                ))
+            }
+        }
+    }
 }
 
 impl PilFont {
@@ -448,6 +477,12 @@ impl PilFont {
         self.getmask(&text.into_bytes()?)
     }
 
+    /// Renders a host-input mask directly into its image representation.
+    #[doc(hidden)]
+    pub fn getmask_image_input(&self, text: PilFontTextInput) -> Result<Image, PilError> {
+        self.getmask_input(text)?.into_image()
+    }
+
     fn textwidth(&self, text: &[u8]) -> Result<i32, PilError> {
         text.iter()
             .take_while(|&&byte| byte != 0)
@@ -638,7 +673,7 @@ struct PbmRaster<'a> {
 mod tests {
     use super::{
         DEFAULT_BITMAP, DEFAULT_BITMAP_HEIGHT, DEFAULT_BITMAP_LUMA, DEFAULT_BITMAP_WIDTH, PilFont,
-        PilFontGlyphImage,
+        PilFontGlyphImage, PilFontMask, PilFontMode,
     };
 
     #[test]
@@ -665,6 +700,28 @@ mod tests {
             PilFont::load_default_if_sources_match(super::DEFAULT_METRICS, &DEFAULT_BITMAP[1..])
                 .is_none()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn owned_mask_image_matches_regular_conversion() -> Result<(), crate::error::PilError> {
+        for (mode, pixels) in [
+            (PilFontMode::One, vec![0, 1, 0, 255, 128, 0, 255, 1]),
+            (PilFontMode::Luma, vec![0, 1, 16, 127, 128, 255, 64, 2]),
+        ] {
+            let mask = PilFontMask {
+                width: 4,
+                height: 2,
+                mode,
+                pixels,
+            };
+            let expected = mask.to_image()?;
+            let actual = mask.into_image()?;
+
+            assert_eq!(actual.mode()?, expected.mode()?);
+            assert_eq!(actual.size()?, expected.size()?);
+            assert_eq!(actual.tobytes()?, expected.tobytes()?);
+        }
         Ok(())
     }
 }

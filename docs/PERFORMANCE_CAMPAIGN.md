@@ -5705,3 +5705,54 @@ source bytes, retain only a bounded amount of immutable parsed state, and
 measure first-use separately from cache hits. An exact match to a public
 embedded resource can safely select its predecoded representation after the
 current file contents have been read. No coverage collection ran.
+
+## PIL.ImageFont.ImageFont.getmask checkpoint — 2026-09-27
+
+The old ranking's 465.583 µs CPU time included loading courb08.pil and its
+PNG. After the separate load/load_path improvements, the correctness-gated
+whole workflow measured 23.708 µs for CPU and 53.500 µs for Pillow. I changed
+the standard workload to observe only its call step after setup; the parity
+gate still executes and compares the complete loaded-font case. This avoids
+charging the load operation to getmask while the independent loader workloads
+keep constructor cost visible.
+
+The isolated baseline measured CPU at 3.667 µs (272,702 calls/second) and
+Pillow at 3.834 µs (260,824 calls/second). The renderer already returned an
+expanded byte-per-pixel mask. PilFontMask::to_image then packed mode-1 rows
+only for Image::frombytes("1") to unpack them into the same expanded raster;
+for mode L, borrowed frombytes copied the mask into its owned image buffer.
+Attempt one added a consuming image path: mode L transfers the vector through
+frombytes_owned, and mode 1 maps each nonzero byte to 255 in place before
+moving the expanded raster into grayscale storage with the explicit logical
+mode tag. This keeps the old packed conversion's behavior even for
+noncanonical mode-1 samples. The Python binding uses that path for getmask;
+the existing borrowed to_image API remains intact. The new Rust regression
+compares mode, size, and exported bytes between both conversion paths for
+noncanonical mode 1 and L samples.
+
+The final receipt measured CPU at 2.916 µs (342,936 calls/second) and Pillow at
+4.250 µs (235,294 calls/second), with exact parity. The original CPU call
+measured 3.667 µs (272,702 calls/second), so the retained implementation is
+about 20% lower in latency and 26% higher in throughput for this input. Pillow
+latency varied between runs; the target remained faster in each comparison.
+The change removes an output allocation and copy for L, and the mode-1
+pack/unpack work while preserving the nonzero-to-255 rule in-place.
+
+Attempt two tried copying complete glyph rows with copy_from_slice when a
+glyph was wholly inside the output, retaining the old pixel loop for clipped
+glyphs. Two public-call samples were 2.875 and 2.917 µs, overlapping the
+simpler path's 2.916 and 3.167 µs samples amid small-call variation, so the
+branch was reverted. Do not keep a more complex inner loop based on an isolated
+kernel intuition when the public-call result does not repeat.
+
+The benchmark reports actual_backend: null for CPU, SIMD, and GPU. PILfont
+mask generation is host-side text conversion and raster construction, and this
+tiny “Hello” case does not dispatch an image kernel. Its CPU path now beats
+Pillow, while a five-times SIMD result or GPU throughput claim is not supported
+by execution receipts. Treat accelerator use as inapplicable for this call;
+spend the next optimization on an operation that performs enough pixel work to
+amortize dispatch. Reusable finding: trace the buffer representation across
+each API boundary before tuning the pixel loop. If the producer already owns
+the exact expanded raster consumed by the next stage, transfer that allocation
+and preserve its logical mode tag instead of encoding and decoding it again.
+No coverage collection ran.
