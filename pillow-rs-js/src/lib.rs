@@ -1726,6 +1726,30 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    /// Builds Color's constructor-time degenerate image.
+    ///
+    /// # Errors
+    ///
+    /// Returns mode conversion or materialization errors from the core.
+    #[wasm_bindgen(js_name = "colorDegenerate")]
+    pub fn color_degenerate(&self) -> Result<Image, JsValue> {
+        self.inner
+            .color_degenerate()
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    /// Builds Contrast's constructor-time mean image.
+    ///
+    /// # Errors
+    ///
+    /// Returns mode conversion or materialization errors from the core.
+    #[wasm_bindgen(js_name = "contrastDegenerate")]
+    pub fn contrast_degenerate(&self) -> Result<Image, JsValue> {
+        self.inner
+            .contrast_degenerate()
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
 
     // Filters
     #[wasm_bindgen(js_name = "gaussianBlur")]
@@ -4305,6 +4329,30 @@ impl ImageOps {
         pillow_rs::imageops_solarize(&img.inner, t)
             .map(|i| Image { inner: i })
             .map_err(err)
+    }
+    /// Applies the exact host-computed `sample < threshold` solarize table.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table does not contain 256 entries or the
+    /// image mode is unsupported by Pillow's `ImageOps.solarize`.
+    #[wasm_bindgen(js_name = "solarizeWithComparisons")]
+    pub fn sol_with_comparisons(img: &Image, below: Vec<u8>) -> Result<Image, JsValue> {
+        if below.len() != 256 {
+            return Err(err(pillow_rs::PilError::ValueError(
+                "solarize threshold comparisons must contain 256 entries".into(),
+            )));
+        }
+        let mut comparisons = Box::new([false; 256]);
+        for (output, input) in comparisons.iter_mut().zip(below) {
+            *output = input != 0;
+        }
+        pillow_rs::imageops_solarize_with_input(
+            &img.inner,
+            pillow_rs::SolarizeInput::Comparisons(comparisons),
+        )
+        .map(|i| Image { inner: i })
+        .map_err(err)
     }
     #[wasm_bindgen(js_name = "equalize")]
     pub fn eq(img: &Image) -> Result<Image, JsValue> {
