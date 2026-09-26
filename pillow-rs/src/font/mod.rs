@@ -440,7 +440,7 @@ impl FreeTypeFont {
     /// Host bindings retain these for Pillow's memory-backed `font_bytes`
     /// attribute. Variation and size changes do not modify the source bytes.
     pub fn source_bytes(&self) -> &[u8] {
-        &self.engine.font_bytes
+        self.engine.font_bytes.as_slice()
     }
 
     /// Create a variant copy of this FreeType font, overriding the size when provided.
