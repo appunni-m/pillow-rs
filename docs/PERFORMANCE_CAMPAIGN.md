@@ -5474,3 +5474,34 @@ do not dispatch image kernels. CPU latency targets pass for axes and names;
 accelerator targets are inapplicable here. The shared table parse removes the
 second `fvar`/`name` parse from workflows that query axes after opening the
 font. Continue with the next unresolved operation in the corrected ranking.
+
+## FreeTypeFont.getmask2 checkpoint — 2026-09-27
+
+The benchmark now times only the `getmask2` call after font construction. The
+41-case parity slice passes on the rebuilt target, including empty and space
+inputs, fractional and negative starts, stroke, anchors, multiline text,
+monochrome masks, embedded color strikes, and error behavior.
+
+Before the change, `getmask2_with_start` rendered pixels through
+`mask_from_run_with_start`, then called `getbbox(font, text)` to obtain its
+returned offset. Both paths performed `glyph_run` shaping and computed the
+same BASIC-mode bounds. Attempt one returns that already-computed bbox from
+the rendering helper, so mask pixels, dimensions, and offset still derive from
+one glyph run. No raster rules, rounding, or public API behavior changed.
+
+The original call-only baseline measured 82.292 µs CPU versus 85.230 µs for
+Pillow. After removing the duplicate layout, two correctness-gated repeats
+measured 61.500/61.562 µs CPU and 60.271/60.541 µs under the requested SIMD
+profile; Pillow measured 80.583 µs in both repeats. This is a stable ~25% CPU
+latency reduction from the original target and 1.31× lower latency than Pillow
+in the final repeat. Receipts are
+`perf-freetypefont-getmask2-baseline-20260927.json`,
+`perf-freetypefont-getmask2-attempt1-20260927.json`, and
+`perf-freetypefont-getmask2-attempt2-20260927.json`.
+
+The GPU-profile median was 60.520 µs in the final repeat, but both SIMD and GPU
+receipts have `actual_backend: null`: this is host-side font shaping and
+FreeType rasterization, not an accelerated image kernel. Those figures do not
+prove SIMD/GPU throughput or parity on those backends. CPU parity and latency
+targets pass, so checkpoint this operation after one implementation attempt
+and continue to the next unresolved operation in the corrected ranking.
