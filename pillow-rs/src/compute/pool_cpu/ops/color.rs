@@ -225,8 +225,39 @@ pub fn op_remap_palette(
 /// index: 0=R, 1=G, 2=B, 3=A (for RGBA), 0=only band for L/LA
 pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mut gray = crate::raster::GrayImage::new(w, h);
     let idx = index as usize;
+    let pixel_count = crate::checked_dims::CheckedDims::new_allow_empty(w, h, 1)?.total_pixels();
+
+    // One-channel images already have the exact output representation. Copy
+    // only the logical raster: ImageBuffer can retain trailing samples, while
+    // Pillow's getchannel result contains exactly width * height bytes.
+    if let DynamicImage::ImageLuma8(luma) = img {
+        let samples = if idx < 3 {
+            luma.as_raw().iter().copied().take(pixel_count).collect()
+        } else {
+            vec![u8::MAX; pixel_count]
+        };
+        return crate::image_utils::raw_bytes_to_image_allow_empty(w, h, samples, 1);
+    }
+
+    // RGB is stored as three interleaved bytes. Expanding it to RGBA before
+    // selecting one byte performs a full-frame conversion and then discards
+    // three quarters of that temporary. Build the one-byte output directly.
+    if let DynamicImage::ImageRgb8(rgb) = img {
+        let channel = idx.min(3);
+        let samples = if channel < 3 {
+            rgb.as_raw()
+                .chunks_exact(3)
+                .take(pixel_count)
+                .map(|pixel| pixel[channel])
+                .collect()
+        } else {
+            vec![u8::MAX; pixel_count]
+        };
+        return crate::image_utils::raw_bytes_to_image_allow_empty(w, h, samples, 1);
+    }
+
+    let mut gray = crate::raster::GrayImage::new(w, h);
     // Extract band from native format to avoid RGBA round-trip losing channels.
     // LA mode stored as La8: [L, A] at bytes 0, 1 per pixel.
     // RGB/RGBA/CMYK stored in their respective formats.

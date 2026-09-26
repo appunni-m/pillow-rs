@@ -9103,6 +9103,38 @@ impl GpuInner {
         Ok(DynamicImage::ImageRgba8(img))
     }
 
+    fn readback_to_luma8(
+        &self,
+        w: u32,
+        h: u32,
+        staging: &wgpu::Buffer,
+    ) -> Result<DynamicImage, PilError> {
+        let packed_dims = CheckedDims::new(w, h, 4)?;
+        let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+        let size = packed_dims.total_bytes() as u64;
+        self.readback_with(size, staging, |bytes| {
+            if bytes.len() != packed_dims.total_bytes() {
+                return Err(PilError::ValueError(format!(
+                    "GPU readback byte length {} does not match image size {}",
+                    bytes.len(),
+                    packed_dims.total_bytes()
+                )));
+            }
+            let samples = bytes
+                .chunks_exact(4)
+                .map(|pixel| pixel[0])
+                .collect::<Vec<_>>();
+            if samples.len() != pixel_count {
+                return Err(PilError::ValueError(
+                    "GPU luma readback has an incomplete pixel".into(),
+                ));
+            }
+            crate::raster::GrayImage::from_raw(w, h, samples)
+                .map(DynamicImage::ImageLuma8)
+                .ok_or_else(|| PilError::ValueError("bad luma readback buffer".into()))
+        })
+    }
+
     fn readback_to_luma16(
         &self,
         w: u32,
@@ -16426,6 +16458,8 @@ impl GpuPool {
         }
         let native_rgb = put_alpha_mode.is_none()
             && out_mode.unwrap_or_else(|| img.color()) == crate::raster::ColorType::Rgb8;
+        let native_luma8_extract = out_mode == Some(crate::raster::ColorType::L8)
+            && matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }));
         // All command buffers are submitted before registering the mapping. The
         // batch owns A/B exclusively until the mapped view is dropped and the
         // selected primary or staging buffer has been unmapped.
@@ -16435,6 +16469,8 @@ impl GpuPool {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
             gpu.readback_to_luma16_numeric(final_w, final_h, readback_buffer)?
+        } else if native_luma8_extract {
+            gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else {
             gpu.readback_to_image(final_w, final_h, readback_buffer, native_rgb)?
         };
@@ -16465,6 +16501,9 @@ impl GpuPool {
         if native_rgb {
             // The final native layout was decoded directly from the mapping;
             // applying mode preservation again would reallocate it.
+            return Ok(result);
+        }
+        if native_luma8_extract {
             return Ok(result);
         }
         if let Some(mode) = put_alpha_mode {
