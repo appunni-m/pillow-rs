@@ -2714,6 +2714,55 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.mode.lab",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.mode.lab"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-bytes",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAECAw==",
+          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LAB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-bytes"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.frombytes.mode.p",
       "surface": "PIL.Image",
       "operation": "frombytes",
@@ -64139,6 +64188,55 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-lab",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.mode.lab"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-lab-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECAw",
+          "sha256": "8e1336ab78ebe687fd8056a37f2d3b0c32f4cf8fa8b691b653800fa693d570b9",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LAB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-lab-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.frombytes.nuanced.invalid-mode",
       "surface": "PIL.Image",
       "operation": "frombytes",
@@ -99227,6 +99325,108 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.nuanced.lab-blend-setup-0x1",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LAB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.nuanced.lab-blend-setup-1x0",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixels",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LAB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                0
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixels"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.frombytes.nuanced.lab-blend-setup-2x1",
       "surface": "PIL.Image",
       "operation": "frombytes",
@@ -99269,6 +99469,102 @@
             "data": {
               "kind": "asset",
               "asset_id": "pixels"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.nuanced.bytearray-rgb",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixel-bytearray",
+          "kind": "builtin",
+          "name": "frombytes-rgb-bytearray"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixel-bytearray"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.performance.bytearray-rgb-throughput",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "pixel-bytearray",
+          "kind": "builtin",
+          "name": "frombytes-rgb-throughput-bytearray"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "pixel-bytearray"
             }
           }
         }

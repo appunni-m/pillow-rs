@@ -487,7 +487,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.frombytes.nuanced.valid-rgb"
+        "case_id": "PIL.Image.frombytes.performance.bytearray-rgb-throughput"
       },
       "measurement": {
         "boundary": "whole_workflow",
@@ -505,8 +505,8 @@
       },
       "context": {
         "size": [
-          1,
-          1
+          1024,
+          768
         ],
         "mode": "RGB",
         "chain_length": 1,

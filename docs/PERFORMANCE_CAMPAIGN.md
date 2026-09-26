@@ -4352,3 +4352,81 @@ setting was changed. Receipts are
 `build/migration-parity/parity-image-new-20260926-final.json` and
 `build/migration-parity/perf-image-new-20260926-final.json`. No coverage ran.
 The next known parity blocker is `PIL.Image.frombytes("LAB", ...)`.
+
+## Image.frombytes checkpoint — 2026-09-26
+
+The class-level constructor rejected LAB before checking buffer length because
+`FromBytesMode` omitted it. LAB uses the existing three-byte RGB raster layout,
+but must retain the explicit `LAB` mode tag so mode queries and raw byte export
+remain exact. The decoder now treats LAB as three bytes per pixel and follows
+the existing raw RGB-storage path. Empty LAB `frombytes` calls take the
+constructor path, which was fixed in the preceding checkpoint. The authority
+and generated manifest add LAB only for the module and instance `frombytes`
+surfaces; the shared YAML mode anchor was moved without changing its old list,
+so unrelated operation claims did not expand.
+
+The first performance review found an avoidable second full-buffer copy for
+mutable input: the Python shim converted `bytearray` to `bytes`, then Rust
+cloned the borrowed slice into raster storage. Bytes and bytearrays now pass
+through unchanged. PyO3's owned vector path transfers exact-sized buffers into
+raw raster storage; borrowed immutable bytes still make their one required
+owned copy. Surplus data is trimmed to the required pixel length, while packed
+mode-1 and 16-bit endian conversion retain their necessary output allocation.
+The pointer-identity unit test proves that an owned RGB vector becomes raster
+storage directly. The exact parity case also confirms the returned image owns
+its bytes and a mutable input remains unchanged.
+
+The existing strict input cohort now contains **66 frombytes cases** across
+module and instance calls, including LAB, empty width/height, short and trailing
+buffers, and bytearray input. All 66 pass with CPU, SIMD, and GPU selected; the
+constructor does not dispatch image work to those accelerators. The focused Rust
+byte-export tests pass **5/5**, including the owned-buffer identity test. No
+expectations were weakened.
+
+The benchmark review caught a measurement defect while replacing the 1 × 1
+standard input with a 1024 × 768 RGB bytearray throughput case. Its first builtin
+fixture regenerated 2.3 MB of bytes inside every timed workflow, producing
+roughly 97–100 ms samples dominated by Python test-data generation. That result
+was discarded. The fixture now creates one deterministic bytearray per
+subprocess and reuses it across timed calls. The corrected official workload
+passes its parity gate and reports these median latencies:
+
+| Subject | Latency | Throughput |
+| --- | ---: | ---: |
+| Pillow | 0.367 ms | 2,722 ops/s |
+| CPU | 0.080 ms | 12,451 ops/s |
+| SIMD selected | 0.106 ms | 9,415 ops/s |
+| GPU selected | 0.132 ms | 7,593 ops/s |
+
+CPU is **4.57× faster** than Pillow on this public throughput workload. The
+execution receipt is `not_proven` for SIMD and GPU because constructors do not
+produce accelerator work; those rows are host-side timing variation under
+different selectors, not SIMD/GPU speedups. This operation is a CPU allocation
+and copy, so the SIMD ≥5× and GPU throughput goals are not applicable without
+changing image residency and paying transfer costs.
+
+An uninstrumented direct-call check used 100 warmups and five timed batches per
+size with caller data prepared outside the timer. It asserted exact output bytes
+for both `bytes` and `bytearray`; mutable inputs remained unchanged. Median
+latency and target speedup over Pillow were:
+
+| Size | Input | Pillow | Target | Speedup |
+| --- | --- | ---: | ---: | ---: |
+| 16 × 16 | bytes | 2.041 µs | 1.047 µs | 1.95× |
+| 16 × 16 | bytearray | 2.007 µs | 1.057 µs | 1.90× |
+| 256 × 256 | bytes | 26.133 µs | 3.958 µs | 6.60× |
+| 256 × 256 | bytearray | 27.878 µs | 3.557 µs | 7.84× |
+| 1024 × 768 | bytes | 387.145 µs | 101.197 µs | 3.83× |
+| 1024 × 768 | bytearray | 405.563 µs | 101.460 µs | 4.00× |
+| 2048 × 2048 | bytes | 1.880 ms | 0.244 ms | 7.72× |
+| 2048 × 2048 | bytearray | 1.875 ms | 0.287 ms | 6.52× |
+
+The ordinary CPU path beats Pillow at all measured sizes. Tiny inputs are
+dominated by wrapper/allocation cost; large inputs are dominated by storage
+allocation and memory copy. Keep the no-extra-copy ownership path and the
+throughput-sized fixture; do not add a SIMD/GPU path that only uploads and
+reads back bytes. Receipts are
+`build/migration-parity/parity-image-frombytes-20260926-throughput-cpu.json`,
+`...-simd.json`, `...-gpu.json`, and
+`build/migration-parity/perf-image-frombytes-20260926-corrected.json` with its
+`-parity.json` gate. No coverage collection ran.

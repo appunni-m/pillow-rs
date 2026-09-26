@@ -16,11 +16,11 @@
 //! # Mode And Layout
 //!
 //! Mode strings follow Pillow names. Raw byte APIs use the current image mode:
-//! `L` is one byte per pixel, `RGB` is tightly packed triplets, `RGBA` is
-//! tightly packed quadruplets, and `P` returns palette indices. Non-standard
-//! modes such as `CMYK`, `HSV`, `YCbCr`, `I`, `F`, and the 16-bit luma raw
-//! modes may be carried through Pillow-owned raster buffers with an explicit
-//! mode tag.
+//! `L` is one byte per pixel, `RGB` and `LAB` are tightly packed triplets,
+//! `RGBA` is tightly packed quadruplets, and `P` returns palette indices.
+//! Non-standard modes such as `CMYK`, `HSV`, `YCbCr`, `I`, `F`, and the 16-bit
+//! luma raw modes may be carried through Pillow-owned raster buffers with an
+//! explicit mode tag.
 //!
 //! # Lazy Execution
 //!
@@ -31,6 +31,7 @@
 use image_slash_star::{
     Decoded, DecodedImage, EncodedImage, ImageFormat, ImageInfo, ImageMode, ImagePalette,
 };
+use std::borrow::Cow;
 use std::sync::{Arc, OnceLock};
 
 use crate::checked_dims::CheckedDims;
@@ -900,6 +901,7 @@ pub fn validate_python_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
 enum FromBytesMode {
     L,
     LA,
+    LAB,
     L16,
     RGB,
     RGBA,
@@ -1693,8 +1695,9 @@ impl Image {
 
     /// Creates an image from tightly packed raw bytes.
     ///
-    /// `mode` uses Pillow mode names. Modes `L`, `LA`, `RGB`, `RGBA`, `CMYK`,
-    /// `HSV`, `YCbCr`, `I`, `F`, and `P` expect one full pixel after another.
+    /// `mode` uses Pillow mode names. Modes `L`, `LA`, `RGB`, `LAB`, `RGBA`,
+    /// `CMYK`, `HSV`, `YCbCr`, `I`, `F`, and `P` expect one full pixel after
+    /// another.
     /// The unsigned 16-bit luma raw modes `I;16`, `I;16L`, `I;16B`, and
     /// `I;16N` consume two bytes per sample with the mode's declared byte
     /// order.
@@ -1709,6 +1712,24 @@ impl Image {
     /// Returns [`PilError`] when allocation checks fail, the mode is
     /// unsupported, or `data` is shorter than the required mode layout.
     pub fn frombytes(mode: &str, size: (u32, u32), data: &[u8]) -> Result<Self, PilError> {
+        Self::frombytes_with_data(mode, size, Cow::Borrowed(data))
+    }
+
+    /// Builds an image from bytes already extracted into an owned buffer.
+    /// Raw byte modes transfer the vector into raster storage without copying.
+    pub(crate) fn frombytes_owned(
+        mode: &str,
+        size: (u32, u32),
+        data: Vec<u8>,
+    ) -> Result<Self, PilError> {
+        Self::frombytes_with_data(mode, size, Cow::Owned(data))
+    }
+
+    fn frombytes_with_data(
+        mode: &str,
+        size: (u32, u32),
+        data: Cow<'_, [u8]>,
+    ) -> Result<Self, PilError> {
         let (w, h) = size;
         let frombytes_mode = match mode {
             "L" => FromBytesMode::L,
@@ -1717,6 +1738,7 @@ impl Image {
             "LA" | "La" | "PA" => FromBytesMode::LA,
             "I;16" | "I;16L" | "I;16B" | "I;16N" => FromBytesMode::L16,
             "RGB" => FromBytesMode::RGB,
+            "LAB" => FromBytesMode::LAB,
             "RGBA" | "RGBa" | "RGBX" => FromBytesMode::RGBA,
             "CMYK" => FromBytesMode::CMYK,
             "HSV" => FromBytesMode::HSV,
@@ -1762,7 +1784,9 @@ impl Image {
         let channels = match frombytes_mode {
             FromBytesMode::L | FromBytesMode::P | FromBytesMode::Mode1 => 1,
             FromBytesMode::LA | FromBytesMode::L16 => 2,
-            FromBytesMode::RGB | FromBytesMode::HSV | FromBytesMode::YCbCr => 3,
+            FromBytesMode::RGB | FromBytesMode::LAB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
+                3
+            }
             FromBytesMode::RGBA | FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => 4,
         };
         let expected = if matches!(frombytes_mode, FromBytesMode::Mode1) {
@@ -1782,13 +1806,23 @@ impl Image {
         // Only validate allocation limits after the decoder has established
         // that the input buffer is complete.
         let _dimensions = CheckedDims::new(w, h, channels as u8)?;
+        let data = match data {
+            Cow::Borrowed(data) => Cow::Borrowed(&data[..expected]),
+            Cow::Owned(data) => {
+                if data.len() == expected {
+                    Cow::Owned(data)
+                } else {
+                    Cow::Owned(data[..expected].to_vec())
+                }
+            }
+        };
         let img = match frombytes_mode {
             FromBytesMode::L => DynamicImage::ImageLuma8(
-                crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::GrayImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             FromBytesMode::L16 => {
-                let pixels = data[..expected]
+                let pixels = data
                     .chunks_exact(2)
                     .map(|sample| {
                         if l16_uses_big_endian(mode) {
@@ -1804,20 +1838,20 @@ impl Image {
                 )
             }
             FromBytesMode::RGB => DynamicImage::ImageRgb8(
-                crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             FromBytesMode::RGBA => DynamicImage::ImageRgba8(
-                crate::raster::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbaImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             FromBytesMode::LA => DynamicImage::ImageLumaA8(
-                crate::raster::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::GrayAlphaImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             FromBytesMode::P => {
                 return Ok(Image::Paletted(PalettedData {
-                    indices: crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                    indices: crate::raster::GrayImage::from_raw(w, h, data.into_owned())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                     // Raw P bytes are indices only. Pillow does not synthesize
                     // palette entries until a palette is explicitly attached.
@@ -1830,16 +1864,18 @@ impl Image {
                 }));
             }
             FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => DynamicImage::ImageRgba8(
-                crate::raster::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbaImage::from_raw(w, h, data.into_owned())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            FromBytesMode::HSV | FromBytesMode::YCbCr => DynamicImage::ImageRgb8(
-                crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
-                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
-            ),
+            FromBytesMode::LAB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
+                DynamicImage::ImageRgb8(
+                    crate::raster::RgbImage::from_raw(w, h, data.into_owned())
+                        .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+                )
+            }
             FromBytesMode::Mode1 => {
                 let mut pixels = CheckedDims::new(w, h, 1)?.alloc_buffer();
-                unpack_mode1_rows(&data[..expected], w as usize, &mut pixels);
+                unpack_mode1_rows(data.as_ref(), w as usize, &mut pixels);
                 DynamicImage::ImageLuma8(
                     crate::raster::GrayImage::from_raw(w, h, pixels)
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
@@ -1849,6 +1885,7 @@ impl Image {
         let explicit_mode = match frombytes_mode {
             FromBytesMode::Mode1
             | FromBytesMode::CMYK
+            | FromBytesMode::LAB
             | FromBytesMode::HSV
             | FromBytesMode::YCbCr
             | FromBytesMode::I
@@ -6823,6 +6860,7 @@ mod byte_export_tests {
         ("LA", 2),
         ("PA", 2),
         ("RGB", 3),
+        ("LAB", 3),
         ("RGBA", 4),
         ("RGBa", 4),
         ("RGBX", 4),
@@ -6860,6 +6898,18 @@ mod byte_export_tests {
                 );
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn owned_frombytes_adopts_raw_raster_allocation() -> Result<(), PilError> {
+        let bytes = vec![0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
+        let input_ptr = bytes.as_ptr();
+        let image = Image::frombytes_owned("RGB", (2, 1), bytes)?;
+        let storage = image.materialized_shared()?;
+
+        assert_eq!(storage.as_bytes().as_ptr(), input_ptr);
+        assert_eq!(storage.as_bytes(), &[0x10, 0x20, 0x30, 0x40, 0x50, 0x60]);
         Ok(())
     }
 

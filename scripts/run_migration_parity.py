@@ -64,6 +64,13 @@ MAX_GPU_TIMEOUT_SECONDS = 300
 PROCESS_REAP_TIMEOUT_SECONDS = 10
 GIT_COMMAND_TIMEOUT_SECONDS = 10
 
+# Keep large raw-constructor benchmark input creation outside each timed
+# workflow. frombytes reads this bytearray without mutating it, so each repeat
+# can reuse the same caller-owned input and measure image construction itself.
+FROMBYTES_RGB_THROUGHPUT_DATA = bytearray(
+    (index * 37 + 11) & 0xFF for index in range(1024 * 768 * 3)
+)
+
 # These public operations consume process-global random state in Pillow and in
 # the Rust implementation.  A parity case is a standalone public-input
 # scenario, so keep its within-workflow random sequence intact while isolating
@@ -457,6 +464,10 @@ class AssetStore:
         return str(path)
 
     def _builtin(self, name: str, asset_id: str) -> Any:
+        if name == "frombytes-rgb-bytearray":
+            return bytearray(b"\x10\x20\x30")
+        if name == "frombytes-rgb-throughput-bytearray":
+            return FROMBYTES_RGB_THROUGHPUT_DATA
         if name in ENCODED_INPUTS:
             return self._write_asset(asset_id, ENCODED_INPUTS[name], ".bin")
         if name.startswith("encoded-") and name.endswith("-input-stream"):

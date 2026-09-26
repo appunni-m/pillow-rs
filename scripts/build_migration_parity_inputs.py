@@ -128,7 +128,7 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image.effect-mandelbrot.standard": "PIL.Image.effect_mandelbrot.nuanced.width-one",
     "pil-image.eval.standard": "PIL.Image.eval.nuanced.rgb-expanded-lut",
     "pil-image.fromarray.standard": "PIL.Image.fromarray.nuanced.buffer-backed-rgb-values",
-    "pil-image.frombytes.standard": "PIL.Image.frombytes.nuanced.valid-rgb",
+    "pil-image.frombytes.standard": "PIL.Image.frombytes.performance.bytearray-rgb-throughput",
     "pil-image.linear-gradient.standard": "PIL.Image.linear_gradient.mode.l",
     "pil-image.radial-gradient.standard": "PIL.Image.radial_gradient.mode.l",
     "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
@@ -4151,6 +4151,7 @@ class WorkflowBuilder:
                     "P": b"\x07",
                     "LA": b"\x7f\xc8",
                     "RGB": b"\x10\x20\x30",
+                    "LAB": b"\x10\x20\x30",
                     "HSV": b"\x10\x20\x30",
                     "YCbCr": b"\x10\x20\x30",
                     "RGBA": b"\x10\x20\x30\xc8",
@@ -35641,6 +35642,14 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image",
             "operation": "frombytes",
+            "requirement_suffix": "mode.lab",
+            "name": "valid-lab",
+            "mode": "LAB",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
             "requirement_suffix": "behavior.default",
             "name": "invalid-mode",
             "edge": "invalid-mode",
@@ -35818,6 +35827,14 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.data",
             "name": "valid-ycbcr",
             "mode": "YCbCr",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.lab",
+            "name": "valid-lab",
+            "mode": "LAB",
             "edge": "valid-frombytes",
         },
         {
@@ -39867,6 +39884,7 @@ def build_nuanced_cases(
     cases.extend(solarize_threshold_parity_cases(surface_id))
     cases.extend(image_blend_native_parity_cases(surface_id))
     cases.extend(lab_constructor_parity_cases(surface_id))
+    cases.extend(frombytes_bytearray_parity_cases(surface_id))
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
@@ -40294,11 +40312,17 @@ def lab_constructor_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     if surface_id != "PIL.Image":
         return []
     cases = []
-    for operation, size in (("new", [0, 1]), ("new", [1, 0]), ("frombytes", [2, 1])):
+    for operation, size in (
+        ("new", [0, 1]),
+        ("new", [1, 0]),
+        ("frombytes", [0, 1]),
+        ("frombytes", [1, 0]),
+        ("frombytes", [2, 1]),
+    ):
         arguments = {"mode": literal("LAB"), "size": literal(size)}
         assets = []
         if operation == "frombytes":
-            raw = bytes(range(6))
+            raw = bytes(range(size[0] * size[1] * 3))
             arguments["data"] = asset_value("pixels")
             assets.append({"id": "pixels", "kind": "inline", "encoding": "base64",
                            "data": base64.b64encode(raw).decode(),
@@ -40314,6 +40338,57 @@ def lab_constructor_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                        "receiver": None, "arguments": arguments}],
             "observations": ["call"],
         })
+    return cases
+
+
+def frombytes_bytearray_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Keep mutable byte-buffer input on the public raw-constructor path."""
+    if surface_id != "PIL.Image":
+        return []
+    cases = []
+    for name, size, case_type, asset_name, covers in (
+        (
+            "bytearray-rgb",
+            [1, 1],
+            "nuanced",
+            "frombytes-rgb-bytearray",
+            ["PIL.Image.frombytes.parameter.data"],
+        ),
+        (
+            "bytearray-rgb-throughput",
+            [1024, 768],
+            "performance",
+            "frombytes-rgb-throughput-bytearray",
+            ["PIL.Image.frombytes.performance.standard"],
+        ),
+    ):
+        asset_id = "pixel-bytearray"
+        cases.append(
+            {
+                "case_id": f"PIL.Image.frombytes.{case_type}.{name}",
+                "surface": surface_id,
+                "operation": "frombytes",
+                "covers": covers,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "assets": [
+                    {"id": asset_id, "kind": "builtin", "name": asset_name}
+                ],
+                "steps": [
+                    {
+                        "step_id": "call",
+                        "surface": surface_id,
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGB"),
+                            "size": literal(size),
+                            "data": asset_value(asset_id),
+                        },
+                    }
+                ],
+                "observations": ["call"],
+            }
+        )
     return cases
 
 

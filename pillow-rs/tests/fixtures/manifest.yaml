@@ -4,7 +4,7 @@ scope:
   mode: full
   inventory:
     authority: scripts/migration_parity_inventory.py
-    revision: sha256:082fa73b89ed6275b8d315585f0035ca7b74287a2c24ee22c78b2a057cc5ee8f+inventory-rule@1
+    revision: sha256:c9a9d982b52cc61f5c313f434b6c1da5a6e6e88bc64632642ee16749e72c2927+inventory-rule@1
     command_id: inventory
 oracles:
 - id: pillow
@@ -1812,6 +1812,14 @@ surfaces:
     - id: PIL.Image.frombytes.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.frombytes.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
       lanes:
       - parity
       - coverage
@@ -4994,6 +5002,14 @@ surfaces:
     - id: PIL.Image.Image.frombytes.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.frombytes.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
       lanes:
       - parity
       - coverage
