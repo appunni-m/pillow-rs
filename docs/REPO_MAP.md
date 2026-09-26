@@ -140,6 +140,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- logical_xor.wgsl
 |   |   |   |       |-- max_filter.wgsl
 |   |   |   |       |-- median_filter.wgsl
+|   |   |   |       |-- median_filter_3x3.wgsl
 |   |   |   |       |-- merge.wgsl
 |   |   |   |       |-- min_filter.wgsl
 |   |   |   |       |-- mirror.wgsl
