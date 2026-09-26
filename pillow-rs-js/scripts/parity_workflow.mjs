@@ -229,6 +229,25 @@ function publicValueType(value) {
     return value.constructor?.name ?? 'object';
 }
 
+function solarizeThresholdComparisons(threshold) {
+    let compare;
+    if (typeof threshold === 'boolean' || typeof threshold === 'number') {
+        const numeric = Number(threshold);
+        compare = (sample) => sample < numeric;
+    } else if (typeof threshold === 'bigint') {
+        compare = (sample) => BigInt(sample) < threshold;
+    } else if (pythonFloatPayload(threshold)) {
+        const numeric = pythonNumber(threshold);
+        compare = (sample) => sample < numeric;
+    } else {
+        throw namedError(
+            'TypeError',
+            `'<' not supported between instances of 'int' and '${publicValueType(threshold)}'`,
+        );
+    }
+    return Uint8Array.from({ length: 256 }, (_, sample) => Number(compare(sample)));
+}
+
 function pythonFloatPayload(value) {
     return value && typeof value === 'object' && Object.hasOwn(value, '__pillow_rs_python_float__');
 }
@@ -463,7 +482,21 @@ function filterDescriptor(type, fields = {}) {
 }
 
 function enhancerDescriptor(type, image) {
-    return descriptor(type, { __pillow_rs_enhancer__: type, image });
+    const state = { __pillow_rs_enhancer__: type, image };
+    if (type === 'Color') {
+        // Pillow retains the converted grayscale base when the enhancer is
+        // constructed. L/LA are the degenerate image itself, so those modes
+        // intentionally keep the source object's live mutation behavior.
+        state.degenerate = image.mode === 'L' || image.mode === 'LA'
+            ? image
+            : image.colorDegenerate();
+    } else if (type === 'Contrast') {
+        // Contrast's rounded mean and reconstructed base are also a
+        // constructor-time snapshot; recomputing at enhance() changes results
+        // if the source image was mutated after construction.
+        state.degenerate = image.contrastDegenerate();
+    }
+    return descriptor(type, state);
 }
 
 function callableLut(value) {
@@ -1991,7 +2024,13 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
         if (operation === 'scale') {
             return wasm.ImageOps.scaleWithInput(image, args.factor, args.resample ?? args.method ?? null);
         }
-        if (operation === 'solarize') return wasm.ImageOps[name](image, args.threshold ?? 128);
+        if (operation === 'solarize') {
+            const threshold = args.threshold === undefined ? 128 : args.threshold;
+            return wasm.ImageOps.solarizeWithComparisons(
+                image,
+                solarizeThresholdComparisons(threshold),
+            );
+        }
         return wasm.ImageOps[name](image);
     }
     if (surface === 'PIL.ImageStat' && operation === 'Stat') {
@@ -2126,6 +2165,10 @@ function callStep(wasm, step, bindings, operations, assets) {
             }[receiver.__pillow_rs_enhancer__];
             if (!method || typeof receiver.image?.[method] !== 'function') {
                 throw unsupportedError(`ImageEnhance operation is not exported by this WASM facade: ${receiver.__pillow_rs_enhancer__}`);
+            }
+            if (receiver.__pillow_rs_enhancer__ === 'Color'
+                || receiver.__pillow_rs_enhancer__ === 'Contrast') {
+                return wasm.blend(receiver.degenerate, receiver.image, Number(args.factor));
             }
             return receiver.image[method](Number(args.factor));
         }

@@ -4874,6 +4874,37 @@ handling. The focused all-mode LAB cohort passes 28/28 on Python CPU, Node
 WASM, and browser WASM. The full 837-case `Image.resize` cohort also passes on
 Node and browser WASM after the binding fix. No coverage ran.
 
+### ImageEnhance and solarize WASM CI repairs — 2026-09-26
+
+The 154 WASM parity failures split into 54 Color/Contrast enhancer failures
+and 100 `ImageOps.solarize` failures. The enhancer workflow adapter represented
+Color and Contrast as stateless descriptors and called one-shot methods at
+`enhance()`. Pillow constructs and retains each degenerate base earlier:
+Color retains its converted grayscale image (except L/LA, where it aliases the
+source), and Contrast retains its rounded-mean image. Recomputing after source
+mutation changed the result. The descriptor also skipped constructor-time
+conversion errors for `La` and `RGBa`. The WASM `Image` binding now exposes the
+existing core base constructors, and the adapter retains that base and blends
+it with the live source. All 572 active Color/Contrast enhance workflows pass
+in Node and browser WASM; the focused pre-fix run had 54 failures.
+
+Solarize's WASM adapter narrowed thresholds to `u8`, which wrapped negative
+values, truncated fractional values, and mishandled values above 255. It also
+used nullish coalescing, turning an explicit Python `None` into the default
+threshold and checking unsupported image modes before raising threshold
+comparison errors. The adapter now computes the exact 256 results of
+`sample < threshold` in the host and sends that table through the existing
+core `SolarizeInput::Comparisons` path. The core applies mode validation only
+after those comparisons, preserving Pillow's error order. All 392 active
+`ImageOps.solarize` workflows pass in both hosts.
+
+After both repairs, `make test-wasm` passed its npm package check and all
+16,771 parity workflows on Node WASM and all 16,771 on browser WASM, with zero
+failures, skipped cases, or infrastructure errors. The campaign build required
+`RUSTC_WRAPPER=` because the configured local `sccache` could not start under
+this host's permissions. No fixtures, expected outputs, or comparison rules
+were changed, and no coverage ran.
+
 ## MedianFilter 3 × 3 checkpoint — 2026-09-26
 
 Three bounded attempts optimized `PIL.Image.Image.filter` with
