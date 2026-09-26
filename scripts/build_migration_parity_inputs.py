@@ -46367,6 +46367,10 @@ def build_inputs(
             isolated_getmetrics = (
                 workload_id == "pil-imagefont-freetypefont.getmetrics.standard"
             )
+            # Exclude the font setup so this measures wrapper construction.
+            isolated_transposedfont = (
+                workload_id == "pil-imagefont.transposedfont.standard"
+            )
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46398,13 +46402,16 @@ def build_inputs(
                             if materialized_getchannel
                             or eager_getcolors
                             or isolated_getmetrics
+                            or isolated_transposedfont
                             else "whole_workflow"
                         ),
                         "step_ids": (
                             ["call", "observe-result"]
                             if materialized_getchannel
                             else ["call"]
-                            if eager_getcolors or isolated_getmetrics
+                            if eager_getcolors
+                            or isolated_getmetrics
+                            or isolated_transposedfont
                             else []
                         ),
                         "metrics": operation["benchmark"]["metrics"],

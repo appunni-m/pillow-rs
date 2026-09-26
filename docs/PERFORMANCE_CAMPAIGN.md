@@ -5207,5 +5207,42 @@ font on the host and returns a font object; no pixel kernel runs, so these
 SIMD/GPU profile timings are not backend evidence. The two host-side font
 entry points already use the parsed-source cache, while preserving path
 change visibility and independent face state. No runtime change is justified
-by these measurements. The next ranked font workload is
-`PIL.ImageFont.TransposedFont`.
+by these measurements.
+
+## ImageFont.TransposedFont checkpoint — 2026-09-26
+
+The standard workload originally measured font loading and wrapper
+construction together. Its generated measurement boundary now times only the
+`call` step after `setup-font-1`, keeping `FreeTypeFont` construction out of
+this operation's latency. The focused default and explicit-orientation
+parity cases pass before and after the code change.
+
+Two bounded implementation attempts were evaluated. The retained change
+assigns `None` directly for the default orientation instead of crossing the
+PyO3 boundary to call a Rust normalizer whose `None` branch returns `None`
+without validation or side effects. Explicit orientations still use the same
+Rust normalization and error path. The second attempt stopped storing an
+instance `_orientation_name` for `None`; it produced no timing improvement and
+was reverted to preserve the existing instance state.
+
+The official observed-step benchmark medians were:
+
+| Run | Pillow | CPU | SIMD profile | GPU profile |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline 1 | 0.001791 ms | 0.002500 ms | 0.002416 ms | 0.002417 ms |
+| Baseline 2 | 0.001917 ms | 0.002438 ms | 0.002250 ms | 0.002542 ms |
+| Retained attempt | 0.001792 ms | 0.002250 ms | 0.002375 ms | 0.002291 ms |
+
+The target profile rows have no actual-backend receipt: constructing a Python
+font wrapper performs no image kernel, so SIMD and GPU are ineligible. The
+official adapter boundary still places CPU about 26% above Pillow. A separate
+sequential direct-call diagnostic, with the font loaded before timing, gives
+medians of 99.69 ns for pillow-rs and 106.29 ns for Pillow across seven
+200,000-call samples. The samples are in
+`build/migration-parity/transposedfont-direct-timeit-final-20260926.json`.
+This direct measurement is a cross-check, not an acceptance artifact; because
+it disagrees with the official adapter result, the CPU goal stays open.
+
+The operation is checkpointed after two attempts with the benchmark-boundary
+and backend-eligibility blockers recorded. The next ranked font function is
+`PIL.ImageFont.TransposedFont.getlength`.
