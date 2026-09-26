@@ -5106,3 +5106,42 @@ aggregate. The manifest refresh records the current enum defaults for resize,
 rotate, and thumbnail and does not change runtime behavior.
 The next unvisited high-ranked workload is `PIL.ImageFont.FreeTypeFont`, the
 direct font-class constructor; work moves there after this checkpoint.
+
+## FreeTypeFont constructor checkpoint — 2026-09-26
+
+The focused parity case `PIL.ImageFont.FreeTypeFont.behavior.default` passes.
+Its benchmark workload is `pil-imagefont.freetypefont.standard`, which loads
+the 17,572-byte `DejaVuSans.ttf` fixture by path and measures the constructor
+workflow. The fresh baseline receipt is
+`build/migration-parity/perf-freetypefont-baseline.json`; its exact-output
+preflight is `perf-freetypefont-baseline-parity.json`.
+
+| Subject | Median latency | Backend receipt |
+| --- | ---: | --- |
+| Pillow | 0.022542 ms | Pillow |
+| CPU | 0.020688 ms | not proven |
+| SIMD profile | 0.020312 ms | not proven |
+| GPU profile | 0.028125 ms | not proven |
+
+The CPU observation is about 8% faster than Pillow for this single warm
+default-font input. The SIMD and GPU labels do not execute image kernels here:
+all target receipts have `actual_backend: null`. Loading a path, parsing font
+tables, and creating an independent mutable face are host-side work; sending
+those bytes through a GPU would add transfer and dispatch cost without
+accelerating the operation. SIMD timing is likewise not proof of SIMD code.
+This operation therefore has no eligible SIMD/GPU optimization target, and
+the one CPU sample does not cover other font sizes, formats, or source types.
+
+The hot path already uses a thread-local parsed-source cache for fonts up to
+256 KiB. It still reads the path and verifies the new bytes before creating a
+separate face, preserving visibility of file changes and mutable per-font
+state. The fixture fits under that limit, so enlarging the cache would not
+help this workload. The diagnostic `cProfile` run was dominated by loading
+the complete YAML manifest and Python startup; profiler-instrumented timings
+are excluded from the baseline. No code change is justified by this evidence.
+
+The constructor is checkpointed with its backend-eligibility blocker recorded.
+The next uncheckpointed high-ranked font workload is
+`PIL.ImageFont.FreeTypeFont.getmetrics`; measure that public call independently
+and keep its setup cost visible before deciding whether to optimize its host
+getter.
