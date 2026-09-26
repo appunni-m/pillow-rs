@@ -65,5 +65,8 @@ wide = "1.6.1"
 # use these macros. CI checks for serial loops that should be parallelized.
 rayon = { version = "1", optional = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+
 [lints]
 workspace = true

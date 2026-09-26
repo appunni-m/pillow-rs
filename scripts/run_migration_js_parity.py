@@ -239,6 +239,55 @@ def js_json_value(value: Any) -> Any:
     return value
 
 
+def putpixel_js_value(value: Any) -> Any:
+    """Preserve Python numeric types that JSON/JavaScript would otherwise erase.
+
+    The putpixel wrapper distinguishes Python integers from floats and rejects
+    integers outside its C integer ranges.  Encoding these only on putpixel
+    inputs keeps the general host protocol unchanged while allowing the JS
+    adapter to reproduce those public checks exactly.
+    """
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and abs(value) > (1 << 53) - 1:
+        return {"__pillow_rs_python_int__": str(value)}
+    if isinstance(value, float):
+        return {"__pillow_rs_python_float__": repr(value)}
+    if isinstance(value, list):
+        return [putpixel_js_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: putpixel_js_value(item) for key, item in value.items()}
+    return value
+
+
+def typed_putpixel_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tag numeric literals only where Python putpixel's type checks need them."""
+
+    prepared = copy.deepcopy(cases)
+    for case in prepared:
+        for step in case.get("steps", []):
+            if step.get("surface") != "PIL.Image.Image" or step.get("operation") != "putpixel":
+                continue
+            for name in ("xy", "value"):
+                descriptor = step.get("arguments", {}).get(name)
+                if isinstance(descriptor, dict) and descriptor.get("kind") == "literal":
+                    descriptor["value"] = putpixel_js_value(descriptor.get("value"))
+    return prepared
+
+
+def decode_js_result(value: Any) -> Any:
+    """Restore float values whose decimal JSON form would otherwise parse as int."""
+
+    if isinstance(value, dict):
+        if set(value) == {"__pillow_rs_float_result__"}:
+            return float(value["__pillow_rs_float_result__"])
+        return {key: decode_js_result(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [decode_js_result(item) for item in value]
+    return value
+
+
 def js_asset_payload(
     cases: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -575,7 +624,7 @@ def _host_payload(
     return json.dumps(
         js_json_value(
             {
-                "cases": cases,
+                "cases": typed_putpixel_cases(cases),
                 "operations": operation_payload(cases, operation_index),
                 "assets": assets,
             }
@@ -608,7 +657,7 @@ def _parse_host_result(
             f"{host_name} WASM adapter emitted unexpected envelope fields: "
             f"{sorted(unexpected)}"
         )
-    results = result["results"]
+    results = decode_js_result(result["results"])
     if not isinstance(results, list):
         raise RuntimeError(f"{host_name} WASM adapter emitted a non-array result set")
     by_id = {item["case_id"]: item for item in results}

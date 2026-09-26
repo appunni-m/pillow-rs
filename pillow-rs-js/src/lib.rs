@@ -837,6 +837,20 @@ fn js_color_triplet(value: &JsValue) -> Result<(u8, u8, u8), JsValue> {
 }
 
 fn js_putpixel_value(value: &JsValue) -> pillow_rs::PutPixelValue {
+    if let Ok(components) = js_sys::Reflect::get(
+        value,
+        &JsValue::from_str("__pillow_rs_putpixel_float_components__"),
+    ) {
+        if components.is_array() {
+            let values = js_sys::Array::from(&components)
+                .iter()
+                .map(|item| item.as_f64())
+                .collect::<Option<Vec<_>>>();
+            if let Some(values) = values {
+                return pillow_rs::PutPixelValue::FloatComponents(values);
+            }
+        }
+    }
     if let Some(number) = value.as_f64() {
         if number.is_finite() && number.fract() == 0.0 {
             return pillow_rs::PutPixelValue::Integer(number as i64);

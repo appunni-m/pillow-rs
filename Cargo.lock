@@ -748,6 +748,7 @@ dependencies = [
  "csscolorparser",
  "fontdone",
  "image-slash-star",
+ "js-sys",
  "log",
  "pollster",
  "rayon",
