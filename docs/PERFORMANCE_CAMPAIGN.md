@@ -5505,3 +5505,29 @@ FreeType rasterization, not an accelerated image kernel. Those figures do not
 prove SIMD/GPU throughput or parity on those backends. CPU parity and latency
 targets pass, so checkpoint this operation after one implementation attempt
 and continue to the next unresolved operation in the corrected ranking.
+
+## FreeTypeFont.getmask checkpoint — 2026-09-27
+
+The standard workload now measures `getmask` after opening its font. Its
+previous whole-workflow boundary included font construction and obscured the
+method cost. All 26 getmask parity cases pass on CPU, covering default and
+optional arguments, byte text, starts, strokes, empty/space text, monochrome
+masks, and embedded bitmap strikes.
+
+Two correctness-gated call-only runs measured CPU at 59.709 and 59.541 µs;
+Pillow measured 80.146 and 80.042 µs. CPU latency is about 25.7% lower, with
+median throughput of 16,748 and 16,795 operations/second versus 12,477 and
+12,493 for Pillow. The receipts are
+`perf-freetypefont-getmask-baseline-20260927.json` and
+`perf-freetypefont-getmask-repeat-20260927.json`.
+
+Code inspection found no duplicated layout pass on this default path: the
+renderer shapes once, computes bounds to size its canvas, and rasterizes that
+run. The SIMD and GPU profile receipts have `actual_backend: null`; font
+shaping and FreeType rasterization stay on the host. No runtime change is
+justified by the measured CPU result, and the profile labels do not prove
+accelerator execution. Checkpoint getmask with CPU parity/latency met and
+SIMD/GPU applicability unproven. The next highest unresolved blocker is
+`PIL.ImageFont.FreeTypeFont.font_variant`; its previous checkpoint identifies
+path-backed byte ownership and parsed-table cloning as the next costs to
+measure.
