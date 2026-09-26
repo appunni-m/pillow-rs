@@ -82,8 +82,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -135,8 +137,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.variable-font"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

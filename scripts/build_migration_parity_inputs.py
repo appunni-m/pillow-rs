@@ -46388,6 +46388,17 @@ def build_inputs(
             isolated_freetype_getbbox = (
                 workload_id == "pil-imagefont-freetypefont.getbbox.standard"
             )
+            # Measure the variation-name getter after opening its variable
+            # font so setup and metadata prewarming do not dominate the call.
+            isolated_freetype_get_variation_names = (
+                workload_id
+                == "pil-imagefont-freetypefont.get-variation-names.standard"
+            )
+            # Measure the axis getter after opening its variable font.
+            isolated_freetype_get_variation_axes = (
+                workload_id
+                == "pil-imagefont-freetypefont.get-variation-axes.standard"
+            )
             # Measure the variation setter after loading its variable font.
             isolated_freetype_set_variation_axes = (
                 workload_id
@@ -46435,6 +46446,8 @@ def build_inputs(
                             or isolated_transposed_getbbox
                             or isolated_freetype_getlength
                             or isolated_freetype_getbbox
+                            or isolated_freetype_get_variation_names
+                            or isolated_freetype_get_variation_axes
                             or isolated_freetype_set_variation_axes
                             or isolated_freetype_set_variation_name
                             else "whole_workflow"
@@ -46450,6 +46463,8 @@ def build_inputs(
                             or isolated_transposed_getbbox
                             or isolated_freetype_getlength
                             or isolated_freetype_getbbox
+                            or isolated_freetype_get_variation_names
+                            or isolated_freetype_get_variation_axes
                             or isolated_freetype_set_variation_axes
                             or isolated_freetype_set_variation_name
                             else []

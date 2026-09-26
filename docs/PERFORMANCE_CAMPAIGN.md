@@ -5426,3 +5426,51 @@ The 5× SIMD target and GPU comparison are inapplicable to this host-only font
 operation and remain unproven by backend receipts. Checkpoint this operation
 after four attempts and continue with the next unresolved operation from the
 corrected latency ranking.
+
+The later shared metadata cache also preserves the setter win: in the joint
+axes/names/setter receipt, its warm call median was 6.146 µs CPU versus 7.500 µs
+Pillow.
+
+## FreeTypeFont.get_variation_names checkpoint — 2026-09-27
+
+The workload now measures only `get_variation_names` after opening the
+variable font. Its input and parity gate are unchanged. The six getter cases
+and four named-setter cases passed together against live Pillow. The final
+warm call-only medians were 2.000 µs CPU and 5.959 µs Pillow in the baseline
+receipt `perf-freetypefont-get-variation-names-baseline-20260927.json`. After
+sharing parsed variation metadata with the axes getter, a joint receipt measured
+1.917 µs CPU and 6.041 µs Pillow for this call.
+
+This method already benefits from the immutable name list prepared by the
+preceding setter optimization, so no additional runtime attempt was needed.
+SIMD/GPU report `actual_backend: null`; enumerating font names is host metadata
+work, not an image kernel. CPU meets the latency target; accelerator targets
+remain inapplicable or unproven. Continue to the next unresolved operation in
+the corrected ranking.
+
+## FreeTypeFont.get_variation_axes checkpoint — 2026-09-27
+
+The benchmark isolates the axes query after opening a variable font. The five
+existing parity cases pass for default and named variable fonts, malformed
+axis metadata, and Type 1 behavior. Two unchanged-policy baseline receipts
+measured CPU at 4.000 and 4.334 µs against Pillow at 3.917 and 3.750 µs, a
+small but repeatable CPU latency miss. Profiling samples identified
+`variation_tables` and `parse_name`: each query reparsed `fvar` and `name` even
+though variable-font construction had already decoded those tables to prepare
+named-instance metadata.
+
+Attempt one stores Pillow-shaped axis descriptors beside the existing
+duplicate-filtered instance names. One exact-byte and collection-face cache
+entry shares only these immutable values; each font keeps its own mutable
+variation coordinates. The metadata is parsed once when opening a variable
+SFNT face, and each axes query clones the small result vector. All 15 axes,
+name, and named-setter parity cases pass. In the correctness-gated joint
+receipt `perf-font-variation-metadata-attempt1-20260927.json`, call-only medians
+are 1.792 µs CPU versus 4.125 µs Pillow for axes, and 1.917 µs versus 6.041 µs
+for names. The setter remains faster than Pillow at 6.146 versus 7.500 µs.
+
+SIMD/GPU report `actual_backend: null`; these methods inspect font metadata and
+do not dispatch image kernels. CPU latency targets pass for axes and names;
+accelerator targets are inapplicable here. The shared table parse removes the
+second `fvar`/`name` parse from workflows that query axes after opening the
+font. Continue with the next unresolved operation in the corrected ranking.
