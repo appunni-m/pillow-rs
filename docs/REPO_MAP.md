@@ -357,6 +357,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_font_native_cases.py
     |-- test_font_variant_parity.py
     |-- test_grayscale_rgb_domain.py
+    |-- test_migration_benchmark_selection.py
     |-- test_migration_parity_icc_timestamp.py
     |-- test_optimization_goals.py
     |-- test_parity_reduction.py
