@@ -660,6 +660,7 @@ migration-parity-profile-all: ## Capture bounded CPU, SIMD, and GPU adapter prof
 	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=gpu
 
 migration-parity-benchmark: build-parity ## Build the checkout facade without replacing the Pillow oracle, then run correctness-gated benchmark workloads
+	$(PYTHON) -m unittest discover -s scripts -p 'test_migration_benchmark_selection.py' -v
 	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
 		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
 		exit 2; \

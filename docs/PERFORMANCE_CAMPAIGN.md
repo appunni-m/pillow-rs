@@ -5531,3 +5531,52 @@ SIMD/GPU applicability unproven. The next highest unresolved blocker is
 `PIL.ImageFont.FreeTypeFont.font_variant`; its previous checkpoint identifies
 path-backed byte ownership and parsed-table cloning as the next costs to
 measure.
+
+## FreeTypeFont.font_variant follow-up — 2026-09-27
+
+The follow-up shared the immutable `glyf` and `loca` byte buffers across static
+font variants instead of deep-copying them with `FontData::clone`. All eight
+maintained `font_variant` parity cases and the live wrapper parity script pass.
+The correctness-gated call-phase median was 20.854 µs, compared with 20.626 µs
+in the immediately preceding baseline; the whole-workflow CPU medians were
+40.187 and 40.730 µs. The call phase did not improve, so the candidate was
+removed. SIMD/GPU receipts remain `actual_backend: null` for this host-side
+font operation.
+
+The earlier 2,345-sample profile counted 640 samples in OS file opens, 282 in
+file reads, 258 in independent-face cloning, and 92 in memory moves inside
+`FontData::clone`. Sharing only the large outline byte buffers attacks a small
+part of that profile. Reopening a path observes file changes, so a metadata-only
+skip would weaken that behavior. Keep `font_variant` blocked until a path-read
+optimization preserves changed-file semantics and shows a call-phase win.
+
+## ImageChops.overlay GPU shader checkpoint — 2026-09-27
+
+The selected 1024 × 768 RGB workflow has a fresh successful-execution-gated baseline of
+3.171 ms for Pillow, 0.737 ms for CPU, 0.685 ms for SIMD, and 1.288 ms for GPU.
+CPU, SIMD, and GPU all completed on their requested backends without fallback.
+Attempt four removes the per-channel dynamic branch and source-level integer
+division: it selects the low or complemented operands first, then applies the
+exact bounded quotient `(n + (n >> 7) + (n >> 14)) >> 7` with `n = product + 1`.
+The selected operand is at most 127, so the product is at most 32,385; an
+exhaustive check of all 32,386 possible products found no quotient mismatch.
+All 174 maintained Overlay cases pass strict GPU parity.
+
+Two correctness-gated repeats measured GPU at 1.264 and 1.183 ms, compared
+with 1.288 ms before the change. Their median GPU execution-phase timings were
+918,709 and 878,083 ns, against 921,709 ns at baseline. These are modest gains
+within a noisy host-bound workflow, not evidence that GPU has caught SIMD. The
+repeated GPU throughputs were 794 and 845 workflows/second, still below SIMD at
+1,363 and 1,554. The GPU receipt retains 2,359,296 bytes of image upload,
+2,359,296 auxiliary input bytes, and 2,359,296 readback bytes per request; the
+baseline terminal phase alone was 1.043 ms. Keep the exact shader change, but
+checkpoint Overlay as incomplete. The main blocker is transfer, mapping, and
+completion latency; the current row remains about 1.8× slower than SIMD.
+
+The first targeted pipeline benchmark exposed a selector bug: `--pipeline`
+discarded `--workload-id` and ran 614 pipeline workloads. That output is retained
+as `perf-benchmark-pipeline-selection-bug-20260927.json` and is excluded from
+Overlay measurements. The runner now composes the filters, and a regression
+test checks single-workload selection and rejects a non-pipeline ID under the
+pipeline filter. The corrected command selects exactly one workload. No
+coverage collection ran.
