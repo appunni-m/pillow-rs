@@ -4702,3 +4702,52 @@ and GPU goals remain inapplicable to this metadata-only call without changing
 its execution contract. Move to the next uncheckpointed high-gap image
 operation, `PIL.ImageOps.fit`; refresh its strict parity and workload timing
 after the `ResizeBoxed` changes before editing it.
+
+## LAB putpixel and build-recovery checkpoint — 2026-09-26
+
+The CI failures exposed two distinct issues. First, logical LAB images use the
+RGB8 raster as storage, but Pillow's public A/B bands are signed: storage adds
+128 and `getpixel` subtracts 128. `Image.new("LAB", color)` and
+`Image.putpixel` had omitted that storage bias. Both now apply it with wrapping
+byte arithmetic at the public write boundary; raw `frombytes` data and the
+LAB conversion kernel remain in their existing stored-byte domain. SIMD
+support is limited to `PutPixel` over this layout, and the GPU accepts LAB only
+for non-palette `PutPixel`, whose shader copies the already-normalized bytes.
+The strict input-audit passes 33/33 LAB cases on CPU, SIMD, and GPU. The full
+1,323-case `putpixel` parity selection passes on strict CPU; the RGB behavior,
+mode, and value cases plus the 33 LAB cases pass 34/34 on both SIMD and GPU.
+
+The no-GPU WASM build also exposed GPU-only helpers and a contrast mean field
+that were compiled without their feature. The GPU table/imports, affine LUT
+helper, and GPU-only contrast field are now gated on `gpu`; the GPU build still
+uses them. Separately, the JS parity asset adapter lacked the fixed RGB
+`frombytes` bytearray and throughput bytearray inputs. It now transports the
+same fixture bytes as `Uint8Array` input; no case, expected output, or assertion
+changed. The two targeted JS cases pass. The no-GPU core build completes.
+
+Three bounded `putpixel` performance attempts retained two changes. The Python
+RGB-integer path now reuses the mode it already resolved for argument parsing
+instead of re-resolving it in the core value adapter. `PipelineOps::one` now
+constructs its single operation node directly instead of allocating an empty
+node and appending a second node. A special direct RGB `push_op` constructor
+was rejected because its sample regressed. The unchanged 16 × 16 RGB scalar
+workload measured Pillow/pillow-rs CPU whole-workflow medians of 7.792/9.188 µs
+before these changes. The best retained-code run measured 7.375/7.834 µs; a
+second standard-policy run measured 7.291/8.292 µs. These samples indicate
+progress, but CPU is still slower than Pillow (about 6–14% across the two
+retained-code runs), so `putpixel` is checkpointed with that explicit blocker.
+The GPU and SIMD selectors have no native-execution receipt for this workload:
+it measures lazy construction and stops before materialization. Their timings
+do not prove accelerated `putpixel` execution or throughput. A background
+`taskpolicy` run changed the scale and ordering of all subjects and is excluded
+from the comparison. Standard benchmark and parity receipts are
+`build/migration-parity/perf-putpixel-20260926-{baseline,attempt2,retained-final}.json`
+and `build/migration-parity/parity-putpixel-20260926-{cpu,simd,gpu}.json`.
+No coverage ran.
+
+The known LAB conversion ICC timestamp issue remains separate: crossing a UTC
+second can change only profile byte 35 even when pixels and image properties
+match. Keep those strict failures visible; do not normalize the timestamp or
+claim exact profile parity. The next first-pass operation is
+`PIL.ImageOps.fit`, after refreshing its strict parity and workload timings on
+the current boxed-resize code.

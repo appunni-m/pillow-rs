@@ -81,7 +81,17 @@ impl PipelineOps {
     }
 
     pub(crate) fn one(op: PipelineOp) -> Self {
-        Self::empty().append(op)
+        let mode_preserving = op_preserves_mode(&op);
+        Self {
+            chain: Arc::new(PipelineOpChain {
+                parent: None,
+                op: Some(op),
+                len: 1,
+                mode_preserving,
+                flattened: OnceLock::new(),
+            }),
+            prefix_cache: None,
+        }
     }
 
     pub(crate) fn append(&self, op: PipelineOp) -> Self {
@@ -1585,14 +1595,23 @@ impl Image {
                 crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             )),
             // These logical modes keep Pillow's public tag over the native
-            // three-byte RGB raster storage, including LAB's raw band values.
-            "YCbCr" | "HSV" | "LAB" => {
-                DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
-                    width,
-                    height,
-                    crate::raster::Rgb([color.0, color.1, color.2]),
-                ))
-            }
+            // three-byte RGB raster storage.
+            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
+                width,
+                height,
+                crate::raster::Rgb([color.0, color.1, color.2]),
+            )),
+            // Pillow exposes signed A/B samples but stores them in the shared
+            // unsigned raster with a +128 bias.
+            "LAB" => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
+                width,
+                height,
+                crate::raster::Rgb([
+                    color.0,
+                    color.1.wrapping_add(128),
+                    color.2.wrapping_add(128),
+                ]),
+            )),
             // I and F modes store all four resolved int32/float32 LE bytes.
             "I" | "F" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
@@ -2847,6 +2866,13 @@ impl Image {
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
         }
+        let (r, g, b) = if self.explicit_mode() == Some("LAB") {
+            // The public LAB bands expose signed A/B values, while the shared
+            // RGB8 raster stores them with Pillow's unsigned +128 bias.
+            (r, g.wrapping_add(128), b.wrapping_add(128))
+        } else {
+            (r, g, b)
+        };
         let (color, palette_index, updated_palette) = if self.has_palette_mode() {
             if a != 255 {
                 return Err(PilError::ValueError(

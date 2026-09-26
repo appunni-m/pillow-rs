@@ -464,6 +464,7 @@ pub(crate) fn gpu_chops_affine_supported(scale: f64, offset: f64) -> bool {
 /// padding. This table depends only on scale/offset, never either image.
 /// Host f32 division preserves Pillow rounding even when device division uses
 /// an approximate reciprocal or flushes a subnormal divisor to zero.
+#[cfg(feature = "gpu")]
 fn gpu_chops_affine_lut(scale: f64, offset: f64, subtract: bool) -> Vec<u32> {
     let scale = scale as f32;
     let offset = offset as f32;
