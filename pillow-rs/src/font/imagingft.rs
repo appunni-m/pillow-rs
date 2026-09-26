@@ -18,10 +18,33 @@ use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::rc::Rc;
 
 const MAX_STRING_LENGTH: usize = 1_000_000;
 const MAX_CACHED_SOURCE_BYTES: usize = 256 * 1024;
+const BASIC_LAYOUT_CACHE_CAPACITY: usize = 512;
+
+#[derive(Default)]
+struct BasicLayoutCache {
+    glyph_indices: HashMap<char, u32>,
+    advances: HashMap<(u32, i32), i32>,
+    kernings: HashMap<(u32, u32), i32>,
+}
+
+impl BasicLayoutCache {
+    fn clear_variable_metrics(&mut self) {
+        self.advances.clear();
+        self.kernings.clear();
+    }
+}
+
+fn insert_bounded<K: Eq + Hash, V>(map: &mut HashMap<K, V>, key: K, value: V) {
+    if map.len() < BASIC_LAYOUT_CACHE_CAPACITY || map.contains_key(&key) {
+        map.insert(key, value);
+    }
+}
 
 struct CachedSourceFace {
     face_index: ffi::FT_Long,
@@ -47,6 +70,10 @@ pub(super) struct FontEngine {
     family_name: Option<String>,
     style_name: Option<String>,
     metrics: ffi::FT_Size_Metrics,
+    // BASIC getlength only needs glyph IDs, hinted advances, and pair kerning.
+    // Keep a small cache for repeated measurements; variation setters clear
+    // the size-dependent entries after changing the active design instance.
+    basic_layout_cache: RefCell<BasicLayoutCache>,
     // Pillow remembers the last public named-variation index. FreeType can
     // report an unknown error when the same named instance is selected twice,
     // so keep this state in the Rust core instead of relying on Python-side
@@ -136,6 +163,7 @@ fn load_truetype_with_index(
         family_name,
         style_name,
         metrics,
+        basic_layout_cache: RefCell::new(BasicLayoutCache::default()),
         last_variation_index: None,
     };
     Ok(FreeTypeFont { engine })
@@ -714,6 +742,10 @@ pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Res
     // that ordering so a failed native call has the same subsequent no-op
     // behavior as the reference wrapper.
     font.engine.last_variation_index = Some(instance_index);
+    font.engine
+        .basic_layout_cache
+        .borrow_mut()
+        .clear_variable_metrics();
     let status =
         ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index as ffi::FT_UInt);
     check_ft_error(status)?;
@@ -730,6 +762,10 @@ pub(crate) fn set_variation_by_axes(font: &mut FreeTypeFont, axes: &[f32]) -> Re
         .iter()
         .map(|axis| pillow_axis_to_fixed(*axis))
         .collect::<Vec<_>>();
+    font.engine
+        .basic_layout_cache
+        .borrow_mut()
+        .clear_variable_metrics();
     check_ft_error(ffi::FT_Set_Var_Design_Coordinates(
         Some(&mut font.engine.face),
         coords.len() as ffi::FT_UInt,
@@ -777,6 +813,10 @@ pub(crate) fn native_setvarname(
     let instance_index =
         u32::try_from(instance_index).map_err(|_| PilError::OsError("invalid argument".into()))?;
     if type1_mm_axis_count(font)?.is_some() {
+        font.engine
+            .basic_layout_cache
+            .borrow_mut()
+            .clear_variable_metrics();
         let status =
             ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index as ffi::FT_UInt);
         check_ft_error(status)?;
@@ -796,6 +836,10 @@ pub(crate) fn native_setvarname(
     if instance_index != 0 && name_index >= names.len() {
         return Err(PilError::OsError("invalid argument".into()));
     }
+    font.engine
+        .basic_layout_cache
+        .borrow_mut()
+        .clear_variable_metrics();
     let status = ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index);
     check_ft_error(status)?;
     refresh_engine_metadata(font);
@@ -1269,7 +1313,115 @@ fn length_from_basic_layout_with_flags(
     text: &str,
     load_flags: i32,
 ) -> Result<i32, PilError> {
-    Ok(glyph_run(ttf, text, load_flags)?.final_pen)
+    if text.is_empty() {
+        return Ok(0);
+    }
+
+    let mut pen = 0i32;
+    let mut prev: Option<u32> = None;
+    for ch in text.chars() {
+        let glyph_index = basic_layout_glyph_index(ttf, ch);
+        let advance = basic_layout_advance_cached(ttf, glyph_index, load_flags)?;
+        if let Some(previous) = prev.filter(|previous| *previous != 0 && glyph_index != 0) {
+            pen = pen.saturating_add(basic_layout_kern_cached(ttf, previous, glyph_index));
+        }
+        pen = pen.saturating_add(advance);
+        prev = Some(glyph_index);
+    }
+
+    Ok(pen)
+}
+
+fn basic_layout_glyph_index(ttf: &FreeTypeFont, ch: char) -> u32 {
+    if let Some(glyph_index) = ttf
+        .engine
+        .basic_layout_cache
+        .borrow()
+        .glyph_indices
+        .get(&ch)
+        .copied()
+    {
+        return glyph_index;
+    }
+
+    let glyph_index = gid(&ttf.engine.face, ch);
+    insert_bounded(
+        &mut ttf.engine.basic_layout_cache.borrow_mut().glyph_indices,
+        ch,
+        glyph_index,
+    );
+    glyph_index
+}
+
+fn basic_layout_advance_cached(
+    ttf: &FreeTypeFont,
+    glyph_index: u32,
+    load_flags: i32,
+) -> Result<i32, PilError> {
+    let key = (glyph_index, load_flags);
+    if let Some(advance) = ttf
+        .engine
+        .basic_layout_cache
+        .borrow()
+        .advances
+        .get(&key)
+        .copied()
+    {
+        return Ok(advance);
+    }
+
+    let advance = basic_layout_advance(&ttf.engine.face, glyph_index, load_flags)?;
+    insert_bounded(
+        &mut ttf.engine.basic_layout_cache.borrow_mut().advances,
+        key,
+        advance,
+    );
+    Ok(advance)
+}
+
+fn basic_layout_kern_cached(ttf: &FreeTypeFont, left: u32, right: u32) -> i32 {
+    let key = (left, right);
+    if let Some(kerning) = ttf
+        .engine
+        .basic_layout_cache
+        .borrow()
+        .kernings
+        .get(&key)
+        .copied()
+    {
+        return kerning;
+    }
+
+    let kerning = basic_layout_kern(&ttf.engine.face, left, right);
+    insert_bounded(
+        &mut ttf.engine.basic_layout_cache.borrow_mut().kernings,
+        key,
+        kerning,
+    );
+    kerning
+}
+
+fn basic_layout_advance(
+    face: &ffi::FT_Face,
+    glyph_index: u32,
+    load_flags: i32,
+) -> Result<i32, PilError> {
+    // Length needs only the hinted advance. FT_Load_Glyph also copies the full
+    // outline into an FFI glyph slot, which the BASIC layout path discards.
+    // FT_Get_Advance follows the same load route without materializing that
+    // slot; its scaled 16.16 result is the glyph loader's 26.6 advance shifted
+    // by ten bits.
+    let advance = ffi::FT_Get_Advance(face, glyph_index, load_flags).map_err(ft_error_to_pil)?;
+    let advance = native_long_to_i64(advance);
+    let advance = if load_flags & ffi::FT_LOAD_NO_SCALE != 0 {
+        advance
+    } else {
+        advance >> 10
+    };
+    let advance =
+        i32::try_from(advance).map_err(|_| PilError::OsError("invalid argument".into()))?;
+    validate_advance_26_6(i64::from(advance))?;
+    Ok(advance)
 }
 
 fn validate_advance_26_6(advance: i64) -> Result<(), PilError> {
