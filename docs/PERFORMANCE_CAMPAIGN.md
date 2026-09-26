@@ -5651,3 +5651,57 @@ content. Keep both cold and warm receipts, and do not interpret unavailable
 backend telemetry as SIMD/GPU execution. This operation's CPU latency target
 is met; the next operation should come from a refreshed single-workload
 ranking. No coverage collection ran.
+
+## PIL.ImageFont.load_path checkpoint — 2026-09-27
+
+The refreshed, correctness-gated 825-workload matrix ranked
+`pil-imagefont.load-path.standard` as the largest CPU gap: 475.938 µs for
+pillow-rs versus 52.333 µs for Pillow. The adjacent `load` row measured
+477.563 µs versus 52.729 µs. Both Python entry points call the same
+`load_pilfont_from_path` binding helper; `load_path` adds `sys.path` lookup.
+The matrix and focused receipts are in
+`perf-standard-ranking-after-load-default-imagefont-20260927.json` and the
+`perf-imagefont-load-*` files.
+
+A 12,000-call native sample attributed about 48% of hot stacks to PNG
+DEFLATE/Huffman decoding inside `Image::materialize`; the same tiny PNG and
+256-entry metric table were decoded and parsed on every call. File reads were
+a small part of the profile. Attempt one added a one-entry parsed-font cache
+keyed by exact metric and bitmap bytes. It is bounded to source payloads at
+most 128 KiB and rasters up to 65,536 pixels. It returns cheap clones backed
+by the immutable `Arc` data introduced for `load_default_imagefont`. The
+loader still resolves the current path and rereads both files before checking
+the cache, so path changes and same-size file edits remain observable. This cut
+the warm `load_path` call from 470.541 µs to 21.125 µs, but its first decode
+still cost 633.917 µs.
+
+Attempt two recognizes the built-in default font only when the freshly read
+metrics and PNG bytes exactly match the embedded sources. It then reuses
+`PilFont::load_default`, whose decoded luma bytes are checked against the
+canonical PNG by `default_bitmap_matches_embedded_png_decode`; all other
+content still follows the normal decoder and exact-byte cache. The cold
+`load_path` call fell to 93.916 µs. The standard warm receipts measure CPU at
+21.187 µs for `load_path` and 20.000 µs for `load`, against Pillow at 50.292
+and 49.250 µs respectively. Their target throughputs are 47,198 and 50,000
+calls/second versus 19,884 and 20,305 for Pillow. Both focused workload gates
+and both public-operation parity cases pass.
+
+A live mutation probe loaded one path repeatedly, first replacing only the
+bitmap with a mode-L copy, then restoring the bitmap, then changing only the
+advance metric for `a`. pillow-rs matched Pillow's mode, mask, bounds, and
+length at each step; the changed advance altered the length and mask width as
+expected. This checks that cache hits depend on the file contents read for
+that call, not a path, size, or timestamp shortcut. Cold target/source
+diagnostics measured 93.916 µs and 9.127 ms; those cold calls include each
+runtime's first-use initialization, so compare them only as a cold-process
+pair. The warm call-only result is the main operation acceptance measure.
+
+The `load` and `load_path` SIMD/GPU profile receipts have
+`actual_backend: null`; these APIs read files and construct host font objects
+without dispatching image kernels. Their requested SIMD/GPU numbers do not
+prove acceleration and those backend targets are inapplicable. Reusable
+finding: for mutable path-backed inputs, validate caches by rereading exact
+source bytes, retain only a bounded amount of immutable parsed state, and
+measure first-use separately from cache hits. An exact match to a public
+embedded resource can safely select its predecoded representation after the
+current file contents have been read. No coverage collection ran.
