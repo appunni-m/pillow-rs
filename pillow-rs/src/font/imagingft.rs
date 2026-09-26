@@ -1179,8 +1179,8 @@ pub(crate) fn getmask2_with_start(
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     validate_text_length(text)?;
-    let (width, height, pixels) = mask_from_run_with_start(font, text, TGT_NORM, start)?;
-    let bbox = getbbox(font, text)?;
+    let (width, height, pixels, bbox) =
+        mask_from_run_with_start_and_bbox(font, text, TGT_NORM, start)?;
     Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 
@@ -1696,9 +1696,20 @@ fn mask_from_run_with_start(
     load_flags: i32,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
+    let (width, height, pixels, _) =
+        mask_from_run_with_start_and_bbox(ttf, text, load_flags, start)?;
+    Ok((width, height, pixels))
+}
+
+fn mask_from_run_with_start_and_bbox(
+    ttf: &FreeTypeFont,
+    text: &str,
+    load_flags: i32,
+    start: (f64, f64),
+) -> Result<(u32, u32, Vec<u8>, (i32, i32, i32, i32)), PilError> {
     let run = glyph_run(ttf, text, load_flags)?;
     if run.glyphs.is_empty() {
-        return Ok((0, 0, vec![]));
+        return Ok((0, 0, vec![], (0, 0, 0, 0)));
     }
     // Pillow 12.2.0 `_imagingft.c` uses FT_LOAD_TARGET_MONO consistently
     // during BASIC layout, bbox calculation, and both render passes for
@@ -1727,7 +1738,7 @@ fn mask_from_run_with_start(
         .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
     let mut canvas = vec![0u8; canvas_len];
     if canvas_len == 0 {
-        return Ok((w, h, canvas));
+        return Ok((w, h, canvas, bbox));
     }
 
     let face = &ttf.engine.face;
@@ -1755,7 +1766,7 @@ fn mask_from_run_with_start(
     let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
     let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
     paste_rendered_bitmaps(&rendered, &mut canvas, w, h, x_origin, y_origin);
-    Ok((w, h, canvas))
+    Ok((w, h, canvas, bbox))
 }
 
 /// Render a mask while preserving embedded BGRA glyph pixels as RGBA.
