@@ -5302,3 +5302,73 @@ setup, and do not use requested SIMD/GPU profiles as proof when their backend
 receipt is null. This operation is checkpointed after three implementation
 attempts; its CPU parity/performance target is met, with SIMD/GPU applicability
 recorded as a blocker. Continue to the next ranked operation.
+
+## ImageFont.TransposedFont.getbbox checkpoint — 2026-09-26
+
+The existing standard workload included both font loading and
+`TransposedFont` construction. Its generated boundary now observes only the
+`call` step after setup. The default, positional and keyword argument, and
+rotated-orientation parity cases pass (4/4). The correctness-gated benchmark
+then measured medians of 52.791 µs for Pillow and 33.458 µs for CPU, with
+29,888 versus 18,942 operations per second. CPU latency is already below
+Pillow, so no runtime optimization was justified for this operation.
+
+The SIMD and GPU profile rows report `actual_backend: null`; the method
+computes font bounds on the host and dispatches no pixel kernel. Record SIMD
+and GPU as inapplicable here, not as accelerator performance. This is a
+baseline checkpoint with no runtime attempts. The next high-ranked font
+operation is `PIL.ImageFont.FreeTypeFont.getlength`; the recent shared BASIC
+layout change affects it, so refresh its own isolated workload before deciding
+whether it needs another implementation attempt.
+
+## FreeTypeFont.set_variation_by_axes four-attempt checkpoint — 2026-09-26
+
+The generated workload isolates the `call` step after font construction and
+sets the variable font axes to `[100.0, 600.0]`. Each benchmark replay creates
+a fresh default font, so the timed operation changes coordinates. This
+distinction exposed why the repeated-coordinate short circuit alone was not a
+benchmark optimization: it applies only after a face already has those exact
+effective coordinates. The six Python behavior cases and the fontdone
+FreeType setter lane remain the parity contract; the latter compared 711
+concrete cases against FreeType 2.14.3.
+
+The first attempt detects FreeType's no-change condition after normalized
+coordinates exist and returns without rebuilding the face. It checks both the
+fully default-filled design coordinate vector and the public variation flag;
+partial input and explicit-default semantics therefore remain distinct. A
+unit test confirms that repeating a valid setter call keeps the same parsed
+face allocation. This helps repeated calls on one face, but the isolated
+changed-coordinate workload measured 10.708 µs CPU against 3.834 µs Pillow,
+effectively unchanged from its 10.542 µs baseline.
+
+The second attempt reuses parsed SFNT tables for eligible glyf-based variable
+faces. It clones the current parsed table model, replaces design and
+normalized coordinates, clears coordinate-dependent glyph outlines, and
+recomputes active face metrics and autohint state. Unsupported face shapes
+continue through the original full parser. The 711-case FreeType parity lane
+passed; CPU fell to 8.229 µs.
+
+The third attempt updates the existing SFNT `FT_Face` fields and active size
+record in place instead of calling `face_to_ffi`, which reparsed public table
+wrappers and replaced size handles. Face identity changes still use the full
+refresh path. The same parity lane passed and CPU fell to 6.854 µs.
+
+The fourth attempt converts the common one-to-eight axis fixed-coordinate
+input through stack storage, retaining checked heap conversion for larger
+inputs. It shaved a further 0.146 µs; the oracle lane again passed. The final
+correctness-gated medians were Pillow 4.000 µs and CPU 6.708 µs, so the
+operation remains 1.68× slower than Pillow and is checkpointed as a blocker
+after the agreed four attempts. SIMD and GPU profile timings are not evidence:
+the font setter runs on the host and both accelerator receipts are null.
+
+The remaining known cost is independent mutable variation state. Cloning
+`FontData` still copies its parsed table vectors, and rebuilding
+`FaceGlobals` remains necessary to bind autohint state to the updated face.
+The next meaningful design is to share immutable parsed tables across font
+instances while keeping normalized coordinates, glyph caches, size metrics,
+and face globals isolated per face. Do not cache or share a mutable varied face
+across instances, and do not turn repeated-coordinate timing into a substitute
+for the changed-coordinate workload. Reopen this blocker when that ownership
+split can be made without changing MVAR metrics, glyph output, named-instance
+behavior, or independent-face semantics. The next operation should be selected
+from the corrected latency ranking, not by extension of this setter work.

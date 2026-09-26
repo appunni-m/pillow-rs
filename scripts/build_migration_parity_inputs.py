@@ -46375,6 +46375,24 @@ def build_inputs(
             isolated_transposed_getlength = (
                 workload_id == "pil-imagefont-transposedfont.getlength.standard"
             )
+            # Measure the bounding-box method after loading and wrapping its
+            # source font, so this row excludes constructor work.
+            isolated_transposed_getbbox = (
+                workload_id == "pil-imagefont-transposedfont.getbbox.standard"
+            )
+            # Measure FreeTypeFont.getlength after loading the font asset.
+            isolated_freetype_getlength = (
+                workload_id == "pil-imagefont-freetypefont.getlength.standard"
+            )
+            # Measure the bounding-box method after loading the font asset.
+            isolated_freetype_getbbox = (
+                workload_id == "pil-imagefont-freetypefont.getbbox.standard"
+            )
+            # Measure the variation setter after loading its variable font.
+            isolated_freetype_set_variation_axes = (
+                workload_id
+                == "pil-imagefont-freetypefont.set-variation-by-axes.standard"
+            )
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46408,6 +46426,10 @@ def build_inputs(
                             or isolated_getmetrics
                             or isolated_transposedfont
                             or isolated_transposed_getlength
+                            or isolated_transposed_getbbox
+                            or isolated_freetype_getlength
+                            or isolated_freetype_getbbox
+                            or isolated_freetype_set_variation_axes
                             else "whole_workflow"
                         ),
                         "step_ids": (
@@ -46418,6 +46440,10 @@ def build_inputs(
                             or isolated_getmetrics
                             or isolated_transposedfont
                             or isolated_transposed_getlength
+                            or isolated_transposed_getbbox
+                            or isolated_freetype_getlength
+                            or isolated_freetype_getbbox
+                            or isolated_freetype_set_variation_axes
                             else []
                         ),
                         "metrics": operation["benchmark"]["metrics"],
