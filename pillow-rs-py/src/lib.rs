@@ -3078,9 +3078,9 @@ impl PyFont {
             .map_err(map_error)
     }
 
-    fn get_name(&self) -> (Option<String>, Option<String>) {
+    fn get_name<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let (family, style) = pillow_rs::imagefont_getname_optional(&self.inner);
-        (family.map(ToOwned::to_owned), style.map(ToOwned::to_owned))
+        Ok(PyTuple::new(py, [family, style])?)
     }
 
     fn get_size(&self) -> f32 {
