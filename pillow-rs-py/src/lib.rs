@@ -41,6 +41,7 @@ use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
 use std::borrow::Cow;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 mod putdata;
 
@@ -3217,11 +3218,28 @@ fn load_pilfont_from_path(
         let Ok(bitmap) = std::fs::read(&candidate) else {
             continue;
         };
+        if let Some(font) = cached_pilfont_load(&metrics, &bitmap) {
+            return Ok((font, candidate.to_string_lossy().into_owned()));
+        }
+        if let Some(font) = pillow_rs::PilFont::load_default_if_sources_match(&metrics, &bitmap) {
+            remember_pilfont_load(&metrics, &bitmap, &font);
+            return Ok((font, candidate.to_string_lossy().into_owned()));
+        }
+        let cache_bitmap =
+            pilfont_load_sources_within_cache_limit(&metrics, &bitmap).then(|| bitmap.clone());
         let Ok(image) = pillow_rs::PilFont::open_pilfont_glyph_image(bitmap) else {
             continue;
         };
+        let cache_raster = pilfont_glyph_image_within_cache_limit(&image);
         match pilfont_from_glyph_image(&metrics, image) {
-            Ok(font) => return Ok((font, candidate.to_string_lossy().into_owned())),
+            Ok(font) => {
+                if cache_raster {
+                    if let Some(bitmap) = cache_bitmap {
+                        remember_pilfont_load(&metrics, &bitmap, &font);
+                    }
+                }
+                return Ok((font, candidate.to_string_lossy().into_owned()));
+            }
             Err(PilError::TypeError(message)) if message == "invalid font image mode" => continue,
             Err(error) => return Err(error),
         }
@@ -3231,6 +3249,78 @@ fn load_pilfont_from_path(
         "cannot find glyph data file {}.{{gif|pbm|png}}",
         root.display()
     )))
+}
+
+const PILFONT_LOAD_CACHE_MAX_SOURCE_BYTES: usize = 128 * 1024;
+const PILFONT_LOAD_CACHE_MAX_RASTER_PIXELS: u64 = 64 * 1024;
+
+struct PilFontLoadCacheEntry {
+    metrics: Vec<u8>,
+    bitmap: Vec<u8>,
+    font: pillow_rs::PilFont,
+}
+
+#[derive(Default)]
+struct PilFontLoadCache {
+    entry: Option<PilFontLoadCacheEntry>,
+}
+
+impl PilFontLoadCache {
+    fn get(&self, metrics: &[u8], bitmap: &[u8]) -> Option<pillow_rs::PilFont> {
+        let entry = self.entry.as_ref()?;
+        (entry.metrics == metrics && entry.bitmap == bitmap).then(|| entry.font.clone())
+    }
+
+    fn insert(&mut self, metrics: &[u8], bitmap: &[u8], font: &pillow_rs::PilFont) {
+        if !pilfont_load_sources_within_cache_limit(metrics, bitmap) {
+            return;
+        }
+        self.entry = Some(PilFontLoadCacheEntry {
+            metrics: metrics.to_vec(),
+            bitmap: bitmap.to_vec(),
+            font: font.clone(),
+        });
+    }
+}
+
+static PILFONT_LOAD_CACHE: OnceLock<Mutex<PilFontLoadCache>> = OnceLock::new();
+
+fn pilfont_load_sources_within_cache_limit(metrics: &[u8], bitmap: &[u8]) -> bool {
+    metrics.len().saturating_add(bitmap.len()) <= PILFONT_LOAD_CACHE_MAX_SOURCE_BYTES
+}
+
+fn pilfont_glyph_image_within_cache_limit(image: &pillow_rs::PilFontGlyphImage) -> bool {
+    let (width, height) = match image {
+        pillow_rs::PilFontGlyphImage::Image(image) => match image.size() {
+            Ok(dimensions) => dimensions,
+            Err(_) => return false,
+        },
+        pillow_rs::PilFontGlyphImage::DeferredRenderError { width, height, .. } => {
+            (*width, *height)
+        }
+    };
+    u64::from(width) * u64::from(height) <= PILFONT_LOAD_CACHE_MAX_RASTER_PIXELS
+}
+
+fn cached_pilfont_load(metrics: &[u8], bitmap: &[u8]) -> Option<pillow_rs::PilFont> {
+    if !pilfont_load_sources_within_cache_limit(metrics, bitmap) {
+        return None;
+    }
+    let cache = PILFONT_LOAD_CACHE.get()?;
+    let cache = match cache.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    cache.get(metrics, bitmap)
+}
+
+fn remember_pilfont_load(metrics: &[u8], bitmap: &[u8], font: &pillow_rs::PilFont) {
+    let cache = PILFONT_LOAD_CACHE.get_or_init(|| Mutex::new(PilFontLoadCache::default()));
+    let mut cache = match cache.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    cache.insert(metrics, bitmap, font);
 }
 
 fn pilfont_from_glyph_image(
@@ -4733,4 +4823,23 @@ fn color3dlut_repr(
 #[pyfunction]
 fn kernel_validate_coefficients(kernel: Option<Vec<f64>>, size: (u32, u32)) -> PyResult<()> {
     pillow_rs::validate_kernel_coefficients(kernel.as_deref(), size).map_err(map_error)
+}
+
+#[cfg(test)]
+mod pilfont_load_cache_tests {
+    use super::PilFontLoadCache;
+
+    #[test]
+    fn cache_requires_exact_metrics_and_bitmap_bytes() {
+        let metrics = b"pilfont metrics";
+        let bitmap = b"glyph bitmap";
+        let font = pillow_rs::PilFont::load_default().expect("embedded default font is valid");
+        let mut cache = PilFontLoadCache::default();
+
+        cache.insert(metrics, bitmap, &font);
+
+        assert!(cache.get(metrics, bitmap).is_some());
+        assert!(cache.get(b"changed metrics", bitmap).is_none());
+        assert!(cache.get(metrics, b"changed bitmap").is_none());
+    }
 }

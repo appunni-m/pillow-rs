@@ -16,7 +16,6 @@ const METRICS_LEN: usize = GLYPH_COUNT * GLYPH_RECORD_LEN;
 const MAX_STRING_LENGTH: usize = 1_000_000;
 
 const DEFAULT_METRICS: &[u8] = include_bytes!("courb08.pil");
-#[cfg(test)]
 const DEFAULT_BITMAP: &[u8] = include_bytes!("courb08.png");
 // Decoded from DEFAULT_BITMAP with the crate's PNG path. Its 15,960 bytes have
 // SHA-256 ff78f1b6d98ed40932e795d3786d0154fb1c2b874c191e3c662676c615846742;
@@ -339,6 +338,19 @@ impl PilFont {
             .clone()
     }
 
+    /// Returns the embedded default font when both encoded source files match.
+    ///
+    /// This lets host bindings reuse its exact predecoded pixels after they
+    /// have read the current files, preserving visibility of file changes.
+    #[doc(hidden)]
+    pub fn load_default_if_sources_match(metrics: &[u8], bitmap: &[u8]) -> Option<Self> {
+        if metrics == DEFAULT_METRICS && bitmap == DEFAULT_BITMAP {
+            Self::load_default().ok()
+        } else {
+            None
+        }
+    }
+
     /// Returns the metadata lines between the PILfont descriptor and `DATA`.
     pub fn info(&self) -> &[Vec<u8>] {
         &self.info
@@ -645,6 +657,14 @@ mod tests {
             (DEFAULT_BITMAP_WIDTH, DEFAULT_BITMAP_HEIGHT)
         );
         assert_eq!(decoded.as_raw().as_slice(), DEFAULT_BITMAP_LUMA);
+        assert!(
+            PilFont::load_default_if_sources_match(super::DEFAULT_METRICS, DEFAULT_BITMAP)
+                .is_some()
+        );
+        assert!(
+            PilFont::load_default_if_sources_match(super::DEFAULT_METRICS, &DEFAULT_BITMAP[1..])
+                .is_none()
+        );
         Ok(())
     }
 }
