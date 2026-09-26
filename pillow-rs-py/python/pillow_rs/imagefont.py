@@ -223,8 +223,10 @@ class FreeTypeFont:
         self._rust_font = _core.ImageFont.truetype(
             font, float(size), int(index), encoding, layout_engine_name
         )
+        self._native_font_bytes = None
         if not isinstance(font, (str, bytes, PathLike)):
             self.font_bytes = self._rust_font._source_bytes()
+            self._native_font_bytes = self.font_bytes
         self.size = float(size)
         self.index = index
         self.encoding = encoding
@@ -240,8 +242,10 @@ class FreeTypeFont:
         font = object.__new__(cls)
         font.path = path
         font._rust_font = rust_font
+        font._native_font_bytes = None
         if path is None:
             font.font_bytes = rust_font._source_bytes()
+            font._native_font_bytes = font.font_bytes
             font.path = BytesIO(font.font_bytes)
         font.size = float(size)
         font.index = index
@@ -334,10 +338,22 @@ class FreeTypeFont:
             # Pillow reopens path-backed fonts, but memory-backed fonts retain
             # their public source bytes. Resolve current public attributes;
             # the native handle may still carry their earlier values.
+            reuse_native_source = False
             try:
-                source_bytes = BytesIO(self.font_bytes).getvalue()
+                public_source_bytes = self.font_bytes
+                reuse_native_source = (
+                    public_source_bytes is not None
+                    and public_source_bytes is self._native_font_bytes
+                )
+                if reuse_native_source:
+                    source_bytes = None
+                elif isinstance(public_source_bytes, bytes):
+                    source_bytes = public_source_bytes
+                else:
+                    source_bytes = BytesIO(public_source_bytes).getvalue()
                 source_path = None
             except AttributeError:
+                reuse_native_source = False
                 if isinstance(self.path, (str, PathLike)):
                     try:
                         with open(self.path, "rb") as source:
@@ -347,7 +363,7 @@ class FreeTypeFont:
                         source_bytes = None
                 else:
                     source_bytes = None
-            if source_bytes is not None:
+            if reuse_native_source or source_bytes is not None:
                 variant_size = float(self.size if size is None else size)
                 variant_index = int(self.index if index is None else index)
                 variant_encoding = self.encoding if encoding is None else encoding
@@ -355,7 +371,7 @@ class FreeTypeFont:
                     layout_engine or self.layout_engine
                 )
                 rust_font = self._rust_font.font_variant_with_options(
-                    source_bytes,
+                    None if reuse_native_source else source_bytes,
                     variant_size,
                     variant_index,
                     variant_encoding,

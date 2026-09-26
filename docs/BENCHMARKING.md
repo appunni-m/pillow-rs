@@ -38,12 +38,13 @@ resource, and timing data where the adapter exposes them. A result is usable
 only when its manifest/input hashes, runtime identity, requested/actual backend,
 and terminal receipts are compatible with the comparison.
 
-The maintained operation matrix currently contains 87 canonical workloads:
+The maintained operation matrix currently contains 88 canonical workloads:
 the active `PipelineOp` variants (with `BoxBlurXY` sharing `BoxBlur`) plus five
 public operations that execute eagerly. `EqualizeMasked` and `ResizeBoxed` were
-added after the former 85-workload count was asserted; both now have matching
-benchmark specs and materialized workloads. The benchmark completeness check
-still fails on any missing operation spec or workload.
+added after the former 85-workload count was asserted. `ConvertLab` adds a
+separate workload for RGB-to-LAB conversion, and `ResizeBoxed` exercises the
+public `resize(box=...)` path. The benchmark completeness check fails when a
+pipeline variant has no spec or materialized workload.
 
 ## Correctness gate and budget gate
 

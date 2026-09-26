@@ -148,6 +148,13 @@ fn open_memory_face(
     size: f32,
     variant_source: Option<&FreeTypeFont>,
 ) -> Result<ffi::FT_Face, PilError> {
+    // Pillow's `_imagingft.getfont` classifies an empty in-memory source as
+    // an unavailable resource before FreeType's memory-stream probe can
+    // report `Invalid_Stream_Operation`.
+    if data.is_empty() {
+        return Err(PilError::OsError("cannot open resource".into()));
+    }
+
     if let Some(source) = variant_source {
         if let Some(face) = ffi::FT_New_Memory_Face_From_Source(
             library,

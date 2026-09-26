@@ -233,12 +233,14 @@ class PipelineBenchmarkSpec:
 # operation without a generated case has an explicit public workflow below.
 PIPELINE_OP_BENCHMARK_SPECS: dict[str, PipelineBenchmarkSpec] = {
     "Resize": PipelineBenchmarkSpec("PIL.Image.Image", "resize", "PIL.Image.Image.resize.behavior.default"),
+    "ResizeBoxed": PipelineBenchmarkSpec("PIL.Image.Image", "resize", "PIL.Image.Image.resize.parameter.box"),
     "Crop": PipelineBenchmarkSpec("PIL.Image.Image", "crop", "PIL.Image.Image.crop.behavior.default"),
     "Rotate": PipelineBenchmarkSpec("PIL.Image.Image", "rotate", "PIL.Image.Image.rotate.behavior.default"),
     "Transpose": PipelineBenchmarkSpec("PIL.Image.Image", "transpose", "PIL.Image.Image.transpose.behavior.default"),
     "Thumbnail": PipelineBenchmarkSpec("PIL.Image.Image", "thumbnail", "PIL.Image.Image.thumbnail.nuanced.rgb-reducing-downscale", "receiver"),
     "Reduce": PipelineBenchmarkSpec("PIL.Image.Image", "reduce", "PIL.Image.Image.reduce.behavior.default"),
     "Convert": PipelineBenchmarkSpec("PIL.Image.Image", "convert", "PIL.Image.Image.convert.behavior.default"),
+    "ConvertLab": PipelineBenchmarkSpec("PIL.Image.Image", "convert", "PIL.Image.Image.convert.nuanced.mode-audit-RGB-to-LAB-17x3"),
     "Quantize": PipelineBenchmarkSpec("PIL.Image.Image", "quantize", "PIL.Image.Image.quantize.behavior.default"),
     "RemapPalette": PipelineBenchmarkSpec("PIL.Image.Image", "remap_palette", "PIL.Image.Image.remap_palette.mode.p"),
     "Filter3x3": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-002"),

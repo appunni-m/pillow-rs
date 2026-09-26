@@ -112,6 +112,125 @@
       }
     },
     {
+      "workload_id": "pipeline-op.resizeboxed.benchmark-materialized",
+      "covers": [
+        "PIL.Image.Image.resize.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  16
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  16
+                ]
+              },
+              "box": {
+                "kind": "literal",
+                "value": [
+                  0,
+                  0,
+                  8,
+                  8
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.crop.benchmark-materialized",
       "covers": [
         "PIL.Image.Image.crop.performance.standard"
@@ -770,6 +889,122 @@
         ],
         "mode": "RGB",
         "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.convertlab.benchmark-materialized",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [
+          {
+            "id": "pixels",
+            "kind": "inline",
+            "encoding": "base64",
+            "data": "wjODt43ykFUGJDw4j9He8LB97hXkVIGkB6kuD3P2C6x7jFn36+5y3WPcMeqpsZbl5I1Tq9I0dyn4X3bwHVL1GXCzvttenTtVzfbt7gW0SHjXioUzHCfL9Hry+aGOXV0A0d+jlH/nPdAAayFHOugM9Gn5a6xFn9K1R/dAgPbS1JQ4Ke5vNfPkeIS8arv7bPsCr7rNLemdYzE9",
+            "sha256": "bb671282c7252fbf7284940d1feed4c9c2b045681e75047b842b9d179981c004",
+            "media_type": "application/octet-stream"
+          }
+        ],
+        "steps": [
+          {
+            "step_id": "image",
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  3
+                ]
+              },
+              "data": {
+                "kind": "asset",
+                "asset_id": "pixels"
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "LAB"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          17,
+          3
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -12288,6 +12523,125 @@
         "mode": "RGB",
         "chain_length": 1,
         "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.resizeboxed.matrix-32x24",
+      "covers": [
+        "PIL.Image.Image.resize.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  32,
+                  24
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  16
+                ]
+              },
+              "box": {
+                "kind": "literal",
+                "value": [
+                  0,
+                  0,
+                  8,
+                  8
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          32,
+          24
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
       }
@@ -243432,6 +243786,10 @@
           "weight": 1
         },
         {
+          "workload_id": "pipeline-op.resizeboxed.benchmark-materialized",
+          "weight": 1
+        },
+        {
           "workload_id": "pipeline-op.crop.benchmark-materialized",
           "weight": 1
         },
@@ -243453,6 +243811,10 @@
         },
         {
           "workload_id": "pipeline-op.convert.benchmark-materialized",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.convertlab.benchmark-materialized",
           "weight": 1
         },
         {
@@ -244183,6 +244545,10 @@
       "members": [
         {
           "workload_id": "pipeline-op.resize.matrix-32x24",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-op.resizeboxed.matrix-32x24",
           "weight": 1
         },
         {
