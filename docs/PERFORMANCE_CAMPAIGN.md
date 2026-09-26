@@ -4304,3 +4304,51 @@ Receipts are `build/migration-parity/parity-verify-20260926-final.json` and
 `build/migration-parity/perf-image-verify-20260926-final.json`. The final
 benchmark artifact passes schema validation, and `RUSTC_WRAPPER= make build-parity`
 succeeds. No coverage collection ran.
+
+## Image.new checkpoint — 2026-09-26
+
+The first strict CPU cohort found two existing LAB constructor mismatches;
+78/80 cases passed. Pillow accepts LAB as a three-band mode, including empty
+images. Rust already stores LAB in its three-byte RGB raster representation but
+`Image::new` did not admit LAB or retain its explicit logical mode. The core
+constructor now uses that existing storage and keeps the `LAB` tag. The
+unchanged 80-case cohort passes 80/80, including other nonempty color/mode
+cases and both prior empty-size regressions. No parity case or assertion
+changed.
+
+The official `pil-image.new.standard` whole-workflow run passes its parity gate.
+Median latency is 3.083 µs for Pillow, 3.459 µs for CPU, 3.250 µs for SIMD,
+and 3.000 µs for GPU. The requested backend does not dispatch for this eager
+constructor, so these SIMD/GPU rows are the same CPU-side operation and do not
+represent accelerator throughput. The strict workflow adapter still reports
+a CPU loss. In a separate uninstrumented direct-call diagnostic, the median
+for omitted-color RGB construction was:
+
+| Size | Pillow | CPU | CPU speedup |
+| --- | ---: | ---: | ---: |
+| 16 × 16 | 870.5 ns | 576.2 ns | 1.51× |
+| 256 × 256 | 4.480 µs | 3.069 µs | 1.46× |
+| 1024 × 768 | 131.932 µs | 95.823 µs | 1.38× |
+
+Those direct measurements used seven warm samples per size with result
+replacement inside the loop; they omit the parity adapter and leave pipeline
+telemetry disabled, as normal runtime does. Strict per-step attribution found
+2.708 µs for Pillow and 3.000 µs for the target. The target-only strict lock
+walk was probing primitive mode and dimension arguments for `_rust_image`;
+the generic walker now returns immediately for exact built-in scalars while
+still traversing containers and locking image objects. This removes about
+83 ns from that strict target step without changing any fixture or lock rule,
+but does not resolve the official whole-workflow gap. The direct public-call
+measurements show omitted-color RGB construction ahead of Pillow; they do not
+account for every path in the official workload. Keep this distinction visible
+and investigate the workflow boundary before attributing its remaining loss to
+the constructor implementation.
+
+The local default `make build-parity` fails before compilation because this
+worktree's ignored `.cargo/config.toml` forces `sccache`, which returns
+`Operation not permitted` while launching rustc. `RUSTC_WRAPPER= make build-parity`
+compiles successfully. This is a local wrapper restriction; no project build
+setting was changed. Receipts are
+`build/migration-parity/parity-image-new-20260926-final.json` and
+`build/migration-parity/perf-image-new-20260926-final.json`. No coverage ran.
+The next known parity blocker is `PIL.Image.frombytes("LAB", ...)`.
