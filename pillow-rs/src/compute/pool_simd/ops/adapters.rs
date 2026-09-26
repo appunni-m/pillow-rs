@@ -16016,6 +16016,7 @@ fn simd_thumbnail_reduce_i(
 
 const SIMD_RESIZE_LANES: usize = 8;
 const SIMD_RESIZE_NEAREST_BYTES: usize = 16;
+const SIMD_FIT_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 fn resize_native_channels_for_image(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     native_resize_byte_layout_for_image(img, mode).map(|(channels, _)| channels)
@@ -18865,7 +18866,11 @@ fn simd_resize_convolution_boxed(
     filter: ResampleFilter,
     channels: usize,
     premultiplied_alpha: bool,
+    parallel_pixel_threshold: usize,
 ) -> Result<DynamicImage, PilError> {
+    // Non-parallel builds still use this helper; the threshold only controls
+    // the optional Rayon row dispatch below.
+    let _ = parallel_pixel_threshold;
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Fit"))?;
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Fit"))?;
     let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Fit"))?;
@@ -18947,38 +18952,67 @@ fn simd_resize_convolution_boxed(
             .as_ref()
             .ok_or_else(|| simd_unsupported("Fit"))?;
         #[cfg(feature = "parallel")]
-        {
-            let failed = AtomicBool::new(false);
-            crate::par_rows_mut!(
-                &mut intermediate,
-                intermediate_stride,
-                intermediate_rows,
-                |row_start, row_end, row_index, intermediate_row| {
-                    let _ = (row_start, row_end);
-                    let source_y = first_source_row.saturating_add(row_index as usize);
-                    let source_start = source_y.saturating_mul(source_stride);
-                    let source_end = source_start.saturating_add(source_stride);
-                    let Some(source_row) = source.get(source_start..source_end) else {
-                        failed.store(true, Ordering::Relaxed);
-                        return;
-                    };
-                    if resize_horizontal_vector_row(
-                        source_row,
-                        channels,
-                        &horizontal,
-                        horizontal_plan,
-                        output_width,
-                        intermediate_row,
-                        premultiplied_alpha,
-                    )
-                    .is_none()
-                    {
-                        failed.store(true, Ordering::Relaxed);
+        if intermediate_rows.saturating_mul(output_width) < parallel_pixel_threshold {
+            for row_index in 0..intermediate_rows {
+                let source_y = first_source_row.saturating_add(row_index);
+                let source_start = source_y
+                    .checked_mul(source_stride)
+                    .ok_or_else(|| simd_unsupported("Fit"))?;
+                let intermediate_start = row_index
+                    .checked_mul(intermediate_stride)
+                    .ok_or_else(|| simd_unsupported("Fit"))?;
+                let source_row = source
+                    .get(source_start..source_start + source_stride)
+                    .ok_or_else(|| simd_unsupported("Fit"))?;
+                let intermediate_row = intermediate
+                    .get_mut(intermediate_start..intermediate_start + intermediate_stride)
+                    .ok_or_else(|| simd_unsupported("Fit"))?;
+                resize_horizontal_vector_row(
+                    source_row,
+                    channels,
+                    &horizontal,
+                    horizontal_plan,
+                    output_width,
+                    intermediate_row,
+                    premultiplied_alpha,
+                )
+                .ok_or_else(|| simd_unsupported("Fit"))?;
+            }
+        } else {
+            #[cfg(feature = "parallel")]
+            {
+                let failed = AtomicBool::new(false);
+                crate::par_rows_mut!(
+                    &mut intermediate,
+                    intermediate_stride,
+                    intermediate_rows,
+                    |row_start, row_end, row_index, intermediate_row| {
+                        let _ = (row_start, row_end);
+                        let source_y = first_source_row.saturating_add(row_index as usize);
+                        let source_start = source_y.saturating_mul(source_stride);
+                        let source_end = source_start.saturating_add(source_stride);
+                        let Some(source_row) = source.get(source_start..source_end) else {
+                            failed.store(true, Ordering::Relaxed);
+                            return;
+                        };
+                        if resize_horizontal_vector_row(
+                            source_row,
+                            channels,
+                            &horizontal,
+                            horizontal_plan,
+                            output_width,
+                            intermediate_row,
+                            premultiplied_alpha,
+                        )
+                        .is_none()
+                        {
+                            failed.store(true, Ordering::Relaxed);
+                        }
                     }
+                );
+                if failed.load(Ordering::Relaxed) {
+                    return Err(simd_unsupported("Fit"));
                 }
-            );
-            if failed.load(Ordering::Relaxed) {
-                return Err(simd_unsupported("Fit"));
             }
         }
         #[cfg(not(feature = "parallel"))]
@@ -19049,32 +19083,55 @@ fn simd_resize_convolution_boxed(
     let output_stride = intermediate_stride;
     if need_vertical {
         #[cfg(feature = "parallel")]
-        {
-            let failed = AtomicBool::new(false);
-            crate::par_rows_mut!(
-                &mut output,
-                output_stride,
-                output_height,
-                |row_start, row_end, output_y, output_row| {
-                    let _ = (row_start, row_end);
-                    if resize_vertical_vector_row(
-                        &intermediate,
-                        output_width,
-                        intermediate_rows,
-                        channels,
-                        &vertical,
-                        output_y as usize,
-                        output_row,
-                        premultiplied_alpha,
-                    )
-                    .is_none()
-                    {
-                        failed.store(true, Ordering::Relaxed);
+        if output_width.saturating_mul(output_height) < parallel_pixel_threshold {
+            for output_y in 0..output_height {
+                let output_start = output_y
+                    .checked_mul(output_stride)
+                    .ok_or_else(|| simd_unsupported("Fit"))?;
+                let output_row = output
+                    .get_mut(output_start..output_start + output_stride)
+                    .ok_or_else(|| simd_unsupported("Fit"))?;
+                resize_vertical_vector_row(
+                    &intermediate,
+                    output_width,
+                    intermediate_rows,
+                    channels,
+                    &vertical,
+                    output_y,
+                    output_row,
+                    premultiplied_alpha,
+                )
+                .ok_or_else(|| simd_unsupported("Fit"))?;
+            }
+        } else {
+            #[cfg(feature = "parallel")]
+            {
+                let failed = AtomicBool::new(false);
+                crate::par_rows_mut!(
+                    &mut output,
+                    output_stride,
+                    output_height,
+                    |row_start, row_end, output_y, output_row| {
+                        let _ = (row_start, row_end);
+                        if resize_vertical_vector_row(
+                            &intermediate,
+                            output_width,
+                            intermediate_rows,
+                            channels,
+                            &vertical,
+                            output_y as usize,
+                            output_row,
+                            premultiplied_alpha,
+                        )
+                        .is_none()
+                        {
+                            failed.store(true, Ordering::Relaxed);
+                        }
                     }
+                );
+                if failed.load(Ordering::Relaxed) {
+                    return Err(simd_unsupported("Fit"));
                 }
-            );
-            if failed.load(Ordering::Relaxed) {
-                return Err(simd_unsupported("Fit"));
             }
         }
         #[cfg(not(feature = "parallel"))]
@@ -21225,6 +21282,7 @@ fn simd_resize_boxed(
             effective_filter,
             channels,
             premultiplied_alpha,
+            0,
         )
     }
 }
@@ -21455,6 +21513,7 @@ pub fn simd_thumbnail(
             effective_filter,
             channels,
             premultiplied_alpha,
+            0,
         );
     }
     match effective_filter {
@@ -21638,6 +21697,25 @@ pub fn simd_fit(
             crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
         return Ok(preserve_mode(img, result));
     }
+    // A zero source remains zero through Pillow's normalized boxed filters,
+    // including the premultiply/unpremultiply alpha path. Fit calls the boxed
+    // convolution kernel directly, so apply its zero shortcut here before
+    // coefficient construction. Nearest sampling is cheap enough that scanning
+    // the whole source would add work instead of removing it.
+    if !matches!(resize_filter, ResampleFilter::Nearest) && native_zero_byte_image(img, channels) {
+        let output_len = usize::try_from(output_width)
+            .ok()
+            .and_then(|width| usize::try_from(output_height).ok()?.checked_mul(width))
+            .and_then(|pixels| pixels.checked_mul(channels))
+            .ok_or_else(|| simd_unsupported("Fit"))?;
+        let output = vec![0; output_len];
+        crate::compute::record_pipeline_operation_path("native-zero-fill");
+        crate::compute::record_pipeline_operation_vector_blocks((output_len / 16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail((output_len % 16) as u64);
+        let result =
+            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
     if matches!(resize_filter, ResampleFilter::Nearest) {
         return simd_resize_nearest_boxed(
             img,
@@ -21661,6 +21739,7 @@ pub fn simd_fit(
         resize_filter,
         channels,
         premultiplied_alpha,
+        SIMD_FIT_PARALLEL_PIXEL_THRESHOLD,
     )
 }
 

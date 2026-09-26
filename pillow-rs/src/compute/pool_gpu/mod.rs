@@ -15037,21 +15037,23 @@ fn gpu_geometry_host_control_reason(
         }
         if let PipelineOp::Fit { w, h, filter, .. } = op {
             // Fit's fractional crop is lowered to the boxed Resample.c
-            // contract. The shared device convolution plan is not yet
-            // proven for straight-alpha/typed rows (tiny source spans can
-            // expose stale horizontal intermediates on Metal), so let the
-            // exact host path own those pixels. Raw-channel layouts retain
-            // their existing native path, and P forces NEAREST before this
-            // decision. Identity Fit is lowered to Duplicate and remains a
-            // native copy. F nearest remains native only when both axes are
-            // reductions; mixed/upsampling cases retain host control until
-            // their two-pass device dependency is proven on all adapters.
+            // contract. The shared device convolution plan is proven for
+            // single-channel L and opaque RGB rows, plus the existing raw
+            // channel layouts. Keep straight-alpha/typed rows on the exact
+            // host path: tiny spans can expose stale horizontal
+            // intermediates on Metal. P forces NEAREST before this decision.
+            // Identity Fit is lowered to Duplicate and remains a native copy.
+            // F nearest remains native only when both axes are reductions;
+            // mixed/upsampling cases retain host control until their
+            // two-pass device dependency is proven on all adapters.
             let native_f_nearest_fit = mode == Some("F")
                 && matches!(filter, ResampleFilter::Nearest)
                 && *w <= dimensions.0
                 && *h <= dimensions.1;
-            let native_fit_layout =
-                matches!(mode, Some("P" | "PA" | "RGBX" | "RGBa" | "CMYK")) || native_f_nearest_fit;
+            let native_fit_layout = matches!(
+                mode,
+                Some("L" | "RGB" | "P" | "PA" | "RGBX" | "RGBa" | "CMYK")
+            ) || native_f_nearest_fit;
             if !native_fit_layout {
                 return Some("Fit boxed-resize layout or pass dependency is not proven");
             }
