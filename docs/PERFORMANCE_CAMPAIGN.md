@@ -4503,7 +4503,85 @@ failing in `cmyk_filtered_rotate_stays_on_exact_host_control`,
 separate GPU-operation blockers; do not relax their expected-backend checks to
 make this constructor checkpoint look green.
 
-The next operation is `PIL.ImageFont.FreeTypeFont.font_variant`. Its earlier
-constructor-inclusive samples remained far slower than Pillow; retime it after
-the lazy-map and shared-byte changes, and separate source-face setup from the
-variant clone before attempting more work.
+
+## ImageFont.font_variant checkpoint — 2026-09-26
+
+The four-attempt revisit found and retained one parity correction and three
+bounded CPU-path changes. An empty public `font_bytes` value now maps to
+Pillow's `OSError("cannot open resource")` at the Python adapter boundary;
+fontdone keeps its FreeType-level `Invalid_Stream_Operation`. The live
+reference test now passes 19 source/state scenarios, including empty and
+mutable public bytes, and all eight maintained variant cases pass with CPU,
+SIMD, and GPU selected (24 comparisons). No assertions or thresholds changed.
+
+Attempt 1 constructs an eligible static SFNT variant directly instead of
+cloning a `Font` and resetting its cloned face globals, bytecode context,
+raster scratch, size state, and non-SFNT fields. It preserves SFNT names,
+charmap, italic flag, and BDF strikes while creating fresh mutable face state.
+Attempt 2 skips source-byte comparison only when slice pointer and length prove
+that the candidate is the same live allocation; distinct allocations still
+require exact byte equality. Attempt 3 avoids the `BytesIO` round trip for
+already-immutable Python `bytes` while retaining the existing snapshot for
+mutable byte-like input. Attempt 4 records the original memory-backed bytes
+object and tells Rust to reuse its owned `Rc<Vec<u8>>` only while that public
+attribute is still the identical object. The maintained standard workload is
+path-backed, so the last two memory-source changes do not affect its hot path.
+
+The official standard benchmark's medians show substantial run-to-run
+variation. The baseline after the `truetype` checkpoint measured Pillow/CPU at
+40.855/49.167 µs. Attempt 1 measured 40.959/42.084 µs, and its unchanged repeat
+measured 42.042/40.916 µs. Attempt 3 measured 40.541/37.750 µs, but Attempt 4
+measured 37.813/38.459 µs. Attempt 2 was a noisy outlier at 59.104 µs on CPU.
+Every run passed its benchmark parity gate. The latest phase medians clarify
+the unresolved operation-level gap:
+
+| Attempt 4 phase | Pillow | CPU |
+| --- | ---: | ---: |
+| Source setup | 20.979 µs | 18.208 µs |
+| `font_variant` call | 16.250 µs | 19.375 µs |
+| Whole workflow | 37.813 µs | 38.459 µs |
+
+Setup is faster, but the `font_variant` call remains 19.2% slower than Pillow;
+the whole workflow is still 1.7% slower in the latest run. Attempt 3 also had a
+slower CPU operation phase (19.021 versus 17.375 µs) despite winning its whole
+workflow sample. The operation is therefore checkpointed incomplete. SIMD and
+GPU execution receipts are `not_proven`; their selector timings do not prove
+acceleration for a host-side font operation, and concurrency-one reciprocal
+rates do not establish sustained throughput.
+
+The next visit to this operation should avoid converting freshly read
+path-backed bytes into an owned vector before checking them against the source
+face. On exact equality, reuse parsed tables and only build independent mutable
+face state; on mismatch, take one owned copy and open the new bytes. Then profile
+the remaining parsed-table clone cost. This work is checkpointed after four
+attempts so the next ranked operation can receive its first pass. Receipts are
+`perf-font-variant-20260926-attempt{1,1b,2,3,4}.json` with matching parity
+sidecars, `font-variant-attempt4-{cpu,simd,gpu}-parity.json`, and
+`test_font_variant_parity.py`. No coverage collection ran.
+
+## Pipeline operation inventory repair — 2026-09-26
+
+The docs CI regression exposed two unrepresented `PipelineOp` variants. The
+canonical inventory is 88 operations after collapsing the `BoxBlurXY` alias
+and including five eager public operations. `ConvertLab` and `ResizeBoxed` had
+no materialized workload specs, so a hard-coded 87-row docs assertion both
+failed and concealed incomplete benchmark input. The workload builder now
+maps `ConvertLab` to the existing RGB-to-LAB public parity case and
+`ResizeBoxed` to the public `resize(box=...)` case. Regenerated inputs report
+88/88 workloads, no missing specs, and no missing workload IDs; the docs test
+checks all three conditions. This is input completeness evidence, not collected
+coverage.
+
+An execution-only smoke of the new boxed-resize row points to a substantial
+backend gap. Its 16 × 16 RGB input resizes the `(0, 0, 8, 8)` box back to 16 ×
+16. Pillow measured 14.250 µs; target CPU measured 127.708 µs. The target call
+phase is 11.000 µs, while terminal materialization takes 105.625 µs. Explicit
+SIMD produced no timing or execution receipt because `ResizeBoxed` is rejected
+by SIMD preflight. The GPU request completed on CPU with the fallback reason
+`exact host semantic control: no valid single-dispatch shader contract`, at
+383.605 µs. This workload uses a `successful_execution` gate, so these are
+routing and timing diagnostics, not parity-backed performance claims. The next
+operation visit is `ResizeBoxed`: first reuse the existing boxed SIMD
+coefficient/data-plane code used by `Fit` and `Thumbnail`, then prove exact
+outputs before extending mode coverage. The smoke artifact is
+`build/migration-parity/perf-new-pipeline-ops-20260926.json`.

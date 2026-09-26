@@ -73,6 +73,8 @@ def observations():
     capture("memory_ignores_path", font.font_variant)
     font.font_bytes = alternate
     capture("changed_public_source_bytes", font.font_variant)
+    font.font_bytes = bytearray(source)
+    capture("mutable_public_source_bytes", font.font_variant)
     font.font_bytes = b""
     capture("empty_public_source_bytes", font.font_variant)
     font.font_bytes = b"invalid font dat"

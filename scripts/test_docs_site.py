@@ -48,7 +48,9 @@ class DocumentationTests(unittest.TestCase):
 
     def test_eager_and_point_workloads_remain_required_after_descriptor_removal(self) -> None:
         baseline = pipeline_report(DEFAULT_INPUT)
-        self.assertEqual(baseline["operation_variants_total"], 87)
+        self.assertEqual(baseline["operation_variants_total"], 88)
+        self.assertEqual(baseline["operation_variants_benchmarked"], 88)
+        self.assertEqual(baseline["missing_benchmark_specs"], [])
         self.assertEqual(baseline["missing_operation_workloads"], [])
         self.assertEqual(baseline["unexpected_benchmark_specs"], [])
         document = json.loads(DEFAULT_INPUT.read_text())
@@ -62,7 +64,7 @@ class DocumentationTests(unittest.TestCase):
                                          if item["workload_id"] != workload_id]
                 path.write_text(json.dumps(modified))
                 result = pipeline_report(path)
-                self.assertEqual(result["operation_variants_total"], 87)
+                self.assertEqual(result["operation_variants_total"], 88)
                 self.assertEqual(result["missing_operation_workloads"], [workload_id])
                 self.assertLess(result["operation_coverage_percent"], 100.0)
 
