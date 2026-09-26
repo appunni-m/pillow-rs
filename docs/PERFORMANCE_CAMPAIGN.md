@@ -5141,7 +5141,71 @@ the complete YAML manifest and Python startup; profiler-instrumented timings
 are excluded from the baseline. No code change is justified by this evidence.
 
 The constructor is checkpointed with its backend-eligibility blocker recorded.
-The next uncheckpointed high-ranked font workload is
-`PIL.ImageFont.FreeTypeFont.getmetrics`; measure that public call independently
-and keep its setup cost visible before deciding whether to optimize its host
-getter.
+
+## FreeTypeFont.getmetrics checkpoint — 2026-09-26
+
+The original `pil-imagefont-freetypefont.getmetrics.standard` row timed the
+whole workflow, so it included opening the font before calling `getmetrics`.
+Its initial medians (Pillow 0.031604 ms, CPU 0.022042 ms) mostly reflected
+constructor setup and could not rank the getter. This was a benchmark-boundary
+defect, not a parity failure or a library speedup. The input generator now
+measures only the observed `call` step after `setup-font-1`; it does not change
+the font, call arguments, expected output, or correctness gate.
+
+The corrected workload passes exact-output preflight. Across two fresh runs,
+the adapter-level medians are:
+
+| Subject | Run 1 | Run 2 | Backend receipt |
+| --- | ---: | ---: | --- |
+| Pillow | 0.000959 ms | 0.000958 ms | Pillow |
+| CPU | 0.001250 ms | 0.001250 ms | not proven |
+| SIMD profile | 0.001166 ms | 0.001209 ms | not proven |
+| GPU profile | 0.001166 ms | 0.001084 ms | not proven |
+
+Every target receipt has `actual_backend: null`; this scalar metadata getter
+does not execute an image kernel, so SIMD and GPU are ineligible. The official
+step timer also includes parity-adapter operation lookup and argument
+resolution. For this sub-microsecond method those costs dominate and reverse
+the direct call ordering. A sequential, warmed diagnostic with nine samples
+of one million direct public calls per subject records 36.13 ns for pillow-rs
+and 41.81 ns for Pillow; outputs are `(19, 5)` on both. The detailed samples
+are retained in
+`build/migration-parity/getmetrics-direct-timeit-20260926.json`. Treat this as
+a cross-check, not as the official acceptance artifact or a sustained
+throughput claim.
+
+No runtime change is justified: the direct call is already faster, while
+changing tuple identity or caching Python integer objects to improve the
+adapter-level number would risk observable behavior. The benchmark-boundary
+repair and this limitation are recorded rather than masking them with a new
+threshold.
+
+## ImageFont.truetype checkpoint — 2026-09-26
+
+The focused `pil-imagefont.truetype.standard` workload passes its exact-output
+preflight. It constructs the default-size font from the same path in each
+implementation. The fresh adapter-boundary receipt is
+`build/migration-parity/perf-im-font-truetype-baseline.json`:
+
+| Subject | Median latency | Backend receipt |
+| --- | ---: | --- |
+| Pillow | 0.022667 ms | Pillow |
+| CPU | 0.020958 ms | not proven |
+| SIMD profile | 0.028813 ms | not proven |
+| GPU profile | 0.020896 ms | not proven |
+
+The public `ImageFont.truetype` path is about 8% faster on CPU in this one
+warm path-based case. A separate sequential, warmed direct-call diagnostic
+measured medians of 15.53 µs for pillow-rs and 18.77 µs for Pillow, with the
+same `(10, 3)` metrics result. Its samples are in
+`build/migration-parity/truetype-direct-timeit-20260926.json`. This is a
+cross-check only: the adapter receipt remains the official benchmark, and
+neither measurement establishes results for other font sources or sizes.
+
+All target receipts have `actual_backend: null`. This API reads and parses a
+font on the host and returns a font object; no pixel kernel runs, so these
+SIMD/GPU profile timings are not backend evidence. The two host-side font
+entry points already use the parsed-source cache, while preserving path
+change visibility and independent face state. No runtime change is justified
+by these measurements. The next ranked font workload is
+`PIL.ImageFont.TransposedFont`.
