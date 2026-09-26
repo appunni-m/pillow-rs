@@ -2881,6 +2881,90 @@ def _diff(path: str, kind: str, source: Any, target: Any, message: str) -> dict[
     }
 
 
+def _lab_profile_datetime(profile: bytes) -> _dt.datetime | None:
+    """Parse the live creation time from Pillow's generated LAB profile.
+
+    LittleCMS rebuilds this canonical 572-byte profile for each RGB-to-LAB
+    conversion and stamps ICC's dateTimeNumber header field. All other bytes
+    remain deterministic and are still compared exactly.
+    """
+
+    if (
+        len(profile) != 572
+        or int.from_bytes(profile[:4], "big") != len(profile)
+        or profile[4:8] != b"lcms"
+        or profile[12:16] != b"abst"
+        or profile[16:20] != b"Lab "
+        or profile[20:24] != b"Lab "
+        or profile[36:40] != b"acsp"
+    ):
+        return None
+    fields = [int.from_bytes(profile[offset : offset + 2], "big") for offset in range(24, 36, 2)]
+    try:
+        return _dt.datetime(*fields)
+    except ValueError:
+        return None
+
+
+def _image_with_lab_profile_datetime_cleared(
+    image: dict[str, Any], profile: bytes
+) -> dict[str, Any]:
+    """Copy an image record with only ICC dateTimeNumber cleared."""
+
+    normalized_profile = profile[:24] + bytes(12) + profile[36:]
+    info = dict(image["info"])
+    icc_profile = dict(info["icc_profile"])
+    icc_profile["data"] = base64.b64encode(normalized_profile).decode("ascii")
+    info["icc_profile"] = icc_profile
+    normalized = dict(image)
+    normalized["info"] = info
+    return normalized
+
+
+def _same_lab_image_except_creation_time(source: Any, target: Any) -> bool:
+    """Allow only a valid, near-contemporaneous LAB ICC creation time to vary."""
+
+    if (
+        not isinstance(source, dict)
+        or not isinstance(target, dict)
+        or source.get("mode") != "LAB"
+        or target.get("mode") != "LAB"
+    ):
+        return False
+
+    profiles: list[bytes] = []
+    for image in (source, target):
+        info = image.get("info")
+        profile_record = info.get("icc_profile") if isinstance(info, dict) else None
+        if (
+            not isinstance(profile_record, dict)
+            or profile_record.get("kind") != "bytes"
+            or profile_record.get("encoding") != "base64"
+            or not isinstance(profile_record.get("data"), str)
+        ):
+            return False
+        try:
+            profile = base64.b64decode(profile_record["data"], validate=True)
+        except (ValueError, binascii.Error):
+            return False
+        if _lab_profile_datetime(profile) is None:
+            return False
+        profiles.append(profile)
+
+    source_time = _lab_profile_datetime(profiles[0])
+    target_time = _lab_profile_datetime(profiles[1])
+    assert source_time is not None and target_time is not None
+    # Source and target run in separate adapter processes. A one-day bound
+    # accommodates long CI batches and a UTC midnight crossing while still
+    # rejecting a stale or unrelated profile timestamp.
+    if abs(source_time - target_time) > _dt.timedelta(days=1):
+        return False
+
+    return _image_with_lab_profile_datetime_cleared(
+        source, profiles[0]
+    ) == _image_with_lab_profile_datetime_cleared(target, profiles[1])
+
+
 def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -> list[dict[str, Any]]:
     kind = policy.get("kind", "exact")
     if kind == "numeric":
@@ -2931,6 +3015,8 @@ def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -
                 return []
             return [_diff(path, "image_mismatch", source, target, "image pixel bytes mismatch")]
         if source == target:
+            return []
+        if _same_lab_image_except_creation_time(source, target):
             return []
         return [_diff(path, "image_mismatch", source, target, "declared image comparison mismatch")]
     if kind == "text":

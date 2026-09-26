@@ -1048,6 +1048,7 @@ function imageMethod(receiver, operation, args, wasm) {
             args.size,
             args.resample ?? null,
             args.box ?? null,
+            args.reducing_gap ?? null,
         );
         case 'rotate': return receiver.rotateWithInput(
             Number(args.angle),
