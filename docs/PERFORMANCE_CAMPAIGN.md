@@ -4751,3 +4751,44 @@ match. Keep those strict failures visible; do not normalize the timestamp or
 claim exact profile parity. The next first-pass operation is
 `PIL.ImageOps.fit`, after refreshing its strict parity and workload timings on
 the current boxed-resize code.
+
+### WASM putpixel parity repair — 2026-09-26
+
+The CI WASM cohort uncovered 468/1,325 `putpixel` mismatches even though the
+native CPU cohort had passed. The pixel kernel was not the cause: the JS
+workflow adapter had flattened Python inputs into JavaScript arrays/numbers,
+then called the low-level WASM method with unvalidated unsigned coordinates.
+That erased distinctions used by Pillow's wrapper (`tuple` versus `list`, and
+`int` versus `float`), rejected valid negative pixel indices, accepted integers
+outside `i64`, and checked the color before coordinates. Palette colors add a
+second ordering rule: Pillow prepares/allocates a palette entry before checking
+coordinates, while PA's explicit alpha conversion happens after the bounds
+check.
+
+The adapter now tags raw JSON arrays as Python tuples and explicit `list` and
+`sequence` protocols with their corresponding types. It transports unsafe
+Python integers as decimal strings decoded to `BigInt`, and float literals as
+typed float markers, but only on `putpixel` arguments. Before dispatch it
+reproduces Python's `__index__`/C-long/i32 coordinate checks, negative-index
+normalization, bounds ordering, mode-specific tuple arity, and integer
+conversion errors. For P/PA color values, the adapter invokes the existing
+Rust palette preparation path at an impossible coordinate. This reuses the
+canonical palette allocator and returns only its pre-write error or palette
+side effect; the adapter then validates real coordinates and performs the
+actual pixel write. Float-component palette inputs use a private typed marker
+so integral-valued Python floats remain floats across the WASM boundary. Large
+F-mode `getpixel` outputs are tagged as floats only at the observation
+serializer, avoiding a global conversion of large JS numbers to Python floats.
+
+After these changes, strict parity passes all 1,325 `putpixel` workflows on
+Node WASM and all 1,325 in a real browser WASM host, with zero failed or
+not-run cases. The 3 large-F-value cases also pass after narrowing the JSON type
+marker to F-mode pixel observations. The JS package check and the focused LAB
+byte-example unit test pass. No fixture, expected output, comparison policy,
+coverage threshold, or runtime pixel kernel was changed. This repair restores
+WASM behavior; it provides no new CPU latency result or SIMD/GPU execution
+receipt. The earlier three bounded native performance attempts remain the
+checkpoint: CPU is still 6–14% slower than Pillow in the recorded 16 × 16
+whole-workflow samples, and the standard SIMD/GPU samples are lazy operations
+without execution evidence. Move on to `PIL.ImageOps.fit` as already queued;
+keep `putpixel` on the explicit latency blocker list.

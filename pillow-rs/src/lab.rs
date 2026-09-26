@@ -11,6 +11,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, RgbImage};
 #[cfg(feature = "gpu")]
 use std::sync::{Arc, OnceLock};
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const GRID: usize = 33;
@@ -20,6 +21,27 @@ const LUT_BYTES: usize = LUT_VALUES * 2;
 #[cfg(feature = "gpu")]
 pub(crate) const GPU_TABLE_WORDS: usize = GRID * GRID * GRID * 2;
 const LAB_PROFILE_TEMPLATE: &[u8; 572] = include_bytes!("data/lab-identity-profile.icc");
+
+#[cfg(target_arch = "wasm32")]
+fn unix_timestamp_seconds() -> u64 {
+    // `std::time::SystemTime::now()` is unsupported on `wasm32-unknown-unknown`.
+    // Date.now() is available in both browser and Node hosts and preserves the
+    // whole-second timestamp that LittleCMS writes into the profile header.
+    let milliseconds = js_sys::Date::now();
+    if milliseconds.is_finite() && milliseconds >= 0.0 {
+        (milliseconds / 1_000.0) as u64
+    } else {
+        0
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn unix_timestamp_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
 
 #[repr(align(2))]
 struct AlignedLut([u8; LUT_BYTES]);
@@ -62,10 +84,7 @@ const AXES: [Axis; 256] = make_axes();
 /// LittleCMS stamps profile creation time at whole-second precision; preserve
 /// that observable field while keeping the profile bytes otherwise static.
 pub(crate) fn pillow_lab_icc_profile() -> Vec<u8> {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let seconds = unix_timestamp_seconds();
     let days = (seconds / 86_400) as i64;
     let within_day = seconds % 86_400;
     let z = days + 719_468;

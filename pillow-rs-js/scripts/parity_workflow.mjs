@@ -98,6 +98,12 @@ function resolveAsset(assetId, assets) {
 
 function decodeInputValue(value) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
+        if (typeof value.__pillow_rs_python_int__ === 'string') {
+            return BigInt(value.__pillow_rs_python_int__);
+        }
+        if (typeof value.__pillow_rs_python_float__ === 'string') {
+            return { __pillow_rs_python_float__: Number(value.__pillow_rs_python_float__) };
+        }
         const marker = value.__pillow_rs_nonfinite_number__;
         if (marker === 'NaN') return Number.NaN;
         if (marker === 'Infinity') return Number.POSITIVE_INFINITY;
@@ -109,7 +115,8 @@ function decodeInputValue(value) {
         // dispatching into the WASM binding.  Array-interface descriptors must
         // remain objects: fromarray uses their shape/typestr/data fields.
         if (value.protocol === 'list' || value.protocol === 'sequence') {
-            return (value.items ?? []).map(decodeInputValue);
+            const sequence = (value.items ?? []).map(decodeInputValue);
+            return pythonSequence(sequence, value.protocol === 'list' ? 'list' : 'sequence');
         }
         if (value.protocol === 'putdata-custom-index') {
             // Preserve the distinction between an actual JavaScript number
@@ -141,7 +148,7 @@ function decodeInputValue(value) {
         }
         return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, decodeInputValue(item)]));
     }
-    if (Array.isArray(value)) return value.map(decodeInputValue);
+    if (Array.isArray(value)) return pythonTuple(value.map(decodeInputValue));
     return value;
 }
 
@@ -212,6 +219,8 @@ function validatePasteCoordinates(values) {
 
 function publicValueType(value) {
     if (value?.__pillow_rs_python_type__) return value.__pillow_rs_python_type__;
+    if (value && Object.hasOwn(value, '__pillow_rs_python_float__')) return 'float';
+    if (typeof value === 'bigint') return 'int';
     if (Array.isArray(value)) return 'list';
     if (typeof value === 'string') return 'str';
     if (typeof value === 'number') return Number.isInteger(value) ? 'int' : 'float';
@@ -220,10 +229,191 @@ function publicValueType(value) {
     return value.constructor?.name ?? 'object';
 }
 
+function pythonFloatPayload(value) {
+    return value && typeof value === 'object' && Object.hasOwn(value, '__pillow_rs_python_float__');
+}
+
+function pythonNumber(value) {
+    return pythonFloatPayload(value) ? value.__pillow_rs_python_float__ : value;
+}
+
+function pythonInt(value, overflowMessage = 'int too big to convert') {
+    let integer;
+    if (typeof value === 'boolean') integer = value ? 1n : 0n;
+    else if (typeof value === 'bigint') integer = value;
+    else if (typeof value === 'number' && !pythonFloatPayload(value) && Number.isInteger(value)) {
+        integer = BigInt(value);
+    } else {
+        throw namedError('TypeError', `'${publicValueType(value)}' object cannot be interpreted as an integer`);
+    }
+    if (integer < -(1n << 63n) || integer > (1n << 63n) - 1n) {
+        throw namedError('OverflowError', overflowMessage);
+    }
+    return integer;
+}
+
+function pythonOffset(value) {
+    let integer;
+    if (typeof value === 'boolean') integer = value ? 1n : 0n;
+    else if (typeof value === 'bigint') integer = value;
+    else if (typeof value === 'number' && !pythonFloatPayload(value) && Number.isInteger(value)) {
+        integer = BigInt(value);
+    } else {
+        throw namedError('TypeError', `'${publicValueType(value)}' object cannot be interpreted as an integer`);
+    }
+    if (integer < -(1n << 63n) || integer > (1n << 63n) - 1n) {
+        throw namedError('OverflowError', 'Python int too large to convert to C long');
+    }
+    if (integer < -2147483648n) {
+        throw namedError('OverflowError', 'signed integer is less than minimum');
+    }
+    if (integer > 2147483647n) {
+        throw namedError('OverflowError', 'signed integer is greater than maximum');
+    }
+    return Number(integer);
+}
+
+function putpixelCoordinates(receiver, value) {
+    let coordinates;
+    if (Array.isArray(value)) coordinates = value;
+    else if (typeof value === 'string') coordinates = Array.from(value);
+    else {
+        const type = value == null ? 'None' : publicValueType(value);
+        throw namedError('TypeError', `argument 1 must be 2-item sequence, not ${type}`);
+    }
+    if (coordinates.length !== 2) {
+        throw namedError('TypeError', `argument 1 must be sequence of length 2, not ${coordinates.length}`);
+    }
+    const x = pythonOffset(coordinates[0]);
+    const y = pythonOffset(coordinates[1]);
+    const [width, height] = receiver.size();
+    const normalizedX = x < 0 ? width + x : x;
+    const normalizedY = y < 0 ? height + y : y;
+    if (normalizedX < 0 || normalizedY < 0 || normalizedX >= width || normalizedY >= height) {
+        throw namedError('IndexError', 'image index out of range');
+    }
+    return [normalizedX, normalizedY];
+}
+
+function validatePutpixelValue(value, mode) {
+    const tuple = Array.isArray(value) && value.__pillow_rs_python_type__ === 'tuple';
+    const list = Array.isArray(value) && value.__pillow_rs_python_type__ === 'list';
+    const scalar = tuple && value.length === 1 ? value[0] : value;
+    if (mode === 'F') {
+        const real = pythonNumber(scalar);
+        if (typeof real === 'number') {
+            if (!Number.isFinite(real) && typeof scalar === 'bigint') {
+                throw namedError('OverflowError', 'int too large to convert to float');
+            }
+            return;
+        }
+        if (typeof real === 'bigint') return;
+        throw namedError('TypeError', `must be real number, not ${publicValueType(scalar)}`);
+    }
+    if (typeof scalar === 'boolean' || typeof scalar === 'bigint'
+        || (typeof scalar === 'number' && !pythonFloatPayload(scalar) && Number.isInteger(scalar))) {
+        pythonInt(scalar);
+        return;
+    }
+
+    const paletteList = (mode === 'P' || mode === 'PA') && list && (value.length === 3 || value.length === 4);
+    const length = paletteList ? value.length : tuple ? value.length : null;
+    const paletteColor = (mode === 'P' || mode === 'PA') && (length === 3 || length === 4);
+    const singleBand = ['1', 'L', 'P', 'I'].includes(mode) || mode.startsWith('I;16');
+    if (singleBand && !paletteColor) {
+        throw namedError('TypeError', 'color must be int or single-element tuple');
+    }
+    if (length == null) {
+        throw namedError('TypeError', 'color must be int or tuple');
+    }
+    const twoBand = ['LA', 'La', 'PA'].includes(mode);
+    if (!paletteColor && ((twoBand && ![1, 2].includes(length))
+        || (!twoBand && ![3, 4].includes(length)))) {
+        throw namedError('TypeError', twoBand
+            ? 'color must be int, or tuple of one or two elements'
+            : 'color must be int, or tuple of one, three or four elements');
+    }
+    if (length === 1) {
+        throw namedError('SystemError', 'new style getargs format but argument is not a tuple');
+    }
+    const components = paletteList ? value : tuple ? value : [];
+    if (paletteColor && components.some(pythonFloatPayload)) return;
+    for (let index = 0; index < components.length; index += 1) {
+        if (mode === 'PA' && paletteColor && length === 4 && index === 3) continue;
+        if (paletteColor && index < 3) {
+            try {
+                pythonInt(components[index], 'bytes must be in range(0, 256)');
+            } catch (error) {
+                if (error.name === 'TypeError') throw error;
+                throw namedError('ValueError', 'bytes must be in range(0, 256)');
+            }
+        } else if (index === 0 || paletteColor) {
+            pythonInt(components[index]);
+        } else {
+            pythonOffset(components[index]);
+        }
+    }
+}
+
+function plainPutpixelValue(value) {
+    if (pythonFloatPayload(value)) return value.__pillow_rs_python_float__;
+    if (typeof value === 'bigint') return Number(value);
+    if (Array.isArray(value)) {
+        return pythonSequence(value.map(plainPutpixelValue), value.__pillow_rs_python_type__ ?? 'tuple');
+    }
+    return value;
+}
+
+function preparePalettePutpixel(receiver, value, mode) {
+    if (!Array.isArray(value) || ![3, 4].includes(value.length)) return;
+    const paletteMode = receiver.paletteMode();
+    const rgbOnly = mode === 'PA' || (mode === 'P' && paletteMode !== 'RGBA');
+    if (mode === 'P' && rgbOnly && value.length === 4 && pythonNumber(value[3]) !== 255) {
+        throw namedError('ValueError', 'cannot add non-opaque RGBA color to RGB palette');
+    }
+    const components = rgbOnly && value.length === 4 ? value.slice(0, 3) : value;
+    const floating = components.some(pythonFloatPayload);
+    const paletteValue = floating
+        ? { __pillow_rs_putpixel_float_components__: components.map((item) => pythonNumber(item)) }
+        : plainPutpixelValue(pythonTuple(components));
+    try {
+        // Pillow allocates palette entries before validating xy.  Trigger the
+        // shared core preparation path at an impossible coordinate so palette
+        // allocation and color conversion run without touching image pixels.
+        receiver.putpixelValue(0xffffffff, 0xffffffff, paletteValue);
+    } catch (error) {
+        if (error?.name === 'IndexError' && error.message === 'image index out of range') return;
+        throw error;
+    }
+}
+
+function putpixelMethod(receiver, args) {
+    const mode = receiver.mode;
+    const paletteMode = mode === 'P' || mode === 'PA';
+    const paletteValue = paletteMode && Array.isArray(args.value)
+        && ['tuple', 'list'].includes(args.value.__pillow_rs_python_type__)
+        && [3, 4].includes(args.value.length);
+    if (paletteValue) {
+        validatePutpixelValue(args.value, mode);
+        preparePalettePutpixel(receiver, args.value, mode);
+    }
+    const [x, y] = putpixelCoordinates(receiver, args.xy);
+    if (!paletteValue) validatePutpixelValue(args.value, mode);
+    if (mode === 'PA' && paletteValue && args.value.length === 4) {
+        pythonOffset(args.value[3]);
+    }
+    receiver.putpixelValue(x, y, plainPutpixelValue(args.value));
+    return null;
+}
+
 function pythonTuple(value) {
+    return pythonSequence(value, 'tuple');
+}
+
+function pythonSequence(value, type) {
     if (!Array.isArray(value)) return value;
     Object.defineProperty(value, '__pillow_rs_python_type__', {
-        value: 'tuple',
+        value: type,
         enumerable: false,
         configurable: true,
     });
@@ -826,8 +1016,7 @@ function imageMethod(receiver, operation, args, wasm) {
         );
         case 'putpalette': return receiver.putpalette(Uint8Array.from(args.data), args.rawmode ?? null);
         case 'putpixel': {
-            receiver.putpixelValue(args.xy[0], args.xy[1], args.value);
-            return null;
+            return putpixelMethod(receiver, args);
         }
         case 'quantize': {
             const colors = args.colors ?? args.k ?? null;
@@ -2022,7 +2211,7 @@ function color3dlutValue(value) {
     };
 }
 
-function serialize(value, shape) {
+function serialize(value, shape, receiverMode = null) {
     if (shape === 'none') return null;
     if (shape === 'image') return imageSequenceValue(value);
     if (shape === 'mask') {
@@ -2103,6 +2292,10 @@ function serialize(value, shape) {
         return jsonSafe(value);
     }
     if (shape === 'sequence' || shape === 'ordered' || shape === 'metrics') return sequenceValue(value);
+    if (receiverMode === 'F' && typeof value === 'number'
+        && Number.isInteger(value) && Math.abs(value) > Number.MAX_SAFE_INTEGER) {
+        return { __pillow_rs_float_result__: String(value) };
+    }
     return jsonSafe(value);
 }
 
@@ -2356,7 +2549,11 @@ function runCase(wasm, item, operations, assets, executionSink) {
         let observationExecutionStatus = 'completed';
         let observationSucceeded = false;
         try {
-            observations.push({ step_id: observationId, status: 'ok', value: serialize(result.value, info.shape) });
+            const receiver = step.receiver?.kind === 'binding'
+                ? bindings[step.receiver.step_id]
+                : null;
+            const mode = step.operation === 'getpixel' ? receiver?.mode ?? null : null;
+            observations.push({ step_id: observationId, status: 'ok', value: serialize(result.value, info.shape, mode) });
             observationSucceeded = true;
         } catch (error) {
             observations.push({ step_id: observationId, status: 'error', error: publicError(error) });
