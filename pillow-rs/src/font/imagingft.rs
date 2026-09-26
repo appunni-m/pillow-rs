@@ -51,10 +51,16 @@ struct CachedSourceFace {
     face: ffi::FT_Face,
 }
 
-struct CachedVariationNames {
+#[derive(Clone, Default)]
+struct VariationMetadata {
+    names: Vec<Vec<u8>>,
+    axes: Vec<ImageFontVariationAxis>,
+}
+
+struct CachedVariationMetadata {
     face_index: ffi::FT_Long,
     source_bytes: Rc<Vec<u8>>,
-    names: Vec<Vec<u8>>,
+    metadata: VariationMetadata,
 }
 
 thread_local! {
@@ -66,7 +72,7 @@ thread_local! {
     // Variable faces need independent coordinate state, so they do not use
     // CACHED_SOURCE_FACE. Their immutable names can still be reused by exact
     // source bytes and collection-face index.
-    static CACHED_VARIATION_NAMES: RefCell<Option<CachedVariationNames>> = const { RefCell::new(None) };
+    static CACHED_VARIATION_METADATA: RefCell<Option<CachedVariationMetadata>> = const { RefCell::new(None) };
 }
 
 pub(super) struct FontEngine {
@@ -89,12 +95,11 @@ pub(super) struct FontEngine {
     // so keep this state in the Rust core instead of relying on Python-side
     // wrapper bookkeeping.
     last_variation_index: Option<usize>,
-    // Named-instance names are immutable for a given byte sequence and face.
-    // Cache the Pillow-decoded, duplicate-filtered list beside the parsed
-    // source face so fresh handles for the same font do not reparse `fvar` and
-    // `name` on every setter call.
+    // Variation names and axes are immutable for a given byte sequence and
+    // collection face. Keep their Pillow-shaped values beside the face so
+    // queries and setters do not reparse `fvar` and `name` on every call.
     source_face_index: ffi::FT_Long,
-    variation_names: RefCell<Option<Vec<Vec<u8>>>>,
+    variation_metadata: RefCell<Option<VariationMetadata>>,
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
@@ -167,7 +172,7 @@ fn load_truetype_with_index(
     let family_name = face.family_name.clone();
     let style_name = face.style_name.clone();
     let metrics = face.size_metrics;
-    let variation_names = cached_source_variation_names(&data, face_index_ffi);
+    let variation_metadata = cached_source_variation_metadata(&data, face_index_ffi);
 
     let engine = FontEngine {
         library,
@@ -183,7 +188,7 @@ fn load_truetype_with_index(
         basic_layout_cache: RefCell::new(BasicLayoutCache::default()),
         last_variation_index: None,
         source_face_index: face_index_ffi,
-        variation_names: RefCell::new(variation_names),
+        variation_metadata: RefCell::new(variation_metadata),
     };
     let font = FreeTypeFont { engine };
     if has_variations(&font) && ffi::FT_Get_Font_Format(Some(&font.engine.face)) != Some("Type 1") {
@@ -193,7 +198,7 @@ fn load_truetype_with_index(
         // the same short lookup path as repeated calls. Keep load behavior
         // intact for malformed or unsupported variation tables; the public
         // query/setter will report the error when requested.
-        let _ = ensure_variation_names(&font);
+        let _ = ensure_variation_metadata(&font);
     }
     Ok(font)
 }
@@ -704,8 +709,78 @@ pub(crate) fn get_variation_axes(
         // wrapper raises KeyError('name') before returning the numeric axes.
         return Err(PilError::KeyError("name".into()));
     }
+    ensure_variation_metadata(font)?;
+    Ok(font
+        .engine
+        .variation_metadata
+        .borrow()
+        .as_ref()
+        .map(|metadata| metadata.axes.clone())
+        .unwrap_or_default())
+}
+
+pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    ensure_variation_metadata(font)?;
+    Ok(font
+        .engine
+        .variation_metadata
+        .borrow()
+        .as_ref()
+        .map(|metadata| metadata.names.clone())
+        .unwrap_or_default())
+}
+
+fn ensure_variation_metadata(font: &FreeTypeFont) -> Result<(), PilError> {
+    if font.engine.variation_metadata.borrow().is_some() {
+        return Ok(());
+    }
+    if let Some(metadata) = cached_source_variation_metadata(
+        font.engine.font_bytes.as_slice(),
+        font.engine.source_face_index,
+    ) {
+        *font.engine.variation_metadata.borrow_mut() = Some(metadata);
+        return Ok(());
+    }
+    let metadata = build_variation_metadata(font)?;
+    *font.engine.variation_metadata.borrow_mut() = Some(metadata.clone());
+    remember_source_variation_metadata(font, metadata);
+    Ok(())
+}
+
+fn cached_source_variation_metadata(
+    data: &[u8],
+    face_index: ffi::FT_Long,
+) -> Option<VariationMetadata> {
+    CACHED_VARIATION_METADATA.with(|cache| {
+        let cache = cache.borrow();
+        let cached = cache.as_ref()?;
+        (data.len() <= MAX_CACHED_SOURCE_BYTES
+            && cached.face_index == face_index
+            && cached.source_bytes.as_slice() == data)
+            .then(|| cached.metadata.clone())
+    })
+}
+
+fn remember_source_variation_metadata(font: &FreeTypeFont, metadata: VariationMetadata) {
+    if font.engine.font_bytes.len() > MAX_CACHED_SOURCE_BYTES {
+        return;
+    }
+    CACHED_VARIATION_METADATA.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        *cache = Some(CachedVariationMetadata {
+            face_index: font.engine.source_face_index,
+            source_bytes: Rc::clone(&font.engine.font_bytes),
+            metadata,
+        });
+    });
+}
+
+fn build_variation_metadata(font: &FreeTypeFont) -> Result<VariationMetadata, PilError> {
+    if type1_mm_axes(font)?.is_some() {
+        return Ok(VariationMetadata::default());
+    }
     let (fvar, name_table) = variation_tables(font)?;
-    Ok(fvar
+    let axes = fvar
         .axes
         .iter()
         .map(|axis| ImageFontVariationAxis {
@@ -718,32 +793,18 @@ pub(crate) fn get_variation_axes(
                 .filter(|byte| *byte != 0)
                 .collect(),
         })
-        .collect())
-}
-
-pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
-    ensure_variation_names(font)?;
-    Ok(font
-        .engine
-        .variation_names
-        .borrow()
-        .as_ref()
-        .cloned()
-        .unwrap_or_default())
-}
-
-fn ensure_variation_names(font: &FreeTypeFont) -> Result<(), PilError> {
-    if font.engine.variation_names.borrow().is_some() {
-        return Ok(());
-    }
-    if let Some(names) = cached_source_variation_names(
-        font.engine.font_bytes.as_slice(),
-        font.engine.source_face_index,
-    ) {
-        *font.engine.variation_names.borrow_mut() = Some(names);
-        return Ok(());
-    }
-    let instance_names = variation_instance_names(font)?;
+        .collect();
+    let instance_names = fvar
+        .instances
+        .iter()
+        .map(|instance| {
+            name_bytes(&name_table, instance.subfamily_name_id)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|byte| *byte != 0)
+                .collect()
+        })
+        .collect::<Vec<Vec<u8>>>();
     let mut names = Vec::with_capacity(instance_names.len());
     for name in instance_names {
         // Pillow's ImageFont.get_variation_names() preserves first-seen order
@@ -752,34 +813,7 @@ fn ensure_variation_names(font: &FreeTypeFont) -> Result<(), PilError> {
             names.push(name);
         }
     }
-    *font.engine.variation_names.borrow_mut() = Some(names.clone());
-    remember_source_variation_names(font, names);
-    Ok(())
-}
-
-fn cached_source_variation_names(data: &[u8], face_index: ffi::FT_Long) -> Option<Vec<Vec<u8>>> {
-    CACHED_VARIATION_NAMES.with(|cache| {
-        let cache = cache.borrow();
-        let cached = cache.as_ref()?;
-        (data.len() <= MAX_CACHED_SOURCE_BYTES
-            && cached.face_index == face_index
-            && cached.source_bytes.as_slice() == data)
-            .then(|| cached.names.clone())
-    })
-}
-
-fn remember_source_variation_names(font: &FreeTypeFont, names: Vec<Vec<u8>>) {
-    if font.engine.font_bytes.len() > MAX_CACHED_SOURCE_BYTES {
-        return;
-    }
-    CACHED_VARIATION_NAMES.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        *cache = Some(CachedVariationNames {
-            face_index: font.engine.source_face_index,
-            source_bytes: Rc::clone(&font.engine.font_bytes),
-            names,
-        });
-    });
+    Ok(VariationMetadata { names, axes })
 }
 
 fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
@@ -801,10 +835,13 @@ fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilErro
 }
 
 pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Result<(), PilError> {
-    ensure_variation_names(font)?;
+    ensure_variation_metadata(font)?;
     let (index, selected_name) = {
-        let names = font.engine.variation_names.borrow();
-        let names = names.as_ref().map(Vec::as_slice).unwrap_or_default();
+        let metadata = font.engine.variation_metadata.borrow();
+        let names = metadata
+            .as_ref()
+            .map(|metadata| metadata.names.as_slice())
+            .unwrap_or_default();
         let Some(index) = names.iter().position(|candidate| candidate == name) else {
             return Err(PilError::ValueError(format!(
                 "b'{}' is not in list",
