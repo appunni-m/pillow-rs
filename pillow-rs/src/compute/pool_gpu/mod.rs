@@ -15,8 +15,8 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
 use crate::error::PilError;
 use crate::ops::pil_resize::{
-    FilterCoeffs, FilterCoeffsF64, filter_from_resample, luma16_resample_big_endian,
-    luma16_resample_read, luma16_resample_write, precompute_coeffs,
+    FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, filter_from_resample,
+    luma16_resample_big_endian, luma16_resample_read, luma16_resample_write, precompute_coeffs,
     precompute_coeffs_boxed_for_filter, precompute_coeffs_f64, round_up,
 };
 use crate::pipeline::{
@@ -5006,6 +5006,79 @@ fn gpu_fit_nearest_coefficients(
     }
 }
 
+/// Build the exact boxed coefficient pair consumed by the device resize
+/// passes. Boxed nearest uses Pillow's cumulative affine coordinate walk;
+/// filtered modes use the shared float32-boundary fixed-point table builder.
+fn gpu_resize_boxed_coefficients(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    bounds: (f64, f64, f64, f64),
+    filter: ResampleFilter,
+) -> (FilterCoeffs, FilterCoeffs) {
+    let (left, top, right, bottom) = (
+        f64::from(bounds.0 as f32),
+        f64::from(bounds.1 as f32),
+        f64::from(bounds.2 as f32),
+        f64::from(bounds.3 as f32),
+    );
+    if matches!(filter, ResampleFilter::Nearest) {
+        return (
+            gpu_fit_nearest_coefficients(output_dimensions.0, source_dimensions.0, left, right),
+            gpu_fit_nearest_coefficients(output_dimensions.1, source_dimensions.1, top, bottom),
+        );
+    }
+    (
+        precompute_coeffs_boxed_for_filter(
+            output_dimensions.0,
+            source_dimensions.0,
+            left,
+            right,
+            filter,
+        ),
+        precompute_coeffs_boxed_for_filter(
+            output_dimensions.1,
+            source_dimensions.1,
+            top,
+            bottom,
+            filter,
+        ),
+    )
+}
+
+fn gpu_resize_boxed_coefficients_are_safe(
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    bounds: (f64, f64, f64, f64),
+    filter: ResampleFilter,
+) -> bool {
+    if source_dimensions.0 == 0
+        || source_dimensions.1 == 0
+        || output_dimensions.0 == 0
+        || output_dimensions.1 == 0
+    {
+        return false;
+    }
+    let Some(source_pixels) = CheckedDims::new(source_dimensions.0, source_dimensions.1, 4)
+        .ok()
+        .map(|dims| dims.total_pixels())
+    else {
+        return false;
+    };
+    let Some(output_pixels) = CheckedDims::new(output_dimensions.0, output_dimensions.1, 4)
+        .ok()
+        .map(|dims| dims.total_pixels())
+    else {
+        return false;
+    };
+    if source_pixels > GPU_BUFFER_CAPACITY as usize || output_pixels > GPU_BUFFER_CAPACITY as usize
+    {
+        return false;
+    }
+    let (horizontal, vertical) =
+        gpu_resize_boxed_coefficients(source_dimensions, output_dimensions, bounds, filter);
+    resize_coeff_word_count(&horizontal).is_ok() && resize_coeff_word_count(&vertical).is_ok()
+}
+
 fn gpu_fit_coefficients_are_safe(
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
@@ -5062,6 +5135,9 @@ struct PreparedGpuBatch<'a> {
     resources: GpuBatchResources<'a>,
     input_dims: Vec<(u32, u32)>,
     output_dims: Vec<(u32, u32)>,
+    /// Source row range represented by a boxed resize's compact horizontal
+    /// intermediate. Other operations retain their complete input height.
+    resize_source_rows: Vec<Option<(u32, u32)>>,
     /// Contain dimensions used by a public Pad operation before its final
     /// placement pass.  The resize and placement remain in one command
     /// buffer, so this is planner metadata rather than a host-side image
@@ -5597,7 +5673,7 @@ impl GpuInner {
                     vertical,
                     place,
                 });
-            } else if matches!(op, PipelineOp::Fit { .. }) {
+            } else if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. }) {
                 let horizontal = self.resolve_pipeline(
                     "__internal_resize_h",
                     "resize_convolution_h.wgsl",
@@ -6255,10 +6331,10 @@ impl GpuInner {
             // Header + resize controls + placement controls. The final
             // output dimensions appended below are included separately.
             9
-        } else if matches!(op, PipelineOp::Fit { .. }) {
-            // Fit is lowered to the exact separable resize kernels. Its
-            // fractional crop is carried by the coefficient ranges, leaving
-            // the same four resize control words as a public Resize.
+        } else if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. }) {
+            // Fit and ResizeBoxed are lowered to the exact separable resize
+            // kernels. Their fractional bounds live in coefficient tables,
+            // leaving the same four resize control words as public Resize.
             4
         } else if let PipelineOp::Transform { method, .. } = op {
             // extract_params contributes ten public words; the executor then
@@ -6339,17 +6415,33 @@ impl GpuInner {
         }
 
         let resize_coefficients = match op {
-            PipelineOp::Resize { w, h, filter } => Some((*w, *h, *filter)),
+            PipelineOp::Resize { w, h, filter } => Some((*w, *h, *filter, None)),
+            PipelineOp::ResizeBoxed {
+                w,
+                h,
+                filter,
+                box_coords,
+            } => Some((*w, *h, *filter, Some(*box_coords))),
             PipelineOp::Pad { filter, .. } => {
                 gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)
-                    .map(|((resize_w, resize_h), _)| (resize_w, resize_h, *filter))
+                    .map(|((resize_w, resize_h), _)| (resize_w, resize_h, *filter, None))
             }
             _ => None,
         };
-        if let Some((resize_w, resize_h, filter)) = resize_coefficients {
+        if let Some((resize_w, resize_h, filter, box_coords)) = resize_coefficients {
             let (source_w, source_h) = source_dimensions;
-            let (horizontal_bytes, vertical_bytes) = if (f_resize_f64_is_exact
-                || f_resize_f64_ordered_is_exact)
+            let (horizontal_bytes, vertical_bytes) = if let Some(box_coords) = box_coords {
+                let (horizontal, vertical) = gpu_resize_boxed_coefficients(
+                    source_dimensions,
+                    (resize_w, resize_h),
+                    box_coords,
+                    filter,
+                );
+                (
+                    resize_coeff_word_count(&horizontal)?,
+                    resize_coeff_word_count(&vertical)?,
+                )
+            } else if (f_resize_f64_is_exact || f_resize_f64_ordered_is_exact)
                 && matches!(mode, 5 | 7 | 8)
                 && !matches!(filter, ResampleFilter::Nearest)
                 && matches!(op, PipelineOp::Resize { .. } | PipelineOp::Pad { .. })
@@ -6640,6 +6732,7 @@ impl GpuInner {
         let mut resize_coeff_ranges = Vec::with_capacity(ops.len());
         let mut input_dims = Vec::with_capacity(ops.len());
         let mut output_dims = Vec::with_capacity(ops.len());
+        let mut resize_source_rows = Vec::with_capacity(ops.len());
         let mut pad_resize_dims = Vec::with_capacity(ops.len());
         let mut cur_w = w;
         let mut cur_h = h;
@@ -6730,8 +6823,28 @@ impl GpuInner {
             };
             let (out_w, out_h) = op_output_dims(op, cur_w, cur_h).unwrap_or((cur_w, cur_h));
             self.validate_output_dims(buffers, out_w, out_h)?;
+            let mut boxed_resize_coefficients = None;
+            let resize_source_row_range =
+                if let PipelineOp::ResizeBoxed {
+                    filter, box_coords, ..
+                } = op
+                {
+                    let (horizontal, mut vertical) = gpu_resize_boxed_coefficients(
+                        (cur_w, cur_h),
+                        (out_w, out_h),
+                        *box_coords,
+                        *filter,
+                    );
+                    let range = compact_resize_coeffs_to_source_span(&mut vertical, cur_h)
+                        .unwrap_or((0, cur_h));
+                    boxed_resize_coefficients = Some((horizontal, vertical));
+                    Some(range)
+                } else {
+                    None
+                };
             input_dims.push((cur_w, cur_h));
             output_dims.push((out_w, out_h));
+            resize_source_rows.push(resize_source_row_range);
 
             // Transpose's swap variants and output-only generators describe
             // their dispatch dimensions in the first uniform words. Ordinary
@@ -6764,10 +6877,14 @@ impl GpuInner {
             } else {
                 current_mode
             };
-            let mut params = vec![shader_w, shader_h, op_mode, 0u32];
+            let source_row_base = resize_source_row_range.map_or(0, |(first, _)| first);
+            let mut params = vec![shader_w, shader_h, op_mode, source_row_base];
             if matches!(
                 op,
                 PipelineOp::Resize {
+                    filter: ResampleFilter::Nearest,
+                    ..
+                } | PipelineOp::ResizeBoxed {
                     filter: ResampleFilter::Nearest,
                     ..
                 }
@@ -6792,7 +6909,12 @@ impl GpuInner {
                     gpu_resize_channel_count(op_mode),
                     nearest_mode,
                 ]);
-            } else if let PipelineOp::Resize { filter, .. } = op {
+            } else if let Some(filter) = match op {
+                PipelineOp::Resize { filter, .. } | PipelineOp::ResizeBoxed { filter, .. } => {
+                    Some(filter)
+                }
+                _ => None,
+            } {
                 debug_assert!(!matches!(filter, ResampleFilter::Nearest));
                 // F-mode constant images are lowered by the mode-8 shader as
                 // an exact bit-pattern fill.  `channels` is unused by that
@@ -7157,6 +7279,21 @@ impl GpuInner {
                         }
                     }
                 }
+                PipelineOp::ResizeBoxed { .. } => {
+                    let (horizontal, vertical) =
+                        boxed_resize_coefficients.as_ref().ok_or_else(|| {
+                            PilError::InternalError(
+                                "GPU ResizeBoxed coefficients were not prepared".into(),
+                            )
+                        })?;
+                    Some(self.append_resize_coeff_ranges(
+                        &mut img2_arena,
+                        auxiliary_cache,
+                        horizontal,
+                        vertical,
+                        storage_alignment,
+                    )?)
+                }
                 PipelineOp::Pad { filter, .. } => {
                     let ((resize_w, resize_h), _) =
                         gpu_pad_geometry(op, cur_w, cur_h).ok_or_else(|| {
@@ -7475,6 +7612,7 @@ impl GpuInner {
             },
             input_dims,
             output_dims,
+            resize_source_rows,
             pad_resize_dims,
             final_dims: (cur_w, cur_h),
             resource_telemetry,
@@ -7556,6 +7694,10 @@ impl GpuInner {
         let resolved = self.resolve_batch_pipelines(ops, logical_mode, &prepared.input_dims)?;
         let mut current_is_a = start_is_a;
         for (index, pipeline) in resolved.iter().enumerate() {
+            let resize_input_dims = prepared.resize_source_rows[index]
+                .map_or(prepared.input_dims[index], |(_, rows)| {
+                    (prepared.input_dims[index].0, rows)
+                });
             if matches!(pipeline, ResolvedPipeline::Skip) {
                 continue;
             }
@@ -7574,6 +7716,7 @@ impl GpuInner {
                         ops.get(index),
                         Some(
                             PipelineOp::Resize { .. }
+                                | PipelineOp::ResizeBoxed { .. }
                                 | PipelineOp::Fit {
                                     filter: ResampleFilter::Nearest,
                                     ..
@@ -7581,9 +7724,15 @@ impl GpuInner {
                         )
                     )
                     || logical_mode == Some("I")
-                        && matches!(ops.get(index), Some(PipelineOp::Resize { .. }))
+                        && matches!(
+                            ops.get(index),
+                            Some(PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. })
+                        )
                     || matches!(logical_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
-                        && matches!(ops.get(index), Some(PipelineOp::Resize { .. })))
+                        && matches!(
+                            ops.get(index),
+                            Some(PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. })
+                        ))
             {
                 let ResolvedPipeline::Resize {
                     horizontal,
@@ -7611,7 +7760,7 @@ impl GpuInner {
                         index,
                         current_is_a,
                         &prepared.resources,
-                        prepared.input_dims[index],
+                        resize_input_dims,
                         prepared.output_dims[index],
                     )?;
                 }
@@ -7771,7 +7920,7 @@ impl GpuInner {
                     index,
                     current_is_a,
                     &prepared.resources,
-                    prepared.input_dims[index],
+                    resize_input_dims,
                     prepared.output_dims[index],
                 )?;
                 current_is_a = self.encode_dispatch(
@@ -10875,6 +11024,7 @@ fn gpu_fit_box(
 fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)> {
     match op {
         PipelineOp::Resize { w, h, .. } => Some((*w, *h)),
+        PipelineOp::ResizeBoxed { w, h, .. } => Some((*w, *h)),
         PipelineOp::Contain { .. } | PipelineOp::Cover { .. } => {
             gpu_contain_cover_output_dims(op, cur_w, cur_h)
         }
@@ -11090,6 +11240,7 @@ fn op_has_explicit_output_dimensions(op: &PipelineOp) -> bool {
     matches!(
         op,
         PipelineOp::Resize { .. }
+            | PipelineOp::ResizeBoxed { .. }
             | PipelineOp::Pad { .. }
             | PipelineOp::Crop { .. }
             | PipelineOp::Expand { .. }
@@ -12675,6 +12826,15 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
                 && *factor * 65536.0 >= 1.0
                 && *factor * 65536.0 <= MAX_GPU_SCALE_FIXED_POINT
         }
+        PipelineOp::ResizeBoxed {
+            w, h, box_coords, ..
+        } => {
+            *w > 0
+                && *h > 0
+                && [box_coords.0, box_coords.1, box_coords.2, box_coords.3]
+                    .into_iter()
+                    .all(finite_f32)
+        }
         PipelineOp::Contain { w, h, .. }
         | PipelineOp::Cover { w, h, .. }
         | PipelineOp::Pad { w, h, .. } => *w > 0 && *h > 0,
@@ -12758,7 +12918,10 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
 fn gpu_operation_requires_image_context(op: &PipelineOp) -> bool {
     matches!(
         op,
-        PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } | PipelineOp::Transform { .. }
+        PipelineOp::Filter3x3 { .. }
+            | PipelineOp::Filter5x5 { .. }
+            | PipelineOp::Transform { .. }
+            | PipelineOp::ResizeBoxed { .. }
     )
 }
 
@@ -14825,6 +14988,53 @@ fn gpu_geometry_host_control_reason(
     let rotate_needs_typed_control = gpu_rotate_requires_exact_host_control(image, mode);
     let mut dimensions = image.dimensions();
     for op in ops {
+        if let PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } = op
+        {
+            let bounds = (
+                f64::from(box_coords.0 as f32),
+                f64::from(box_coords.1 as f32),
+                f64::from(box_coords.2 as f32),
+                f64::from(box_coords.3 as f32),
+            );
+            if bounds.0 < 0.0
+                || bounds.1 < 0.0
+                || bounds.2 > f64::from(dimensions.0 as f32)
+                || bounds.3 > f64::from(dimensions.1 as f32)
+                || bounds.2 < bounds.0
+                || bounds.3 < bounds.1
+            {
+                return Some("ResizeBoxed float32 bounds are outside the source image");
+            }
+            if !gpu_resize_boxed_coefficients_are_safe(dimensions, (*w, *h), *box_coords, *filter) {
+                return Some("ResizeBoxed coefficient tables exceed the GPU contract");
+            }
+            if !matches!(filter, ResampleFilter::Nearest)
+                && u64::from(dimensions.1) > u64::from(dimensions.0) * 100
+                && *h < dimensions.1
+            {
+                return Some("ResizeBoxed requires Pillow vertical-first pass order");
+            }
+            if !matches!(filter, ResampleFilter::Nearest)
+                && matches!(mode, Some("F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"))
+            {
+                return Some("ResizeBoxed typed ordered arithmetic is not proven");
+            }
+            let raw_alpha_mode = matches!(mode, Some("CMYK" | "La" | "PA" | "RGBa" | "RGBX"));
+            if !matches!(filter, ResampleFilter::Nearest)
+                && !raw_alpha_mode
+                && matches!(
+                    image.color(),
+                    crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
+                )
+            {
+                return Some("ResizeBoxed straight-alpha pass dependency is not proven");
+            }
+        }
         if let PipelineOp::Fit { w, h, filter, .. } = op {
             // Fit's fractional crop is lowered to the boxed Resample.c
             // contract. The shared device convolution plan is not yet

@@ -487,6 +487,7 @@ fn pil_resize_luma16(
 const PRECISION_BITS: u32 = 22;
 const PRECISION: i64 = 1i64 << PRECISION_BITS; // 2^22
 const HALF_PRECISION: i64 = 1i64 << (PRECISION_BITS - 1); // 2^21
+const BOXED_ZERO_FAST_PATH_MAX_PIXELS: usize = 256 * 256;
 
 /// Round a float to u8, matching PIL's fixed-point rounding:
 ///   `(int)(v + 0.5)` clamped to [0, 255]
@@ -1036,6 +1037,45 @@ pub(crate) fn precompute_coeffs_boxed_for_filter(
     precompute_coeffs_boxed(out_size, in_size, box_start, box_end, kernel, support)
 }
 
+/// Rebase coefficient source rows to the smallest span that can contribute.
+///
+/// Boxed resizes often read only a fraction of the source's vertical extent.
+/// The horizontal pass is independent for each source row, so rows outside
+/// the vertical coefficient ranges can be omitted exactly. The returned
+/// `(first_row, row_count)` addresses the original source; `xmin` values are
+/// shifted to address an intermediate containing only that range. Invalid or
+/// empty tables are left untouched and return `None`.
+pub(crate) fn compact_resize_coeffs_to_source_span(
+    coeffs: &mut FilterCoeffs,
+    source_rows: u32,
+) -> Option<(u32, u32)> {
+    if coeffs.xmin.len() != coeffs.count.len() {
+        return None;
+    }
+    let mut first = i64::MAX;
+    let mut end = i64::MIN;
+    for (&xmin, &count) in coeffs.xmin.iter().zip(&coeffs.count) {
+        if count == 0 {
+            continue;
+        }
+        let row_end = xmin.checked_add(i64::try_from(count).ok()?)?;
+        if xmin < 0 || row_end > i64::from(source_rows) {
+            return None;
+        }
+        first = first.min(xmin);
+        end = end.max(row_end);
+    }
+    if first == i64::MAX || end <= first {
+        return None;
+    }
+    for (xmin, &count) in coeffs.xmin.iter_mut().zip(&coeffs.count) {
+        if count > 0 {
+            *xmin -= first;
+        }
+    }
+    Some((u32::try_from(first).ok()?, u32::try_from(end - first).ok()?))
+}
+
 /// Internal implementation with explicit scale, called by pil_resize (double scale).
 fn _precompute_coeffs_impl(
     out_size: u32,
@@ -1470,6 +1510,77 @@ fn horizontal_pass_rows_alpha(
             output_width,
             &mut intermediate[output_start..output_start + output_stride],
         );
+    }
+}
+
+/// Boxed-resize variant that runs the horizontal pass only for source rows
+/// referenced by the rebased vertical coefficient table.
+fn horizontal_pass_boxed_rows(
+    work_bytes: &[u8],
+    source_width: u32,
+    first_source_row: u32,
+    source_row_count: u32,
+    channels: usize,
+    coeffs: &FilterCoeffs,
+    output_width: u32,
+    intermediate: &mut [u8],
+    premultiplied_alpha: bool,
+) {
+    let source_stride = source_width as usize * channels;
+    let output_stride = output_width as usize * channels;
+    if source_row_count == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        intermediate,
+        output_stride,
+        source_row_count as usize,
+        |_row_start, _row_end, row_index, row| {
+            let source_y = first_source_row as usize + row_index as usize;
+            let source_start = source_y * source_stride;
+            let source_row = &work_bytes[source_start..source_start + source_stride];
+            if premultiplied_alpha {
+                horizontal_pass_row_alpha(
+                    source_row,
+                    channels,
+                    coeffs,
+                    output_width,
+                    &mut row[..output_stride],
+                );
+            } else {
+                horizontal_pass_row(
+                    source_row,
+                    source_width,
+                    channels,
+                    coeffs,
+                    output_width,
+                    &mut row[..output_stride],
+                );
+            }
+        }
+    );
+
+    #[cfg(not(feature = "parallel"))]
+    for row_index in 0..source_row_count as usize {
+        let source_y = first_source_row as usize + row_index;
+        let source_start = source_y * source_stride;
+        let output_start = row_index * output_stride;
+        let source_row = &work_bytes[source_start..source_start + source_stride];
+        let output_row = &mut intermediate[output_start..output_start + output_stride];
+        if premultiplied_alpha {
+            horizontal_pass_row_alpha(source_row, channels, coeffs, output_width, output_row);
+        } else {
+            horizontal_pass_row(
+                source_row,
+                source_width,
+                channels,
+                coeffs,
+                output_width,
+                output_row,
+            );
+        }
     }
 }
 
@@ -2232,6 +2343,36 @@ pub fn pil_resize_boxed(
         _ => 4usize,
     };
 
+    // A bounded all-zero byte source remains zero through every normalized
+    // Pillow resampling filter, including alpha premultiplication. Boxed
+    // resizes otherwise rebuild two coefficient tables and walk both passes
+    // even though every tap and destination sample is zero.
+    let native_byte_image = matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    );
+    let source_pixels = (sw as usize).checked_mul(sh as usize);
+    if native_byte_image
+        && source_pixels.is_some_and(|pixels| {
+            pixels != 0
+                && pixels <= BOXED_ZERO_FAST_PATH_MAX_PIXELS
+                && img.as_bytes().iter().all(|&value| value == 0)
+        })
+    {
+        if let Some(output_len) = (dst_w as usize)
+            .checked_mul(dst_h as usize)
+            .and_then(|pixels| pixels.checked_mul(channels))
+        {
+            return pil_preserve_mode(
+                orig_img,
+                raw_to_dynamic_owned(vec![0; output_len], dst_w, dst_h, channels),
+            );
+        }
+    }
+
     // Pillow's boxed nearest path is an affine sample, not a one-tap box
     // convolution. The convolution-style coefficient builder can include
     // adjacent samples at a boundary and produce a value that Pillow never
@@ -2288,7 +2429,7 @@ pub fn pil_resize_boxed(
 
     // Use box-parameter coefficients for both passes
     let h_coeffs = precompute_coeffs_boxed(dst_w, sw, box_left, box_right, kernel_fn, support);
-    let v_coeffs = precompute_coeffs_boxed(dst_h, sh, box_top, box_bottom, kernel_fn, support);
+    let mut v_coeffs = precompute_coeffs_boxed(dst_h, sh, box_top, box_bottom, kernel_fn, support);
 
     // Resample.c skips a pass when that axis already has the requested size
     // and covers the complete source extent. A boxed one-axis crop therefore
@@ -2297,14 +2438,26 @@ pub fn pil_resize_boxed(
     let need_horizontal = dst_w != sw || box_left_f32 != 0.0 || box_right_f32 != dst_w as f32;
     let need_vertical = dst_h != sh || box_top_f32 != 0.0 || box_bottom_f32 != dst_h as f32;
 
-    // Allocate intermediate image (sh rows × dw columns × channels)
-    let mut intermediate = vec![0u8; (sh * dst_w) as usize * channels];
+    // The horizontal pass is independent per source row. Avoid processing
+    // vertical rows that the rebased output table cannot read, which is a
+    // substantial win when a small fractional box is enlarged.
+    let (first_source_row, intermediate_rows) = if need_vertical {
+        compact_resize_coeffs_to_source_span(&mut v_coeffs, sh).unwrap_or((0, sh))
+    } else {
+        (0, sh)
+    };
+
+    // Allocate only rows referenced by the vertical table.
+    let mut intermediate = vec![0u8; (intermediate_rows * dst_w) as usize * channels];
 
     // Horizontal pass: each source row writes one independent intermediate row.
     if !need_horizontal {
+        let source_stride = sw as usize * channels;
+        let source_start = first_source_row as usize * source_stride;
+        let source_end = source_start + intermediate.len();
+        let source_rows = &img.as_bytes()[source_start..source_end];
         if needs_alpha {
-            let source = img.as_bytes();
-            for (source_pixel, intermediate_pixel) in source
+            for (source_pixel, intermediate_pixel) in source_rows
                 .chunks_exact(channels)
                 .zip(intermediate.chunks_exact_mut(channels))
             {
@@ -2318,27 +2471,19 @@ pub fn pil_resize_boxed(
                 }
             }
         } else {
-            intermediate.copy_from_slice(img.as_bytes());
+            intermediate.copy_from_slice(source_rows);
         }
-    } else if needs_alpha {
-        horizontal_pass_rows_alpha(
-            img.as_bytes(),
-            sw,
-            sh,
-            channels,
-            &h_coeffs,
-            dst_w,
-            &mut intermediate,
-        );
     } else {
-        horizontal_pass_rows(
+        horizontal_pass_boxed_rows(
             img.as_bytes(),
             sw,
-            sh,
+            first_source_row,
+            intermediate_rows,
             channels,
             &h_coeffs,
             dst_w,
             &mut intermediate,
+            needs_alpha,
         );
     }
 
@@ -2368,7 +2513,7 @@ pub fn pil_resize_boxed(
     } else if needs_alpha {
         vertical_pass_rows_alpha(
             &intermediate,
-            sh,
+            intermediate_rows,
             dst_w,
             dst_h,
             channels,
@@ -2378,7 +2523,7 @@ pub fn pil_resize_boxed(
     } else {
         vertical_pass_rows(
             &intermediate,
-            sh,
+            intermediate_rows,
             dst_w,
             dst_h,
             channels,
