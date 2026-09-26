@@ -1975,9 +1975,23 @@ impl PyImage {
             Some(value) => value,
             None => putpixel_value_from_python(value, &mode)?,
         };
-        self.inner
-            .putpixel_value(x as u32, y as u32, value)
-            .map_err(map_error)
+        let result = if mode == "RGB" {
+            match value {
+                pillow_rs::PutPixelValue::Integer(value) => {
+                    // The mode was already resolved above for Python value
+                    // parsing. RGB integer inks are stored as the low three
+                    // bytes, so send that normalized pixel directly instead
+                    // of resolving the same mode again in putpixel_value.
+                    let bytes = value.to_le_bytes();
+                    self.inner
+                        .putpixel(x as u32, y as u32, bytes[0], bytes[1], bytes[2], bytes[3])
+                }
+                value => self.inner.putpixel_value(x as u32, y as u32, value),
+            }
+        } else {
+            self.inner.putpixel_value(x as u32, y as u32, value)
+        };
+        result.map_err(map_error)
     }
 
     #[getter]

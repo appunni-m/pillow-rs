@@ -39,6 +39,7 @@ try:
     from run_migration_parity import (
         ENCODED_INPUTS,
         FIXTURE_ROOT,
+        FROMBYTES_RGB_THROUGHPUT_DATA,
         build_operation_index,
         compare_case,
         classify_pipeline_case,
@@ -54,6 +55,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
     from scripts.run_migration_parity import (
         ENCODED_INPUTS,
         FIXTURE_ROOT,
+        FROMBYTES_RGB_THROUGHPUT_DATA,
         build_operation_index,
         compare_case,
         classify_pipeline_case,
@@ -416,6 +418,26 @@ def js_asset_payload(
                     add(asset_id, {"kind": "callable", "name": name})
                 elif name in {"font-byte-stream", "in-memory-byte-stream"}:
                     add(asset_id, {"kind": "bytes", "data_base64": ""})
+                elif name == "frombytes-rgb-bytearray":
+                    add(
+                        asset_id,
+                        {
+                            "kind": "bytes",
+                            "data_base64": base64.b64encode(b"\x10\x20\x30").decode(
+                                "ascii"
+                            ),
+                        },
+                    )
+                elif name == "frombytes-rgb-throughput-bytearray":
+                    add(
+                        asset_id,
+                        {
+                            "kind": "bytes",
+                            "data_base64": base64.b64encode(
+                                FROMBYTES_RGB_THROUGHPUT_DATA
+                            ).decode("ascii"),
+                        },
+                    )
                 elif name in {
                     "temporary-output-path",
                     "temporary-output-no-extension-path",

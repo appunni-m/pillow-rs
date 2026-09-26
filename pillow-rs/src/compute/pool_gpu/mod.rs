@@ -15513,6 +15513,19 @@ impl GpuPool {
         // transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                // LAB shares RGB8 storage. The core has already encoded its
+                // public signed A/B samples into the stored +128 byte domain,
+                // so the raw three-channel PutPixel shader is exact here.
+                || (logical_mode == "LAB"
+                    && ops.iter().all(|op| {
+                        matches!(
+                            op,
+                            PipelineOp::PutPixel {
+                                palette_index: false,
+                                ..
+                            }
+                        )
+                    }))
                 || (cfg!(target_endian = "little")
                     && matches!(ops, [PipelineOp::Multiply { .. }])
                     && gpu_native_multiply_channels(img, mode).is_some())

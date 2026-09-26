@@ -6,6 +6,7 @@ use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
 pub(crate) struct ContrastBase {
+    #[cfg(feature = "gpu")]
     pub(crate) mean: u8,
     pub(crate) channels: usize,
     pub(crate) values: [u8; 4],
@@ -75,6 +76,7 @@ pub(crate) fn contrast_base(img: &DynamicImage, mode: Option<&str>) -> Option<Co
         (sum as f64 / count as f64 + 0.5) as u8
     };
     Some(ContrastBase {
+        #[cfg(feature = "gpu")]
         mean,
         channels,
         alpha,

@@ -9,6 +9,7 @@
 
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, RgbImage};
+#[cfg(feature = "gpu")]
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -16,6 +17,7 @@ const GRID: usize = 33;
 const CHANNELS: usize = 3;
 const LUT_VALUES: usize = GRID * GRID * GRID * CHANNELS;
 const LUT_BYTES: usize = LUT_VALUES * 2;
+#[cfg(feature = "gpu")]
 pub(crate) const GPU_TABLE_WORDS: usize = GRID * GRID * GRID * 2;
 const LAB_PROFILE_TEMPLATE: &[u8; 572] = include_bytes!("data/lab-identity-profile.icc");
 
@@ -98,6 +100,7 @@ pub(crate) fn pillow_lab_icc_profile() -> Vec<u8> {
 /// The first word stores L in its low half and A in its high half; the second
 /// stores B in its low half. This reduces the device table from three storage
 /// reads to two per vertex while preserving the exact 16-bit samples.
+#[cfg(feature = "gpu")]
 pub(crate) fn gpu_table_words() -> &'static [u32] {
     static WORDS: OnceLock<Box<[u32]>> = OnceLock::new();
     WORDS.get_or_init(|| {
@@ -116,6 +119,7 @@ pub(crate) fn gpu_table_words() -> &'static [u32] {
 
 /// Synthetic RGBA storage view used only to satisfy GPU auxiliary layout and
 /// shape preflight. The GPU planner uploads the cached packed words directly.
+#[cfg(feature = "gpu")]
 pub(crate) fn gpu_table_image() -> Arc<DynamicImage> {
     static IMAGE: OnceLock<Arc<DynamicImage>> = OnceLock::new();
     Arc::clone(IMAGE.get_or_init(|| {

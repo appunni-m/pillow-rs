@@ -439,6 +439,17 @@ fn native_draw_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     }
 }
 
+/// `Image.putpixel` stores the already-normalized LAB sample triplet directly
+/// into the shared RGB8 raster. Keep this support specific to PutPixel so the
+/// broader drawing adapters do not accidentally inherit color-space semantics.
+fn native_putpixel_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    if matches!((img, mode), (DynamicImage::ImageRgb8(_), Some("LAB"))) {
+        Some(3)
+    } else {
+        native_draw_layout(img, mode)
+    }
+}
+
 /// Return a native interleaved byte layout for operations whose data plane is
 /// memory movement rather than color arithmetic. Indexed and color-space
 /// tags are included here because their stored samples are still raw bytes;
@@ -4763,7 +4774,7 @@ pub(crate) fn simd_supports_for_image(
             y,
             palette_index: _,
             ..
-        } => native_draw_layout(img, mode)
+        } => native_putpixel_layout(img, mode)
             .is_some_and(|channels| *x < img.width() && *y < img.height() && channels != 0),
         PipelineOp::DrawRectangle {
             x0,
@@ -5058,6 +5069,14 @@ fn shape_draw_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usiz
         }
         SimdLayout::Luma16 => None,
         _ => None,
+    }
+}
+
+fn shape_putpixel_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
+    if matches!((shape.layout, mode), (SimdLayout::Rgb8, Some("LAB"))) {
+        Some(3)
+    } else {
+        shape_draw_channels(shape, mode)
     }
 }
 
@@ -6298,7 +6317,7 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             y,
             palette_index: _,
             ..
-        } => shape_draw_channels(shape, mode)
+        } => shape_putpixel_channels(shape, mode)
             .is_some_and(|channels| *x < shape.width && *y < shape.height && channels != 0),
         PipelineOp::DrawRectangle {
             x0,
@@ -23765,7 +23784,7 @@ pub fn simd_put_pixel(
     let PipelineOp::PutPixel { x, y, color, .. } = op else {
         return Err(PilError::ValueError("expected PutPixel op".into()));
     };
-    let Some(channels) = native_draw_layout(img, mode) else {
+    let Some(channels) = native_putpixel_layout(img, mode) else {
         return Err(simd_unsupported("PutPixel"));
     };
     simd_put_pixel_native(img, *x, *y, *color, channels)?
