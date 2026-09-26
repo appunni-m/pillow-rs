@@ -442,7 +442,11 @@ class TransposedFont:
         """
         self.font = font
         self.orientation = orientation
-        self._orientation_name = _core.transposed_font_orientation(orientation)
+        self._orientation_name = (
+            None
+            if orientation is None
+            else _core.transposed_font_orientation(orientation)
+        )
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
