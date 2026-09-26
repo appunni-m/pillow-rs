@@ -8,6 +8,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
+use std::sync::{Arc, OnceLock};
 
 const GLYPH_COUNT: usize = 256;
 const GLYPH_RECORD_LEN: usize = 20;
@@ -15,7 +16,16 @@ const METRICS_LEN: usize = GLYPH_COUNT * GLYPH_RECORD_LEN;
 const MAX_STRING_LENGTH: usize = 1_000_000;
 
 const DEFAULT_METRICS: &[u8] = include_bytes!("courb08.pil");
+#[cfg(test)]
 const DEFAULT_BITMAP: &[u8] = include_bytes!("courb08.png");
+// Decoded from DEFAULT_BITMAP with the crate's PNG path. Its 15,960 bytes have
+// SHA-256 ff78f1b6d98ed40932e795d3786d0154fb1c2b874c191e3c662676c615846742;
+// the pilfont unit test checks it against the source PNG. This keeps the first
+// default-font call off the general PNG/DEFLATE decoder.
+const DEFAULT_BITMAP_LUMA: &[u8; 15_960] = include_bytes!("courb08.luma");
+const DEFAULT_BITMAP_WIDTH: u32 = 798;
+const DEFAULT_BITMAP_HEIGHT: u32 = 20;
+static DEFAULT_PILFONT: OnceLock<Result<PilFont, PilError>> = OnceLock::new();
 
 /// Native storage mode of a PILfont glyph image and its rendered masks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,13 +102,13 @@ struct Glyph {
 /// Parsed PILfont metrics and glyph bitmap.
 #[derive(Debug, Clone)]
 pub struct PilFont {
-    glyphs: [Glyph; GLYPH_COUNT],
-    bitmap: Vec<u8>,
+    glyphs: Arc<[Glyph; GLYPH_COUNT]>,
+    bitmap: Arc<[u8]>,
     bitmap_width: u32,
     ysize: i32,
     baseline: i32,
     mode: PilFontMode,
-    info: Vec<Vec<u8>>,
+    info: Arc<[Vec<u8>]>,
     render_error: Option<PilError>,
 }
 
@@ -207,6 +217,24 @@ impl PilFont {
                 (mode, width, height, dims.alloc_buffer(), Some(error))
             }
         };
+        Self::from_pilfont_parts(
+            data,
+            mode,
+            bitmap_width,
+            bitmap_height,
+            bitmap,
+            render_error,
+        )
+    }
+
+    fn from_pilfont_parts(
+        data: &[u8],
+        mode: PilFontMode,
+        bitmap_width: u32,
+        bitmap_height: u32,
+        bitmap: Vec<u8>,
+        render_error: Option<PilError>,
+    ) -> Result<Self, PilError> {
         let (info, metrics) = parse_metrics_file(data)?;
 
         let bitmap_width_i32 = i32::try_from(bitmap_width)
@@ -258,13 +286,13 @@ impl PilFont {
         }
 
         Ok(Self {
-            glyphs,
-            bitmap,
+            glyphs: Arc::new(glyphs),
+            bitmap: bitmap.into(),
             bitmap_width,
             ysize: y1 - y0,
             baseline: -y0,
             mode,
-            info,
+            info: info.into(),
             render_error,
         })
     }
@@ -297,10 +325,18 @@ impl PilFont {
     /// - PNG bytes: 1,273; SHA-256
     ///   `afdc82adb778486c71c5cc9c6f88623b3c7e5044e80ff7b32d973663eff31ed0`
     pub fn load_default() -> Result<Self, PilError> {
-        Self::from_pilfont_glyph_data(
-            DEFAULT_METRICS,
-            Self::open_pilfont_glyph_image(DEFAULT_BITMAP.to_vec())?,
-        )
+        DEFAULT_PILFONT
+            .get_or_init(|| {
+                Self::from_pilfont_parts(
+                    DEFAULT_METRICS,
+                    PilFontMode::One,
+                    DEFAULT_BITMAP_WIDTH,
+                    DEFAULT_BITMAP_HEIGHT,
+                    DEFAULT_BITMAP_LUMA.to_vec(),
+                    None,
+                )
+            })
+            .clone()
     }
 
     /// Returns the metadata lines between the PILfont descriptor and `DATA`.
@@ -584,6 +620,33 @@ struct PbmTokens<'a> {
 struct PbmRaster<'a> {
     bytes: &'a [u8],
     had_crlf_separator: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        DEFAULT_BITMAP, DEFAULT_BITMAP_HEIGHT, DEFAULT_BITMAP_LUMA, DEFAULT_BITMAP_WIDTH, PilFont,
+        PilFontGlyphImage,
+    };
+
+    #[test]
+    fn default_bitmap_matches_embedded_png_decode() -> Result<(), crate::error::PilError> {
+        let glyph_image = PilFont::open_pilfont_glyph_image(DEFAULT_BITMAP.to_vec())?;
+        let image = match glyph_image {
+            PilFontGlyphImage::Image(image) => image,
+            PilFontGlyphImage::DeferredRenderError { .. } => {
+                panic!("the embedded default bitmap must decode successfully")
+            }
+        };
+        let decoded = image.materialize()?.to_luma8();
+
+        assert_eq!(
+            decoded.dimensions(),
+            (DEFAULT_BITMAP_WIDTH, DEFAULT_BITMAP_HEIGHT)
+        );
+        assert_eq!(decoded.as_raw().as_slice(), DEFAULT_BITMAP_LUMA);
+        Ok(())
+    }
 }
 
 impl<'a> PbmTokens<'a> {

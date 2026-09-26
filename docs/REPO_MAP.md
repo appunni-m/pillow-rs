@@ -192,6 +192,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   `-- mod.rs
 |   |   |-- error.rs
 |   |   |-- font/
+|   |   |   |-- courb08.luma
 |   |   |   |-- courb08.pil
 |   |   |   |-- default_aileron.LICENSE.txt
 |   |   |   |-- default_aileron.rs

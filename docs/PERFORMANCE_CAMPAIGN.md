@@ -5580,3 +5580,74 @@ Overlay measurements. The runner now composes the filters, and a regression
 test checks single-workload selection and rejects a non-pipeline ID under the
 pipeline filter. The corrected command selects exactly one workload. No
 coverage collection ran.
+
+## ImageFont.load_default checkpoint — 2026-09-27
+
+The refreshed single-workload receipt
+`perf-load-default-attempt0-20260927.json` passes its exact-output gate; its
+parity sidecar records one passing comparison. The warm default-font workflow
+measured 28.750 µs for Pillow and 7.250 µs for CPU, so CPU latency is about 4×
+lower on this case. This replaces the stale 2026-09-24 ranking observation,
+which reported 0.773 ms for the target and did not prove requested-backend
+execution. The current implementation opens the embedded 12,676-byte Aileron
+font through the ordinary font path, which already has an exact-byte cached
+source face. No profile attributes the remaining call cost, and this one warm
+case does not justify another cache or a change to font construction.
+
+The SIMD and GPU profiles report `actual_backend: null`: loading a font is
+host-side object construction, not an image kernel. Their profile times do not
+demonstrate SIMD or GPU performance. Keep those accelerator goals inapplicable
+for this operation; CPU parity and latency pass for the default case. The
+non-default size parameter remains a separate parity case, not a timed
+workload. No runtime change was made; continue to the next uncheckpointed
+operation using refreshed, single-workload evidence. No coverage collection
+ran.
+
+## PIL.ImageFont.load_default_imagefont checkpoint — 2026-09-27
+
+The warm baseline measured 425.708 µs for pillow-rs versus 31.000 µs for
+Pillow. Native samples placed roughly half of the hot stacks in the ordinary
+glyph-image materialization and PNG/DEFLATE path; every call decoded the same
+embedded `courb08.png`, then parsed and copied its fixed glyph data. The first
+change put a parsed default `PilFont` in `OnceLock` and made its immutable glyph
+table, bitmap, and info shareable through `Arc`. That cut the warm call to
+1.459 µs, but a fresh target process still paid 482.375 µs for its first PNG
+decode. A warm-only benchmark would have hidden this cost.
+
+The next change stores the exact 798 × 20 decoded luma pixels in
+`pillow-rs/src/font/courb08.luma` and initializes the parsed default font
+directly from them. The 15,960-byte asset was produced with pillow-rs's own
+PNG path. A focused Rust test decodes the checked-in PNG through that normal
+path and requires its mode, dimensions, and every luma byte to match the
+embedded asset; its SHA-256 is
+`ff78f1b6d98ed40932e795d3786d0154fb1c2b874c191e3c662676c615846742`. This keeps
+the production first call off the general decoder without using Pillow as a
+runtime dependency or weakening behavior checks.
+
+Two correctness-gated warm runs measured CPU at 1.458 and 1.500 µs, while
+Pillow measured 31.250 and 31.688 µs. That is about 21× lower CPU latency, with
+666,667–685,871 calls/second versus 31,558–32,000 for Pillow. Fresh-process
+first-call diagnostics measured 15.6–16.9 µs for pillow-rs and 10.187 ms for
+Pillow. The public parity case confirms construction, the decoded-asset test
+confirms the actual source pixels, and a live render probe matched Pillow's
+bounds, advance, mode, dimensions, and all 792 mask pixels. The workload's
+SIMD and GPU receipts have `actual_backend: null`: this function constructs a
+host font object and dispatches no image kernel, so accelerator latency is not
+proven or applicable here.
+
+The warm receipts are `perf-load-default-imagefont-attempt2-20260927.json` and
+`perf-load-default-imagefont-attempt2-repeat-20260927.json`, with exact-parity
+sidecars. The isolated cold-call receipts are
+`perf-load-default-imagefont-cold-attempt2-target.json` and
+`perf-load-default-imagefont-cold-attempt2-source.json`; the asset regression
+is `default_bitmap_matches_embedded_png_decode`.
+
+Reusable optimization finding: when profiles show repeated decoding of a
+small immutable built-in asset, cache parsed state first and share only
+immutable storage; then measure a fresh-process call separately. If first-call
+decoding remains material, a predecoded static asset can remove it, provided a
+test derives the bytes through the canonical decoder and checks the full
+content. Keep both cold and warm receipts, and do not interpret unavailable
+backend telemetry as SIMD/GPU execution. This operation's CPU latency target
+is met; the next operation should come from a refreshed single-workload
+ranking. No coverage collection ran.
