@@ -3198,8 +3198,7 @@ impl PyPilFont {
         let _ = mode;
         let image = self
             .inner
-            .getmask_input(pilfont_text_input_from_python(text)?)
-            .and_then(|mask| mask.to_image())
+            .getmask_image_input(pilfont_text_input_from_python(text)?)
             .map_err(map_error)?;
         Ok(PyImage { inner: image })
     }

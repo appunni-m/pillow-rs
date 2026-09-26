@@ -46398,6 +46398,12 @@ def build_inputs(
             isolated_freetype_getmask = (
                 workload_id == "pil-imagefont-freetypefont.getmask.standard"
             )
+            # The legacy bitmap font has its own load workload. Measure its
+            # getmask call after setup so PNG and metrics parsing do not hide
+            # the mask-rendering cost.
+            isolated_pilfont_getmask = (
+                workload_id == "pil-imagefont-imagefont.getmask.standard"
+            )
             # Measure the variation-name getter after opening its variable
             # font so setup and metadata prewarming do not dominate the call.
             isolated_freetype_get_variation_names = (
@@ -46457,6 +46463,7 @@ def build_inputs(
                             or isolated_freetype_getlength
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
+                            or isolated_pilfont_getmask
                             or isolated_freetype_getmask2
                             or isolated_freetype_get_variation_names
                             or isolated_freetype_get_variation_axes
@@ -46476,6 +46483,7 @@ def build_inputs(
                             or isolated_freetype_getlength
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
+                            or isolated_pilfont_getmask
                             or isolated_freetype_getmask2
                             or isolated_freetype_get_variation_names
                             or isolated_freetype_get_variation_axes
