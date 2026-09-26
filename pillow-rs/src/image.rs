@@ -1582,11 +1582,15 @@ impl Image {
                 height,
                 crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             )),
-            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgb([color.0, color.1, color.2]),
-            )),
+            // These logical modes keep Pillow's public tag over the native
+            // three-byte RGB raster storage, including LAB's raw band values.
+            "YCbCr" | "HSV" | "LAB" => {
+                DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
+                    width,
+                    height,
+                    crate::raster::Rgb([color.0, color.1, color.2]),
+                ))
+            }
             // I and F modes store all four resolved int32/float32 LE bytes.
             "I" | "F" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
@@ -1600,6 +1604,7 @@ impl Image {
             mode,
             "CMYK"
                 | "YCbCr"
+                | "LAB"
                 | "HSV"
                 | "I"
                 | "F"

@@ -802,6 +802,11 @@ def lock_target_image_pipeline(value: Any) -> Any:
 def lock_target_workflow_value(value: Any) -> None:
     """Lock target images nested in public workflow argument containers."""
 
+    # Exact built-in scalars cannot carry an image pipeline. Strict backend
+    # checks should not probe their attributes on every timed constructor or
+    # operation call.
+    if type(value) in (bool, int, float, complex, str, bytes, bytearray, type(None)):
+        return
     if isinstance(value, (list, tuple)):
         for item in value:
             lock_target_workflow_value(item)
