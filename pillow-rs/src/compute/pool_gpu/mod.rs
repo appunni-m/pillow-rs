@@ -5588,6 +5588,22 @@ impl GpuInner {
             }
 
             let op = &ops[index];
+            // MedianFilter's default 3x3 window is common enough to deserve a
+            // dedicated shader. The general insertion-sort shader reserves
+            // four 225-value channel arrays per invocation even though this
+            // path needs only nine packed samples.
+            if matches!(op, PipelineOp::MedianFilter { size: 3 })
+                && !matches!(logical_mode, Some("F" | "I"))
+            {
+                let median = self.resolve_pipeline(
+                    "__internal_median_filter_3x3",
+                    "median_filter_3x3.wgsl",
+                    include_str!("shaders/median_filter_3x3.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(median));
+                index += 1;
+                continue;
+            }
             if matches!(
                 op,
                 PipelineOp::Autocontrast { .. }

@@ -4873,3 +4873,73 @@ to integers and the JS method called the core API that discarded
 handling. The focused all-mode LAB cohort passes 28/28 on Python CPU, Node
 WASM, and browser WASM. The full 837-case `Image.resize` cohort also passes on
 Node and browser WASM after the binding fix. No coverage ran.
+
+## MedianFilter 3 × 3 checkpoint — 2026-09-26
+
+Three bounded attempts optimized `PIL.Image.Image.filter` with
+`MedianFilter(3)`. CPU strict parity passes all 756 Filter workflows; the
+dedicated GPU shader passes all 13 selected size-3 median workflows across
+byte modes and the F-mode control. No expected output or comparison rule was
+changed.
+
+The first CPU change recognizes uniform native-byte images for every rank, not
+only min/max, and returns a clone before allocating the output. Every rank of a
+uniform image is the same image, so the bounded byte scan removes the window
+gather and order-statistic selection entirely while preserving mode. On the
+maintained zero-filled 16 × 16 workload, whole-workflow CPU median fell from
+141.73 to 16.62 µs (8.53×); the 32 × 32 sample fell from 80.77 to 19.85 µs
+(4.07×). These official inputs are constant images and overstate the benefit
+for ordinary content.
+
+The second CPU change specializes size 3 for native byte layouts. Each output
+channel gathers exactly nine clamped samples into a nine-byte stack array and
+selects the requested rank, rather than initializing the general 7 × 7
+scratch array. This preserves replicated-edge semantics. In a separate
+patterned-input diagnostic, CPU medians changed from 46.02 to 51.50 µs at
+16 × 16, 48.92 to 41.83 µs at 32 × 32, 1,036.69 to 439.38 µs at 256 × 256,
+and 7,334.13 to 6,371.25 µs at 1,024 × 768. The 16 × 16 result regressed and
+remains slower than Pillow; at 32 × 32 CPU also remains slower than Pillow.
+SIMD's patterned-input measurements were 34.62, 38.96, 466.25, and 4,760.58 µs
+for those sizes. SIMD still misses the 5× target at small and medium sizes.
+
+The third change routes non-F/I size-3 GPU median operations to a compact
+shader. The old general shader reserves four 225-sample channel arrays per
+invocation and insertion-sorts them; the new shader sorts nine packed samples
+with a fixed compare-exchange network. The first shader draft used WGSL's
+reserved identifier `pass`; renaming it to `phase` fixed shader validation,
+with no behavior or parity relaxation. On the same patterned diagnostic, GPU
+latency fell from 982.42 to 176.88 µs at 16 × 16, 1,467.69 to 180.58 µs at
+32 × 32, 4,923.31 to 422.90 µs at 256 × 256, and 31,647.17 to 2,411.42 µs at
+1,024 × 768 (5.6×–13.1× faster). The 16 × 16 and 32 × 32 GPU paths are still
+launch-bound; at 256 × 256 GPU is approximately level with SIMD, and at
+1,024 × 768 it is about 2.0× faster than SIMD in this diagnostic. The
+maintained whole-workflow row reports about 1.6×, but uses a constant input.
+
+The unchanged-policy whole-workflow receipt
+`build/migration-parity/perf-filter-median-3x3-optimized-20260926.json` records
+the following medians in microseconds, compared with
+`build/migration-parity/perf-filter-20260926.json`:
+
+| Workload | Pillow baseline → current | CPU baseline → current | SIMD baseline → current | GPU baseline → current |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 1 × 1 | 16.40 → 19.81 | 13.77 → 16.25 | 13.90 → 17.62 | 299.44 → 632.19 |
+| RGB 32 × 32 | 67.23 → 67.60 | 80.77 → 19.85 | 18.38 → 19.29 | 403.81 → 322.25 |
+| RGB 256 × 256 | 3,370.94 → 3,163.21 | 320.96 → 216.62 | 457.48 → 518.94 | 3,562.69 → 527.56 |
+| RGB 1,024 × 768 | 36,733 → 39,671 | 2,882 → 1,926 | 4,119 → 5,342 | 21,960 → 3,348 |
+| MedianFilter materialized 16 × 16 | 27.60 → 30.58 | 141.73 → 16.62 | 14.71 → 16.08 | 530.92 → 282.54 |
+
+The official filter generator uses constant-zero images, so the first four rows
+do not measure median-selection throughput on varied pixels. The direct
+patterned diagnostics are separate and do not include the official workflow's
+instrumentation or establish sustained request throughput. Rerun variance also
+affects the unrelated 1 × 1 row; do not interpret that row as a filter-kernel
+change.
+
+Checkpoint blockers: patterned 16 × 16 CPU is slower than Pillow; SIMD remains
+below 5× Pillow for small and medium
+inputs; GPU loses to SIMD for small inputs and is only approximately tied at
+256 × 256. Add representative patterned benchmark inputs before using the
+official cohort to rank this operation. The next revisit should first attribute
+small-call fixed costs, then test a selection network or specialized 3×3
+median kernel and measure the GPU transfer/dispatch crossover. This operation
+is checkpointed, not complete. No coverage ran.
