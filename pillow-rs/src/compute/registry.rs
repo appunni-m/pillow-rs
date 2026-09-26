@@ -506,8 +506,10 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // The bundled LCMS CLUT is uploaded as a read-only auxiliary buffer;
         // the shader reproduces its fixed-point tetrahedral interpolation.
         PipelineOp::ConvertLab { .. } => true,
-        // The ordinary shader has no floating source-box parameters.
-        PipelineOp::ResizeBoxed { .. } => false,
+        // ResizeBoxed is lowered to the exact separable resize shaders after
+        // its float32 bounds have been converted into host-built coefficient
+        // tables; the device never approximates the source box.
+        PipelineOp::ResizeBoxed { .. } => true,
         // NEAREST is a single-dispatch relocation. The other filters expand
         // into the pool's exact horizontal/vertical fixed-point kernels; the
         // registry entry remains the public operation marker while the pool
@@ -744,6 +746,7 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
         PipelineOp::Invert
             | PipelineOp::InvertChops
             | PipelineOp::Resize { .. }
+            | PipelineOp::ResizeBoxed { .. }
             | PipelineOp::Scale { .. }
             | PipelineOp::Thumbnail { .. }
             | PipelineOp::Contain { .. }
@@ -1115,7 +1118,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── Resize: dst_w, dst_h ──
         PipelineOp::Resize { w, h, .. } => vec![*w, *h],
-        PipelineOp::ResizeBoxed { .. } => vec![],
+        PipelineOp::ResizeBoxed { w, h, .. } => vec![*w, *h],
 
         // ── Transpose: op_code ──
         PipelineOp::Transpose { method } => {

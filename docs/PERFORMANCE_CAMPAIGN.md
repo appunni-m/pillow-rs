@@ -4585,3 +4585,70 @@ operation visit is `ResizeBoxed`: first reuse the existing boxed SIMD
 coefficient/data-plane code used by `Fit` and `Thumbnail`, then prove exact
 outputs before extending mode coverage. The smoke artifact is
 `build/migration-parity/perf-new-pipeline-ops-20260926.json`.
+
+## ResizeBoxed checkpoint — 2026-09-26
+
+Four bounded attempts retained the SIMD boxed-resize route, a bounded all-zero
+CPU/SIMD shortcut, native GPU dispatch through the shared horizontal/vertical
+resize shaders, and vertical source-row compaction. The fourth change derives
+the smallest source-row span referenced by the vertical coefficient table,
+keeps the exact fixed-point weights, rebases only source-row indices, and
+skips horizontal work outside that span. Recomputing coefficients from a
+cropped float box was avoided because subtracting an integer from float32 box
+coordinates can change Pillow-visible coefficient boundaries. GPU carries the
+original first-row offset in the unused resize uniform word and dispatches only
+the compact horizontal row count; its intermediate and vertical table use
+zero-based rows.
+
+Parity evidence is exact. The maintained `resize.parameter.box` case passes on
+CPU, SIMD, and GPU. A nonuniform RGB center-crop workflow passes all six
+resampling filters on each backend, with six actual-GPU receipts and no
+fallback. A wider 54-case CPU and SIMD differential passes all six filters for
+`1`, `P`, `L`, `LA`, `RGB`, `RGBA`, `RGBa`, `RGBX`, and `CMYK`. The existing
+zero-input differential also remains exact. No fixture or assertion was
+changed to improve these results, and no coverage ran.
+
+End-to-end samples time `resize` through `tobytes` on deterministic nonuniform
+RGB inputs. Each row is a seven-sample median from one local run; GPU and SIMD
+are explicitly selected and execution receipts name the requested backend.
+The full-box geometry is a fractional near-full extent; the crop geometry is
+the central half of the source, both resized to three quarters of source
+width and height.
+
+| Geometry | Input | Pillow | CPU | SIMD | GPU | SIMD / Pillow | SIMD / GPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Near-full | 1024 × 768 | 5.24 ms | 2.08 ms | 1.93 ms | 2.98 ms | 2.71× | 0.65× |
+| Near-full | 2048 × 1536 | 20.99 ms | 7.25 ms | 7.20 ms | 6.98 ms | 2.91× | 1.03× |
+| Center half | 1024 × 768 | 2.75 ms | 1.37 ms | 1.24 ms | 2.67 ms | 2.23× | 0.46× |
+| Center half | 2048 × 1536 | 11.78 ms | 4.96 ms | 3.78 ms | 5.14 ms | 3.12× | 0.74× |
+
+The compact span improves the large crop case structurally, but this table has
+no pre-change crop baseline. CPU beats Pillow in these nonuniform samples; the
+tiny all-zero fixture remains within measurement noise and does not prove CPU
+is never slower. SIMD reaches only 2.2–3.1× Pillow here, short of 5×. GPU is
+faster than SIMD only on the single near-full 2048 × 1536 sample, by about 3%,
+which is within local run-to-run noise; it loses on the other three. Thus the
+SIMD and GPU goals remain open, and CPU parity/performance outside these tested
+layouts is not established. Filtered straight-alpha GPU resizes still use
+exact host control because the current two-pass dependency is not proven for
+those modes.
+
+The measured bottlenecks point to different next attacks. SIMD's reusable
+boxed kernel still spends work in two full image passes and row scheduling;
+profile horizontal taps, vertical memory access, and per-call coefficient
+planning separately before choosing another data layout. GPU's remaining cost
+is dominated by dispatch, packed-buffer transfer, and materialization at these
+sizes; the two-pass shader throughput only reaches parity with SIMD near the
+largest full-box sample. Separate device work from host upload/readback and
+test a larger workload before claiming a throughput lead. Do not credit a CPU
+fallback or host-computed pixels as native GPU acceleration. This `resize(box=...)`
+subcase remains checkpointed as incomplete; the next visit should take the
+next highest uncheckpointed operation in the refreshed matrix.
+
+The release extension build, `make fmt clippy`, and `make docs-lint` pass. The
+focused `cargo test --locked -p pillow-rs --lib resize` filter compiles and runs
+65 existing tests: 51 pass and 14 fail on GPU backend/receipt assertions in
+float, integer, 16-bit, and thumbnail resize cases. The changed RGB boxed path
+passes strict GPU parity; an isolated ordinary GPU float-resize receipt test
+also passes. Keep the broader typed/GPU receipt failures visible as separate
+blockers rather than weakening their checks. No coverage collection ran.

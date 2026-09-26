@@ -1340,5 +1340,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.dst_w || gid.y >= params.height {
         return;
     }
-    output[gid.y * params.dst_w + gid.x] = pack_filtered(gid.y, gid.x);
+    // ResizeBoxed stores only rows referenced by its vertical table. `_pad`
+    // carries the first original source row; output rows remain zero-based so
+    // the rebased vertical table addresses this compact intermediate.
+    let source_y = gid.y + params._pad;
+    if source_y >= params.height {
+        return;
+    }
+    output[gid.y * params.dst_w + gid.x] = pack_filtered(source_y, gid.x);
 }

@@ -15,9 +15,10 @@ use crate::draw::{for_each_bresenham_point, for_each_polygon_fill_span, wide_lin
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::ops::pil_resize::{
-    FilterCoeffs, filter_from_resample, luma16_resample_big_endian, luma16_resample_read,
-    luma16_resample_write, precompute_coeffs, precompute_coeffs_boxed_for_filter,
-    precompute_coeffs_f64, precompute_coeffs_f64_boxed, round_up,
+    FilterCoeffs, compact_resize_coeffs_to_source_span, filter_from_resample,
+    luma16_resample_big_endian, luma16_resample_read, luma16_resample_write, precompute_coeffs,
+    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
+    round_up,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
@@ -4313,7 +4314,12 @@ pub(crate) fn simd_supports_for_image(
             .is_some_and(|channels| {
                 has_empty_native_bytes(img, channels) || has_nonempty_byte_data(img, channels)
             }),
-        PipelineOp::ResizeBoxed { .. } => false,
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => native_resize_boxed_supported_for_image(img, *w, *h, *filter, *box_coords, mode),
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_image(img, *w, *h, *filter, mode)
         }
@@ -5584,6 +5590,10 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
             next.width = *w;
             next.height = *h;
         }
+        PipelineOp::ResizeBoxed { w, h, .. } => {
+            next.width = *w;
+            next.height = *h;
+        }
         PipelineOp::Scale { factor, .. } => {
             (next.width, next.height) =
                 native_scale_dimensions(shape.width, shape.height, *factor)?;
@@ -5844,7 +5854,12 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
                 shape_has_empty_native_bytes(shape, channels)
                     || shape_has_nonempty_byte_data(shape, channels)
             }),
-        PipelineOp::ResizeBoxed { .. } => false,
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => native_resize_boxed_supported_for_shape(shape, *w, *h, *filter, *box_coords, mode),
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_shape(shape, *w, *h, *filter, mode)
         }
@@ -16264,11 +16279,169 @@ fn native_fit_layout_for_shape(shape: SimdImageShape, mode: Option<&str>) -> Opt
 }
 
 fn native_fit_filter(mode: Option<&str>, filter: ResampleFilter) -> ResampleFilter {
-    if mode == Some("P") {
+    if matches!(mode, Some("1" | "P")) {
         ResampleFilter::Nearest
     } else {
         filter
     }
+}
+
+/// Match the float32 box validation boundary used by `Image.resize` and the
+/// CPU boxed resampler before admitting a source box to native SIMD kernels.
+fn native_resize_boxed_bounds(
+    source_width: u32,
+    source_height: u32,
+    bounds: (f64, f64, f64, f64),
+) -> Option<(f64, f64, f64, f64)> {
+    let bounds = (
+        f64::from(bounds.0 as f32),
+        f64::from(bounds.1 as f32),
+        f64::from(bounds.2 as f32),
+        f64::from(bounds.3 as f32),
+    );
+    if !bounds.0.is_finite()
+        || !bounds.1.is_finite()
+        || !bounds.2.is_finite()
+        || !bounds.3.is_finite()
+        || bounds.0 < 0.0
+        || bounds.1 < 0.0
+        || bounds.2 > f64::from(source_width as f32)
+        || bounds.3 > f64::from(source_height as f32)
+        || bounds.2 < bounds.0
+        || bounds.3 < bounds.1
+    {
+        return None;
+    }
+    Some(bounds)
+}
+
+fn native_resize_boxed_layout_for_image(
+    img: &DynamicImage,
+    filter: ResampleFilter,
+    mode: Option<&str>,
+) -> Option<(usize, bool)> {
+    if matches!(mode, Some("F" | "I")) {
+        if !matches!(img, DynamicImage::ImageRgba8(_))
+            || (mode == Some("I") && !matches!(filter, ResampleFilter::Nearest))
+        {
+            return None;
+        }
+        return Some((4, false));
+    }
+    native_fit_layout_for_image(img, mode)
+}
+
+fn native_resize_boxed_layout_for_shape(
+    shape: SimdImageShape,
+    filter: ResampleFilter,
+    mode: Option<&str>,
+) -> Option<(usize, bool)> {
+    if matches!(mode, Some("F" | "I")) {
+        if shape.layout != SimdLayout::Rgba8
+            || (mode == Some("I") && !matches!(filter, ResampleFilter::Nearest))
+        {
+            return None;
+        }
+        return Some((4, false));
+    }
+    native_fit_layout_for_shape(shape, mode)
+}
+
+fn native_resize_boxed_supported_for_dimensions(
+    source_width: u32,
+    source_height: u32,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    channels: usize,
+) -> bool {
+    if output_width == 0 || output_height == 0 {
+        return false;
+    }
+    let Some((left, top, right, bottom)) =
+        native_resize_boxed_bounds(source_width, source_height, bounds)
+    else {
+        return false;
+    };
+
+    // Pillow changes pass order for extremely tall images. The existing
+    // boxed SIMD kernel is horizontal-first, so leave this case on the CPU
+    // until a vertical-first vector implementation can preserve its rounding.
+    if u64::from(source_height) > u64::from(source_width) * 100 && output_height < source_height {
+        return false;
+    }
+
+    let full_source_identity = source_width == output_width
+        && source_height == output_height
+        && left == 0.0
+        && top == 0.0
+        && right == f64::from(source_width as f32)
+        && bottom == f64::from(source_height as f32);
+    full_source_identity
+        || native_resize_supported_for_dimensions(
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+            filter,
+            channels,
+        )
+}
+
+fn native_resize_boxed_supported_for_image(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    mode: Option<&str>,
+) -> bool {
+    let effective_filter = native_fit_filter(mode, filter);
+    let Some((channels, _)) = native_resize_boxed_layout_for_image(img, effective_filter, mode)
+    else {
+        return false;
+    };
+    let Some(expected_bytes) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return false;
+    };
+    img.as_bytes().len() == expected_bytes
+        && native_resize_boxed_supported_for_dimensions(
+            img.width(),
+            img.height(),
+            output_width,
+            output_height,
+            effective_filter,
+            bounds,
+            channels,
+        )
+}
+
+fn native_resize_boxed_supported_for_shape(
+    shape: SimdImageShape,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    mode: Option<&str>,
+) -> bool {
+    let effective_filter = native_fit_filter(mode, filter);
+    native_resize_boxed_layout_for_shape(shape, effective_filter, mode).is_some_and(
+        |(channels, _)| {
+            native_resize_boxed_supported_for_dimensions(
+                shape.width,
+                shape.height,
+                output_width,
+                output_height,
+                effective_filter,
+                bounds,
+                channels,
+            )
+        },
+    )
 }
 
 fn native_fit_float_supported_for_image(
@@ -18678,10 +18851,6 @@ fn simd_resize_convolution_boxed(
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Fit"))?;
     let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Fit"))?;
     let output_height = usize::try_from(output_height).map_err(|_| simd_unsupported("Fit"))?;
-    let intermediate_len = source_height
-        .checked_mul(output_width)
-        .and_then(|pixels| pixels.checked_mul(channels))
-        .ok_or_else(|| simd_unsupported("Fit"))?;
     let output_len = output_height
         .checked_mul(output_width)
         .and_then(|pixels| pixels.checked_mul(channels))
@@ -18703,7 +18872,7 @@ fn simd_resize_convolution_boxed(
         box_right,
         filter,
     );
-    let vertical = precompute_coeffs_boxed_for_filter(
+    let mut vertical = precompute_coeffs_boxed_for_filter(
         output_height as u32,
         source_height as u32,
         box_top,
@@ -18719,6 +18888,17 @@ fn simd_resize_convolution_boxed(
     let need_vertical = output_height != source_height
         || box_top_f32 != 0.0
         || box_bottom_f32 != output_height as f32;
+    let (first_source_row, intermediate_rows) = if need_vertical {
+        compact_resize_coeffs_to_source_span(&mut vertical, source_height as u32)
+            .map(|(first, count)| (first as usize, count as usize))
+            .unwrap_or((0, source_height))
+    } else {
+        (0, source_height)
+    };
+    let intermediate_len = intermediate_rows
+        .checked_mul(output_width)
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| simd_unsupported("Fit"))?;
     let horizontal_plan = if need_horizontal {
         Some(
             build_resize_horizontal_plan(&horizontal, output_width, channels)
@@ -18753,10 +18933,11 @@ fn simd_resize_convolution_boxed(
             crate::par_rows_mut!(
                 &mut intermediate,
                 intermediate_stride,
-                source_height,
-                |row_start, row_end, source_y, intermediate_row| {
+                intermediate_rows,
+                |row_start, row_end, row_index, intermediate_row| {
                     let _ = (row_start, row_end);
-                    let source_start = (source_y as usize).saturating_mul(source_stride);
+                    let source_y = first_source_row.saturating_add(row_index as usize);
+                    let source_start = source_y.saturating_mul(source_stride);
                     let source_end = source_start.saturating_add(source_stride);
                     let Some(source_row) = source.get(source_start..source_end) else {
                         failed.store(true, Ordering::Relaxed);
@@ -18782,11 +18963,12 @@ fn simd_resize_convolution_boxed(
             }
         }
         #[cfg(not(feature = "parallel"))]
-        for source_y in 0..source_height {
+        for row_index in 0..intermediate_rows {
+            let source_y = first_source_row.saturating_add(row_index);
             let source_start = source_y
                 .checked_mul(source_stride)
                 .ok_or_else(|| simd_unsupported("Fit"))?;
-            let intermediate_start = source_y
+            let intermediate_start = row_index
                 .checked_mul(intermediate_stride)
                 .ok_or_else(|| simd_unsupported("Fit"))?;
             let source_row = source
@@ -18809,7 +18991,15 @@ fn simd_resize_convolution_boxed(
             scalar_tail = scalar_tail.saturating_add(tail);
         }
     } else if premultiplied_alpha {
+        let source_start = first_source_row
+            .checked_mul(source_stride)
+            .ok_or_else(|| simd_unsupported("Fit"))?;
+        let source_end = source_start
+            .checked_add(intermediate_len)
+            .ok_or_else(|| simd_unsupported("Fit"))?;
         for (source_pixel, intermediate_pixel) in source
+            .get(source_start..source_end)
+            .ok_or_else(|| simd_unsupported("Fit"))?
             .chunks_exact(channels)
             .zip(intermediate.chunks_exact_mut(channels))
         {
@@ -18823,7 +19013,17 @@ fn simd_resize_convolution_boxed(
             }
         }
     } else {
-        intermediate.copy_from_slice(source);
+        let source_start = first_source_row
+            .checked_mul(source_stride)
+            .ok_or_else(|| simd_unsupported("Fit"))?;
+        let source_end = source_start
+            .checked_add(intermediate_len)
+            .ok_or_else(|| simd_unsupported("Fit"))?;
+        intermediate.copy_from_slice(
+            source
+                .get(source_start..source_end)
+                .ok_or_else(|| simd_unsupported("Fit"))?,
+        );
     }
 
     let mut output = vec![0u8; output_len];
@@ -18841,7 +19041,7 @@ fn simd_resize_convolution_boxed(
                     if resize_vertical_vector_row(
                         &intermediate,
                         output_width,
-                        source_height,
+                        intermediate_rows,
                         channels,
                         &vertical,
                         output_y as usize,
@@ -18869,7 +19069,7 @@ fn simd_resize_convolution_boxed(
             let (blocks, tail) = resize_vertical_vector_row(
                 &intermediate,
                 output_width,
-                source_height,
+                intermediate_rows,
                 channels,
                 &vertical,
                 output_y,
@@ -18908,10 +19108,10 @@ fn simd_resize_convolution_boxed(
         let horizontal_blocks = vector_width.div_ceil(SIMD_RESIZE_LANES) as u64;
         let horizontal_tail = output_width.saturating_sub(vector_width) as u64;
         vector_blocks = horizontal_blocks
-            .saturating_mul(source_height as u64)
+            .saturating_mul(intermediate_rows as u64)
             .saturating_add(horizontal_blocks.saturating_mul(output_height as u64));
         scalar_tail = horizontal_tail
-            .saturating_mul(source_height as u64)
+            .saturating_mul(intermediate_rows as u64)
             .saturating_add(horizontal_tail.saturating_mul(output_height as u64));
     }
 
@@ -20887,13 +21087,145 @@ fn simd_resize_i32_boxed(
     Ok(preserve_mode(img, result))
 }
 
+fn simd_resize_boxed(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if !native_resize_boxed_supported_for_image(
+        img,
+        output_width,
+        output_height,
+        filter,
+        bounds,
+        mode,
+    ) {
+        return Err(simd_unsupported("Resize"));
+    }
+    let (box_left, box_top, box_right, box_bottom) =
+        native_resize_boxed_bounds(img.width(), img.height(), bounds)
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+    let effective_filter = native_fit_filter(mode, filter);
+    let (channels, _) = native_resize_boxed_layout_for_image(img, effective_filter, mode)
+        .ok_or_else(|| simd_unsupported("Resize"))?;
+
+    // The CPU executor returns the original stored samples before mode
+    // conversion for a full-source identity box.
+    if img.width() == output_width
+        && img.height() == output_height
+        && box_left == 0.0
+        && box_top == 0.0
+        && box_right == f64::from(img.width() as f32)
+        && box_bottom == f64::from(img.height() as f32)
+    {
+        let result =
+            native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("Resize"))?;
+        return Ok(preserve_mode(img, result));
+    }
+
+    if img.width() == 0 || img.height() == 0 {
+        return simd_resize_zero_source(img, output_width, output_height, channels);
+    }
+
+    // Every stored channel remains zero through a normalized boxed filter.
+    // Avoid coefficient construction and both separable passes for bounded
+    // small inputs where the source scan is cheaper than the vector work.
+    if native_zero_byte_image(img, channels) {
+        let output_len = usize::try_from(output_width)
+            .ok()
+            .and_then(|width| usize::try_from(output_height).ok()?.checked_mul(width))
+            .and_then(|pixels| pixels.checked_mul(channels))
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+        let output = vec![0; output_len];
+        crate::compute::record_pipeline_operation_path("native-zero-fill");
+        crate::compute::record_pipeline_operation_vector_blocks((output_len / 16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail((output_len % 16) as u64);
+        let result =
+            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+        return Ok(preserve_mode(img, result));
+    }
+
+    // Pillow takes an integer crop before selecting a filter unless filtered
+    // LA/RGBA needs its observable premultiply/unpremultiply round trip.
+    let needs_alpha = !matches!(effective_filter, ResampleFilter::Nearest)
+        && !matches!(
+            mode,
+            Some("CMYK" | "F" | "I" | "RGBa" | "RGBX" | "La" | "PA")
+        )
+        && matches!(
+            img.color(),
+            crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
+        );
+    let integer_crop = box_left.fract() == 0.0
+        && box_top.fract() == 0.0
+        && (box_right as f32 - box_left as f32) == output_width as f32
+        && (box_bottom as f32 - box_top as f32) == output_height as f32;
+    if integer_crop && !needs_alpha {
+        let result = img.crop_imm(box_left as u32, box_top as u32, output_width, output_height);
+        crate::compute::record_pipeline_operation_path("native-crop");
+        return Ok(preserve_mode(img, result));
+    }
+
+    if mode == Some("F") && !matches!(effective_filter, ResampleFilter::Nearest) {
+        return simd_resize_f_boxed(
+            img,
+            output_width,
+            output_height,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            effective_filter,
+        );
+    }
+
+    let premultiplied_alpha = needs_alpha;
+    if matches!(effective_filter, ResampleFilter::Nearest) {
+        simd_resize_nearest_boxed(
+            img,
+            output_width,
+            output_height,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            channels,
+        )
+    } else {
+        simd_resize_convolution_boxed(
+            img,
+            output_width,
+            output_height,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            effective_filter,
+            channels,
+            premultiplied_alpha,
+        )
+    }
+}
+
 pub fn simd_resize(
     img: &DynamicImage,
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let PipelineOp::Resize { w, h, filter } = op else {
-        return Err(PilError::ValueError("expected Resize op".into()));
+    let (w, h, filter) = match op {
+        PipelineOp::Resize { w, h, filter } => (w, h, filter),
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => {
+            return simd_resize_boxed(img, *w, *h, *filter, *box_coords, mode);
+        }
+        _ => return Err(PilError::ValueError("expected Resize op".into())),
     };
     if matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
         && matches!(img, DynamicImage::ImageLuma16(_))
