@@ -567,8 +567,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
