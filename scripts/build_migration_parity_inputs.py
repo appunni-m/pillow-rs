@@ -46384,6 +46384,12 @@ def build_inputs(
             isolated_freetype_getlength = (
                 workload_id == "pil-imagefont-freetypefont.getlength.standard"
             )
+            # Measure the BASIC-layout call after constructing Pillow's
+            # embedded default font. The default-font loader has its own
+            # workload, so including it here would mix two operations.
+            isolated_default_getlength = (
+                workload_id == "pil-imagefont-imagefont.getlength.standard"
+            )
             # Measure the bounding-box method after loading the font asset.
             isolated_freetype_getbbox = (
                 workload_id == "pil-imagefont-freetypefont.getbbox.standard"
@@ -46461,6 +46467,7 @@ def build_inputs(
                             or isolated_transposed_getlength
                             or isolated_transposed_getbbox
                             or isolated_freetype_getlength
+                            or isolated_default_getlength
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
                             or isolated_pilfont_getmask
@@ -46481,6 +46488,7 @@ def build_inputs(
                             or isolated_transposed_getlength
                             or isolated_transposed_getbbox
                             or isolated_freetype_getlength
+                            or isolated_default_getlength
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
                             or isolated_pilfont_getmask
