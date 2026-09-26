@@ -400,8 +400,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getmetrics.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

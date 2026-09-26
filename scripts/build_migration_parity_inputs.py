@@ -46362,6 +46362,11 @@ def build_inputs(
                 workload_id == "pil-image-image.getchannel.standard"
             )
             eager_getcolors = workload_id == "pil-image-image.getcolors.standard"
+            # Measure getmetrics after its setup-font step; the constructor is
+            # a separate public workload and must not dominate this getter.
+            isolated_getmetrics = (
+                workload_id == "pil-imagefont-freetypefont.getmetrics.standard"
+            )
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46390,14 +46395,16 @@ def build_inputs(
                     "measurement": {
                         "boundary": (
                             "observed_steps"
-                            if materialized_getchannel or eager_getcolors
+                            if materialized_getchannel
+                            or eager_getcolors
+                            or isolated_getmetrics
                             else "whole_workflow"
                         ),
                         "step_ids": (
                             ["call", "observe-result"]
                             if materialized_getchannel
                             else ["call"]
-                            if eager_getcolors
+                            if eager_getcolors or isolated_getmetrics
                             else []
                         ),
                         "metrics": operation["benchmark"]["metrics"],
