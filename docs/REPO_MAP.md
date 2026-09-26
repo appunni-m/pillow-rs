@@ -162,6 +162,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- resize_convolution_h.wgsl
 |   |   |   |       |-- resize_convolution_v.wgsl
 |   |   |   |       |-- resize_nearest.wgsl
+|   |   |   |       |-- rgb_to_lab.wgsl
 |   |   |   |       |-- rotate.wgsl
 |   |   |   |       |-- scale.wgsl
 |   |   |   |       |-- screen.wgsl
@@ -183,6 +184,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- mod.rs
 |   |   |   |       `-- scalar.rs
 |   |   |   `-- registry.rs
+|   |   |-- data/
+|   |   |   |-- lab-identity-profile.icc
+|   |   |   `-- lcms-lab-lut.u16le
 |   |   |-- draw/
 |   |   |   `-- mod.rs
 |   |   |-- error.rs
@@ -198,6 +202,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- image.rs
 |   |   |-- image_sequence.rs
 |   |   |-- image_utils.rs
+|   |   |-- lab.rs
 |   |   |-- lib.rs
 |   |   |-- ops/
 |   |   |   |-- analysis.rs
