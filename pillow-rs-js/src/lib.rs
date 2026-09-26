@@ -310,11 +310,11 @@ fn js_optional_resample(value: &JsValue) -> Result<Option<pillow_rs::ResampleInp
     ))))
 }
 
-fn js_resize_box(value: &JsValue) -> Result<Option<(i32, i32, i32, i32)>, JsValue> {
+fn js_resize_box(value: &JsValue) -> Result<Option<(f64, f64, f64, f64)>, JsValue> {
     if value.is_null() || value.is_undefined() {
         return Ok(None);
     }
-    let Some(values) = js_integer_array(value) else {
+    let Some(values) = js_float_array(value) else {
         return Err(err(pillow_rs::PilError::TypeError(
             "box must be a 4-item sequence".to_owned(),
         )));
@@ -325,16 +325,6 @@ fn js_resize_box(value: &JsValue) -> Result<Option<(i32, i32, i32, i32)>, JsValu
             values.len()
         ))));
     }
-    let values = values
-        .into_iter()
-        .map(|value| {
-            i32::try_from(value).map_err(|_| {
-                err(pillow_rs::PilError::OverflowError(
-                    "signed integer is outside the image coordinate range".to_owned(),
-                ))
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     Ok(Some((values[0], values[1], values[2], values[3])))
 }
 
@@ -1181,6 +1171,7 @@ impl Image {
         size: JsValue,
         resample: JsValue,
         box_coords: JsValue,
+        reducing_gap: JsValue,
     ) -> Result<Image, JsValue> {
         let values = js_integer_array(&size).ok_or_else(|| {
             err(pillow_rs::PilError::TypeError(
@@ -1195,8 +1186,17 @@ impl Image {
         }
         let filter = js_optional_resample(&resample)?;
         let box_coords = js_resize_box(&box_coords)?;
+        let reducing_gap = if reducing_gap.is_null() || reducing_gap.is_undefined() {
+            None
+        } else {
+            Some(reducing_gap.as_f64().ok_or_else(|| {
+                err(pillow_rs::PilError::TypeError(
+                    "reducing_gap must be a real number".to_owned(),
+                ))
+            })?)
+        };
         self.inner
-            .resize((values[0], values[1]), filter, box_coords)
+            .resize_with_options((values[0], values[1]), filter, box_coords, reducing_gap)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
