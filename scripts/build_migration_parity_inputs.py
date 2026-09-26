@@ -46393,6 +46393,12 @@ def build_inputs(
                 workload_id
                 == "pil-imagefont-freetypefont.set-variation-by-axes.standard"
             )
+            # Measure the named-instance setter after opening its variable
+            # font so setup does not dominate this call's latency.
+            isolated_freetype_set_variation_name = (
+                workload_id
+                == "pil-imagefont-freetypefont.set-variation-by-name.standard"
+            )
             input_spec = (
                 {"kind": "workflow", **workflow_override}
                 if workflow_override is not None
@@ -46430,6 +46436,7 @@ def build_inputs(
                             or isolated_freetype_getlength
                             or isolated_freetype_getbbox
                             or isolated_freetype_set_variation_axes
+                            or isolated_freetype_set_variation_name
                             else "whole_workflow"
                         ),
                         "step_ids": (
@@ -46444,6 +46451,7 @@ def build_inputs(
                             or isolated_freetype_getlength
                             or isolated_freetype_getbbox
                             or isolated_freetype_set_variation_axes
+                            or isolated_freetype_set_variation_name
                             else []
                         ),
                         "metrics": operation["benchmark"]["metrics"],

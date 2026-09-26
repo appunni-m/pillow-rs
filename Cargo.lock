@@ -280,7 +280,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 [[package]]
 name = "fontdone"
 version = "2.14.3-alpha.10"
-source = "git+https://github.com/appunni-m/fontdone.git?rev=e5391340daafcd51bdb60fc071f3ba084618943d#e5391340daafcd51bdb60fc071f3ba084618943d"
+source = "git+https://github.com/appunni-m/fontdone.git?rev=e77b71207aef90f346cff4915018a964943cf5b9#e77b71207aef90f346cff4915018a964943cf5b9"
 dependencies = [
  "bzip2-rs",
  "flate2",

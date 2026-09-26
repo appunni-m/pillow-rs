@@ -51,12 +51,22 @@ struct CachedSourceFace {
     face: ffi::FT_Face,
 }
 
+struct CachedVariationNames {
+    face_index: ffi::FT_Long,
+    source_bytes: Rc<Vec<u8>>,
+    names: Vec<Vec<u8>>,
+}
+
 thread_local! {
     // A one-entry cache reuses parsed immutable tables when callers repeatedly
     // open the same small static font. The source face never escapes this
     // thread; FT_New_Memory_Face_From_Source verifies byte equality and makes
     // an independent mutable face for each caller.
     static CACHED_SOURCE_FACE: RefCell<Option<CachedSourceFace>> = const { RefCell::new(None) };
+    // Variable faces need independent coordinate state, so they do not use
+    // CACHED_SOURCE_FACE. Their immutable names can still be reused by exact
+    // source bytes and collection-face index.
+    static CACHED_VARIATION_NAMES: RefCell<Option<CachedVariationNames>> = const { RefCell::new(None) };
 }
 
 pub(super) struct FontEngine {
@@ -79,6 +89,12 @@ pub(super) struct FontEngine {
     // so keep this state in the Rust core instead of relying on Python-side
     // wrapper bookkeeping.
     last_variation_index: Option<usize>,
+    // Named-instance names are immutable for a given byte sequence and face.
+    // Cache the Pillow-decoded, duplicate-filtered list beside the parsed
+    // source face so fresh handles for the same font do not reparse `fvar` and
+    // `name` on every setter call.
+    source_face_index: ffi::FT_Long,
+    variation_names: RefCell<Option<Vec<Vec<u8>>>>,
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
@@ -151,6 +167,7 @@ fn load_truetype_with_index(
     let family_name = face.family_name.clone();
     let style_name = face.style_name.clone();
     let metrics = face.size_metrics;
+    let variation_names = cached_source_variation_names(&data, face_index_ffi);
 
     let engine = FontEngine {
         library,
@@ -165,8 +182,20 @@ fn load_truetype_with_index(
         metrics,
         basic_layout_cache: RefCell::new(BasicLayoutCache::default()),
         last_variation_index: None,
+        source_face_index: face_index_ffi,
+        variation_names: RefCell::new(variation_names),
     };
-    Ok(FreeTypeFont { engine })
+    let font = FreeTypeFont { engine };
+    if has_variations(&font) && ffi::FT_Get_Font_Format(Some(&font.engine.face)) != Some("Type 1") {
+        // Named-instance selection otherwise parses and decodes the fvar/name
+        // tables on its first call. Populate that immutable metadata while the
+        // variable face is being opened, so the setter's cold call stays on
+        // the same short lookup path as repeated calls. Keep load behavior
+        // intact for malformed or unsupported variation tables; the public
+        // query/setter will report the error when requested.
+        let _ = ensure_variation_names(&font);
+    }
+    Ok(font)
 }
 
 fn open_memory_face(
@@ -693,8 +722,26 @@ pub(crate) fn get_variation_axes(
 }
 
 pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
-    if type1_mm_axes(font)?.is_some() {
-        return Ok(Vec::new());
+    ensure_variation_names(font)?;
+    Ok(font
+        .engine
+        .variation_names
+        .borrow()
+        .as_ref()
+        .cloned()
+        .unwrap_or_default())
+}
+
+fn ensure_variation_names(font: &FreeTypeFont) -> Result<(), PilError> {
+    if font.engine.variation_names.borrow().is_some() {
+        return Ok(());
+    }
+    if let Some(names) = cached_source_variation_names(
+        font.engine.font_bytes.as_slice(),
+        font.engine.source_face_index,
+    ) {
+        *font.engine.variation_names.borrow_mut() = Some(names);
+        return Ok(());
     }
     let instance_names = variation_instance_names(font)?;
     let mut names = Vec::with_capacity(instance_names.len());
@@ -705,7 +752,34 @@ pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, P
             names.push(name);
         }
     }
-    Ok(names)
+    *font.engine.variation_names.borrow_mut() = Some(names.clone());
+    remember_source_variation_names(font, names);
+    Ok(())
+}
+
+fn cached_source_variation_names(data: &[u8], face_index: ffi::FT_Long) -> Option<Vec<Vec<u8>>> {
+    CACHED_VARIATION_NAMES.with(|cache| {
+        let cache = cache.borrow();
+        let cached = cache.as_ref()?;
+        (data.len() <= MAX_CACHED_SOURCE_BYTES
+            && cached.face_index == face_index
+            && cached.source_bytes.as_slice() == data)
+            .then(|| cached.names.clone())
+    })
+}
+
+fn remember_source_variation_names(font: &FreeTypeFont, names: Vec<Vec<u8>>) {
+    if font.engine.font_bytes.len() > MAX_CACHED_SOURCE_BYTES {
+        return;
+    }
+    CACHED_VARIATION_NAMES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        *cache = Some(CachedVariationNames {
+            face_index: font.engine.source_face_index,
+            source_bytes: Rc::clone(&font.engine.font_bytes),
+            names,
+        });
+    });
 }
 
 fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
@@ -727,12 +801,17 @@ fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilErro
 }
 
 pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Result<(), PilError> {
-    let names = get_variation_names(font)?;
-    let Some(index) = names.iter().position(|candidate| candidate == name) else {
-        return Err(PilError::ValueError(format!(
-            "b'{}' is not in list",
-            String::from_utf8_lossy(name)
-        )));
+    ensure_variation_names(font)?;
+    let (index, selected_name) = {
+        let names = font.engine.variation_names.borrow();
+        let names = names.as_ref().map(Vec::as_slice).unwrap_or_default();
+        let Some(index) = names.iter().position(|candidate| candidate == name) else {
+            return Err(PilError::ValueError(format!(
+                "b'{}' is not in list",
+                String::from_utf8_lossy(name)
+            )));
+        };
+        (index, names[index].clone())
     };
     let instance_index = index + 1;
     if font.engine.last_variation_index == Some(instance_index) {
@@ -750,7 +829,7 @@ pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Res
         ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index as ffi::FT_UInt);
     check_ft_error(status)?;
     refresh_engine_metadata(font);
-    font.engine.style_name = Some(String::from_utf8_lossy(&names[index]).into_owned());
+    font.engine.style_name = Some(String::from_utf8_lossy(&selected_name).into_owned());
     Ok(())
 }
 

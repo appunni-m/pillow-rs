@@ -5377,3 +5377,52 @@ The Windows binding check caught that FreeType `FT_Long` follows native
 `c_long` width: 32 bits on Windows and 64 bits on LP64 systems. Keep variation
 flag conversion in a width shared by both targets before widening it back to
 `FT_Long`; the exact Windows Python binding type-check then passes.
+
+## FreeTypeFont.set_variation_by_name checkpoint — 2026-09-27
+
+The benchmark now measures only the setter call after constructing its variable
+font. The previous whole-workflow boundary hid setter costs in setup. Four
+setter and six related `get_variation_names` parity cases pass on the rebuilt
+target, including malformed instance arrays, non-English name fallback, Type 1
+multiple-master behavior, an unknown instance, and named selection. No parity
+assertion or benchmark budget changed.
+
+The pre-optimization call-only warm median was 13.417 µs for CPU versus
+7.583 µs for Pillow. The first retained change in fontdone reuses the parsed
+variable-font tables and existing face record for named-instance selection;
+this lowered CPU to 10.271 µs. A per-font name cache alone did not improve the
+benchmark because each sample opens a fresh font. The static source-face cache
+also deliberately excludes variable faces: their mutable coordinate state
+must not be shared.
+
+Attempt three added a separate one-entry, thread-local cache for the
+immutable, duplicate-filtered name list, keyed by exact font bytes and
+collection-face index. This preserves independent variation coordinates while
+letting subsequent handles reuse names. Its correctness-gated warm medians
+were 7.021 µs for CPU and 7.542 µs for Pillow. SIMD/GPU profiles have
+`actual_backend: null`; named-font metadata and FreeType state are host-side,
+so those profiles do not establish accelerator performance.
+
+A cold-process diagnostic then showed the first setter call at 27.042 µs for
+CPU versus 24.625 µs for Pillow. Attempt four populates the immutable names
+while opening an SFNT variable face, swallowing parse failure there so malformed
+font errors remain deferred to the public query or setter. Cold setter medians
+then became 20.708 µs CPU and 24.167 µs Pillow. Cold whole-workflow medians were
+0.731 ms CPU and 6.650 ms Pillow; the pre-attempt-four sample was 0.685/6.578
+ms. These small whole-workflow differences are noisy, so the evidence supports
+faster isolated setter latency, not an end-to-end workflow speedup. The names
+are now prepared during font setup, and the workload intentionally reports
+call-only timing so setup cost is visible as a separate boundary.
+
+The final unchanged warm policy measured 7.292 µs CPU and 7.583 µs Pillow
+(receipt `perf-freetypefont-set-variation-by-name-attempt4-20260927.json`).
+The correctness-gated cold call receipt is
+`perf-freetypefont-set-variation-by-name-cold-attempt4-20260927.json`; cold
+whole-workflow diagnostics are in
+`perf-freetypefont-set-variation-by-name-whole-cold-attempt4-20260927.json`.
+
+The CPU setter meets the Pillow latency target in both measured cache states.
+The 5× SIMD target and GPU comparison are inapplicable to this host-only font
+operation and remain unproven by backend receipts. Checkpoint this operation
+after four attempts and continue with the next unresolved operation from the
+corrected latency ranking.
