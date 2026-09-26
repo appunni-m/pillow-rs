@@ -1565,6 +1565,75 @@ fn rank_filter_bytes_small(
     }
 }
 
+/// Apply a 3x3 byte rank filter without constructing the maximum-sized
+/// 7x7 scratch array for every output pixel. The clamped coordinates preserve
+/// Pillow's replicated-edge window, and only the requested order statistic is
+/// selected from the nine samples per channel.
+fn rank_filter_bytes_3x3_row(
+    raw: &[u8],
+    row: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    rank: usize,
+    y: usize,
+) {
+    let row_stride = width * channels;
+    let top = y.saturating_sub(1) * row_stride;
+    let middle = y * row_stride;
+    let bottom = (y + 1).min(height - 1) * row_stride;
+
+    for x in 0..width {
+        let left = x.saturating_sub(1) * channels;
+        let center = x * channels;
+        let right = (x + 1).min(width - 1) * channels;
+        let output = center;
+        for channel in 0..channels {
+            let mut values = [
+                raw[top + left + channel],
+                raw[top + center + channel],
+                raw[top + right + channel],
+                raw[middle + left + channel],
+                raw[middle + center + channel],
+                raw[middle + right + channel],
+                raw[bottom + left + channel],
+                raw[bottom + center + channel],
+                raw[bottom + right + channel],
+            ];
+            let (_, selected, _) = values.select_nth_unstable(rank);
+            row[output + channel] = *selected;
+        }
+    }
+}
+
+fn rank_filter_bytes_3x3(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    rank: usize,
+) {
+    let row_stride = width * channels;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+        rank_filter_bytes_3x3_row(raw, row, width, height, channels, rank, y as usize);
+    });
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y * row_stride;
+        rank_filter_bytes_3x3_row(
+            raw,
+            &mut out[row_start..row_start + row_stride],
+            width,
+            height,
+            channels,
+            rank,
+            y,
+        );
+    }
+}
+
 fn rank_filter_bytes_histogram_row(
     raw: &[u8],
     row: &mut [u8],
@@ -1782,7 +1851,6 @@ fn rank_filter_impl(
 
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
-    let mut out = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
 
     let native_byte_layout = matches!(
         img,
@@ -1792,13 +1860,14 @@ fn rank_filter_impl(
             | DynamicImage::ImageRgba8(_)
     );
     if native_byte_layout
-        && (rank == 0 || rank == area - 1)
         && native_small_uniform_byte_image(img, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS)
     {
-        // C's rank-filter window replicates edge samples, so every output
-        // tuple is identical to the input tuple when the source is uniform.
+        // Every rank of a uniform byte image is the same source tuple. The
+        // bounded scan avoids gathering and selecting an identical window at
+        // every output pixel, and cloning preserves the source's native mode.
         return Ok(img.clone());
     }
+    let mut out = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
     let separable_extreme =
         native_byte_layout && size >= 5 && w.max(h) > 512 && (rank == 0 || rank == area - 1);
     if separable_extreme
@@ -1819,6 +1888,15 @@ fn rank_filter_impl(
         rank_filter_bytes_extreme(raw, &mut out, w, h, channels, half, false);
     } else if rank == area - 1 {
         rank_filter_bytes_extreme(raw, &mut out, w, h, channels, half, true);
+    } else if size == 3 {
+        rank_filter_bytes_3x3(
+            raw,
+            &mut out,
+            w_u32 as usize,
+            h_u32 as usize,
+            channels,
+            rank,
+        );
     } else if area <= SMALL_RANK_AREA {
         rank_filter_bytes_small(raw, &mut out, w, h, channels, half, area, rank);
     } else {
