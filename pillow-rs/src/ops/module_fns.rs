@@ -69,6 +69,22 @@ pub fn frombytes(
     Image::frombytes(mode, size, data)
 }
 
+/// Creates an image from an owned raw byte buffer, avoiding a second copy for
+/// raw raster modes when the decoder can adopt the supplied allocation.
+pub fn frombytes_owned(
+    mode: &str,
+    size: (u32, u32),
+    data: Vec<u8>,
+    decoder_name: &str,
+) -> Result<Image, PilError> {
+    if decoder_name != "raw" {
+        return Err(PilError::IOError(format!(
+            "decoder {decoder_name} not available"
+        )));
+    }
+    Image::frombytes_owned(mode, size, data)
+}
+
 /// Composites `im2` over `im1` and returns a new image.
 pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
     let mut result = im1.copy();

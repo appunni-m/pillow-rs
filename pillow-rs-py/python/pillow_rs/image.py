@@ -548,8 +548,9 @@ class Image:
             # Instance method: im.frombytes(data, decoder_name, *args)
             mode = self.mode
             size = self.size
+            pixel_data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
             self._rust_image = RustImage.frombytes(
-                mode, size, bytes(data), decoder_name
+                mode, size, pixel_data, decoder_name
             )
             return None
 
@@ -558,7 +559,12 @@ class Image:
         size = data if isinstance(self, str) else decoder_name
         pixel_data = decoder_name if isinstance(self, str) else args[0] if args else None
         decoder = args[0] if isinstance(self, str) and args else "raw"
-        result = Image(RustImage.frombytes(mode, size, bytes(pixel_data), decoder))
+        pixel_data = (
+            pixel_data
+            if isinstance(pixel_data, (bytes, bytearray))
+            else bytes(pixel_data)
+        )
+        result = Image(RustImage.frombytes(mode, size, pixel_data, decoder))
         return result
 
     @classmethod

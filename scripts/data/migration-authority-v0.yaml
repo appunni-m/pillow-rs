@@ -1072,9 +1072,10 @@ modules:
       edge_cases: []
       supported_targets:
       - cpu
-      supported_modes: &id002
+      supported_modes:
       - L
       - LA
+      - LAB
       - RGB
       - RGBA
     properties:
@@ -1226,6 +1227,7 @@ modules:
       - CMYK
       - L
       - LA
+      - LAB
       - P
       - RGB
       - RGBA
@@ -1628,7 +1630,11 @@ modules:
       - cpu
       - gpu
       - simd
-      supported_modes: *id002
+      supported_modes: &id002
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: DETAIL
       signature: ImageFilter.DETAIL
       status: implemented

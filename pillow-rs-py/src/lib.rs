@@ -1767,12 +1767,15 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let mode = mode.to_owned();
         let decoder_name = decoder_name.to_owned();
-        // PyO3 borrows immutable bytes for this call and retains the Vec
-        // extractor for other sequences. The core constructs owned image
-        // storage before returning, so no Python-backed slice escapes.
-        py.detach(|| pillow_rs::image_frombytes(&mode, size, data.as_ref(), &decoder_name))
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error)
+        // PyO3 borrows immutable bytes and extracts owned vectors for mutable
+        // sequences. Preserve that ownership so raw raster modes can adopt an
+        // extracted buffer instead of copying it a second time.
+        py.detach(move || match data {
+            Cow::Borrowed(data) => pillow_rs::image_frombytes(&mode, size, data, &decoder_name),
+            Cow::Owned(data) => pillow_rs::image_frombytes_owned(&mode, size, data, &decoder_name),
+        })
+        .map(|img| PyImage { inner: img })
+        .map_err(map_error)
     }
 
     #[pyo3(signature = (dest_map, source_palette=None))]
