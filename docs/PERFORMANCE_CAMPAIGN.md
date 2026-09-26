@@ -4430,3 +4430,80 @@ reads back bytes. Receipts are
 `...-simd.json`, `...-gpu.json`, and
 `build/migration-parity/perf-image-frombytes-20260926-corrected.json` with its
 `-parity.json` gate. No coverage collection ran.
+
+## ImageFont.truetype checkpoint — 2026-09-26
+
+The baseline constructor workload measured 1.959 ms on CPU versus 22.17 µs
+for Pillow. Profiling attributed about 86% of target time to eager creation of
+fontdone's glyph-to-script map during FFI face construction. The map is not
+observed by a newly opened font; it is needed when the autofitter property is
+queried or glyph loading synchronizes that property state. A face-local
+`OnceLock` now builds it at first use, preserving the returned map and later
+glyph behavior while removing that unused constructor work. The first
+correctness-gated CPU median fell to 23.94 µs. A second shared-ownership change
+lets the adapter and parsed SFNT data retain the same immutable font-byte
+allocation instead of copying it again; the measured 23.33 µs median was within
+run-to-run noise and did not qualify as a standalone latency win.
+
+The third attempt caches one small static SFNT source face per thread, capped
+at 256 KiB. Reuse requires the exact source bytes and face index; every call
+still creates an independent mutable face, and size/charmap state is reset by
+the existing clone path. Variable fonts, CFF data, unsupported interpreter
+state, large fonts, and different bytes fall back to normal opening. This
+reduced the warm repeated-constructor CPU median to 20.25 µs; an unchanged-policy
+repeat measured 19.83 µs. The first and repeat Pillow medians were 22.33 and
+22.23 µs. The CPU path is therefore ahead of Pillow by 9–11% on these warm
+samples, not by an order of magnitude. The two samples are diagnostics, not a
+stable guarantee for every font or a cold one-off open.
+
+The final build pinned to fontdone `80b8224293a50c41753a3f295bbc304e581bbd7c`
+measured these medians:
+
+| Selector | Latency | Reciprocal rate |
+| --- | ---: | ---: |
+| Pillow | 23.833 µs | 41,959 ops/s |
+| CPU | 20.209 µs | 49,484 ops/s |
+| SIMD | 21.062 µs | 47,479 ops/s |
+| GPU | 26.625 µs | 37,559 ops/s |
+
+This agrees with the checkpoint direction; the single run remains a diagnostic
+sample. The target execution receipt is `not_proven` for each selector. The
+rates are reciprocal single-request latency at concurrency one, not sustained
+throughput.
+
+The cache initially panicked at thread exit because the cached face's size
+state destructor accessed a thread-local registry after that registry had
+already been destroyed. `FT_Init_FreeType` now initializes the registry before
+the adapter can initialize its cache TLS. Repeated-process benchmark completion
+and the focused fontdone memory-face tests exercise the corrected lifetime.
+Keep this initialization ordering if the cache or registry TLS changes.
+
+The unchanged 15-case `truetype` parity cohort passes on CPU, SIMD, and GPU
+configurations (45 comparisons total). The benchmark records `not_proven` for
+all three target backends: font construction makes no SIMD or GPU dispatch.
+Selector-specific timings therefore measure host-side noise, not acceleration;
+the SIMD ≥5× and GPU-vs-SIMD objectives cannot be credited for this constructor.
+The benchmark uses concurrency one and reciprocal latency for its operations
+per second figure, so it does not establish sustained throughput. Keep the
+operation checkpointed with that limitation rather than claiming those goals
+met. Receipts are
+`perf-font-truetype-20260926-source-cache.json` and
+`perf-font-truetype-20260926-source-cache-repeat.json`, with their parity
+sidecars, `perf-font-truetype-20260926-pinned.json` with its parity sidecar,
+and `truetype-{cpu,simd,gpu}-pinned-parity.json`. No coverage collection ran.
+
+The broad `cargo test --locked -p pillow-rs` run completed 238/255 tests and
+failed 17 GPU execution/receipt assertions outside this constructor operation.
+Rerunning those cases individually passed 12; five GPU-path assertions remain
+failing in `cmyk_filtered_rotate_stays_on_exact_host_control`,
+`f_resize_f64_wide_special_value_outputs_native`,
+`f_resize_ordered_f64_subnormal_vertical_native_matches_cpu`,
+`f_resize_compact_box_special_over_binding_native_matches_cpu`, and
+`typed_luma16_nearest_affine_transform_uses_native_word_path`. Keep these as
+separate GPU-operation blockers; do not relax their expected-backend checks to
+make this constructor checkpoint look green.
+
+The next operation is `PIL.ImageFont.FreeTypeFont.font_variant`. Its earlier
+constructor-inclusive samples remained far slower than Pillow; retime it after
+the lazy-map and shared-byte changes, and separate source-face setup from the
+variant clone before attempting more work.

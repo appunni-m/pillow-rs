@@ -17,13 +17,29 @@ use super::{
 use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 const MAX_STRING_LENGTH: usize = 1_000_000;
+const MAX_CACHED_SOURCE_BYTES: usize = 256 * 1024;
+
+struct CachedSourceFace {
+    face_index: ffi::FT_Long,
+    face: ffi::FT_Face,
+}
+
+thread_local! {
+    // A one-entry cache reuses parsed immutable tables when callers repeatedly
+    // open the same small static font. The source face never escapes this
+    // thread; FT_New_Memory_Face_From_Source verifies byte equality and makes
+    // an independent mutable face for each caller.
+    static CACHED_SOURCE_FACE: RefCell<Option<CachedSourceFace>> = const { RefCell::new(None) };
+}
 
 pub(super) struct FontEngine {
     library: ffi::FT_Library,
     face: ffi::FT_Face,
-    pub(super) font_bytes: Vec<u8>,
+    pub(super) font_bytes: Rc<Vec<u8>>,
     face_index: usize,
     pub(super) size_pt: f32,
     encoding: Option<String>,
@@ -39,7 +55,7 @@ pub(super) struct FontEngine {
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
-    load_truetype_with_index(data, size, 0, None, None, None)
+    load_truetype_with_index(Rc::new(data), size, 0, None, None, None)
 }
 
 pub(super) fn load_truetype_with_options(
@@ -48,7 +64,7 @@ pub(super) fn load_truetype_with_options(
     options: &ImageFontLoadOptions,
 ) -> Result<FreeTypeFont, PilError> {
     load_truetype_with_index(
-        data,
+        Rc::new(data),
         size,
         options.index.unwrap_or(0),
         options.encoding.clone(),
@@ -58,7 +74,7 @@ pub(super) fn load_truetype_with_options(
 }
 
 fn load_truetype_with_index(
-    data: Vec<u8>,
+    data: Rc<Vec<u8>>,
     size: f32,
     face_index: usize,
     encoding: Option<String>,
@@ -79,22 +95,13 @@ fn load_truetype_with_index(
     let library = ffi::FT_Init_FreeType();
     let face_index_ffi = ffi::FT_Long::try_from(face_index)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
-    let mut face = if let Some(source) = variant_source {
-        match ffi::FT_New_Memory_Face_From_Source(
-            &library,
-            &source.engine.face,
-            &data,
-            face_index_ffi,
-        )
-        .map_err(ft_error_to_pil)?
-        {
-            Some(face) => face,
-            None => ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size)
-                .map_err(ft_error_to_pil)?,
-        }
-    } else {
-        ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size).map_err(ft_error_to_pil)?
-    };
+    let mut face = open_memory_face(
+        &library,
+        Rc::clone(&data),
+        face_index_ffi,
+        size,
+        variant_source,
+    )?;
 
     // Pillow's `getfont` selects a requested FreeType charmap immediately
     // after opening the face.  Keep the tag translation in the Rust core so
@@ -132,6 +139,67 @@ fn load_truetype_with_index(
         last_variation_index: None,
     };
     Ok(FreeTypeFont { engine })
+}
+
+fn open_memory_face(
+    library: &ffi::FT_Library,
+    data: Rc<Vec<u8>>,
+    face_index: ffi::FT_Long,
+    size: f32,
+    variant_source: Option<&FreeTypeFont>,
+) -> Result<ffi::FT_Face, PilError> {
+    if let Some(source) = variant_source {
+        if let Some(face) = ffi::FT_New_Memory_Face_From_Source(
+            library,
+            &source.engine.face,
+            data.as_slice(),
+            face_index,
+        )
+        .map_err(ft_error_to_pil)?
+        {
+            return Ok(face);
+        }
+        return ffi::FT_New_Memory_Face_Owned(library, data, face_index, size)
+            .map_err(ft_error_to_pil);
+    }
+
+    if data.len() <= MAX_CACHED_SOURCE_BYTES {
+        let cached_face = CACHED_SOURCE_FACE.with(|cache| {
+            let cache = cache.borrow();
+            match cache.as_ref() {
+                Some(cached) if cached.face_index == face_index => {
+                    ffi::FT_New_Memory_Face_From_Source(
+                        library,
+                        &cached.face,
+                        data.as_slice(),
+                        face_index,
+                    )
+                }
+                _ => Ok(None),
+            }
+        });
+        if let Some(face) = cached_face.map_err(ft_error_to_pil)? {
+            return Ok(face);
+        }
+    }
+
+    let source_face = ffi::FT_New_Memory_Face_Owned(library, Rc::clone(&data), face_index, size)
+        .map_err(ft_error_to_pil)?;
+    if data.len() <= MAX_CACHED_SOURCE_BYTES {
+        if let Some(face) =
+            ffi::FT_New_Memory_Face_From_Source(library, &source_face, data.as_slice(), face_index)
+                .map_err(ft_error_to_pil)?
+        {
+            CACHED_SOURCE_FACE.with(|cache| {
+                *cache.borrow_mut() = Some(CachedSourceFace {
+                    face_index,
+                    face: source_face,
+                });
+            });
+            return Ok(face);
+        }
+    }
+    Ok(source_face)
 }
 
 fn select_charmap(face: &mut ffi::FT_Face, encoding: Option<&str>) -> Result<(), PilError> {
@@ -552,7 +620,8 @@ pub(crate) fn font_variant_with_options(
         options
             .font_bytes
             .clone()
-            .unwrap_or_else(|| font.engine.font_bytes.clone()),
+            .map(Rc::new)
+            .unwrap_or_else(|| Rc::clone(&font.engine.font_bytes)),
         options.size.unwrap_or(font.engine.size_pt),
         load_options.index.unwrap_or(0),
         load_options.encoding,
