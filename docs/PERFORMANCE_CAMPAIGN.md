@@ -4652,3 +4652,53 @@ float, integer, 16-bit, and thumbnail resize cases. The changed RGB boxed path
 passes strict GPU parity; an isolated ordinary GPU float-resize receipt test
 also passes. Keep the broader typed/GPU receipt failures visible as separate
 blockers rather than weakening their checks. No coverage collection ran.
+
+## ImageFont.getname checkpoint — 2026-09-26
+
+The Python binding originally copied both borrowed Rust names into temporary
+`String`s before PyO3 created the returned Python strings. Attempt 1 created
+the Python strings directly from the borrowed names. Attempt 2 passed the two
+`Option<&str>` values straight to `PyTuple::new`, preserving `None` conversion
+while removing the extra match/conversion layer. Attempt 2 is retained.
+
+The live `getname.behavior.default` case passes exactly on CPU, SIMD, and GPU
+(one comparison per selected backend). Repeated calls return equal tuple
+values, while both Pillow and pillow-rs create a fresh tuple and fresh name
+strings each time. Caching those Python objects would change observable
+identity; font variation also changes the reported style name, so the binding
+must read the current Rust name fields on each call.
+
+Unprofiled 500-repeat call-phase measurements show the intended reduction:
+
+| Version | Pillow call | pillow-rs call | pillow-rs setup + call |
+| --- | ---: | ---: | ---: |
+| Original binding | 1.00 µs | 1.58 µs | 29.46 µs |
+| Attempt 1: direct borrowed strings | 1.00 µs | 1.29 µs | 28.71 µs |
+| Attempt 2: direct tuple conversion | 1.00 µs | 1.17 µs | 24.04 µs |
+
+The separate correctness-gated standard workload measured Pillow at 23.88 µs
+and CPU at 22.12 µs after attempt 2, so the whole-workflow CPU target passed
+that local sample. The getter call itself remains about 17% slower than Pillow.
+SIMD measured 30.08 µs and GPU 21.42 µs in that run, but neither has an actual
+backend receipt: returning two strings has no pixel data plane to dispatch.
+Those selector timings do not establish SIMD acceleration or GPU throughput.
+The sample is from a dirty worktree and remains diagnostic, not accepted
+backend evidence.
+
+Two measurement caveats remain. `profile_migration_benchmark.py --backend
+pillow` currently prepends the target package path even for the source side;
+it therefore imports pillow-rs `12.2.0-alpha.1` and fails the pinned Pillow
+identity check. The call-phase comparison above used the isolated source
+adapter with `PYTHONPATH` unset. Also, the pushed CI run `332568625` passed
+documentation, formatting/clippy, parity build, and Windows type-check jobs,
+but the supply-chain job failed and skipped downstream Python/WASM jobs. The
+job logs were not accessible without GitHub sign-in. Local `cargo deny` checks
+pass; local `cargo audit` exited successfully but reported a registry timeout
+while checking whether `paste 1.0.15` is yanked, so the hosted failure cause
+remains unresolved. No coverage collection ran.
+
+This checkpoint is complete for the two safe binding changes; the global SIMD
+and GPU goals remain inapplicable to this metadata-only call without changing
+its execution contract. Move to the next uncheckpointed high-gap image
+operation, `PIL.ImageOps.fit`; refresh its strict parity and workload timing
+after the `ResizeBoxed` changes before editing it.
