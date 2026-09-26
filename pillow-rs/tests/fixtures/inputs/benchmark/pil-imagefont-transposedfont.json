@@ -29,8 +29,10 @@
         "case_id": "PIL.ImageFont.TransposedFont.getbbox.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

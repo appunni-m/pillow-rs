@@ -188,8 +188,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -241,8 +243,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getlength.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -508,8 +512,10 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
