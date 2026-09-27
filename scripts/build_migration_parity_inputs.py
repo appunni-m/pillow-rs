@@ -33552,6 +33552,20 @@ def build_nuanced_cases(
             "scenario_asset": "image/rgba-small.png",
             "values": {"channel": literal(3)},
         },
+        # The generic L-mode contract case selects an invalid band. Keep a
+        # separate successful one-band input so strict backend parity reaches
+        # ExtractBand itself, while the invalid-channel case remains intact.
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "l-single-band-channel-zero",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 173,
+            "observe_result": "tobytes",
+            "values": {"channel": literal(0)},
+        },
         {
             "surface": "PIL.Image.Image",
             "operation": "getchannel",

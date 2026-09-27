@@ -15,10 +15,15 @@ struct Params {
 @group(0) @binding(2) var<uniform> params: Params;
 
 @compute @workgroup_size(64, 1, 1)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let first_pixel = gid.x * 4u;
+fn main(
+    @builtin(global_invocation_id) gid: vec3<u32>,
+    @builtin(num_workgroups) workgroups: vec3<u32>,
+) {
     let pixel_count = params.width * params.height;
-    if first_pixel >= pixel_count { return; }
+    let output_word_count = pixel_count / 4u + select(0u, 1u, pixel_count % 4u != 0u);
+    let output_word = gid.x + gid.y * workgroups.x * 64u;
+    if output_word >= output_word_count { return; }
+    let first_pixel = output_word * 4u;
 
     // LA stores its alpha band in byte 3; RGB/RGBA use the normal byte
     // offsets. `getchannel(1)` must therefore select byte 3 only for the
@@ -35,5 +40,5 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     // Four L samples share one storage word. The result buffer remains
     // word-aligned while transfer/readback moves one byte per output pixel.
-    output[gid.x] = packed;
+    output[output_word] = packed;
 }
