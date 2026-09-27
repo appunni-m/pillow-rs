@@ -1733,6 +1733,7 @@ impl Draw {
             fill,
             &crate::font::ImageFontTextOptions::default(),
         )
+        .map(|_| ())
     }
 
     /// Draws text at `(x, y)` using Pillow-compatible text options.
@@ -1755,6 +1756,7 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         self.text_with_options_inner(x, y, text, font, fill, options)
+            .map(|_| ())
     }
 
     /// Draw text after applying Pillow's host-neutral text input rules.
@@ -1816,13 +1818,26 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         let mut line_y = y;
+        let can_reuse_default_line_height = options.uses_default_mask()
+            && !matches!(self.effective_mode().as_str(), "1" | "P" | "I" | "F");
         for line in text.split('\n') {
             if line.is_empty() {
                 line_y += spacing + 10.0;
                 continue;
             }
-            self.text_with_options(x as i32, line_y as i32, line, font, fill, options)?;
-            let (_, height) = font.text_bbox(line)?;
+            let (_, rendered_height) =
+                self.text_with_options_inner(x as i32, line_y as i32, line, font, fill, options)?;
+            let height = if can_reuse_default_line_height {
+                // The default mask's measured height is the same bbox height
+                // used for line stepping; reuse it instead of laying out each
+                // glyph a second time through `font.text_bbox`.
+                rendered_height
+            } else {
+                // Stroke, anchors, and other mask options can change rendered
+                // bounds while Pillow's multiline line step still uses the
+                // plain font bbox.
+                font.text_bbox(line)?.1
+            };
             line_y += height as f64 + spacing;
         }
         Ok(())
@@ -1873,7 +1888,7 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
-    ) -> Result<(), PilError> {
+    ) -> Result<(u32, u32), PilError> {
         let mode = self.effective_mode();
         self.validate_text_options(options)?;
         let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
@@ -1907,7 +1922,7 @@ impl Draw {
             text_mask_to_rgba(mask, render_fill)
         };
         if w == 0 || h == 0 {
-            return Ok(());
+            return Ok((w, h));
         }
         let draw_x = x.saturating_add(offset.0);
         let draw_y = y.saturating_add(offset.1);
@@ -1924,7 +1939,8 @@ impl Draw {
                 color_mask,
             ),
             _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
-        }
+        }?;
+        Ok((w, h))
     }
 
     fn pack_text_ink(fill: (u8, u8, u8, u8)) -> i64 {

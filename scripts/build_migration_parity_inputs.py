@@ -151,6 +151,12 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imagedraw-imagedraw.bitmap.standard": "PIL.ImageDraw.ImageDraw.bitmap.mode.l",
     "pil-imagedraw-imagedraw.chord.standard": "PIL.ImageDraw.ImageDraw.chord.parameter-combination.legacy-001",
     "pil-imagedraw-imagedraw.ellipse.standard": "PIL.ImageDraw.ImageDraw.ellipse.parameter-combination.legacy-001",
+    # A single-line default would never exercise multiline line stepping.
+    # Reuse the reviewed two-line hello/world case so this row measures the
+    # repeated per-line rendering and spacing work named by the operation.
+    "pil-imagedraw-imagedraw.multiline-text.standard": (
+        "PIL.ImageDraw.ImageDraw.multiline_text.parameter-combination.legacy-001"
+    ),
     "pil-imagedraw-imagedraw.pieslice.standard": "PIL.ImageDraw.ImageDraw.pieslice.parameter-combination.legacy-001",
     "pil-imagedraw-imagedraw.polygon.standard": "PIL.ImageDraw.ImageDraw.polygon.parameter-combination.legacy-001",
     "pil-imagedraw-imagedraw.rectangle.standard": "PIL.ImageDraw.ImageDraw.rectangle.parameter-combination.legacy-001",
@@ -46390,6 +46396,19 @@ def build_inputs(
             isolated_default_getlength = (
                 workload_id == "pil-imagefont-imagefont.getlength.standard"
             )
+            # Measure the BASIC-layout bounding-box call after constructing
+            # Pillow's embedded default font; loading has its own workload.
+            isolated_default_getbbox = (
+                workload_id == "pil-imagefont-imagefont.getbbox.standard"
+            )
+            # Measure textlength separately from constructing its image and
+            # draw wrapper, which are independent public operations.
+            isolated_imagedraw_textlength = (
+                workload_id == "pil-imagedraw-imagedraw.textlength.standard"
+            )
+            isolated_imagedraw_multiline_text = (
+                workload_id == "pil-imagedraw-imagedraw.multiline-text.standard"
+            )
             # Measure the bounding-box method after loading the font asset.
             isolated_freetype_getbbox = (
                 workload_id == "pil-imagefont-freetypefont.getbbox.standard"
@@ -46468,6 +46487,9 @@ def build_inputs(
                             or isolated_transposed_getbbox
                             or isolated_freetype_getlength
                             or isolated_default_getlength
+                            or isolated_default_getbbox
+                            or isolated_imagedraw_textlength
+                            or isolated_imagedraw_multiline_text
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
                             or isolated_pilfont_getmask
@@ -46489,6 +46511,9 @@ def build_inputs(
                             or isolated_transposed_getbbox
                             or isolated_freetype_getlength
                             or isolated_default_getlength
+                            or isolated_default_getbbox
+                            or isolated_imagedraw_textlength
+                            or isolated_imagedraw_multiline_text
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
                             or isolated_pilfont_getmask
