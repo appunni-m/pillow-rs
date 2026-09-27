@@ -1168,6 +1168,12 @@ impl PyImage {
         }
     }
 
+    fn _clone_handle(&self) -> PyImage {
+        PyImage {
+            inner: self.inner.clone(),
+        }
+    }
+
     fn tobytes_unpacked(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
         py.detach(|| self.inner.tobytes_unpacked())
             .map_err(map_error)
@@ -1606,6 +1612,17 @@ impl PyImage {
 
     /// Return getdata formatted as PIL expects.
     fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if band.is_none() {
+            let mode = self.inner.mode().map_err(map_error)?;
+            if !matches!(
+                mode.as_str(),
+                "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+            ) {
+                let values = py.detach(|| self.inner.getdata(None)).map_err(map_error)?;
+                return Ok(PyBytes::new(py, &values).into());
+            }
+        }
+
         let formatted = py
             .detach(|| self.inner.getdata_formatted(band))
             .map_err(map_error)?;
