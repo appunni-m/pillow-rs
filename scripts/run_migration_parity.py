@@ -914,6 +914,7 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
             operation=operation,
         )
     if shape == "mask":
+        pixels = None
         try:
             raw = bytes(value)
         except Exception:
@@ -921,12 +922,19 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
                 raw = bytes(value.tobytes())
             except Exception:
                 raw = b""
-        return {
+                pixels = [json_safe(item) for item in value]
+        result = {
             "kind": "mask",
             "mode": str(getattr(value, "mode", "")),
             "size": json_safe(getattr(value, "size", None)),
             "bytes": base64.b64encode(raw).decode("ascii"),
         }
+        if pixels is not None:
+            # Multiband ImagingCore values are tuples, so bytes(core) and
+            # core.tobytes() both fail. Preserve their public sequence values
+            # instead of recording identical empty-byte placeholders.
+            result["pixels"] = pixels
+        return result
     if shape == "mask_with_offset":
         mask, offset = value
         if str(getattr(mask, "mode", "")) == "RGBA":

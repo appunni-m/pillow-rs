@@ -40117,6 +40117,72 @@ def build_nuanced_cases(
     cases.extend(resize_mode_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
     cases.extend(transform_mode_parity_cases(surface_id))
+    if surface_id == "PIL.Image.Image":
+        # Pillow returns its live ImagingCore from getdata(). In-place pixel
+        # writes update a retained sequence, while thumbnail replaces the
+        # core and leaves earlier sequences attached to the old pixels.
+        cases.append(
+            {
+                "case_id": "PIL.Image.Image.getdata.nuanced.retained-view-mutation-and-thumbnail",
+                "surface": surface_id,
+                "operation": "getdata",
+                "covers": ["PIL.Image.Image.getdata.behavior.default"],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGB"),
+                            "size": literal([2, 1]),
+                            "color": literal([1, 2, 3]),
+                        },
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": surface_id,
+                        "operation": "getdata",
+                        "receiver": binding("setup-image"),
+                        "arguments": {},
+                    },
+                    {
+                        "step_id": "noop-thumbnail",
+                        "surface": surface_id,
+                        "operation": "thumbnail",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"size": literal([4, 4])},
+                    },
+                    {
+                        "step_id": "mutate-pixel",
+                        "surface": surface_id,
+                        "operation": "putpixel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "xy": literal([0, 0]),
+                            "value": literal([7, 8, 9]),
+                        },
+                    },
+                    {
+                        "step_id": "call-after-mutation",
+                        "surface": surface_id,
+                        "operation": "getdata",
+                        "receiver": binding("setup-image"),
+                        "arguments": {},
+                    },
+                    {
+                        "step_id": "resize-thumbnail",
+                        "surface": surface_id,
+                        "operation": "thumbnail",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"size": literal([1, 1])},
+                    },
+                ],
+                "observations": ["call", "call-after-mutation"],
+            }
+        )
     return cases
 
 
@@ -46498,6 +46564,9 @@ def build_inputs(
             materialized_getchannel = (
                 workload_id == "pil-image-image.getchannel.standard"
             )
+            # Measure sequence creation after image setup; the returned
+            # values are the operation's output and remain inside timing.
+            isolated_getdata = workload_id == "pil-image-image.getdata.standard"
             eager_getcolors = workload_id == "pil-image-image.getcolors.standard"
             # Measure getmetrics after its setup-font step; the constructor is
             # a separate public workload and must not dominate this getter.
@@ -46619,6 +46688,7 @@ def build_inputs(
                         "boundary": (
                             "observed_steps"
                             if materialized_getchannel
+                            or isolated_getdata
                             or eager_getcolors
                             or isolated_getmetrics
                             or isolated_transposedfont
@@ -46646,6 +46716,7 @@ def build_inputs(
                             if materialized_getchannel
                             else ["call"]
                             if eager_getcolors
+                            or isolated_getdata
                             or isolated_getmetrics
                             or isolated_transposedfont
                             or isolated_transposed_getlength

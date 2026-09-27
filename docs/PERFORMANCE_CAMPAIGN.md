@@ -6016,3 +6016,42 @@ The call-only benchmark measured CPU at 1.917 µs and Pillow at 2.125 µs, about
 backend receipts, so they do not establish accelerator execution. The CPU
 target already beats Pillow for this input; retain the current implementation
 and move on. No coverage collection ran.
+
+## PIL.Image.Image.getdata checkpoint — 2026-09-27
+
+The original 16 × 16 call-only workload measured CPU at 15.94 µs against
+Pillow's 2.04 µs, about 7.8× slower. The hot path allocated one nested Rust
+vector per multiband pixel and then built a Python tuple for each pixel before
+returning `ImagingCore`. A compact interleaved-byte result removed those
+allocations, but its first parity pass was incomplete: the generic mask
+serializer converted failed `bytes(core)` and `core.tobytes()` calls into empty
+bytes on both sides. That hid every RGB/LA/RGBA pixel. The serializer now
+records the public tuples when byte conversion is invalid, and a focused test
+protects that distinction.
+
+The stronger parity observation exposed another contract detail: Pillow's
+returned `ImagingCore` remains live across `putpixel` and other in-place writes.
+A compact snapshot therefore failed retained-view parity despite beating the
+latency target. The final binding returns a light Python sequence backed by the
+same Rust image handle, calls `load()` before returning to preserve eager
+decode/error timing, and obtains compact bytes only when a caller consumes the
+sequence. When `thumbnail` changes the image size, the wrapper shallow-clones
+the handle and replaces only its own reference; retained sequences continue to
+read the old core. A no-op thumbnail keeps the handle shared. The retained-view
+case covers both paths, including an intervening pixel write.
+
+The focused parity run passed 26/26 cases across RGB, LA, RGBA, scalar and
+palette modes, `I`/`F`/`I;16`, band selection, invalid bands, loaded images, and
+retained views. The generated-input check also passes. Three correctness-gated
+call-only runs measured CPU at 1.667, 1.666, and 1.750 µs; Pillow measured
+2.209, 2.042, and 2.083 µs. CPU latency was 16–25% lower in every paired
+sample, with median throughput ranging from 571,000 to 600,000 calls/second
+versus Pillow's 453,000 to 490,000. This boundary measures returning the
+sequence; consuming all pixel tuples is a separate workload and remains
+unmeasured here.
+
+SIMD and GPU labels report `actual_backend: null` and `not_proven`. Returning
+host pixel data does not execute an image kernel, so these measurements do not
+claim SIMD or GPU speedup. Keep the CPU path, keep the serializer regression
+test, and rank the next operation using a fresh call-only measurement. No
+coverage collection ran.

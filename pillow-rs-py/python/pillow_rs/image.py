@@ -1,11 +1,108 @@
 """Internal Python Image class that wraps the Rust implementation."""
 from copy import deepcopy
+from operator import index as _index
 from pathlib import Path
+from sys import maxsize as _MAX_INDEX
 from typing import Any, Optional, Tuple, Union
 
 from . import _core
 from ._core import Image as RustImage
 from .enums import Palette, Resampling, Transpose
+
+
+def _image_data_bands(mode):
+    if mode in ("1", "L", "P", "I", "F", "I;16", "I;16L", "I;16B", "I;16N"):
+        return 1
+    if mode in ("LA", "La", "PA"):
+        return 2
+    if mode in ("RGB", "YCbCr", "HSV", "LAB"):
+        return 3
+    return 4
+
+
+class _CompactImageDataSequence:
+    """Lazy tuple view over compact interleaved byte samples."""
+
+    __slots__ = ("_data", "_bands")
+
+    def __init__(self, data, bands):
+        self._data = data
+        self._bands = bands
+
+    def __len__(self):
+        return len(self._data) // self._bands
+
+    def __iter__(self):
+        return (
+            tuple(self._data[offset : offset + self._bands])
+            for offset in range(0, len(self._data), self._bands)
+        )
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(len(self)))]
+        try:
+            index = _index(index)
+        except TypeError:
+            raise TypeError(
+                "list indices must be integers or slices, not "
+                f"{type(index).__name__}"
+            ) from None
+        if index > _MAX_INDEX or index < -_MAX_INDEX - 1:
+            raise IndexError("cannot fit 'int' into an index-sized integer")
+        if index < 0:
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError("list index out of range")
+        offset = index * self._bands
+        return tuple(self._data[offset : offset + self._bands])
+
+
+class _ImageDataSequence:
+    """Pillow-style live sequence over one image's current pixel storage."""
+
+    __slots__ = ("_image", "_bands", "_size", "_band")
+
+    def __init__(self, image, mode, size, band=None):
+        self._image = image
+        self._bands = _image_data_bands(mode)
+        self._size = size
+        self._band = band
+
+    def __len__(self):
+        return self._size[0] * self._size[1]
+
+    def _materialized_values(self):
+        values = self._image.getdata_formatted(self._band)
+        if isinstance(values, bytes) and self._bands > 1:
+            return _CompactImageDataSequence(values, self._bands)
+        return values
+
+    def __iter__(self):
+        return iter(self._materialized_values())
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(len(self)))]
+        try:
+            index = _index(index)
+        except TypeError:
+            raise TypeError(
+                "list indices must be integers or slices, not "
+                f"{type(index).__name__}"
+            ) from None
+        if index > _MAX_INDEX or index < -_MAX_INDEX - 1:
+            raise IndexError("cannot fit 'int' into an index-sized integer")
+        if index < 0:
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError("list index out of range")
+        x = index % self._size[0]
+        y = index // self._size[0]
+        value = self._image.getpixel_formatted((x, y))
+        if self._band is not None and isinstance(value, (tuple, list)):
+            return value[self._band]
+        return value
 
 
 class ImagingCore:
@@ -14,6 +111,8 @@ class ImagingCore:
     __slots__ = ("_values", "mode", "size")
 
     def __init__(self, values, mode=None, size=None):
+        if isinstance(values, bytes) and mode is not None and _image_data_bands(mode) > 1:
+            values = _CompactImageDataSequence(values, _image_data_bands(mode))
         self._values = values
         self.mode = mode
         self.size = size
@@ -33,6 +132,21 @@ class ImagingCore:
         ``bytes(ImagingCore)`` is only meaningful for a one-band sequence;
         Pillow does not flatten multiband tuples implicitly.
         """
+        if isinstance(self._values, bytes):
+            return self._values
+        if isinstance(self._values, _CompactImageDataSequence):
+            if not len(self._values):
+                return self._values._data
+            raise TypeError("'tuple' object cannot be interpreted as an integer")
+        if isinstance(self._values, _ImageDataSequence):
+            if self._values._bands > 1:
+                if not len(self._values):
+                    return b""
+                raise TypeError("'tuple' object cannot be interpreted as an integer")
+            values = self._values._materialized_values()
+            if isinstance(values, bytes):
+                return values
+            return _core.imaging_core_to_bytes(values)
         return _core.imaging_core_to_bytes(self._values)
 
     def tobytes(self):
@@ -110,6 +224,7 @@ class Image:
         self._native_info_omitted = frozenset()
         self._transpose_loads_info = False
         self._verify_encoded_source = False
+        self._has_getdata_views = False
 
     def _sync_observed_info(self):
         # A caller may retain the dictionary itself across an in-place core
@@ -259,7 +374,18 @@ class Image:
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
         del reducing_gap
-        self._rust_image.thumbnail(size, resample)
+        if self._has_getdata_views:
+            # Pillow replaces its core during thumbnail; previously returned
+            # getdata sequences keep the old core alive. Detach this wrapper
+            # only when thumbnail actually changes the image. A no-op must
+            # leave the core shared so later in-place writes remain visible.
+            current = self._rust_image
+            replacement = current._clone_handle()
+            replacement.thumbnail(size, resample)
+            if replacement.size != current.size:
+                self._rust_image = replacement
+        else:
+            self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
         return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
@@ -340,9 +466,11 @@ class Image:
             # Pillow preserves the palette mode for a banded P read; other
             # public band selections are exposed as a single L channel.
             return ImagingCore(values, "P" if self.mode == "P" else "L", self.size)
-        return ImagingCore(
-            self._rust_image.getdata_formatted(None), self.mode, self.size
-        )
+        self.load()
+        mode, size = self.mode, self.size
+        self._has_getdata_views = True
+        values = _ImageDataSequence(self._rust_image, mode, size)
+        return ImagingCore(values, mode, size)
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixels from scalar samples or multiband color tuples."""

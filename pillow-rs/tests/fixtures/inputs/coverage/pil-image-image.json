@@ -9238,6 +9238,7 @@
           "PIL.Image.Image.transform.nuanced.modes-I;16N-3-mesh",
           "PIL.Image.Image.transform.nuanced.modes-L-0-affine-large",
           "PIL.Image.Image.transform.nuanced.modes-RGB-0-affine-large",
+          "PIL.Image.Image.getdata.nuanced.retained-view-mutation-and-thumbnail",
           "pipeline-case.resize.materialized-smoke",
           "pipeline-case.resizeboxed.materialized-smoke",
           "pipeline-case.crop.materialized-smoke",
