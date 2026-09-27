@@ -1807,8 +1807,13 @@ fn rank_filter_impl(
 
     // For F-mode: operate on f32 values stored as 4 RGBA bytes
     if mode == Some("F") {
-        let rgba = img.to_rgba8();
-        let raw = rgba.into_raw();
+        // F-mode images use the RGBA8 raster as a four-byte float container.
+        // Borrow its byte buffer directly on the native route; converting it
+        // with `to_rgba8()` only clones the entire source before filtering.
+        let raw: std::borrow::Cow<'_, [u8]> = match img {
+            DynamicImage::ImageRgba8(rgba) => std::borrow::Cow::Borrowed(rgba.as_raw()),
+            _ => std::borrow::Cow::Owned(img.to_rgba8().into_raw()),
+        };
         let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
         if area <= SMALL_RANK_AREA {
             for y in 0..h {
@@ -1838,9 +1843,9 @@ fn rank_filter_impl(
             }
         } else {
             #[cfg(feature = "parallel")]
-            rank_filter_f_large_parallel(&raw, &mut out, w, h, half, area, rank);
+            rank_filter_f_large_parallel(raw.as_ref(), &mut out, w, h, half, area, rank);
             #[cfg(not(feature = "parallel"))]
-            rank_filter_f_large_serial(&raw, &mut out, w, h, half, area, rank);
+            rank_filter_f_large_serial(raw.as_ref(), &mut out, w, h, half, area, rank);
         }
         let result = DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
