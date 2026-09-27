@@ -4017,10 +4017,10 @@ impl ReadbackTarget {
         }
     }
 
-    fn full_frame_copy_count(&self) -> u64 {
-        // The upload is still an explicit copy. Only the staged path also
-        // records a full-frame copy from the final storage buffer.
-        1 + u64::from(matches!(self, Self::Staging(_)))
+    fn full_frame_copy_count(&self, input_uploaded: bool) -> u64 {
+        // The staged path adds a full-frame copy from the final storage
+        // buffer. Output-only generators do not count a source upload.
+        u64::from(input_uploaded) + u64::from(matches!(self, Self::Staging(_)))
     }
 }
 
@@ -4339,21 +4339,21 @@ fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError
         .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
 }
 
-/// Plan the compact ExtractBand dispatch as a near-square 2D grid. One shader
-/// invocation writes one packed word containing four output pixels, and each
-/// workgroup contains 64 invocations. The shader's flattened word index uses
-/// `u32`, so reject dimensions and padded grids outside that index range.
-fn plan_extract_band_dispatch(
+/// Plan packed-L output as a near-square 2D grid. One shader invocation writes
+/// one packed word containing four output pixels, and each workgroup contains
+/// 64 invocations. The flattened word index uses `u32`, so reject dimensions
+/// and padded grids outside that index range.
+fn plan_packed_luma8_dispatch(
     width: u32,
     height: u32,
     max_workgroups_per_dimension: u32,
 ) -> Result<(u32, u32), PilError> {
     let pixel_count = u64::from(width)
         .checked_mul(u64::from(height))
-        .ok_or_else(|| PilError::ValueError("GPU channel extraction image is too large".into()))?;
+        .ok_or_else(|| PilError::ValueError("GPU packed-luma image is too large".into()))?;
     if pixel_count == 0 || pixel_count > u64::from(u32::MAX) {
         return Err(PilError::ValueError(
-            "GPU channel extraction dimensions exceed shader indexing limits".into(),
+            "GPU packed-luma dimensions exceed shader indexing limits".into(),
         ));
     }
     if max_workgroups_per_dimension == 0 {
@@ -4361,48 +4361,45 @@ fn plan_extract_band_dispatch(
             "GPU adapter reports no compute workgroups per dimension".into(),
         ));
     }
-
     let output_words = pixel_count.div_ceil(4);
     let required_workgroups = output_words.div_ceil(64).max(1);
     let mut groups_x = required_workgroups.isqrt();
     let groups_x_square = groups_x
         .checked_mul(groups_x)
-        .ok_or_else(|| PilError::ValueError("GPU channel extraction dispatch overflows".into()))?;
+        .ok_or_else(|| PilError::ValueError("GPU packed-luma dispatch overflows".into()))?;
     if groups_x_square < required_workgroups {
-        groups_x = groups_x.checked_add(1).ok_or_else(|| {
-            PilError::ValueError("GPU channel extraction dispatch overflows".into())
-        })?;
+        groups_x = groups_x
+            .checked_add(1)
+            .ok_or_else(|| PilError::ValueError("GPU packed-luma dispatch overflows".into()))?;
     }
     groups_x = groups_x.min(u64::from(max_workgroups_per_dimension));
     let groups_y = required_workgroups.div_ceil(groups_x);
     if groups_y > u64::from(max_workgroups_per_dimension) {
         return Err(PilError::ValueError(
-            "GPU channel extraction exceeds adapter workgroup limits".into(),
+            "GPU packed-luma dispatch exceeds adapter workgroup limits".into(),
         ));
     }
 
     let padded_word_count = groups_x
         .checked_mul(groups_y)
         .and_then(|groups| groups.checked_mul(64))
-        .ok_or_else(|| PilError::ValueError("GPU channel extraction dispatch overflows".into()))?;
+        .ok_or_else(|| PilError::ValueError("GPU packed-luma dispatch overflows".into()))?;
     let Some(max_output_word) = padded_word_count.checked_sub(1) else {
         return Err(PilError::ValueError(
-            "GPU channel extraction dispatch exceeds shader indexing limits".into(),
+            "GPU packed-luma dispatch exceeds shader indexing limits".into(),
         ));
     };
     if max_output_word > u64::from(u32::MAX) {
         return Err(PilError::ValueError(
-            "GPU channel extraction dispatch exceeds shader indexing limits".into(),
+            "GPU packed-luma dispatch exceeds shader indexing limits".into(),
         ));
     }
 
     Ok((
-        u32::try_from(groups_x).map_err(|_| {
-            PilError::ValueError("GPU channel extraction dispatch is too wide".into())
-        })?,
-        u32::try_from(groups_y).map_err(|_| {
-            PilError::ValueError("GPU channel extraction dispatch is too tall".into())
-        })?,
+        u32::try_from(groups_x)
+            .map_err(|_| PilError::ValueError("GPU packed-luma dispatch is too wide".into()))?,
+        u32::try_from(groups_y)
+            .map_err(|_| PilError::ValueError("GPU packed-luma dispatch is too tall".into()))?,
     ))
 }
 
@@ -7771,7 +7768,7 @@ impl GpuInner {
         cpass.set_pipeline(&cached.pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         let (dispatch_w, dispatch_h) = match cached.variant_name {
-            "ExtractBand" => plan_extract_band_dispatch(
+            "ExtractBand" | "Constant" => plan_packed_luma8_dispatch(
                 output_dims.0,
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -9823,7 +9820,10 @@ impl GpuInner {
 
             let final_dims = prepared.final_dims;
             if chunk_end == ops.len() {
-                let size = if matches!(ops.last(), Some(PipelineOp::ExtractBand { .. })) {
+                let size = if matches!(
+                    ops.last(),
+                    Some(PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. })
+                ) {
                     compact_luma8_transfer_bytes(final_dims.0, final_dims.1)?
                 } else {
                     CheckedDims::new(final_dims.0, final_dims.1, 4)?.total_bytes() as u64
@@ -12764,8 +12764,11 @@ fn gpu_dispatch_dimensions_require_cpu(
                 | PipelineOp::GaussianBlur { .. }
         ) {
             next.1 > max_workgroups_per_dimension || next.0 > max_workgroups_per_dimension
-        } else if matches!(op, PipelineOp::ExtractBand { .. }) {
-            plan_extract_band_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
+        } else if matches!(
+            op,
+            PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. }
+        ) {
+            plan_packed_luma8_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
         } else if matches!(op, PipelineOp::Fit { .. })
             || matches!(op, PipelineOp::Resize { filter, .. }
             if !matches!(filter, ResampleFilter::Nearest)
@@ -16488,10 +16491,14 @@ impl GpuPool {
             mcode,
             op_keys
         );
+        let output_only_constant = matches!(ops, [PipelineOp::Constant { .. }]);
         gpu_log!(
-            "[GPU] step=upload start native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
+            "[GPU] step=upload start output_only_constant={output_only_constant} native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
         );
-        if native_luma16 {
+        if output_only_constant {
+            // A standalone Constant generates every output sample from its
+            // parameter; the shader does not consume the source pixels.
+        } else if native_luma16 {
             let DynamicImage::ImageLuma16(image) = img else {
                 return Err(PilError::InternalError(
                     "GPU typed layout was admitted without an ImageLuma16 source".into(),
@@ -16515,7 +16522,9 @@ impl GpuPool {
         } else {
             buffers.upload_standard_image(&gpu.queue, img)?;
         }
-        gpu_log!("[GPU] step=upload done native_luma16={native_luma16}");
+        gpu_log!(
+            "[GPU] step=upload done output_only_constant={output_only_constant} native_luma16={native_luma16}"
+        );
         gpu_log!("[GPU] step=execute_batch_impl start");
         let (final_is_a, final_w, final_h, readback, mut resource_telemetry, dispatch_count) = gpu
             .execute_batch_impl(
@@ -16593,8 +16602,11 @@ impl GpuPool {
         }
         let native_rgb = put_alpha_mode.is_none()
             && out_mode.unwrap_or_else(|| img.color()) == crate::raster::ColorType::Rgb8;
-        let native_luma8_extract = out_mode == Some(crate::raster::ColorType::L8)
-            && matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }));
+        let native_luma8_output = out_mode == Some(crate::raster::ColorType::L8)
+            && matches!(
+                ops.last(),
+                Some(PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. })
+            );
         // All command buffers are submitted before registering the mapping. The
         // batch owns A/B exclusively until the mapped view is dropped and the
         // selected primary or staging buffer has been unmapped.
@@ -16604,7 +16616,7 @@ impl GpuPool {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
             gpu.readback_to_luma16_numeric(final_w, final_h, readback_buffer)?
-        } else if native_luma8_extract {
+        } else if native_luma8_output {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else {
             gpu.readback_to_image(final_w, final_h, readback_buffer, native_rgb)?
@@ -16614,7 +16626,9 @@ impl GpuPool {
         // working images. Return successful working sets to the bounded pool;
         // every error path drops its buffers instead of risking reuse of an
         // in-flight or device-invalid resource.
-        resource_telemetry.upload_bytes = if packed_luma_colorize {
+        resource_telemetry.upload_bytes = if output_only_constant {
+            0
+        } else if packed_luma_colorize {
             CheckedDims::new(w, h, 1)?
                 .total_bytes()
                 .div_ceil(4)
@@ -16624,20 +16638,22 @@ impl GpuPool {
         } else {
             CheckedDims::new(w, h, 4)?.total_bytes() as u64
         };
-        resource_telemetry.readback_bytes = if native_luma8_extract {
+        resource_telemetry.readback_bytes = if native_luma8_output {
             compact_luma8_transfer_bytes(final_w, final_h)?
         } else {
             CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
         };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
-        resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
+        resource_telemetry.full_frame_copy_count =
+            readback.full_frame_copy_count(!output_only_constant);
         resource_telemetry.mode_conversion_count = u64::from(
-            native_luma16_convert
-                || native_luma16_paste
-                || !matches!(
-                    img,
-                    DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
-                ),
+            !output_only_constant
+                && (native_luma16_convert
+                    || native_luma16_paste
+                    || !matches!(
+                        img,
+                        DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
+                    )),
         );
         crate::compute::record_pipeline_resource_telemetry(resource_telemetry);
         crate::compute::record_pipeline_dispatch_count(dispatch_count);
@@ -16650,7 +16666,7 @@ impl GpuPool {
             // applying mode preservation again would reallocate it.
             return Ok(result);
         }
-        if native_luma8_extract {
+        if native_luma8_output {
             return Ok(result);
         }
         if let Some(mode) = put_alpha_mode {
@@ -16690,7 +16706,7 @@ mod tests {
         gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
         gpu_transform_all_fill_is_exact, gpu_transform_fill, gpu_transform_should_premultiply,
-        luma16_resample_big_endian, plan_extract_band_dispatch, readback_poll_backoff,
+        luma16_resample_big_endian, plan_packed_luma8_dispatch, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -16765,6 +16781,67 @@ mod tests {
         assert_eq!(resources.readback_bytes, pixels as u64 * 4);
         assert_eq!(resources.mode_conversion_count, 1);
         assert_eq!(crate::compute::take_pipeline_backend_override(), None);
+    }
+
+    #[test]
+    fn constant_gpu_packs_flat_luma_and_reads_back_aligned_tail() {
+        use crate::compute::BackendImpl;
+
+        let gpu = match super::GpuPool::ensure_init() {
+            Ok(gpu) => gpu,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("GPU Constant initialization failed: {error}"),
+        };
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _telemetry = RestoreTelemetry(previous);
+
+        for (width, height, value) in [(1, 1, 0), (3, 2, 173), (5, 3, 255), (7, 5, 41)] {
+            let pixel_count = width as usize * height as usize;
+            let input = (0..pixel_count * 4)
+                .map(|index| index.wrapping_mul(53).wrapping_add(19) as u8)
+                .collect();
+            let source = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(width, height, input).expect("RGBA Constant source"),
+            );
+            let op = PipelineOp::Constant { value };
+            let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGBA"))
+                .expect("CPU Constant reference");
+            let actual = super::GpuPool
+                .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGBA"))
+                .expect("strict GPU Constant");
+
+            assert_eq!(actual.color(), expected.color());
+            assert_eq!(actual.dimensions(), expected.dimensions());
+            assert_eq!(actual.as_bytes(), expected.as_bytes());
+            let resources = crate::compute::take_pipeline_resource_telemetry()
+                .expect("GPU Constant resource receipt");
+            assert_eq!(resources.upload_bytes, 0);
+            assert_eq!(
+                resources.readback_bytes,
+                super::compact_luma8_transfer_bytes(width, height).unwrap()
+            );
+            assert_eq!(resources.mode_conversion_count, 0);
+            assert_eq!(
+                resources.full_frame_copy_count,
+                u64::from(!gpu.direct_primary_readback)
+            );
+            assert_eq!(crate::compute::take_pipeline_dispatch_count(), Some(1));
+            assert_eq!(crate::compute::take_pipeline_backend_override(), None);
+        }
     }
 
     #[test]
@@ -17617,7 +17694,14 @@ mod tests {
                 assert_eq!(dispatches, operation_count as u64);
                 assert_eq!(final_is_a, operation_count % 2 == 0);
                 assert_eq!(matches!(readback, super::ReadbackTarget::Primary), direct);
-                assert_eq!(readback.full_frame_copy_count(), if direct { 1 } else { 2 });
+                assert_eq!(
+                    readback.full_frame_copy_count(true),
+                    if direct { 1 } else { 2 }
+                );
+                assert_eq!(
+                    readback.full_frame_copy_count(false),
+                    if direct { 0 } else { 1 }
+                );
                 let actual = gpu
                     .readback_to_image(width, height, readback.buffer(&buffers, final_is_a), false)
                     .unwrap();
@@ -21950,7 +22034,7 @@ mod tests {
         ] {
             let width = workgroups * 256;
             assert_eq!(
-                plan_extract_band_dispatch(width, 1, 65_535)
+                plan_packed_luma8_dispatch(width, 1, 65_535)
                     .expect("boundary image should fit the tiled grid"),
                 expected,
                 "required groups={workgroups}"
@@ -21958,7 +22042,7 @@ mod tests {
         }
 
         let (groups_x, groups_y) =
-            plan_extract_band_dispatch(5 * 256, 1, 3).expect("small tiled grid");
+            plan_packed_luma8_dispatch(5 * 256, 1, 3).expect("small tiled grid");
         assert_eq!((groups_x, groups_y), (3, 2));
         let output_words = 5 * 64;
         let mut covered = vec![false; output_words as usize];
@@ -21978,9 +22062,9 @@ mod tests {
         }
         assert!(covered.into_iter().all(|written| written));
 
-        assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
-        assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
-        assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+        assert!(plan_packed_luma8_dispatch(5 * 256, 1, 0).is_err());
+        assert!(plan_packed_luma8_dispatch(5 * 256, 1, 1).is_err());
+        assert!(plan_packed_luma8_dispatch(u32::MAX, 2, 65_535).is_err());
     }
 
     #[test]
