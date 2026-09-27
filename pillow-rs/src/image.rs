@@ -774,11 +774,119 @@ fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)> {
         .map(|(size, polynomial)| (size - 1, *polynomial))
 }
 
+enum PillowColorCounts {
+    Direct(Vec<u64>),
+    Sparse(std::collections::HashMap<u32, (u32, u32)>),
+}
+
+impl PillowColorCounts {
+    fn new(code_mask: u32, sparse_capacity: usize) -> Self {
+        // Small Pillow tables are cheap to address directly. Keeping the
+        // count and pixel key in one word removes HashMap's second hash/probe
+        // after the Pillow-compatible slot probe.
+        if code_mask <= 1023 {
+            Self::Direct(vec![0; code_mask as usize + 1])
+        } else {
+            Self::Sparse(std::collections::HashMap::with_capacity(sparse_capacity))
+        }
+    }
+
+    fn count(
+        &mut self,
+        colors: &mut usize,
+        pixel: u32,
+        maxcolors: usize,
+        code_mask: u32,
+        code_polynomial: u32,
+    ) -> bool {
+        match self {
+            Self::Direct(slots) => count_pillow_color_direct(
+                slots,
+                colors,
+                pixel,
+                maxcolors,
+                code_mask,
+                code_polynomial,
+            ),
+            Self::Sparse(table) => count_pillow_color_sparse(
+                table,
+                colors,
+                pixel,
+                maxcolors,
+                code_mask,
+                code_polynomial,
+            ),
+        }
+    }
+
+    fn into_slot_order(self, distinct_colors: usize) -> Vec<(u32, (u32, u32))> {
+        match self {
+            Self::Direct(slots) => {
+                let mut result = Vec::with_capacity(distinct_colors);
+                result.extend(slots.into_iter().enumerate().filter_map(|(slot, packed)| {
+                    (packed != 0).then_some((slot as u32, (packed as u32, (packed >> 32) as u32)))
+                }));
+                result
+            }
+            Self::Sparse(table) => {
+                let mut result: Vec<_> = table.into_iter().collect();
+                result.sort_unstable_by_key(|(slot, _)| *slot);
+                result
+            }
+        }
+    }
+}
+
 /// Insert one Pillow-packed pixel using the exact probe sequence used by
-/// `ImagingGetColors`. The map stores occupied Pillow slots sparsely, so large
-/// `maxcolors` values do not force a table allocation proportional to the
-/// requested limit.
-fn count_pillow_color(
+/// `ImagingGetColors` in a directly indexed small table.
+fn count_pillow_color_direct(
+    slots: &mut [u64],
+    colors: &mut usize,
+    pixel: u32,
+    maxcolors: usize,
+    code_mask: u32,
+    code_polynomial: u32,
+) -> bool {
+    let mut slot = (!pixel) & code_mask;
+    let mut increment = 0u32;
+    let mut first_conflict = true;
+
+    loop {
+        let entry = &mut slots[slot as usize];
+        if *entry == 0 {
+            if *colors == maxcolors {
+                return false;
+            }
+            *entry = (1u64 << 32) | u64::from(pixel);
+            *colors += 1;
+            return true;
+        }
+        if *entry as u32 == pixel {
+            let count = (*entry >> 32) as u32 + 1;
+            *entry = (u64::from(count) << 32) | u64::from(pixel);
+            return true;
+        }
+
+        if first_conflict {
+            increment = (pixel ^ (pixel >> 3)) & code_mask;
+            if increment == 0 {
+                increment = code_mask;
+            }
+            first_conflict = false;
+        } else {
+            increment <<= 1;
+            if increment > code_mask {
+                increment ^= code_polynomial;
+            }
+        }
+        slot = (slot + increment) & code_mask;
+    }
+}
+
+/// Insert one Pillow-packed pixel using the exact probe sequence used by
+/// `ImagingGetColors`. Sparse storage avoids allocations proportional to
+/// large `maxcolors` values.
+fn count_pillow_color_sparse(
     table: &mut std::collections::HashMap<u32, (u32, u32)>,
     colors: &mut usize,
     pixel: u32,
@@ -5914,12 +6022,10 @@ impl Image {
         } else {
             0
         };
-        let mut counts: std::collections::HashMap<u32, (u32, u32)> =
-            std::collections::HashMap::with_capacity(initial_capacity);
+        let mut counts = PillowColorCounts::new(code_mask, initial_capacity);
         let mut distinct_colors = 0usize;
         let mut count_pixel = |pixel: u32| {
-            count_pillow_color(
-                &mut counts,
+            counts.count(
                 &mut distinct_colors,
                 pixel,
                 max_distinct_colors,
@@ -5975,8 +6081,7 @@ impl Image {
             }
             _ => unreachable!("getcolors only supports one through four bands"),
         }
-        let mut result: Vec<_> = counts.into_iter().collect();
-        result.sort_unstable_by_key(|(slot, _)| *slot);
+        let result = counts.into_slot_order(distinct_colors);
         Ok(Some(
             result
                 .into_iter()
@@ -6153,13 +6258,11 @@ impl Image {
         } else {
             0
         };
-        let mut counts: std::collections::HashMap<u32, (u32, u32)> =
-            std::collections::HashMap::with_capacity(initial_capacity);
+        let mut counts = PillowColorCounts::new(code_mask, initial_capacity);
         let mut distinct_colors = 0usize;
         for sample in img.as_bytes().chunks_exact(4) {
             let pixel = u32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]);
-            if !count_pillow_color(
-                &mut counts,
+            if !counts.count(
                 &mut distinct_colors,
                 pixel,
                 max_distinct_colors,
@@ -6169,8 +6272,7 @@ impl Image {
                 return Ok(None);
             }
         }
-        let mut result: Vec<_> = counts.into_iter().collect();
-        result.sort_unstable_by_key(|(slot, _)| *slot);
+        let result = counts.into_slot_order(distinct_colors);
         Ok(Some(
             result
                 .into_iter()
