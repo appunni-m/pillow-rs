@@ -934,8 +934,10 @@
         "case_id": "PIL.ImageDraw.ImageDraw.textbbox.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

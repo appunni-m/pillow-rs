@@ -5819,3 +5819,17 @@ SIMD/GPU profile rows report `actual_backend: null`; this font-metric path has
 no proven accelerator dispatch. CPU is already faster than Pillow, so retain
 the change and move to the next call-only-ranked operation. No coverage
 collection ran.
+
+## PIL.ImageDraw.ImageDraw.textbbox checkpoint — 2026-09-27
+
+The old `textbbox.standard` row timed the full image/draw workflow. I changed
+the benchmark boundary to the observed `textbbox` call, leaving default-font
+construction inside that call because the public method creates a font when
+none is supplied. The existing `textbbox` parity cases are unchanged; all
+15 passed, and both benchmark parity gates passed.
+
+Two call-only runs measured CPU at 81.1 and 88.6 µs, versus Pillow at 134.2
+and 133.5 µs. CPU is about 1.5–1.65× faster on this input, so no runtime change
+was needed. SIMD/GPU-labelled profiles report `actual_backend: null`; this
+font-bounds call has no proven accelerator dispatch. Use the current residual
+single-workload ranking for the next operation. No coverage collection ran.
