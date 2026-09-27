@@ -503,11 +503,14 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024"
+        "case_id": "PIL.ImageFilter.GaussianBlur.nuanced.performance-material-rgb-noise-1024x768-radius-2"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "apply-filter",
+          "observe-filter-result"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -522,7 +525,7 @@
       "context": {
         "size": [
           1024,
-          1024
+          768
         ],
         "mode": "RGB",
         "chain_length": 2,
