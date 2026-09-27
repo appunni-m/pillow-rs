@@ -7979,7 +7979,7 @@ impl GpuInner {
                         )?;
                     }
                 }
-                {
+                if resize_dims != prepared.output_dims[index] {
                     let mut place_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                         label: Some("gpu_batch_compute_typed_pad_place"),
                         timestamp_writes: None,
@@ -8096,15 +8096,20 @@ impl GpuInner {
                         resize_dims,
                     )?;
                 }
-                current_is_a = self.encode_dispatch(
-                    &mut cpass,
-                    place,
-                    index,
-                    current_is_a,
-                    &prepared.resources,
-                    resize_dims,
-                    prepared.output_dims[index],
-                )?;
+                // When contain already fills the requested output, its
+                // horizontal/vertical resize result is the final image.
+                // Avoid a placement pass that would only copy that frame.
+                if resize_dims != prepared.output_dims[index] {
+                    current_is_a = self.encode_dispatch(
+                        &mut cpass,
+                        place,
+                        index,
+                        current_is_a,
+                        &prepared.resources,
+                        resize_dims,
+                        prepared.output_dims[index],
+                    )?;
+                }
             } else if let ResolvedPipeline::Histogram {
                 clear,
                 histogram,
@@ -11047,8 +11052,16 @@ fn gpu_dispatch_count(
         {
             2
         } else if matches!(&ops[index], PipelineOp::Pad { .. }) {
-            // Pad is an exact resize followed by a fill/copy placement pass.
-            3
+            // A no-resize pad needs only placement, and a contain result that
+            // already matches the output needs no placement dispatch.
+            gpu_pad_geometry(&ops[index], cur_w, cur_h).map_or(3, |((resize_w, resize_h), _)| {
+                let resize_passes = if (resize_w, resize_h) == (cur_w, cur_h) {
+                    0
+                } else {
+                    2
+                };
+                resize_passes + u64::from((resize_w, resize_h) != next)
+            })
         } else {
             GpuInner::blur_pass_count(&ops[index]).map_or(1usize, |passes| passes.saturating_mul(2))
                 as u64
@@ -26552,6 +26565,65 @@ mod tests {
                 None
             );
         }
+    }
+
+    #[test]
+    fn pad_dispatch_count_skips_identity_contain_resize_passes() {
+        let op = PipelineOp::Pad {
+            w: 512,
+            h: 768,
+            filter: ResampleFilter::Bicubic,
+            color: None,
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_pad_geometry(&op, 512, 512),
+            Some(((512, 512), (0, 128)))
+        );
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&op), Some("RGB"), (512, 512)),
+            1
+        );
+
+        let resize = PipelineOp::Pad {
+            w: 16,
+            h: 16,
+            filter: ResampleFilter::Bicubic,
+            color: None,
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&resize), Some("RGB"), (32, 24)),
+            3
+        );
+
+        let contain_only = PipelineOp::Pad {
+            w: 16,
+            h: 12,
+            filter: ResampleFilter::Bicubic,
+            color: None,
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_pad_geometry(&contain_only, 32, 24),
+            Some(((16, 12), (0, 0)))
+        );
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&contain_only), Some("RGB"), (32, 24)),
+            2
+        );
+
+        let identity = PipelineOp::Pad {
+            w: 32,
+            h: 24,
+            filter: ResampleFilter::Bicubic,
+            color: None,
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&identity), Some("RGB"), (32, 24)),
+            0
+        );
     }
 
     #[test]

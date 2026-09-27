@@ -17673,21 +17673,25 @@ fn native_pad_bytes(
     // cases to diverge even though no resize was required.
     let mut resize_vector_blocks = 0u64;
     let mut resize_scalar_tail = 0u64;
-    let resized = if (img.width(), img.height()) == (contained_width, contained_height) {
-        let mut copied = vec![0u8; img.as_bytes().len()];
-        let (blocks, tail) = copy_native_bytes(img.as_bytes(), &mut copied)
-            .ok_or_else(|| PilError::InternalError("SIMD pad source copy shape mismatch".into()))?;
-        resize_vector_blocks = resize_vector_blocks.saturating_add(blocks);
-        resize_scalar_tail = resize_scalar_tail.saturating_add(tail);
-        let result =
-            crate::image_utils::raw_bytes_to_image(img.width(), img.height(), copied, channels)?;
-        preserve_mode(img, result)
+    let identity_contain = (img.width(), img.height()) == (contained_width, contained_height);
+    let resized = if identity_contain {
+        None
     } else if mode == Some("F") {
-        simd_resize_f(img, contained_width, contained_height, &filter)?
+        Some(simd_resize_f(
+            img,
+            contained_width,
+            contained_height,
+            &filter,
+        )?)
     } else if mode == Some("I") {
-        simd_resize_i32(img, contained_width, contained_height, &filter)?
+        Some(simd_resize_i32(
+            img,
+            contained_width,
+            contained_height,
+            &filter,
+        )?)
     } else {
-        match filter {
+        Some(match filter {
             ResampleFilter::Nearest => {
                 simd_resize_nearest(img, contained_width, contained_height, channels)?
             }
@@ -17703,8 +17707,38 @@ fn native_pad_bytes(
                     _ => false,
                 },
             )?,
-        }
+        })
     };
+    // If contain already reaches the requested canvas there are no border
+    // bytes to fill or paste. Resized images already own their output. An
+    // identity contain still needs one independent copy to preserve ImageOps
+    // semantics, but should not allocate an intermediate source clone first.
+    if (contained_width, contained_height) == (target_width, target_height) {
+        let result = if let Some(resized) = resized {
+            preserve_mode(img, resized)
+        } else {
+            let mut copied = vec![0u8; img.as_bytes().len()];
+            let (blocks, tail) =
+                copy_native_bytes(img.as_bytes(), &mut copied).ok_or_else(|| {
+                    PilError::InternalError("SIMD pad source copy shape mismatch".into())
+                })?;
+            resize_vector_blocks = resize_vector_blocks.saturating_add(blocks);
+            resize_scalar_tail = resize_scalar_tail.saturating_add(tail);
+            preserve_mode(
+                img,
+                crate::image_utils::raw_bytes_to_image(
+                    contained_width,
+                    contained_height,
+                    copied,
+                    channels,
+                )?,
+            )
+        };
+        return Ok(Some((result, resize_vector_blocks, resize_scalar_tail)));
+    }
+    let source = resized
+        .as_ref()
+        .map_or_else(|| img.as_bytes(), DynamicImage::as_bytes);
     let source_width = usize::try_from(contained_width).map_err(|_| simd_unsupported("Pad"))?;
     let source_height = usize::try_from(contained_height).map_err(|_| simd_unsupported("Pad"))?;
     let target_width = usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
@@ -17718,7 +17752,10 @@ fn native_pad_bytes(
     let output_len = target_stride
         .checked_mul(target_height)
         .ok_or_else(|| simd_unsupported("Pad"))?;
-    if resized.as_bytes().len() != source_stride.saturating_mul(source_height)
+    if target_stride == 0 {
+        return Ok(None);
+    }
+    if source.len() != source_stride.saturating_mul(source_height)
         || offset_x.saturating_add(source_width) > target_width
         || offset_y.saturating_add(source_height) > target_height
     {
@@ -17734,28 +17771,49 @@ fn native_pad_bytes(
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = resize_vector_blocks;
     let mut scalar_tail = resize_scalar_tail;
-    for row in output.chunks_exact_mut(target_stride) {
-        let (blocks, tail) = native_fill_row(row, fill, channels)
-            .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
-    }
-    let source = resized.as_bytes();
-    for source_y in 0..source_height {
+    let fill_is_zero =
+        (0..channels).all(|sample| native_expand_fill_sample(fill, channels, sample) == 0);
+    let content_start = offset_x
+        .checked_mul(channels)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let content_end = content_start
+        .checked_add(source_stride)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    for (output_y, row) in output.chunks_exact_mut(target_stride).enumerate() {
+        if output_y < offset_y || output_y - offset_y >= source_height {
+            if !fill_is_zero {
+                let (blocks, tail) = native_fill_row(row, fill, channels).ok_or_else(|| {
+                    PilError::InternalError("SIMD pad fill shape mismatch".into())
+                })?;
+                vector_blocks = vector_blocks.saturating_add(blocks);
+                scalar_tail = scalar_tail.saturating_add(tail);
+            }
+            continue;
+        }
+
+        let source_y = output_y - offset_y;
+        if !fill_is_zero {
+            let (blocks, tail) = native_fill_row(&mut row[..content_start], fill, channels)
+                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        }
         let source_start = source_y
             .checked_mul(source_stride)
             .ok_or_else(|| simd_unsupported("Pad"))?;
-        let output_start = (offset_y + source_y)
-            .checked_mul(target_stride)
-            .and_then(|row| row.checked_add(offset_x.checked_mul(channels)?))
-            .ok_or_else(|| simd_unsupported("Pad"))?;
         let (blocks, tail) = copy_native_bytes(
             &source[source_start..source_start + source_stride],
-            &mut output[output_start..output_start + source_stride],
+            &mut row[content_start..content_end],
         )
         .ok_or_else(|| PilError::InternalError("SIMD pad copy shape mismatch".into()))?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
+        if !fill_is_zero {
+            let (blocks, tail) = native_fill_row(&mut row[content_end..], fill, channels)
+                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        }
     }
     let result = crate::image_utils::raw_bytes_to_image(
         target_width as u32,
