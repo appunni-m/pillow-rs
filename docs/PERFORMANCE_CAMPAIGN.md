@@ -6547,6 +6547,49 @@ were `make migration-parity-benchmark` with
 Strict parity artifacts are `unsharp-attempt3-cpu.json`,
 `unsharp-attempt3-simd-strict-supported.json`,
 `unsharp-attempt3-simd-fallback.json`, and `unsharp-attempt3-gpu.json`.
-The next operation nomination is `PIL.ImageOps.cover`, first refreshing its
-rank and establishing exact parity for the measured inputs on each requested
-backend; the existing ranking row uses only a successful-execution gate.
+The next operation nomination is `PIL.ImageOps.cover`. Its refreshed parity
+and bounded performance checkpoint follow.
+
+## PIL.ImageOps.cover checkpoint — 2026-09-27
+
+Cover has already consumed three optimization attempts. The retained SIMD
+change schedules small aspect-resize inputs serially and vectorizes scalar
+tails (`05d339580`); the earlier candidates and three final repeats are kept
+under `build/migration-parity/cover-{serial-candidate,tail-candidate,final-*}`.
+This operation is a dimension calculation followed by the shared resize path:
+CPU uses separable resize, SIMD uses native aspect-resize kernels, and the GPU
+planner lowers Cover to Resize. There is no separate Cover pixel kernel to
+tune without entering the shared Resize campaign. The public API documentation
+now states the actual contract: Cover preserves aspect ratio, may return
+dimensions larger than the requested box, and does not crop.
+
+Fresh strict output parity on exact source revision
+`96ea69e1b22d9f438191e9dcdf0a69ec38f5fccf` passes all 50 Cover cases on each
+backend, 150/150 comparisons total, with no failures, infrastructure errors,
+or unrun cases. Artifacts are
+`cover-current-cpu.json`, `cover-current-simd-strict-all.json`, and
+`cover-current-gpu-strict-all.json`; each receipt identifies the target as
+clean at that revision. Cases include byte, palette, and floating-point modes,
+pipeline composition, dimension rounding, and errors. This is fresh output
+parity, not evidence that every case executed an accelerated kernel.
+
+The old performance evidence cannot rank Cover reliably. Its standard
+`PIL.ImageOps.cover` row measures only lazy pipeline construction for a black
+16 × 16 identity input, while Pillow resizes eagerly. The materialized matrix
+rows use uniform black 16 × 16 and 32 × 24 inputs, a `successful_execution`
+gate, and only six samples per subject. Their final diagnostic medians (ms)
+were:
+
+| Materialized workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 16 × 16 identity | 0.01292 | 0.03729 | 0.01333 | 0.31544 |
+| 32 × 24 to cover a 16 × 16 box | 0.01602 | 0.03288 | 0.02183 | 0.31148 |
+
+These runs are stale (`e9fa12c` dirty target), use zero-valued tiny inputs, and
+are too noisy and weakly gated to establish performance. They suggest that
+small-call overhead hurts CPU and GPU, but do not establish a general backend
+ranking or throughput. The earlier SIMD scheduling/tail changes remain
+checkpointed; do not spend a fourth attempt on them. If Cover is revisited,
+first add a varied, materialized resize workload with exact parity for the
+same input on CPU, SIMD, and GPU, and enough samples to resolve both call
+latency and completed-work throughput. No coverage collection ran.
