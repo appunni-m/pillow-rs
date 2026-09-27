@@ -12958,6 +12958,20 @@ fn native_filter_load_byte_block(raw: &[u8], start: usize, active_bytes: usize) 
     f32x8::from(values)
 }
 
+/// Load up to eight RGB stream bytes through the safe portable byte-vector path.
+#[inline]
+fn native_filter_load_rgb_byte_stream_block(
+    raw: &[u8],
+    start: usize,
+    active_bytes: usize,
+) -> f32x8 {
+    debug_assert!(active_bytes <= 8);
+    let bytes = u8x16::from(&raw[start..start + active_bytes]);
+    let widened = u16x16::from(bytes);
+    let [low, _high]: [u16x8; 2] = bytemuck::cast(widened);
+    f32x8::from_i32x8(i32x8::from_u16x8(low))
+}
+
 /// Evaluate a block of complete interleaved pixels in parallel.
 ///
 /// The ordinary byte layouts are interleaved, so a vector over x positions
@@ -13030,6 +13044,110 @@ fn native_filter_3x3_rows(
         kernel,
         rounding_bias,
     );
+}
+
+/// Evaluate eight consecutive RGB channel bytes with the ordinary 3x3 math.
+///
+/// RGB uses one kernel for all three channels, so an eight-byte vector may
+/// start or end within a pixel. A horizontal neighbor is exactly three bytes
+/// away, which keeps each lane on the same channel without deinterleaving.
+#[inline]
+fn native_filter_3x3_rgb_byte_stream_vector(
+    raw: &[u8],
+    row_stride: usize,
+    y: usize,
+    output_byte_start: usize,
+    active_bytes: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> [u8; 8] {
+    debug_assert!(active_bytes <= 8);
+    debug_assert!(output_byte_start >= 3);
+    debug_assert!(output_byte_start + active_bytes <= row_stride - 3);
+
+    let row = |dy: isize, kernel_start: usize| -> f32x8 {
+        let source_start = (y as isize + dy) as usize * row_stride + output_byte_start;
+        let left = native_filter_load_rgb_byte_stream_block(raw, source_start - 3, active_bytes);
+        let middle = native_filter_load_rgb_byte_stream_block(raw, source_start, active_bytes);
+        let right = native_filter_load_rgb_byte_stream_block(raw, source_start + 3, active_bytes);
+        let sum = middle * f32x8::splat(kernel[kernel_start + 1]);
+        let sum = left.mul_add(f32x8::splat(kernel[kernel_start]), sum);
+        right.mul_add(f32x8::splat(kernel[kernel_start + 2]), sum)
+    };
+
+    let mut total = f32x8::splat(rounding_bias);
+    total += row(1, 0);
+    total += row(0, 3);
+    total += row(-1, 6);
+    let values = total.to_array();
+    std::array::from_fn(|lane| {
+        let value = values[lane];
+        if value <= 0.0 {
+            0
+        } else if value >= 255.0 {
+            255
+        } else {
+            value as u8
+        }
+    })
+}
+
+/// Apply a native RGB 3x3 kernel as one contiguous stream of channel bytes.
+///
+/// The stream covers only the interior pixels: three border bytes remain at
+/// each end of every row. Every lane reads its horizontal neighbors at -3/+3
+/// bytes, preserving channel identity while removing per-channel gathers and
+/// strided output scatters from the generic row loop.
+fn native_filter_3x3_rgb_byte_stream(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> Option<u64> {
+    let row_stride = width.checked_mul(3)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if width < 3 || height < 3 || raw.len() != expected_len || out.len() != expected_len {
+        return None;
+    }
+    let interior_bytes = row_stride - 6;
+    let blocks_per_row = interior_bytes.div_ceil(8);
+    let interior_height = height - 2;
+    let apply_row = |y: usize, output_row: &mut [u8]| {
+        let mut output_byte = 3usize;
+        let interior_end = row_stride - 3;
+        while output_byte < interior_end {
+            let active_bytes = (interior_end - output_byte).min(8);
+            let values = native_filter_3x3_rgb_byte_stream_vector(
+                raw,
+                row_stride,
+                y,
+                output_byte,
+                active_bytes,
+                kernel,
+                rounding_bias,
+            );
+            output_row[output_byte..output_byte + active_bytes]
+                .copy_from_slice(&values[..active_bytes]);
+            output_byte += active_bytes;
+        }
+    };
+
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+        let y = y as usize;
+        if (1..height - 1).contains(&y) {
+            apply_row(y, row);
+        }
+    });
+    #[cfg(not(feature = "parallel"))]
+    for y in 1..height - 1 {
+        let row_start = y * row_stride;
+        apply_row(y, &mut out[row_start..row_start + row_stride]);
+    }
+
+    Some((blocks_per_row * interior_height) as u64)
 }
 
 /// Apply a native-byte 3x3 convolution to only the active channels.
@@ -13619,26 +13737,56 @@ pub fn simd_filter_3x3(
     let channels =
         native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter3x3"))?;
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
-    if native_small_uniform_convolution_identity(
-        img,
-        channels,
-        &normalized_kernel,
-        3,
-        *offset + 0.5,
-    ) {
-        return simd_filter_identity(img, mode, "Filter3x3");
+    if let Some(filtered) =
+        native_small_uniform_3x3_convolution(img, channels, &normalized_kernel, *offset + 0.5)
+    {
+        let raw = img.as_bytes();
+        if raw[..channels] == filtered[..channels] {
+            return simd_filter_identity(img, mode, "Filter3x3");
+        }
+        let mut output = raw.to_vec();
+        let width = img.width() as usize;
+        let height = img.height() as usize;
+        let row_stride = width * channels;
+        for y in 1..height - 1 {
+            for x in 1..width - 1 {
+                let start = y * row_stride + x * channels;
+                output[start..start + channels].copy_from_slice(&filtered[..channels]);
+            }
+        }
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        let result =
+            crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
+        return Ok(preserve_mode(img, result));
     }
     let mut output = img.as_bytes().to_vec();
-    crate::compute::record_pipeline_operation_path("vector");
-    native_filter_3x3_rows(
-        img.as_bytes(),
-        &mut output,
-        img.width() as usize,
-        img.height() as usize,
-        channels,
-        &normalized_kernel,
-        *offset + 0.5,
-    );
+    let rgb_byte_stream_blocks = if channels == 3 {
+        native_filter_3x3_rgb_byte_stream(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+            &normalized_kernel,
+            *offset + 0.5,
+        )
+    } else {
+        None
+    };
+    if let Some(vector_blocks) = rgb_byte_stream_blocks {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+    } else {
+        crate::compute::record_pipeline_operation_path("vector");
+        native_filter_3x3_rows(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+            channels,
+            &normalized_kernel,
+            *offset + 0.5,
+        );
+    }
     let result =
         crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
@@ -13803,6 +13951,45 @@ fn native_small_uniform_convolution_identity(
         }
     }
     true
+}
+
+/// Return the filtered pixel tuple for a constant image, if the image is
+/// small enough to prove uniformity cheaply. A 3x3 convolution then needs one
+/// exact evaluation per channel; borders still copy the source tuple.
+fn native_small_uniform_3x3_convolution(
+    img: &DynamicImage,
+    channels: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> Option<[u8; 4]> {
+    if !(1..=4).contains(&channels)
+        || !native_small_uniform_byte_image(img, channels)
+        || img.width() < 3
+        || img.height() < 3
+    {
+        return None;
+    }
+    let first_pixel = img.as_bytes().get(..channels)?;
+    let mut filtered = [0u8; 4];
+    for channel in 0..channels {
+        let sample = f32::from(first_pixel[channel]);
+        let mut total = rounding_bias;
+        for row in 0..3 {
+            let kernel_start = row * 3;
+            let mut row_sum = sample * kernel[kernel_start + 1];
+            row_sum = sample.mul_add(kernel[kernel_start], row_sum);
+            row_sum = sample.mul_add(kernel[kernel_start + 2], row_sum);
+            total += row_sum;
+        }
+        filtered[channel] = if total <= 0.0 {
+            0
+        } else if total >= 255.0 {
+            255
+        } else {
+            total as u8
+        };
+    }
+    Some(filtered)
 }
 
 fn native_float_rank_supported_for_image(

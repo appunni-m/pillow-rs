@@ -6242,8 +6242,54 @@ beats full sort at the supported window sizes, a partial SIMD selection
 network for non-extreme ranks, and a GPU-resident or batched workload that can
 amortize transfer cost. Do not retry the branchy Wirth selector on these small
 windows without a new hypothesis; algorithmic O(n) complexity did not beat the
-bounded sort here. The next first-pass operation is Filter3x3, which remains
-one of the worst primitive workloads in the operation matrix. `cargo fmt --all
--- --check`, a no-default-features `cargo check`, all three parity lanes, the
-standard benchmarks, and both threshold-boundary oracle comparisons pass.
-No coverage collection ran.
+bounded sort here. Its checks above pass, and no coverage collection ran.
+
+## PIL.ImageFilter.Filter3x3 checkpoint — 2026-09-27
+
+Four bounded attempts retained a small-uniform-image shortcut and a flat RGB
+byte-stream SIMD kernel. The shortcut evaluates one exact 3 × 3 result per
+channel and writes only interior pixels. The RGB stream uses horizontal taps
+at ±3 bytes, so lanes can cross pixel boundaries without mixing channels;
+vertical taps use the row stride and output stores are contiguous. A safe
+`wide` byte-load/widening path improved the 40-repeat target-call median from
+1.699 ms to 1.564 ms at 1024 × 768. A one-load-plus-swizzle variant measured
+1.659 ms and was discarded. Direct NEON intrinsics were also discarded because
+the crate denies unsafe code. Backend receipts prove strict SIMD routing and
+vector-block accounting, not that the compiler emitted the intended machine
+instructions; this checkpoint has no generated-assembly inspection.
+
+The retained attempt's six-workload standard benchmark is
+`build/migration-parity/filter3x3-attempt3.json`. Median whole-workflow latency
+in microseconds was:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 16 × 16 RGB | 16.15 | 16.90 | 19.10 | 537.92 |
+| 32 × 24 RGB | 16.00 | 19.33 | 20.23 | 519.35 |
+| 1 × 1 RGB | 11.73 | 13.42 | 14.00 | 536.73 |
+| 32 × 32 RGB | 17.38 | 20.56 | 21.46 | 522.67 |
+| 256 × 256 RGB | 374.00 | 276.40 | 300.00 | 485.29 |
+| 1024 × 768 RGB | 4727.25 | 1812.96 | 1731.21 | 1947.98 |
+
+The six-sample benchmark gates successful execution; strict oracle parity is a
+separate gate. Receipts show the requested CPU, SIMD and GPU backends actually
+ran for all six workloads, with no fallback. Relative to the original SIMD
+baseline, the retained shortcut reduced medians substantially on tiny uniform
+inputs and the RGB stream cut the 1024 × 768 median from 2.275 ms to 1.731 ms.
+SIMD still misses 5× Pillow at
+every measured size: it is 2.73× faster at 1024 × 768 and slower on the four
+small cases. CPU remains slower than Pillow on the four small cases. GPU is
+slower than SIMD at every size, by about 1.13× even on the largest input. The
+operation therefore remains an open performance blocker; do not claim the
+campaign goals are met from the large-image improvement.
+
+The exact retained source passes 51/51 selected cases in each CPU, strict-SIMD
+and strict-GPU parity lane, including mode, edge, scale, offset and convolution
+controls. Attempt 4's swizzle candidate separately passed its four RGB SIMD
+cases before it was removed. No assertions or parity inputs changed. Because
+the fourth attempt did not beat attempt 3 in repeated profiling, checkpoint
+Filter3x3 here and move to `PIL.ImageChops.constant`. Its next investigation
+should measure the standalone CPU fill and GPU upload/readback/conversion costs
+before replacing the fill kernel or adding more SIMD machinery. The separate
+distinct-secondary Multiply→Screen GPU fusion case remains a later candidate;
+its large transfer and dispatch deltas need a parity-gated experiment.
