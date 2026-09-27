@@ -6380,3 +6380,27 @@ same whole-workflow benchmark on the current source first, because Filter3x3
 changed its shared smooth-filter helper. Then test only whether a validated
 factor-1 call can return an independent source copy without the smooth pass
 and blend. No coverage collection ran.
+
+## Sharpness benchmark-input blocker — 2026-09-27
+
+The fresh baseline at `dba071559f4e5699673cddd40fe759b920f26b6b` passes all 38
+Sharpness parity cases on CPU, SIMD, and GPU (114/114 total, no skips,
+failures, or infrastructure errors). The strict lane artifacts are
+`sharpness-baseline-cpu.json`, `sharpness-baseline-simd.json`, and
+`sharpness-baseline-gpu.json`.
+
+The official `pil-imageenhance-sharpness.enhance.standard` workload is not a
+valid operation-time comparison for this lazy target. Its parity case observes
+only the returned `enhance()` image; target pixels are deferred until
+materialization, while Pillow performs its work before returning. The separate
+parity run materializes and compares bytes, but the benchmark clock does not:
+CPU, SIMD, and GPU each report zero terminal time and `execution.status` of
+`not_proven`, with no actual-backend receipt. The run
+`migration-benchmark-3c25fba98b80485bb802bd54734a29b5` therefore measures
+wrapper/lazy-graph setup, not Sharpness throughput. Its one selected workload
+does pass its separate 1/1 parity sidecar; this does not validate the timed
+backend work. An existing `pipeline-case.sharpness.materialized-smoke` case
+does call `tobytes()`, but the standard benchmark does not select it, and it is
+only 16 × 16. Keep this as a documented benchmark-input blocker; do not infer
+operation speed from its approximately 8.6–8.9 μs target medians. No
+implementation change was made and no coverage ran.
