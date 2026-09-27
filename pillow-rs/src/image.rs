@@ -1525,6 +1525,16 @@ pub enum Image {
 /// Shared once-initialized operation-ready pixel result for lazy image nodes.
 pub type MaterializationCache = Arc<OnceLock<Result<Arc<DynamicImage>, PilError>>>;
 
+fn take_cached_materialization(cache: MaterializationCache) -> Result<Arc<DynamicImage>, PilError> {
+    match Arc::try_unwrap(cache) {
+        Ok(cache) => cache.into_inner(),
+        Err(cache) => cache.get().cloned(),
+    }
+    .ok_or_else(|| {
+        PilError::InternalError("materialized image cache was unexpectedly empty".to_owned())
+    })?
+}
+
 /// A materialized prefix that can be shared by flattened sibling pipelines.
 ///
 /// This cache is intentionally limited to a prefix of a mode-preserving,
@@ -2461,9 +2471,7 @@ impl Image {
     /// Returns [`PilError`] when lazy decoding, pipeline execution, or format
     /// conversion fails.
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
-        let image = self.materialized_shared()?;
-        let mode = self.mode_from_materialized(&image);
-        validate_scalar_storage(&image, &mode)?;
+        let image = self.materialized_shared_validated()?;
         Ok(image.as_ref().clone())
     }
 
@@ -2543,6 +2551,30 @@ impl Image {
                 })
                 .clone(),
         }
+    }
+
+    /// Returns shared operation-ready pixels after the same scalar-storage
+    /// validation used by [`Image::materialize`].
+    pub(crate) fn materialized_shared_validated(&self) -> Result<Arc<DynamicImage>, PilError> {
+        let image = self.materialized_shared()?;
+        let mode = self.mode_from_materialized(&image);
+        validate_scalar_storage(&image, &mode)?;
+        Ok(image)
+    }
+
+    /// Consumes an image into an owned materialization, reusing a unique
+    /// cached pixel buffer when no other handle shares it.
+    pub(crate) fn materialize_owned(self) -> Result<DynamicImage, PilError> {
+        let shared = self.materialized_shared_validated()?;
+        drop(shared);
+        let cached = match self {
+            Image::Loaded(data) => Ok(data.image),
+            Image::Paletted(data) => take_cached_materialization(data.materialized),
+            Image::Bytes { materialized, .. } | Image::Pipeline { materialized, .. } => {
+                take_cached_materialization(materialized)
+            }
+        }?;
+        Ok(Arc::try_unwrap(cached).unwrap_or_else(|shared| shared.as_ref().clone()))
     }
 
     /// Evaluates a pipeline without publishing its result into the pipeline's

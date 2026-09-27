@@ -1417,7 +1417,7 @@ impl PyImage {
         &self,
         radius: Option<f64>,
         percent: Option<i32>,
-        threshold: Option<u8>,
+        threshold: Option<i32>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let radius = radius.unwrap_or(2.0) as f32;
