@@ -6404,3 +6404,62 @@ does call `tobytes()`, but the standard benchmark does not select it, and it is
 only 16 × 16. Keep this as a documented benchmark-input blocker; do not infer
 operation speed from its approximately 8.6–8.9 μs target medians. No
 implementation change was made and no coverage ran.
+
+## PIL.ImageOps.pad checkpoint — 2026-09-27
+
+Three bounded attempts retained four changes. The CPU now pads native L, LA,
+RGB, and RGBA bytes in one row pass, filling only border spans and copying the
+contained pixels without expanding the source to RGBA. The SIMD adapter does
+the same and avoids an intermediate copy when contain leaves the source size
+unchanged; zero-filled borders reuse the destination's initialization. The
+core `pad()` entry point returns an independent copy for an exact same-size
+request. GPU Pad skips the placement dispatch when the contain result already
+matches the output, and its dispatch estimate follows the executor for identity
+contain, resize-only, and resize-plus-placement cases. Palette modes continue
+through their existing path. No parity inputs or assertions changed.
+
+Strict parity on the retained source snapshot passes all 267 selected Pad
+cases on each of CPU, SIMD, and GPU: `pad-attempt3-cpu.json`,
+`pad-attempt3-simd.json`, and `pad-attempt3-gpu.json` each report 267/267,
+with no skips, failures, or infrastructure errors. The GPU execution receipt
+records 135 GPU receipts and two CPU host-semantic controls for unsafe primary
+dimensions; receipt availability is smaller than the selected case count and
+is not itself a 267-case backend-parity claim. The two-workload benchmark
+sidecar `pad-large-attempt3-parity.json` passes 2/2. The focused Rust tests for
+GPU dispatch counts and same-size core copies pass; `make build-parity`, Rust
+formatting, and `git diff --check` pass. No coverage ran.
+
+The benchmark uses Pillow 12.2.0 and a materialized 512 × 512 RGB source padded
+to 512 × 768, timed through `call` and result-byte observation, with 100 samples
+per subject. All three attempt artifacts report actual CPU, SIMD, and GPU
+execution without fallback. Median whole-workflow latency in milliseconds was:
+
+| Attempt | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 1, `pad-large-attempt1.json` | 0.26604 | 0.23388 | 0.17415 | 1.13917 |
+| 2, `pad-large-attempt2.json` | 0.30119 | 0.20008 | 0.09246 | 1.15048 |
+| 3, `pad-large-attempt3.json` | 0.31390 | 0.19138 | 0.11121 | 1.15352 |
+
+The best paired result is attempt 2: CPU is 1.50× faster than Pillow and SIMD
+is 3.26× faster, short of the 5× goal. Attempt 3's CPU is 1.64× faster, while
+its SIMD is 2.82× faster; the timing spread means this does not establish an
+attempt-3 SIMD regression. GPU remains about 3.7× slower than Pillow and 10.4×
+slower than SIMD in attempt 3. Its one-dispatch large Pad still uploads
+1,048,576 bytes and reads back 1,572,864 bytes. On the 16 × 16 equal-aspect
+resize-only workload, attempt 3 uses two GPU dispatches after dropping the
+empty placement pass, but still measures 0.20927 ms versus Pillow's 0.00638 ms.
+CPU and SIMD also lose to Pillow on that tiny workload. The result confirms
+that removing redundant copies and dispatches helps, while per-call overhead,
+transfers, and result export still dominate GPU latency; Pad remains an open
+campaign blocker on every backend goal.
+
+The benchmark and strict artifacts identify base revision `9ce418c3` as dirty.
+The exact code-only patch measured in attempt 3 has SHA-256
+`66c8948100a421d19117ba8d76a021a84cafa2523a3bd337956cd79d146e9101`; the
+artifacts do not embed this patch hash. Keep that limitation with the evidence.
+The next Pad investigation is reducing GPU host/device transfers and
+materialization costs; do not spend another attempt on the same copy/dispatch
+removals without a new measurable hypothesis. Checkpoint Pad after three
+attempts and continue with `PIL.ImageFilter.UnsharpMask`, first replacing its
+uniform 16 × 16 benchmark signal with a parity-gated varied RGB workload whose
+source setup stays outside timing.
