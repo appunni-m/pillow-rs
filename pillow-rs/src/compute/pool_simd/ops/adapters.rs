@@ -14600,6 +14600,8 @@ fn simd_order_statistic_filter(
 
 const SIMD_FLOAT_ORDER_STATISTIC_MAX_AREA: usize = 81;
 const SIMD_FLOAT_ORDER_STATISTIC_LANES: usize = 8;
+#[cfg(feature = "parallel")]
+const SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 // The byte-domain selector switches away from the fixed network above 5x5,
 // but the existing F-mode vector sorter is independently bounded by its
 // 9x9/81-value storage. Keep that exact F-mode contract available.
@@ -14787,16 +14789,34 @@ fn simd_float_order_statistic_filter(
     let raw = img.as_bytes();
     let mut output = raw.to_vec();
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        &mut output,
-        width * 4,
-        height,
-        |_row_start, _row_end, y, row| {
+    if width.saturating_mul(height) >= SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            width * 4,
+            height,
+            |_row_start, _row_end, y, row| {
+                rank_filter_float_order_statistic_row(
+                    raw, row, width, height, size, half, area, rank, y as usize,
+                );
+            }
+        );
+    } else {
+        for y in 0..height {
+            let row_start = y * width * 4;
+            let row_end = row_start + width * 4;
             rank_filter_float_order_statistic_row(
-                raw, row, width, height, size, half, area, rank, y as usize,
+                raw,
+                &mut output[row_start..row_end],
+                width,
+                height,
+                size,
+                half,
+                area,
+                rank,
+                y,
             );
         }
-    );
+    }
     #[cfg(not(feature = "parallel"))]
     for y in 0..height {
         let row_start = y * width * 4;

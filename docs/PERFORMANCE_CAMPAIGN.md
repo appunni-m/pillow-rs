@@ -6198,3 +6198,52 @@ GPU transfer floors mean this operation alone cannot meet GPU-equals-SIMD.
 Artifacts are `build/migration-parity/perf-getchannel-revisit-compact-output.json`,
 `perf-getchannel-revisit-vectorized-repeat.json`, and
 `perf-getchannel-revisit-parallel-vector.json`. No coverage collection ran.
+
+## PIL.ImageFilter.RankFilter checkpoint — 2026-09-27
+
+Three bounded attempts kept two changes: the F-mode SIMD adapter now processes
+rows serially below 1,024 output pixels and keeps the same vector kernel; at or
+above the threshold it uses Rayon. A direct oracle comparison passes at both
+1,023 and 1,024 pixels. The CPU F-mode path also borrows the existing RGBA8
+float-byte container instead of cloning it through `to_rgba8()`; the conversion
+fallback remains for other storage variants. A Pillow-compatible Wirth
+quickselect was tried for CPU F-mode and reverted: its 9 × 9 profile was about
+2% slower than the bounded full sort, with no small-window gain. The reference
+algorithm is visible in [Pillow's RankFilter.c](https://raw.githubusercontent.com/python-pillow/Pillow/main/src/libImaging/RankFilter.c).
+
+The final exact-source parity artifacts, `rankfilter-final-cpu.json`,
+`rankfilter-final-simd.json`, and `rankfilter-final-gpu.json`, each pass all 78
+selected RankFilter cases with no skips, failures, or infrastructure errors.
+The serial/parallel boundary check also passes against live Pillow at 31 × 33
+and 32 × 32 in strict SIMD mode. No assertions or parity inputs changed.
+
+The standard correctness-gated benchmark artifact is
+`build/migration-parity/rankfilter-final-benchmark.json`. Each workflow records
+its requested native backend without fallback. Median times and operations per
+second were:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| F rank 3 × 3, materialized | 0.01917 ms / 52,215 ops/s | 0.06098 ms / 16,401 ops/s | 0.02027 ms / 49,353 ops/s | 0.37617 ms / 2,659 ops/s |
+| F rank 9 × 9, composed chain | 0.03977 ms / 25,171 ops/s | 0.27073 ms / 3,700 ops/s | 0.07625 ms / 13,115 ops/s | 2.24533 ms / 445 ops/s |
+
+The SIMD scheduling change reduced the small-workload median from 0.06352 ms
+to 0.02027 ms and the 9 × 9 median from 0.12796 ms to 0.07625 ms across the
+standard runs. RankFilter remains incomplete: CPU is 3.18× and 6.81× slower
+than Pillow on these two workflows; SIMD is 1.06× and 1.92× slower, short of
+the 5× goal. GPU is 19.63× and 56.46× slower than Pillow, and 18.6× and 29.5×
+slower than SIMD. Its terminal phase is 0.333 ms for the tiny workflow and
+2.212 ms for the 9 × 9 workflow, so device transfer/readback dominates these
+standalone cases. The no-copy CPU path has not yet been shown to improve a
+large raster end to end.
+
+The remaining investigations are a lower-cost exact CPU order statistic that
+beats full sort at the supported window sizes, a partial SIMD selection
+network for non-extreme ranks, and a GPU-resident or batched workload that can
+amortize transfer cost. Do not retry the branchy Wirth selector on these small
+windows without a new hypothesis; algorithmic O(n) complexity did not beat the
+bounded sort here. The next first-pass operation is Filter3x3, which remains
+one of the worst primitive workloads in the operation matrix. `cargo fmt --all
+-- --check`, a no-default-features `cargo check`, all three parity lanes, the
+standard benchmarks, and both threshold-boundary oracle comparisons pass.
+No coverage collection ran.
