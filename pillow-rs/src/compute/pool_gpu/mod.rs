@@ -12775,12 +12775,6 @@ fn gpu_dispatch_dimensions_require_cpu(
             None if op_has_explicit_output_dimensions(op) => return true,
             None => (cur_w, cur_h),
         };
-        // The rolling blur shaders are deliberately 1x1 workgroups: one
-        // invocation owns a complete row or column. Their dispatch grid is
-        // therefore (1, height) for the horizontal pass and (width, 1) for
-        // the vertical pass, unlike the ordinary 16x16 kernels. Checking
-        // only ceil(dim / 16) would admit a tall, narrow image and let the
-        // later blur dispatch exceed the adapter's per-dimension limit.
         let dispatch_exceeds_limit = if matches!(op, PipelineOp::Pad { .. }) {
             let Some(((resize_w, resize_h), _)) = gpu_pad_geometry(op, cur_w, cur_h) else {
                 return true;
@@ -12797,7 +12791,7 @@ fn gpu_dispatch_dimensions_require_cpu(
                 | PipelineOp::BoxBlurXY { .. }
                 | PipelineOp::GaussianBlur { .. }
         ) {
-            next.1 > max_workgroups_per_dimension || next.0 > max_workgroups_per_dimension
+            plan_blur_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
         } else if matches!(op, PipelineOp::ExtractBand { .. }) {
             plan_extract_band_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
         } else if matches!(op, PipelineOp::Fit { .. })
@@ -12830,8 +12824,15 @@ fn gpu_dispatch_dimensions_require_cpu(
 }
 
 /// Keep finite-but-expensive kernels below a conservative watchdog budget.
-/// The estimate counts the inner loop body per output pixel; kernels without
+/// The estimate counts channel-sample work per output pixel; kernels without
 /// dynamic inner work return false and remain eligible for GPU dispatch.
+fn gpu_blur_pass_work_items(radius: u32) -> u64 {
+    let taps = u64::from(radius).saturating_mul(2).saturating_add(1);
+    // The shader sums four packed channels for every window sample and reads
+    // two more packed pixels for fractional edge weights.
+    taps.saturating_mul(4).saturating_add(8)
+}
+
 fn gpu_shader_work_items(
     op: &PipelineOp,
     source_dimensions: (u32, u32),
@@ -12876,28 +12877,21 @@ fn gpu_shader_work_items(
         );
     }
     let inner_work = match op {
-        PipelineOp::BoxBlur { radius } => {
-            let _ = radius;
-            // One remove/add update per pixel in each of the horizontal and
-            // vertical rolling passes. Count four channels plus edge reads;
-            // the radius-sized initialization is paid once per row/column.
-            24
-        }
+        PipelineOp::BoxBlur { radius } => gpu_blur_pass_work_items(*radius).saturating_mul(2),
         PipelineOp::BoxBlurXY {
             radius_x,
             radius_y,
             passes,
         } => {
-            let _ = (radius_x, radius_y);
-            24 * u64::from((*passes).max(1))
+            let radius_x = registry::separable_box_blur_params_f32(*radius_x)?[0];
+            let radius_y = registry::separable_box_blur_params_f32(*radius_y)?[0];
+            gpu_blur_pass_work_items(radius_x)
+                .saturating_add(gpu_blur_pass_work_items(radius_y))
+                .saturating_mul(u64::from((*passes).max(1)))
         }
         PipelineOp::GaussianBlur { sigma } => {
-            let _ = sigma;
-            // GaussianBlur expands to three horizontal and three vertical
-            // rolling passes. The estimate is radius-independent; each
-            // pass advances one window per output pixel and pays its
-            // radius-sized initialization once per row/column.
-            72
+            let radius = registry::separable_gaussian_blur_radius(*sigma)?;
+            gpu_blur_pass_work_items(radius).saturating_mul(6)
         }
         PipelineOp::MedianFilter { size } | PipelineOp::RankFilter { size, .. } => {
             // These shaders insertion-sort four channel arrays. The sort is
@@ -16723,10 +16717,10 @@ mod tests {
         gpu_palette_alpha_projective_relocation_is_admitted,
         gpu_palette_first_rgb_merge_is_supported, gpu_projective_filtered_constant_is_admitted,
         gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
-        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
-        gpu_transform_all_fill_is_exact, gpu_transform_fill, gpu_transform_should_premultiply,
-        luma16_resample_big_endian, plan_blur_dispatch, plan_extract_band_dispatch,
-        readback_poll_backoff,
+        gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, gpu_shader_work_items,
+        gpu_shader_work_requires_cpu, gpu_transform_all_fill_is_exact, gpu_transform_fill,
+        gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
+        plan_extract_band_dispatch, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -22059,6 +22053,41 @@ mod tests {
                 "{width}x{height} dispatch must cover every pixel exactly once"
             );
         }
+    }
+
+    #[test]
+    fn blur_dispatch_dimensions_allow_grid_stride_past_device_grid() {
+        let op = PipelineOp::BoxBlur { radius: 1 };
+        assert!(!gpu_dispatch_dimensions_require_cpu(
+            std::slice::from_ref(&op),
+            (65, 33),
+            4,
+            Some("RGB")
+        ));
+    }
+
+    #[test]
+    fn blur_shader_work_estimate_scales_with_radius() {
+        let dimensions = (4096, 4096);
+        let small = PipelineOp::GaussianBlur { sigma: 2.0 };
+        let larger = PipelineOp::GaussianBlur { sigma: 3.0 };
+        let small_work = gpu_shader_work_items(&small, dimensions, dimensions, Some("RGB"))
+            .expect("bounded small Gaussian blur");
+        let larger_work = gpu_shader_work_items(&larger, dimensions, dimensions, Some("RGB"))
+            .expect("bounded larger Gaussian blur");
+        assert!(larger_work > small_work);
+        assert!(!gpu_shader_work_requires_cpu(
+            &small,
+            dimensions,
+            dimensions,
+            Some("RGB")
+        ));
+        assert!(gpu_shader_work_requires_cpu(
+            &larger,
+            dimensions,
+            dimensions,
+            Some("RGB")
+        ));
     }
 
     #[test]
