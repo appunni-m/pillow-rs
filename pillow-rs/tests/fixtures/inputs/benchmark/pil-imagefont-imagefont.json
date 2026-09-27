@@ -107,35 +107,8 @@
         }
       ],
       "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "font",
-            "surface": "PIL.ImageFont",
-            "operation": "load_default",
-            "receiver": null,
-            "arguments": {}
-          },
-          {
-            "step_id": "call",
-            "surface": "PIL.ImageFont.ImageFont",
-            "operation": "getlength",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "font"
-            },
-            "arguments": {
-              "text": {
-                "kind": "literal",
-                "value": "Hello"
-              }
-            }
-          }
-        ],
-        "observations": [
-          "call"
-        ]
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.ImageFont.getlength.nuanced.loaded-pilfont-parity"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -151,7 +124,7 @@
         "samples": 5,
         "concurrency": 1,
         "cache_state": "warm",
-        "correctness_gate": "successful_execution"
+        "correctness_gate": "parity_pass"
       },
       "context": {
         "size": [
@@ -159,7 +132,7 @@
           0
         ],
         "mode": "unknown",
-        "chain_length": 2,
+        "chain_length": 1,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
