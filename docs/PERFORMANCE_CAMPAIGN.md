@@ -6334,6 +6334,18 @@ fractional edge weights, replicated borders, intermediate byte rounding, and
 channel layout remain intact. A focused planner unit checks grid bounds and
 exact single coverage of each pixel.
 
+A post-checkpoint code review found that GPU admission still budgeted the old
+radius-independent rolling-window work. The new per-pixel stencil repeats its
+window for every output, so the guard now counts the four channel samples per
+tap and the two fractional-edge samples, multiplied by the actual radius and
+number of passes. Blur preflight also uses the bounded planner instead of
+rejecting a dimension merely because its pixel count exceeds the workgroup
+limit; the shader grid-strides the remaining pixels. Focused tests cover
+radius-scaled rejection at the maximum image size and dispatch dimensions
+larger than the device grid. Large-radius, maximum-size blurs can still be
+routed to CPU by the watchdog budget; a rolling or hierarchical GPU kernel is
+needed before those workloads can stay on GPU safely.
+
 Attempt 2 made SIMD radius-1 accumulation calculate each three-tap output
 independently. Its SIMD median regressed from 4.020 ms to 4.568 ms, so that
 change was removed. Attempt 3 routed CPU and SIMD through a shared cache-tiled
@@ -6353,8 +6365,8 @@ filter application and terminal output observation, with image construction
 outside the timer.
 
 The final exact-output benchmark is
-`build/migration-parity/gaussianblur-e9fa-final.json`, with its gate in
-`gaussianblur-e9fa-final-parity.json`. It uses varied RGB noise at 1,024 × 768,
+`build/migration-parity/gaussianblur-e9fa-guardfix.json`, with its gate in
+`gaussianblur-e9fa-guardfix-parity.json`. It uses varied RGB noise at 1,024 × 768,
 radius 2, warm cache, five warmups, 20 iterations per sample, five samples,
 and concurrency one. The measured steps are `apply-filter` and
 `observe-filter-result`; filter-object construction and image creation are
@@ -6362,7 +6374,7 @@ outside the timer. The final benchmark input asset is
 `86cffa627633d9bf0b8b7ddfb2826c433a8b3841361a06087770b989876595ed`; the
 manifest hash is `c3c3c6c6c25ca8bbd51f7b37cf9dccdf86bc983bf2768cd8ed45ac75cb8860d`.
 It ran on macOS 15.7.7 arm64 with Pillow 12.2.0 and target revision
-`ac64b428066e56ffbabf78b72dc00e98ccdb385a` (`dirty: true`).
+`b38c616d0eb91402dd4bdf5a73e93e7719fffc38` (`dirty: true`).
 
 | Run | Pillow ms | CPU ms | SIMD ms | GPU ms |
 | --- | ---: | ---: | ---: | ---: |
@@ -6370,27 +6382,29 @@ It ran on macOS 15.7.7 arm64 with Pillow 12.2.0 and target revision
 | Attempt 1: output-parallel GPU blur | 5.625 | 4.792 | 4.020 | 2.955 |
 | Attempt 2: direct three-tap SIMD (reverted) | 5.651 | 4.718 | 4.568 | 2.905 |
 | Attempt 3: shared tiled transpose (reverted) | 5.658 | 5.344 | 4.595 | 2.962 |
-| Final retained GPU kernel | 5.957 | 5.211 | 4.476 | 3.162 |
+| Final radius-aware GPU admission | 5.710 | 4.780 | 4.121 | 2.974 |
 
-The final medians show CPU 1.14× faster than Pillow and SIMD 1.33× faster,
-still far short of the 5× SIMD goal. GPU is 1.42× faster than SIMD by median
-latency. All 100 measured GPU executions used the GPU, with one GaussianBlur
-operation, six dispatches, no fallback, 3,145,728 bytes uploaded and the same
-amount read back. The listed throughput metric is reciprocal single-request
-latency at concurrency one; it does not establish sustained throughput. The
-final result is slower than Attempt 1 on all subjects, including Pillow, so
-the small differences between these runs are host/run variance, not evidence
-that the kernel changed CPU or SIMD performance.
+After the guard correction, `gaussianblur-e9fa-guardfix.json` supersedes the
+earlier `gaussianblur-e9fa-final.json`. Its run ID is
+`migration-benchmark-99b5ac7ddb84459d971f4bc4470d2858`, on target revision
+`b38c616d0eb91402dd4bdf5a73e93e7719fffc38` (`dirty: true`). CPU is 1.19×
+faster than Pillow and SIMD 1.39× faster, still far short of the 5× SIMD goal.
+GPU is 1.39× faster than SIMD by median latency. All 100 measured GPU
+executions used the GPU, with one GaussianBlur operation, six dispatches, no
+fallback, 3,145,728 bytes uploaded and the same amount read back. The listed
+throughput metric is collected at concurrency one; it does not establish
+sustained throughput. Differences between attempts include host/run variance,
+so use these results as workload-specific measurements, not universal ratios.
 
 Strict exact-output parity passed 5/5 selected cases in each CPU, SIMD, and GPU
-lane (15/15 total): odd-width RGB BoxBlur plus GaussianBlur on varied RGB
-1,024 × 768 and varied `L`, `LA`, and `RGBA` images. Each selected backend was
-required to run without fallback. The benchmark's own exact-output gate also
-passed on CPU, SIMD, and GPU. These five cases do not establish parity for
-every image size, radius, or border shape. The retained planner test,
-`make fmt`, `make clippy`, `make migration-parity-inputs-check`,
-`make build-parity`, and the timing-parser unit test passed. No coverage
-collection ran.
+lane (15/15 total) after the guard correction: odd-width RGB BoxBlur plus
+GaussianBlur on varied RGB 1,024 × 768 and varied `L`, `LA`, and `RGBA`
+images. Each selected backend was required to run without fallback. The
+benchmark's own exact-output gate also passed on CPU, SIMD, and GPU. These
+five cases do not establish parity for every image size, radius, or border
+shape. The planner/grid-budget Rust tests, `make fmt`, `make clippy`,
+`make migration-parity-inputs-check`, `make build-parity`, and the
+timing-parser unit test passed. No coverage collection ran.
 
 The GPU remains transfer-bound for standalone calls: each request stages a
 3 MiB input and output and performs six dispatches. First investigate keeping
