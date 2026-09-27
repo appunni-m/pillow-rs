@@ -6416,7 +6416,8 @@ core `pad()` entry point returns an independent copy for an exact same-size
 request. GPU Pad skips the placement dispatch when the contain result already
 matches the output, and its dispatch estimate follows the executor for identity
 contain, resize-only, and resize-plus-placement cases. Palette modes continue
-through their existing path. No parity inputs or assertions changed.
+through their existing path. No public parity inputs or parity expectations
+changed; focused Rust assertions cover the same-size copy and dispatch counts.
 
 Strict parity on the retained source snapshot passes all 267 selected Pad
 cases on each of CPU, SIMD, and GPU: `pad-attempt3-cpu.json`,
@@ -6430,12 +6431,14 @@ GPU dispatch counts and same-size core copies pass; `make build-parity`, Rust
 formatting, and `git diff --check` pass. No coverage ran.
 
 The benchmark uses Pillow 12.2.0 and a materialized 512 × 512 RGB source padded
-to 512 × 768, timed through `call` and result-byte observation, with 100 samples
-per subject. All three attempt artifacts report actual CPU, SIMD, and GPU
-execution without fallback. Median whole-workflow latency in milliseconds was:
+to 512 × 768, timed through the `call` and result-byte observation steps, with
+100 samples per subject. All three attempt artifacts report actual CPU, SIMD,
+and GPU execution without fallback. Median measured-step latency in
+milliseconds was:
 
 | Attempt | Pillow | CPU | SIMD | GPU |
 | --- | ---: | ---: | ---: | ---: |
+| Pre-attempt baseline, `pad-large-baseline-observed.json` | 0.29815 | 0.49048 | 0.88319 | 1.19227 |
 | 1, `pad-large-attempt1.json` | 0.26604 | 0.23388 | 0.17415 | 1.13917 |
 | 2, `pad-large-attempt2.json` | 0.30119 | 0.20008 | 0.09246 | 1.15048 |
 | 3, `pad-large-attempt3.json` | 0.31390 | 0.19138 | 0.11121 | 1.15352 |
@@ -6443,8 +6446,11 @@ execution without fallback. Median whole-workflow latency in milliseconds was:
 The best paired result is attempt 2: CPU is 1.50× faster than Pillow and SIMD
 is 3.26× faster, short of the 5× goal. Attempt 3's CPU is 1.64× faster, while
 its SIMD is 2.82× faster; the timing spread means this does not establish an
-attempt-3 SIMD regression. GPU remains about 3.7× slower than Pillow and 10.4×
-slower than SIMD in attempt 3. Its one-dispatch large Pad still uploads
+attempt-3 SIMD regression. Against the pre-attempt target baseline, attempt 3
+improves CPU by 2.56× and SIMD by 7.94×, but the paired Pillow comparison
+still misses the SIMD goal. GPU improves only about 3% from baseline and
+remains about 3.7× slower than Pillow and 10.4× slower than SIMD in attempt 3.
+Its one-dispatch large Pad still uploads
 1,048,576 bytes and reads back 1,572,864 bytes. On the 16 × 16 equal-aspect
 resize-only workload, attempt 3 uses two GPU dispatches after dropping the
 empty placement pass, but still measures 0.20927 ms versus Pillow's 0.00638 ms.
