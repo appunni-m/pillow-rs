@@ -239,6 +239,13 @@ BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
         ),
         "step_ids": ["apply-filter", "observe-filter-result"],
     },
+    "pil-image-image.crop.standard": {
+        "case_id": (
+            "PIL.Image.Image.crop.nuanced."
+            "performance-material-rgb-noise-1024x768-box-97-65-928-704"
+        ),
+        "step_ids": ["call", "observe-result"],
+    },
     "pil-imagechops.multiply.standard": {
         "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
         "step_ids": [],
@@ -40130,6 +40137,39 @@ def build_nuanced_cases(
 
     if surface_id == "PIL.Image.Image":
         specs += ({
+            "surface": "PIL.Image.Image", "operation": "crop",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768-box-97-65-928-704",
+            "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20260928, "observe_result": "tobytes",
+            "values": {"box": literal([97, 65, 928, 704])},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        specs += ({
+            "surface": "PIL.Image.Image", "operation": "crop",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768-full-width-box-0-65-1024-704",
+            "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20260928, "observe_result": "tobytes",
+            "values": {"box": literal([0, 65, 1024, 704])},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        # Keep crop channel packing and row-tail behavior visible on every
+        # backend with varied input; the material RGB case carries timing.
+        for mode, seed in (("L", 20260929), ("LA", 20260930), ("RGBA", 20260931)):
+            specs += ({
+                "surface": "PIL.Image.Image", "operation": "crop",
+                "requirement_suffix": "performance.standard",
+                "name": f"backend-noise-{mode.lower()}-65x47-box-5-7-62-41",
+                "mode": mode, "size": [65, 47], "edge": "noise-fill",
+                "seed": seed, "observe_result": "tobytes",
+                "values": {"box": literal([5, 7, 62, 41])},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
+        specs += ({
             "surface": "PIL.Image.Image", "operation": "reduce",
             "requirement_suffix": "performance.standard",
             "name": "performance-material-rgb-noise-1024x768-factor-3x5",
@@ -43310,7 +43350,7 @@ def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
 def _pipeline_operation_class(variant: str, surface: str, operation: str) -> str:
     """Classify a benchmark workload for operation-class performance gates."""
 
-    if surface == "PIL.Image.Image" and operation == "reduce":
+    if surface == "PIL.Image.Image" and operation in {"crop", "reduce"}:
         return "geometry"
     if surface == "PIL.ImageEnhance.Sharpness":
         return "neighborhood"
@@ -46738,8 +46778,8 @@ def build_inputs(
                 workload_id == "pil-imageenhance-sharpness.enhance.standard"
             )
             materialized_reduce = workload_id == "pil-image-image.reduce.standard"
-            isolated_gaussian_blur = (
-                workload_id == "pil-imagefilter.gaussianblur.standard"
+            isolated_pipeline_workload = bool(
+                pipeline_workload and pipeline_workload.get("step_ids")
             )
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
@@ -46872,7 +46912,7 @@ def build_inputs(
                             if materialized_getchannel
                             or materialized_sharpness
                             or materialized_reduce
-                            or isolated_gaussian_blur
+                            or isolated_pipeline_workload
                             or isolated_getdata
                             or isolated_get_flattened_data
                             or eager_getcolors
@@ -46898,8 +46938,8 @@ def build_inputs(
                             else "whole_workflow"
                         ),
                         "step_ids": (
-                            ["apply-filter", "observe-filter-result"]
-                            if isolated_gaussian_blur
+                            pipeline_workload["step_ids"]
+                            if isolated_pipeline_workload
                             else ["call", "observe-result"]
                             if materialized_getchannel or materialized_reduce
                             else ["setup-sharpness-2", "call", "observe-result"]
@@ -47000,6 +47040,30 @@ def build_inputs(
                 members.append(
                     {"workload_id": identity_workload_id, "weight": 1}
                 )
+            if workload_id == "pil-image-image.crop.standard":
+                full_width_case_id = (
+                    "PIL.Image.Image.crop.nuanced."
+                    "performance-material-rgb-noise-1024x768-"
+                    "full-width-box-0-65-1024-704"
+                )
+                full_width_case = all_cases_by_id[full_width_case_id]
+                full_width_workload_id = (
+                    "pil-image-image.crop.materialized.full-width-rgb-1024x768"
+                )
+                full_width_workload = copy.deepcopy(workloads[-1])
+                full_width_workload["workload_id"] = full_width_workload_id
+                full_width_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": full_width_case_id,
+                }
+                full_width_workload["context"] = _workflow_benchmark_context(
+                    full_width_case,
+                    variant="materialized-full-width-rgb-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(full_width_workload)
+                members.append({"workload_id": full_width_workload_id, "weight": 1})
         if surface_id == "PIL.ImageOps":
             colorize_benchmark = next(
                 (

@@ -6416,3 +6416,78 @@ transposed row kernel; the cache-tiled wrapper alone did not help. Require a
 stable complete-call win and exact output before retaining another attempt.
 The global CPU, SIMD, and GPU goals remain open. Proceed to the next
 uncheckpointed operation after this three-attempt visit.
+
+## PIL.Image.Image.crop checkpoint — 2026-09-28
+
+The old standard crop row exercised `crop(None)` on a 16 × 16 image. That
+shares/copies the source and does not execute the explicit-box crop kernel, so
+it was not useful evidence for crop performance. The standard row now times an
+explicit in-bounds crop of deterministic RGB noise at 1,024 × 768, box
+`(97, 65, 928, 704)`, followed by `tobytes`. Setup is outside the measured
+steps (`call`, `observe-result`); the run uses five warmups, 100 observations,
+and concurrency one. A separate full-width vertical crop uses box
+`(0, 65, 1024, 704)`. Small varied `L`, `LA`, and `RGBA` cases check channel
+packing and row tails. These cases do not cover signed/out-of-bounds boxes,
+empty outputs, palette modes, or typed `I;16` paths.
+
+Three bounded attempts were made. The first removes the CPU serial native-byte
+crop's zero-fill-then-overwrite: it reserves the checked output size, records
+the allocation, and appends each source row. The existing 4 MiB parallel
+threshold remains. The threshold experiment at 1 MiB was reverted: the RGB
+crop below 4 MiB entered the parallel branch and its CPU median regressed from
+0.174 ms to 0.298 ms, despite passing output checks. The third attempt added a
+contiguous-span copy for full-width crops. Its CPU half was removed after a
+repeat did not reproduce the first measured win; the SIMD native-copy path
+keeps the span fast path, with row copying for other boxes.
+
+| Workload / run | Pillow ms | CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Interior RGB, before serial allocation change | 0.432250 | 0.173812 | 0.173187 | 1.469542 |
+| Interior RGB, serial append path | 0.420792 | 0.171834 | 0.172458 | 1.417333 |
+| Interior RGB, 1 MiB parallel threshold (reverted) | 0.408749 | 0.298021 | 0.164104 | 1.466542 |
+| Full-width RGB, before contiguous-span path | 0.440875 | 0.151084 | 0.203625 | 1.500667 |
+| Full-width RGB, initial CPU + SIMD span trial | 0.443229 | 0.145500 | 0.160271 | 1.480708 |
+| Final code: CPU row copy, SIMD span copy | 0.427105 | 0.143583 | 0.183709 | 1.465417 |
+
+On the matched full-width workload, the initial span trial reduced CPU median
+by 3.7% and SIMD by 21.3%. That CPU result did not reproduce: the final code
+keeps CPU row copying, and the SIMD span path measured 0.184 ms versus 0.204 ms
+before the change, about a 9.8% median reduction. Run-to-run variance is
+material, so treat this as a modest workload-specific SIMD improvement, not a
+universal speedup. The final code's CPU measurement was 0.144 ms versus 0.151
+ms in the earlier full-width run, but that difference cannot be attributed to
+the CPU implementation. The interior row's first-attempt CPU change was only
+about 1%. The lower parallel threshold clearly regressed CPU. These receipts
+share the same base commit and are marked `dirty`; they do not contain
+source-tree hashes, so per-attempt numbers are observations tied to the run
+sequence, not reproducible code fingerprints. The full-width runs used the
+same input and benchmark policy on macOS 15.7.7 arm64 with Pillow 12.2.0 and
+CPython 3.12.
+
+The benchmark's exact-output gate passed for all subjects. Receipts report 100
+actual CPU, SIMD, and GPU executions, without fallback. The GPU used one
+dispatch but uploaded 3,145,728 bytes and read back 2,617,344 bytes for each
+call, plus a full-frame copy and mode conversion. GPU latency is about 8×
+SIMD latency in the final verified run. Host-to-device staging, synchronization,
+and readback dominate the one-copy shader; shader instruction tuning is not
+the first GPU target. SIMD uses native row copies rather than arithmetic SIMD;
+the typed `I;16` path still materializes bytes and reconstructs typed samples.
+
+Strict exact-output parity passed 5/5 selected cases independently on CPU,
+SIMD, and GPU (15/15 total), including the SIMD full-width RGB fast path and
+the interior RGB plus varied `L`, `LA`, and `RGBA` cases. Every backend was
+required to execute without fallback. The final receipts are
+`build/migration-parity/crop-checkpoint-cpu.json`, `crop-final-simd.json`, and
+`crop-final-gpu.json`; the matched full-width benchmarks and gates are
+`crop-full-width-baseline.json`, `crop-full-width-baseline-parity.json`, and
+`crop-checkpoint.json` with `crop-checkpoint-parity.json`. `make build-parity`,
+`make migration-parity-inputs-check`, and `make fmt` passed. No coverage
+collection ran.
+
+This visit stops after three bounded attempts. CPU is faster than Pillow for
+the measured byte crops, but the 5× SIMD goal and GPU-versus-SIMD goal remain
+open. Next crop work would need to reduce typed-sample materialization for
+SIMD and remove full-frame staging/readback for GPU; the current standalone
+GPU execution model cannot amortize those transfers. Move to the next ranked
+operation and revisit crop only with a resident/batched GPU design or a direct
+typed-sample implementation to measure.
