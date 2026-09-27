@@ -397,11 +397,13 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.parameter-combination.legacy-001"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -983,8 +985,10 @@
         "case_id": "PIL.ImageDraw.ImageDraw.textlength.behavior.default"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

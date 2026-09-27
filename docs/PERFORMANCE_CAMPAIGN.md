@@ -5756,3 +5756,37 @@ each API boundary before tuning the pixel loop. If the producer already owns
 the exact expanded raster consumed by the next stage, transfer that allocation
 and preserve its logical mode tag instead of encoding and decoding it again.
 No coverage collection ran.
+
+## PIL.ImageDraw.ImageDraw.multiline_text checkpoint — 2026-09-27
+
+The original `multiline_text.standard` benchmark called the method with
+`"Hello"`, so it timed one rendered line and never exercised line stepping.
+I changed only the benchmark input to the existing parity-backed
+`"hello\nworld"` case, kept setup outside the measured `call` step, and kept
+the benchmark's `parity_pass` gate. No parity case was edited.
+
+Profiling showed that each nonempty line rendered a mask through `getmask2`,
+then ran `text_bbox` over the same glyphs solely to advance `line_y`. For
+default mask options on nonbinary destination modes, both paths use the same
+BASIC `TGT_NORM` glyph run and bbox, so the mask's returned height is already
+the required line-step height. The change returns `(width, height)` from the
+private render-and-compose helper and reuses that height. It retains the plain
+`text_bbox` fallback for nondefault mask options and binary modes, where mask
+flags or bounds can differ. Empty lines still advance by `spacing + 10`.
+
+The pre-change two-line baseline measured Pillow at 290.8 µs and 3,439 calls/s;
+CPU at 365.9 µs and 2,733 calls/s; SIMD at 370.5 µs; and GPU at 341.6 µs. Two
+correctness-gated optimized runs measured CPU at 259.0 and 262.8 µs, or about
+28–29% lower latency than the baseline and 9–11% lower latency than Pillow.
+CPU throughput rose to 3,807–3,861 calls/s. The benchmark parity outcome was
+`pass` on all runs. The complete `multiline_text` operation parity selection
+also passed 25/25 cases, including binary modes, anchors, stroke, empty lines,
+and byte text.
+
+SIMD/GPU-labelled rows report `actual_backend: null`; the measured draw path
+rasterizes glyphs through the CPU font engine and does not prove accelerator
+execution. Their timing remains unproven for the 5× SIMD and GPU-throughput
+goals. Revisit acceleration only with a real execution receipt and enough
+mask/compositing work to amortize dispatch. This operation's CPU latency target
+is met, so the next visit should rank the remaining operations from fresh
+call-only benchmark evidence. No coverage collection ran.

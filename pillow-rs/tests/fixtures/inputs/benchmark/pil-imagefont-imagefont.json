@@ -56,8 +56,10 @@
         ]
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"
