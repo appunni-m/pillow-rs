@@ -175,6 +175,9 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imagefont-imagefont.getlength.standard": (
         "PIL.ImageFont.ImageFont.getlength.nuanced.loaded-pilfont-parity"
     ),
+    "pil-imagefont-imagefont.getbbox.standard": (
+        "PIL.ImageFont.ImageFont.getbbox.nuanced.loaded-pilfont-parity"
+    ),
     # The public ``mode.l`` behavior case predates Pillow's stricter color
     # argument normalization and still passes scalar colors.  Use the
     # reviewed materialized workflow so this benchmark measures a successful
@@ -205,7 +208,6 @@ GETCOLORS_SLOT_ORDER_CASES = (
 )
 BENCHMARK_SUCCESS_WORKFLOW_IDS = {
     "pil-image.frombuffer.standard",
-    "pil-imagefont-imagefont.getbbox.standard",
     "pil-imagesequence-iterator.next.standard",
 }
 BENCHMARK_DEFAULT_EXCLUSIONS = {
@@ -4706,6 +4708,34 @@ class WorkflowBuilder:
                 raise ValueError(
                     "PILfont getlength chains require ImageFont.getlength"
                 )
+            font_step = self.add_step(
+                "PIL.ImageFont",
+                "load",
+                receiver=None,
+                arguments={
+                    "filename": self.ref(
+                        "pilfont",
+                        self.scenario_asset or "font/pilfont/courb08.pil",
+                        "application/x-pilfont",
+                    )
+                },
+                step_id="setup-pilfont",
+            )
+            call_id = self.add_step(
+                self.primary_surface,
+                self.primary_operation,
+                receiver=binding(font_step),
+                arguments=self.primary_arguments(operation),
+                step_id="call",
+            )
+            return self.assets, self.steps, [call_id]
+
+        if self.scenario_chain == "pilfont-load-getbbox":
+            if (
+                self.primary_surface != "PIL.ImageFont.ImageFont"
+                or self.primary_operation != "getbbox"
+            ):
+                raise ValueError("PILfont getbbox chains require ImageFont.getbbox")
             font_step = self.add_step(
                 "PIL.ImageFont",
                 "load",
@@ -15042,6 +15072,14 @@ def build_nuanced_cases(
             "requirement_suffix": "performance.standard",
             "name": "loaded-pilfont-parity",
             "chain": "pilfont-load-getlength",
+            "target_profiles": ["python-cpu"],
+        },
+        {
+            "surface": "PIL.ImageFont.ImageFont",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "loaded-pilfont-parity",
+            "chain": "pilfont-load-getbbox",
             "target_profiles": ["python-cpu"],
         },
         {
@@ -46208,28 +46246,6 @@ def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
                 }
             ],
             "observations": ["image"],
-        }
-
-    if workload_id == "pil-imagefont-imagefont.getbbox.standard":
-        return {
-            "assets": [],
-            "steps": [
-                {
-                    "step_id": "font",
-                    "surface": "PIL.ImageFont",
-                    "operation": "load_default",
-                    "receiver": None,
-                    "arguments": {},
-                },
-                {
-                    "step_id": "call",
-                    "surface": "PIL.ImageFont.ImageFont",
-                    "operation": "getbbox",
-                    "receiver": binding("font"),
-                    "arguments": {"text": literal("Hello")},
-                },
-            ],
-            "observations": ["call"],
         }
 
     if workload_id == "pil-imagesequence-iterator.next.standard":

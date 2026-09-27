@@ -5985,3 +5985,34 @@ font advance is scalar text processing, not image-kernel work. Their 5× SIMD
 and GPU-throughput goals are inapplicable to this call and are not claimed as
 met. Keep this optimization, then rank the next operation using a fresh
 call-only workload. No coverage collection ran.
+
+## PIL.ImageDraw.ImageDraw.textlength checkpoint — 2026-09-27
+
+The stale 825-workload matrix showed CPU at 0.785 ms and Pillow at 0.130 ms.
+After the preceding font-construction and cache work, a fresh call-only run
+with the same parity gate measured CPU at 70.9 µs and Pillow at 116.9 µs; CPU
+was about 1.65× faster. The target completed about 14,101 calls/second versus
+8,558 for Pillow. This confirms the earlier gap came from a stale dependency
+path, not a current `textlength` kernel regression. The benchmark parity gate
+passes.
+
+SIMD and GPU profiles report `actual_backend: null` and `not_proven`. This
+default-font measurement is text layout, not image-kernel work. No runtime
+change is needed; refresh dependent-call benchmarks after changing shared font
+loading or caches, and do not carry old ranking ratios forward. No coverage
+collection ran.
+
+## PIL.ImageFont.ImageFont.getbbox baseline — 2026-09-27
+
+The previous standard workload called `ImageFont.load_default()`, which
+returns a `FreeTypeFont` in this environment and did not exercise the named
+base bitmap-font method. I redirected the workload to a parity case that loads
+the real `courb08.pil` bitmap font, observes `ImageFont.ImageFont.getbbox`, and
+gates timing on the complete setup-and-call result. All four getbbox parity
+cases pass.
+
+The call-only benchmark measured CPU at 1.917 µs and Pillow at 2.125 µs, about
+10% lower target latency in this sample. SIMD and GPU rows have no actual
+backend receipts, so they do not establish accelerator execution. The CPU
+target already beats Pillow for this input; retain the current implementation
+and move on. No coverage collection ran.
