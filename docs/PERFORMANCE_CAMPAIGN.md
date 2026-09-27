@@ -5790,3 +5790,32 @@ goals. Revisit acceleration only with a real execution receipt and enough
 mask/compositing work to amortize dispatch. This operation's CPU latency target
 is met, so the next visit should rank the remaining operations from fresh
 call-only benchmark evidence. No coverage collection ran.
+
+## PIL.ImageDraw.ImageDraw.multiline_textbbox checkpoint — 2026-09-27
+
+The old standard workload used a one-line default case, bypassing the repeated
+per-line work in this method. I redirected its benchmark to the reviewed
+three-line `A\nBB\nC` parity case and timed only the `multiline_textbbox` call.
+The original operation parity corpus remains unchanged.
+
+The baseline call-only receipt passed parity and measured CPU at 116.6 µs
+(8,573 calls/s) and Pillow at 163.2 µs (6,129 calls/s). Profiles and code
+inspection showed that multiline bounding boxes called `getlength` for every
+line, then called `getbbox` for every line. Default `getlength` uses cached
+advance queries; `getbbox` loads the same glyphs again to collect their
+advances and boxes. I added a BASIC-layout combined path that loads a line's
+glyphs once, derives its 26.6 final pen and bbox from that `GlyphRun`, and uses
+those values for width aggregation and alignment. Nondefault layout, color
+mask, and special-option paths keep the previous calls; single-line behavior
+also keeps its existing direct bbox path.
+
+After the change, all 17 multiline-textbox parity cases passed, including
+center/right alignment, stroke, modes, and byte text. Two parity-gated
+call-only runs measured CPU at 94.5 and 84.4 µs (10,580–11,843 calls/s), about
+19–28% lower latency than baseline and 42–52% lower than Pillow's measured
+160.4–174.2 µs. The two optimized benchmark parity gates passed.
+
+SIMD/GPU profile rows report `actual_backend: null`; this font-metric path has
+no proven accelerator dispatch. CPU is already faster than Pillow, so retain
+the change and move to the next call-only-ranked operation. No coverage
+collection ran.

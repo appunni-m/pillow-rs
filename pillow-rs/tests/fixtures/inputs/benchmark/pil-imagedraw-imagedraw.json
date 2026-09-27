@@ -452,11 +452,13 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.behavior.default"
+        "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.three-line-spacing"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
         "metrics": [
           "latency",
           "throughput"

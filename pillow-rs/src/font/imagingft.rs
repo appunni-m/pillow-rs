@@ -1064,6 +1064,18 @@ pub(crate) fn getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError
     Ok(length_from_basic_layout_with_flags(font, text, 0)? as f32 / 64.0)
 }
 
+/// Return default-layout advance and bounds from one glyph pass.
+pub(crate) fn getlength_and_bbox(
+    font: &FreeTypeFont,
+    text: &str,
+) -> Result<(f32, (i32, i32, i32, i32)), PilError> {
+    validate_text_length(text)?;
+    let run = glyph_run(font, text, TGT_NORM)?;
+    let length = run.final_pen as f32 / 64.0;
+    let bbox = bbox_from_glyph_run(font, &run)?;
+    Ok((length, bbox))
+}
+
 pub(crate) fn native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Result<i32, PilError> {
     validate_text_length(text)?;
     length_from_basic_layout_with_flags(font, text, 0)

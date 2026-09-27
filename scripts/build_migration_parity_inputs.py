@@ -157,6 +157,11 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imagedraw-imagedraw.multiline-text.standard": (
         "PIL.ImageDraw.ImageDraw.multiline_text.parameter-combination.legacy-001"
     ),
+    # Keep the timed bbox call representative of a multi-line request; the
+    # default input contains one line and skips per-line width/box aggregation.
+    "pil-imagedraw-imagedraw.multiline-textbbox.standard": (
+        "PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.three-line-spacing"
+    ),
     "pil-imagedraw-imagedraw.pieslice.standard": "PIL.ImageDraw.ImageDraw.pieslice.parameter-combination.legacy-001",
     "pil-imagedraw-imagedraw.polygon.standard": "PIL.ImageDraw.ImageDraw.polygon.parameter-combination.legacy-001",
     "pil-imagedraw-imagedraw.rectangle.standard": "PIL.ImageDraw.ImageDraw.rectangle.parameter-combination.legacy-001",
@@ -46409,6 +46414,9 @@ def build_inputs(
             isolated_imagedraw_multiline_text = (
                 workload_id == "pil-imagedraw-imagedraw.multiline-text.standard"
             )
+            isolated_imagedraw_multiline_textbbox = (
+                workload_id == "pil-imagedraw-imagedraw.multiline-textbbox.standard"
+            )
             # Measure the bounding-box method after loading the font asset.
             isolated_freetype_getbbox = (
                 workload_id == "pil-imagefont-freetypefont.getbbox.standard"
@@ -46490,6 +46498,7 @@ def build_inputs(
                             or isolated_default_getbbox
                             or isolated_imagedraw_textlength
                             or isolated_imagedraw_multiline_text
+                            or isolated_imagedraw_multiline_textbbox
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
                             or isolated_pilfont_getmask
@@ -46514,6 +46523,7 @@ def build_inputs(
                             or isolated_default_getbbox
                             or isolated_imagedraw_textlength
                             or isolated_imagedraw_multiline_text
+                            or isolated_imagedraw_multiline_textbbox
                             or isolated_freetype_getbbox
                             or isolated_freetype_getmask
                             or isolated_pilfont_getmask
