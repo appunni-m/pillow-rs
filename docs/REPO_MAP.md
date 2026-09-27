@@ -360,6 +360,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_grayscale_rgb_domain.py
     |-- test_migration_benchmark_selection.py
     |-- test_migration_parity_icc_timestamp.py
+    |-- test_migration_parity_serialization.py
     |-- test_optimization_goals.py
     |-- test_parity_reduction.py
     |-- test_receipt_state.py

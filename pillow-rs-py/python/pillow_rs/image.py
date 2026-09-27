@@ -2,6 +2,7 @@
 from copy import deepcopy
 from operator import index as _index
 from pathlib import Path
+from struct import iter_unpack as _iter_unpack
 from sys import maxsize as _MAX_INDEX
 from typing import Any, Optional, Tuple, Union
 
@@ -523,7 +524,18 @@ class Image:
         """Return flattened pixel data matching PIL format."""
         if band is not None:
             return tuple(self.getdata(band))
-        return tuple(self.getdata())
+        self.load()
+        # Match getdata's existing view bookkeeping and eager load boundary,
+        # but avoid routing an eager tuple result through ImagingCore and its
+        # Python per-pixel slicing iterator.
+        self._has_getdata_views = True
+        values = self._rust_image.getdata_formatted(None)
+        if not isinstance(values, bytes):
+            return tuple(values)
+        bands = _image_data_bands(self.mode)
+        if bands == 1:
+            return tuple(values)
+        return tuple(_iter_unpack(f"{bands}B", values))
 
     def getexif(self):
         """Return EXIF data as dict, matching PIL's Image.Exif."""

@@ -6055,3 +6055,52 @@ host pixel data does not execute an image kernel, so these measurements do not
 claim SIMD or GPU speedup. Keep the CPU path, keep the serializer regression
 test, and rank the next operation using a fresh call-only measurement. No
 coverage collection ran.
+
+### WASM getdata parity harness follow-up — 2026-09-27
+
+The pushed checkpoint's Node and browser parity jobs exposed the same false
+empty-byte encoding in the JavaScript serializer. Once the Python serializer
+preserved multiband tuples, 16 WASM cases became visible; fixing that encoding
+left one retained-view mismatch. The JS workflow adapter had captured
+`getdata()` at call time, while Pillow's `ImagingCore` reads live storage until
+a size-changing `thumbnail()` replaces that storage.
+
+The adapter now serializes the actual sample sequence when byte conversion is
+invalid. Its no-band getdata descriptor reads the current Rust image when
+observed. A size-changing thumbnail shallow-copies the old Rust image handle
+before mutation and retargets existing views to it; a no-op thumbnail leaves
+them live. The focused Node and browser runs now pass all 16 affected cases.
+This was a serializer and parity-workflow modeling defect, not a pixel-result
+change in the Python implementation. Keep pixel tuples and retained-view
+behavior in both host adapters; never replace failed multiband byte coercion
+with an empty-byte value. No coverage collection ran.
+
+## PIL.Image.Image.get_flattened_data checkpoint — 2026-09-27
+
+The original whole-workflow row was not a clean call comparison. I changed its
+measurement boundary to time only `get_flattened_data()` after image setup.
+The 16 × 16 RGB baseline then measured CPU at 21.042 µs and Pillow at 5.709 µs.
+The target constructed a live `ImagingCore` proxy, then iterated it through a
+Python generator that sliced one byte string per pixel to create the eager
+tuple result. That proxy is needed by `getdata()`, but this method returns an
+eager immutable tuple.
+
+The optimized path keeps the existing band-selection branch. With no band, it
+preserves `load()` and the wrapper's getdata-view bookkeeping, asks the Rust
+binding for the same formatted data, and materializes scalar byte output with
+`tuple(bytes)` or multiband pixels with `struct.iter_unpack`. The latter
+removes the per-pixel Python generator and temporary byte slices. Numeric
+`I`, `F`, and `I;16` lists still become tuples directly. Existing default,
+band, and L-mode parity cases pass; a source/target cross-process check also
+matches Pillow for modes 1, L, P, LA, RGB, RGBA, I, F, and I;16.
+
+Two correctness-gated call-only runs measured CPU at 5.167 and 4.917 µs;
+Pillow measured 5.833 and 5.708 µs. CPU is 4.1–4.3× faster than the prior
+implementation and 11–14% faster than Pillow in these paired runs. Median
+throughput was 193,536 and 203,376 calls/second versus 171,438 and 175,193 for
+Pillow. Keep this change and proceed to the next operation.
+
+The SIMD/GPU profile timings are the same host-side tuple construction, with
+`actual_backend: null` and `not_proven`; this API launches no image kernel.
+These numbers do not establish SIMD or GPU acceleration. No coverage collection
+ran.
