@@ -16211,9 +16211,9 @@ fn native_cover_dimensions(
     }
 }
 
-// Cover is often used to resize a thumbnail-sized image. Rayon row dispatch
-// costs more than the SIMD work for fewer than 32 × 32 output pixels.
-const SIMD_COVER_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
+// Aspect-resize operations are often used on thumbnail-sized images. Rayon
+// row dispatch can cost more than the SIMD work for fewer than 32 × 32 pixels.
+const SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 /// Compute the source box used by `ImageOps.fit` without touching pixels.
 ///
@@ -17745,7 +17745,6 @@ fn resize_coeff_slice(coeffs: &FilterCoeffs, index: usize) -> Option<&[i64]> {
 struct ResizeHorizontalTapPlan {
     source_bases: [usize; SIMD_RESIZE_LANES],
     weights: [i32; SIMD_RESIZE_LANES],
-    active: [bool; SIMD_RESIZE_LANES],
 }
 
 struct ResizeHorizontalBlockPlan {
@@ -17787,7 +17786,6 @@ fn build_resize_horizontal_plan(
         for tap in 0..max_count {
             let mut source_bases = [0usize; SIMD_RESIZE_LANES];
             let mut weights = [0i32; SIMD_RESIZE_LANES];
-            let mut active = [false; SIMD_RESIZE_LANES];
             for lane in 0..SIMD_RESIZE_LANES {
                 let index = output_x + lane;
                 if let (Some(&count), Some(&xmin), Some(&offset)) = (
@@ -17801,13 +17799,11 @@ fn build_resize_horizontal_plan(
                     let weight_index = offset.checked_add(tap)?;
                     source_bases[lane] = source_base;
                     weights[lane] = *coeffs.weights.get(weight_index)? as i32;
-                    active[lane] = true;
                 }
             }
             taps.push(ResizeHorizontalTapPlan {
                 source_bases,
                 weights,
-                active,
             });
         }
         blocks.push(ResizeHorizontalBlockPlan { taps });
@@ -17868,6 +17864,19 @@ fn resize_horizontal_vector_row(
     output_row: &mut [u8],
     premultiplied_alpha: bool,
 ) -> Option<(u64, u64)> {
+    if source_row.is_empty() {
+        // Empty source rows contribute only zero-weight padding lanes. Keep
+        // their established zero result without entering the gather loop.
+        output_row.fill(0);
+        let vector_blocks = u64::try_from(plan.blocks.len()).ok()?;
+        let scalar_start = if output_width < SIMD_RESIZE_LANES {
+            output_width
+        } else {
+            plan.vector_width
+        };
+        let scalar_tail = u64::try_from(output_width.saturating_sub(scalar_start)).ok()?;
+        return Some((vector_blocks, scalar_tail));
+    }
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
     let alpha_channel = channels - 1;
@@ -17883,17 +17892,14 @@ fn resize_horizontal_vector_row(
             for channel in 0..channels {
                 let mut samples = [0u8; SIMD_RESIZE_LANES];
                 for lane in 0..SIMD_RESIZE_LANES {
-                    if tap.active[lane] {
-                        samples[lane] = *source_row.get(tap.source_bases[lane] + channel)?;
-                    }
+                    // Missing lanes have weight zero and base zero. Reading
+                    // one valid source sample avoids a branch per lane/tap.
+                    samples[lane] = *source_row.get(tap.source_bases[lane] + channel)?;
                 }
                 let samples = if premultiplied_alpha && channel != alpha_channel {
                     let mut alphas = [0u8; SIMD_RESIZE_LANES];
                     for lane in 0..SIMD_RESIZE_LANES {
-                        if tap.active[lane] {
-                            alphas[lane] =
-                                *source_row.get(tap.source_bases[lane] + alpha_channel)?;
-                        }
+                        alphas[lane] = *source_row.get(tap.source_bases[lane] + alpha_channel)?;
                     }
                     let values = u16x8::new(samples.map(u16::from))
                         * u16x8::new(alphas.map(u16::from))
@@ -21665,8 +21671,8 @@ pub fn simd_contain(
         *filter,
         mode,
         native_pad_contained_dimensions,
-        0,
-        false,
+        SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD,
+        true,
         "Contain",
     )?
     .ok_or_else(|| simd_unsupported("Contain"))
@@ -21690,7 +21696,7 @@ pub fn simd_cover(
         *filter,
         mode,
         native_cover_dimensions,
-        SIMD_COVER_PARALLEL_PIXEL_THRESHOLD,
+        SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD,
         true,
         "Cover",
     )?
