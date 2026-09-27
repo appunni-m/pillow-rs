@@ -4339,6 +4339,73 @@ fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError
         .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
 }
 
+/// Plan the compact ExtractBand dispatch as a near-square 2D grid. One shader
+/// invocation writes one packed word containing four output pixels, and each
+/// workgroup contains 64 invocations. The shader's flattened word index uses
+/// `u32`, so reject dimensions and padded grids outside that index range.
+fn plan_extract_band_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<(u32, u32), PilError> {
+    let pixel_count = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| PilError::ValueError("GPU channel extraction image is too large".into()))?;
+    if pixel_count == 0 || pixel_count > u64::from(u32::MAX) {
+        return Err(PilError::ValueError(
+            "GPU channel extraction dimensions exceed shader indexing limits".into(),
+        ));
+    }
+    if max_workgroups_per_dimension == 0 {
+        return Err(PilError::ValueError(
+            "GPU adapter reports no compute workgroups per dimension".into(),
+        ));
+    }
+
+    let output_words = pixel_count.div_ceil(4);
+    let required_workgroups = output_words.div_ceil(64).max(1);
+    let mut groups_x = required_workgroups.isqrt();
+    let groups_x_square = groups_x
+        .checked_mul(groups_x)
+        .ok_or_else(|| PilError::ValueError("GPU channel extraction dispatch overflows".into()))?;
+    if groups_x_square < required_workgroups {
+        groups_x = groups_x.checked_add(1).ok_or_else(|| {
+            PilError::ValueError("GPU channel extraction dispatch overflows".into())
+        })?;
+    }
+    groups_x = groups_x.min(u64::from(max_workgroups_per_dimension));
+    let groups_y = required_workgroups.div_ceil(groups_x);
+    if groups_y > u64::from(max_workgroups_per_dimension) {
+        return Err(PilError::ValueError(
+            "GPU channel extraction exceeds adapter workgroup limits".into(),
+        ));
+    }
+
+    let padded_word_count = groups_x
+        .checked_mul(groups_y)
+        .and_then(|groups| groups.checked_mul(64))
+        .ok_or_else(|| PilError::ValueError("GPU channel extraction dispatch overflows".into()))?;
+    let Some(max_output_word) = padded_word_count.checked_sub(1) else {
+        return Err(PilError::ValueError(
+            "GPU channel extraction dispatch exceeds shader indexing limits".into(),
+        ));
+    };
+    if max_output_word > u64::from(u32::MAX) {
+        return Err(PilError::ValueError(
+            "GPU channel extraction dispatch exceeds shader indexing limits".into(),
+        ));
+    }
+
+    Ok((
+        u32::try_from(groups_x).map_err(|_| {
+            PilError::ValueError("GPU channel extraction dispatch is too wide".into())
+        })?,
+        u32::try_from(groups_y).map_err(|_| {
+            PilError::ValueError("GPU channel extraction dispatch is too tall".into())
+        })?,
+    ))
+}
+
 fn gpu_buffer_reuse_allowed(capacity: u32, minimum_capacity: u32) -> bool {
     capacity >= minimum_capacity
         && (minimum_capacity == 0
@@ -7704,18 +7771,11 @@ impl GpuInner {
         cpass.set_pipeline(&cached.pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         let (dispatch_w, dispatch_h) = match cached.variant_name {
-            "ExtractBand" => {
-                let pixel_count = u64::from(output_dims.0) * u64::from(output_dims.1);
-                let groups = pixel_count.div_ceil(4).div_ceil(64).max(1);
-                (
-                    u32::try_from(groups).map_err(|_| {
-                        PilError::ValueError(
-                            "GPU channel extraction exceeds dispatch limits".into(),
-                        )
-                    })?,
-                    1,
-                )
-            }
+            "ExtractBand" => plan_extract_band_dispatch(
+                output_dims.0,
+                output_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "__internal_blur_h" => (1, output_dims.1),
             "__internal_blur_v" => (output_dims.0, 1),
             "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
@@ -12704,6 +12764,8 @@ fn gpu_dispatch_dimensions_require_cpu(
                 | PipelineOp::GaussianBlur { .. }
         ) {
             next.1 > max_workgroups_per_dimension || next.0 > max_workgroups_per_dimension
+        } else if matches!(op, PipelineOp::ExtractBand { .. }) {
+            plan_extract_band_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
         } else if matches!(op, PipelineOp::Fit { .. })
             || matches!(op, PipelineOp::Resize { filter, .. }
             if !matches!(filter, ResampleFilter::Nearest)
@@ -16628,7 +16690,7 @@ mod tests {
         gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
         gpu_transform_all_fill_is_exact, gpu_transform_fill, gpu_transform_should_premultiply,
-        luma16_resample_big_endian, readback_poll_backoff,
+        luma16_resample_big_endian, plan_extract_band_dispatch, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -21807,6 +21869,35 @@ mod tests {
     #[test]
     fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
         let cases = [
+            ("L", 0, vec![71, 19], vec![71, 19]),
+            ("LA", 1, vec![10, 201, 20, 202], vec![201, 202]),
+            ("RGB", 0, vec![1, 2, 3, 11, 12, 13], vec![1, 11]),
+            ("RGB", 1, vec![1, 2, 3, 11, 12, 13], vec![2, 12]),
+            ("RGB", 2, vec![1, 2, 3, 11, 12, 13], vec![3, 13]),
+            (
+                "RGBA",
+                0,
+                vec![21, 22, 23, 24, 31, 32, 33, 34],
+                vec![21, 31],
+            ),
+            (
+                "RGBA",
+                1,
+                vec![21, 22, 23, 24, 31, 32, 33, 34],
+                vec![22, 32],
+            ),
+            (
+                "RGBA",
+                2,
+                vec![21, 22, 23, 24, 31, 32, 33, 34],
+                vec![23, 33],
+            ),
+            (
+                "RGBA",
+                3,
+                vec![21, 22, 23, 24, 31, 32, 33, 34],
+                vec![24, 34],
+            ),
             ("CMYK", 3, vec![1, 2, 3, 4, 11, 12, 13, 14], vec![4, 14]),
             ("HSV", 1, vec![21, 22, 23, 31, 32, 33], vec![22, 32]),
             ("YCbCr", 2, vec![41, 42, 43, 51, 52, 53], vec![43, 53]),
@@ -21847,6 +21938,110 @@ mod tests {
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
         }
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
+
+    #[test]
+    fn extract_band_dispatch_planner_tiles_workgroups_without_gaps() {
+        for (workgroups, expected) in [
+            (65_534u32, (256, 256)),
+            (65_535, (256, 256)),
+            (65_536, (256, 256)),
+        ] {
+            let width = workgroups * 256;
+            assert_eq!(
+                plan_extract_band_dispatch(width, 1, 65_535)
+                    .expect("boundary image should fit the tiled grid"),
+                expected,
+                "required groups={workgroups}"
+            );
+        }
+
+        let (groups_x, groups_y) =
+            plan_extract_band_dispatch(5 * 256, 1, 3).expect("small tiled grid");
+        assert_eq!((groups_x, groups_y), (3, 2));
+        let output_words = 5 * 64;
+        let mut covered = vec![false; output_words as usize];
+        for group_y in 0..groups_y {
+            for group_x in 0..groups_x {
+                for lane in 0..64 {
+                    let word = group_x * 64 + group_y * groups_x * 64 + lane;
+                    if word < output_words {
+                        assert!(
+                            !covered[word as usize],
+                            "output word {word} was written twice"
+                        );
+                        covered[word as usize] = true;
+                    }
+                }
+            }
+        }
+        assert!(covered.into_iter().all(|written| written));
+
+        assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
+        assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
+        assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+    }
+
+    #[test]
+    fn extract_band_native_gpu_handles_4096_square_la_alpha() {
+        const WIDTH: u32 = 4096;
+        const HEIGHT: u32 = 4096;
+        let pixel_count = usize::try_from(WIDTH)
+            .expect("width fits usize")
+            .checked_mul(usize::try_from(HEIGHT).expect("height fits usize"))
+            .expect("4096-square pixel count fits usize");
+        let capacity = pixel_count
+            .checked_mul(2)
+            .expect("LA source byte count fits usize");
+        let mut source_bytes = Vec::with_capacity(capacity);
+        for index in 0..pixel_count {
+            let sample = u8::try_from(index % 256).expect("remainder fits u8");
+            source_bytes.push(sample.wrapping_mul(7).wrapping_add(13));
+            source_bytes.push(sample.wrapping_mul(37).wrapping_add(53));
+        }
+        let source =
+            Image::frombytes("LA", (WIDTH, HEIGHT), &source_bytes).expect("4096-square LA source");
+        let expected = source
+            .getchannel(1)
+            .expect("LA alpha channel")
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU LA alpha extraction");
+
+        // The telemetry switch is process-wide and other GPU tests toggle it.
+        // Discard this thread's CPU reference receipt before requesting GPU.
+        let _ = Backend::take_pipeline_telemetry();
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match source
+            .getchannel(1)
+            .expect("LA alpha channel")
+            .use_backend(Backend::Gpu)
+            .tobytes()
+        {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("4096-square GPU LA alpha extraction failed: {error}"),
+        };
+        assert_eq!(actual, expected, "4096-square LA alpha extraction parity");
+        let telemetry = Backend::take_pipeline_telemetry()
+            .expect("4096-square GPU channel extraction must publish a receipt");
+        assert_eq!(
+            telemetry.0,
+            Some(Backend::Gpu),
+            "4096-square request unexpectedly fell back: {telemetry:?}"
+        );
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 
