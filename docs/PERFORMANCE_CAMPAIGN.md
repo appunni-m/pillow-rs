@@ -6253,10 +6253,16 @@ at ±3 bytes, so lanes can cross pixel boundaries without mixing channels;
 vertical taps use the row stride and output stores are contiguous. A safe
 `wide` byte-load/widening path improved the 40-repeat target-call median from
 1.699 ms to 1.564 ms at 1024 × 768. A one-load-plus-swizzle variant measured
-1.659 ms and was discarded. Direct NEON intrinsics were also discarded because
-the crate denies unsafe code. Backend receipts prove strict SIMD routing and
-vector-block accounting, not that the compiler emitted the intended machine
-instructions; this checkpoint has no generated-assembly inspection.
+1.659 ms in the same repeated profile and was discarded on that measurement.
+Its separate six-sample standard benchmark disagreed: attempt 4's SIMD median
+was lower than attempt 3's in all six workloads, including 1.405 ms versus
+1.731 ms at 1024 × 768. The two runs do not establish a stable ranking; retain
+attempt 3 as the better repeated-profile result and treat the swizzle variant's
+whole-workflow result as unresolved. Direct NEON intrinsics were also discarded
+because the crate denies unsafe code. Backend receipts prove strict SIMD
+routing and vector-block accounting, not that the compiler emitted the
+intended machine instructions; this checkpoint has no generated-assembly
+inspection.
 
 The retained attempt's six-workload standard benchmark is
 `build/migration-parity/filter3x3-attempt3.json`. Median whole-workflow latency
@@ -6283,13 +6289,19 @@ slower than SIMD at every size, by about 1.13× even on the largest input. The
 operation therefore remains an open performance blocker; do not claim the
 campaign goals are met from the large-image improvement.
 
-The exact retained source passes 51/51 selected cases in each CPU, strict-SIMD
-and strict-GPU parity lane, including mode, edge, scale, offset and convolution
-controls. Attempt 4's swizzle candidate separately passed its four RGB SIMD
-cases before it was removed. No assertions or parity inputs changed. Because
-the fourth attempt did not beat attempt 3 in repeated profiling, checkpoint
-Filter3x3 here and move to `PIL.ImageChops.constant`. Its next investigation
-should measure the standalone CPU fill and GPU upload/readback/conversion costs
-before replacing the fill kernel or adding more SIMD machinery. The separate
-distinct-secondary Multiply→Screen GPU fusion case remains a later candidate;
-its large transfer and dispatch deltas need a parity-gated experiment.
+The final parity receipts report 51/51 selected cases in each CPU, strict-SIMD
+and strict-GPU lane, including mode, edge, scale, offset and convolution
+controls. Attempt 4's execution receipt records four actual-SIMD RGB Kernel
+3 × 3 cases routed through Filter3x3. Its parity sidecar selected zero cases;
+that receipt proves routing, not exact output parity, so those four cases are
+not a parity result. No assertions or parity inputs changed. The benchmark and
+parity receipts identify base revision
+`3e0bede81fbc225b2d67be460b9cee6da02e6e42` with `dirty=true` and do not hash the
+dirty source snapshot, so they cannot independently prove its exact source
+contents. The retained change is now committed as
+`cff12738a946a71375f200b9dafee40ff32eac30`. Checkpoint Filter3x3 and continue
+with `PIL.ImageChops.constant`; measure the standalone CPU fill and GPU
+upload/readback/conversion costs before replacing the fill kernel or adding more
+SIMD machinery. The distinct-secondary Multiply→Screen GPU fusion case ranks
+ahead on absolute GPU-versus-SIMD time, but its large transfer and dispatch
+deltas need an exact parity-gated experiment before implementation.
