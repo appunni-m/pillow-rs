@@ -5886,3 +5886,68 @@ then inspect whether the GPU can avoid its full-frame copy or fuse the reducing
 and resampling passes without changing filter, rounding, mode, or error
 semantics. The tiny 16 × 16 workflow still loses to Pillow and remains a
 separate small-work dispatch/adapter blocker. No coverage collection ran.
+
+## Colorize follow-up checkpoint — 2026-09-27
+
+This follow-up checkpoints four attempts on `PIL.ImageOps.colorize`: balanced
+SIMD LUT selection, exact RGB output construction, packed GPU input, and a
+benchmark-input correction. The previous large fixture queued `putpixel` on a
+newly created image, so the supposedly single-operation case replayed a
+two-operation `PutPixel → Colorize` pipeline. A uniform-fill correction removed
+that setup operation but overrepresented one cached LUT entry, so it was
+replaced with seeded, deterministic high-entropy `L` bytes. The final 1024 ×
+768 case constructs the image with `frombytes` before timing and measures only
+Colorize plus result export. Its exact parity gate passed on CPU, SIMD, and GPU;
+receipts report 100/100 actual executions per requested backend and no
+fallback. This fixture lesson applies to all lazy backends: setup must be
+materialized before timing, and pointwise LUT workloads should include varied
+indices as well as any separately measured uniform case.
+
+The SIMD Colorize path uses a Colorize-local balanced lookup select tree. It
+still performs sixteen low-nibble byte swizzles per channel and input block,
+but reduces the high-nibble selection dependency depth from fifteen serial
+steps to four. Keeping this change local avoids changing code generation for
+other users of the shared LUT helper. RGB output is built as exact `[u8; 3]`
+pixels in reserved storage and flattened without a second copy; all active
+tail pixels are initialized before append. Focused parity-gated SIMD and GPU
+checks passed, including an odd 37 × 29 `L` image for packed GPU input.
+
+For a standalone `L → RGB` GPU Colorize, the source is uploaded as four luma
+bytes per `u32`; the shader selects the byte by linear pixel index. This
+reduces the 1024 × 768 source transfer from 3,145,728 to 786,432 bytes. The
+eligibility check excludes chains with preceding GPU operations, whose
+intermediate transport is RGBA. It does not shrink the four-byte-per-pixel
+output or its 3,145,728-byte readback.
+
+The latest correctness-gated, concurrency-one receipt is
+`perf-colorize-large-after-packed-input-noise-20260927.json`; its exact parity
+gate passed 3/3 backend comparisons. Median full-call latency and
+reciprocal-latency throughput were:
+
+| Subject | Latency | Throughput | Actual backend |
+| --- | ---: | ---: | --- |
+| Pillow | 1.311 ms | 763 ops/s | Pillow |
+| CPU | 0.722 ms | 1,386 ops/s | CPU, 100/100 |
+| SIMD | 0.776 ms | 1,289 ops/s | SIMD, 100/100 |
+| GPU | 1.113 ms | 898 ops/s | GPU, 100/100 |
+
+CPU is about 1.82× faster than Pillow, so this operation meets the CPU
+requirement. SIMD is about 1.69× faster, far below 5×. GPU latency is about
+1.43× SIMD latency and its reciprocal-latency throughput is about 30% lower,
+so it does not match SIMD throughput. The GPU's packed source transfer is a
+useful 4× reduction, but the output readback, output mode conversion,
+completion and host result creation remain; the single-request timing does not
+identify their individual costs. These reciprocal rates are not sustained
+concurrent-throughput measurements.
+
+The remaining Colorize work is therefore SIMD LUT/output bandwidth and GPU
+output transport. For SIMD, inspect emitted instructions and register spills
+for the sixteen-swizzle lookup before trying more select rearrangements; compare
+it against scalar indexed LUT and supported architecture-specific byte
+permutation paths, then profile output packing separately. For GPU, profile
+completion mapping and host conversion; a compact RGB readback could save
+25% of output bytes, but requires race-free packing (for example, four pixels
+writing three aligned words) and exact tail trimming. Do not revisit shader
+arithmetic while transfer and completion are unmeasured. Move to the next
+ranked operation after this checkpoint; the SIMD and GPU goals remain open.
+No coverage collection ran.
