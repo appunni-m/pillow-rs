@@ -134,6 +134,10 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
     "pil-image-image.frombytes.standard": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
     "pil-image-image.getchannel.standard": "PIL.Image.Image.getchannel.nuanced.performance-rgb-16x16",
+    "pil-image-image.reduce.standard": (
+        "PIL.Image.Image.reduce.nuanced."
+        "performance-material-rgb-noise-1024x768-factor-3x5"
+    ),
     "pil-imageenhance-sharpness.enhance.standard": (
         "PIL.ImageEnhance.Sharpness.enhance.nuanced."
         "performance-material-rgb-noise-1024x768-active"
@@ -40121,6 +40125,34 @@ def build_nuanced_cases(
         "target_profiles": ["python-cpu", "python-simd"],
     },)
 
+    if surface_id == "PIL.Image.Image":
+        specs += ({
+            "surface": "PIL.Image.Image", "operation": "reduce",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768-factor-3x5",
+            "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20260928, "observe_result": "tobytes",
+            "values": {"factor": literal([3, 5])},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        # Keep cross-backend parity sensitive to alpha handling and the
+        # one-band path without multiplying the large benchmark fixture cost.
+        for mode, requirement_suffix, seed in (
+            ("L", "mode.l", 20260929),
+            ("LA", "mode.la", 20260930),
+            ("RGBA", "mode.rgba", 20260931),
+        ):
+            specs += ({
+                "surface": "PIL.Image.Image", "operation": "reduce",
+                "requirement_suffix": requirement_suffix,
+                "name": f"backend-noise-{mode.lower()}-64x48-factor-3x5",
+                "mode": mode, "size": [64, 48], "edge": "noise-fill",
+                "seed": seed, "observe_result": "tobytes",
+                "values": {"factor": literal([3, 5])},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:
         for operation in surface["operations"]:
@@ -43237,6 +43269,8 @@ def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
 def _pipeline_operation_class(variant: str, surface: str, operation: str) -> str:
     """Classify a benchmark workload for operation-class performance gates."""
 
+    if surface == "PIL.Image.Image" and operation == "reduce":
+        return "geometry"
     if surface == "PIL.ImageEnhance.Sharpness":
         return "neighborhood"
     if variant.startswith("Draw") or surface == "PIL.ImageDraw.ImageDraw":
@@ -46662,6 +46696,7 @@ def build_inputs(
             materialized_sharpness = (
                 workload_id == "pil-imageenhance-sharpness.enhance.standard"
             )
+            materialized_reduce = workload_id == "pil-image-image.reduce.standard"
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
             isolated_getdata = workload_id == "pil-image-image.getdata.standard"
@@ -46792,6 +46827,7 @@ def build_inputs(
                             "observed_steps"
                             if materialized_getchannel
                             or materialized_sharpness
+                            or materialized_reduce
                             or isolated_getdata
                             or isolated_get_flattened_data
                             or eager_getcolors
@@ -46818,7 +46854,7 @@ def build_inputs(
                         ),
                         "step_ids": (
                             ["call", "observe-result"]
-                            if materialized_getchannel
+                            if materialized_getchannel or materialized_reduce
                             else ["setup-sharpness-2", "call", "observe-result"]
                             if materialized_sharpness
                             else ["call"]

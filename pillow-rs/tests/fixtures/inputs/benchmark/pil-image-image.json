@@ -2102,11 +2102,14 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.reduce.behavior.default"
+        "case_id": "PIL.Image.Image.reduce.nuanced.performance-material-rgb-noise-1024x768-factor-3x5"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -2120,12 +2123,12 @@
       },
       "context": {
         "size": [
-          16,
-          16
+          1024,
+          768
         ],
         "mode": "RGB",
         "chain_length": 1,
-        "operation_class": "point",
+        "operation_class": "geometry",
         "cache_state": "warm",
         "build_profile": "release"
       }

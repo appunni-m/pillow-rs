@@ -15413,51 +15413,129 @@ const SIMD_REDUCE_LANES: usize = 8;
 #[cfg(feature = "parallel")]
 const SIMD_REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
-/// Return the fixed-point block parameters used by Pillow's Reduce.c for one
-/// output pixel. The address selection is scalar control work; the sums and
-/// fixed-point average for a group of output pixels are vectorized below.
-#[inline]
-fn native_reduce_block_parameters(
+#[derive(Clone, Copy)]
+struct NativeReduceAverage {
+    multiplier: u32,
+    amend: u32,
+}
+
+/// Geometry and fixed-point divisors shared by every output pixel in one
+/// native byte reduction. Only the four edge classes can use different block
+/// dimensions; their divisors do not need to be recomputed per SIMD lane.
+#[derive(Clone, Copy)]
+struct NativeReduceGeometry {
     width: usize,
-    height: usize,
     x_factor: usize,
     y_factor: usize,
-    x: usize,
-    y: usize,
-) -> Option<(usize, usize, usize, usize, u32, u32)> {
-    let main_width = width / x_factor;
-    let main_height = height / y_factor;
-    let right_width = width % x_factor;
-    let bottom_height = height % y_factor;
-    let (block_width, source_x) = if x < main_width {
-        (x_factor, x.checked_mul(x_factor)?)
-    } else {
-        (right_width, main_width.checked_mul(x_factor)?)
-    };
-    let (block_height, source_y) = if y < main_height {
-        (y_factor, y.checked_mul(y_factor)?)
-    } else {
-        (bottom_height, main_height.checked_mul(y_factor)?)
-    };
-    if block_width == 0 || block_height == 0 {
-        return None;
+    main_width: usize,
+    main_height: usize,
+    right_width: usize,
+    bottom_height: usize,
+    tail_x: usize,
+    tail_y: usize,
+    full: Option<NativeReduceAverage>,
+    right: Option<NativeReduceAverage>,
+    bottom: Option<NativeReduceAverage>,
+    corner: Option<NativeReduceAverage>,
+}
+
+impl NativeReduceGeometry {
+    fn new(width: usize, height: usize, x_factor: usize, y_factor: usize) -> Option<Self> {
+        if x_factor == 0 || y_factor == 0 {
+            return None;
+        }
+        let main_width = width / x_factor;
+        let main_height = height / y_factor;
+        let right_width = width % x_factor;
+        let bottom_height = height % y_factor;
+        let tail_x = main_width.checked_mul(x_factor)?;
+        let tail_y = main_height.checked_mul(y_factor)?;
+        let average = |block_width: usize, block_height: usize| {
+            let count = block_width.checked_mul(block_height)?;
+            // The u32 vector arithmetic below is exact while sum+amend fits
+            // in u32. Larger public factors remain valid CPU work but stay
+            // outside this SIMD contract.
+            if count == 0 || count > (u32::MAX / 256) as usize {
+                return None;
+            }
+            Some(NativeReduceAverage {
+                multiplier: ((1u128 << 32) / (count as u128 * 256)) as u32,
+                amend: (count / 2) as u32,
+            })
+        };
+        let full = if main_width != 0 && main_height != 0 {
+            Some(average(x_factor, y_factor)?)
+        } else {
+            None
+        };
+        let right = if right_width != 0 && main_height != 0 {
+            Some(average(right_width, y_factor)?)
+        } else {
+            None
+        };
+        let bottom = if main_width != 0 && bottom_height != 0 {
+            Some(average(x_factor, bottom_height)?)
+        } else {
+            None
+        };
+        let corner = if right_width != 0 && bottom_height != 0 {
+            Some(average(right_width, bottom_height)?)
+        } else {
+            None
+        };
+        Some(Self {
+            width,
+            x_factor,
+            y_factor,
+            main_width,
+            main_height,
+            right_width,
+            bottom_height,
+            tail_x,
+            tail_y,
+            full,
+            right,
+            bottom,
+            corner,
+        })
     }
-    let count = block_width.checked_mul(block_height)?;
-    // The u32 vector arithmetic below is exact while sum+amend fits in u32.
-    // Larger public factors remain valid CPU work but are explicitly outside
-    // this SIMD contract rather than being truncated by a narrower lane.
-    if count > (u32::MAX / 256) as usize {
-        return None;
+
+    #[inline]
+    fn block_parameters(
+        &self,
+        x: usize,
+        y: usize,
+    ) -> Option<(usize, usize, usize, usize, u32, u32)> {
+        let is_right = x >= self.main_width;
+        let is_bottom = y >= self.main_height;
+        let (block_width, source_x) = if is_right {
+            (self.right_width, self.tail_x)
+        } else {
+            (self.x_factor, x.checked_mul(self.x_factor)?)
+        };
+        let (block_height, source_y) = if is_bottom {
+            (self.bottom_height, self.tail_y)
+        } else {
+            (self.y_factor, y.checked_mul(self.y_factor)?)
+        };
+        if block_width == 0 || block_height == 0 {
+            return None;
+        }
+        let average = match (is_right, is_bottom) {
+            (false, false) => self.full,
+            (true, false) => self.right,
+            (false, true) => self.bottom,
+            (true, true) => self.corner,
+        }?;
+        Some((
+            source_x,
+            source_y,
+            block_width,
+            block_height,
+            average.multiplier,
+            average.amend,
+        ))
     }
-    let multiplier = ((1u128 << 32) / (u128::from(count as u64) * 256)) as u32;
-    Some((
-        source_x,
-        source_y,
-        block_width,
-        block_height,
-        multiplier,
-        (count / 2) as u32,
-    ))
 }
 
 #[inline]
@@ -15509,8 +15587,7 @@ fn native_reduce_supported_for_image(
         .checked_mul(output_height)
         .is_some_and(|pixels| pixels != 0)
         && output_height != 0
-        && native_reduce_block_parameters(width, height, x_factor as usize, y_factor as usize, 0, 0)
-            .is_some()
+        && NativeReduceGeometry::new(width, height, x_factor as usize, y_factor as usize).is_some()
 }
 
 fn native_reduce_supported_for_shape(
@@ -15552,13 +15629,11 @@ fn native_reduce_supported_for_shape(
         .checked_mul(output_height)
         .is_some_and(|pixels| pixels != 0)
         && output_height != 0
-        && native_reduce_block_parameters(
+        && NativeReduceGeometry::new(
             shape.width as usize,
             shape.height as usize,
             x_factor as usize,
             y_factor as usize,
-            0,
-            0,
         )
         .is_some()
 }
@@ -15566,21 +15641,18 @@ fn native_reduce_supported_for_shape(
 #[inline]
 fn native_reduce_pixel_sums(
     source: &[u8],
-    width: usize,
-    height: usize,
+    geometry: &NativeReduceGeometry,
     channels: usize,
     premultiplied_alpha: bool,
-    x_factor: usize,
-    y_factor: usize,
     x: usize,
     y: usize,
 ) -> Option<([u32; 4], u32, u32, u32)> {
     let (source_x, source_y, block_width, block_height, multiplier, amend) =
-        native_reduce_block_parameters(width, height, x_factor, y_factor, x, y)?;
+        geometry.block_parameters(x, y)?;
     let mut sums = [0u64; 4];
     for dy in 0..block_height {
         for dx in 0..block_width {
-            let source_index = ((source_y + dy) * width + source_x + dx) * channels;
+            let source_index = ((source_y + dy) * geometry.width + source_x + dx) * channels;
             for channel in 0..channels {
                 let mut sample = u32::from(source[source_index + channel]);
                 if premultiplied_alpha && channel + 1 < channels {
@@ -15613,26 +15685,14 @@ fn native_reduce_average(sum: u32, multiplier: u32, amend: u32) -> u8 {
 #[inline]
 fn native_reduce_scalar_pixel(
     source: &[u8],
-    width: usize,
-    height: usize,
+    geometry: &NativeReduceGeometry,
     channels: usize,
     premultiplied_alpha: bool,
-    x_factor: usize,
-    y_factor: usize,
     x: usize,
     y: usize,
 ) -> Option<[u8; 4]> {
-    let (sums, _count, multiplier, amend) = native_reduce_pixel_sums(
-        source,
-        width,
-        height,
-        channels,
-        premultiplied_alpha,
-        x_factor,
-        y_factor,
-        x,
-        y,
-    )?;
+    let (sums, _count, multiplier, amend) =
+        native_reduce_pixel_sums(source, geometry, channels, premultiplied_alpha, x, y)?;
     let mut output = [0u8; 4];
     let alpha = if premultiplied_alpha {
         native_reduce_average(sums[channels - 1], multiplier, amend)
@@ -15655,47 +15715,101 @@ fn native_reduce_scalar_pixel(
 }
 
 #[inline]
-fn native_reduce_vector_block(
+fn native_reduce_full_pixel_sums(
     source: &[u8],
-    width: usize,
-    height: usize,
-    output_width: usize,
-    output_pixels: usize,
+    geometry: &NativeReduceGeometry,
     channels: usize,
     premultiplied_alpha: bool,
-    x_factor: usize,
-    y_factor: usize,
-    start_index: usize,
+    source_x: usize,
+    source_y: usize,
+    block_width: usize,
+    block_height: usize,
+) -> [u32; 4] {
+    let mut sums = [0u32; 4];
+    for dy in 0..block_height {
+        for dx in 0..block_width {
+            let source_index = ((source_y + dy) * geometry.width + source_x + dx) * channels;
+            let alpha = if premultiplied_alpha {
+                u32::from(source[source_index + channels - 1])
+            } else {
+                0
+            };
+            for channel in 0..channels {
+                let sample = if premultiplied_alpha && channel + 1 < channels {
+                    ((u32::from(source[source_index + channel]) * alpha + 127) / 255) as u8
+                } else {
+                    source[source_index + channel]
+                };
+                sums[channel] += u32::from(sample);
+            }
+        }
+    }
+    sums
+}
+
+#[inline]
+fn native_reduce_vector_block(
+    source: &[u8],
+    geometry: &NativeReduceGeometry,
+    output_x: usize,
+    output_y: usize,
+    valid_pixels: usize,
+    channels: usize,
+    premultiplied_alpha: bool,
 ) -> Option<[u8; SIMD_REDUCE_LANES * 4]> {
     let mut sums = [[0u32; SIMD_REDUCE_LANES]; 4];
     let mut multipliers = [0u32; SIMD_REDUCE_LANES];
     let mut amends = [0u32; SIMD_REDUCE_LANES];
-    for lane in 0..SIMD_REDUCE_LANES {
-        if start_index + lane >= output_pixels {
-            continue;
+    let full_width_batch = valid_pixels != 0
+        && output_x < geometry.main_width
+        && valid_pixels <= geometry.main_width - output_x;
+    let mut used_full_width_batch = false;
+    if full_width_batch {
+        let (source_x, source_y, block_width, block_height, multiplier, amend) =
+            geometry.block_parameters(output_x, output_y)?;
+        if block_width == geometry.x_factor {
+            for lane in 0..valid_pixels {
+                let pixel_sums = native_reduce_full_pixel_sums(
+                    source,
+                    geometry,
+                    channels,
+                    premultiplied_alpha,
+                    source_x + lane * geometry.x_factor,
+                    source_y,
+                    block_width,
+                    block_height,
+                );
+                for channel in 0..channels {
+                    sums[channel][lane] = pixel_sums[channel];
+                }
+                multipliers[lane] = multiplier;
+                amends[lane] = amend;
+            }
+            used_full_width_batch = true;
         }
-        let (pixel_sums, _count, multiplier, amend) = native_reduce_pixel_sums(
-            source,
-            width,
-            height,
-            channels,
-            premultiplied_alpha,
-            x_factor,
-            y_factor,
-            (start_index + lane) % output_width,
-            (start_index + lane) / output_width,
-        )?;
-        for channel in 0..channels {
-            sums[channel][lane] = pixel_sums[channel];
+    }
+    if !used_full_width_batch {
+        for lane in 0..valid_pixels {
+            let (pixel_sums, _count, multiplier, amend) = native_reduce_pixel_sums(
+                source,
+                geometry,
+                channels,
+                premultiplied_alpha,
+                output_x + lane,
+                output_y,
+            )?;
+            for channel in 0..channels {
+                sums[channel][lane] = pixel_sums[channel];
+            }
+            multipliers[lane] = multiplier;
+            amends[lane] = amend;
         }
-        multipliers[lane] = multiplier;
-        amends[lane] = amend;
     }
     let multipliers = u32x8::new(multipliers);
     let amends = u32x8::new(amends);
     let mut averaged = [[0u8; SIMD_REDUCE_LANES]; 4];
     for channel in 0..channels {
-        let values = (u32x8::new(sums[channel]) + amends) * multipliers >> 24u32;
+        let values = ((u32x8::new(sums[channel]) + amends) * multipliers) >> 24u32;
         averaged[channel] = values.to_array().map(|value| value.min(255) as u8);
     }
     let mut output = [0u8; SIMD_REDUCE_LANES * 4];
@@ -15751,6 +15865,7 @@ fn native_reduce_bytes(
             0,
         ));
     }
+    let geometry = NativeReduceGeometry::new(width, height, x_factor, y_factor)?;
     let mut output = vec![0u8; output_len];
     let vector_blocks_per_row = if output_width < SIMD_REDUCE_LANES {
         1
@@ -15769,29 +15884,24 @@ fn native_reduce_bytes(
     // serial row loop below the small-output threshold; large reductions still
     // use the shared row-parallel execution policy.
     let process_row = |y: usize, row: &mut [u8]| -> bool {
-        let row_start_pixel = y.saturating_mul(output_width);
         let vector_limit = if output_width < SIMD_REDUCE_LANES {
             output_width
         } else {
             output_width / SIMD_REDUCE_LANES * SIMD_REDUCE_LANES
         };
         for local in (0..vector_limit).step_by(SIMD_REDUCE_LANES) {
-            let start_index = row_start_pixel.saturating_add(local);
+            let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
             let Some(block) = native_reduce_vector_block(
                 source,
-                width,
-                height,
-                output_width,
-                output_pixels,
+                &geometry,
+                local,
+                y,
+                valid_pixels,
                 channels,
                 premultiplied_alpha,
-                x_factor,
-                y_factor,
-                start_index,
             ) else {
                 return false;
             };
-            let valid_pixels = (output_width - local).min(SIMD_REDUCE_LANES);
             let dst_start = local * channels;
             let dst_end = dst_start + valid_pixels * channels;
             let Some(dst) = row.get_mut(dst_start..dst_end) else {
@@ -15800,21 +15910,17 @@ fn native_reduce_bytes(
             dst.copy_from_slice(&block[..valid_pixels * channels]);
         }
         for local in vector_limit..output_width {
-            let index = row_start_pixel.saturating_add(local);
             let Some(pixel) = native_reduce_scalar_pixel(
                 source,
-                width,
-                height,
+                &geometry,
                 channels,
                 premultiplied_alpha,
-                x_factor,
-                y_factor,
                 local,
                 y,
             ) else {
                 return false;
             };
-            let dst_start = (index - row_start_pixel) * channels;
+            let dst_start = local * channels;
             let dst_end = dst_start + channels;
             let Some(dst) = row.get_mut(dst_start..dst_end) else {
                 return false;
