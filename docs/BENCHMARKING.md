@@ -42,13 +42,15 @@ The default image-font `getlength` workload measures the `getlength` call as
 an observed step; `load_default()` setup has its own workload. The loader still
 runs to create the font, but its time is excluded from call-only latency. The
 default image-font `getbbox` and `ImageDraw.textlength` rows isolate their
-method calls from font, image, and draw setup. The standard multiline draw
-workloads use reviewed line-bearing cases: `ImageDraw.multiline_text` uses
-`hello\nworld`, and `ImageDraw.multiline_textbbox` uses `A\nBB\nC`. Their
-ordinary default inputs contain no newline and skip line stepping or
-per-line aggregation. Use the full workflow when comparing end-to-end
-construction plus measurement. Font metrics and text rasterization do not
-necessarily enter the image SIMD/GPU kernels, so interpret those rows with
+method calls from font, image, and draw setup. The `ImageDraw.textbbox` row
+isolates its call too; when font is omitted, default-font creation remains
+part of that public call. The standard multiline draw workloads use reviewed
+line-bearing cases: `ImageDraw.multiline_text` uses `hello\nworld`, and
+`ImageDraw.multiline_textbbox` uses `A\nBB\nC`. Their ordinary default inputs
+contain no newline and skip line stepping or per-line aggregation. Use the full
+workflow when comparing end-to-end construction plus measurement. Font metrics
+and text rasterization do not necessarily enter the image SIMD/GPU kernels, so
+interpret those rows with
 their actual-backend receipts.
 
 The maintained operation matrix currently contains 88 canonical workloads:

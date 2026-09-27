@@ -46411,6 +46411,11 @@ def build_inputs(
             isolated_imagedraw_textlength = (
                 workload_id == "pil-imagedraw-imagedraw.textlength.standard"
             )
+            # Measure textbbox after image and draw setup; its call includes
+            # default-font construction when no font is supplied.
+            isolated_imagedraw_textbbox = (
+                workload_id == "pil-imagedraw-imagedraw.textbbox.standard"
+            )
             isolated_imagedraw_multiline_text = (
                 workload_id == "pil-imagedraw-imagedraw.multiline-text.standard"
             )
@@ -46497,6 +46502,7 @@ def build_inputs(
                             or isolated_default_getlength
                             or isolated_default_getbbox
                             or isolated_imagedraw_textlength
+                            or isolated_imagedraw_textbbox
                             or isolated_imagedraw_multiline_text
                             or isolated_imagedraw_multiline_textbbox
                             or isolated_freetype_getbbox
@@ -46522,6 +46528,7 @@ def build_inputs(
                             or isolated_default_getlength
                             or isolated_default_getbbox
                             or isolated_imagedraw_textlength
+                            or isolated_imagedraw_textbbox
                             or isolated_imagedraw_multiline_text
                             or isolated_imagedraw_multiline_textbbox
                             or isolated_freetype_getbbox
