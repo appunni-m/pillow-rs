@@ -6255,7 +6255,69 @@ Strict operation parity passed 42/42 CPU cases, 4/4 SIMD cases, and 3/3 GPU
 cases. The six benchmark-specific parity gates also passed. No coverage
 collection ran.
 
-Checkpoint the remaining gap and continue with a fresh material, parity-gated
-baseline for `PIL.Image.Image.reduce`. The old top-ranked `ImageOps.invert`
-row is a one-sample 16 × 16 diagnostic without parity proof, so it cannot
-justify reopening that completed operation or choosing the next optimization.
+At this checkpoint the campaign selected `PIL.Image.Image.reduce` for a fresh
+material, parity-gated baseline. The old top-ranked `ImageOps.invert` row was a
+one-sample 16 × 16 diagnostic without parity proof, so it did not justify
+reopening that completed operation or choosing the next optimization.
+
+## PIL.Image.Image.reduce checkpoint — 2026-09-28
+
+The first Reduce campaign added a seeded, varied RGB workload at 1,024 × 768
+with factor `(3, 5)`. Its 342 × 154 result exercises full blocks and the right,
+bottom, and corner tails. Separate 64 × 48 `L`, `LA`, and `RGBA` cases exercise
+single-band and alpha handling. The benchmark times `reduce` and materializes
+the result with `tobytes`; input creation is outside the timed steps. Each run
+uses five warmups and 100 observations at concurrency one, with exact Pillow
+output as the benchmark parity gate.
+
+Four bounded implementation attempts are checkpointed. The SIMD path now
+precomputes the full/right/bottom/corner block geometry and fixed-point average
+parameters once, instead of dividing and rebuilding reciprocal parameters for
+each output pixel. It passes output-row coordinates into the SIMD block kernel,
+removing per-lane global-index division and remainder. Its common full-block
+path also accumulates into `u32` directly; construction proves the sample-count
+bound before this path is admitted, so it avoids checked `u64` accumulation
+and narrowing in the hot loop. The exact edge path retains checked sums and
+per-pixel geometry.
+
+| Run | Pillow ms | CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.405417 | 0.247750 | 0.312229 | 1.040167 |
+| Attempt 1: hoist geometry and average parameters | 0.391625 | 0.271896 | 0.295146 | 1.039188 |
+| Attempt 2: vectorize source accumulation (reverted) | 0.425520 | 0.264771 | 0.317458 | 1.009041 |
+| Attempt 3: row-aware SIMD lanes | 0.411271 | 0.262563 | 0.291479 | 1.020188 |
+| Attempt 4: direct `u32` full-block sums | 0.405063 | 0.272042 | 0.275396 | 1.032334 |
+
+Attempt 2 passed parity but made SIMD slower than baseline and was removed.
+Attempts 1 and 3 improved SIMD median latency modestly; attempt 4 brought it to
+0.275 ms, about 1.47× faster than Pillow on this material workload. The CPU
+median is about 1.49× faster than Pillow. These per-run medians vary with host
+load, so they establish a useful workload-specific result, not universal
+performance for every shape or mode. SIMD still misses the 5× target by a wide
+margin.
+
+GPU is about 2.55× slower than Pillow and 3.75× slower than SIMD. Its receipt
+shows 100/100 real GPU executions, one dispatch per call, and no fallback, but
+also a 3,145,728-byte upload, 210,672-byte readback, one full-frame copy, and
+one mode conversion per request. The next GPU design needs to remove staging or
+retain the source in a native layout; shader arithmetic is not the first
+attack while these transfers dominate.
+
+Strict final parity passed 4/4 cases on each CPU, SIMD, and GPU lane, covering
+the varied RGB input and `L`, `LA`, and `RGBA`. The benchmark exact-output gate
+also passed on all three actual backends. Receipts are
+`build/migration-parity/reduce-e9fa-attempt4-cpu.json`,
+`reduce-e9fa-attempt4-simd.json`, and `reduce-e9fa-attempt4-gpu.json`; the
+benchmark and its gate are `reduce-e9fa-attempt4.json` and
+`reduce-e9fa-attempt4-parity.json`. Every benchmark artifact reports base
+revision `73d52050346cbc6ee595306f3ed7ef5ff8b8136e` with `dirty: true`; the
+runner does not record a working-tree hash, so the receipts do not independently
+identify each intermediate attempt's exact diff. The final attempt was
+revalidated on all three backends above. No coverage collection ran.
+
+The next SIMD revisit should reduce scalar source loads and per-sample work;
+naively vectorizing source accumulation already regressed, so inspect the
+generated loop and measure the complete call before retrying a vector layout.
+The CPU goal is met only for this 1,024 × 768 RGB workload. SIMD and GPU goals
+remain open; stop this operation at four attempts and proceed to the next
+ranked, uncheckpointed operation.
