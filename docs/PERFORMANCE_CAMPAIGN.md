@@ -6198,3 +6198,64 @@ GPU transfer floors mean this operation alone cannot meet GPU-equals-SIMD.
 Artifacts are `build/migration-parity/perf-getchannel-revisit-compact-output.json`,
 `perf-getchannel-revisit-vectorized-repeat.json`, and
 `perf-getchannel-revisit-parallel-vector.json`. No coverage collection ran.
+
+## PIL.ImageEnhance.Sharpness checkpoint — 2026-09-28
+
+Four bounded performance passes are checkpointed. Factor one returns an
+independent copy on CPU and SIMD; GPU removes that exact identity before
+upload and records zero dispatches. For active filtering, the integer weighted
+sum is bounded by 3315 and `(weighted + 6) / 13` exactly rounds the Pillow
+3×3 smoothing result. CPU writes the filtered and blended bytes into one output
+buffer. SIMD fuses filtering and blending into one output pass, keeps the
+smoothed-byte narrowing between those stages, and evaluates the blend with
+fused float32 difference arithmetic. On targets where `wide::f32x8::mul_add`
+is not fused, it uses scalar fused lane arithmetic so x86 without FMA keeps the
+same byte result. The GPU fixed-point factor is admitted only after proving it
+matches that float32 blend for every byte pair.
+
+Two parity regressions now pin down the blend contract. Factor 0.3 with a
+nonzero border sample catches the old weighted-f64 expression truncating an
+unchanged value by one. Factor 1.1 uses a 3×3 image whose center blends samples
+2 and 12; it catches separate multiply/add rounding to 1 where Pillow's fused
+operation truncates to 0. GPU factor 1.1 is not a supported profile because
+the fixed-point shader cannot prove exact output for every byte pair.
+
+The corrected benchmark is
+`build/migration-parity/sharpness-e9fa-corrected.json`, with six exact-output
+gates in `sharpness-e9fa-corrected-parity.json`. The 1024 × 768 RGB input is
+created with `frombytes` outside the timer; the measured steps are Sharpness
+construction, `enhance`, and terminal `tobytes`. Each workload has five
+warmups and 100 measured observations (five samples × 20 iterations) at
+concurrency one. Both workloads passed Pillow parity on CPU, SIMD, and GPU.
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Factor 1.5, active filter | 13.545 ms | 7.647 ms | 3.069 ms | 2.156 ms |
+| Factor 1.0, identity | 4.733 ms | 0.246 ms | 0.253 ms | 0.385 ms |
+
+For the active filter, CPU is 1.77× faster than Pillow and SIMD is 4.41×
+faster, still below the 5× goal. GPU median latency is 29.8% lower than SIMD,
+with 100/100 actual GPU executions, exactly one Sharpness operation and one
+dispatch per request, and no fallback. This benchmark reports serial
+concurrency-one latency; its reciprocal throughput field does not demonstrate
+sustained throughput. For identity, GPU executes on every request with zero
+dispatches, but its latency remains 52.0% higher than SIMD. The measured
+non-identity CPU workload is faster than Pillow; these two material inputs do
+not prove every Sharpness shape or mode meets that goal.
+
+The former `sharpness-e9fa-final4.json` active comparison is superseded. Its
+timed materialization also flushed a deferred setup `putpixel`, so the target
+ran two operations and GPU ran two dispatches while Pillow had performed that
+setup eagerly. Do not use its latency ratios. The corrected active and identity
+input hashes are `9a77b4da8c7019debbad18a50fa8e9923425ba770b4a04b3fddd95a15694d152`
+and `9cc08d7196415e3d179b0b2b02b5e78f31f1a59fe32642aaa198e6d215848bc9`;
+the shared RGB bytes hash to
+`c840db423eb756ccc880049237174a89a504f4e0699ecbf65835abc376ede4f9`.
+Strict operation parity passed 42/42 CPU cases, 4/4 SIMD cases, and 3/3 GPU
+cases. The six benchmark-specific parity gates also passed. No coverage
+collection ran.
+
+Checkpoint the remaining gap and continue with a fresh material, parity-gated
+baseline for `PIL.Image.Image.reduce`. The old top-ranked `ImageOps.invert`
+row is a one-sample 16 × 16 diagnostic without parity proof, so it cannot
+justify reopening that completed operation or choosing the next optimization.

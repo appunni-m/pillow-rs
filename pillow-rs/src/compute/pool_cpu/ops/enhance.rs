@@ -228,9 +228,15 @@ pub fn op_enhance_sharpness(
     factor: f64,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if factor == 1.0 {
+        // The blend is exactly the original samples. Clone the dynamic image
+        // so the enhanced result stays independent without converting modes
+        // or allocating the unused smoothed and blend buffers.
+        return Ok(img.clone());
+    }
     // PIL: apply SMOOTH filter (3x3 kernel [1,1,1; 1,5,1; 1,1,1] / 13, offset 0),
-    // then blend: smoothed * (1-factor) + original * factor
-    let f = factor;
+    // then use Image.blend's f32 fused difference form.
+    let alpha = factor as f32;
     // CMYK mode: operate on all 4 channels (C=R, M=G, Y=B, K=A in RGBA8)
     let has_alpha = matches!(
         img,
@@ -243,31 +249,44 @@ pub fn op_enhance_sharpness(
         img.to_rgb8().into_raw()
     };
     let (w, h) = (img.width() as i32, img.height() as i32);
-    let inv_scale = 1.0f32 / 13.0f32;
-    let k = inv_scale;
-    let kc = 5.0f32 * inv_scale;
-    let rounding_bias = 0.5f32;
-    let mut blurred = src.clone();
-    for y in 1..h - 1 {
-        for x in 1..w - 1 {
+    let (width, height) = (w as usize, h as usize);
+    let row_stride = width * channels;
+    let mut result = src.clone();
+    for y in 0..height {
+        for x in 0..width {
             for c in 0..channels {
-                let get_pixel = |dx: i32, dy: i32| -> f32 {
-                    let px = (x + dx).clamp(0, w - 1) as u32;
-                    let py = (y + dy).clamp(0, h - 1) as u32;
-                    src[(py * w as u32 + px) as usize * channels + c] as f32
+                let index = y * row_stride + x * channels + c;
+                let original = src[index];
+                let smooth = if x > 0 && x + 1 < width && y > 0 && y + 1 < height {
+                    let above = (y - 1) * row_stride;
+                    let current = y * row_stride;
+                    let below = (y + 1) * row_stride;
+                    let left = (x - 1) * channels + c;
+                    let center = x * channels + c;
+                    let right = (x + 1) * channels + c;
+                    // The weighted byte sum is an integer in 0..=3315. The
+                    // f32 filter's rounding error is far below the nearest
+                    // half-integer boundary (at least 1/26 away because the
+                    // divisor is odd), so this integer form produces the
+                    // same rounded byte without nine float multiplies.
+                    let weighted = u16::from(src[below + left])
+                        + u16::from(src[below + center])
+                        + u16::from(src[below + right])
+                        + u16::from(src[current + left])
+                        + u16::from(src[current + center]) * 5
+                        + u16::from(src[current + right])
+                        + u16::from(src[above + left])
+                        + u16::from(src[above + center])
+                        + u16::from(src[above + right]);
+                    ((weighted + 6) / 13) as u8
+                } else {
+                    original
                 };
-                let b = get_pixel(-1, 1) * k + get_pixel(0, 1) * k + get_pixel(1, 1) * k;
-                let m = get_pixel(-1, 0) * k + get_pixel(0, 0) * kc + get_pixel(1, 0) * k;
-                let t = get_pixel(-1, -1) * k + get_pixel(0, -1) * k + get_pixel(1, -1) * k;
-                let val = rounding_bias + b + m + t;
-                let idx = (y * w + x) as usize * channels + c;
-                blurred[idx] = val.clamp(0.0, 255.0) as u8;
+                result[index] = alpha
+                    .mul_add(f32::from(original) - f32::from(smooth), f32::from(smooth))
+                    .clamp(0.0, 255.0) as u8;
             }
         }
-    }
-    let mut result = src.clone();
-    for i in 0..result.len() {
-        result[i] = (blurred[i] as f64 * (1.0 - f) + result[i] as f64 * f).clamp(0.0, 255.0) as u8;
     }
     if mode == Some("CMYK") {
         let img_result = crate::raster::RgbaImage::from_raw(w as u32, h as u32, result)
