@@ -16211,6 +16211,10 @@ fn native_cover_dimensions(
     }
 }
 
+// Cover is often used to resize a thumbnail-sized image. Rayon row dispatch
+// costs more than the SIMD work for fewer than 32 × 32 output pixels.
+const SIMD_COVER_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
+
 /// Compute the source box used by `ImageOps.fit` without touching pixels.
 ///
 /// Pillow keeps this calculation in the ImageOps layer and passes the four
@@ -17761,9 +17765,14 @@ fn build_resize_horizontal_plan(
     coeffs: &FilterCoeffs,
     output_width: usize,
     channels: usize,
+    vectorize_tail: bool,
 ) -> Option<ResizeHorizontalPlan> {
     let vector_width = if output_width < SIMD_RESIZE_LANES {
         SIMD_RESIZE_LANES
+    } else if vectorize_tail {
+        output_width
+            .div_ceil(SIMD_RESIZE_LANES)
+            .checked_mul(SIMD_RESIZE_LANES)?
     } else {
         output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
     };
@@ -17941,6 +17950,7 @@ fn resize_vertical_vector_row(
     output_y: usize,
     output_row: &mut [u8],
     premultiplied_alpha: bool,
+    vectorize_tail: bool,
 ) -> Option<(u64, u64)> {
     let weights = resize_coeff_slice(coeffs, output_y)?;
     let y0 = usize::try_from(*coeffs.xmin.get(output_y)?).ok()?;
@@ -17948,6 +17958,10 @@ fn resize_vertical_vector_row(
     // lanes are zero-filled and skipped when the valid prefix is stored.
     let vector_width = if output_width < SIMD_RESIZE_LANES {
         SIMD_RESIZE_LANES
+    } else if vectorize_tail {
+        output_width
+            .div_ceil(SIMD_RESIZE_LANES)
+            .checked_mul(SIMD_RESIZE_LANES)?
     } else {
         output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
     };
@@ -18662,6 +18676,28 @@ fn simd_resize_convolution(
     channels: usize,
     premultiplied_alpha: bool,
 ) -> Result<DynamicImage, PilError> {
+    simd_resize_convolution_with_parallel_threshold(
+        img,
+        output_width,
+        output_height,
+        filter,
+        channels,
+        premultiplied_alpha,
+        0,
+        false,
+    )
+}
+
+fn simd_resize_convolution_with_parallel_threshold(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    channels: usize,
+    premultiplied_alpha: bool,
+    parallel_pixel_threshold: usize,
+    vectorize_tail: bool,
+) -> Result<DynamicImage, PilError> {
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
     let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
@@ -18685,8 +18721,9 @@ fn simd_resize_convolution(
     }
     let horizontal = precompute_coeffs(output_width as u32, source_width as u32, filter);
     let vertical = precompute_coeffs(output_height as u32, source_height as u32, filter);
-    let horizontal_plan = build_resize_horizontal_plan(&horizontal, output_width, channels)
-        .ok_or_else(|| simd_unsupported("Resize"))?;
+    let horizontal_plan =
+        build_resize_horizontal_plan(&horizontal, output_width, channels, vectorize_tail)
+            .ok_or_else(|| simd_unsupported("Resize"))?;
     let mut intermediate = vec![0u8; intermediate_len];
     #[cfg(feature = "parallel")]
     let vector_blocks;
@@ -18704,7 +18741,32 @@ fn simd_resize_convolution(
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let source = img.as_bytes();
     #[cfg(feature = "parallel")]
-    {
+    if source_height.saturating_mul(output_width) < parallel_pixel_threshold {
+        for source_y in 0..source_height {
+            let source_start = source_y
+                .checked_mul(source_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let intermediate_start = source_y
+                .checked_mul(intermediate_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let source_row = source
+                .get(source_start..source_start + source_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let intermediate_row = intermediate
+                .get_mut(intermediate_start..intermediate_start + intermediate_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            resize_horizontal_vector_row(
+                source_row,
+                channels,
+                &horizontal,
+                &horizontal_plan,
+                output_width,
+                intermediate_row,
+                premultiplied_alpha,
+            )
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+        }
+    } else {
         // Horizontal rows are independent once the coefficient table is
         // built.  Keep the same per-row tap order, but let Rayon schedule
         // rows across cores; this is the same ownership proof used by the
@@ -18774,7 +18836,28 @@ fn simd_resize_convolution(
     let mut output = vec![0u8; output_len];
     let output_stride = intermediate_stride;
     #[cfg(feature = "parallel")]
-    {
+    if output_width.saturating_mul(output_height) < parallel_pixel_threshold {
+        for output_y in 0..output_height {
+            let output_start = output_y
+                .checked_mul(output_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let output_row = output
+                .get_mut(output_start..output_start + output_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            resize_vertical_vector_row(
+                &intermediate,
+                output_width,
+                source_height,
+                channels,
+                &vertical,
+                output_y,
+                output_row,
+                premultiplied_alpha,
+                vectorize_tail,
+            )
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+        }
+    } else {
         let failed = AtomicBool::new(false);
         crate::par_rows_mut!(
             &mut output,
@@ -18791,6 +18874,7 @@ fn simd_resize_convolution(
                     output_y as usize,
                     output_row,
                     premultiplied_alpha,
+                    vectorize_tail,
                 )
                 .is_none()
                 {
@@ -18802,6 +18886,8 @@ fn simd_resize_convolution(
             return Err(simd_unsupported("Resize"));
         }
     }
+    #[cfg(not(feature = "parallel"))]
+    let _ = parallel_pixel_threshold;
     #[cfg(not(feature = "parallel"))]
     for output_y in 0..output_height {
         let output_start = output_y
@@ -18819,6 +18905,7 @@ fn simd_resize_convolution(
             output_y,
             output_row,
             premultiplied_alpha,
+            vectorize_tail,
         )
         .map(|(blocks, tail)| {
             vector_blocks = vector_blocks.saturating_add(blocks);
@@ -18831,24 +18918,24 @@ fn simd_resize_convolution(
         // The vector/tail counters are deterministic functions of the output
         // width and row count.  Compute them after parallel writes rather
         // than contending on shared counters inside the hot loops.
-        let horizontal_blocks = if output_width < SIMD_RESIZE_LANES {
+        let blocks_per_row = if output_width < SIMD_RESIZE_LANES {
             1
+        } else if vectorize_tail {
+            output_width.div_ceil(SIMD_RESIZE_LANES)
         } else {
             output_width / SIMD_RESIZE_LANES
         } as u64;
-        let horizontal_tail = if output_width < SIMD_RESIZE_LANES {
+        let scalar_tail_per_row = if output_width < SIMD_RESIZE_LANES || vectorize_tail {
             0
         } else {
             output_width % SIMD_RESIZE_LANES
         } as u64;
-        let vertical_blocks = horizontal_blocks;
-        let vertical_tail = horizontal_tail;
-        let computed_vector_blocks = horizontal_blocks
+        let computed_vector_blocks = blocks_per_row
             .saturating_mul(source_height as u64)
-            .saturating_add(vertical_blocks.saturating_mul(output_height as u64));
-        let computed_scalar_tail = horizontal_tail
+            .saturating_add(blocks_per_row.saturating_mul(output_height as u64));
+        let computed_scalar_tail = scalar_tail_per_row
             .saturating_mul(source_height as u64)
-            .saturating_add(vertical_tail.saturating_mul(output_height as u64));
+            .saturating_add(scalar_tail_per_row.saturating_mul(output_height as u64));
         vector_blocks = computed_vector_blocks;
         scalar_tail = computed_scalar_tail;
     }
@@ -18940,7 +19027,7 @@ fn simd_resize_convolution_boxed(
         .ok_or_else(|| simd_unsupported("Fit"))?;
     let horizontal_plan = if need_horizontal {
         Some(
-            build_resize_horizontal_plan(&horizontal, output_width, channels)
+            build_resize_horizontal_plan(&horizontal, output_width, channels, false)
                 .ok_or_else(|| simd_unsupported("Fit"))?,
         )
     } else {
@@ -19115,6 +19202,7 @@ fn simd_resize_convolution_boxed(
                     output_y,
                     output_row,
                     premultiplied_alpha,
+                    false,
                 )
                 .ok_or_else(|| simd_unsupported("Fit"))?;
             }
@@ -19137,6 +19225,7 @@ fn simd_resize_convolution_boxed(
                             output_y as usize,
                             output_row,
                             premultiplied_alpha,
+                            false,
                         )
                         .is_none()
                         {
@@ -19166,6 +19255,7 @@ fn simd_resize_convolution_boxed(
                 output_y,
                 output_row,
                 premultiplied_alpha,
+                false,
             )
             .ok_or_else(|| simd_unsupported("Fit"))?;
             vector_blocks = vector_blocks.saturating_add(blocks);
@@ -19230,6 +19320,8 @@ fn native_aspect_resize_bytes(
     filter: ResampleFilter,
     mode: Option<&str>,
     dimensions: fn(u32, u32, u32, u32) -> Option<(u32, u32)>,
+    parallel_pixel_threshold: usize,
+    vectorize_tail: bool,
     operation: &str,
 ) -> Result<Option<DynamicImage>, PilError> {
     let Some(channels) = native_pad_channels_for_image(img, mode) else {
@@ -19248,13 +19340,15 @@ fn native_aspect_resize_bytes(
     }
     let result = match filter {
         ResampleFilter::Nearest => simd_resize_nearest(img, output_width, output_height, channels),
-        _ => simd_resize_convolution(
+        _ => simd_resize_convolution_with_parallel_threshold(
             img,
             output_width,
             output_height,
             filter,
             channels,
             matches!(channels, 2 | 4),
+            parallel_pixel_threshold,
+            vectorize_tail,
         ),
     }?;
     if result.width() != output_width || result.height() != output_height {
@@ -21571,6 +21665,8 @@ pub fn simd_contain(
         *filter,
         mode,
         native_pad_contained_dimensions,
+        0,
+        false,
         "Contain",
     )?
     .ok_or_else(|| simd_unsupported("Contain"))
@@ -21587,8 +21683,18 @@ pub fn simd_cover(
     let PipelineOp::Cover { w, h, filter } = op else {
         return Err(PilError::ValueError("expected Cover op".into()));
     };
-    native_aspect_resize_bytes(img, *w, *h, *filter, mode, native_cover_dimensions, "Cover")?
-        .ok_or_else(|| simd_unsupported("Cover"))
+    native_aspect_resize_bytes(
+        img,
+        *w,
+        *h,
+        *filter,
+        mode,
+        native_cover_dimensions,
+        SIMD_COVER_PARALLEL_PIXEL_THRESHOLD,
+        true,
+        "Cover",
+    )?
+    .ok_or_else(|| simd_unsupported("Cover"))
 }
 
 /// Execute `ImageOps.fit` with scalar crop-box construction and a native
