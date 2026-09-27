@@ -4329,6 +4329,16 @@ fn gpu_working_set_bytes(capacity: u32) -> u64 {
         .saturating_add(GPU_HISTOGRAM_BYTES as u64)
 }
 
+fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError> {
+    let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
+    let transfer_bytes = pixel_count
+        .div_ceil(std::mem::size_of::<u32>())
+        .checked_mul(std::mem::size_of::<u32>())
+        .ok_or_else(|| PilError::ValueError("GPU luma readback is too large".into()))?;
+    u64::try_from(transfer_bytes)
+        .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
+}
+
 fn gpu_buffer_reuse_allowed(capacity: u32, minimum_capacity: u32) -> bool {
     capacity >= minimum_capacity
         && (minimum_capacity == 0
@@ -7694,6 +7704,18 @@ impl GpuInner {
         cpass.set_pipeline(&cached.pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         let (dispatch_w, dispatch_h) = match cached.variant_name {
+            "ExtractBand" => {
+                let pixel_count = u64::from(output_dims.0) * u64::from(output_dims.1);
+                let groups = pixel_count.div_ceil(4).div_ceil(64).max(1);
+                (
+                    u32::try_from(groups).map_err(|_| {
+                        PilError::ValueError(
+                            "GPU channel extraction exceeds dispatch limits".into(),
+                        )
+                    })?,
+                    1,
+                )
+            }
             "__internal_blur_h" => (1, output_dims.1),
             "__internal_blur_v" => (output_dims.0, 1),
             "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
@@ -9149,26 +9171,19 @@ impl GpuInner {
         h: u32,
         staging: &wgpu::Buffer,
     ) -> Result<DynamicImage, PilError> {
-        let packed_dims = CheckedDims::new(w, h, 4)?;
         let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
-        let size = packed_dims.total_bytes() as u64;
-        self.readback_with(size, staging, |bytes| {
-            if bytes.len() != packed_dims.total_bytes() {
+        let transfer_bytes = compact_luma8_transfer_bytes(w, h)?;
+        let transfer_len = usize::try_from(transfer_bytes)
+            .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))?;
+        self.readback_with(transfer_bytes, staging, |bytes| {
+            if bytes.len() != transfer_len || bytes.len() < pixel_count {
                 return Err(PilError::ValueError(format!(
-                    "GPU readback byte length {} does not match image size {}",
+                    "GPU packed-luma readback byte length {} does not match expected size {}",
                     bytes.len(),
-                    packed_dims.total_bytes()
+                    transfer_len
                 )));
             }
-            let samples = bytes
-                .chunks_exact(4)
-                .map(|pixel| pixel[0])
-                .collect::<Vec<_>>();
-            if samples.len() != pixel_count {
-                return Err(PilError::ValueError(
-                    "GPU luma readback has an incomplete pixel".into(),
-                ));
-            }
+            let samples = bytes[..pixel_count].to_vec();
             crate::raster::GrayImage::from_raw(w, h, samples)
                 .map(DynamicImage::ImageLuma8)
                 .ok_or_else(|| PilError::ValueError("bad luma readback buffer".into()))
@@ -9748,7 +9763,11 @@ impl GpuInner {
 
             let final_dims = prepared.final_dims;
             if chunk_end == ops.len() {
-                let size = CheckedDims::new(final_dims.0, final_dims.1, 4)?.total_bytes() as u64;
+                let size = if matches!(ops.last(), Some(PipelineOp::ExtractBand { .. })) {
+                    compact_luma8_transfer_bytes(final_dims.0, final_dims.1)?
+                } else {
+                    CheckedDims::new(final_dims.0, final_dims.1, 4)?.total_bytes() as u64
+                };
                 let src = if current_is_a {
                     prepared.resources.buf_a
                 } else {
@@ -16543,8 +16562,11 @@ impl GpuPool {
         } else {
             CheckedDims::new(w, h, 4)?.total_bytes() as u64
         };
-        resource_telemetry.readback_bytes =
-            CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64;
+        resource_telemetry.readback_bytes = if native_luma8_extract {
+            compact_luma8_transfer_bytes(final_w, final_h)?
+        } else {
+            CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
+        };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = u64::from(

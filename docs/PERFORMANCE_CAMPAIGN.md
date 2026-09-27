@@ -6157,3 +6157,44 @@ slots only when the reference table is bounded, preserve its exact probe and
 enumeration order, retain sparse storage for large limits, and reject raw-byte
 iteration unless complete-call measurements improve representative entropy
 and cutoff cases.
+
+## PIL.Image.Image.getchannel revisit checkpoint — 2026-09-27
+
+Three bounded attempts revisited the existing getchannel blocker. First, the
+GPU extract shader now packs four L samples into each u32 output word and maps
+only the active one-byte-per-pixel result, with four-byte alignment padding.
+This quartered readback for 1024 × 768 images from 3,145,728 to 786,432 bytes.
+The isolated GPU call improved by about 7–12% on RGB, LA and RGBA, but upload,
+dispatch, map completion and host output still leave it far slower than CPU or
+SIMD. The transfer reduction is useful for composed GPU-resident pipelines; it
+does not make a standalone extraction competitive.
+
+Second, the SIMD path replaced scalar indexed gathers with 16-byte vector
+shuffles and masks, precomputed per-channel lane selectors, then handled the
+final partial block scalarly. Two correctness-gated runs put 1024 × 768 SIMD
+medians around 100–105 µs for RGB, LA and RGBA, versus the prior 157–227 µs
+path. CPU measured 46–107 µs and Pillow 147–194 µs across those modes. SIMD is
+still only about 1.5–1.9× Pillow, not the 5× target; small RGB remains slower
+than Pillow because fixed wrapper and allocation cost dominates. The shuffle
+path proves vector execution but does not beat the simpler CPU kernel
+consistently: interleaved RGB gathers require several shuffles and masks, so
+inspect emitted instructions before adding more vector complexity.
+
+Third, splitting the cheap vector gather into parallel rows was rejected. Its
+correctness-gated run measured SIMD at 172–197 µs for the large modes, with
+high sample variance and a longer backend phase than the prior vector-only
+repeat. This work is a cheap byte extraction over a bandwidth-limited buffer;
+row task overhead and memory contention erased the benefit. Do not parallelize
+this loop again without a repeatable isolated crossover measurement.
+
+The final parity artifact, `build/migration-parity/perf-getchannel-revisit-final-all-backends.json`,
+passes all 130 selected cases in CPU, SIMD, GPU, Python, Node and browser lanes;
+the full-request GPU gate also passes. Benchmark exact-output gates pass in
+the vector-only artifacts. Keep compact GPU output and sequential vector
+gather; revert row parallelism. The remaining work is a lower-instruction
+packed-channel permutation for SIMD, reducing per-call cost for tiny images,
+and keeping GPU input/output resident across a longer fused pipeline. Standalone
+GPU transfer floors mean this operation alone cannot meet GPU-equals-SIMD.
+Artifacts are `build/migration-parity/perf-getchannel-revisit-compact-output.json`,
+`perf-getchannel-revisit-vectorized-repeat.json`, and
+`perf-getchannel-revisit-parallel-vector.json`. No coverage collection ran.

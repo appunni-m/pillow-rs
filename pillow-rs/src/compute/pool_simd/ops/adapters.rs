@@ -84,30 +84,51 @@ fn native_extract_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize
 }
 
 #[inline(always)]
-fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(source: &[u8]) -> Vec<u8> {
-    source
-        .chunks_exact(CHANNELS)
-        .map(|pixel| pixel[CHANNEL])
-        .collect()
-}
-
-#[cfg(feature = "parallel")]
-#[inline]
-fn gather_channel_parallel<const CHANNELS: usize, const CHANNEL: usize>(
+fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(
     source: &[u8],
-    width: usize,
-    height: usize,
-) -> Vec<u8> {
-    let row_stride = width * CHANNELS;
-    let mut output = vec![0; width * height];
-    crate::par_rows_mut!(&mut output, width, height, |_start, _end, y, row| {
-        let source_start = y as usize * row_stride;
-        let source_row = &source[source_start..source_start + row_stride];
-        for (destination, pixel) in row.iter_mut().zip(source_row.chunks_exact(CHANNELS)) {
-            *destination = pixel[CHANNEL];
-        }
+) -> (Vec<u8>, u64, u64) {
+    const LANES: usize = 16;
+    let pixel_count = source.len() / CHANNELS;
+    let selectors: [u8x16; CHANNELS] = std::array::from_fn(|_block| {
+        u8x16::new(std::array::from_fn(|lane| {
+            ((lane * CHANNELS + CHANNEL) % LANES) as u8
+        }))
     });
-    output
+    let masks: [u8x16; CHANNELS] = std::array::from_fn(|block| {
+        u8x16::new(std::array::from_fn(|lane| {
+            if (lane * CHANNELS + CHANNEL) / LANES == block {
+                u8::MAX
+            } else {
+                0
+            }
+        }))
+    });
+
+    let mut output = Vec::with_capacity(pixel_count);
+    let vector_pixels = pixel_count / LANES * LANES;
+    for pixels in source[..vector_pixels * CHANNELS].chunks_exact(CHANNELS * LANES) {
+        let input_vectors: [u8x16; CHANNELS] = std::array::from_fn(|block| {
+            let mut lanes = [0u8; LANES];
+            let start = block * LANES;
+            lanes.copy_from_slice(&pixels[start..start + LANES]);
+            u8x16::new(lanes)
+        });
+        let mut selected = u8x16::splat(0);
+        for block in 0..CHANNELS {
+            selected |= input_vectors[block].swizzle_relaxed(selectors[block]) & masks[block];
+        }
+        output.extend_from_slice(&selected.to_array());
+    }
+
+    for pixel in source[vector_pixels * CHANNELS..].chunks_exact(CHANNELS) {
+        output.push(pixel[CHANNEL]);
+    }
+    debug_assert_eq!(output.len(), pixel_count);
+    (
+        output,
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    )
 }
 
 fn native_typed_filter_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
@@ -11903,33 +11924,14 @@ pub fn simd_extract_band(
     // Keep the CPU operation's defensive clamping for direct internal
     // PipelineOp callers while using the native storage stride here.
     let channel = usize::from(*index).min(channels - 1);
-    // Keep both the pixel stride and selected lane constant in each hot loop.
-    // The previous explicit shuffle rebuilt a padded 16-byte block for every
-    // five RGB pixels and spilled each shuffled vector through a scalar array.
-    #[cfg(feature = "parallel")]
-    let (width_usize, height_usize) = (width as usize, height as usize);
+    // Keep the stride and selected lane constant. Each vector block loads the
+    // exact 16-pixel source span, shuffles the requested byte lane, and uses a
+    // scalar tail only for the final partial block.
     macro_rules! gather {
-        ($channels:literal, $channel:literal) => {{
-            #[cfg(feature = "parallel")]
-            {
-                if pixel_count >= 256 * 1024 && height > 1 {
-                    gather_channel_parallel::<$channels, $channel>(
-                        source,
-                        width_usize,
-                        height_usize,
-                    )
-                } else {
-                    gather_channel::<$channels, $channel>(source)
-                }
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                gather_channel::<$channels, $channel>(source)
-            }
-        }};
+        ($channels:literal, $channel:literal) => {{ gather_channel::<$channels, $channel>(source) }};
     }
-    let output = match (channels, channel) {
-        (1, _) => source.to_vec(),
+    let (output, vector_blocks, scalar_tail) = match (channels, channel) {
+        (1, _) => (source.to_vec(), 0, 0),
         (2, 0) => gather!(2, 0),
         (2, 1) => gather!(2, 1),
         (3, 0) => gather!(3, 0),
@@ -11941,16 +11943,16 @@ pub fn simd_extract_band(
         (4, _) => gather!(4, 3),
         _ => unreachable!("native extract layout has one to four channels"),
     };
-    // This route currently uses scalar byte gathers (possibly split across
-    // rows), not explicit wide-vector operations. Do not report synthetic
-    // vector blocks based only on the number of pixels processed.
-    if pixel_count != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(pixel_count as u64);
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    if scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     }
     crate::compute::record_pipeline_operation_path(if pixel_count == 0 {
         "scalar-control"
-    } else if cfg!(feature = "parallel") && pixel_count >= 256 * 1024 && height > 1 {
-        "parallel-gather"
+    } else if vector_blocks != 0 {
+        "vector-gather"
     } else {
         "scalar-gather"
     });
@@ -24678,7 +24680,7 @@ mod tests {
         simd_projective_nearest_transform_bytes, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
-    use crate::raster::{DynamicImage, GrayImage, RgbaImage};
+    use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
     #[test]
     fn native_lut_preserves_channel_order_and_vector_tails() {
@@ -25739,6 +25741,52 @@ mod tests {
                     output.as_bytes(),
                     expected.as_slice(),
                     "mode={mode} index={index}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn extract_band_vector_gathers_match_full_blocks_and_tail() {
+        let pixel_count = 37;
+        for (mode, channels) in [("LA", 2usize), ("RGB", 3), ("RGBA", 4)] {
+            let raw: Vec<u8> = (0..pixel_count * channels)
+                .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
+                .collect();
+            let image = match mode {
+                "LA" => DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(pixel_count as u32, 1, raw)
+                        .expect("LA source shape must be valid"),
+                ),
+                "RGB" => DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(pixel_count as u32, 1, raw)
+                        .expect("RGB source shape must be valid"),
+                ),
+                "RGBA" => DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(pixel_count as u32, 1, raw)
+                        .expect("RGBA source shape must be valid"),
+                ),
+                _ => unreachable!(),
+            };
+
+            for channel in 0..channels {
+                let output = simd_extract_band(
+                    &image,
+                    &PipelineOp::ExtractBand {
+                        index: channel as u8,
+                    },
+                    Some(mode),
+                )
+                .expect("SIMD ExtractBand vector gather must succeed");
+                let expected: Vec<u8> = image
+                    .as_bytes()
+                    .chunks_exact(channels)
+                    .map(|pixel| pixel[channel])
+                    .collect();
+                assert_eq!(
+                    output.as_bytes(),
+                    expected.as_slice(),
+                    "mode={mode} channel={channel}"
                 );
             }
         }
