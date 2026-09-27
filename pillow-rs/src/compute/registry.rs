@@ -286,7 +286,8 @@ pub(crate) fn gpu_color_saturation_factor_params(factor: f64) -> Option<u32> {
 /// Return the fixed-point factor when the Sharpness WGSL blend is exact for
 /// every possible blurred/original byte pair. The 3x3 smooth kernel is
 /// represented with integer weights in the shader; this helper proves the
-/// remaining f64 blend against its integer numerator before dispatch.
+/// Pillow-compatible f32 fused-difference blend against its integer numerator
+/// before dispatch.
 #[cfg(feature = "gpu")]
 pub(crate) fn gpu_sharpness_factor_int(factor: f64) -> Option<u32> {
     if !factor.is_finite() || factor < 0.0 {
@@ -308,9 +309,11 @@ pub(crate) fn gpu_sharpness_factor_int(factor: f64) -> Option<u32> {
         return None;
     }
     let factor_i32 = factor_int as i32;
+    let alpha = factor as f32;
     for blurred in 0..=255_i32 {
         for original in 0..=255_i32 {
-            let cpu = (f64::from(blurred) * (1.0 - factor) + f64::from(original) * factor)
+            let cpu = alpha
+                .mul_add((original - blurred) as f32, blurred as f32)
                 .clamp(0.0, 255.0) as u8;
             let shader = (blurred * (1000 - factor_i32) + original * factor_i32)
                 .div_euclid(1000)

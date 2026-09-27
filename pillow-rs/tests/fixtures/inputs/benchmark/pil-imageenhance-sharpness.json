@@ -26,11 +26,15 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageEnhance.Sharpness.enhance.behavior.default"
+        "case_id": "PIL.ImageEnhance.Sharpness.enhance.nuanced.performance-material-rgb-noise-1024x768-active"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "setup-sharpness-2",
+          "call",
+          "observe-result"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -44,12 +48,69 @@
       },
       "context": {
         "size": [
-          16,
-          16
+          1024,
+          768
         ],
         "mode": "RGB",
         "chain_length": 1,
-        "operation_class": "point",
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-imageenhance-sharpness.enhance.identity-material-rgb-noise-1024x768",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageEnhance.Sharpness.enhance.nuanced.performance-material-rgb-noise-1024x768-identity"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "setup-sharpness-2",
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "neighborhood",
         "cache_state": "warm",
         "build_profile": "release"
       }
@@ -62,6 +123,10 @@
       "members": [
         {
           "workload_id": "pil-imageenhance-sharpness.enhance.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imageenhance-sharpness.enhance.identity-material-rgb-noise-1024x768",
           "weight": 1
         }
       ]

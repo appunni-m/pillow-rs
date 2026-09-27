@@ -11615,64 +11615,151 @@ pub fn simd_color_saturation(
     Ok(result)
 }
 
-/// Blend Sharpness's smoothed and original samples with eight-wide f64 lanes.
+/// Run Sharpness's 3x3 byte filter and Pillow's f32 blend in one output pass.
 ///
-/// The samples are gathered by channel because Pillow keeps LA/RGBA alpha
-/// untouched. Coordinate arithmetic and the interleaved stores are scalar
-/// control; the per-sample blend and clamp are vector arithmetic. A scalar
-/// tail is used only for the final pixels that do not fill a vector block.
-fn native_sharpness_blend(
+/// Interior filtered bytes are narrowed exactly as Pillow's SMOOTH result is
+/// before they enter the blend. Edge pixels use the original byte as their
+/// filtered value, preserving the reference's exact-copy border behavior.
+/// LA/RGBA alpha stays copied from the source.
+fn native_sharpness_filter_blend(
     source: &[u8],
-    blurred: &[u8],
     output: &mut [u8],
+    width: usize,
+    height: usize,
     channels: usize,
     active_channels: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
     factor: f64,
 ) -> Option<(u64, u64)> {
-    if source.len() != blurred.len()
-        || source.len() != output.len()
+    let row_stride = width.checked_mul(channels)?;
+    if source.len() != output.len()
+        || source.len() != row_stride.checked_mul(height)?
         || !(1..=4).contains(&channels)
         || active_channels == 0
         || active_channels > channels
-        || source.len() % channels != 0
+        || width < 3
+        || height < 3
     {
         return None;
     }
-    let pixels = source.len() / channels;
-    let factor_value = factor;
-    let inverse = f64x8::splat(1.0 - factor_value);
-    let factor = f64x8::splat(factor_value);
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
-    for channel in 0..active_channels {
-        let mut pixel = 0usize;
-        while pixel + 8 <= pixels {
-            let original =
-                std::array::from_fn(|lane| source[(pixel + lane) * channels + channel] as f64);
-            let smooth =
-                std::array::from_fn(|lane| blurred[(pixel + lane) * channels + channel] as f64);
-            let values = f64x8::from(smooth) * inverse + f64x8::from(original) * factor;
-            for (lane, value) in values.to_array().into_iter().enumerate() {
-                output[(pixel + lane) * channels + channel] = if value <= 0.0 {
-                    0
-                } else if value >= 255.0 {
-                    255
-                } else {
-                    value as u8
-                };
-            }
-            vector_blocks = vector_blocks.saturating_add(1);
-            pixel += 8;
-        }
-        while pixel < pixels {
-            let value = blurred[pixel * channels + channel] as f64 * (1.0 - factor_value)
-                + source[pixel * channels + channel] as f64 * factor_value;
-            output[pixel * channels + channel] = value.clamp(0.0, 255.0) as u8;
-            scalar_tail = scalar_tail.saturating_add(1);
-            pixel += 1;
-        }
+    let interior_width = width - 2;
+    let interior_height = height - 2;
+    let vector_blocks = interior_width
+        .div_ceil(8)
+        .saturating_mul(interior_height)
+        .saturating_mul(active_channels);
+    if vector_blocks == 0 {
+        return None;
     }
-    Some((vector_blocks, scalar_tail))
+    let scalar_tail = (width * 2 + height * 2 - 4).saturating_mul(active_channels);
+    let alpha = factor as f32;
+    let apply_row = |y: usize, row: &mut [u8]| {
+        let source_row = y * row_stride;
+        if (1..height - 1).contains(&y) {
+            for channel in 0..active_channels {
+                let first = source_row + channel;
+                row[channel] = native_sharpness_blend_value(source[first], source[first], alpha);
+                let mut x = 1usize;
+                while x < width - 1 {
+                    let active = (width - 1 - x).min(8);
+                    let smooth = native_filter_3x3_vector(
+                        source,
+                        width,
+                        channels,
+                        channel,
+                        y,
+                        x,
+                        kernel,
+                        rounding_bias,
+                    );
+                    let original: [f32; 8] = std::array::from_fn(|lane| {
+                        let pixel_x = (x + lane).min(width - 2);
+                        f32::from(source[source_row + pixel_x * channels + channel])
+                    });
+                    let smooth: [f32; 8] = std::array::from_fn(|lane| f32::from(smooth[lane]));
+                    let smooth_lanes = f32x8::from(smooth);
+                    let values =
+                        native_sharpness_blend_lanes(f32x8::from(original), smooth_lanes, alpha)
+                            .to_array();
+                    for (lane, value) in values.into_iter().enumerate().take(active) {
+                        row[(x + lane) * channels + channel] = native_sharpness_blend_result(value);
+                    }
+                    x += active;
+                }
+                let last = source_row + (width - 1) * channels + channel;
+                row[(width - 1) * channels + channel] =
+                    native_sharpness_blend_value(source[last], source[last], alpha);
+            }
+        } else {
+            for x in 0..width {
+                for channel in 0..active_channels {
+                    let index = source_row + x * channels + channel;
+                    row[x * channels + channel] =
+                        native_sharpness_blend_value(source[index], source[index], alpha);
+                }
+            }
+        }
+    };
+
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        output,
+        row_stride,
+        height,
+        |_row_start, _row_end, y, row| {
+            apply_row(y as usize, row);
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y * row_stride;
+        apply_row(y, &mut output[row_start..row_start + row_stride]);
+    }
+    Some((vector_blocks as u64, scalar_tail as u64))
+}
+
+#[inline]
+fn native_sharpness_blend_value(original: u8, smooth: u8, alpha: f32) -> u8 {
+    native_sharpness_blend_result(
+        alpha.mul_add(f32::from(original) - f32::from(smooth), f32::from(smooth)),
+    )
+}
+
+#[inline]
+fn native_sharpness_blend_lanes(original: f32x8, smooth: f32x8, alpha: f32) -> f32x8 {
+    let delta = original - smooth;
+    let alpha = f32x8::splat(alpha);
+    #[cfg(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
+    {
+        alpha.mul_add(delta, smooth)
+    }
+    #[cfg(not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
+    {
+        let alpha = alpha.to_array();
+        let delta = delta.to_array();
+        let smooth = smooth.to_array();
+        f32x8::new(std::array::from_fn(|lane| {
+            alpha[lane].mul_add(delta[lane], smooth[lane])
+        }))
+    }
+}
+
+#[inline]
+fn native_sharpness_blend_result(value: f32) -> u8 {
+    if value <= 0.0 {
+        0
+    } else if value >= 255.0 {
+        255
+    } else {
+        value as u8
+    }
 }
 
 /// Apply ImageEnhance.Sharpness using the native interleaved layout.
@@ -11680,8 +11767,8 @@ fn native_sharpness_blend(
 /// Pillow first applies the 3x3 SMOOTH kernel, then blends that result with
 /// the original image. The existing exact 3x3 SIMD kernel supplies the
 /// neighborhood pass; this adapter keeps alpha out of that pass and uses
-/// f64x8 for the final blend. No CPU pixel adapter or packed RGBA conversion
-/// is used.
+/// f32x8 fused multiply-add lanes to match Image.blend. No CPU pixel adapter
+/// or packed RGBA conversion is used.
 pub fn simd_sharpness(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -11696,10 +11783,14 @@ pub fn simd_sharpness(
     if !factor.is_finite() || !has_vectorized_sharpness_bytes(img, channels) {
         return Err(simd_unsupported("Sharpness"));
     }
+    if *factor == 1.0 {
+        // Reuse the native copy kernel: the exact identity needs neither the
+        // 3x3 temporary nor a blend output pass.
+        return simd_duplicate(img, &PipelineOp::Duplicate, mode);
+    }
     let width = img.width() as usize;
     let height = img.height() as usize;
     let source = img.as_bytes();
-    let mut blurred = source.to_vec();
     let kernel = [
         1.0f32 / 13.0,
         1.0f32 / 13.0,
@@ -11711,31 +11802,21 @@ pub fn simd_sharpness(
         1.0f32 / 13.0,
         1.0f32 / 13.0,
     ];
-    let (blur_blocks, _blur_tail) = native_filter_3x3_rows_active(
+    let mut output = source.to_vec();
+    let (vector_blocks, scalar_tail) = native_sharpness_filter_blend(
         source,
-        &mut blurred,
+        &mut output,
         width,
         height,
         channels,
         active_channels,
         &kernel,
         0.5,
-    );
-    if blur_blocks == 0 {
-        return Err(simd_unsupported("Sharpness"));
-    }
-    let mut output = source.to_vec();
-    let (blend_blocks, blend_tail) = native_sharpness_blend(
-        source,
-        &blurred,
-        &mut output,
-        channels,
-        active_channels,
         *factor,
     )
     .ok_or_else(|| simd_unsupported("Sharpness"))?;
-    crate::compute::record_pipeline_operation_vector_blocks(blend_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(blend_tail);
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
     let result =
         crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;

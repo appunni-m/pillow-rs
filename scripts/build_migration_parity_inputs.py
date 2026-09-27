@@ -134,6 +134,10 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
     "pil-image-image.frombytes.standard": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
     "pil-image-image.getchannel.standard": "PIL.Image.Image.getchannel.nuanced.performance-rgb-16x16",
+    "pil-imageenhance-sharpness.enhance.standard": (
+        "PIL.ImageEnhance.Sharpness.enhance.nuanced."
+        "performance-material-rgb-noise-1024x768-active"
+    ),
     "pil-image-image.point.standard": "PIL.Image.Image.point.mode.l",
     "pil-image-image.putalpha.standard": "PIL.Image.Image.putalpha.nuanced.rgb-scalar",
     "pil-image-image.putdata.standard": "PIL.Image.Image.putdata.nuanced.l-bytes",
@@ -2720,6 +2724,34 @@ class WorkflowBuilder:
                     arguments={"xy": literal([x, 0]), "value": literal(value)},
                     step_id=self.next_step_id(f"setup-{label}-pixel"),
                 )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "sharpness-fma-cancellation" and label == "image":
+            size = self.scenario_size or [3, 3]
+            if requested_mode != "RGB" or size != [3, 3]:
+                raise ValueError(
+                    "sharpness-fma-cancellation requires a 3x3 RGB image"
+                )
+            # At the center, Pillow's rounded smooth byte is 12 from one
+            # center sample of 2 and eight neighbors of 18. With factor 1.1,
+            # the fused blend is just below 1 and truncates to 0; separate
+            # multiply/add rounds to exactly 1 on targets without vector FMA.
+            data = bytearray([18] * (size[0] * size[1] * 3))
+            center = (size[0] + 1) * 3
+            data[center : center + 3] = bytes([2, 2, 2])
+            step_id = self.add_step(
+                "PIL.Image", "frombytes", receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": self.inline_bytes(
+                        f"{label}-sharpness-fma-cancellation",
+                        bytes(data),
+                        "application/octet-stream",
+                    ),
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
             self._image_steps[cache_key] = step_id
             return step_id
         if (
@@ -40042,6 +40074,53 @@ def build_nuanced_cases(
         "values": {"size": literal([1, 1]), "resample": literal(4)},
     },)
 
+    # Keep an identity workload on a material-sized varied image so the exact
+    # factor-one path is measured independently from the active blur kernel.
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "parameter.factor",
+        "name": "performance-material-rgb-noise-1024x768-identity",
+        "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+        "seed": 20260927, "observe_result": "tobytes",
+        "values": {"factor": literal(1.0)},
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+    },)
+
+    # The active kernel must have a large non-identity workload. Use byte-backed
+    # noise instead of putpixel: putpixel is eager in Pillow but remains queued
+    # in pillow-rs, so a setup mutation can otherwise leak into timed tobytes.
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "performance.standard",
+        "name": "performance-material-rgb-noise-1024x768-active",
+        "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+        "seed": 20260927, "observe_result": "tobytes",
+        "values": {"factor": literal(1.5)},
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+    },)
+
+    # Image.blend preserves equal edge samples exactly. A weighted f64 blend
+    # can round an unchanged byte downward for non-dyadic factors such as 0.3.
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "parameter.factor",
+        "name": "parity-blend-rounding-factor-0.3-border-rgb-3x3",
+        "mode": "RGB", "size": [3, 3], "edge": "nonzero-pixel-origin",
+        "pixel": [3, 0, 0], "observe_result": "tobytes",
+        "values": {"factor": literal(0.3)},
+        "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+    },)
+
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "parameter.factor",
+        "name": "parity-fma-cancellation-factor-1.1-rgb-3x3",
+        "mode": "RGB", "size": [3, 3], "edge": "sharpness-fma-cancellation",
+        "observe_result": "tobytes",
+        "values": {"factor": literal(1.1)},
+        "target_profiles": ["python-cpu", "python-simd"],
+    },)
+
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:
         for operation in surface["operations"]:
@@ -43158,6 +43237,8 @@ def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
 def _pipeline_operation_class(variant: str, surface: str, operation: str) -> str:
     """Classify a benchmark workload for operation-class performance gates."""
 
+    if surface == "PIL.ImageEnhance.Sharpness":
+        return "neighborhood"
     if variant.startswith("Draw") or surface == "PIL.ImageDraw.ImageDraw":
         return "draw"
     if variant in {"pipeline-invert-mirror", "pipeline-transpose-twice"}:
@@ -46578,6 +46659,9 @@ def build_inputs(
             materialized_getchannel = (
                 workload_id == "pil-image-image.getchannel.standard"
             )
+            materialized_sharpness = (
+                workload_id == "pil-imageenhance-sharpness.enhance.standard"
+            )
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
             isolated_getdata = workload_id == "pil-image-image.getdata.standard"
@@ -46707,6 +46791,7 @@ def build_inputs(
                         "boundary": (
                             "observed_steps"
                             if materialized_getchannel
+                            or materialized_sharpness
                             or isolated_getdata
                             or isolated_get_flattened_data
                             or eager_getcolors
@@ -46734,6 +46819,8 @@ def build_inputs(
                         "step_ids": (
                             ["call", "observe-result"]
                             if materialized_getchannel
+                            else ["setup-sharpness-2", "call", "observe-result"]
+                            if materialized_sharpness
                             else ["call"]
                             if eager_getcolors
                             or isolated_getdata
@@ -46780,6 +46867,56 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+            if materialized_sharpness:
+                constructor_step = next(
+                    step["step_id"]
+                    for step in context_source["steps"]
+                    if step["surface"] == "PIL.ImageEnhance"
+                    and step["operation"] == "Sharpness"
+                )
+                workloads[-1]["measurement"]["step_ids"] = [
+                    constructor_step,
+                    "call",
+                    "observe-result",
+                ]
+                workloads[-1]["context"]["chain_length"] = 1
+                identity_case_id = (
+                    "PIL.ImageEnhance.Sharpness.enhance.nuanced."
+                    "performance-material-rgb-noise-1024x768-identity"
+                )
+                identity_case = all_cases_by_id[identity_case_id]
+                identity_workload_id = (
+                    "pil-imageenhance-sharpness.enhance."
+                    "identity-material-rgb-noise-1024x768"
+                )
+                identity_workload = copy.deepcopy(workloads[-1])
+                identity_workload["workload_id"] = identity_workload_id
+                identity_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": identity_case_id,
+                }
+                identity_constructor_step = next(
+                    step["step_id"]
+                    for step in identity_case["steps"]
+                    if step["surface"] == "PIL.ImageEnhance"
+                    and step["operation"] == "Sharpness"
+                )
+                identity_workload["measurement"]["step_ids"] = [
+                    identity_constructor_step,
+                    "call",
+                    "observe-result",
+                ]
+                identity_workload["context"] = _workflow_benchmark_context(
+                    identity_case,
+                    variant="identity-material-rgb-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                identity_workload["context"]["chain_length"] = 1
+                workloads.append(identity_workload)
+                members.append(
+                    {"workload_id": identity_workload_id, "weight": 1}
+                )
         if surface_id == "PIL.ImageOps":
             colorize_benchmark = next(
                 (

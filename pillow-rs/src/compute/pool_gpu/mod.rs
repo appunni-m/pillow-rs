@@ -11885,6 +11885,13 @@ fn gpu_reduce_is_identity(op: &PipelineOp) -> bool {
     )
 }
 
+/// Sharpness at factor one is exactly its original sample buffer. Skip it in
+/// the GPU executor before packing/uploading a frame that the shader would
+/// only copy back unchanged.
+fn gpu_sharpness_is_identity(op: &PipelineOp) -> bool {
+    matches!(op, PipelineOp::Sharpness { factor } if *factor == 1.0)
+}
+
 /// Return whether `ImageOps.fit` is the exact identity for this GPU segment.
 ///
 /// With no bleed and equal source/target dimensions, the fit planner's crop
@@ -15498,14 +15505,15 @@ impl GpuPool {
             vec![op]
         } else {
             ops.iter()
-                .filter(|op| !gpu_reduce_is_identity(op))
+                .filter(|op| !gpu_reduce_is_identity(op) && !gpu_sharpness_is_identity(op))
                 .cloned()
                 .collect()
         };
         if dispatch_ops.is_empty() {
-            // There are no pixel invocations for Reduce(1, 1). Return the
-            // independent Pillow result without forcing an unsupported native
-            // layout through the packed GPU transport.
+            // Exact identities have no pixel invocations. Return an
+            // independent result without paying for upload, dispatch, or
+            // readback. The selected GPU backend still owns completion and
+            // reports an explicit zero-dispatch receipt.
             crate::compute::record_pipeline_dispatch_count(0);
             return Ok(img.clone());
         }
