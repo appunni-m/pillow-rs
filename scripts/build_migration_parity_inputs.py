@@ -172,6 +172,9 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imagefont-freetypefont.set-variation-by-axes.standard": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font",
     "pil-imagefont-freetypefont.set-variation-by-name.standard": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font",
     "pil-imagefont-imagefont.getmask.standard": "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask",
+    "pil-imagefont-imagefont.getlength.standard": (
+        "PIL.ImageFont.ImageFont.getlength.nuanced.loaded-pilfont-parity"
+    ),
     # The public ``mode.l`` behavior case predates Pillow's stricter color
     # argument normalization and still passes scalar colors.  Use the
     # reviewed materialized workflow so this benchmark measures a successful
@@ -203,7 +206,6 @@ GETCOLORS_SLOT_ORDER_CASES = (
 BENCHMARK_SUCCESS_WORKFLOW_IDS = {
     "pil-image.frombuffer.standard",
     "pil-imagefont-imagefont.getbbox.standard",
-    "pil-imagefont-imagefont.getlength.standard",
     "pil-imagesequence-iterator.next.standard",
 }
 BENCHMARK_DEFAULT_EXCLUSIONS = {
@@ -4696,6 +4698,36 @@ class WorkflowBuilder:
         operation = self.operations[
             operation_key(self.primary_surface, self.primary_operation)
         ]
+        if self.scenario_chain == "pilfont-load-getlength":
+            if (
+                self.primary_surface != "PIL.ImageFont.ImageFont"
+                or self.primary_operation != "getlength"
+            ):
+                raise ValueError(
+                    "PILfont getlength chains require ImageFont.getlength"
+                )
+            font_step = self.add_step(
+                "PIL.ImageFont",
+                "load",
+                receiver=None,
+                arguments={
+                    "filename": self.ref(
+                        "pilfont",
+                        self.scenario_asset or "font/pilfont/courb08.pil",
+                        "application/x-pilfont",
+                    )
+                },
+                step_id="setup-pilfont",
+            )
+            call_id = self.add_step(
+                self.primary_surface,
+                self.primary_operation,
+                receiver=binding(font_step),
+                arguments=self.primary_arguments(operation),
+                step_id="call",
+            )
+            return self.assets, self.steps, [call_id]
+
         if self.scenario_chain == "pilfont-load-getmask":
             if self.primary_surface != "PIL.ImageFont.ImageFont":
                 raise ValueError(
@@ -15003,6 +15035,14 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.im",
             "name": "invalid-im-no-seek",
             "values": {"im": literal(None)},
+        },
+        {
+            "surface": "PIL.ImageFont.ImageFont",
+            "operation": "getlength",
+            "requirement_suffix": "performance.standard",
+            "name": "loaded-pilfont-parity",
+            "chain": "pilfont-load-getlength",
+            "target_profiles": ["python-cpu"],
         },
         {
             "surface": "PIL.ImageFont.ImageFont",
@@ -46170,15 +46210,7 @@ def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
             "observations": ["image"],
         }
 
-    if workload_id in {
-        "pil-imagefont-imagefont.getbbox.standard",
-        "pil-imagefont-imagefont.getlength.standard",
-    }:
-        operation = (
-            "getbbox"
-            if workload_id.endswith("getbbox.standard")
-            else "getlength"
-        )
+    if workload_id == "pil-imagefont-imagefont.getbbox.standard":
         return {
             "assets": [],
             "steps": [
@@ -46192,7 +46224,7 @@ def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
                 {
                     "step_id": "call",
                     "surface": "PIL.ImageFont.ImageFont",
-                    "operation": operation,
+                    "operation": "getbbox",
                     "receiver": binding("font"),
                     "arguments": {"text": literal("Hello")},
                 },

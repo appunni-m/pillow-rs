@@ -52,25 +52,30 @@ impl PilFontTextInput {
                 .chars()
                 .enumerate()
                 .map(|(position, character)| {
-                    u8::try_from(character as u32).map_err(|_| {
-                        let codepoint = character as u32;
-                        let escaped = if codepoint <= 0xffff {
-                            format!("\\u{codepoint:04x}")
-                        } else {
-                            format!("\\U{codepoint:08x}")
-                        };
-                        PilError::UnicodeEncodeError {
-                            message: format!("'latin-1' codec can't encode character '{escaped}' in position {position}: ordinal not in range(256)"),
-                            encoding: "latin-1".into(),
-                            object: text.clone(),
-                            start: position,
-                            end: position + 1,
-                            reason: "ordinal not in range(256)".into(),
-                        }
-                    })
+                    u8::try_from(character as u32)
+                        .map_err(|_| latin1_encode_error(&text, position, character))
                 })
                 .collect(),
         }
+    }
+}
+
+fn latin1_encode_error(text: &str, position: usize, character: char) -> PilError {
+    let codepoint = character as u32;
+    let escaped = if codepoint <= 0xffff {
+        format!("\\u{codepoint:04x}")
+    } else {
+        format!("\\U{codepoint:08x}")
+    };
+    PilError::UnicodeEncodeError {
+        message: format!(
+            "'latin-1' codec can't encode character '{escaped}' in position {position}: ordinal not in range(256)"
+        ),
+        encoding: "latin-1".into(),
+        object: text.to_owned(),
+        start: position,
+        end: position + 1,
+        reason: "ordinal not in range(256)".into(),
     }
 }
 
@@ -417,9 +422,41 @@ impl PilFont {
         self.getsize(text).map(|(width, _)| width)
     }
 
+    /// Returns the horizontal advance for Unicode text without materializing
+    /// an intermediate Latin-1 byte vector.
+    pub fn getlength_str(&self, text: &str) -> Result<i32, PilError> {
+        if text.is_ascii() {
+            return self.getlength(text.as_bytes());
+        }
+
+        // Pillow encodes the complete Unicode input before applying PILfont's
+        // NUL-terminated width rule, and encoding errors precede length errors.
+        let mut character_count = 0;
+        for (position, character) in text.chars().enumerate() {
+            character_count = position + 1;
+            if u8::try_from(character as u32).is_err() {
+                return Err(latin1_encode_error(text, position, character));
+            }
+        }
+        if character_count > MAX_STRING_LENGTH {
+            return Err(PilError::ValueError("too many characters in string".into()));
+        }
+
+        text.chars()
+            .take_while(|&character| character != '\0')
+            .try_fold(0i32, |width, character| {
+                width
+                    .checked_add(self.glyphs[character as usize].dx)
+                    .ok_or_else(|| PilError::DimensionError("PILfont text width overflow".into()))
+            })
+    }
+
     /// Returns the horizontal advance after applying the host text-input rules.
     pub fn getlength_input(&self, text: PilFontTextInput) -> Result<i32, PilError> {
-        self.getlength(&text.into_bytes()?)
+        match text {
+            PilFontTextInput::Text(text) => self.getlength_str(&text),
+            PilFontTextInput::Bytes(bytes) => self.getlength(&bytes),
+        }
     }
 
     /// Renders Latin-1 bytes using Pillow's PILfont placement rules.
@@ -673,7 +710,7 @@ struct PbmRaster<'a> {
 mod tests {
     use super::{
         DEFAULT_BITMAP, DEFAULT_BITMAP_HEIGHT, DEFAULT_BITMAP_LUMA, DEFAULT_BITMAP_WIDTH, PilFont,
-        PilFontGlyphImage, PilFontMask, PilFontMode,
+        PilFontGlyphImage, PilFontMask, PilFontMode, PilFontTextInput,
     };
 
     #[test]
@@ -722,6 +759,46 @@ mod tests {
             assert_eq!(actual.size()?, expected.size()?);
             assert_eq!(actual.tobytes()?, expected.tobytes()?);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn borrowed_string_getlength_matches_latin1_encoding() -> Result<(), crate::error::PilError> {
+        let font = PilFont::load_default()?;
+        for text in ["Hello", "caf\u{e9}", "A\0B"] {
+            let bytes = PilFontTextInput::Text(text.to_owned()).into_bytes()?;
+            assert_eq!(font.getlength_str(text)?, font.getlength(&bytes)?);
+        }
+
+        let error = font
+            .getlength_str("A\0\u{100}")
+            .expect_err("text after NUL still has to be encodable as Latin-1");
+        assert!(matches!(
+            error,
+            crate::error::PilError::UnicodeEncodeError {
+                start: 2,
+                end: 3,
+                ..
+            }
+        ));
+
+        let too_long = "A".repeat(super::MAX_STRING_LENGTH + 1);
+        assert!(matches!(
+            font.getlength_str(&too_long),
+            Err(crate::error::PilError::ValueError(message))
+                if message == "too many characters in string"
+        ));
+
+        let mut too_long_with_invalid_text = too_long;
+        too_long_with_invalid_text.push('\u{100}');
+        assert!(matches!(
+            font.getlength_str(&too_long_with_invalid_text),
+            Err(crate::error::PilError::UnicodeEncodeError {
+                start,
+                end,
+                ..
+            }) if start == super::MAX_STRING_LENGTH + 1 && end == super::MAX_STRING_LENGTH + 2
+        ));
         Ok(())
     }
 }

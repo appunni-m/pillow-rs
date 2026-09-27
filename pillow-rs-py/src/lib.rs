@@ -34,6 +34,7 @@ use pyo3::types::PyList;
 use pyo3::types::PyListMethods;
 use pyo3::types::PyModuleMethods;
 use pyo3::types::PyString;
+use pyo3::types::PyStringMethods;
 use pyo3::types::PyTuple;
 use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
@@ -3188,6 +3189,9 @@ impl PyPilFont {
     }
 
     fn getlength(&self, text: &Bound<'_, PyAny>) -> PyResult<i32> {
+        if let Ok(text) = text.cast::<PyString>() {
+            return self.inner.getlength_str(&text.to_cow()?).map_err(map_error);
+        }
         self.inner
             .getlength_input(pilfont_text_input_from_python(text)?)
             .map_err(map_error)

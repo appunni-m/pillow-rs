@@ -5951,3 +5951,37 @@ writing three aligned words) and exact tail trimming. Do not revisit shader
 arithmetic while transfer and completion are unmeasured. Move to the next
 ranked operation after this checkpoint; the SIMD and GPU goals remain open.
 No coverage collection ran.
+
+## PIL.ImageFont.ImageFont.getlength checkpoint — 2026-09-27
+
+The first `getlength` workload was misrouted: `ImageFont.load_default()` returns
+a `FreeTypeFont` here, so its label did not mean the base bitmap-font method
+was being measured. I changed the fixture chain to load the bundled
+`courb08.pil` through `ImageFont.load`, observe the returned
+`ImageFont.ImageFont.getlength`, and gate the call-only benchmark on that exact
+parity workflow. All four operation cases pass (default, positional arguments,
+keyword arguments, and the loaded bitmap font). The Rust regression also checks
+ASCII, Latin-1, NUL termination, and the requirement that unsupported text
+after NUL still raises the same Latin-1 encoding error.
+
+The baseline call-only receipt measured CPU at 2.188 µs and Pillow at 2.084 µs;
+CPU was about 5% slower. Inspection found two avoidable conversions for Python
+strings: the binding extracted an owned `String`, then the Rust input adapter
+allocated a second Latin-1 byte vector. The retained path borrows a Python
+`str`, uses its bytes directly for ASCII, and validates/measures other
+Latin-1 text without a temporary vector. It keeps full-input encoding checks
+before NUL-terminated width measurement, preserving error order and length
+validation.
+
+Two post-change parity-gated runs measured CPU at 1.875 µs each. Pillow measured
+2.125 and 2.417 µs, so CPU was 12–22% lower in these runs. The baseline and
+Pillow samples are noisy at this scale; repeat the same call-only workload
+before treating small deltas as stable. The CPU call is now faster than Pillow
+in both post-change samples. This reports concurrency-one reciprocal latency,
+not sustained throughput.
+
+The SIMD and GPU rows report `actual_backend: null` and `not_proven`: a bitmap
+font advance is scalar text processing, not image-kernel work. Their 5× SIMD
+and GPU-throughput goals are inapplicable to this call and are not claimed as
+met. Keep this optimization, then rank the next operation using a fresh
+call-only workload. No coverage collection ran.
