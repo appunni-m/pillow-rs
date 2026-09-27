@@ -6104,3 +6104,56 @@ The SIMD/GPU profile timings are the same host-side tuple construction, with
 `actual_backend: null` and `not_proven`; this API launches no image kernel.
 These numbers do not establish SIMD or GPU acceleration. No coverage collection
 ran.
+
+## PIL.Image.Image.getcolors direct-slot revisit checkpoint — 2026-09-27
+
+`getcolors` had already reached a four-attempt checkpoint. This revisit made
+two bounded implementation attempts, bringing the total beyond the campaign's
+three-to-four-attempt limit. Keep the direct-slot table and checkpoint the
+remaining latency gap rather than continue tuning without phase evidence.
+
+The retained `PillowColorCounts` uses a contiguous table when Pillow's slot
+mask is at most 1,023. Each `u64` stores the packed pixel key and count, so the
+reference-compatible probe is the only lookup; enumerating those slots also
+preserves Pillow's observable result order without a final sort. Larger tables
+stay sparse so an extreme `maxcolors` request does not allocate a vector in
+proportion to the requested limit. The prior early exit at the `(maxcolors +
+1)`th unique value remains in place. The small-table path reduced the fresh
+standard CPU call from 3.625 µs to 2.125 µs, while retaining exact Pillow output.
+
+A second attempt replaced `.pixels()` traversal with raw-byte chunk scans and
+inline packing. It regressed the direct-table candidate on both the standard
+call (2.334 µs versus 2.167 µs) and varied RGB 16 × 16 (20.417 µs versus
+19.062 µs), with no change for high-cardinality early exit (2.375 µs). That
+attempt was reverted. Contiguous source bytes alone do not guarantee a faster
+loop when the scan must decode and pack every pixel; compare the complete call,
+including key construction and output, before changing traversal.
+
+The final correctness-gated run is
+`build/migration-parity/perf-getcolors-revisit-final.json`, with matching
+parity artifact `perf-getcolors-revisit-final-parity.json`. Five-sample medians
+were:
+
+| Workload | Pillow | CPU | SIMD profile | GPU profile |
+| --- | ---: | ---: | ---: | ---: |
+| RGB 16 × 16 standard | 1.625 µs | 2.125 µs | 2.167 µs | 2.041 µs |
+| RGB 16 × 16 varied | 9.792 µs | 19.709 µs | 19.041 µs | 19.458 µs |
+| RGB 1,024 × 768 high cardinality | 2.208 µs | 2.375 µs | 2.375 µs | 2.416 µs |
+
+All three benchmark exact-output gates pass. The full focused all-backend
+artifact is `build/migration-parity/perf-getcolors-revisit-final-all-backends.json`:
+all 36 cases pass in each selected lane, including CPU, SIMD, GPU, Python, Node,
+and browser. GPU full-request validation passed. SIMD/GPU receipts for this
+eager host-side API do not establish accelerator execution; reported `actual_backend`
+is null for the timing rows. CPU remains 1.31× slower than Pillow on the
+standard call, 2.01× slower on varied RGB, and 1.08× slower on large early exit.
+The blockers are the remaining per-call and per-pixel core cost plus output
+construction; no phase profile currently attributes that cost. Profile those
+phases before another implementation attempt. This operation remains incomplete.
+No coverage collection ran.
+
+The optimization skill now records the reusable decision: use packed direct
+slots only when the reference table is bounded, preserve its exact probe and
+enumeration order, retain sparse storage for large limits, and reject raw-byte
+iteration unless complete-call measurements improve representative entropy
+and cutoff cases.
