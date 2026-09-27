@@ -2064,9 +2064,8 @@ pub fn execute_thumbnail(
         crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
     ) && !matches!(explicit_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
     let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest) && !has_alpha;
-    let mut work_img = img.clone();
     let mut resize_box = None;
-    if needs_reduce {
+    let work_img = if needs_reduce {
         let scale_x = cur_w as f64 / new_w as f64;
         let scale_y = cur_h as f64 / new_h as f64;
         // Image.resize computes these independently for the two axes before
@@ -2086,20 +2085,24 @@ pub fn execute_thumbnail(
                 cur_w as f64 / factor_x as f64,
                 cur_h as f64 / factor_y as f64,
             ));
-            work_img = match explicit_mode {
+            match explicit_mode {
                 // Pillow keeps F/I samples in their native scalar domain for
                 // the reducing_gap pass. Averaging encoded RGBA bytes would
                 // corrupt the representation before resize_f/resize_i runs.
-                Some("F") if matches!(work_img, DynamicImage::ImageRgba8(_)) => {
-                    reduce_f_thumbnail(&work_img, rw, rh, factor_x, factor_y)?
+                Some("F") if matches!(img, DynamicImage::ImageRgba8(_)) => {
+                    reduce_f_thumbnail(img, rw, rh, factor_x, factor_y)?
                 }
-                Some("I") if matches!(work_img, DynamicImage::ImageRgba8(_)) => {
-                    reduce_i_thumbnail(&work_img, rw, rh, factor_x, factor_y)?
+                Some("I") if matches!(img, DynamicImage::ImageRgba8(_)) => {
+                    reduce_i_thumbnail(img, rw, rh, factor_x, factor_y)?
                 }
-                _ => execute_reduce(&work_img, factor_x, factor_y, explicit_mode)?,
-            };
+                _ => execute_reduce(img, factor_x, factor_y, explicit_mode)?,
+            }
+        } else {
+            img.clone()
         }
-    }
+    } else {
+        img.clone()
+    };
     // Only use F/I thumbnail paths when the image is already stored as Rgba8
     // (4 bytes per pixel), meaning it has been converted to F/I mode already.
     // If the image is still RGB or other format, use normal thumbnail regardless

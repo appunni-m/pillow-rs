@@ -245,7 +245,7 @@ impl Image {
         // the public call. Materialize here so deferred codec failures are
         // reported at thumbnail(), rather than being delayed until a later
         // observation of the mutated image.
-        let source_size = self.materialize()?.dimensions();
+        let source_size = self.materialized_shared()?.dimensions();
         // Pillow returns before evaluating the aspect-ratio division when
         // both requested bounds already contain the source. This also covers
         // empty images: every non-negative bound contains a (0, 0) source,

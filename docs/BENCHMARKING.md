@@ -53,6 +53,23 @@ and text rasterization do not necessarily enter the image SIMD/GPU kernels, so
 interpret those rows with
 their actual-backend receipts.
 
+The dedicated `thumbnail` material-size workload uses a parity-backed
+1024 × 768 RGB image, downsizes it to fit 256 × 256 with BICUBIC, and times the
+public mutation plus receiver `tobytes`. It keeps image creation outside the
+timed steps and includes terminal export so eager Pillow execution and deferred
+target execution cover the same observable work. Its workload ID is
+`pipeline-op.thumbnail.material-rgb-1024x768`; filter it with the pipeline
+profile when investigating thumbnail:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.thumbnail.material-rgb-1024x768" \
+make migration-parity-benchmark
+```
+
+The small thumbnail row remains useful for dispatch and adapter overhead, but
+must not stand in for this material workload.
+
 The maintained operation matrix currently contains 88 canonical workloads:
 the active `PipelineOp` variants (with `BoxBlurXY` sharing `BoxBlur`) plus five
 public operations that execute eagerly. `EqualizeMasked` and `ResizeBoxed` were
