@@ -6469,3 +6469,84 @@ removals without a new measurable hypothesis. Checkpoint Pad after three
 attempts and continue with `PIL.ImageFilter.UnsharpMask`, first replacing its
 uniform 16 × 16 benchmark signal with a parity-gated varied RGB workload whose
 source setup stays outside timing.
+
+## PIL.ImageFilter.UnsharpMask checkpoint — 2026-09-27
+
+Three bounded attempts retained native-mode validation, signed threshold
+semantics, shared source reads, and in-place reuse of the GaussianBlur result.
+The baseline implementation cloned the source and blurred images and allocated
+a second full-frame output. Attempt 1 removed the source clone but left the
+blur clone and output allocation; CPU, SIMD, and GPU stayed about 1.8–2.1×
+slower than Pillow. Attempt 2 removed the zero-filled output initialization but
+still wrote a separate output frame; its medians improved only slightly, with
+all three target backends still slower than Pillow. Attempt 3 consumes the
+blurred image's cached allocation when uniquely owned, then applies the exact
+integer blend in that buffer. If another image handle shares the cache, the
+owned-materialization helper falls back to a safe clone. The source stays
+borrowed and validated, and the GaussianBlur arithmetic and pass order are
+unchanged.
+
+The parity investigation found real API mismatches and fixed them before
+accepting the speedup. Pillow's native UnsharpMask accepts byte modes L, LA,
+La, RGB, RGBA, RGBX, RGBa, and CMYK; other modes now preserve Pillow's
+`image has wrong mode` error. Supported modes keep their original mode tags.
+Thresholds use signed integers, and the blend retains Pillow's strict
+`abs(diff) > threshold` comparison, signed division truncation, and byte
+clipping. The focused input set has 31 cases. Strict CPU and GPU each pass
+31/31. Strict SIMD passes 29/29; CMYK and La are unsupported by its GaussianBlur
+layout, and those two cases pass 2/2 through the explicitly recorded CPU
+fallback. GPU execution receipts cover 17 cases, with four CPU semantic
+controls and ten cases where a pipeline receipt does not apply; these receipt
+counts do not replace the 31-case output-parity result. The benchmark's parity
+gate passes 3/3. `make build-parity`, `make fmt`, and `git diff --check` pass;
+no coverage collection ran.
+
+The benchmark uses Pillow 12.2.0 and pillow-rs on CPython 3.12.13/macOS 15.7.7
+arm64. It times a materialized, varied 1024 × 768 RGB image with source and
+filter setup outside the clock; the observed steps are `call` and
+`observe-result` (`tobytes`). Each subject has five warmups and 100 measured
+samples under the standard profile. The selected workload is
+`pil-imagefilter.unsharpmask.materialized-varied-rgb-1024x768`; actual target
+backend receipts report CPU, SIMD, and GPU with no fallback. Median latency in
+milliseconds was:
+
+| Run | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Pre-attempt baseline, `unsharp-baseline-benchmark.json` | 7.526 | 14.296 | 13.654 | 15.481 |
+| 1, `unsharp-attempt1-final-benchmark.json` | 7.781 | 15.319 | 14.241 | 16.515 |
+| 2, `unsharp-attempt2-benchmark.json` | 8.000 | 14.471 | 13.770 | 16.134 |
+| 3, `unsharp-attempt3-benchmark.json` | 7.529 | 5.494 | 4.832 | 7.138 |
+| 3 repeat, `unsharp-attempt3-repeat-benchmark.json` | 7.579 | 5.516 | 4.959 | 5.671 |
+
+Attempt 3 makes CPU 1.37× faster than Pillow and SIMD 1.53–1.56× faster, far
+short of the 5× SIMD goal. GPU beats Pillow by 1.05–1.34× across the two runs,
+but its median is still 1.14–1.48× slower than SIMD. GPU measurements have
+substantially higher spread than CPU: the two attempt-3 GPU p95 values are
+8.78 ms and 8.55 ms, versus 5.66–5.77 ms for CPU. Treat the median improvement
+as a useful signal, not stable GPU throughput. The GPU still performs six blur
+dispatches, uploads and reads back 3 MiB, and performs the final blend on the
+host. A dedicated GPU UnsharpMask path that keeps the original resident and
+fuses the blend into the last vertical pass is the next focused GPU hypothesis;
+it must preserve all six fixed-point blur stages, alpha-channel behavior, the
+strict threshold, signed division, and clipping. Do not spend another attempt
+on the removed source/output copies without a new bottleneck measurement.
+
+The paired benchmark's median reciprocal call rates were 132.8/182.0/206.9/140.1
+operations per second for Pillow/CPU/SIMD/GPU in attempt 3, and
+132.0/181.3/201.7/176.3 on its repeat. These are reciprocal observed-call
+latencies, not sustained completed-request throughput.
+
+The attempt-3 benchmark artifacts record base revision `034e7743` with a dirty
+worktree. The measured source-only patch SHA-256 is
+`7345db62a10f0f4ff57ee187d1b5c7a1b470a4bb46f62c8dbba17c82884dd33b`; the
+benchmark receipt does not embed that patch hash. The exact benchmark commands
+were `make migration-parity-benchmark` with
+`MIGRATION_BENCHMARK_PROFILE=standard`, workload selector
+`pil-imagefilter.unsharpmask.materialized-varied-rgb-1024x768`, and outputs
+`unsharp-attempt3-benchmark.json` and `unsharp-attempt3-repeat-benchmark.json`.
+Strict parity artifacts are `unsharp-attempt3-cpu.json`,
+`unsharp-attempt3-simd-strict-supported.json`,
+`unsharp-attempt3-simd-fallback.json`, and `unsharp-attempt3-gpu.json`.
+The next operation nomination is `PIL.ImageOps.cover`, first refreshing its
+rank and establishing exact parity for the measured inputs on each requested
+backend; the existing ranking row uses only a successful-execution gate.

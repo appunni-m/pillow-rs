@@ -392,40 +392,41 @@ impl Image {
         &self,
         radius: f32,
         percent: i32,
-        threshold: u8,
+        threshold: i32,
     ) -> Result<Image, PilError> {
         self.validate_filter("UnsharpMask")?;
-        let img = self.materialize()?;
+        let mode = self.mode()?;
+        let img = self.materialized_shared_validated()?;
         // Use PIL-style GaussianBlur via the pipeline (sigma→box radius conversion)
-        let blurred = Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius });
-        let blurred = blurred.materialize()?;
+        let mut blurred =
+            Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius }).materialize_owned()?;
 
         let (w, h) = (img.width(), img.height());
         let channels = img.color().channel_count() as usize;
 
         let raw = img.as_bytes();
-        let blur_raw = blurred.as_bytes();
-        let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
-
-        for y in 0..h {
-            for x in 0..w {
-                let base = (y * w + x) as usize * channels;
-                for c in 0..channels {
-                    let p = raw[base + c] as i32;
-                    let b = blur_raw[base + c] as i32;
-                    let diff = p - b;
-                    // PIL uses integer arithmetic: diff * percent / 100 (truncating)
-                    out[base + c] = if diff.unsigned_abs() > threshold as u32 {
-                        Self::pil_clip8(p + diff * percent / 100)
-                    } else {
-                        p as u8
-                    };
-                }
-            }
+        let dims = CheckedDims::new(w, h, channels as u8)?;
+        let blur_raw = blurred.as_bytes_mut().ok_or_else(|| {
+            PilError::InternalError("unsharp blur result has no byte storage".to_owned())
+        })?;
+        if raw.len() != dims.total_bytes() || blur_raw.len() != dims.total_bytes() {
+            return Err(PilError::InternalError(
+                "unsharp source and blur storage do not match image dimensions".to_owned(),
+            ));
         }
 
-        let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;
-        Ok(Image::from_dynamic(result, None))
+        for (&original, blurred) in raw.iter().zip(blur_raw) {
+            let original = i32::from(original);
+            let diff = original - i32::from(*blurred);
+            // PIL uses integer arithmetic: diff * percent / 100 (truncating).
+            *blurred = if diff.abs() > threshold {
+                Self::pil_clip8(original + diff * percent / 100)
+            } else {
+                original as u8
+            };
+        }
+
+        Ok(Image::from_dynamic(blurred, Some(mode)))
     }
 
     /// Applies a maximum filter over an odd neighborhood.
