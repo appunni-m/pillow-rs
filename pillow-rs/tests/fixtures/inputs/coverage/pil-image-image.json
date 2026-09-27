@@ -4848,6 +4848,7 @@
           "PIL.Image.Image.getpalette.nuanced.opened-p-rgba",
           "PIL.Image.Image.getpalette.nuanced.opened-p-transparency-rgba",
           "PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha",
+          "PIL.Image.Image.getchannel.nuanced.l-single-band-channel-zero",
           "PIL.Image.Image.getchannel.nuanced.named-rgba-alpha",
           "PIL.Image.Image.getchannel.nuanced.rgba-green-nonzero",
           "PIL.Image.Image.getchannel.nuanced.negative-index",
