@@ -5833,3 +5833,56 @@ and 133.5 µs. CPU is about 1.5–1.65× faster on this input, so no runtime cha
 was needed. SIMD/GPU-labelled profiles report `actual_backend: null`; this
 font-bounds call has no proven accelerator dispatch. Use the current residual
 single-workload ranking for the next operation. No coverage collection ran.
+
+## PIL.Image.Image.thumbnail checkpoint — 2026-09-27
+
+The old small thumbnail row used a 16 × 16 source, targeted 2 × 2, and mixed
+source setup and `putpixel` into the measured workflow. I added one larger,
+parity-gated RGB workload: 1024 × 768 to 256 × 192 using BICUBIC and the public
+`thumbnail` call followed by receiver `tobytes`. Image construction stays
+outside the timed steps; the result includes deferred execution and pixel
+export so a lazy target is compared with Pillow's eager mutation. The updated
+thumbnail selection passes 53/53 CPU parity cases. The material workload passes
+exact CPU, SIMD, and GPU parity, with 100 actual backend executions per target
+and no fallbacks.
+
+Three changes remove clones that were immediately discarded. First,
+`thumbnail` read source dimensions through `materialize()`, which cloned the
+entire materialized image. Reading dimensions through the shared materialized
+image preserves eager decode and error timing while avoiding that pixel copy.
+On the first paired sample, the CPU pipeline phase fell from 215.9 to 94.6 µs,
+SIMD from 216.2 to 116.7 µs, and GPU from 1.233 to 1.118 ms. Second, the CPU
+reducing-gap path initialized `work_img` by cloning the source, then replaced it
+with the newly allocated reduced image. It now clones only when no reduction
+occurs; float/integer reduction helpers still read the original source in their
+native scalar domain. Third, SIMD had the same clone-then-replace path and now
+branches to the reduced result directly.
+
+The final parity-gated receipt is
+`thumbnail-material-1024x768-after-simd-copy-removal.json`. Median observed
+latency and reciprocal-latency throughput across 100 executions were:
+
+| Subject | Latency | Throughput | Actual execution |
+| --- | ---: | ---: | --- |
+| Pillow | 925.1 µs | 1,081 ops/s | Pillow |
+| CPU | 643.4 µs | 1,554 ops/s | CPU, 100/100 |
+| SIMD | 769.3 µs | 1,300 ops/s | SIMD, 100/100 |
+| GPU | 2.101 ms | 476 ops/s | GPU, 100/100 |
+
+CPU is about 1.44× faster than Pillow on this boundary. SIMD is only about
+1.20× faster, far short of 5×; GPU is 2.73× slower than SIMD, so its throughput
+also misses the goal. The CPU and SIMD terminal-export phases alone measured
+530.5 and 661.7 µs, respectively, making host buffer creation and export the
+next CPU/SIMD ceiling for this workflow. The GPU receipt records three
+dispatches, a 3,145,728-byte upload, a 196,608-byte readback, one full-frame
+copy, one mode conversion, and 12,544 auxiliary bytes. Its transfer, conversion,
+and dispatch structure is the next GPU target; timings do not yet isolate their
+individual costs. These concurrency-one reciprocal rates are not sustained
+throughput measurements.
+
+Retain the three copy removals and move on after this checkpoint. When
+revisiting thumbnail, profile terminal pixel export separately from resize,
+then inspect whether the GPU can avoid its full-frame copy or fuse the reducing
+and resampling passes without changing filter, rounding, mode, or error
+semantics. The tiny 16 × 16 workflow still loses to Pillow and remains a
+separate small-work dispatch/adapter blocker. No coverage collection ran.

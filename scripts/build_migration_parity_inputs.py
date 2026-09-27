@@ -38024,6 +38024,25 @@ def build_nuanced_cases(
                 )
             )
         ),
+        # The thumbnail accelerator comparison needs a material source size;
+        # keep the same deterministic, nonuniform public input parity-gated
+        # across CPU, SIMD, and GPU.
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-large-rgb-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "nonzero-pixel",
+            "pixel": [180, 120, 60],
+            "observe_receiver": True,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "values": {
+                "size": literal([256, 256]),
+                "resample": literal(2),
+            },
+        },
         # Coverage batch 2026-08-11: exercise the public thumbnail aspect
         # selection and reducing-gap decisions across non-square source and
         # target boxes.  These are valid input-only workflows and reuse the
@@ -43650,6 +43669,35 @@ def build_pipeline_benchmark_document(
             }
         )
 
+    thumbnail_material_workload = {
+        "workload_id": "pipeline-op.thumbnail.material-rgb-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "thumbnail")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {
+            "kind": "parity_case",
+            "case_id": "PIL.Image.Image.thumbnail.nuanced.performance-large-rgb-1024x768",
+        },
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "observe-receiver"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            cases_by_id[
+                "PIL.Image.Image.thumbnail.nuanced.performance-large-rgb-1024x768"
+            ],
+            variant="thumbnail-material-rgb-1024x768",
+            surface="PIL.Image.Image",
+            operation="thumbnail",
+        ),
+    }
+
     # Add one non-square size variant for every ordinary byte-image workflow
     # that has a public Image.new source. These remain benchmark-only inputs:
     # the isolated PipelineOp registry coverage stays exactly one workload per
@@ -45673,6 +45721,7 @@ def build_pipeline_benchmark_document(
         "schema": "migration-parity/benchmark-input@1",
         "workloads": [
             *operation_workloads,
+            thumbnail_material_workload,
             *matrix_workloads,
             *expanded_matrix_workloads,
             *chain_workloads,
@@ -45721,6 +45770,16 @@ def build_pipeline_benchmark_document(
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}
                     for item in operation_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.thumbnail-material-size-suite",
+                "description": (
+                    "Parity-gated 1024x768 RGB thumbnail mutation and terminal "
+                    "materialization across CPU, SIMD, and GPU."
+                ),
+                "members": [
+                    {"workload_id": thumbnail_material_workload["workload_id"], "weight": 1}
                 ],
             },
             {

@@ -21424,8 +21424,7 @@ pub fn simd_thumbnail(
     )
     .ok_or_else(|| simd_unsupported("Thumbnail"))?;
     let typed_scalar = matches!(mode, Some("F" | "I"));
-    let mut work_img = img.clone();
-    if factor_x != 1 || factor_y != 1 {
+    let work_img = if factor_x != 1 || factor_y != 1 {
         let (reduced, vector_blocks, scalar_tail) = if typed_scalar && mode == Some("F") {
             simd_thumbnail_reduce_f(img, factor_x, factor_y)?
         } else if typed_scalar && mode == Some("I") {
@@ -21450,8 +21449,10 @@ pub fn simd_thumbnail(
         };
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-        work_img = reduced;
-    }
+        reduced
+    } else {
+        img.clone()
+    };
     if typed_scalar && mode == Some("F") {
         if factor_x != 1 || factor_y != 1 {
             let box_right = f64::from(img.width()) / f64::from(factor_x);
