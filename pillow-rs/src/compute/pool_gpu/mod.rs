@@ -4406,6 +4406,30 @@ fn plan_extract_band_dispatch(
     ))
 }
 
+const BLUR_WORKGROUP_SIZE: u32 = 16;
+
+/// Plan bounded 2D blur workgroups. Each invocation computes one output pixel;
+/// shader grid-stride loops cover dimensions larger than the device grid.
+fn plan_blur_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<(u32, u32), PilError> {
+    if max_workgroups_per_dimension == 0 {
+        return Err(PilError::ValueError(
+            "GPU adapter reports no compute workgroups per dimension".into(),
+        ));
+    }
+    let max_groups = max_workgroups_per_dimension;
+    let groups = |dimension: u32| {
+        dimension
+            .div_ceil(BLUR_WORKGROUP_SIZE)
+            .max(1)
+            .min(max_groups)
+    };
+    Ok((groups(width), groups(height)))
+}
+
 fn gpu_buffer_reuse_allowed(capacity: u32, minimum_capacity: u32) -> bool {
     capacity >= minimum_capacity
         && (minimum_capacity == 0
@@ -7776,8 +7800,11 @@ impl GpuInner {
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
-            "__internal_blur_h" => (1, output_dims.1),
-            "__internal_blur_v" => (output_dims.0, 1),
+            "__internal_blur_h" | "__internal_blur_v" => plan_blur_dispatch(
+                output_dims.0,
+                output_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
             "__internal_resize_v" => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
             "__internal_equalize_histogram" => {
@@ -16678,7 +16705,7 @@ mod tests {
     #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
     use super::{
-        F64OrderedKind, F64OrderedState, F64SignedMagnitude, GPU_POLL_BACKOFF,
+        BLUR_WORKGROUP_SIZE, F64OrderedKind, F64OrderedState, F64SignedMagnitude, GPU_POLL_BACKOFF,
         GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, encode_resize_compact_box_axis,
         gpu_buffer_reuse_allowed, gpu_byte_point_mode_allowed, gpu_contrast_mean,
         gpu_contrast_mean_after_exact_prefix, gpu_dimensions_require_cpu, gpu_dispatch_count,
@@ -16698,7 +16725,8 @@ mod tests {
         gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
         gpu_transform_all_fill_is_exact, gpu_transform_fill, gpu_transform_should_premultiply,
-        luma16_resample_big_endian, plan_extract_band_dispatch, readback_poll_backoff,
+        luma16_resample_big_endian, plan_blur_dispatch, plan_extract_band_dispatch,
+        readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -21989,6 +22017,48 @@ mod tests {
         assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
         assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
         assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+    }
+
+    #[test]
+    fn blur_dispatch_planner_bounds_grid_and_covers_each_pixel_once() {
+        let max_groups = 65_535;
+        let tile = BLUR_WORKGROUP_SIZE;
+        assert_eq!(
+            plan_blur_dispatch(tile * max_groups, 1, max_groups).expect("nonzero grid limit"),
+            (max_groups, 1)
+        );
+        assert_eq!(
+            plan_blur_dispatch(tile * max_groups + 1, tile * max_groups + 1, max_groups)
+                .expect("nonzero grid limit"),
+            (max_groups, max_groups)
+        );
+        assert!(plan_blur_dispatch(1, 1, 0).is_err());
+
+        for (width, height) in [(1, 1), (16, 17), (17, 16), (33, 35), (65, 47)] {
+            let (groups_x, groups_y) =
+                plan_blur_dispatch(width, height, 2).expect("nonzero grid limit");
+            assert!(groups_x <= 2 && groups_y <= 2);
+            let stride_x = groups_x * tile;
+            let stride_y = groups_y * tile;
+            let mut writes = vec![0u8; (width * height) as usize];
+            for invocation_y in 0..groups_y * tile {
+                let mut y = invocation_y;
+                while y < height {
+                    for invocation_x in 0..groups_x * tile {
+                        let mut x = invocation_x;
+                        while x < width {
+                            writes[(y * width + x) as usize] += 1;
+                            x += stride_x;
+                        }
+                    }
+                    y += stride_y;
+                }
+            }
+            assert!(
+                writes.iter().all(|count| *count == 1),
+                "{width}x{height} dispatch must cover every pixel exactly once"
+            );
+        }
     }
 
     #[test]

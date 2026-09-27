@@ -233,8 +233,11 @@ BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
         "step_ids": [],
     },
     "pil-imagefilter.gaussianblur.standard": {
-        "case_id": "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024",
-        "step_ids": [],
+        "case_id": (
+            "PIL.ImageFilter.GaussianBlur.nuanced."
+            "performance-material-rgb-noise-1024x768-radius-2"
+        ),
+        "step_ids": ["apply-filter", "observe-filter-result"],
     },
     "pil-imagechops.multiply.standard": {
         "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
@@ -40153,6 +40156,44 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+    if surface_id == "PIL.ImageFilter":
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "BoxBlur",
+            "requirement_suffix": "performance.standard",
+            "name": "backend-noise-rgb-65x47-radius-1",
+            "mode": "RGB", "size": [65, 47], "edge": "noise-fill",
+            "seed": 20261002, "observe_result": "tobytes",
+            "values": {"radius": literal(1.0)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "GaussianBlur",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768-radius-2",
+            "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20260929, "observe_result": "tobytes",
+            "values": {"radius": literal(2.0)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        # Keep channel and alpha behavior in the strict backend cohort without
+        # multiplying the large material benchmark cost.
+        for mode, requirement_suffix, seed in (
+            ("L", "mode.l", 20260930),
+            ("LA", "mode.la", 20260931),
+            ("RGBA", "mode.rgba", 20261001),
+        ):
+            specs += ({
+                "surface": "PIL.ImageFilter", "operation": "GaussianBlur",
+                "requirement_suffix": requirement_suffix,
+                "name": f"backend-noise-{mode.lower()}-65x47-radius-2",
+                "mode": mode, "size": [65, 47], "edge": "noise-fill",
+                "seed": seed, "observe_result": "tobytes",
+                "values": {"radius": literal(2.0)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:
         for operation in surface["operations"]:
@@ -46697,6 +46738,9 @@ def build_inputs(
                 workload_id == "pil-imageenhance-sharpness.enhance.standard"
             )
             materialized_reduce = workload_id == "pil-image-image.reduce.standard"
+            isolated_gaussian_blur = (
+                workload_id == "pil-imagefilter.gaussianblur.standard"
+            )
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
             isolated_getdata = workload_id == "pil-image-image.getdata.standard"
@@ -46828,6 +46872,7 @@ def build_inputs(
                             if materialized_getchannel
                             or materialized_sharpness
                             or materialized_reduce
+                            or isolated_gaussian_blur
                             or isolated_getdata
                             or isolated_get_flattened_data
                             or eager_getcolors
@@ -46853,7 +46898,9 @@ def build_inputs(
                             else "whole_workflow"
                         ),
                         "step_ids": (
-                            ["call", "observe-result"]
+                            ["apply-filter", "observe-filter-result"]
+                            if isolated_gaussian_blur
+                            else ["call", "observe-result"]
                             if materialized_getchannel or materialized_reduce
                             else ["setup-sharpness-2", "call", "observe-result"]
                             if materialized_sharpness

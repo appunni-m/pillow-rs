@@ -98,6 +98,13 @@ def target_profile_for_backend(backend: str) -> str:
     return f"python-{backend}"
 
 
+def effective_timing_steps(requested: Iterable[str] | None) -> set[str]:
+    """Resolve explicit timing steps, preserving the CLI's historical default."""
+
+    selected = set(requested or ())
+    return selected if selected else {"call"}
+
+
 def effective_adapter_timeout(requested_seconds: int) -> int:
     """Return a bounded adapter deadline for the selected target backend.
 
@@ -3993,7 +4000,7 @@ def run_side(args: argparse.Namespace) -> int:
                         operation_index,
                         tempdir,
                         repeat=args.repeat,
-                        timing_steps=set(args.timing_step),
+                        timing_steps=effective_timing_steps(args.timing_step),
                         timing_sink=sink,
                         telemetry_sink=phase_sink,
                         execution_sink=execution_sink,
@@ -4009,7 +4016,7 @@ def run_side(args: argparse.Namespace) -> int:
                             case,
                             operation_index,
                             tempdir,
-                            timing_steps=set(args.timing_step),
+                            timing_steps=effective_timing_steps(args.timing_step),
                             timing_sink=sink if args.timings else None,
                             telemetry_sink=phase_sink if args.timings else None,
                             timing_boundary=args.timing_boundary,
@@ -4101,7 +4108,7 @@ def run_side(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -4124,8 +4131,12 @@ def main() -> int:
         choices=("observed_steps", "whole_workflow"),
         default="observed_steps",
     )
-    parser.add_argument("--timing-step", action="append", default=["call"])
-    args = parser.parse_args()
+    parser.add_argument("--timing-step", action="append", default=[])
+    return parser
+
+
+def main() -> int:
+    args = build_argument_parser().parse_args()
     if args.side:
         return run_side(args)
     if args.identity:
