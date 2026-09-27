@@ -6593,3 +6593,45 @@ checkpointed; do not spend a fourth attempt on them. If Cover is revisited,
 first add a varied, materialized resize workload with exact parity for the
 same input on CPU, SIMD, and GPU, and enough samples to resolve both call
 latency and completed-work throughput. No coverage collection ran.
+
+## PIL.ImageOps.contain checkpoint — 2026-09-27
+
+Contain already has three recorded optimization attempts, each followed by
+three timing repeats. The retained path computes Pillow's rounded output size
+and delegates pixel work to ordinary Resize: CPU and SIMD already return an
+identity copy when the size is unchanged, while GPU lowers Contain to a generic
+Resize plan. A potential GPU-only identity lowering would remove redundant
+resize passes, but the existing three-attempt budget is exhausted; do not
+start a fourth attempt here.
+
+Fresh strict parity on source revision
+`d326b0e1061c77a4cc2202dd1e5049ac8763cddd` passes all 50 Contain cases on each
+backend, 150/150 total, with no failures, infrastructure errors, or unrun
+cases. The exact outputs are `contain-current-cpu.json`,
+`contain-current-simd.json`, and `contain-current-gpu.json`; each receipt is
+clean at that revision. The run selected all 50 Contain IDs from
+`inputs/parity/pil-imageops.json` through `make migration-parity-test`, with
+`MIGRATION_TARGET_BACKEND` set to `cpu`, `simd`, and `gpu` in turn and
+`MIGRATION_STRICT_TARGET_BACKEND=1`. The release comparison build passed via
+`make build-parity` using the existing shared CPython 3.12 venv because this
+worktree has no local `.venv`. No coverage was collected.
+
+The three earlier attempts did not establish performance or benchmark parity.
+They time only `pipeline-op.contain.benchmark-materialized` (a black 16 × 16
+identity) and `pipeline-op.contain.matrix-32x24` (a black 32 × 24 resize into
+a 16 × 16 box). Both use one warmup, three iterations, two samples, and a
+`successful_execution` gate; every benchmark parity sidecar selected zero
+cases. Across attempt 3's three repeat artifacts, the median of the per-run
+latency medians (ms) was:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 16 × 16 identity | 0.0139 | 0.0144 | 0.0154 | 0.6605 |
+| 32 × 24 to 16 × 12 | 0.0168 | 0.0135 | 0.0216 | 0.6325 |
+
+The GPU remains far slower on these tiny calls, but the selected inputs and
+low sample count cannot distinguish general resize throughput from transfer
+and per-call overhead. Do not treat these rows as parity-gated evidence. The
+next investigation moves to `PIL.ImageEnhance.Sharpness`; first replace its
+lazy, call-only timing input with a varied materialized workload and fresh
+strict parity before choosing an implementation change.
