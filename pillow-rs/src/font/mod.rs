@@ -347,10 +347,25 @@ impl FreeTypeFont {
         // Pillow ImageText.Text::_split advances by the bottom of "A"'s
         // FreeType bbox, then unions each line's full bbox.
         let line_height = spacing + self.getbbox_with_options("A", options)?.3 as i32;
-        let widths = lines
-            .iter()
-            .map(|line| self.getlength_with_options(line, options))
-            .collect::<Result<Vec<_>, _>>()?;
+        let combine_basic_metrics = options.uses_default_layout() && !options.uses_color_mask();
+        let combined_metrics = if combine_basic_metrics {
+            Some(
+                lines
+                    .iter()
+                    .map(|line| imagingft::getlength_and_bbox(self, line))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )
+        } else {
+            None
+        };
+        let widths = if let Some(metrics) = &combined_metrics {
+            metrics.iter().map(|(width, _)| *width).collect()
+        } else {
+            lines
+                .iter()
+                .map(|line| self.getlength_with_options(line, options))
+                .collect::<Result<Vec<_>, _>>()?
+        };
         let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
         let x0 = xy.0 as f64;
         let y0 = xy.1 as f64;
@@ -365,7 +380,12 @@ impl FreeTypeFont {
                 "right" => x0 + max_width as f64 - widths[index] as f64,
                 _ => x0,
             };
-            let bbox = self.getbbox_with_options(line, options)?;
+            let bbox = if let Some(metrics) = &combined_metrics {
+                let bbox = metrics[index].1;
+                (bbox.0 as f32, bbox.1 as f32, bbox.2 as f32, bbox.3 as f32)
+            } else {
+                self.getbbox_with_options(line, options)?
+            };
             left = left.min(line_x + bbox.0 as f64);
             top = top.min(line_y + bbox.1 as f64);
             right = right.max(line_x + bbox.2 as f64);
