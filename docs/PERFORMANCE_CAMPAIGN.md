@@ -6305,3 +6305,78 @@ upload/readback/conversion costs before replacing the fill kernel or adding more
 SIMD machinery. The distinct-secondary Multiply→Screen GPU fusion case ranks
 ahead on absolute GPU-versus-SIMD time, but its large transfer and dispatch
 deltas need an exact parity-gated experiment before implementation.
+
+## PIL.ImageChops.constant checkpoint — 2026-09-27
+
+`ImageChops.constant` returns a new `L` image whose samples depend on the
+requested value and extent, not on source pixels. CPU already builds the result
+with `GrayImage::from_pixel`; SIMD already allocates `vec![value; output_len]`.
+Both are one-pass fills, so neither fill kernel changed. The measured SIMD
+route is a repeated-byte allocator fill, not proof that explicit SIMD
+instructions execute; its 5× target remains open.
+
+Three bounded GPU attempts retained only two changes. Attempt 1 made the
+standalone Constant shader output-only and skipped source upload for an exact
+singleton `[Constant]`. Its exploratory GPU-only result lowered the large
+1024 × 768 and 1024 × 1024 medians from 2.078/2.736 ms to 1.486/1.961 ms, but
+its benchmark parity sidecar selected zero cases. Attempt 2 packs four
+row-major L samples into each u32 and reuses the checked near-square dispatch
+planner also used by ExtractBand. The final aligned word is padded only at the
+end of the flattened image and readback trims it to N samples. Runtime
+dispatch and capability preflight use the same planner and the device's actual
+workgroup limit. Attempt 3 tested 256 shader invocations per workgroup to cut
+the group count fourfold. It passed parity, but timings varied without a
+consistent gain and regressed the 32 × 32 row; discard it and retain 64.
+
+The retained code snapshot is based on `f77a9b9aa66b1486cc44e4d054f5a2093f7fc703`
+with a code-only diff SHA-256 of
+`dd2d1017830dc1b9e595d29f58b0b0df53ae9bdd806fcf23a49f1272d2452d15`. The
+focused strict parity artifacts `constant-final-cpu.json`,
+`constant-final-simd.json`, and `constant-final-gpu.json` each execute and pass
+all 14 selected cases, with no skips or infrastructure errors (42 backend-case
+comparisons total). They cover Constant's mode/value/large-image cases and
+getchannel on L, LA, RGB and RGBA. The ExtractBand unit lane also passes its
+dispatch-boundary planner, raw channel-order test, and 4096 × 4096 LA-alpha
+GPU test. No parity assertions or inputs changed.
+
+The exact-snapshot release benchmark is
+`build/migration-parity/constant-final-benchmark.json`, run
+`migration-benchmark-143492edff0e49919074e9209b34a379`. It uses the six focused
+Constant workloads, each with a whole-workflow boundary, one warmup, three
+iterations and two samples. All six complete; the benchmark gate is only
+`successful_execution`, and its parity sidecar selects zero cases, so the
+separate strict parity artifacts above establish correctness. The run identifies
+base revision `f77a9b9` as dirty; the code hash above identifies the measured
+patch. Pillow 12.2.0 and the target ran on CPython 3.12.13/macOS arm64. Median
+latency in milliseconds was:
+
+| Workload | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized 16 × 16 RGB | 0.01213 | 0.01488 | 0.01481 | 0.53863 |
+| 32 × 24 RGB | 0.01044 | 0.01277 | 0.01273 | 0.35767 |
+| 32 × 32 RGB | 0.01106 | 0.01404 | 0.01371 | 0.53048 |
+| 256 × 256 RGB | 0.03348 | 0.01927 | 0.01938 | 0.27188 |
+| 1024 × 768 RGB | 0.44613 | 0.17131 | 0.12629 | 0.95823 |
+| 1024 × 1024 RGB | 0.62779 | 0.46310 | 0.21335 | 0.78111 |
+
+On the large rows, the retained GPU path transfers zero input bytes and reads
+back 786,432 bytes at 1024 × 768 and 1,048,576 bytes at 1024 × 1024, versus
+3,145,728 and 4,194,304 before compaction. Receipts show one actual GPU
+dispatch, no fallback, zero mode conversions and no full-frame copy on this
+adapter. The final benchmark's GPU terminal phase is 0.785 ms and 0.623 ms for
+those sizes, so completion/map and Python byte export still dominate the
+standalone GPU call. GPU remains slower than SIMD at every measured size. CPU
+still loses to Pillow on the three smallest rows; SIMD is only 2.94× faster at
+1024 × 1024 and 3.53× at 1024 × 768, short of 5×. The repeated normal-profile
+runs show wide timing variation, so use the byte-count reduction as firm
+evidence and treat latency deltas as directional. The low-load target also
+completed, but its task-policy run inflated all backends to roughly 4–6 ms and
+is excluded from the normal-profile comparison. These latency throughput
+figures are reciprocal call times, not sustained completed-request throughput.
+
+Checkpoint Constant after three attempts. The next nomination is
+`PIL.ImageEnhance.Sharpness.enhance(factor=1.0)`: refresh strict parity and the
+same whole-workflow benchmark on the current source first, because Filter3x3
+changed its shared smooth-filter helper. Then test only whether a validated
+factor-1 call can return an independent source copy without the smooth pass
+and blend. No coverage collection ran.
