@@ -46567,6 +46567,11 @@ def build_inputs(
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
             isolated_getdata = workload_id == "pil-image-image.getdata.standard"
+            # Measure the eager flattened tuple construction after image
+            # setup; this operation's returned values remain inside timing.
+            isolated_get_flattened_data = (
+                workload_id == "pil-image-image.get-flattened-data.standard"
+            )
             eager_getcolors = workload_id == "pil-image-image.getcolors.standard"
             # Measure getmetrics after its setup-font step; the constructor is
             # a separate public workload and must not dominate this getter.
@@ -46689,6 +46694,7 @@ def build_inputs(
                             "observed_steps"
                             if materialized_getchannel
                             or isolated_getdata
+                            or isolated_get_flattened_data
                             or eager_getcolors
                             or isolated_getmetrics
                             or isolated_transposedfont
@@ -46717,6 +46723,7 @@ def build_inputs(
                             else ["call"]
                             if eager_getcolors
                             or isolated_getdata
+                            or isolated_get_flattened_data
                             or isolated_getmetrics
                             or isolated_transposedfont
                             or isolated_transposed_getlength

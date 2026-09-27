@@ -13,6 +13,7 @@ function key(surface, operation) {
 // Rust pixel object. Preserve the identity of an observed mapping across
 // loads, and shallow-copy it across operations whose wrappers preserve info.
 const imageInfo = new WeakMap();
+const getdataViews = new WeakMap();
 
 function imageInfoValue(image) {
     if (!imageInfo.has(image)) {
@@ -49,6 +50,30 @@ function imageInfoValue(image) {
     state.native = structuredClone(native);
     state.rebaseline = false;
     return state.value;
+}
+
+function liveGetdataView(image, mode) {
+    // Match Pillow's eager load/error boundary even though later observation
+    // must read the live image data.
+    image.getdataFormatted(null);
+    const view = {
+        source: image,
+        mode,
+        size: Array.from(image.size()),
+    };
+    Object.defineProperty(view, '__pillow_rs_getdata__', {
+        enumerable: true,
+        get() {
+            return view.source.getdataFormatted(null);
+        },
+    });
+    let views = getdataViews.get(image);
+    if (!views) {
+        views = new Set();
+        getdataViews.set(image, views);
+    }
+    views.add(view);
+    return view;
 }
 
 function unsupportedError(message) {
@@ -919,7 +944,7 @@ function pasteMethod(receiver, args, wasm) {
     return receiver.pasteValue(source, box ?? null, mask ?? null);
 }
 
-function imageMethod(receiver, operation, args, wasm) {
+function imageMethod(receiver, operation, args, wasm, owned) {
     const mode = receiver.mode;
     switch (operation) {
         case 'alpha_composite': return receiver.alphaComposite(args.im, args.dest ?? null, args.source ?? null);
@@ -983,6 +1008,7 @@ function imageMethod(receiver, operation, args, wasm) {
             const bandMode = band == null || !['LA', 'RGB', 'RGBA', 'RGBX', 'CMYK', 'HSV', 'PA', 'YCbCr'].includes(mode)
                 ? mode
                 : 'L';
+            if (band == null) return liveGetdataView(receiver, bandMode);
             return {
                 __pillow_rs_getdata__: receiver.getdataFormatted(band),
                 mode: bandMode,
@@ -1095,7 +1121,32 @@ function imageMethod(receiver, operation, args, wasm) {
             args.fillcolor ?? null,
         );
         case 'split': return receiver.split();
-        case 'thumbnail': return receiver.thumbnailWithInput(args.size, args.resample ?? null);
+        case 'thumbnail': {
+            const views = getdataViews.get(receiver);
+            const previousSize = Array.from(receiver.size());
+            // Pillow keeps an existing ImagingCore on the old pixel storage
+            // when thumbnail replaces the image. Clone before mutation so
+            // live views can follow writes up to that replacement boundary.
+            const previousImage = views?.size ? receiver.copy() : null;
+            let result;
+            try {
+                result = receiver.thumbnailWithInput(args.size, args.resample ?? null);
+            } catch (error) {
+                previousImage?.free();
+                throw error;
+            }
+            const nextSize = Array.from(receiver.size());
+            if (previousImage) {
+                if (previousSize[0] !== nextSize[0] || previousSize[1] !== nextSize[1]) {
+                    for (const view of views) view.source = previousImage;
+                    getdataViews.delete(receiver);
+                    owned?.add(previousImage);
+                } else {
+                    previousImage.free();
+                }
+            }
+            return result;
+        }
         case 'tobitmap': return receiver.tobitmap();
         case 'tobytes': {
             if (receiver?.__pillow_rs_getdata__) return getdataBytes(receiver);
@@ -2053,7 +2104,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
     throw unsupportedError(`static operation is not exported by this WASM facade: ${surface}.${operation}`);
 }
 
-function callStep(wasm, step, bindings, operations, assets) {
+function callStep(wasm, step, bindings, operations, assets, owned) {
     const args = argsOf(step, bindings, assets);
     let receiver = step.receiver ? resolveDescriptor(step.receiver, bindings, assets) : null;
     if (receiver?.__pillow_rs_image_with_info__) {
@@ -2118,7 +2169,7 @@ function callStep(wasm, step, bindings, operations, assets) {
         }
         if (step.surface === 'PIL.Image.Image') {
             if (receiver?.__pillow_rs_getdata__ && step.operation === 'tobytes') {
-                return imageMethod(receiver, step.operation, args, wasm);
+                return imageMethod(receiver, step.operation, args, wasm, owned);
             }
             if (!isImage(receiver, wasm)) {
                 throw namedError(
@@ -2126,7 +2177,7 @@ function callStep(wasm, step, bindings, operations, assets) {
                     `'tuple' object has no attribute '${step.operation}'`,
                 );
             }
-            const value = imageMethod(receiver, step.operation, args, wasm);
+            const value = imageMethod(receiver, step.operation, args, wasm, owned);
             if (imageInfo.has(receiver)) imageInfoValue(receiver);
             return value;
         }
@@ -2261,13 +2312,28 @@ function serialize(value, shape, receiverMode = null) {
     if (shape === 'mask') {
         if (value?.__pillow_rs_getdata__) {
             let raw = new Uint8Array();
-            try { raw = getdataBytes(value); } catch (_) { /* ImagingCore bytes may be invalid for tuples/floats. */ }
-            return {
+            let pixels = null;
+            try {
+                raw = getdataBytes(value);
+            } catch (_) {
+                // Match the Python oracle serializer: tuple-valued multiband
+                // pixels and non-byte scalar modes are not bytes(core). An
+                // empty byte string hid their actual values and let parity
+                // pass without comparing pixels.
+                const samples = value.__pillow_rs_getdata__;
+                if (!Array.isArray(samples)) {
+                    throw new TypeError('getdata result is not a sequence');
+                }
+                pixels = samples.map(jsonSafe);
+            }
+            const result = {
                 kind: 'mask',
                 mode: value.mode ?? '',
                 size: value.size ?? null,
                 bytes: base64(raw),
             };
+            if (pixels !== null) result.pixels = pixels;
+            return result;
         }
         if (
             value != null
@@ -2542,7 +2608,7 @@ function runCase(wasm, item, operations, assets, executionSink) {
         }
         let stepExecutionStatus = 'completed';
         try {
-            const value = callStep(wasm, step, bindings, operations, assets);
+            const value = callStep(wasm, step, bindings, operations, assets, owned);
             if (value && typeof value.free === 'function') owned.add(value);
             bindings[step.step_id] = value;
             results[step.step_id] = { step_id: step.step_id, status: 'ok', value };
