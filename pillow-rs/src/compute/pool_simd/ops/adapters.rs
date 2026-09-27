@@ -6958,6 +6958,26 @@ fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     output
 }
 
+/// Apply the three colorize LUTs' 256-entry lookup using a balanced select
+/// tree. Keep the general LUT helper's lowering unchanged for its other users.
+#[inline]
+fn native_colorize_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
+    let low = input & u8x16::splat(0x0f);
+    let high: u8x16 = input >> 4u32;
+    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
+    let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
+    let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
+    let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));
+    let bit3 = (high & u8x16::splat(8)).simd_eq(u8x16::splat(0));
+    let level1: [u8x16; 8] =
+        std::array::from_fn(|index| bit0.select(lookups[index * 2], lookups[index * 2 + 1]));
+    let level2: [u8x16; 4] =
+        std::array::from_fn(|index| bit1.select(level1[index * 2], level1[index * 2 + 1]));
+    let level3: [u8x16; 2] =
+        std::array::from_fn(|index| bit2.select(level2[index * 2], level2[index * 2 + 1]));
+    bit3.select(level3[0], level3[1])
+}
+
 fn native_remap_palette_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     matches!(img, DynamicImage::ImageLuma8(_))
         .then_some(1)
@@ -11278,7 +11298,7 @@ fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Ve
     }
     let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
     let source = img.as_bytes();
-    let output_len = pixels.checked_mul(3)?;
+    let output_bytes = pixels.checked_mul(3)?;
     if pixels == 0 || source.len() != pixels {
         return None;
     }
@@ -11287,7 +11307,9 @@ fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Ve
         native_lut_tables(&lut[1])?,
         native_lut_tables(&lut[2])?,
     ];
-    let mut output = vec![0u8; output_len];
+    // Store complete RGB pixels so output construction does not zero-fill a
+    // second full frame before overwriting every output byte.
+    let mut output = Vec::<[u8; 3]>::with_capacity(output_bytes / 3);
     let mut vector_blocks = 0u64;
     if pixels >= 65_536 {
         for start in (0..pixels).step_by(16) {
@@ -11295,19 +11317,18 @@ fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Ve
             let mut padded = [0u8; 16];
             padded[..active].copy_from_slice(&source[start..start + active]);
             let input = u8x16::new(padded);
-            let red = native_lut_chunk(input, &tables[0]).to_array();
-            let green = native_lut_chunk(input, &tables[1]).to_array();
-            let blue = native_lut_chunk(input, &tables[2]).to_array();
+            let red = native_colorize_lut_chunk(input, &tables[0]).to_array();
+            let green = native_colorize_lut_chunk(input, &tables[1]).to_array();
+            let blue = native_colorize_lut_chunk(input, &tables[2]).to_array();
 
-            // Large outputs benefit from writing the already-computed channel
-            // lanes directly: this avoids four vector interleave shuffles per
-            // block and the associated temporary 16-byte packs.
+            // Interleave the computed lanes into exact RGB pixels, then append
+            // only active pixels. This avoids zero-filling a second full-frame
+            // byte vector and keeps the final partial block out of the result.
+            let mut packed = [[0u8; 3]; 16];
             for lane in 0..active {
-                let output_start = (start + lane) * 3;
-                output[output_start] = red[lane];
-                output[output_start + 1] = green[lane];
-                output[output_start + 2] = blue[lane];
+                packed[lane] = [red[lane], green[lane], blue[lane]];
             }
+            output.extend_from_slice(&packed[..active]);
             vector_blocks = vector_blocks.saturating_add(4);
         }
     } else {
@@ -11317,9 +11338,9 @@ fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Ve
             let mut padded = [0u8; 16];
             padded[..active].copy_from_slice(&source[start..start + active]);
             let input = u8x16::new(padded);
-            let red = native_lut_chunk(input, &tables[0]).to_array();
-            let green = native_lut_chunk(input, &tables[1]).to_array();
-            let blue = native_lut_chunk(input, &tables[2]).to_array();
+            let red = native_colorize_lut_chunk(input, &tables[0]).to_array();
+            let green = native_colorize_lut_chunk(input, &tables[1]).to_array();
+            let blue = native_colorize_lut_chunk(input, &tables[2]).to_array();
 
             for group in 0..4 {
                 let lane = group * 4;
@@ -11345,16 +11366,19 @@ fn native_colorize_bytes(img: &DynamicImage, lut: &[[u8; 256]; 3]) -> Option<(Ve
                 .to_array();
                 let group_pixels = active.saturating_sub(lane).min(4);
                 if group_pixels != 0 {
-                    let output_start = (start + lane) * 3;
-                    let output_len = group_pixels * 3;
-                    output[output_start..output_start + output_len]
-                        .copy_from_slice(&packed[..output_len]);
+                    let pixels = [
+                        [packed[0], packed[1], packed[2]],
+                        [packed[3], packed[4], packed[5]],
+                        [packed[6], packed[7], packed[8]],
+                        [packed[9], packed[10], packed[11]],
+                    ];
+                    output.extend_from_slice(&pixels[..group_pixels]);
                 }
                 vector_blocks = vector_blocks.saturating_add(1);
             }
         }
     }
-    Some((output, vector_blocks, 0))
+    Some((output.into_flattened(), vector_blocks, 0))
 }
 
 pub fn simd_grayscale(

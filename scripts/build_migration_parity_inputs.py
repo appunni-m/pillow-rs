@@ -29703,6 +29703,25 @@ def build_nuanced_cases(
                 "white": literal("white"),
             },
         },
+        # Keep Colorize's material-size comparison parity-gated across every
+        # backend. Start from deterministic, materialized high-entropy L bytes
+        # so the timed operation is Colorize, not setup or a repeated LUT index.
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "colorize",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-large-l-noise-1024x768",
+            "mode": "L",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20260927,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+            "values": {
+                "black": literal("black"),
+                "white": literal("white"),
+            },
+        },
         {
             "surface": "PIL.ImageOps",
             "operation": "colorize",
@@ -46621,6 +46640,49 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+        if surface_id == "PIL.ImageOps":
+            colorize_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "colorize"
+                ),
+                None,
+            )
+            if colorize_benchmark is not None:
+                operation, requirement = colorize_benchmark
+                case_id = (
+                    "PIL.ImageOps.colorize.nuanced."
+                    "performance-large-l-noise-1024x768"
+                )
+                case = all_cases_by_id[case_id]
+                workload_id = "pil-imageops.colorize.materialized-noise-l-1024x768"
+                workloads.append(
+                    {
+                        "workload_id": workload_id,
+                        "covers": [requirement["id"]],
+                        "subjects": benchmark_subjects(),
+                        "input": {"kind": "parity_case", "case_id": case_id},
+                        "measurement": {
+                            "boundary": "observed_steps",
+                            "step_ids": ["call", "observe-result"],
+                            "metrics": operation["benchmark"]["metrics"],
+                            "warmup_iterations": 5,
+                            "measurement_iterations": 20,
+                            "samples": 5,
+                            "concurrency": 1,
+                            "cache_state": "warm",
+                            "correctness_gate": "parity_pass",
+                        },
+                        "context": _workflow_benchmark_context(
+                            case,
+                            variant="colorize-material-noise-l-1024x768",
+                            surface=surface_id,
+                            operation="colorize",
+                        ),
+                    }
+                )
+                members.append({"workload_id": workload_id, "weight": 1})
         if surface_id == "PIL.Image.Image":
             getchannel_benchmark = next(
                 (

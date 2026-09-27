@@ -5,7 +5,7 @@ struct Params {
     width: u32,
     height: u32,
     mode: u32,
-    _pad: u32,
+    packed_luma: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -18,6 +18,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let index = gid.y * params.width + gid.x;
-    let luma = input[index] & 0xffu;
+    var luma = input[index] & 0xffu;
+    if params.packed_luma != 0u {
+        let packed = input[index / 4u];
+        luma = (packed >> ((index % 4u) * 8u)) & 0xffu;
+    }
     output[index] = lut[luma];
 }

@@ -4188,6 +4188,40 @@ impl BufferPool {
         self.upload_rgba(queue, &rgba)
     }
 
+    /// Upload four `L` samples per storage word for the standalone Colorize
+    /// shader. The shader extracts each byte by pixel index, so the source
+    /// does not need an expanded RGBA host image or a four-byte transfer per
+    /// sample.
+    fn upload_colorize_luma(
+        &self,
+        queue: &wgpu::Queue,
+        image: &crate::raster::GrayImage,
+    ) -> Result<(), PilError> {
+        let (w, h) = image.dimensions();
+        let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+        if pixel_count > self.capacity as usize || image.as_raw().len() != pixel_count {
+            return Err(PilError::ValueError(
+                "GPU Colorize luma input does not fit its checked buffer".into(),
+            ));
+        }
+        let transfer_bytes = pixel_count
+            .div_ceil(4)
+            .checked_mul(4)
+            .ok_or_else(|| PilError::ValueError("GPU Colorize input is too large".into()))?;
+        let size = u64::try_from(transfer_bytes)
+            .ok()
+            .and_then(NonZeroU64::new)
+            .ok_or_else(|| PilError::ValueError("GPU Colorize input is empty".into()))?;
+        let mut upload = queue
+            .write_buffer_with(&self.buf_a, 0, size)
+            .ok_or_else(|| {
+                PilError::InternalError("GPU Colorize staging allocation failed".into())
+            })?;
+        upload.fill(0);
+        upload[..pixel_count].copy_from_slice(image.as_raw());
+        Ok(())
+    }
+
     #[cfg(target_endian = "little")]
     fn upload_packed_rgb(
         &self,
@@ -6722,6 +6756,7 @@ impl GpuInner {
         f_resize_dyadic_is_exact: bool,
         f_resize_f64_is_exact: bool,
         f_resize_f64_ordered_is_exact: bool,
+        packed_luma_colorize: bool,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -6895,6 +6930,11 @@ impl GpuInner {
             };
             let source_row_base = resize_source_row_range.map_or(0, |(first, _)| first);
             let mut params = vec![shader_w, shader_h, op_mode, source_row_base];
+            if packed_luma_colorize && matches!(op, PipelineOp::Colorize { .. }) {
+                // Colorize has no row-offset input; reuse that word to select
+                // the packed four-luma-samples-per-u32 upload layout.
+                params[3] = 1;
+            }
             if matches!(
                 op,
                 PipelineOp::Resize {
@@ -9497,6 +9537,7 @@ impl GpuInner {
         w: u32,
         h: u32,
         mode: u32,
+        packed_luma_colorize: bool,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
@@ -9682,6 +9723,7 @@ impl GpuInner {
                 f_resize_dyadic_is_exact,
                 f_resize_f64_is_exact,
                 f_resize_f64_ordered_is_exact,
+                packed_luma_colorize,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -15429,6 +15471,10 @@ impl GpuPool {
             dispatch_ops = vec![PipelineOp::Duplicate];
         }
         let ops = dispatch_ops.as_slice();
+        // Only a standalone L -> RGB Colorize can consume a four-samples-per-
+        // word upload; preceding GPU kernels leave the ordinary RGBA transport.
+        let packed_luma_colorize = matches!(ops, [PipelineOp::Colorize { .. }])
+            && matches!(img, DynamicImage::ImageLuma8(_));
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -16378,6 +16424,13 @@ impl GpuPool {
                 ));
             };
             buffers.upload_luma16_numeric(&gpu.queue, image)?;
+        } else if packed_luma_colorize {
+            let DynamicImage::ImageLuma8(image) = img else {
+                return Err(PilError::InternalError(
+                    "packed GPU Colorize input requires native L samples".into(),
+                ));
+            };
+            buffers.upload_colorize_luma(&gpu.queue, image)?;
         } else {
             buffers.upload_standard_image(&gpu.queue, img)?;
         }
@@ -16390,6 +16443,7 @@ impl GpuPool {
                 w,
                 h,
                 mcode,
+                packed_luma_colorize,
                 mode,
                 contrast_mean,
                 f_resize_constant_bits,
@@ -16479,7 +16533,16 @@ impl GpuPool {
         // working images. Return successful working sets to the bounded pool;
         // every error path drops its buffers instead of risking reuse of an
         // in-flight or device-invalid resource.
-        resource_telemetry.upload_bytes = CheckedDims::new(w, h, 4)?.total_bytes() as u64;
+        resource_telemetry.upload_bytes = if packed_luma_colorize {
+            CheckedDims::new(w, h, 1)?
+                .total_bytes()
+                .div_ceil(4)
+                .checked_mul(4)
+                .ok_or_else(|| PilError::ValueError("GPU Colorize input is too large".into()))?
+                as u64
+        } else {
+            CheckedDims::new(w, h, 4)?.total_bytes() as u64
+        };
         resource_telemetry.readback_bytes =
             CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64;
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
@@ -16556,6 +16619,69 @@ mod tests {
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn colorize_gpu_packs_luma_upload_and_keeps_exact_rgb() {
+        use crate::compute::BackendImpl;
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("GPU Colorize initialization failed: {error}"),
+        }
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _telemetry = RestoreTelemetry(previous);
+
+        let (width, height) = (37, 29);
+        let pixels = width as usize * height as usize;
+        let source = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(
+                width,
+                height,
+                (0..pixels)
+                    .map(|index| index.wrapping_mul(47).wrapping_add(index / 7) as u8)
+                    .collect(),
+            )
+            .expect("Colorize L source"),
+        );
+        let op = PipelineOp::Colorize {
+            black: (0, 0, 0),
+            white: (255, 255, 255),
+            mid: None,
+            blackpoint: 0,
+            midpoint: 127,
+            whitepoint: 255,
+        };
+        let expected = crate::compute::registry::execute_cpu(&op, &source, Some("L"))
+            .expect("CPU Colorize reference");
+        let actual = super::GpuPool
+            .execute_batch_strict(std::slice::from_ref(&op), &source, Some("L"))
+            .expect("strict GPU Colorize");
+        assert_eq!(actual.color(), expected.color());
+        assert_eq!(actual.dimensions(), expected.dimensions());
+        assert_eq!(actual.as_bytes(), expected.as_bytes());
+
+        let resources = crate::compute::take_pipeline_resource_telemetry()
+            .expect("GPU Colorize resource receipt");
+        assert_eq!(resources.upload_bytes, pixels.div_ceil(4) as u64 * 4);
+        assert_eq!(resources.readback_bytes, pixels as u64 * 4);
+        assert_eq!(resources.mode_conversion_count, 1);
+        assert_eq!(crate::compute::take_pipeline_backend_override(), None);
+    }
 
     #[test]
     #[cfg(target_endian = "little")]
@@ -17391,6 +17517,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         Some("RGBA"),
                         None,
                         None,
