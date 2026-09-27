@@ -781,7 +781,9 @@ pub fn contain_with_input(
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
-/// Resizes an image to cover `(w, h)`, cropping overflow.
+/// Resizes an image to cover `(w, h)` while preserving its aspect ratio.
+///
+/// The returned dimensions may exceed `(w, h)`; overflow is not cropped.
 ///
 /// # Errors
 ///
