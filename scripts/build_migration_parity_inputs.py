@@ -40733,6 +40733,7 @@ def build_nuanced_cases(
     cases.extend(composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(brightness_pixel_parity_cases(surface_id))
+    cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
@@ -41829,6 +41830,78 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             }
         )
     return cases
+
+
+def quantize_fast_octree_rgb_performance_parity_cases(
+    surface_id: str,
+) -> list[dict[str, Any]]:
+    """Parity-gate the high-cardinality RGB FASTOCTREE benchmark input."""
+    target = "PIL.Image.Image"
+    if surface_id != target:
+        return []
+
+    width, height = 256, 256
+    rng = random.Random(105)
+    raw = bytes(rng.randrange(256) for _ in range(width * height * 3))
+    case_id = f"{target}.quantize.nuanced.fast-octree-rgb-noise-{width}x{height}"
+    return [
+        {
+            "case_id": case_id,
+            "surface": target,
+            "operation": "quantize",
+            "covers": [f"{target}.quantize.parameter.method"],
+            "target_profiles": ["python-cpu"],
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal([width, height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": target,
+                    "operation": "quantize",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "colors": literal(32),
+                        "method": literal(2),
+                        "kmeans": literal(0),
+                    },
+                },
+                {
+                    "step_id": "palette",
+                    "surface": "PIL.Image.Image",
+                    "operation": "getpalette",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "palette", "materialize"],
+        }
+    ]
 
 
 def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -45598,6 +45671,41 @@ def build_pipeline_benchmark_document(
         ("maxcoverage-kmeans", 1, 16, 2, 104),
         ("fast-octree", 2, 32, 0, 105),
     ):
+        if name == "fast-octree":
+            # This is the material FASTOCTREE input used by the algorithm
+            # benchmark below. Point it at the same parity case so timings are
+            # correctness-gated on exact palette and index output.
+            quantize_algorithm_workloads.append(
+                {
+                    "workload_id": "pipeline-chain.quantize.algorithm.fast-octree",
+                    "covers": [quantize_requirement],
+                    "subjects": benchmark_subjects(),
+                    "input": {
+                        "kind": "parity_case",
+                        "case_id": "PIL.Image.Image.quantize.nuanced.fast-octree-rgb-noise-256x256",
+                    },
+                    "measurement": {
+                        "boundary": "whole_workflow",
+                        "step_ids": [],
+                        "metrics": ["latency", "throughput"],
+                        "warmup_iterations": 5,
+                        "measurement_iterations": 20,
+                        "samples": 5,
+                        "concurrency": 1,
+                        "cache_state": "warm",
+                        "correctness_gate": "parity_pass",
+                    },
+                    "context": {
+                        "size": [quantize_width, quantize_height],
+                        "mode": "RGB",
+                        "chain_length": 1,
+                        "operation_class": "point",
+                        "cache_state": "warm",
+                        "build_profile": "release",
+                    },
+                }
+            )
+            continue
         rng = random.Random(seed)
         raw = bytes(rng.randrange(256) for _ in range(quantize_pixels * 3))
         asset_id = f"pipeline-quantize-{slug(name)}-rgb-data"

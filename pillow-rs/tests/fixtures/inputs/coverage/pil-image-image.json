@@ -6510,6 +6510,7 @@
           "PIL.Image.Image.alpha_composite.nuanced.pixels-RGB-unsupported-mode",
           "PIL.Image.Image.alpha_composite.nuanced.pixels-RGBa-unsupported-mode",
           "PIL.Image.Image.alpha_composite.nuanced.pixels-La-unsupported-mode",
+          "PIL.Image.Image.quantize.nuanced.fast-octree-rgb-noise-256x256",
           "PIL.Image.Image.convert.nuanced.mode-audit-1-to-1-17x3",
           "PIL.Image.Image.convert.nuanced.mode-audit-1-to-L-17x3",
           "PIL.Image.Image.convert.nuanced.mode-audit-1-to-LA-17x3",
