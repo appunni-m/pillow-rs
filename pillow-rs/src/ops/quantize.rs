@@ -2294,9 +2294,17 @@ impl Image {
 
         let (indices, palette_bytes, palette_alpha) = if is_rgba {
             // FASTOCTREE (octree) algorithm for RGBA.
-            let rgba = img.to_rgba8();
-            let rgba_raw = rgba.into_raw();
-            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors, true)?;
+            // Match the four-byte carrier directly; the color accessor clones
+            // existing RGBA storage even though the quantizer only reads it.
+            let (idx, pal) = match &img {
+                DynamicImage::ImageRgba8(rgba) => {
+                    quantize_octree_rgba(rgba.as_raw(), w, h, n_colors, true)?
+                }
+                _ => {
+                    let rgba = img.to_rgba8();
+                    quantize_octree_rgba(rgba.as_raw(), w, h, n_colors, true)?
+                }
+            };
             // Pillow's FASTOCTREE result owns an RGBA palette. Core represents
             // that interleaved layout as RGB triples plus an alpha sidecar.
             let pal_rgb = pal
