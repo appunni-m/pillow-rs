@@ -6979,6 +6979,28 @@ fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     output
 }
 
+/// Apply a Point LUT with a balanced selection tree. Each nibble lookup stays
+/// independent, then four high-bit decisions select its matching table. This
+/// shortens the dependent select chain in the hot Point path without changing
+/// the shared LUT lowering used by other operations.
+#[inline]
+fn native_point_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
+    let low = input & u8x16::splat(0x0f);
+    let high: u8x16 = input >> 4u32;
+    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
+    let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
+    let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
+    let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));
+    let bit3 = (high & u8x16::splat(8)).simd_eq(u8x16::splat(0));
+    let level1: [u8x16; 8] =
+        std::array::from_fn(|index| bit0.select(lookups[index * 2], lookups[index * 2 + 1]));
+    let level2: [u8x16; 4] =
+        std::array::from_fn(|index| bit1.select(level1[index * 2], level1[index * 2 + 1]));
+    let level3: [u8x16; 2] =
+        std::array::from_fn(|index| bit2.select(level2[index * 2], level2[index * 2 + 1]));
+    bit3.select(level3[0], level3[1])
+}
+
 /// Apply the three colorize LUTs' 256-entry lookup using a balanced select
 /// tree. Keep the general LUT helper's lowering unchanged for its other users.
 #[inline]
@@ -7158,6 +7180,99 @@ fn native_lut_apply(
         }
     });
     Some((vector_blocks, 0))
+}
+
+/// Map one row into a separate output row so a single Point operation reads
+/// each source sample once instead of cloning and then rereading the clone.
+fn native_lut_map_row(
+    source: &[u8],
+    destination: &mut [u8],
+    channels: usize,
+    tables: &[[u8x16; 16]; 4],
+) {
+    if channels == 1 {
+        for (source_chunk, destination_chunk) in source.chunks(16).zip(destination.chunks_mut(16)) {
+            let mut padded = [0u8; 16];
+            padded[..source_chunk.len()].copy_from_slice(source_chunk);
+            let mapped = native_point_lut_chunk(u8x16::new(padded), &tables[0]).to_array();
+            destination_chunk.copy_from_slice(&mapped[..destination_chunk.len()]);
+        }
+        return;
+    }
+
+    for (source_chunk, destination_chunk) in source
+        .chunks(channels * 16)
+        .zip(destination.chunks_mut(channels * 16))
+    {
+        let active_pixels = source_chunk.len() / channels;
+        let mut input = [[0u8; 16]; 4];
+        for pixel in 0..active_pixels {
+            for channel in 0..channels {
+                input[channel][pixel] = source_chunk[pixel * channels + channel];
+            }
+        }
+        let mut mapped = [[0u8; 16]; 4];
+        for channel in 0..channels {
+            mapped[channel] =
+                native_point_lut_chunk(u8x16::new(input[channel]), &tables[channel]).to_array();
+        }
+        for pixel in 0..active_pixels {
+            for channel in 0..channels {
+                destination_chunk[pixel * channels + channel] = mapped[channel][pixel];
+            }
+        }
+    }
+}
+
+/// Apply a channel LUT from immutable input to a single newly allocated
+/// output. The output buffer's zero initialization is the only extra pass;
+/// unlike clone-then-transform, the source data itself is traversed once.
+fn native_lut_map_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    tables: &[[u8x16; 16]; 4],
+) -> Option<u64> {
+    let row_stride = width.checked_mul(channels)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if row_stride == 0 || source.len() != expected_len || destination.len() != expected_len {
+        return None;
+    }
+    #[cfg(feature = "parallel")]
+    if source.len() >= 256 * 1024 {
+        crate::par_rows_mut!(
+            destination,
+            row_stride,
+            height,
+            |row_start, row_end, _y, row| {
+                native_lut_map_row(&source[row_start..row_end], row, channels, tables);
+            }
+        );
+    } else {
+        for (source_row, destination_row) in source
+            .chunks_exact(row_stride)
+            .zip(destination.chunks_exact_mut(row_stride))
+            .take(height)
+        {
+            native_lut_map_row(source_row, destination_row, channels, tables);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        for (source_row, destination_row) in source
+            .chunks_exact(row_stride)
+            .zip(destination.chunks_exact_mut(row_stride))
+            .take(height)
+        {
+            native_lut_map_row(source_row, destination_row, channels, tables);
+        }
+    }
+    let vector_blocks = channels
+        .saturating_mul(width.div_ceil(16))
+        .saturating_mul(height);
+    Some(u64::try_from(vector_blocks).unwrap_or(u64::MAX))
 }
 
 #[inline]
@@ -7503,17 +7618,36 @@ pub(crate) fn native_point_lut(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Some(img.clone());
     }
-    let mut result = img.clone();
-    let bytes = result.as_bytes_mut()?;
-    let (vector_blocks, scalar_tail) = native_lut_apply(
-        bytes,
+    let tables = native_lut_tables_for_channels(lut, channels)?;
+    let source = img.as_bytes();
+    let mut output = vec![0u8; source.len()];
+    let vector_blocks = native_lut_map_rows(
+        source,
+        &mut output,
         img.width() as usize,
         img.height() as usize,
         channels,
-        lut,
+        &tables,
     )?;
+    let result = match img {
+        DynamicImage::ImageLuma8(image) => {
+            DynamicImage::ImageLuma8(GrayImage::from_raw(image.width(), image.height(), output)?)
+        }
+        DynamicImage::ImageLumaA8(image) => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
+            image.width(),
+            image.height(),
+            output,
+        )?),
+        DynamicImage::ImageRgb8(image) => {
+            DynamicImage::ImageRgb8(RgbImage::from_raw(image.width(), image.height(), output)?)
+        }
+        DynamicImage::ImageRgba8(image) => {
+            DynamicImage::ImageRgba8(RgbaImage::from_raw(image.width(), image.height(), output)?)
+        }
+        _ => return None,
+    };
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
     Some(result)
 }
@@ -24876,7 +25010,8 @@ mod tests {
         transpose_native_odd_collect_admitted,
     };
     use super::{
-        native_lut_apply, native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band,
+        native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
+        native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band,
         simd_projective_nearest_transform_bytes, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
@@ -24900,6 +25035,20 @@ mod tests {
                         .enumerate()
                         .map(|(index, &value)| lut[(index % channels) * 256 + usize::from(value)])
                         .collect();
+                    let original = bytes.clone();
+                    let tables = native_lut_tables_for_channels(&lut, channels)
+                        .expect("valid native byte lookup tables");
+                    let mut mapped = vec![0u8; bytes.len()];
+                    native_lut_map_rows(&bytes, &mut mapped, width, height, channels, &tables)
+                        .expect("valid out-of-place native byte lookup");
+                    assert_eq!(
+                        mapped, expected,
+                        "out of place {width}x{height}, {channels}"
+                    );
+                    assert_eq!(
+                        bytes, original,
+                        "source mutated {width}x{height}, {channels}"
+                    );
                     let (_, scalar_tail) =
                         native_lut_apply(&mut bytes, width, height, channels, &lut)
                             .expect("valid native byte lookup");
