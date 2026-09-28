@@ -1916,16 +1916,27 @@ impl Draw {
         // in text_compose_direct / text_compose_rgba.
         let render_fill = (fill.0, fill.1, fill.2, 255u8);
         let (w, h, mask, offset) = font.getmask2_with_options(text, &options)?;
-        let pixels = if color_mask {
-            mask
-        } else {
-            text_mask_to_rgba(mask, render_fill)
-        };
         if w == 0 || h == 0 {
             return Ok((w, h));
         }
         let draw_x = x.saturating_add(offset.0);
         let draw_y = y.saturating_add(offset.1);
+
+        // Keep ordinary RGB text on its native three-byte canvas. The font
+        // mask already carries one coverage byte per pixel; do not expand
+        // either the full image or a grayscale glyph mask to RGBA.
+        if mode == "RGB"
+            && !self.alpha_blend_rgb()
+            && self.text_compose_rgb_native(draw_x, draw_y, w, h, &mask, fill, color_mask)?
+        {
+            return Ok((w, h));
+        }
+
+        let pixels = if color_mask {
+            mask
+        } else {
+            text_mask_to_rgba(mask, render_fill)
+        };
 
         match mode.as_str() {
             "RGB" | "RGBA" => self.text_compose_rgba(
@@ -1945,6 +1956,82 @@ impl Draw {
 
     fn pack_text_ink(fill: (u8, u8, u8, u8)) -> i64 {
         i64::from(fill.0) | (i64::from(fill.1) << 8) | (i64::from(fill.2) << 16)
+    }
+
+    /// Blend text coverage directly into an exact logical RGB raster.
+    ///
+    /// `DynamicImage::ImageRgb8` owns three bytes per pixel, whereas
+    /// `ImageRgba8` can also represent CMYK or an explicit RGBA drawing
+    /// context. Require both the caller's RGB mode gate and this concrete
+    /// storage variant before writing native bytes. `mask` is one coverage
+    /// byte per pixel for ordinary glyphs and RGBA source pixels for color
+    /// glyphs.
+    fn text_compose_rgb_native(
+        &mut self,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        mask: &[u8],
+        fill: (u8, u8, u8, u8),
+        color_mask: bool,
+    ) -> Result<bool, PilError> {
+        let mut canvas = self.image.materialize()?;
+        let crate::raster::DynamicImage::ImageRgb8(rgb) = &mut canvas else {
+            return Ok(false);
+        };
+        let (img_w, img_h) = (rgb.width(), rgb.height());
+        if img_w == 0 || img_h == 0 {
+            return Ok(true);
+        }
+        let raw = rgb.as_mut();
+        for py in 0..h {
+            for px in 0..w {
+                let pixel_index = (py * w + px) as usize;
+                let source_offset = if color_mask {
+                    pixel_index * 4
+                } else {
+                    pixel_index
+                };
+                let coverage = if color_mask {
+                    mask[source_offset + 3]
+                } else {
+                    mask[source_offset]
+                };
+                if coverage == 0 {
+                    continue;
+                }
+
+                // Text is clipped in signed space. Casting a negative anchor
+                // before the bounds check would wrap and address unrelated
+                // pixels.
+                let dx = i64::from(x) + i64::from(px);
+                let dy = i64::from(y) + i64::from(py);
+                if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h) {
+                    continue;
+                }
+
+                let destination_offset = (dy as usize * img_w as usize + dx as usize) * 3;
+                let inverse = 255u16 - u16::from(coverage);
+                let source_rgb = if color_mask {
+                    (
+                        mask[source_offset],
+                        mask[source_offset + 1],
+                        mask[source_offset + 2],
+                    )
+                } else {
+                    (fill.0, fill.1, fill.2)
+                };
+                raw[destination_offset] =
+                    blend_u8(source_rgb.0, raw[destination_offset], coverage, inverse);
+                raw[destination_offset + 1] =
+                    blend_u8(source_rgb.1, raw[destination_offset + 1], coverage, inverse);
+                raw[destination_offset + 2] =
+                    blend_u8(source_rgb.2, raw[destination_offset + 2], coverage, inverse);
+            }
+        }
+        self.image = Image::from_dynamic(canvas, None);
+        Ok(true)
     }
 
     /// RGBA compositing for text (used for RGB and RGBA modes).

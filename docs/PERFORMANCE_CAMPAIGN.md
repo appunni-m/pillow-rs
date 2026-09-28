@@ -7038,3 +7038,46 @@ Borrowing the identity-contain source also avoids an otherwise redundant full
 source clone. Keep the row-wise path for horizontal pads and preserve the
 mode-and-storage gate so CMYK's K byte and scalar I/F words never become color
 channels.
+
+### ImageDraw.text: native RGB glyph compositing — 2026-09-28
+
+The RGB text fast path now blends the FreeType mask into `ImageRgb8` directly.
+For monochrome glyphs it reads one mask coverage byte and applies the fill RGB
+to three destination bytes. For color glyphs it reads source RGB and uses the
+mask's fourth byte as coverage. Both preserve the existing rounded
+`(src * coverage + dst * (255 - coverage) + 127) / 255` arithmetic and signed
+clipping. The route requires logical RGB, physical `ImageRgb8`, and no explicit
+RGBA-on-RGB blend context; other layouts retain their existing compositor.
+This removes the full-frame RGB→RGBA widening/narrowing and avoids constructing
+an RGBA buffer for grayscale glyph masks.
+
+The measured case is deterministic noisy RGB at 1024 × 768, DejaVuSans at
+20 px, drawing text and observing `tobytes()` in the timed boundary. Font/image
+setup is excluded; the correctness-gated benchmark has five warmups, 20 calls ×
+5 samples, and concurrency one. Baseline run
+`migration-benchmark-2dd005bcebcd49c69faab532b2ddaf85`; native run
+`migration-benchmark-7d8baab35a0642f6adffdc5f416848b0`; both use the same input
+hash and policy.
+
+| Subject | Baseline ms | Native RGB ms |
+| --- | ---: | ---: |
+| Pillow | 0.669729 | 0.676375 |
+| CPU | 0.813563 | 0.408104 |
+| SIMD-labeled profile | 0.848104 | 0.450542 |
+| GPU-labeled profile | 0.961375 | 0.431084 |
+
+The CPU path improved about 2.0× and is 1.66× faster than Pillow on this
+workload. The focused CPU parity lane passed 6/6 cases, including the
+material-sized RGB input, monochrome and embedded-color glyphs, clipping, and
+RGBA fallback. The benchmark parity gate passed 3/3 profile comparisons. The
+SIMD and GPU figures are profile timings only: receipts had `actual_backend =
+null`, so neither accelerator is proven to execute text drawing. The current
+text path rasterizes and composites on the host and does not enqueue a text
+pipeline operation; the GPU draw route also copies a host-rendered preview. GPU
+text remains a structural backend blocker until mask compositing is represented
+as device work. Do not use these profile timings to claim SIMD or GPU speedup.
+
+The useful kernel rule is to preserve the coverage mask in its narrowest form:
+grayscale glyphs need one coverage byte per pixel, while color glyphs need RGB
+source bytes plus alpha coverage. Expand only the channels the destination
+stores, and only after proving the logical mode and concrete raster layout.
