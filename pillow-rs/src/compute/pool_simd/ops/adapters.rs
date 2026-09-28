@@ -24389,6 +24389,16 @@ fn simd_effect_spread_native(
         return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
             .map(|result| Some(preserve_mode(img, result)));
     }
+    if distance == 1 {
+        crate::compute::pool_cpu::ops::effects::effect_spread_advance_identity_rng(
+            img.width(),
+            img.height(),
+        )?;
+        crate::compute::record_pipeline_operation_path("native-identity");
+        crate::compute::record_pipeline_operation_vector_blocks(0);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+        return Ok(Some(preserve_mode(img, img.clone())));
+    }
 
     let width_i64 = i64::try_from(width)
         .map_err(|_| PilError::ValueError("SIMD EffectSpread width overflow".into()))?;
