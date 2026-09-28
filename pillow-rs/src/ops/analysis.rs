@@ -295,10 +295,15 @@ impl Image {
                 }
             }
             crate::raster::DynamicImage::ImageRgba8(image) => {
+                // Four-byte storage is not synonymous with alpha. CMYK and
+                // RGBX also use ImageRgba8 storage, but Pillow inspects all
+                // stored bands for those logical modes even when
+                // `alpha_only` is true. Only RGBA/RGBa select band 3 alone.
+                let has_alpha = matches!(mode.as_str(), "RGBA" | "RGBa");
                 for (index, pixel) in image.pixels().enumerate() {
                     include(
                         index,
-                        if alpha_only {
+                        if alpha_only && has_alpha {
                             pixel[3] != 0
                         } else {
                             pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 || pixel[3] != 0

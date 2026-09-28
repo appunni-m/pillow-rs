@@ -6851,11 +6851,20 @@ result-normalization paths; its image kernels otherwise use native bytes.
 | `compute/pool_simd/mod.rs` | 143, 158 | P/PA output normalization; preserve palette index and alpha directly in L/LA result storage. |
 | `draw/mod.rs` | 1073, 1207, 1332, 1384, 1970, 2165, 2275 | RGB drawing and bitmap fallback paths may widen; RGBA composition and canonical four-byte modes keep their semantic contract. |
 | `image.rs` | 3833, 3848, 5383, 5416, 6082, 6427, 6564, 7023, 7032, 7041 | Read-only analysis/accessor paths can borrow native bands. `preserve_mode` is output normalization and should be removed only when the caller can own the requested layout directly. |
-| `ops/analysis.rs` | 318, 396, 583 | Masked/generic analysis fallbacks; keep exact mask and sample semantics while borrowing or scanning native bytes. |
+| `ops/analysis.rs` | 318, 396, 583 | Masked/generic analysis fallbacks; keep exact mask and sample semantics while borrowing or scanning native bytes. In `getbbox`, physical `ImageRgba8` storage is not enough to infer alpha semantics. |
 | `ops/convert.rs` | 365, 382, 657, 701, 1021 | Explicit RGBa/RGBX/RGBA and palette-alpha conversions; some create requested output, while alpha extraction may be narrowed to the consumed band. |
 | `ops/pil_resize.rs` | 272, 282, 1956, 2225 | 272 repeats full-image conversion for typed variants, but current public constructors/decoder lanes do not reach it; do not claim a public perf win without a real producer. 1956 and 2225 preserve conversion/typed contracts and need separate proof. |
 | `ops/quantize.rs` | 2206, 2219 | FASTOCTREE consumes alpha as RGBA; RGB expansion is candidate for native RGB input if the quantizer contract permits. |
 | `raster/dynamic.rs` | 327, 420, 423, 1016 | Conversion API definitions and `From` implementations, not independent operation algorithms. |
+
+The mode guard in `Image.getbbox()` now treats only logical RGBA/RGBa byte 3
+as alpha. CMYK and RGBX can also use `ImageRgba8`, but Pillow checks all four
+stored bands for those modes when `alpha_only=True`; K is ink, and RGBX's fourth
+byte participates in this byte-oriented scan. A cyan-only CMYK pixel exposed a
+real mismatch: Pillow returned its one-pixel box while pillow-rs returned
+`None`. The generated parity inputs retain that C-only regression alongside
+K-only CMYK, RGBX, and transparent/visible RGBA controls. The focused five-case
+CPU run passes after the logical-mode guard; no coverage was run.
 
 ### Native-format attack order
 

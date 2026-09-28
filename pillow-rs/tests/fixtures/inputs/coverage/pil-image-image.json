@@ -1871,6 +1871,8 @@
           "PIL.Image.Image.getbbox.nuanced.alpha-only-rgba",
           "PIL.Image.Image.getbbox.nuanced.transparent-alpha-rgba",
           "PIL.Image.Image.getbbox.nuanced.nonzero-cmyk",
+          "PIL.Image.Image.getbbox.nuanced.c-only-cmyk",
+          "PIL.Image.Image.getbbox.nuanced.red-only-rgbx",
           "PIL.Image.Image.getbbox.nuanced.nonzero-ycbcr",
           "PIL.Image.Image.getbbox.nuanced.nonzero-hsv",
           "PIL.Image.Image.getbbox.nuanced.nonzero-i",
