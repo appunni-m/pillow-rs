@@ -1,15 +1,19 @@
-// Unmasked L-mode Paste with one stored byte per sample. Each invocation
-// writes one packed output word so adjacent bytes never race on a u32 store.
+// Exact-layout unmasked L/LA Paste. Each invocation writes one packed output
+// word; bpp is admitted as 1 (L) or 2 (LA) by the host layout gate.
 
 struct Params {
     width: u32,
     height: u32,
     source_width: u32,
     source_height: u32,
-    byte_length: u32,
+    destination_pixels: u32,
     word_count: u32,
+    bytes_per_pixel: u32,
+    reserved: u32,
     paste_x: i32,
     paste_y: i32,
+    padding_0: u32,
+    padding_1: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input_destination: array<u32>;
@@ -34,15 +38,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
+    let pixels_per_word = 4u / params.bytes_per_pixel;
     var packed = 0u;
-    for (var lane = 0u; lane < 4u; lane += 1u) {
-        let destination_index = word_index * 4u + lane;
-        if destination_index >= params.byte_length {
+    for (var pixel_lane = 0u; pixel_lane < pixels_per_word; pixel_lane += 1u) {
+        let destination_pixel_index = word_index * pixels_per_word + pixel_lane;
+        if destination_pixel_index >= params.destination_pixels {
             continue;
         }
 
-        let destination_x = destination_index % params.width;
-        let destination_y = destination_index / params.width;
+        let destination_x = destination_pixel_index % params.width;
+        let destination_y = destination_pixel_index / params.width;
         var inside_x = true;
         var inside_y = true;
         var source_x = 0u;
@@ -78,16 +83,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
         }
 
-        var value = read_destination(destination_index);
-        if inside_x
-            && inside_y
-            && source_x < params.source_width
-            && source_y < params.source_height
-        {
-            let source_index = source_y * params.source_width + source_x;
-            value = read_source(source_index);
+        for (var channel = 0u; channel < params.bytes_per_pixel; channel += 1u) {
+            let destination_byte_index =
+                destination_pixel_index * params.bytes_per_pixel + channel;
+            var value = read_destination(destination_byte_index);
+            if inside_x
+                && inside_y
+                && source_x < params.source_width
+                && source_y < params.source_height
+            {
+                let source_pixel_index = source_y * params.source_width + source_x;
+                let source_byte_index = source_pixel_index * params.bytes_per_pixel + channel;
+                value = read_source(source_byte_index);
+            }
+            let shift = (pixel_lane * params.bytes_per_pixel + channel) * 8u;
+            packed |= value << shift;
         }
-        packed |= value << (lane * 8u);
     }
     output[word_index] = packed;
 }

@@ -99,6 +99,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- box_blur_h.wgsl
 |   |   |   |       |-- box_blur_v.wgsl
 |   |   |   |       |-- brightness.wgsl
+|   |   |   |       |-- brightness_native.wgsl
 |   |   |   |       |-- color_3dlut.wgsl
 |   |   |   |       |-- color_saturation.wgsl
 |   |   |   |       |-- colorize.wgsl
@@ -150,11 +151,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- overlay.wgsl
 |   |   |   |       |-- pad.wgsl
 |   |   |   |       |-- paste.wgsl
+|   |   |   |       |-- paste_native_bytes.wgsl
 |   |   |   |       |-- point_luma_packed.wgsl
 |   |   |   |       |-- point_op.wgsl
 |   |   |   |       |-- posterize.wgsl
 |   |   |   |       |-- put_alpha.wgsl
 |   |   |   |       |-- put_alpha_data.wgsl
+|   |   |   |       |-- put_alpha_native_la.wgsl
 |   |   |   |       |-- put_data.wgsl
 |   |   |   |       |-- put_data_luma_packed.wgsl
 |   |   |   |       |-- put_pixel.wgsl
