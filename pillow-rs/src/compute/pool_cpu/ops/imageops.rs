@@ -959,7 +959,7 @@ pub fn op_fit(
 }
 
 /// Build the padded output in the exact byte layout of canonical L, LA, RGB,
-/// or RGBA images. Other logical modes keep the general RGBA-compatible path.
+/// HSV, or RGBA images. Other logical modes keep the general compatibility path.
 fn pad_native_rows(
     img: &DynamicImage,
     resized: &DynamicImage,
@@ -980,6 +980,12 @@ fn pad_native_rows(
             (source.as_raw(), 2, [fill.0, fill.3, 0, 0])
         }
         (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(source), None | Some("RGB")) => {
+            (source.as_raw(), 3, [fill.0, fill.1, fill.2, 0])
+        }
+        // HSV pixels share RGB's three-byte physical layout. The logical mode
+        // selects color interpretation, but Pad copies and fills raw HSV
+        // samples without converting them to RGB or RGBA.
+        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(source), Some("HSV")) => {
             (source.as_raw(), 3, [fill.0, fill.1, fill.2, 0])
         }
         (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(source), None | Some("RGBA")) => {
@@ -1149,6 +1155,7 @@ pub fn op_pad(
             (None | Some("L"), DynamicImage::ImageLuma8(_))
                 | (None | Some("LA"), DynamicImage::ImageLumaA8(_))
                 | (None | Some("RGB"), DynamicImage::ImageRgb8(_))
+                | (Some("HSV"), DynamicImage::ImageRgb8(_))
                 | (None | Some("RGBA"), DynamicImage::ImageRgba8(_))
         );
     let resized_storage = if nw == 0 || nh == 0 {
@@ -1671,7 +1678,7 @@ mod pad_native_tests {
         match (mode, image) {
             ("L", DynamicImage::ImageLuma8(image)) => image.as_raw(),
             ("LA", DynamicImage::ImageLumaA8(image)) => image.as_raw(),
-            ("RGB", DynamicImage::ImageRgb8(image)) => image.as_raw(),
+            ("RGB" | "HSV", DynamicImage::ImageRgb8(image)) => image.as_raw(),
             ("RGBA", DynamicImage::ImageRgba8(image)) => image.as_raw(),
             _ => panic!("pad must preserve native {mode} storage"),
         }
@@ -1692,7 +1699,7 @@ mod pad_native_tests {
     }
 
     #[test]
-    fn pad_keeps_l_la_rgb_and_rgba_channels_in_native_storage() {
+    fn pad_keeps_l_la_rgb_hsv_and_rgba_channels_in_native_storage() {
         check_native_pad(
             DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![11, 22]).expect("L source")),
             "L",
@@ -1712,6 +1719,14 @@ mod pad_native_tests {
                 RgbImage::from_raw(2, 1, vec![11, 12, 13, 22, 23, 24]).expect("RGB source"),
             ),
             "RGB",
+            (73, 99, 111, 157),
+            &[73, 99, 111, 73, 99, 111, 11, 12, 13, 22, 23, 24],
+        );
+        check_native_pad(
+            DynamicImage::ImageRgb8(
+                RgbImage::from_raw(2, 1, vec![11, 12, 13, 22, 23, 24]).expect("HSV source"),
+            ),
+            "HSV",
             (73, 99, 111, 157),
             &[73, 99, 111, 73, 99, 111, 11, 12, 13, 22, 23, 24],
         );

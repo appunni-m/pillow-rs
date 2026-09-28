@@ -242,6 +242,7 @@ PAD_PERFORMANCE_CASES = (
         20261007,
         [17, 83, 149, 191],
     ),
+    ("hsv-noise-1024x768-square", "HSV", [1024, 768], 20261011, [17, 83, 149]),
 )
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
@@ -2864,7 +2865,7 @@ class WorkflowBuilder:
                 seed += 1
             rng = random.Random(seed)
             n_pixels = size[0] * size[1]
-            if requested_mode == "RGB":
+            if requested_mode in {"RGB", "HSV"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
             elif requested_mode == "RGBA":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))

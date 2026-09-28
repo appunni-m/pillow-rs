@@ -17789,6 +17789,65 @@ fn native_pad_bytes(
     ) else {
         return Ok(None);
     };
+    let source_width = usize::try_from(contained_width).map_err(|_| simd_unsupported("Pad"))?;
+    let source_height = usize::try_from(contained_height).map_err(|_| simd_unsupported("Pad"))?;
+    let target_width_usize = usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
+    let target_height_usize =
+        usize::try_from(target_height).map_err(|_| simd_unsupported("Pad"))?;
+    let source_stride = source_width
+        .checked_mul(channels)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let target_stride = target_width_usize
+        .checked_mul(channels)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let output_len = target_stride
+        .checked_mul(target_height_usize)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let default_fill = if channels == 2 || channels == 4 {
+        (0, 0, 0, 0)
+    } else {
+        (0, 0, 0, u8::MAX)
+    };
+    let fill = color.unwrap_or(default_fill);
+
+    // For the common vertical-pad case, contain did no resampling and the
+    // source spans the full output width. Build one native fill row and repeat
+    // it, then copy the original bytes into one contiguous output range. This
+    // avoids both an intermediate source clone and per-byte fill lane
+    // construction for every output row (especially costly for 3-byte HSV and
+    // YCbCr pixels).
+    if (img.width(), img.height()) == (contained_width, contained_height)
+        && offset_x == 0
+        && source_width == target_width_usize
+    {
+        let fill_pixel = (0..channels)
+            .map(|channel| native_expand_fill_sample(fill, channels, channel))
+            .collect::<Vec<_>>();
+        let fill_row = fill_pixel.repeat(target_width_usize);
+        if fill_row.len() != target_stride {
+            return Ok(None);
+        }
+        let mut output = fill_row.repeat(target_height_usize);
+        let source = img.as_bytes();
+        let expected_source = source_stride
+            .checked_mul(source_height)
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        if source.len() != expected_source {
+            return Ok(None);
+        }
+        let destination_start = offset_y
+            .checked_mul(target_stride)
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        let destination_end = destination_start
+            .checked_add(source.len())
+            .filter(|end| *end <= output.len())
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        output[destination_start..destination_end].copy_from_slice(source);
+        let result =
+            crate::image_utils::raw_bytes_to_image(target_width, target_height, output, channels)?;
+        return Ok(Some((preserve_mode(img, result), 0, 0)));
+    }
+
     // If the contain step leaves the source dimensions unchanged, Pillow
     // copies the source directly. Resampling an equal-sized image changes
     // edge pixels for convolution filters, which caused the large RGBA pad
@@ -17827,19 +17886,8 @@ fn native_pad_bytes(
             )?,
         }
     };
-    let source_width = usize::try_from(contained_width).map_err(|_| simd_unsupported("Pad"))?;
-    let source_height = usize::try_from(contained_height).map_err(|_| simd_unsupported("Pad"))?;
-    let target_width = usize::try_from(target_width).map_err(|_| simd_unsupported("Pad"))?;
-    let target_height = usize::try_from(target_height).map_err(|_| simd_unsupported("Pad"))?;
-    let source_stride = source_width
-        .checked_mul(channels)
-        .ok_or_else(|| simd_unsupported("Pad"))?;
-    let target_stride = target_width
-        .checked_mul(channels)
-        .ok_or_else(|| simd_unsupported("Pad"))?;
-    let output_len = target_stride
-        .checked_mul(target_height)
-        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let target_width = target_width_usize;
+    let target_height = target_height_usize;
     if resized.as_bytes().len() != source_stride.saturating_mul(source_height)
         || offset_x.saturating_add(source_width) > target_width
         || offset_y.saturating_add(source_height) > target_height
@@ -17847,12 +17895,6 @@ fn native_pad_bytes(
         return Ok(None);
     }
 
-    let default_fill = if channels == 2 || channels == 4 {
-        (0, 0, 0, 0)
-    } else {
-        (0, 0, 0, u8::MAX)
-    };
-    let fill = color.unwrap_or(default_fill);
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = resize_vector_blocks;
     let mut scalar_tail = resize_scalar_tail;
