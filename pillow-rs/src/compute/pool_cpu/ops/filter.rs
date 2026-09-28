@@ -526,10 +526,16 @@ fn filter_5x5_i32(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (w_u32, h_u32) = rgba.dimensions();
+    // I-mode stores one little-endian i32 word per four-byte pixel. Borrow a
+    // matching carrier directly, keeping the existing accessor fallback for
+    // mismatched internal variants.
+    let (w_u32, h_u32) = (img.width(), img.height());
+    let raw: Cow<'_, [u8]> = match img {
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
+    let raw = raw.as_ref();
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    let raw = rgba.into_raw();
 
     // See the 3x3 path: preserve the raw C f32 divisor, including zero,
     // negative, and non-finite values.
@@ -537,7 +543,7 @@ fn filter_5x5_i32(
     // Pre-compute normalized kernel coefficients using f32 (matching PIL C construction)
     let kd: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
 
-    let mut out = raw.clone();
+    let mut out = raw.to_vec();
 
     let row_stride = w_u32 as usize * 4;
     #[cfg(feature = "parallel")]
@@ -547,14 +553,14 @@ fn filter_5x5_i32(
             row_stride,
             h_u32 as usize,
             |_row_start, _row_end, y, row| {
-                filter_5x5_i32_row(&raw, row, y as i32, w, h, &kd, offset);
+                filter_5x5_i32_row(raw, row, y as i32, w, h, &kd, offset);
             }
         );
     } else {
         for y in 0..h {
             let row_start = y as usize * row_stride;
             filter_5x5_i32_row(
-                &raw,
+                raw,
                 &mut out[row_start..row_start + row_stride],
                 y,
                 w,
@@ -568,7 +574,7 @@ fn filter_5x5_i32(
     for y in 0..h {
         let row_start = y as usize * row_stride;
         filter_5x5_i32_row(
-            &raw,
+            raw,
             &mut out[row_start..row_start + row_stride],
             y,
             w,
