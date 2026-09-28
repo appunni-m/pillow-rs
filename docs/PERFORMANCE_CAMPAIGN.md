@@ -6840,7 +6840,7 @@ follow-up and compact native GPU output are recorded below.
 The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 84 Rust
 source matches: 74 runtime operation calls, one GPU test, two wrapper
 delegations, one single-color conversion, two conversion method definitions,
-and three comments. The Python Qt bridge has two explicit `convert("RGBA")`
+and four comments. The Python Qt bridge has two explicit `convert("RGBA")`
 calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
 binding has none. The table lists every Rust match, grouped by what the call
 does. “Widening-capable” includes fallback sites that widen L/LA/RGB but only
@@ -6848,12 +6848,12 @@ copy an existing four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 37 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
-| Same-layout clone or four-byte reinterpretation | 23 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:529,1817`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
+| Widening-capable or mixed-format fallback | 38 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370,535`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
+| Same-layout clone or four-byte reinterpretation | 22 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,283`; `compute/pool_cpu/ops/filter.rs:1823`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
 | Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19327`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
-Do not treat the 36 fallback matches as 36 guaranteed conversions. `to_rgba8()`
+Do not treat fallback callsites as guaranteed conversions. `to_rgba8()`
 expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
 means CMYK, RGBX, premultiplied RGBa, I, or F. Those bytes are not interchangeable:
 CMYK byte 3 is K, RGBX byte 3 is padding, LA alpha is byte 1, and RGBa stores
@@ -7572,3 +7572,35 @@ remains 1.29× slower than Pillow on the post-change median. The source clone
 is removed for the concrete I carrier, but CPU still misses its speed goal.
 SIMD/GPU did not change, and those noisy benchmark deltas are not attributed to
 this edit. No coverage was run.
+
+### I-mode Filter5x5: borrow native scalar storage — 2026-09-28
+
+I pixels use the `ImageRgba8` carrier as one little-endian i32 word per pixel.
+The Filter5x5 CPU path previously called `to_rgba8()` to clone those bytes, then
+cloned the source again to preserve the output border. It now borrows the raw
+bytes for the matching carrier and makes only the output copy; the old accessor
+remains the fallback for a mismatched internal variant. The SIMD and GPU
+implementations are unchanged. The existing
+`PIL.Image.Image.filter.nuanced.i-mode-smooth-more-fused-row` case passed 1/1
+on CPU, strict SIMD, and strict GPU after this change.
+
+The benchmark `pipeline-chain.convolution-i.5x5-1024x768` measures the full
+workflow with one warmup, six timed samples, warm cache, and concurrency one;
+its benchmark gate is `successful_execution`. A paired baseline and native
+run are `migration-benchmark-ea296922185940d2b26bef9be63f06c3` and
+`migration-benchmark-c33bdce8d3aa4e2caaaec5b55a0ac0ea`:
+
+| Subject | Baseline ms | Native-byte ms |
+| --- | ---: | ---: |
+| Pillow | 4.042438 | 3.851375 |
+| CPU | 4.987584 | 4.678917 |
+| SIMD | 3.189500 | 3.206917 |
+| GPU | 1.621291 | 1.800271 |
+
+CPU latency improves 6.2% in this paired sample and whole-workflow throughput
+rises from 200.5 to 213.7 operations/s. CPU remains 1.21× slower than Pillow,
+so this copy reduction does not close the CPU target. The SIMD/GPU implementation
+was not changed; their small independent deltas are measurement variation, not
+effects attributed to this edit. The per-callsite ledger above now classifies
+this accessor as a guarded fallback and the I-mode rank-filter accessor as the
+remaining same-layout filter site. No coverage was run.
