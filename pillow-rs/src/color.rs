@@ -21,6 +21,8 @@
 //! resolver helpers return `(r, g, b, a)` tuples even when the destination mode
 //! will later use only one or two channels.
 
+use std::borrow::Cow;
+
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ColorType, DynamicImage, RgbImage};
@@ -773,10 +775,16 @@ pub fn muldiv255(a: u32, b: u32) -> u32 {
 /// The input is an RGBA buffer interpreted as `C`, `M`, `Y`, `K`. The returned
 /// image is `RGB8` with the same dimensions.
 pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let cmyk = match img {
+        // CMYK already occupies this exact four-byte layout. Borrow it so the
+        // conversion allocates only its RGB result instead of cloning a full
+        // RGBA-shaped intermediate.
+        DynamicImage::ImageRgba8(image) => Cow::Borrowed(image.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+    for (op, ip) in out.pixels_mut().zip(cmyk.chunks_exact(4)) {
         let c = ip[0] as u32;
         let m = ip[1] as u32;
         let y = ip[2] as u32;

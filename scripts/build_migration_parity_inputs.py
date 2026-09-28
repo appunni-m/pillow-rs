@@ -40802,6 +40802,7 @@ def build_nuanced_cases(
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
+    cases.extend(cmyk_to_rgb_parity_cases(surface_id))
     cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
@@ -41333,6 +41334,51 @@ def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         }
     )
     return cases
+
+
+def cmyk_to_rgb_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover material-size CMYK to RGB conversion in every target profile."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    case_id = f"{surface_id}.convert.nuanced.material-cmyk-to-rgb-1024x768"
+    return [
+        {
+            "case_id": case_id,
+            "surface": surface_id,
+            "operation": "convert",
+            "covers": [f"{surface_id}.convert.behavior.default"],
+            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("CMYK"),
+                        "size": literal([1024, 768]),
+                        "color": literal([17, 83, 149, 211]),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "convert",
+                    "receiver": binding("image"),
+                    "arguments": {"mode": literal("RGB")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
 
 
 def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -45783,6 +45829,42 @@ def build_pipeline_benchmark_document(
         "context": getprojection_cmyk_sparse_context,
     }
 
+    cmyk_to_rgb_case_id = (
+        "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768"
+    )
+    cmyk_to_rgb_case = cases_by_id.get(cmyk_to_rgb_case_id)
+    if cmyk_to_rgb_case is None:
+        raise ValueError(
+            f"CMYK to RGB benchmark references missing case: {cmyk_to_rgb_case_id}"
+        )
+    cmyk_to_rgb_context = _workflow_benchmark_context(
+        cmyk_to_rgb_case,
+        variant="convert-material-cmyk-to-rgb-1024x768",
+        surface="PIL.Image.Image",
+        operation="convert",
+    )
+    cmyk_to_rgb_context.update(size=[1024, 768], mode="CMYK")
+    cmyk_to_rgb_workload = {
+        "workload_id": "pipeline-chain.convert.material-cmyk-to-rgb-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "convert")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": cmyk_to_rgb_case_id},
+        "measurement": {
+            "boundary": "observed_steps",
+            "step_ids": ["call"],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "concurrency": 1,
+            "cache_state": "warm",
+            "correctness_gate": "parity_pass",
+        },
+        "context": cmyk_to_rgb_context,
+    }
+
     # Exercise the packed scalar reduction paths on a materially sized frame.
     # I and F are created through public conversion steps and all terminal
     # observations share one workflow process; this is benchmark-only input,
@@ -47559,6 +47641,7 @@ def build_pipeline_benchmark_document(
             *terminal_analysis_workloads,
             getprojection_cmyk_workload,
             getprojection_cmyk_sparse_workload,
+            cmyk_to_rgb_workload,
             *terminal_scalar_analysis_workloads,
             *terminal_masked_analysis_workloads,
             *terminal_color_count_workloads,

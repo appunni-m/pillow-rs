@@ -6976,6 +6976,35 @@ blocker is a fast exact scan for sparse rows and a real GPU projection path;
 do not use the dense result as representative of all CMYK images. Coverage was
 not run.
 
+### CMYK `convert("RGB")`: borrow input, retain the allocation blocker — 2026-09-29
+
+`color::cmyk_to_rgb` interprets four bytes as C/M/Y/K and produces three RGB
+bytes. Its old `to_rgba8()` call cloned a CMYK `ImageRgba8` buffer before the
+conversion loop. The retained fast path borrows the raw four-byte slice only
+for that concrete variant; other storage layouts keep the original RGBA
+normalization fallback. It preserves Pillow's existing `muldiv255` arithmetic
+and allocates the RGB output as before.
+
+The 17 × 3 mode-audit case and a dense 1024 × 768 CMYK→RGB case passed strict
+parity (2/2 selected cases). The correctness-gated `pipeline-chain.convert`
+benchmark measures the `convert` call over 100 samples; `tobytes()` is also
+observed by parity but is outside the timed step:
+
+| Run | Pillow | CPU profile | SIMD profile | GPU profile |
+| --- | ---: | ---: | ---: | ---: |
+| Before, cloned CMYK carrier | 0.437 ms | 0.803 ms | 0.808 ms | 0.787 ms |
+| Best retained run | 0.465 ms | 0.629 ms | 0.634 ms | 0.668 ms |
+| Final retained run | 0.481 ms | 0.757 ms | 0.714 ms | 0.716 ms |
+
+The final run narrowed the CPU deficit from 1.84× to 1.57× Pillow latency, but
+the operation still misses the no-slower-than-Pillow goal. The SIMD- and
+GPU-requested profile receipts did not dispatch either backend; all Rust
+receipts have `actual_backend` unset. A `from_fn` output with coordinate
+indexing measured 1.34 ms CPU, and a streamed `Vec` plus `from_raw` measured
+1.54 ms CPU, so both were discarded. The direct borrowed-slice version is the
+best of three attempts and is checkpointed with the remaining arithmetic and
+output-store cost as a blocker. Coverage was not run.
+
 ### F boxed nearest resize: retain scalar words and skip identity work — 2026-09-28
 
 `DynamicImage::ImageRgba8` is also the internal four-byte carrier for Pillow
