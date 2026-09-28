@@ -16829,6 +16829,24 @@ impl GpuPool {
             );
         }
 
+        // Distance one makes every EffectSpread displacement exactly zero.
+        // Preserve its two RNG draws per pixel, but skip generating/uploading
+        // the identity map and submitting a shader that only copies pixels.
+        // Keep this after the ordinary GPU capability and dimension checks so
+        // strict backend selection retains the same input contract.
+        if matches!(ops, [PipelineOp::EffectSpread { distance: 1 }])
+            && img.width() != 0
+            && img.height() != 0
+        {
+            crate::compute::pool_cpu::ops::effects::effect_spread_advance_identity_rng(
+                img.width(),
+                img.height(),
+            )?;
+            crate::compute::record_pipeline_operation_path("native-identity");
+            crate::compute::record_pipeline_dispatch_count(0);
+            return Ok(img.clone());
+        }
+
         // Resolve every nested image before starting GPU work. A nested
         // explicitly locked pipeline may itself need the GPU pool, and Pillow
         // surfaces that materialization failure instead of dispatching the

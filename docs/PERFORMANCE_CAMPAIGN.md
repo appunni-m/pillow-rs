@@ -6851,7 +6851,7 @@ copy an existing four-byte carrier for other modes.
 | Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
 | Same-layout clone or four-byte reinterpretation | 24 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
-| Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
+| Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19327`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
 Do not treat the 36 fallback matches as 36 guaranteed conversions. `to_rgba8()`
 expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
@@ -7516,10 +7516,12 @@ zero, so the result is an image copy. The process-global Park–Miller stream
 still must advance twice per pixel because later spread/noise calls share it.
 `DarwinRand::advance` applies the generator's multiplicative recurrence with
 modular exponentiation, preserving that state in O(log(pixel_count)) work.
-CPU and SIMD return the native image copy after advancing the stream; the GPU
-keeps its dispatch and identity map but uses the same jump-ahead for map
-construction. A Rust regression compares jump-ahead with sequential draws at
-six lengths, including 1,000,003 values.
+CPU and SIMD return the native image copy after advancing the stream. A
+singleton GPU request now does the same before auxiliary-map creation, so it
+skips the identity-map allocation, upload, shader, and readback while recording
+zero dispatches; mixed GPU batches and nonzero distances retain the existing
+map-and-shader path. A Rust regression compares jump-ahead with sequential
+draws at six lengths, including 1,000,003 values.
 
 Seven new parity inputs use varied 3 × 2 pixels in modes 1, L, LA, P, RGB, RGBA,
 and CMYK at distance one. Since the displacement is exactly zero, the byte
@@ -7527,21 +7529,23 @@ observations remain stable even when the lazy image handle is observed too;
 the test verifies every band's stored order and the returned mode. The focused
 spread lane passed 21/21 cases on CPU, 21/21 on strict SIMD, and 21/21 on strict
 GPU, covering the existing mode, palette, single-pixel and nonzero-distance
-inputs alongside the new layouts. The focused Rust jump-ahead test passed. No
-coverage was run.
+inputs alongside the new layouts. GPU used the selected backend with no
+fallback; the seven distance-one requests produced zero shader dispatches. The
+focused Rust jump-ahead test passed. No coverage was run.
 
 The maintained 1024 × 768 RGB pipeline workload uses distance one and measures
 one warmup plus six timed calls per subject. Its benchmark correctness gate is
 `successful_execution`; parity is reported separately above. Before the
 identity path, medians were Pillow 9.722 ms, CPU 9.112 ms, SIMD 8.864 ms, and
-GPU 8.029 ms. The latest exact-source run measured Pillow 9.344 ms, CPU 0.388
-ms, SIMD 0.272 ms, and GPU 3.598 ms. All six calls on each target used the
-requested backend without fallback. The final CPU and SIMD medians are 24.1×
-and 34.3× faster than that run's Pillow median; GPU remains 13.2× slower than
-SIMD.
-These are single-concurrency reciprocal-latency measurements for the
-distance-one identity case, not sustained-throughput evidence or a result for
-nonzero spread distances. The source-borrow gather path has parity coverage,
-but its standalone latency benefit is not isolated by this workload. The
-remaining conversion and GPU/SIMD parity gaps stay visible in the native-format
-attack order.
+GPU 8.029 ms. Three exact-source reruns measured six calls per subject after
+one warmup. Taking the median of the three run medians gives Pillow 10.314 ms,
+CPU 0.544 ms, SIMD 0.359 ms, and GPU 0.379 ms. All GPU samples used the GPU
+backend without fallback and recorded zero dispatches. The CPU and SIMD results
+are 19.0× and 28.7× faster than Pillow; GPU remains 5.8% slower than SIMD, so
+this pass narrows but does not close the latency gap. These are
+single-concurrency reciprocal-latency measurements for the distance-one
+identity case, not sustained-throughput evidence or a result for nonzero
+spread distances. The source-borrow gather path has parity coverage, but its
+standalone latency benefit is not isolated by this workload. The remaining
+conversion and GPU/SIMD parity gaps stay visible in the native-format attack
+order.
