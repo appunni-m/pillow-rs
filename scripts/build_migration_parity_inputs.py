@@ -31794,6 +31794,32 @@ def build_nuanced_cases(
             "observe_result": "tobytes",
             "values": {"distance": literal(17)},
         },
+        # Distance one still consumes Pillow's two random values per pixel,
+        # but every modulo result is zero. A varied multi-pixel image therefore
+        # stays stable across lazy-handle and byte observations while checking
+        # native band order and mode preservation for each byte layout.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "effect_spread",
+                "requirement_suffix": requirement,
+                "name": f"{mode.lower()}-native-byte-layout-distance-one",
+                "mode": mode,
+                "edge": "analysis-coverage-pattern",
+                "size": [3, 2],
+                "observe_result": "tobytes",
+                "values": {"distance": literal(1)},
+            }
+            for mode, requirement in (
+                ("1", "mode.1"),
+                ("L", "mode.l"),
+                ("LA", "mode.la"),
+                ("P", "mode.p"),
+                ("RGB", "mode.rgb"),
+                ("RGBA", "mode.rgba"),
+                ("CMYK", "mode.cmyk"),
+            )
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "putpalette",

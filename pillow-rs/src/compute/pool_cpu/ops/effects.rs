@@ -7,6 +7,7 @@ use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage,
 };
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex, OnceLock};
 
 #[cfg(feature = "parallel")]
@@ -80,6 +81,23 @@ impl DarwinRand {
         self.state = ((u64::from(self.state) * MULTIPLIER) % MODULUS) as u32;
         self.state
     }
+
+    fn advance(&mut self, steps: u64) {
+        const MULTIPLIER: u64 = 16_807;
+        const MODULUS: u64 = 2_147_483_647;
+
+        let mut exponent = steps;
+        let mut factor = MULTIPLIER;
+        let mut multiplier = 1u64;
+        while exponent != 0 {
+            if exponent & 1 != 0 {
+                multiplier = (multiplier * factor) % MODULUS;
+            }
+            factor = (factor * factor) % MODULUS;
+            exponent >>= 1;
+        }
+        self.state = ((u64::from(self.state) * multiplier) % MODULUS) as u32;
+    }
 }
 
 static PROCESS_RNG: OnceLock<Mutex<DarwinRand>> = OnceLock::new();
@@ -120,33 +138,43 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     if distance == 0 {
         return Ok(img.clone());
     }
+    // With distance one, each random offset is rand() % 1 == 0. Keep the
+    // process-global stream identical by jumping over the same two draws per
+    // pixel, then copy the native dynamic image once instead of building a
+    // u32 relocation map and gathering every sample.
+    if distance == 1
+        && img.width() != 0
+        && img.height() != 0
+        && matches!(
+            img,
+            DynamicImage::ImageLuma8(_)
+                | DynamicImage::ImageLumaA8(_)
+                | DynamicImage::ImageRgb8(_)
+                | DynamicImage::ImageRgba8(_)
+        )
+    {
+        i32::try_from(img.width())
+            .map_err(|_| PilError::ValueError("effect_spread width is too large".into()))?;
+        i32::try_from(img.height())
+            .map_err(|_| PilError::ValueError("effect_spread height is too large".into()))?;
+        effect_spread_advance_identity_rng(img.width(), img.height())?;
+        return Ok(img.clone());
+    }
     let mapping = effect_spread_mapping(img.width(), img.height(), distance)?;
-    // Determine pixel stride based on color type (PIL uses image8 for L/LA/P with pixelsize,
-    // image32 for RGB/RGBA/CMYK with 4-byte stride)
-    let (pixels, w, h, stride) = match img.color() {
-        crate::raster::ColorType::L8 => {
-            let luma = img.to_luma8();
-            let (w, h) = luma.dimensions();
-            (luma.into_raw(), w as i32, h as i32, 1usize)
-        }
-        crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
-            let la = img.to_luma_alpha8();
-            let (w, h) = la.dimensions();
-            (la.into_raw(), w as i32, h as i32, 2usize)
-        }
-        crate::raster::ColorType::Rgb8 => {
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            (rgb.into_raw(), w as i32, h as i32, 3usize)
-        }
-        _ => {
-            // RGBA8, or any other 4-channel mode
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
-            (rgba.into_raw(), w as i32, h as i32, 4usize)
-        }
+    // Relocation copies stored samples verbatim, so keep byte images in their
+    // native layout. In particular, the four-byte carrier can represent RGBA,
+    // RGBa, CMYK, RGBX, I, or F; spread does not interpret those bytes as colors.
+    // Preserve the existing numeric down-conversion for LA16 and uncommon
+    // storage variants until their output contracts have dedicated paths.
+    let (w, h) = img.dimensions();
+    let (input_pixels, stride): (Cow<'_, [u8]>, usize) = match img {
+        DynamicImage::ImageLuma8(luma) => (Cow::Borrowed(luma.as_raw()), 1),
+        DynamicImage::ImageLumaA8(la) => (Cow::Borrowed(la.as_raw()), 2),
+        DynamicImage::ImageLumaA16(_) => (Cow::Owned(img.to_luma_alpha8().into_raw()), 2),
+        DynamicImage::ImageRgb8(rgb) => (Cow::Borrowed(rgb.as_raw()), 3),
+        DynamicImage::ImageRgba8(rgba) => (Cow::Borrowed(rgba.as_raw()), 4),
+        _ => (Cow::Owned(img.to_rgba8().into_raw()), 4),
     };
-    let input_pixels = pixels;
     let mut out_pixels = vec![0u8; input_pixels.len()];
     for (destination, &source) in mapping.iter().enumerate() {
         let source = source as usize;
@@ -158,19 +186,19 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     // Reconstruct DynamicImage from the output pixel data
     let result = match stride {
         1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(w as u32, h as u32, out_pixels)
+            GrayImage::from_raw(w, h, out_pixels)
                 .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
         2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(w as u32, h as u32, out_pixels)
+            GrayAlphaImage::from_raw(w, h, out_pixels)
                 .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
         3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(w as u32, h as u32, out_pixels)
+            RgbImage::from_raw(w, h, out_pixels)
                 .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
         _ => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(w as u32, h as u32, out_pixels)
+            RgbaImage::from_raw(w, h, out_pixels)
                 .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
     };
@@ -205,6 +233,14 @@ pub(crate) fn effect_spread_mapping(
         .map_err(|_| PilError::ValueError("effect_spread width is too large".into()))?;
     let height_i32 = i32::try_from(height)
         .map_err(|_| PilError::ValueError("effect_spread height is too large".into()))?;
+    if distance == 1 {
+        let steps = u64::try_from(pixels)
+            .ok()
+            .and_then(|pixels| pixels.checked_mul(2))
+            .ok_or_else(|| PilError::ValueError("effect_spread RNG step count overflow".into()))?;
+        with_process_rng(|rng| rng.advance(steps))?;
+        return Ok(mapping);
+    }
     with_process_rng(|rng| {
         for y in 0..height_i32 {
             for x in 0..width_i32 {
@@ -220,6 +256,25 @@ pub(crate) fn effect_spread_mapping(
         }
     })?;
     Ok(mapping)
+}
+
+/// Advance the shared spread/noise stream exactly as a distance-one operation
+/// does, without allocating an identity index map or visiting each pixel.
+pub(crate) fn effect_spread_advance_identity_rng(width: u32, height: u32) -> Result<(), PilError> {
+    let pixels = usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("effect_spread image dimensions overflow".into()))?;
+    let steps = u64::try_from(pixels)
+        .ok()
+        .and_then(|pixels| pixels.checked_mul(2))
+        .ok_or_else(|| PilError::ValueError("effect_spread RNG step count overflow".into()))?;
+    with_process_rng(|rng| rng.advance(steps))?;
+    Ok(())
 }
 
 // ── Paste ──
@@ -3786,13 +3841,27 @@ fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        cubic_sample, op_paste, op_transform, transform_mesh, transform_projective_generic,
+        DarwinRand, cubic_sample, op_paste, op_transform, transform_mesh,
+        transform_projective_generic,
     };
     use crate::pipeline::{ResampleFilter, TransformMethod};
     use crate::raster::{
         DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
     };
     use std::sync::Arc;
+
+    #[test]
+    fn darwin_rand_jump_ahead_matches_sequential_draws() {
+        for steps in [0, 1, 2, 3, 16, 1_000_003] {
+            let mut sequential = DarwinRand::default();
+            let mut jumped = DarwinRand::default();
+            for _ in 0..steps {
+                sequential.next();
+            }
+            jumped.advance(steps);
+            assert_eq!(jumped.next(), sequential.next(), "after {steps} draws");
+        }
+    }
 
     fn varied_luma_source() -> DynamicImage {
         let raw: Vec<u8> = (0..4)
