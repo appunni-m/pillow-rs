@@ -6255,6 +6255,49 @@ Strict operation parity passed 42/42 CPU cases, 4/4 SIMD cases, and 3/3 GPU
 cases. The six benchmark-specific parity gates also passed. No coverage
 collection ran.
 
+### Sharpness native byte layouts — 2026-09-29
+
+The CPU now has a direct path for matching L, LA, RGB, RGBA, and CMYK storage.
+It computes row stride from bytes per pixel but processes only the semantic
+channels: one for L/LA, three for RGB/RGBA, and four for CMYK. LA alpha and
+RGBA alpha are copied unchanged; CMYK's fourth byte remains active as K. The
+path requires the logical mode and concrete `DynamicImage` variant to agree,
+so aliases and mismatched layouts continue through the established conversion
+fallback.
+
+Keep the existing integer 3×3 smooth result, `f32::mul_add` blend, clamp, and
+truncating byte store. Blend border samples too: for non-finite factors,
+blending a border with itself is observably different from skipping it. The
+new implementation clones the native buffer once and uses the existing row
+parallelizer at 512 × 512 pixels; the 520 × 512 workload crosses that threshold.
+Therefore this result measures both removed channel widening and row
+parallelism, not channel reduction alone. A future attribution experiment
+should compare serial and parallel native rows before changing the threshold.
+
+The maintained workload
+`pil-imageenhance-sharpness.enhance.material-la-520x512` uses five warmups and
+100 observations per subject at concurrency one, and gates every run on exact
+Pillow output. Before/after receipts are
+`sharpness-la-before.json` and `sharpness-la-after.json` with their parity
+sidecars. The whole observed workflow median changed from 3.328 ms to 0.292 ms
+on CPU (11.4× faster); Pillow measured 1.730 ms before and 1.653 ms after,
+while SIMD stayed at 0.306/0.304 ms and GPU at 1.321/1.327 ms. In the after
+receipt, CPU was 5.66× faster than Pillow and 4% faster than SIMD, but GPU
+remained 4.36× slower than SIMD. Actual backend counts were 100 CPU, 100 SIMD,
+and 100 GPU executions, with no fallback. This is one LA workload, not a
+claim about every size or mode. The CPU backend-phase median also fell from
+3.313 ms to 0.272 ms. These were separate runs about eight minutes apart, not
+alternating A/B samples: Pillow moved 4.4% between runs, while the CPU before
+and after ranges do not overlap. Both receipts identify the same Git revision
+with a dirty tree and record no extension-binary hash; raw samples are absent,
+so retain the result as a strong workload-level comparison, not a paired
+statistical experiment.
+
+Strict Pillow parity passed all five factors for L, LA, RGB, RGBA, and CMYK:
+25 CPU cases, 25 SIMD cases, and 25 GPU cases. The new CPU path is used only
+for matching layouts; SIMD and GPU runs confirm the shared operation contract
+remains exact. No coverage collection ran.
+
 At this checkpoint the campaign selected `PIL.Image.Image.reduce` for a fresh
 material, parity-gated baseline. The old top-ranked `ImageOps.invert` row was a
 one-sample 16 × 16 diagnostic without parity proof, so it did not justify
@@ -6765,7 +6808,7 @@ image kernels otherwise operate on native bytes. Runtime CPU call sites are conc
 | Caller | Native-format opportunity and semantic boundary |
 | --- | --- |
 | [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad and Expand CPU paths admit exact L/LA/RGB/HSV/RGBA storage. Expand also has native three-byte SIMD rows and a guarded GPU native-input/native-output path when the adapter's bounded word grid fits. Keep P/PA tuple-index semantics and CMYK's four active samples. |
-| [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness now scales byte 0 directly and preserves byte 1 on CPU; its one-op GPU path transfers native LA bytes. Sharpness still widens and repeats luma work before restoring alpha. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
+| [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness scales byte 0 directly and preserves byte 1 on CPU; its one-op GPU path transfers native LA bytes. CPU Sharpness now processes matching L/LA/RGB/RGBA/CMYK bytes with semantic active-channel counts; aliases retain the conversion fallback. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
 | [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Spread now borrows native 1/2/3/4-byte storage for relocation, preserving raw CMYK/RGBX/RGBa/I/F samples; typed fallbacks retain their existing numeric conversion. Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Keep mixed-mode paste/composite conversions where blending semantics require them; RGB→RGBA and explicit alpha composition change output semantics. |
 | [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I-mode Filter3x3, I-mode Filter5x5, and F-mode rank filtering now borrow matching scalar carriers; preserve the guarded accessor fallback and exact sample representation. |
 | [`color.rs`](../pillow-rs/src/compute/pool_cpu/ops/color.rs), [`draw.rs`](../pillow-rs/src/compute/pool_cpu/ops/draw.rs) | Explicit `convert(..., "RGBA")` and fallback drawing canvases have a canonical RGBA output contract. Avoid only after proving the caller's requested format and palette/alpha semantics allow it. |
@@ -7172,7 +7215,7 @@ everything else.
 | 2 | CPU/SIMD Pad | Keep exact native L/LA/RGB/HSV/RGBA storage, borrow the identity-contain source, repeat a fill row, and copy full-width source spans contiguously. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1. SIMD is 3.48× Pillow and GPU still uses four-byte transport on HSV. |
 | 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA bytes. Build SIMD 3-byte fill rows once; on GPU, assign each invocation one packed output word and read back the native byte count. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
-| 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
+| 5 | L/LA brightness and Sharpness | For brightness, scale native L bytes or LA byte 0 and retain byte 1. For Sharpness, process one active channel for L/LA, three for RGB/RGBA, and all four for CMYK; keep alpha bytes unchanged. | LA Sharpness CPU is 5.66× Pillow and slightly faster than SIMD on the measured 520 × 512 case; GPU remains 4.36× slower than SIMD. These are one-workload results. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
 | 7 | F boxed nearest resize | Preserve the four-byte scalar words; copy selected words directly and return `Image.copy()` only when both cumulative nearest maps select the same source coordinates. | Validate the narrowed box first. Retain logical F at CPU dispatch; decode to f32 only for filtered resampling and preserve f64 accumulation/f32 stores. The identity workload is 5.1× faster end-to-end but bypasses all backends; GPU F resize remains unsupported. |
 | 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity, ordinary F/I CPU resize, F/I thumbnail reduction, I Filter3x3 and Filter5x5, and F rank-filter now borrow their native carrier on CPU. Preserve exact rounding, byte order, and sample evaluation; measure SIMD/GPU separately. |

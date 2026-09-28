@@ -48349,6 +48349,44 @@ def build_inputs(
                 members.append(
                     {"workload_id": identity_workload_id, "weight": 1}
                 )
+                # CPU Sharpness previously widened LA luma to three RGB
+                # samples and converted the source to RGBA again to restore
+                # alpha. Keep a material LA workload so a native two-byte
+                # kernel has an operation-sized before/after measurement.
+                la_case_id = (
+                    "PIL.ImageEnhance.Sharpness.enhance.nuanced."
+                    "coverage-batch-enhance-large-sharpness-la-4"
+                )
+                la_case = all_cases_by_id[la_case_id]
+                la_workload_id = (
+                    "pil-imageenhance-sharpness.enhance.material-la-520x512"
+                )
+                la_workload = copy.deepcopy(identity_workload)
+                la_workload["workload_id"] = la_workload_id
+                la_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": la_case_id,
+                }
+                la_constructor_step = next(
+                    step["step_id"]
+                    for step in la_case["steps"]
+                    if step["surface"] == "PIL.ImageEnhance"
+                    and step["operation"] == "Sharpness"
+                )
+                la_workload["measurement"]["step_ids"] = [
+                    la_constructor_step,
+                    "call",
+                    "observe-result",
+                ]
+                la_workload["context"] = _workflow_benchmark_context(
+                    la_case,
+                    variant="material-la-520x512",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                la_workload["context"]["chain_length"] = 1
+                workloads.append(la_workload)
+                members.append({"workload_id": la_workload_id, "weight": 1})
             if workload_id == "pil-image-image.point.standard":
                 point_case_id = (
                     "PIL.Image.Image.point.nuanced."
