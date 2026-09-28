@@ -6529,6 +6529,17 @@ impl Image {
                         }
                     }
                 }
+                crate::raster::DynamicImage::ImageRgb8(image) if mode == "LAB" => {
+                    // LAB stores its logical A/B zero points at byte value
+                    // 128. Scanning through RGBA would synthesize alpha 255
+                    // and mark every pixel, while testing raw bytes against
+                    // zero would mark neutral LAB pixels.
+                    for (index, pixel) in image.pixels().enumerate() {
+                        if pixel[0] != 0 || pixel[1] != 128 || pixel[2] != 128 {
+                            mark(index);
+                        }
+                    }
+                }
                 crate::raster::DynamicImage::ImageRgba8(image)
                     if matches!(mode.as_str(), "RGBA" | "RGBa" | "RGBX") =>
                 {
