@@ -167,6 +167,10 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imagedraw-imagedraw.multiline-text.standard": (
         "PIL.ImageDraw.ImageDraw.multiline_text.parameter-combination.legacy-001"
     ),
+    "pil-imagedraw-imagedraw.text.standard": (
+        "PIL.ImageDraw.ImageDraw.text.nuanced."
+        "performance-rgb-noise-1024x768"
+    ),
     # Keep the timed bbox call representative of a multi-line request; the
     # default input contains one line and skips per-line width/box aggregation.
     "pil-imagedraw-imagedraw.multiline-textbbox.standard": (
@@ -16181,6 +16185,24 @@ def build_nuanced_cases(
                 "text": literal("Hello"),
                 "fill": literal(255),
             },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20260928,
+            "font": "font/fonts/DejaVuSans.ttf",
+            "font_size": 20,
+            "values": {
+                "text": literal("Native RGB glyph composite"),
+                "fill": literal([231, 73, 19]),
+            },
+            "observe_receiver": True,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -47176,6 +47198,12 @@ def build_inputs(
             isolated_imagedraw_textlength = (
                 workload_id == "pil-imagedraw-imagedraw.textlength.standard"
             )
+            # Time text composition plus a public image export after the
+            # material RGB canvas and font have been prepared. This exposes
+            # full-frame copies while keeping source setup outside timing.
+            isolated_imagedraw_text = (
+                workload_id == "pil-imagedraw-imagedraw.text.standard"
+            )
             # Measure textbbox after image and draw setup; its call includes
             # default-font construction when no font is supplied.
             isolated_imagedraw_textbbox = (
@@ -47272,6 +47300,7 @@ def build_inputs(
                             or isolated_freetype_getlength
                             or isolated_default_getlength
                             or isolated_default_getbbox
+                            or isolated_imagedraw_text
                             or isolated_imagedraw_textlength
                             or isolated_imagedraw_textbbox
                             or isolated_imagedraw_multiline_text
@@ -47295,6 +47324,8 @@ def build_inputs(
                             if isolated_putdata
                             else ["setup-sharpness-2", "call", "observe-result"]
                             if materialized_sharpness
+                            else ["call", "observe-receiver"]
+                            if isolated_imagedraw_text
                             else ["call"]
                             if eager_getcolors
                             or isolated_getdata
