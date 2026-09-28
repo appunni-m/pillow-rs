@@ -6825,22 +6825,25 @@ GPU input widening and has strict parity, but no backend meets the full targets
 on every selected mode. The Expand checkpoint below addresses the next
 native-layout opportunity. The broader scan also exposed
 [`pil_resize.rs`](../pillow-rs/src/ops/pil_resize.rs)'s `pixel_at` fallback:
-nearest resize can materialize a full RGBA copy while sampling output pixels.
-It is reachable only for typed `DynamicImage` variants that current public
-constructors and decoder lanes do not produce, so it lacks a public parity and
-benchmark route. Unmasked, same-mode RGB Paste is now checkpointed with a
-native CPU row-copy route. Pad was the next reachable target and now has native
+nearest resize used to materialize a full RGBA copy for every output sample on
+typed `DynamicImage` variants. It now converts only the selected typed pixel;
+the retained test compares typed samples and nearest output with a single
+materialized RGBA reference. These variants are not produced by current public
+constructors or decoder lanes, so this internal route still lacks public
+migration parity and benchmark coverage. Unmasked, same-mode RGB Paste is now
+checkpointed with a native CPU row-copy route. Pad was the next reachable
+target and now has native
 CPU L/LA/RGB/HSV/RGBA paths plus a direct SIMD full-width vertical-pad route.
 Its remaining gaps are SIMD versus the 5× goal and GPU's four-byte transport.
 Expand's native CPU/SIMD/GPU paths now cover L/LA/RGB/HSV/RGBA. The HSV
 follow-up and compact native GPU output are recorded below.
 
-### Explicit RGBA callsite ledger — 2026-09-28
+### Explicit RGBA callsite ledger — 2026-09-29
 
 The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 84 Rust
-source matches: 74 runtime operation calls, one GPU test, two wrapper
-delegations, one single-color conversion, two conversion method definitions,
-and four comments. The Python Qt bridge has two explicit `convert("RGBA")`
+source matches: 73 operational raster calls, two wrapper delegations, one
+single-color conversion, two conversion method definitions, four comments,
+and two tests. The Python Qt bridge has two explicit `convert("RGBA")`
 calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
 binding has none. The table lists every Rust match, grouped by what the call
 does. “Widening-capable” includes fallback sites that widen L/LA/RGB but only
@@ -6848,12 +6851,13 @@ copy an existing four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 40 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2304,2325` |
+| Widening-capable or mixed-format fallback | 39 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
 | Same-layout clone or four-byte reinterpretation | 20 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,283`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
-| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
-| Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19327`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
+| Definitions, wrappers, tests, comments, or color-only | 11 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:118`; comments: `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10556`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19327`, `ops/pil_resize.rs:2850` |
 
-Do not treat fallback callsites as guaranteed conversions. `to_rgba8()`
+The three operational groups total 73. Do not treat fallback callsites as
+guaranteed conversions. `to_rgba8()`
 expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
 means CMYK, RGBX, premultiplied RGBa, I, or F. Those bytes are not interchangeable:
 CMYK byte 3 is K, RGBX byte 3 is padding, LA alpha is byte 1, and RGBa stores
@@ -6865,10 +6869,11 @@ not core image algorithms.
 
 Several common paths already avoid these conversions: native LA Brightness and
 PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
-composition, and native CPU/SIMD/GPU Pad and Expand. `ops/pil_resize.rs:272`
-still converts a whole typed source inside its per-pixel fallback, but current
-public constructors and decoder lanes do not produce the typed layouts that
-reach it. `ops/quantize.rs` keeps logical RGB backed by `ImageRgb8` in its
+composition, and native CPU/SIMD/GPU Pad and Expand. The former repeated
+per-sample whole-image conversion in nearest resize is gone; typed samples now
+convert individually, while the RGBA result materialization at
+`ops/pil_resize.rs:1974` remains required by that return format. `ops/quantize.rs`
+keeps logical RGB backed by `ImageRgb8` in its
 three-byte layout through FASTOCTREE and reads logical RGBA from a matching
 `ImageRgba8` without cloning. Other storage variants retain guarded conversion
 fallbacks until their channel semantics are proven separately.
@@ -6930,6 +6935,35 @@ for exact factors; measurements and the remaining GPU bottleneck are recorded
 below. Keep RGB→RGBA conversions when adding alpha is the requested result, and
 retain mode-mismatched conversions until their semantics have separate
 parity-backed paths.
+
+### Typed nearest resize: convert the selected pixel only — 2026-09-29
+
+The generic nearest-resize accessor previously called `to_rgba8()` for every
+destination sample on typed `DynamicImage` variants. For an `S`-pixel source and
+`D`-pixel output, this repeated whole-frame conversion scales as `D × S`, even
+though nearest sampling reads only `D` source pixels. The accessor now matches
+the concrete image variant once, fetches the selected pixel, and uses the same
+`FromColor` conversion as `to_rgba8()` for LA16, RGB16, RGBA16, RGB32F, and
+RGBA32F. L16 retains its distinct clip-to-255 behavior; converting it through a
+generic normalized u16 conversion would change samples.
+
+The focused Rust test checks every pixel against one reference RGBA conversion,
+then checks nearest-resize output bytes for the typed variants that reach this
+generic route. It includes u16 rounding boundaries, float values outside the
+unit range, NaN, infinities, and signed zero. The Release diagnostic used
+RGBA16 128 × 96 resized to 64 × 48, nine paired repetitions, and exact output
+comparison. Median latency was 17.542 µs for direct typed sampling versus
+17.6425 ms for the legacy per-sample conversion (about 1,006× in this
+microbenchmark). This is an internal typed-image diagnostic: current public
+constructors and decoder lanes do not produce these variants, so it is not a
+public Pillow-parity benchmark or evidence about CPU/SIMD/GPU executors.
+
+The general optimization signal is multiplicative materialization inside an
+inner accessor: count how often the helper runs, then multiply that count by
+the amount of work its conversion performs. A per-sample conversion should
+touch only the selected pixel; if callers can reuse one converted frame,
+hoisting may be a simpler alternative, but direct native sampling avoids both
+the full-frame allocation and channel expansion.
 
 ### RGB FASTOCTREE: keep three-channel pixels native — 2026-09-28
 
