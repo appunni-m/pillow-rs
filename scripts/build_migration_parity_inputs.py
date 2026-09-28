@@ -40802,6 +40802,7 @@ def build_nuanced_cases(
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
+    cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
     cases.extend(image_blend_native_parity_cases(surface_id))
@@ -41195,6 +41196,142 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         raw = struct.pack(">14H" if mode == "I;16B" else "<14H", *words)
         for target in ("I", "F", "P", "PA", "HSV", "YCbCr"):
             cases.append(make_case(mode, target, (7, 2), raw, "typed-boundaries"))
+    return cases
+
+
+def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover native CMYK band scans, including a material-size benchmark input."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    cases: list[dict[str, Any]] = []
+    for channel, name in enumerate(("cyan", "magenta", "yellow", "black")):
+        color = [0, 0, 0, 0]
+        color[channel] = 1
+        cases.append(
+            {
+                "case_id": f"{surface_id}.getprojection.nuanced.cmyk-{name}-only",
+                "surface": surface_id,
+                "operation": "getprojection",
+                "covers": [f"{surface_id}.getprojection.behavior.default"],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("CMYK"),
+                            "size": literal([4, 5]),
+                            "color": literal([0, 0, 0, 0]),
+                        },
+                    },
+                    {
+                        "step_id": "channel-pixel",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putpixel",
+                        "receiver": binding("image"),
+                        "arguments": {
+                            "xy": literal([2, 3]),
+                            "value": literal(color),
+                        },
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": surface_id,
+                        "operation": "getprojection",
+                        "receiver": binding("image"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["call"],
+            }
+        )
+
+    cases.append(
+        {
+            "case_id": f"{surface_id}.getprojection.nuanced.material-cmyk-1024x768",
+            "surface": surface_id,
+            "operation": "getprojection",
+            "covers": [f"{surface_id}.getprojection.behavior.default"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("CMYK"),
+                        "size": literal([1024, 768]),
+                        "color": literal([17, 83, 149, 211]),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "getprojection",
+                    "receiver": binding("image"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call"],
+        }
+    )
+
+    sparse_steps = [
+        {
+            "step_id": "image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("CMYK"),
+                "size": literal([1024, 768]),
+                "color": literal([0, 0, 0, 0]),
+            },
+        }
+    ]
+    for index, (xy, value) in enumerate(
+        (
+            ([0, 0], [1, 0, 0, 0]),
+            ([400, 100], [0, 1, 0, 0]),
+            ([1023, 767], [0, 0, 0, 1]),
+        )
+    ):
+        sparse_steps.append(
+            {
+                "step_id": f"pixel-{index}",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "receiver": binding("image"),
+                "arguments": {"xy": literal(xy), "value": literal(value)},
+            }
+        )
+    sparse_steps.append(
+        {
+            "step_id": "call",
+            "surface": surface_id,
+            "operation": "getprojection",
+            "receiver": binding("image"),
+            "arguments": {},
+        }
+    )
+    cases.append(
+        {
+            "case_id": f"{surface_id}.getprojection.nuanced.sparse-cmyk-1024x768",
+            "surface": surface_id,
+            "operation": "getprojection",
+            "covers": [f"{surface_id}.getprojection.behavior.default"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": sparse_steps,
+            "observations": ["call"],
+        }
+    )
     return cases
 
 
@@ -45572,6 +45709,80 @@ def build_pipeline_benchmark_document(
         }
     ]
 
+    getprojection_cmyk_case_id = (
+        "PIL.Image.Image.getprojection.nuanced.material-cmyk-1024x768"
+    )
+    getprojection_cmyk_case = cases_by_id.get(getprojection_cmyk_case_id)
+    if getprojection_cmyk_case is None:
+        raise ValueError(
+            f"CMYK getprojection benchmark references missing case: "
+            f"{getprojection_cmyk_case_id}"
+        )
+    getprojection_cmyk_context = _workflow_benchmark_context(
+        getprojection_cmyk_case,
+        variant="getprojection-material-cmyk-1024x768",
+        surface="PIL.Image.Image",
+        operation="getprojection",
+    )
+    getprojection_cmyk_context.update(size=[1024, 768], mode="CMYK")
+    getprojection_cmyk_workload = {
+        "workload_id": "pipeline-chain.getprojection.material-cmyk-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "getprojection")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": getprojection_cmyk_case_id},
+        "measurement": {
+            "boundary": "observed_steps",
+            "step_ids": ["call"],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "concurrency": 1,
+            "cache_state": "warm",
+            "correctness_gate": "parity_pass",
+        },
+        "context": getprojection_cmyk_context,
+    }
+
+    getprojection_cmyk_sparse_case_id = (
+        "PIL.Image.Image.getprojection.nuanced.sparse-cmyk-1024x768"
+    )
+    getprojection_cmyk_sparse_case = cases_by_id.get(getprojection_cmyk_sparse_case_id)
+    if getprojection_cmyk_sparse_case is None:
+        raise ValueError(
+            f"Sparse CMYK getprojection benchmark references missing case: "
+            f"{getprojection_cmyk_sparse_case_id}"
+        )
+    getprojection_cmyk_sparse_context = _workflow_benchmark_context(
+        getprojection_cmyk_sparse_case,
+        variant="getprojection-sparse-cmyk-1024x768",
+        surface="PIL.Image.Image",
+        operation="getprojection",
+    )
+    getprojection_cmyk_sparse_context.update(size=[1024, 768], mode="CMYK")
+    getprojection_cmyk_sparse_workload = {
+        "workload_id": "pipeline-chain.getprojection.sparse-cmyk-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "getprojection")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": getprojection_cmyk_sparse_case_id},
+        "measurement": {
+            "boundary": "observed_steps",
+            "step_ids": ["call"],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "concurrency": 1,
+            "cache_state": "warm",
+            "correctness_gate": "parity_pass",
+        },
+        "context": getprojection_cmyk_sparse_context,
+    }
+
     # Exercise the packed scalar reduction paths on a materially sized frame.
     # I and F are created through public conversion steps and all terminal
     # observations share one workflow process; this is benchmark-only input,
@@ -47346,6 +47557,8 @@ def build_pipeline_benchmark_document(
             *chain_workloads,
             *terminal_read_workloads,
             *terminal_analysis_workloads,
+            getprojection_cmyk_workload,
+            getprojection_cmyk_sparse_workload,
             *terminal_scalar_analysis_workloads,
             *terminal_masked_analysis_workloads,
             *terminal_color_count_workloads,

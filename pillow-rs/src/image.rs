@@ -6549,6 +6549,35 @@ impl Image {
                         }
                     }
                 }
+                crate::raster::DynamicImage::ImageRgba8(image) if mode == "CMYK" => {
+                    // CMYK shares the four-byte carrier, but its fourth sample
+                    // is K. Projection tests all four stored inks; reading the
+                    // matching carrier directly avoids cloning it as RGBA.
+                    let mut covered_columns = 0usize;
+                    let mut all_columns_covered = w == 0;
+                    for (y, mut row) in image.rows().enumerate() {
+                        let row_nonzero = if all_columns_covered {
+                            row.any(|pixel| pixel.0.iter().any(|value| *value != 0))
+                        } else {
+                            let mut any = false;
+                            for (x, pixel) in row.enumerate() {
+                                let [cyan, magenta, yellow, black] = pixel.0;
+                                if cyan != 0 || magenta != 0 || yellow != 0 || black != 0 {
+                                    if h_proj[x] == 0 {
+                                        h_proj[x] = 1;
+                                        covered_columns += 1;
+                                        all_columns_covered = covered_columns == w;
+                                    }
+                                    any = true;
+                                }
+                            }
+                            any
+                        };
+                        if row_nonzero {
+                            v_proj[y] = 1;
+                        }
+                    }
+                }
                 _ => match mode.as_str() {
                     "L" | "1" | "P" => {
                         for (index, pixel) in img.to_luma8().pixels().enumerate() {
