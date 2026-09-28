@@ -3282,6 +3282,18 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
         }
         return DynamicImage::ImageLumaA8(la);
     }
+    if mode == PixelMode::LA
+        && let DynamicImage::ImageLumaA8(source) = img
+    {
+        // LA already stores luma and alpha contiguously. Replace byte 1 in
+        // one native copy instead of widening to four-byte RGBA and narrowing
+        // back to LA.
+        let mut output = source.clone();
+        for pixel in output.as_mut().chunks_exact_mut(2) {
+            pixel[1] = alpha;
+        }
+        return DynamicImage::ImageLumaA8(output);
+    }
     let out = match img.color() {
         crate::raster::ColorType::L8 => {
             let luma = img.to_luma8();

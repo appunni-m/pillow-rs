@@ -6934,6 +6934,41 @@ workloads passed all 15 backend parity comparisons. These blockers are
 checkpointed after four bounded implementations; do not keep changing the same
 loop without a new profile showing a different dominant cost.
 
+### Scalar `Image.putalpha` on LA: replace byte 1 in native storage — 2026-09-28
+
+The old CPU LA branch widened two-byte samples to RGBA, replaced alpha, then
+allocated LA output. CPU now clones the concrete `ImageLumaA8` and writes the
+new alpha to byte 1. SIMD uses the same native two-byte layout and avoids its
+generic vector-block staging for this low-arithmetic operation. GPU admits only
+a nonempty logical LA image backed by `ImageLumaA8`; its native-byte shader
+updates alpha bytes 1 and 3 in each packed word, returns LA directly, and
+reports no mode conversion. Upload and readback each fell from 3,145,728 to
+1,572,864 bytes for the 1024 × 768 workload. Other modes retain their existing
+mode-specific paths.
+
+The standard correctness-gated workload uses noisy 1024 × 768 LA pixels,
+alpha 192, and measures `putalpha` plus receiver `tobytes()` at concurrency one
+(five warmups, 20 iterations × five samples). Every target reported the
+requested CPU/SIMD/GPU backend. The final receipt is
+`putalpha-la-checkpoint.json`; an additional strict 5 × 3 LA case verifies the
+GPU's final partially occupied packed word. Exact parity passed 3/3 backends
+for both the large benchmark and the odd-tail case.
+
+| Subject | Before ms | Final ms | Final effective ops/s |
+| --- | ---: | ---: | ---: |
+| Pillow | 0.411188 | 0.373750 | 2,676 |
+| CPU | 0.294292 | 0.239812 | 4,170 |
+| SIMD | 0.647729 | 0.209417 | 4,775 |
+| GPU | 2.217021 | 0.669813 | 1,493 |
+
+The final run puts CPU 1.56× and SIMD 1.79× ahead of Pillow. SIMD improved
+3.09× against its own baseline. GPU improved 3.31× and now moves half as many
+bytes, but remains 3.20× slower than SIMD and 1.79× slower than Pillow; its
+single-concurrency reciprocal latency is not sustained-throughput evidence.
+The SIMD 5× goal and GPU/SIMD target remain blockers. Stop this LA scalar
+specialization after the bounded CPU, GPU, and SIMD paths; reopen it only with
+a profile that isolates a new cost.
+
 ### Brightness LA: native CPU and GPU processing — 2026-09-28
 
 For logical LA backed by `ImageLumaA8`, brightness scales only each pixel's
