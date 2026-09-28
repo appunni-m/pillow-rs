@@ -7676,6 +7676,14 @@ now correct and measured end to end; the remaining GPU cost is dispatch,
 synchronization, and materialization, while the SIMD gap needs a separate
 kernel-level investigation.
 
+An unmasked SIMD copy trial replaced the 16-byte load/convert/store loop with
+`copy_from_slice`. Strict SIMD parity passed 2/2, but two standard benchmark
+runs did not show a repeatable gain: SIMD stayed about 5% slower than CPU both
+before and after, while one noisy run made them appear equal. A low-load run
+passed parity but slowed every subject by roughly 5×, so its timings are not
+comparable. The slice-copy change was reverted; the next SIMD attempt needs to
+remove measured whole-call or buffer work rather than restate a compiler copy.
+
 ### Pad: native CPU L/LA/RGB/HSV/RGBA — 2026-09-28
 
 `op_pad` previously resized to contain, cloned the resized image into RGBA,
