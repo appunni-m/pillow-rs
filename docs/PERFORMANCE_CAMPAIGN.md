@@ -6848,8 +6848,8 @@ copy an existing four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 39 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
-| Same-layout clone or four-byte reinterpretation | 21 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,283`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
+| Widening-capable or mixed-format fallback | 40 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2304,2325` |
+| Same-layout clone or four-byte reinterpretation | 20 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,283`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
 | Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19327`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
@@ -6868,9 +6868,10 @@ PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
 composition, and native CPU/SIMD/GPU Pad and Expand. `ops/pil_resize.rs:272`
 still converts a whole typed source inside its per-pixel fallback, but current
 public constructors and decoder lanes do not produce the typed layouts that
-reach it. `ops/quantize.rs` now keeps logical RGB backed by `ImageRgb8` in its
-three-byte layout through FASTOCTREE; other modes and storage variants retain
-the conversion fallback until their channel semantics are proven separately.
+reach it. `ops/quantize.rs` keeps logical RGB backed by `ImageRgb8` in its
+three-byte layout through FASTOCTREE and reads logical RGBA from a matching
+`ImageRgba8` without cloning. Other storage variants retain guarded conversion
+fallbacks until their channel semantics are proven separately.
 
 The standard byte-mode LA `ImageStat.Stat` path already enters `histogram()`
 before this RGBA fallback and counts L and alpha at their native byte offsets.
@@ -6954,6 +6955,37 @@ Pillow throughput for this workload. The final correctness gate passed. The
 three `python-*` benchmark profiles share this eager CPU implementation;
 receipts contain no actual backend dispatch counts, so these are not SIMD or
 GPU measurements. No coverage was run.
+
+### RGBA FASTOCTREE: read the four-byte carrier directly — 2026-09-28
+
+The RGBA FASTOCTREE path used `to_rgba8().into_raw()` before a read-only octree
+pass. When the image already has the matching `ImageRgba8` carrier, that
+round-trip clones every source pixel without changing its four RGBA samples.
+The branch now passes the carrier's raw bytes directly; mismatched variants
+retain the old conversion fallback. The transparent-color case and the
+materialized RGBA case passed focused CPU parity, including transparent RGB
+normalization and palette results.
+
+The existing benchmark `pipeline-chain.color.quantize-mode-rgba` is a small
+16 × 16 whole-workflow case with one warmup and six timed samples. Its
+correctness gate is `successful_execution`; parity is checked separately. The
+baseline receipt is `migration-benchmark-d0cce545ecf7404a8c2a8a4c5c8f48f5`, and
+the two native receipts are `migration-benchmark-a753dc310a314bfda4e1abf62ad50290`
+and `migration-benchmark-cd831031f8744229851dd8bce4ddc778`:
+
+| Subject | Baseline ms | Native median of two runs ms | Native run range ms |
+| --- | ---: | ---: | ---: |
+| Pillow | 0.069438 | 0.066969 | 0.061791–0.072146 |
+| CPU | 0.164230 | 0.132938 | 0.118625–0.147250 |
+| SIMD-labeled profile | 0.067146 | 0.062500 | 0.054000–0.071000 |
+| GPU-labeled profile | 0.074063 | 0.074719 | 0.073292–0.076146 |
+
+The CPU profile is about 19% lower than the single baseline median, but the
+workload is small and its sample spread is large. CPU remains about 2.0× slower
+than Pillow. The benchmark reports no actual backend counts for any profile;
+quantization is eager host-side work, so SIMD/GPU-labeled rows do not establish
+hardware execution. This change removes a redundant RGBA carrier clone; it does
+not close the latency blocker. No coverage was run.
 
 ### RGB `ImageDraw.bitmap`: keep the canvas three bytes per pixel — 2026-09-28
 
