@@ -28104,6 +28104,8 @@ surfaces:
       - benchmark
       target_profiles:
       - python-cpu
+      - python-simd
+      - python-gpu
     parity:
       applicability: required
       target_profiles:

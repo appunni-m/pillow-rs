@@ -500,8 +500,84 @@ pub fn op_flip(img: &DynamicImage) -> Result<DynamicImage, PilError> {
 }
 
 /// Mirror horizontally.
+#[inline]
+fn mirror_byte_row<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
+    for (destination, source_pixel) in output
+        .chunks_exact_mut(CHANNELS)
+        .zip(source.rchunks_exact(CHANNELS))
+    {
+        match CHANNELS {
+            1 => destination[0] = source_pixel[0],
+            2 => {
+                destination[0] = source_pixel[0];
+                destination[1] = source_pixel[1];
+            }
+            3 => {
+                destination[0] = source_pixel[0];
+                destination[1] = source_pixel[1];
+                destination[2] = source_pixel[2];
+            }
+            4 => {
+                destination[0] = source_pixel[0];
+                destination[1] = source_pixel[1];
+                destination[2] = source_pixel[2];
+                destination[3] = source_pixel[3];
+            }
+            _ => unreachable!("Mirror supports only byte pixels with 1–4 channels"),
+        }
+    }
+}
+
+#[inline]
+fn mirror_byte_rows<const CHANNELS: usize>(source: &[u8], output: &mut [u8], row_len: usize) {
+    for (source_row, output_row) in source
+        .chunks_exact(row_len)
+        .zip(output.chunks_exact_mut(row_len))
+    {
+        mirror_byte_row::<CHANNELS>(source_row, output_row);
+    }
+}
+
 pub fn op_mirror(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    Ok(img.fliph())
+    let channels = match img {
+        DynamicImage::ImageLuma8(_) => 1,
+        DynamicImage::ImageLumaA8(_) => 2,
+        DynamicImage::ImageRgb8(_) => 3,
+        DynamicImage::ImageRgba8(_) => 4,
+        _ => return Ok(img.fliph()),
+    };
+    let (width, height) = (img.width(), img.height());
+    if width == 0 || height == 0 {
+        return Ok(img.fliph());
+    }
+
+    // Preserve the existing image crate path when limits have changed since
+    // this image was created, and validate all allocation arithmetic before
+    // reserving the destination buffer.
+    let Ok(dims) = crate::checked_dims::CheckedDims::new(width, height, channels as u8) else {
+        return Ok(img.fliph());
+    };
+    let row_len = dims.row_stride();
+    let total_len = dims.total_bytes();
+    let Some(source) = img.as_bytes().get(..total_len) else {
+        return Ok(img.fliph());
+    };
+
+    // Reverse complete native pixels within each row. DynamicImage::fliph
+    // routes byte images through per-pixel get_pixel/from_fn closures; these
+    // contiguous spans avoid that coordinate and bounds work without changing
+    // channel bytes or touching typed image paths.
+    let mut output = dims.alloc_buffer();
+    match channels {
+        1 => mirror_byte_rows::<1>(source, &mut output, row_len),
+        2 => mirror_byte_rows::<2>(source, &mut output, row_len),
+        3 => mirror_byte_rows::<3>(source, &mut output, row_len),
+        4 => mirror_byte_rows::<4>(source, &mut output, row_len),
+        _ => unreachable!("Mirror supports only byte pixels with 1–4 channels"),
+    }
+
+    let result = crate::image_utils::raw_bytes_to_image(width, height, output, channels)?;
+    Ok(preserve_mode(img, result))
 }
 
 /// Posterize: reduce the number of bits per channel.
