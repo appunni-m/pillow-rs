@@ -300,12 +300,22 @@ fn resize_f(
         }
     }
 
-    let rgba = img.to_rgba8();
-
-    // Reinterpret each 4 RGBA bytes as a f32 (little-endian).
-    let src_floats: Vec<f32> = rgba
-        .pixels()
-        .map(|p| f32::from_le_bytes([p[0], p[1], p[2], p[3]]))
+    // F-mode is stored in ImageRgba8 only as a four-byte carrier for scalar
+    // f32 samples. Borrow those words directly; `to_rgba8()` clones the whole
+    // input even though it performs no channel conversion for this layout.
+    let source_bytes = match img {
+        DynamicImage::ImageRgba8(rgba) => rgba.as_raw().as_slice(),
+        _ => {
+            return Err(PilError::ValueError(
+                "F-mode resize requires four-byte sample storage".into(),
+            ));
+        }
+    };
+    let source_pixels = CheckedDims::new_allow_empty(sw, sh, 4)?.total_pixels();
+    let src_floats: Vec<f32> = source_bytes
+        .chunks_exact(4)
+        .take(source_pixels)
+        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
         .collect();
 
     // Pillow's F-mode ImagingResample keeps an ordinary finite constant sample
@@ -531,8 +541,7 @@ fn resize_i(
     dst_h: u32,
     filter: &ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (sw, sh) = rgba.dimensions();
+    let (sw, sh) = img.dimensions();
 
     if dst_w == 0 || dst_h == 0 || sw == 0 || sh == 0 {
         return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
@@ -541,11 +550,7 @@ fn resize_i(
         return Ok(img.clone());
     }
 
-    // Reinterpret each 4 RGBA bytes as i32 (little-endian).
-    let src_ints: Vec<i32> = rgba
-        .pixels()
-        .map(|p| i32::from_le_bytes([p[0], p[1], p[2], p[3]]))
-        .collect();
+    let (_, _, src_ints) = i32_samples_from_native_storage(img)?;
 
     let (kernel, support) = resample_kernel(filter);
     let sw_f = sw as f64;
@@ -684,6 +689,27 @@ fn resize_i(
     Ok(DynamicImage::ImageRgba8(out))
 }
 
+/// Decode I-mode samples from their little-endian four-byte carrier without
+/// cloning that carrier into an RGBA image.
+fn i32_samples_from_native_storage(img: &DynamicImage) -> Result<(u32, u32, Vec<i32>), PilError> {
+    let (width, height) = img.dimensions();
+    let source_bytes = match img {
+        DynamicImage::ImageRgba8(rgba) => rgba.as_raw().as_slice(),
+        _ => {
+            return Err(PilError::ValueError(
+                "I-mode resize requires four-byte sample storage".into(),
+            ));
+        }
+    };
+    let source_pixels = CheckedDims::new_allow_empty(width, height, 4)?.total_pixels();
+    let samples = source_bytes
+        .chunks_exact(4)
+        .take(source_pixels)
+        .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+        .collect();
+    Ok((width, height, samples))
+}
+
 /// Resize an `I` image through a fractional source box.
 ///
 /// Pillow's reducing-gap thumbnail path passes the original source box after
@@ -699,15 +725,11 @@ fn resize_i_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (source_width, source_height) = rgba.dimensions();
+    let (source_width, source_height) = img.dimensions();
     if dst_w == 0 || dst_h == 0 || source_width == 0 || source_height == 0 {
         return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
     }
-    let source: Vec<i32> = rgba
-        .pixels()
-        .map(|pixel| i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]))
-        .collect();
+    let (_, _, source) = i32_samples_from_native_storage(img)?;
     let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
     let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
 

@@ -8823,6 +8823,8 @@
           "PIL.Image.Image.resize.nuanced.modes-I;16B-tall-5-full",
           "PIL.Image.Image.resize.nuanced.modes-I;16B-tall-5-fractional-box",
           "PIL.Image.Image.resize.nuanced.f-boxed-nearest-noise-512x512",
+          "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768",
+          "PIL.Image.Image.resize.nuanced.i-resize-bicubic-noise-1024x768",
           "PIL.Image.Image.rotate.nuanced.modes-L-0-arbitrary",
           "PIL.Image.Image.rotate.nuanced.modes-L-0-expanded",
           "PIL.Image.Image.rotate.nuanced.modes-L-0-right-angle",

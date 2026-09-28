@@ -12530,6 +12530,118 @@
       }
     },
     {
+      "workload_id": "pipeline-chain.resize-native-f32.bicubic-noise-1024x768",
+      "covers": [
+        "PIL.Image.Image.resize.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 2,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.resize-native-i32.bicubic-noise-1024x768",
+      "covers": [
+        "PIL.Image.Image.resize.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.resize.nuanced.i-resize-bicubic-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 2,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.resize.matrix-32x24",
       "covers": [
         "PIL.Image.Image.resize.performance.standard"
@@ -245852,7 +245964,7 @@
     },
     {
       "suite_id": "pipeline-operations.resize-typed-suite",
-      "description": "Public F-mode and I-mode resize workflows used to measure typed native row execution.",
+      "description": "Public F-mode and I-mode resize workflows, including material noisy scalar sources for native-buffer execution.",
       "members": [
         {
           "workload_id": "pipeline-chain.resize-typed.simd-f-resize-transpose",
@@ -245860,6 +245972,14 @@
         },
         {
           "workload_id": "pipeline-chain.resize-typed.simd-i-resize-transform",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.resize-native-f32.bicubic-noise-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.resize-native-i32.bicubic-noise-1024x768",
           "weight": 1
         }
       ]
