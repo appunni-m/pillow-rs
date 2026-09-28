@@ -1441,9 +1441,33 @@ impl OctreeCube {
         self.offset_position(values)
     }
 
+    #[inline]
+    fn offset_rgb(&self, color: [u8; 3]) -> usize {
+        let values = [
+            (usize::from(color[0]) >> 8u32.saturating_sub(self.bits[0]))
+                & self.widths[0].saturating_sub(1),
+            (usize::from(color[1]) >> 8u32.saturating_sub(self.bits[1]))
+                & self.widths[1].saturating_sub(1),
+            (usize::from(color[2]) >> 8u32.saturating_sub(self.bits[2]))
+                & self.widths[2].saturating_sub(1),
+            0,
+        ];
+        self.offset_position(values)
+    }
+
     fn add_color(&mut self, color: [u8; 4]) {
         let offset = self.offset(color);
         self.buckets[offset].add_color(color);
+    }
+
+    #[inline]
+    fn add_rgb_color(&mut self, color: [u8; 3]) {
+        let offset = self.offset_rgb(color);
+        let bucket = &mut self.buckets[offset];
+        bucket.count = bucket.count.saturating_add(1);
+        bucket.sums[0] = bucket.sums[0].saturating_add(u64::from(color[0]));
+        bucket.sums[1] = bucket.sums[1].saturating_add(u64::from(color[1]));
+        bucket.sums[2] = bucket.sums[2].saturating_add(u64::from(color[2]));
     }
 
     fn used(&self) -> usize {
@@ -1698,7 +1722,55 @@ fn quantize_octree_rgba(
         // are no palette entries to reduce or slice.
         return Ok((Vec::new(), Vec::new()));
     }
-    let dimensions = CheckedDims::new(w, h, 1)?;
+    let dimensions = CheckedDims::new(w, h, 4)?;
+    if pixels.len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(
+            "FASTOCTREE RGBA input buffer shape mismatch".to_owned(),
+        ));
+    }
+    quantize_octree_pixels(dimensions.total_pixels(), n_colors, with_alpha, |index| {
+        let offset = index * 4;
+        [
+            pixels[offset],
+            pixels[offset + 1],
+            pixels[offset + 2],
+            pixels[offset + 3],
+        ]
+    })
+}
+
+/// Quantize tightly packed RGB samples without widening them to RGBA.
+fn quantize_octree_rgb(
+    pixels: &[u8],
+    w: u32,
+    h: u32,
+    n_colors: usize,
+) -> Result<(Vec<u8>, Vec<u8>), PilError> {
+    if w == 0 || h == 0 {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let dimensions = CheckedDims::new(w, h, 3)?;
+    if pixels.len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(
+            "FASTOCTREE RGB input buffer shape mismatch".to_owned(),
+        ));
+    }
+    quantize_octree_pixels(dimensions.total_pixels(), n_colors, false, |index| {
+        let offset = index * 3;
+        [pixels[offset], pixels[offset + 1], pixels[offset + 2], 255]
+    })
+}
+
+/// Shared octree reduction over a native-format pixel accessor.
+///
+/// The accessor constructs one stack color at a time, so RGB callers do not
+/// allocate a four-byte-per-pixel staging image or a second color array.
+fn quantize_octree_pixels(
+    pixel_count: usize,
+    n_colors: usize,
+    with_alpha: bool,
+    color_at: impl Fn(usize) -> [u8; 4],
+) -> Result<(Vec<u8>, Vec<u8>), PilError> {
     let cube_levels = if with_alpha {
         CUBE_LEVELS_RGBA
     } else {
@@ -1716,25 +1788,32 @@ fn quantize_octree_rgba(
         cube_levels[6],
         cube_levels[7],
     ];
-    let mut colors = pixels
-        .chunks_exact(4)
-        .take(dimensions.total_pixels())
-        .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
-        .collect::<Vec<_>>();
     // Quant.c normalizes every fully transparent pixel to the first one's RGB
     // before FASTOCTREE. Invisible garbage channels must not consume colors or
     // cause distinct indices for pixels that Pillow treats as equivalent.
-    if let Some(first) = colors.iter().find(|color| color[3] == 0).copied() {
-        for color in &mut colors {
-            if color[3] == 0 {
-                color[..3].copy_from_slice(&first[..3]);
-            }
+    let first_transparent = if with_alpha {
+        (0..pixel_count).map(&color_at).find(|color| color[3] == 0)
+    } else {
+        None
+    };
+    let normalize_transparent = |mut color: [u8; 4]| {
+        if color[3] == 0
+            && let Some(first) = first_transparent
+        {
+            color[..3].copy_from_slice(&first[..3]);
         }
-    }
-
+        color
+    };
     let mut fine = OctreeCube::new(fine_bits);
-    for &color in &colors {
-        fine.add_color(color);
+    if with_alpha {
+        for index in 0..pixel_count {
+            fine.add_color(normalize_transparent(color_at(index)));
+        }
+    } else {
+        for index in 0..pixel_count {
+            let color = color_at(index);
+            fine.add_rgb_color([color[0], color[1], color[2]]);
+        }
     }
     let mut coarse = copy_octree_cube(&fine, coarse_bits);
     let mut coarse_count = coarse.used().min(n_colors);
@@ -1756,10 +1835,22 @@ fn quantize_octree_rgba(
     let mut lookup = copy_octree_cube(&coarse_lookup, fine_bits);
     add_octree_lookup(&mut lookup, &palette, coarse_count);
 
-    let indices = colors
-        .iter()
-        .map(|&color| lookup.buckets[lookup.offset(color)].count as u8)
-        .collect();
+    let indices = if with_alpha {
+        (0..pixel_count)
+            .map(|index| {
+                let color = normalize_transparent(color_at(index));
+                lookup.buckets[lookup.offset(color)].count as u8
+            })
+            .collect()
+    } else {
+        (0..pixel_count)
+            .map(|index| {
+                let color = color_at(index);
+                let rgb = [color[0], color[1], color[2]];
+                lookup.buckets[lookup.offset_rgb(rgb)].count as u8
+            })
+            .collect()
+    };
     let palette_bytes = palette
         .iter()
         .flat_map(OctreeBucket::average)
@@ -2216,9 +2307,17 @@ impl Image {
             (idx, pal_rgb, Some(alpha))
         } else if method == 2 {
             // Pillow's FASTOCTREE also accepts RGB (alpha forced opaque).
-            let rgba = img.to_rgba8();
-            let rgba_raw = rgba.into_raw();
-            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors, false)?;
+            let (idx, pal) = match &img {
+                DynamicImage::ImageRgb8(rgb)
+                    if matches!(self.explicit_mode(), None | Some("RGB")) =>
+                {
+                    quantize_octree_rgb(rgb.as_raw(), w, h, n_colors)?
+                }
+                _ => {
+                    let rgba = img.to_rgba8();
+                    quantize_octree_rgba(rgba.as_raw(), w, h, n_colors, false)?
+                }
+            };
             let pal_rgb = pal
                 .chunks_exact(4)
                 .flat_map(|color| [color[0], color[1], color[2]])

@@ -6848,8 +6848,8 @@ copy an existing four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2219` |
-| Same-layout clone or four-byte reinterpretation | 30 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2166,2249`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/pil_resize.rs:2225`; `ops/quantize.rs:2206` |
+| Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
+| Same-layout clone or four-byte reinterpretation | 30 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2166,2249`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/pil_resize.rs:2225`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3250,3328,3401`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
 | Definition, wrapper, test, comment, or color-only | 8 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282`; `raster/dynamic.rs:327,420,423,1016` |
 
@@ -6868,9 +6868,9 @@ PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
 composition, and native CPU/SIMD/GPU Pad and Expand. `ops/pil_resize.rs:272`
 still converts a whole typed source inside its per-pixel fallback, but current
 public constructors and decoder lanes do not produce the typed layouts that
-reach it. `ops/quantize.rs:2219` is a reachable RGB→RGBA candidate, but its
-FASTOCTREE insertion order and exact palette output need dedicated parity
-cases before changing it.
+reach it. `ops/quantize.rs` now keeps logical RGB backed by `ImageRgb8` in its
+three-byte layout through FASTOCTREE; other modes and storage variants retain
+the conversion fallback until their channel semantics are proven separately.
 
 The audit found and fixed one correctness bug in `Image.getprojection`: LAB is
 stored in RGB bytes with logical A/B zero represented by 128. Its old fallback
@@ -6883,6 +6883,31 @@ for exact factors; measurements and the remaining GPU bottleneck are recorded
 below. Keep RGB→RGBA conversions when adding alpha is the requested result, and
 retain mode-mismatched conversions until their semantics have separate
 parity-backed paths.
+
+### RGB FASTOCTREE: keep three-channel pixels native — 2026-09-28
+
+The old RGB method-2 route called `to_rgba8()`, moved the four-byte image into
+a raw buffer, then allocated a second `Vec<[u8; 4]>` for octree insertion and
+index mapping. The fast route admits only logical mode `None`/`RGB` with
+concrete `ImageRgb8`; it reads the three stored samples directly on each pass.
+RGB bucket offsets and sums now touch only R/G/B. The alpha-aware path still
+normalizes fully transparent pixels to the first transparent RGB and uses the
+same four-channel cube; all other modes retain the prior conversion path.
+Checked dimensions and buffer length guard the new raw accessor.
+
+Strict CPU parity passed 152/152 FASTOCTREE cases, including RGB distributions,
+palette/index tie ordering, the 256 × 256 noisy RGB input, and RGBA transparency
+controls. The correctness-gated benchmark measured the public quantize call,
+palette retrieval, and output bytes for a 256 × 256 random RGB image quantized
+to 32 colors with five warmups and 100 samples. The initial CPU median was
+0.660 ms against Pillow's 0.649 ms; after removing the staging allocations but
+before specializing the inner loop it was 0.642 ms against 0.618 ms. Three-
+channel bucket updates and lookup then measured 0.519 ms CPU against 0.606 ms
+Pillow: 21% lower CPU latency than the initial pillow-rs result and 1.17×
+Pillow throughput for this workload. The final correctness gate passed. The
+three `python-*` benchmark profiles share this eager CPU implementation;
+receipts contain no actual backend dispatch counts, so these are not SIMD or
+GPU measurements. No coverage was run.
 
 ### RGB `ImageDraw.bitmap`: keep the canvas three bytes per pixel — 2026-09-28
 
@@ -7037,7 +7062,8 @@ everything else.
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
 | 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
-| 7 | Quantization and typed copies | Let FASTOCTREE consume RGB samples without synthetic alpha only if palette/index output is byte-identical; borrow I/F scalar-word storage instead of cloning it. | These are not blanket color conversions. Preserve alpha-sensitive palette choice and exact typed rounding. |
+| 7 | LA `ImageStat.Stat` | Count the existing `[L, A]` bytes directly into the two 256-bin histograms instead of widening to RGBA. | Logical alpha is byte 1; preserve the exact empty-image extrema, per-band statistics, and mode-specific error order. |
+| 8 | Typed scalar copies | Borrow I/F scalar-word storage instead of copying through RGBA-shaped buffers. | These bytes encode numeric samples, not color channels; preserve exact typed rounding and output byte order. |
 
 Treat a four-byte physical buffer as its real format: CMYK's fourth byte is K,
 RGBX's is padding, RGBa is premultiplied, LA alpha is byte 1, and I/F are scalar
