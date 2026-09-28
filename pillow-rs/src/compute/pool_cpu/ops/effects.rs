@@ -224,29 +224,48 @@ pub(crate) fn effect_spread_mapping(
 
 // ── Paste ──
 
-/// Copy an unmasked RGB paste using the image's native three-byte layout.
+/// Return the native storage width admitted for exact same-mode paste.
 ///
-/// `None` means the physical buffers do not satisfy the checked RGB layout;
-/// callers then keep the established general paste path.
-fn paste_native_rgb_rows(
+/// Four-byte storage is shared by alpha, padding, CMYK, and scalar modes, so
+/// the logical mode must be part of this check; a matching physical type alone
+/// is not enough to establish channel meaning.
+fn paste_native_channels(mode: &str, image: &DynamicImage) -> Option<usize> {
+    match (mode, image) {
+        ("1" | "L" | "P", DynamicImage::ImageLuma8(_)) => Some(1),
+        ("LA" | "La" | "PA", DynamicImage::ImageLumaA8(_)) => Some(2),
+        ("RGB" | "HSV" | "YCbCr" | "LAB", DynamicImage::ImageRgb8(_)) => Some(3),
+        ("RGBA" | "RGBa" | "RGBX" | "CMYK" | "I" | "F", DynamicImage::ImageRgba8(_)) => Some(4),
+        _ => None,
+    }
+}
+
+/// Copy an unmasked paste using an exact same-mode native byte layout.
+///
+/// `None` means the logical modes, physical layouts, or checked dimensions do
+/// not satisfy this route; callers then keep the established general path.
+fn paste_native_rows(
     destination: &DynamicImage,
     source: &DynamicImage,
     x: i64,
     y: i64,
+    mode: &str,
 ) -> Option<DynamicImage> {
-    let (DynamicImage::ImageRgb8(destination), DynamicImage::ImageRgb8(source)) =
-        (destination, source)
-    else {
+    let channels = paste_native_channels(mode, destination)?;
+    if paste_native_channels(mode, source)? != channels {
         return None;
-    };
+    }
     let (source_width, source_height) = source.dimensions();
     let (destination_width, destination_height) = destination.dimensions();
-    let source_stride = usize::try_from(source_width).ok()?.checked_mul(3)?;
-    let destination_stride = usize::try_from(destination_width).ok()?.checked_mul(3)?;
-    if source.as_raw().len() != source_stride.checked_mul(usize::try_from(source_height).ok()?)?
-        || destination.as_raw().len()
-            != destination_stride.checked_mul(usize::try_from(destination_height).ok()?)?
-    {
+    let source_stride = usize::try_from(source_width).ok()?.checked_mul(channels)?;
+    let destination_stride = usize::try_from(destination_width)
+        .ok()?
+        .checked_mul(channels)?;
+    let source_len = source_stride.checked_mul(usize::try_from(source_height).ok()?)?;
+    let destination_len =
+        destination_stride.checked_mul(usize::try_from(destination_height).ok()?)?;
+    let source_bytes = source.as_bytes();
+    let destination_bytes = destination.as_bytes();
+    if source_bytes.len() != source_len || destination_bytes.len() != destination_len {
         return None;
     }
 
@@ -261,31 +280,39 @@ fn paste_native_rgb_rows(
         .saturating_sub(source_top)
         .min(destination_height.saturating_sub(destination_top));
     if copy_width == 0 || copy_height == 0 {
-        return Some(DynamicImage::ImageRgb8(destination.clone()));
+        return Some(destination.clone());
     }
 
-    let row_bytes = usize::try_from(copy_width).ok()?.checked_mul(3)?;
-    let source_x_bytes = usize::try_from(source_left).ok()?.checked_mul(3)?;
-    let destination_x_bytes = usize::try_from(destination_left).ok()?.checked_mul(3)?;
-    let source_bytes = source.as_raw();
+    let row_bytes = usize::try_from(copy_width).ok()?.checked_mul(channels)?;
+    let source_x_bytes = usize::try_from(source_left).ok()?.checked_mul(channels)?;
+    let destination_x_bytes = usize::try_from(destination_left)
+        .ok()?
+        .checked_mul(channels)?;
+    let source_x_end = source_x_bytes.checked_add(row_bytes)?;
+    let destination_x_end = destination_x_bytes.checked_add(row_bytes)?;
+    let source_rows_start = usize::try_from(source_top)
+        .ok()?
+        .checked_mul(source_stride)?;
+    let destination_rows_start = usize::try_from(destination_top)
+        .ok()?
+        .checked_mul(destination_stride)?;
+    let source_rows_end = source_rows_start
+        .checked_add(source_stride.checked_mul(usize::try_from(copy_height).ok()?)?)?;
+    let destination_rows_end = destination_rows_start
+        .checked_add(destination_stride.checked_mul(usize::try_from(copy_height).ok()?)?)?;
     let mut output = destination.clone();
-    let output_bytes = output.as_mut();
-    for row in 0..copy_height {
-        let source_y = usize::try_from(source_top.checked_add(row)?).ok()?;
-        let destination_y = usize::try_from(destination_top.checked_add(row)?).ok()?;
-        let source_start = source_y
-            .checked_mul(source_stride)?
-            .checked_add(source_x_bytes)?;
-        let destination_start = destination_y
-            .checked_mul(destination_stride)?
-            .checked_add(destination_x_bytes)?;
-        let source_end = source_start.checked_add(row_bytes)?;
-        let destination_end = destination_start.checked_add(row_bytes)?;
-        output_bytes
-            .get_mut(destination_start..destination_end)?
-            .copy_from_slice(source_bytes.get(source_start..source_end)?);
+    let output_bytes = output.as_bytes_mut()?;
+    let source_rows = source_bytes.get(source_rows_start..source_rows_end)?;
+    let destination_rows = output_bytes.get_mut(destination_rows_start..destination_rows_end)?;
+    for (source_row, destination_row) in source_rows
+        .chunks_exact(source_stride)
+        .zip(destination_rows.chunks_exact_mut(destination_stride))
+    {
+        destination_row
+            .get_mut(destination_x_bytes..destination_x_end)?
+            .copy_from_slice(source_row.get(source_x_bytes..source_x_end)?);
     }
-    Some(DynamicImage::ImageRgb8(output))
+    Some(output)
 }
 
 pub fn op_paste(
@@ -297,22 +324,55 @@ pub fn op_paste(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let native_rgb_source =
-        if mask.is_none() && matches!(mode, None | Some("RGB")) && source.mode()?.as_str() == "RGB"
-        {
-            Some(source.materialized_shared()?)
+    let source_mode = if mask.is_none()
+        && matches!(
+            mode,
+            None | Some(
+                "1" | "L"
+                    | "P"
+                    | "LA"
+                    | "La"
+                    | "PA"
+                    | "RGB"
+                    | "HSV"
+                    | "YCbCr"
+                    | "LAB"
+                    | "RGBA"
+                    | "RGBa"
+                    | "RGBX"
+                    | "CMYK"
+                    | "I"
+                    | "F"
+            )
+        ) {
+        Some(source.mode()?)
+    } else {
+        None
+    };
+    let native_mode = match (mode, source_mode.as_deref()) {
+        (Some(mode), Some(source_mode)) if mode == source_mode => Some(mode),
+        (None, Some("RGB")) => Some("RGB"),
+        _ => None,
+    };
+    let native_source = if let Some(native_mode) = native_mode {
+        if matches!(native_mode, "P" | "PA") {
+            Some(Arc::new(source.materialize_indices()?))
         } else {
-            None
-        };
-    if let Some(source_image) = native_rgb_source.as_deref()
-        && let Some(output) = paste_native_rgb_rows(img, source_image, x, y)
+            Some(source.materialized_shared()?)
+        }
+    } else {
+        None
+    };
+    if mask.is_none()
+        && let (Some(native_mode), Some(source_image)) = (native_mode, native_source.as_deref())
+        && let Some(output) = paste_native_rows(img, source_image, x, y, native_mode)
     {
         return Ok(output);
     }
 
     let src_img = if matches!(mode, Some("P" | "PA")) {
         source.materialize_indices()?
-    } else if let Some(source_image) = native_rgb_source {
+    } else if let Some(source_image) = native_source {
         source_image.as_ref().clone()
     } else {
         source.materialize_for_ops()?
@@ -3470,6 +3530,84 @@ mod tests {
         )
         .expect("extreme clipped paste");
         assert_eq!(extreme_offset, destination);
+    }
+
+    #[test]
+    fn native_unmasked_paste_copies_each_supported_layout_verbatim() {
+        let cases = [
+            ("1", 1),
+            ("L", 1),
+            ("P", 1),
+            ("LA", 2),
+            ("PA", 2),
+            ("RGB", 3),
+            ("HSV", 3),
+            ("YCbCr", 3),
+            ("LAB", 3),
+            ("RGBA", 4),
+            ("RGBa", 4),
+            ("RGBX", 4),
+            ("CMYK", 4),
+            ("I", 4),
+            ("F", 4),
+        ];
+
+        for (mode, channels) in cases {
+            let destination_bytes = (0..channels * 2)
+                .map(|index| 10 + index as u8)
+                .collect::<Vec<_>>();
+            let source_bytes = (0..channels)
+                .map(|index| 100 + index as u8)
+                .collect::<Vec<_>>();
+            let destination = match channels {
+                1 => DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(2, 1, destination_bytes.clone())
+                        .expect("destination L buffer"),
+                ),
+                2 => DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(2, 1, destination_bytes.clone())
+                        .expect("destination LA buffer"),
+                ),
+                3 => DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(2, 1, destination_bytes.clone())
+                        .expect("destination RGB buffer"),
+                ),
+                4 => DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(2, 1, destination_bytes.clone())
+                        .expect("destination four-byte buffer"),
+                ),
+                _ => unreachable!("test cases use one through four channels"),
+            };
+            let source_image = match channels {
+                1 => DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(1, 1, source_bytes.clone()).expect("source L buffer"),
+                ),
+                2 => DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(1, 1, source_bytes.clone()).expect("source LA buffer"),
+                ),
+                3 => DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(1, 1, source_bytes.clone()).expect("source RGB buffer"),
+                ),
+                4 => DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(1, 1, source_bytes.clone())
+                        .expect("source four-byte buffer"),
+                ),
+                _ => unreachable!("test cases use one through four channels"),
+            };
+            let source = Arc::new(crate::Image::from_dynamic(
+                source_image,
+                Some(mode.to_owned()),
+            ));
+
+            let result = op_paste(&destination, &source, 1, 0, &None, false, Some(mode))
+                .unwrap_or_else(|error| panic!("native {mode} paste: {error}"));
+            let expected = destination_bytes[..channels]
+                .iter()
+                .chain(source_bytes.iter())
+                .copied()
+                .collect::<Vec<_>>();
+            assert_eq!(result.as_bytes(), expected, "native {mode} bytes");
+        }
     }
 
     #[cfg(target_endian = "little")]
