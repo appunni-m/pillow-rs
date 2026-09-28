@@ -2,8 +2,9 @@
 // Output dimensions = (w + 2*border) x (h + 2*border)
 // Border pixels = fill_color; inner region = source image.
 // Mode-aware: fill color respects image mode channels.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
-// Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
+// Mode codes: 0=L, 1=LA, 2=RGB/HSV, 3=RGBA
+// Generic output is packed u32 RGBA. The bounded native-output route packs
+// each four-byte word from the requested 1/2/3/4-byte channel layout.
 //
 // Source dimensions come from header width/height (= cur_w/cur_h).
 // Output dimensions computed as (width + 2*border, height + 2*border).
@@ -11,10 +12,12 @@
 struct Params {
     width: u32,    // source width (from header = cur_w)
     height: u32,   // source height (from header = cur_h)
-    mode: u32,     // 0=L, 1=LA, 2=RGB, 3=RGBA
-    native_input: u32,
+    mode: u32,     // 0=L, 1=LA, 2=RGB/HSV, 3=RGBA
+    native_input: u32, // bit 0: packed native input; bit 1: compact native output
     border: u32,   // border width in pixels
     fill: u32,     // packed fill color (0xAABBGGRR)
+    dst_w: u32,    // generic output width or native output words per dispatch row
+    dst_h: u32,    // generic output height or native output word count
 }
 
 // ── Mode helpers ──
@@ -33,6 +36,21 @@ fn read_native_byte(pixel_index: u32, channel: u32, channels: u32) -> u32 {
     return (word >> ((byte_index % 4u) * 8u)) & 0xffu;
 }
 
+fn native_expand_byte(byte_index: u32, out_w: u32, border: u32, channels: u32) -> u32 {
+    let pixel_index = byte_index / channels;
+    let channel = byte_index % channels;
+    let x = pixel_index % out_w;
+    let y = pixel_index / out_w;
+    if x < border || x >= border + params.width || y < border || y >= border + params.height {
+        let fill_channel = select(channel, 3u, params.mode == 1u && channel == 1u);
+        return (params.fill >> (fill_channel * 8u)) & 0xffu;
+    }
+    let source_x = x - border;
+    let source_y = y - border;
+    let source_pixel = source_y * params.width + source_x;
+    return read_native_byte(source_pixel, channel, channels);
+}
+
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let b = params.border;
@@ -44,6 +62,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     let out_w = params.width + 2u * b;
     let out_h = params.height + 2u * b;
+    if (params.native_input & 2u) != 0u {
+        let word_index = gid.y * params.dst_w + gid.x;
+        if gid.x >= params.dst_w || word_index >= params.dst_h { return; }
+        let channels = params.mode + 1u;
+        let output_byte_count = out_w * out_h * channels;
+        var packed = 0u;
+        for (var lane = 0u; lane < 4u; lane = lane + 1u) {
+            let byte_index = word_index * 4u + lane;
+            if byte_index < output_byte_count {
+                packed |= native_expand_byte(byte_index, out_w, b, channels) << (lane * 8u);
+            }
+        }
+        output[word_index] = packed;
+        return;
+    }
     if gid.x >= out_w || gid.y >= out_h { return; }
 
     let idx = gid.y * out_w + gid.x;
@@ -72,7 +105,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         var g = 0u;
         var b2 = 0u;
         var a = 255u;
-        if params.native_input != 0u {
+        if (params.native_input & 1u) != 0u {
             let channels = params.mode + 1u;
             r = read_native_byte(pixel_index, 0u, channels);
             if params.mode == 1u {

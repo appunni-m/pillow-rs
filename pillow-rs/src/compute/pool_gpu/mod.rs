@@ -4489,6 +4489,49 @@ fn plan_extract_band_dispatch(
     ))
 }
 
+const NATIVE_EXPAND_WORKGROUP_WIDTH: u64 = 16;
+const NATIVE_EXPAND_WORKGROUP_HEIGHT: u64 = 16;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NativeExpandOutputDispatch {
+    groups_x: u32,
+    groups_y: u32,
+    words_per_row: u32,
+    word_count: u32,
+    transfer_bytes: u64,
+}
+
+/// Plan one output invocation per packed word. Each 16×16 workgroup owns 256
+/// distinct words; the flattened 2D grid never assigns two invocations to the
+/// same word, including when the adapter's X limit requires a second row.
+fn plan_native_expand_output_dispatch(
+    output_bytes: u64,
+    max_workgroups_per_dimension: u32,
+) -> Option<NativeExpandOutputDispatch> {
+    if output_bytes == 0 || max_workgroups_per_dimension == 0 {
+        return None;
+    }
+    let word_count = output_bytes.checked_add(3)?.checked_div(4)?;
+    let workgroup_items =
+        NATIVE_EXPAND_WORKGROUP_WIDTH.checked_mul(NATIVE_EXPAND_WORKGROUP_HEIGHT)?;
+    let required_workgroups = word_count.div_ceil(workgroup_items);
+    let max_groups = u64::from(max_workgroups_per_dimension);
+    let groups_x = required_workgroups.min(max_groups);
+    let groups_y = required_workgroups.div_ceil(groups_x);
+    if groups_y > max_groups {
+        return None;
+    }
+    let words_per_row = groups_x.checked_mul(NATIVE_EXPAND_WORKGROUP_WIDTH)?;
+    let transfer_bytes = word_count.checked_mul(4)?;
+    Some(NativeExpandOutputDispatch {
+        groups_x: u32::try_from(groups_x).ok()?,
+        groups_y: u32::try_from(groups_y).ok()?,
+        words_per_row: u32::try_from(words_per_row).ok()?,
+        word_count: u32::try_from(word_count).ok()?,
+        transfer_bytes,
+    })
+}
+
 const BLUR_WORKGROUP_SIZE: u32 = 16;
 
 /// Plan bounded 2D blur workgroups. Each invocation computes one output pixel;
@@ -5374,6 +5417,7 @@ struct GpuBatchResources<'a> {
     img3_ranges: Vec<Option<BufferRange>>,
     lut: Option<&'a wgpu::Buffer>,
     lut_ranges: Vec<Option<BufferRange>>,
+    native_expand_output: Option<NativeExpandOutputDispatch>,
 }
 
 struct PreparedGpuBatch<'a> {
@@ -7031,6 +7075,7 @@ impl GpuInner {
         let mut output_dims = Vec::with_capacity(ops.len());
         let mut resize_source_rows = Vec::with_capacity(ops.len());
         let mut pad_resize_dims = Vec::with_capacity(ops.len());
+        let mut native_expand_output = None;
         let mut cur_w = w;
         let mut cur_h = h;
         let mut current_mode = mode;
@@ -7126,6 +7171,23 @@ impl GpuInner {
             };
             let (out_w, out_h) = op_output_dims(op, cur_w, cur_h).unwrap_or((cur_w, cur_h));
             self.validate_output_dims(buffers, out_w, out_h)?;
+            let native_expand_output_dispatch = if let Some(channels) = native_expand_channels
+                && ops.len() == 1
+                && matches!(op, PipelineOp::Expand { .. })
+            {
+                let output_bytes = CheckedDims::new(out_w, out_h, channels)?.total_bytes();
+                plan_native_expand_output_dispatch(
+                    u64::try_from(output_bytes).map_err(|_| {
+                        PilError::ValueError("GPU Expand output is too large".into())
+                    })?,
+                    limits.max_compute_workgroups_per_dimension,
+                )
+            } else {
+                None
+            };
+            if native_expand_output_dispatch.is_some() {
+                native_expand_output = native_expand_output_dispatch;
+            }
             let mut boxed_resize_coefficients = None;
             let resize_source_row_range =
                 if let PipelineOp::ResizeBoxed {
@@ -7190,9 +7252,10 @@ impl GpuInner {
             }
             if native_expand_channels.is_some() && matches!(op, PipelineOp::Expand { .. }) {
                 // Expand uses the same otherwise-unused fourth fixed uniform
-                // word to mark native-byte input. This remains safe because
-                // admission is restricted to a singleton Expand batch.
-                params[3] = 1;
+                // word as flags for native-byte input and compact native output.
+                // These are safe because admission requires a singleton
+                // Expand batch with matching physical storage.
+                params[3] = 1 | (u32::from(native_expand_output_dispatch.is_some()) << 1);
             }
             if packed_luma_putdata && matches!(op, PipelineOp::PutData { .. }) {
                 let pixel_count = CheckedDims::new(cur_w, cur_h, 1)?.total_pixels();
@@ -7541,7 +7604,11 @@ impl GpuInner {
             }
             // Shaders that declare dst_w/dst_h at the end of Params read these
             // words; shaders without them ignore the trailing words.
-            params.extend([out_w, out_h]);
+            if let Some(dispatch) = native_expand_output_dispatch {
+                params.extend([dispatch.words_per_row, dispatch.word_count]);
+            } else {
+                params.extend([out_w, out_h]);
+            }
             params_ranges.push(append_arena_slice(
                 &mut params_arena,
                 &params,
@@ -7956,6 +8023,7 @@ impl GpuInner {
                 img3_ranges,
                 lut,
                 lut_ranges,
+                native_expand_output,
             },
             input_dims,
             output_dims,
@@ -8000,6 +8068,12 @@ impl GpuInner {
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
+            "Expand" if resources.native_expand_output.is_some() => {
+                let plan = resources
+                    .native_expand_output
+                    .expect("guarded native Expand dispatch");
+                (plan.groups_x, plan.groups_y)
+            }
             "__internal_blur_h" | "__internal_blur_v" => plan_blur_dispatch(
                 output_dims.0,
                 output_dims.1,
@@ -9510,6 +9584,34 @@ impl GpuInner {
         Ok(DynamicImage::ImageRgba8(img))
     }
 
+    fn readback_to_native_channels(
+        &self,
+        w: u32,
+        h: u32,
+        channels: u8,
+        staging: &wgpu::Buffer,
+    ) -> Result<DynamicImage, PilError> {
+        let dimensions = CheckedDims::new(w, h, channels)?;
+        let native_bytes = dimensions.total_bytes();
+        let expected_transfer_bytes = native_bytes
+            .div_ceil(std::mem::size_of::<u32>())
+            .checked_mul(std::mem::size_of::<u32>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| {
+                PilError::ValueError("GPU native image readback size overflow".into())
+            })?;
+        self.readback_with(expected_transfer_bytes, staging, |mapped| {
+            if mapped.len() != expected_transfer_bytes as usize {
+                return Err(PilError::InternalError(
+                    "GPU native image readback has an unexpected byte length".into(),
+                ));
+            }
+            let pixels = mapped[..native_bytes].to_vec();
+            crate::compute::record_pipeline_allocation(pixels.len());
+            crate::image_utils::raw_bytes_to_image(w, h, pixels, usize::from(channels))
+        })
+    }
+
     fn readback_to_luma8(
         &self,
         w: u32,
@@ -9920,6 +10022,7 @@ impl GpuInner {
             ReadbackTarget,
             PipelineResourceTelemetry,
             u64,
+            bool,
         ),
         PilError,
     > {
@@ -9942,13 +10045,27 @@ impl GpuInner {
                     if gpu_f_resize_coefficients_need_tiles(&horizontal)
                         || gpu_f_resize_coefficients_need_tiles(&vertical)
                     {
-                        return self.execute_f_resize_tiled(
-                            (w, h),
-                            (*out_w, *out_h),
-                            &horizontal,
-                            &vertical,
-                            buffers,
-                        );
+                        return self
+                            .execute_f_resize_tiled(
+                                (w, h),
+                                (*out_w, *out_h),
+                                &horizontal,
+                                &vertical,
+                                buffers,
+                            )
+                            .map(
+                                |(current_is_a, width, height, readback, telemetry, dispatches)| {
+                                    (
+                                        current_is_a,
+                                        width,
+                                        height,
+                                        readback,
+                                        telemetry,
+                                        dispatches,
+                                        false,
+                                    )
+                                },
+                            );
                     }
                 }
             }
@@ -9957,6 +10074,7 @@ impl GpuInner {
         let mut cur_w = w;
         let mut cur_h = h;
         let dispatch_count = gpu_dispatch_count(ops, logical_mode, (w, h));
+        let mut native_expand_output = false;
         gpu_log!(
             "[GPU] batch_impl: {} ops, start dims {}x{}",
             ops.len(),
@@ -10096,6 +10214,7 @@ impl GpuInner {
                 buffers,
                 &auxiliary_cache,
             )?;
+            native_expand_output |= prepared.resources.native_expand_output.is_some();
             resource_telemetry.parameter_bytes = resource_telemetry
                 .parameter_bytes
                 .saturating_add(prepared.resource_telemetry.parameter_bytes);
@@ -10119,7 +10238,9 @@ impl GpuInner {
 
             let final_dims = prepared.final_dims;
             if chunk_end == ops.len() {
-                let size = if packed_luma_point
+                let size = if let Some(dispatch) = prepared.resources.native_expand_output {
+                    dispatch.transfer_bytes
+                } else if packed_luma_point
                     || packed_luma_putdata
                     || matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }))
                 {
@@ -10173,6 +10294,7 @@ impl GpuInner {
             readback,
             resource_telemetry,
             dispatch_count,
+            native_expand_output,
         ))
     }
 }
@@ -10252,8 +10374,9 @@ fn gpu_native_extract_band_channels(
 }
 
 /// Return the packed native-byte channel count for a singleton Expand batch.
-/// Expand's shader still produces its established RGBA output, but it can read
-/// matching L/LA/RGB/RGBA input bytes without host-side widening.
+/// When the adapter's bounded output-word grid fits, the shader also writes
+/// the result in this compact native layout; otherwise the generic RGBA output
+/// path remains available.
 #[cfg(target_endian = "little")]
 fn gpu_native_expand_channels(
     ops: &[PipelineOp],
@@ -10266,7 +10389,7 @@ fn gpu_native_expand_channels(
     let channels = match (logical_mode, image) {
         (None | Some("L"), DynamicImage::ImageLuma8(_)) => 1u8,
         (None | Some("LA"), DynamicImage::ImageLumaA8(_)) => 2,
-        (None | Some("RGB"), DynamicImage::ImageRgb8(_)) => 3,
+        (None | Some("RGB" | "HSV"), DynamicImage::ImageRgb8(_)) => 3,
         (None | Some("RGBA"), DynamicImage::ImageRgba8(_)) => 4,
         _ => return None,
     };
@@ -16334,6 +16457,12 @@ impl GpuPool {
                                 }
                         )
                     }))
+                // Singleton HSV Expand reads the image's three stored
+                // samples as-is. Keep this tied to the native-layout gate so
+                // the shader cannot admit a logical HSV image with a
+                // mismatched physical representation.
+                || (logical_mode == "HSV"
+                    && gpu_native_expand_channels(ops, img, mode).is_some())
                 // CMYK, HSV, and YCbCr retain their native channel order in
                 // the packed RGBA/RGB transport.  ExtractBand only copies
                 // one requested byte and then publishes an L8 result, so it
@@ -16982,29 +17111,36 @@ impl GpuPool {
         }
         gpu_log!("[GPU] step=upload done native_luma16={native_luma16}");
         gpu_log!("[GPU] step=execute_batch_impl start");
-        let (final_is_a, final_w, final_h, readback, mut resource_telemetry, dispatch_count) = gpu
-            .execute_batch_impl(
-                ops,
-                &auxiliary_images,
-                w,
-                h,
-                mcode,
-                packed_luma_colorize,
-                packed_luma_point,
-                packed_luma_putdata,
-                native_extract_band,
-                native_expand_channels,
-                mode,
-                contrast_mean,
-                f_resize_constant_bits,
-                f_resize_box_copy_is_exact,
-                f_resize_identity_is_exact,
-                f_resize_box_average_is_exact,
-                f_resize_dyadic_is_exact,
-                f_resize_f64_is_exact,
-                f_resize_f64_ordered_is_exact,
-                &mut buffers,
-            )?;
+        let (
+            final_is_a,
+            final_w,
+            final_h,
+            readback,
+            mut resource_telemetry,
+            dispatch_count,
+            native_expand_output,
+        ) = gpu.execute_batch_impl(
+            ops,
+            &auxiliary_images,
+            w,
+            h,
+            mcode,
+            packed_luma_colorize,
+            packed_luma_point,
+            packed_luma_putdata,
+            native_extract_band,
+            native_expand_channels,
+            mode,
+            contrast_mean,
+            f_resize_constant_bits,
+            f_resize_box_copy_is_exact,
+            f_resize_identity_is_exact,
+            f_resize_box_average_is_exact,
+            f_resize_dyadic_is_exact,
+            f_resize_f64_is_exact,
+            f_resize_f64_ordered_is_exact,
+            &mut buffers,
+        )?;
         gpu_log!(
             "[GPU] step=execute_batch_impl done final=({},{}) is_a={}",
             final_w,
@@ -17076,7 +17212,16 @@ impl GpuPool {
         } else if native_luma8_extract || packed_luma_point || packed_luma_putdata {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else {
-            gpu.readback_to_image(final_w, final_h, readback_buffer, native_rgb)?
+            if native_expand_output {
+                let channels = native_expand_channels.ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU native Expand output is missing its channel count".into(),
+                    )
+                })?;
+                gpu.readback_to_native_channels(final_w, final_h, channels, readback_buffer)?
+            } else {
+                gpu.readback_to_image(final_w, final_h, readback_buffer, native_rgb)?
+            }
         };
         gpu_log!("[GPU] step=readback done");
         // map_async completion proves the command buffer no longer uses the
@@ -17106,12 +17251,25 @@ impl GpuPool {
         } else {
             CheckedDims::new(w, h, 4)?.total_bytes() as u64
         };
-        resource_telemetry.readback_bytes =
-            if native_luma8_extract || packed_luma_point || packed_luma_putdata {
-                compact_luma8_transfer_bytes(final_w, final_h)?
-            } else {
-                CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
-            };
+        resource_telemetry.readback_bytes = if native_expand_output {
+            let channels = native_expand_channels.ok_or_else(|| {
+                PilError::InternalError("GPU native Expand output is missing its channels".into())
+            })?;
+            let native_bytes = CheckedDims::new(final_w, final_h, channels)?.total_bytes();
+            u64::try_from(
+                native_bytes
+                    .div_ceil(std::mem::size_of::<u32>())
+                    .checked_mul(std::mem::size_of::<u32>())
+                    .ok_or_else(|| {
+                        PilError::ValueError("GPU native image readback size overflow".into())
+                    })?,
+            )
+            .map_err(|_| PilError::ValueError("GPU native image readback size overflow".into()))?
+        } else if native_luma8_extract || packed_luma_point || packed_luma_putdata {
+            compact_luma8_transfer_bytes(final_w, final_h)?
+        } else {
+            CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
+        };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = if native_expand_channels.is_some() {
@@ -17184,8 +17342,8 @@ mod tests {
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, gpu_shader_work_items,
         gpu_shader_work_requires_cpu, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
-        plan_extract_band_dispatch, plan_packed_point_luma_dispatch, putdata_auxiliary_words,
-        readback_poll_backoff,
+        plan_extract_band_dispatch, plan_native_expand_output_dispatch,
+        plan_packed_point_luma_dispatch, putdata_auxiliary_words, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -18089,7 +18247,7 @@ mod tests {
                     })
                     .collect();
                 buffers.upload_standard_image(&gpu.queue, &source).unwrap();
-                let (final_is_a, width, height, readback, _, dispatches) = gpu
+                let (final_is_a, width, height, readback, _, dispatches, _) = gpu
                     .execute_batch_impl(
                         &ops,
                         &auxiliary,
@@ -22479,6 +22637,13 @@ mod tests {
                 Some(3),
             ),
             (
+                DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(2, 1, vec![3, 5, 7, 11, 13, 17]).unwrap(),
+                ),
+                Some("HSV"),
+                Some(3),
+            ),
+            (
                 DynamicImage::ImageRgba8(
                     RgbaImage::from_raw(2, 1, vec![3, 5, 7, 11, 13, 17, 19, 23]).unwrap(),
                 ),
@@ -22551,6 +22716,44 @@ mod tests {
         assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
         assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
         assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+    }
+
+    #[test]
+    fn native_expand_output_dispatch_covers_padded_words_within_limits() {
+        let plan = plan_native_expand_output_dispatch(600 * 4, 2)
+            .expect("small output should fit a tiled dispatch");
+        assert_eq!((plan.groups_x, plan.groups_y), (2, 2));
+        assert_eq!(plan.words_per_row, 32);
+        assert_eq!(plan.word_count, 600);
+        assert_eq!(plan.transfer_bytes, 600 * 4);
+        let mut writes = vec![0u8; plan.word_count as usize];
+        for invocation_y in 0..plan.groups_y * 16 {
+            for invocation_x in 0..plan.groups_x * 16 {
+                let word = invocation_y * plan.words_per_row + invocation_x;
+                if word < plan.word_count {
+                    writes[word as usize] += 1;
+                }
+            }
+        }
+        assert!(writes.iter().all(|count| *count == 1));
+
+        let max_groups = 65_535u64;
+        let max_x_words = max_groups * 256;
+        let exact_x = plan_native_expand_output_dispatch(max_x_words * 4, 65_535)
+            .expect("exact X limit should fit");
+        assert_eq!((exact_x.groups_x, exact_x.groups_y), (65_535, 1));
+        let next_x = plan_native_expand_output_dispatch((max_x_words + 1) * 4, 65_535)
+            .expect("one group beyond X should tile to a second row");
+        assert_eq!((next_x.groups_x, next_x.groups_y), (65_535, 2));
+
+        let tiled_limit = 256u64;
+        let max_grid_words = tiled_limit * tiled_limit * 256;
+        let exact_grid = plan_native_expand_output_dispatch(max_grid_words * 4, 256)
+            .expect("exact 2D limit should fit the shader index type");
+        assert_eq!((exact_grid.groups_x, exact_grid.groups_y), (256, 256));
+        assert!(plan_native_expand_output_dispatch((max_grid_words + 1) * 4, 256).is_none());
+        assert!(plan_native_expand_output_dispatch(1, 0).is_none());
+        assert!(plan_native_expand_output_dispatch(0, 65_535).is_none());
     }
 
     #[test]
