@@ -222,6 +222,18 @@ EXPAND_PERFORMANCE_CASES = (
 PASTE_PERFORMANCE_CASES = (
     ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002),
 )
+PAD_PERFORMANCE_CASES = (
+    ("l-noise-1024x768-square", "L", [1024, 768], 20261004, 73),
+    ("la-noise-1024x768-square", "LA", [1024, 768], 20261005, [73, 149]),
+    ("rgb-noise-1024x768-square", "RGB", [1024, 768], 20261006, [17, 83, 149]),
+    (
+        "rgba-noise-1024x768-square",
+        "RGBA",
+        [1024, 768],
+        20261007,
+        [17, 83, 149, 191],
+    ),
+)
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
     ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
@@ -40219,6 +40231,21 @@ def build_nuanced_cases(
         "target_profiles": ["python-cpu", "python-simd"],
     },)
 
+    if surface_id == "PIL.ImageOps":
+        # Materialize the pad assembly on noisy native byte layouts. The 4:3
+        # source already fits the 4:4 target width, so contain keeps its
+        # dimensions and the timed operation isolates canvas fill and row copy.
+        for name, mode, size, seed, fill in PAD_PERFORMANCE_CASES:
+            specs += ({
+                "surface": "PIL.ImageOps", "operation": "pad",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-native-{name}",
+                "mode": mode, "size": size, "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal([1024, 1024]), "color": literal(fill)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
     if surface_id == "PIL.Image.Image":
         # The standard Point workload is a 16x16 identity LUT over a black
         # image. Keep it as the small-call row, but add an active lookup over
@@ -47477,6 +47504,54 @@ def build_inputs(
                                 variant=f"expand-{slug(name)}",
                                 surface=surface_id,
                                 operation="expand",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+            pad_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "pad"
+                ),
+                None,
+            )
+            if pad_benchmark is not None:
+                operation, requirement = pad_benchmark
+                for name, _mode, _size, _seed, _fill in PAD_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.pad.materialized.native-{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.ImageOps.pad.nuanced.performance-native-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-result"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"pad-native-{slug(name)}",
+                                surface=surface_id,
+                                operation="pad",
                             ),
                         }
                     )

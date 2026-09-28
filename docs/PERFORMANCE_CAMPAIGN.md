@@ -6983,6 +6983,49 @@ All three targets executed 100/100 samples without fallback and parity passed
 3/3. This is a final-state measurement, not a replacement for the controlled
 before/after pair above; the repeated timings vary with host load.
 
-This is a CPU RGB checkpoint, not a general Paste or campaign completion. The
-next format-specific Paste cases and the CPU Pad conversion remain open; masked
-Paste and mixed-mode input paths are intentionally untouched.
+This is a CPU RGB checkpoint, not a general Paste or campaign completion.
+Other mode-specific Paste cases remain open; masked Paste and mixed-mode input
+paths are intentionally untouched. The following Pad checkpoint covers
+canonical L/LA/RGB/RGBA CPU layouts only.
+
+### Pad: native CPU L/LA/RGB/RGBA — 2026-09-28
+
+`op_pad` previously resized to contain, cloned the resized image into RGBA,
+filled a four-byte canvas, copied source rows, reconstructed RGBA storage, and
+then narrowed back to the requested mode. The native path admits only matching
+logical and physical L, LA, RGB, or RGBA layouts. It borrows the original image
+when contain dimensions are unchanged, fills an output in the requested byte
+pattern, then copies either the entire vertical source span contiguously or the
+clipped horizontal rows. P/PA keep their existing index paths; CMYK, RGBX,
+RGBa, I, F, and other layouts retain the general route. LA output stores fill
+as `[fill_luma, fill_alpha]`, while source LA alpha stays at byte 1.
+
+The benchmark cases use deterministic noisy 1024 × 768 input and pad to
+1024 × 1024, which isolates the canvas-and-copy phase from resampling. Setup
+is outside the timer; the boundary is `pad` plus `tobytes`, with 5 warmups, 20
+iterations × 5 samples, concurrency one, and a parity gate. Baseline run
+`migration-benchmark-1450a5d9148247d782dc51e30d8139a9`; native run
+`migration-benchmark-b0b5450f636349298977a6e92a84edfc`.
+
+| Mode | CPU before ms | CPU native ms | Pillow ms in final run | CPU speedup vs before | CPU vs Pillow |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 1.416396 | 0.041042 | 0.177646 | 34.5× | 4.33× faster |
+| LA | 2.033542 | 0.164209 | 0.811271 | 12.4× | 4.94× faster |
+| RGB | 1.381584 | 0.246396 | 1.133417 | 5.61× | 4.60× faster |
+| RGBA | 1.129125 | 0.330646 | 0.991271 | 3.41× | 3.00× faster |
+
+The final benchmark gate passed 12/12 comparisons across CPU, SIMD, and GPU;
+each backend executed 100/100 samples per mode without fallback. The focused
+CPU strict lane passed 13/13, covering all four modes, fill projection,
+fractional centering, and bilinear contain output. SIMD and GPU code were not
+changed, so their timings are observations only; GPU remains slower than SIMD
+on these cases. Input generation/contract validation, `make fmt`, focused Rust
+test, `make clippy`, and docs lint passed. No coverage collection ran.
+
+The useful tuning result was to avoid a per-pixel fill loop and per-row
+parallel copies for the common vertical pad: repeated fill-row initialization
+plus one contiguous source copy reduced the L case from 0.215 ms to 0.041 ms.
+Borrowing the identity-contain source also avoids an otherwise redundant full
+source clone. Keep the row-wise path for horizontal pads and preserve the
+mode-and-storage gate so CMYK's K byte and scalar I/F words never become color
+channels.
