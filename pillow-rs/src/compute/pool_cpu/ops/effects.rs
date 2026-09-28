@@ -224,6 +224,70 @@ pub(crate) fn effect_spread_mapping(
 
 // ── Paste ──
 
+/// Copy an unmasked RGB paste using the image's native three-byte layout.
+///
+/// `None` means the physical buffers do not satisfy the checked RGB layout;
+/// callers then keep the established general paste path.
+fn paste_native_rgb_rows(
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    x: i64,
+    y: i64,
+) -> Option<DynamicImage> {
+    let (DynamicImage::ImageRgb8(destination), DynamicImage::ImageRgb8(source)) =
+        (destination, source)
+    else {
+        return None;
+    };
+    let (source_width, source_height) = source.dimensions();
+    let (destination_width, destination_height) = destination.dimensions();
+    let source_stride = usize::try_from(source_width).ok()?.checked_mul(3)?;
+    let destination_stride = usize::try_from(destination_width).ok()?.checked_mul(3)?;
+    if source.as_raw().len() != source_stride.checked_mul(usize::try_from(source_height).ok()?)?
+        || destination.as_raw().len()
+            != destination_stride.checked_mul(usize::try_from(destination_height).ok()?)?
+    {
+        return None;
+    }
+
+    let source_left = x.saturating_neg().max(0).min(i64::from(source_width)) as u32;
+    let source_top = y.saturating_neg().max(0).min(i64::from(source_height)) as u32;
+    let destination_left = x.max(0).min(i64::from(destination_width)) as u32;
+    let destination_top = y.max(0).min(i64::from(destination_height)) as u32;
+    let copy_width = source_width
+        .saturating_sub(source_left)
+        .min(destination_width.saturating_sub(destination_left));
+    let copy_height = source_height
+        .saturating_sub(source_top)
+        .min(destination_height.saturating_sub(destination_top));
+    if copy_width == 0 || copy_height == 0 {
+        return Some(DynamicImage::ImageRgb8(destination.clone()));
+    }
+
+    let row_bytes = usize::try_from(copy_width).ok()?.checked_mul(3)?;
+    let source_x_bytes = usize::try_from(source_left).ok()?.checked_mul(3)?;
+    let destination_x_bytes = usize::try_from(destination_left).ok()?.checked_mul(3)?;
+    let source_bytes = source.as_raw();
+    let mut output = destination.clone();
+    let output_bytes = output.as_mut();
+    for row in 0..copy_height {
+        let source_y = usize::try_from(source_top.checked_add(row)?).ok()?;
+        let destination_y = usize::try_from(destination_top.checked_add(row)?).ok()?;
+        let source_start = source_y
+            .checked_mul(source_stride)?
+            .checked_add(source_x_bytes)?;
+        let destination_start = destination_y
+            .checked_mul(destination_stride)?
+            .checked_add(destination_x_bytes)?;
+        let source_end = source_start.checked_add(row_bytes)?;
+        let destination_end = destination_start.checked_add(row_bytes)?;
+        output_bytes
+            .get_mut(destination_start..destination_end)?
+            .copy_from_slice(source_bytes.get(source_start..source_end)?);
+    }
+    Some(DynamicImage::ImageRgb8(output))
+}
+
 pub fn op_paste(
     img: &DynamicImage,
     source: &Arc<Image>,
@@ -233,15 +297,30 @@ pub fn op_paste(
     mask_alpha: bool,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let native_rgb_source =
+        if mask.is_none() && matches!(mode, None | Some("RGB")) && source.mode()?.as_str() == "RGB"
+        {
+            Some(source.materialized_shared()?)
+        } else {
+            None
+        };
+    if let Some(source_image) = native_rgb_source.as_deref()
+        && let Some(output) = paste_native_rgb_rows(img, source_image, x, y)
+    {
+        return Ok(output);
+    }
+
     let src_img = if matches!(mode, Some("P" | "PA")) {
         source.materialize_indices()?
+    } else if let Some(source_image) = native_rgb_source {
+        source_image.as_ref().clone()
     } else {
         source.materialize_for_ops()?
     };
     let (src_w, src_h) = (src_img.width(), src_img.height());
     let (dest_w, dest_h) = img.dimensions();
-    let source_left = (-x).max(0).min(i64::from(src_w)) as u32;
-    let source_top = (-y).max(0).min(i64::from(src_h)) as u32;
+    let source_left = x.saturating_neg().max(0).min(i64::from(src_w)) as u32;
+    let source_top = y.saturating_neg().max(0).min(i64::from(src_h)) as u32;
     let dest_left = x.max(0).min(i64::from(dest_w)) as u32;
     let dest_top = y.max(0).min(i64::from(dest_h)) as u32;
     let copy_width = src_w
@@ -3284,11 +3363,14 @@ fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{cubic_sample, op_transform, transform_mesh, transform_projective_generic};
+    use super::{
+        cubic_sample, op_paste, op_transform, transform_mesh, transform_projective_generic,
+    };
     use crate::pipeline::{ResampleFilter, TransformMethod};
     use crate::raster::{
         DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
     };
+    use std::sync::Arc;
 
     fn varied_luma_source() -> DynamicImage {
         let raw: Vec<u8> = (0..4)
@@ -3334,6 +3416,60 @@ mod tests {
         DynamicImage::ImageRgba8(
             RgbaImage::from_raw(width, height, raw).expect("F source buffer shape"),
         )
+    }
+
+    #[test]
+    fn native_rgb_paste_copies_clipped_rows_without_changing_other_pixels() {
+        let destination = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(
+                3,
+                3,
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27,
+                ],
+            )
+            .expect("destination RGB buffer"),
+        );
+        let source = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageRgb8(
+                RgbImage::from_raw(
+                    4,
+                    2,
+                    vec![
+                        101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+                        116, 117, 118, 119, 120, 121, 122, 123, 124,
+                    ],
+                )
+                .expect("source RGB buffer"),
+            ),
+            Some("RGB".to_owned()),
+        ));
+
+        let result = op_paste(&destination, &source, -1, 1, &None, false, Some("RGB"))
+            .expect("native RGB paste");
+        let DynamicImage::ImageRgb8(result) = result else {
+            panic!("native RGB paste must retain RGB storage");
+        };
+        assert_eq!(
+            result.as_raw(),
+            &[
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 104, 105, 106, 107, 108, 109, 110, 111, 112, 116, 117,
+                118, 119, 120, 121, 122, 123, 124,
+            ]
+        );
+
+        let extreme_offset = op_paste(
+            &destination,
+            &source,
+            i64::MIN,
+            0,
+            &None,
+            false,
+            Some("RGB"),
+        )
+        .expect("extreme clipped paste");
+        assert_eq!(extreme_offset, destination);
     }
 
     #[cfg(target_endian = "little")]

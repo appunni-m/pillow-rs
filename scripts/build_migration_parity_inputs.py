@@ -219,6 +219,9 @@ EXPAND_PERFORMANCE_CASES = (
         [37, 113, 211, 79],
     ),
 )
+PASTE_PERFORMANCE_CASES = (
+    ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002),
+)
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
     ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
@@ -2827,12 +2830,18 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
-        if self.edge == "noise-fill":
+        if self.edge in {"noise-fill", "paste-noise-fill"}:
             # Deterministic diverse images are built through the public
             # frombytes endpoint with inline bytes so the oracle and target
             # decode the exact same samples.
             size = self.scenario_size or [16, 16]
-            rng = random.Random(self.scenario_noise_seed or 0)
+            seed = self.scenario_noise_seed or 0
+            if self.edge == "paste-noise-fill" and label == "im":
+                # Keep the source distinct from the destination so the paste
+                # workload measures a real copy rather than rewriting the
+                # same byte pattern.
+                seed += 1
+            rng = random.Random(seed)
             n_pixels = size[0] * size[1]
             if requested_mode == "RGB":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
@@ -22308,6 +22317,35 @@ def build_nuanced_cases(
                 "im": literal(255),
                 "box": literal([1, 1, 5, 5]),
             },
+        },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "paste",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "paste-noise-fill",
+                "seed": seed,
+                "values": {"box": literal([2, 2])},
+                "observe_receiver": True,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in PASTE_PERFORMANCE_CASES
+        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "native-rgb-negative-offset-clips-source",
+            "mode": "RGB",
+            "size": [13, 11],
+            "edge": "paste-noise-fill",
+            "seed": 20261003,
+            "values": {"box": literal([-2, -1])},
+            "observe_receiver": True,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -47486,6 +47524,54 @@ def build_inputs(
                 )
                 members.append({"workload_id": workload_id, "weight": 1})
         if surface_id == "PIL.Image.Image":
+            paste_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "paste"
+                ),
+                None,
+            )
+            if paste_benchmark is not None:
+                operation, requirement = paste_benchmark
+                for name, _mode, _size, _seed in PASTE_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.paste.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.paste.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-receiver"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"paste-{slug(name)}",
+                                surface=surface_id,
+                                operation="paste",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
             getchannel_benchmark = next(
                 (
                     (operation, requirement)
