@@ -2187,8 +2187,19 @@ fn reduce_f_thumbnail(
     factor_x: u32,
     factor_y: u32,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (src_w, src_h) = rgba.dimensions();
+    // F's four-byte image is a scalar carrier here; borrow it to avoid a copy.
+    let (src_w, src_h, source_image) = match img {
+        DynamicImage::ImageRgba8(image) => (image.width(), image.height(), image),
+        _ => {
+            return Err(PilError::ValueError(
+                "F-mode thumbnail reduction requires four-byte scalar storage".into(),
+            ));
+        }
+    };
+    let sample_f32 = |x: u32, y: u32| {
+        let sample = source_image.get_pixel(x, y);
+        f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])
+    };
     let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
     let main_width = src_w / factor_x;
     let main_height = src_h / factor_y;
@@ -2211,8 +2222,7 @@ fn reduce_f_thumbnail(
                     let mut dx = 0;
                     while dx + 1 < block_w {
                         let value = |offset_x: u32, offset_y: u32| {
-                            let pixel = rgba.get_pixel(source_x + offset_x, source_y + offset_y);
-                            f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
+                            sample_f32(source_x + offset_x, source_y + offset_y)
                         };
                         let top_left = value(dx, dy);
                         let top_right = value(dx + 1, dy);
@@ -2223,10 +2233,7 @@ fn reduce_f_thumbnail(
                         dx += 2;
                     }
                     if dx < block_w {
-                        let value = |offset_y: u32| {
-                            let pixel = rgba.get_pixel(source_x + dx, source_y + offset_y);
-                            f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
-                        };
+                        let value = |offset_y: u32| sample_f32(source_x + dx, source_y + offset_y);
                         sum += f64::from(value(dy) + value(dy + 1));
                     }
                     dy += 2;
@@ -2234,25 +2241,18 @@ fn reduce_f_thumbnail(
                 if dy < block_h {
                     let mut dx = 0;
                     while dx + 1 < block_w {
-                        let value = |offset_x: u32| {
-                            let pixel = rgba.get_pixel(source_x + offset_x, source_y + dy);
-                            f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
-                        };
+                        let value = |offset_x: u32| sample_f32(source_x + offset_x, source_y + dy);
                         sum += f64::from(value(dx) + value(dx + 1));
                         dx += 2;
                     }
                     if dx < block_w {
-                        let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
-                        sum +=
-                            f64::from(f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]));
+                        sum += f64::from(sample_f32(source_x + dx, source_y + dy));
                     }
                 }
             } else {
                 for dy in 0..block_h {
                     for dx in 0..block_w {
-                        let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
-                        sum +=
-                            f64::from(f32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]));
+                        sum += f64::from(sample_f32(source_x + dx, source_y + dy));
                     }
                 }
             }
@@ -2270,8 +2270,19 @@ fn reduce_i_thumbnail(
     factor_x: u32,
     factor_y: u32,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (src_w, src_h) = rgba.dimensions();
+    // I's four-byte image is a scalar carrier here; borrow it to avoid a copy.
+    let (src_w, src_h, source_image) = match img {
+        DynamicImage::ImageRgba8(image) => (image.width(), image.height(), image),
+        _ => {
+            return Err(PilError::ValueError(
+                "I-mode thumbnail reduction requires four-byte scalar storage".into(),
+            ));
+        }
+    };
+    let sample_i32 = |x: u32, y: u32| {
+        let sample = source_image.get_pixel(x, y);
+        i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])
+    };
     let mut out = Vec::with_capacity((dst_w * dst_h * 4) as usize);
     let main_width = src_w / factor_x;
     let main_height = src_h / factor_y;
@@ -2290,8 +2301,7 @@ fn reduce_i_thumbnail(
             let mut sum = 0.0f64;
             if x < main_width && y < main_height {
                 let value = |offset_x: u32, offset_y: u32| {
-                    let pixel = rgba.get_pixel(source_x + offset_x, source_y + offset_y);
-                    i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]])
+                    sample_i32(source_x + offset_x, source_y + offset_y)
                 };
                 let mut dy = 0;
                 while dy + 1 < block_h {
@@ -2324,9 +2334,7 @@ fn reduce_i_thumbnail(
             } else {
                 for dy in 0..block_h {
                     for dx in 0..block_w {
-                        let pixel = rgba.get_pixel(source_x + dx, source_y + dy);
-                        let value = i32::from_le_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]);
-                        sum += f64::from(value);
+                        sum += f64::from(sample_i32(source_x + dx, source_y + dy));
                     }
                 }
             }

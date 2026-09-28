@@ -6752,9 +6752,9 @@ revisit Mirror after other operations receive their first optimization pass.
 
 ## Native-format conversion audit and GetChannel checkpoint — 2026-09-28
 
-The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 86
+The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 84
 textual call/declaration sites, including tests and the `DynamicImage`
-conversion helpers. These are not 86 runtime image conversions. The Python
+conversion helpers. These are not 84 runtime image conversions. The Python
 Qt bridge has two explicit `convert("RGBA")` calls; JavaScript has none in
 the binding source. The ledger below separates runtime operations from helper
 definitions, wrappers, test-only matches, comments, and a one-pixel color
@@ -6837,8 +6837,8 @@ follow-up and compact native GPU output are recorded below.
 
 ### Explicit RGBA callsite ledger — 2026-09-28
 
-The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 86 Rust
-source matches: 76 runtime operation calls, one GPU test, two wrapper
+The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 84 Rust
+source matches: 74 runtime operation calls, one GPU test, two wrapper
 delegations, one single-color conversion, two conversion method definitions,
 and three comments. The Python Qt bridge has two explicit `convert("RGBA")`
 calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
@@ -6849,7 +6849,7 @@ copy an existing four-byte carrier for other modes.
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
 | Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
-| Same-layout clone or four-byte reinterpretation | 26 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:2190,2273`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
+| Same-layout clone or four-byte reinterpretation | 24 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3250,3328,3401`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
 | Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
@@ -7109,7 +7109,7 @@ everything else.
 | 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
 | 7 | F boxed nearest resize | Preserve the four-byte scalar words; copy selected words directly and return `Image.copy()` only when both cumulative nearest maps select the same source coordinates. | Validate the narrowed box first. Retain logical F at CPU dispatch; decode to f32 only for filtered resampling and preserve f64 accumulation/f32 stores. The identity workload is 5.1× faster end-to-end but bypasses all backends; GPU F resize remains unsupported. |
-| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity and ordinary F/I CPU resize no longer clone through the RGBA accessor. Filtered kernels still decode to typed sample vectors; preserve exact rounding, byte order, and sample evaluation. |
+| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity, ordinary F/I CPU resize, and F/I thumbnail reduction no longer clone through the RGBA accessor. Filtered kernels still decode to typed sample vectors; preserve exact rounding, byte order, and sample evaluation. |
 
 Treat a four-byte physical buffer as its real format: CMYK's fourth byte is K,
 RGBX's is padding, RGBa is premultiplied, LA alpha is byte 1, and I/F are scalar
@@ -7462,5 +7462,41 @@ Pillow in both modes, and GPU is much slower than SIMD; these changes affect
 the CPU scalar routes only. Treat those misses as separate backend blockers,
 not as evidence that eliminating a redundant carrier clone helps those
 executors. These are concurrency-one latency measurements, not sustained
-throughput. The conversion-audit checkpoint removes three same-layout clone
-sites; it does not convert or reinterpret scalar samples as RGBA channels.
+throughput. The conversion audit has removed five same-layout clone sites across typed
+resize and thumbnail reduction; scalar samples are never treated as RGBA
+channels.
+
+
+### F/I Image.thumbnail: borrow scalar storage during reducing-gap prepass — 2026-09-28
+
+F and I thumbnail reduction used the RGBA accessor only to clone the existing
+four-byte scalar carrier before reading every sample with get_pixel. The
+reducer now admits only the matching ImageRgba8 carrier and borrows that image
+directly. It still decodes each little-endian word as one f32 or i32 sample,
+preserving F's float pair/quartet addition order and I's wrapping 32-bit
+pair/quartet arithmetic before double accumulation. The following resample
+stage and output packing are unchanged. This removes a full source buffer
+clone without changing color or channel semantics.
+
+The material workload uses noisy 1024 × 768 F/I sources, thumbnail to a
+256 × 256 bound with bicubic resampling and reducing_gap=2, and observes the
+mutated image through materialization. It uses five warmups and 100 measured
+calls per subject. Both benchmark parity gates passed for Pillow, CPU, SIMD,
+and GPU-requested profiles. CPU and SIMD each executed 100/100 calls; GPU
+requests fell back to CPU on 100/100 because typed reducing-gap arithmetic
+is not proven in the GPU executor. Separate 17 × 13 F/I CPU parity cases cover
+partial right and bottom reduction blocks. No coverage ran.
+
+| Mode | Run | Pillow ms | CPU ms | SIMD ms | GPU-requested ms | GPU evidence |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| F | Before → borrowed storage | 1.009000 → 1.085291 | 1.570292 → 1.533416 | 1.644062 → 1.836729 | 2.361104 → 2.397146 | CPU fallback, 100/100 |
+| I | Before → borrowed storage | 0.871750 → 0.883000 | 1.820042 → 1.679688 | 1.612125 → 1.663687 | 2.420084 → 2.393000 | CPU fallback, 100/100 |
+
+CPU latency fell about 2% for F and 8% for I versus the initial run, while
+Pillow and SIMD medians also moved between runs. Those gains are small and do
+not establish a robust speedup beyond noise. CPU remains 1.4× slower than
+Pillow for F and 1.9× slower for I in the final run; SIMD remains slower than
+Pillow, and the GPU-requested profile never reaches GPU execution. The source
+clone is removed, but the operation stays checkpointed with these backend
+blockers. Further work should profile reduction versus resampling and terminal
+materialization before another implementation attempt.

@@ -38570,6 +38570,46 @@ def build_nuanced_cases(
                 "resample": literal(2),
             },
         },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-large-{mode.lower()}-1024x768",
+                "mode": mode,
+                "size": [1024, 768],
+                "edge": "noise-fill",
+                "seed": 240931 if mode == "F" else 240932,
+                "observe_receiver": True,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "values": {
+                    "size": literal([256, 256]),
+                    "resample": literal(3),
+                    "reducing_gap": literal(2.0),
+                },
+            }
+            for mode in ("F", "I")
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "behavior.default",
+                "name": f"reducing-gap-odd-tail-{mode.lower()}-17x13",
+                "mode": mode,
+                "size": [17, 13],
+                "edge": "noise-fill",
+                "seed": 240941 if mode == "F" else 240942,
+                "observe_receiver": True,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "values": {
+                    "size": literal([4, 3]),
+                    "resample": literal(3),
+                    "reducing_gap": literal(2.0),
+                },
+            }
+            for mode in ("F", "I")
+        ),
         # Coverage batch 2026-08-11: exercise the public thumbnail aspect
         # selection and reducing-gap decisions across non-square source and
         # target boxes.  These are valid input-only workflows and reuse the
@@ -45078,6 +45118,41 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    thumbnail_scalar_workloads = []
+    for mode, suffix in (("F", "f32"), ("I", "i32")):
+        case_id = (
+            f"PIL.Image.Image.thumbnail.nuanced.performance-large-"
+            f"{mode.lower()}-1024x768"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"typed thumbnail benchmark references missing case: {case_id}")
+        workload = {
+            "workload_id": f"pipeline-op.thumbnail.native-{suffix}-1024x768",
+            "covers": [
+                _performance_requirement(operations, "PIL.Image.Image", "thumbnail")
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {"kind": "parity_case", "case_id": case_id},
+            "measurement": {
+                **copy.deepcopy(policy),
+                "boundary": "observed_steps",
+                "step_ids": ["call", "observe-receiver"],
+                "warmup_iterations": 5,
+                "measurement_iterations": 20,
+                "samples": 5,
+                "correctness_gate": "parity_pass",
+            },
+            "context": _workflow_benchmark_context(
+                case,
+                variant=f"thumbnail-native-{suffix}-1024x768",
+                surface="PIL.Image.Image",
+                operation="thumbnail",
+            ),
+        }
+        workload["context"]["operation_class"] = "geometry"
+        thumbnail_scalar_workloads.append(workload)
+
     f_boxed_resize_case_id = (
         "PIL.Image.Image.resize.nuanced.f-boxed-nearest-noise-512x512"
     )
@@ -47236,6 +47311,7 @@ def build_pipeline_benchmark_document(
         "workloads": [
             *operation_workloads,
             thumbnail_material_workload,
+            *thumbnail_scalar_workloads,
             f_boxed_resize_workload,
             f_resize_workload,
             i_resize_workload,
@@ -47297,6 +47373,17 @@ def build_pipeline_benchmark_document(
                 ),
                 "members": [
                     {"workload_id": thumbnail_material_workload["workload_id"], "weight": 1}
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.thumbnail-typed-scalar-suite",
+                "description": (
+                    "Material noisy F-mode and I-mode thumbnail reduction plus "
+                    "terminal materialization across CPU, SIMD, and GPU."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in thumbnail_scalar_workloads
                 ],
             },
             {
