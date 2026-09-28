@@ -4646,6 +4646,7 @@
           "PIL.Image.Image.putalpha.nuanced.la-mask",
           "PIL.Image.Image.putalpha.nuanced.l-scalar",
           "PIL.Image.Image.putalpha.nuanced.la-scalar",
+          "PIL.Image.Image.putalpha.nuanced.la-scalar-odd-packed-tail",
           "PIL.Image.Image.putalpha.nuanced.p-scalar",
           "PIL.Image.Image.putalpha.nuanced.rgb-scalar",
           "PIL.Image.Image.putalpha.nuanced.rgba-scalar",

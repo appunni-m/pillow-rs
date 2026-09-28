@@ -9099,6 +9099,10 @@ impl GpuInner {
                     PipelineOp::Invert
                         | PipelineOp::Solarize { .. }
                         | PipelineOp::Brightness { .. }
+                        | PipelineOp::PutAlpha {
+                            mode: PixelMode::LA,
+                            ..
+                        }
                 )
             || (fused_screen && !matches!(op, PipelineOp::Multiply { .. }))
         {
@@ -9147,6 +9151,14 @@ impl GpuInner {
                 "BrightnessNativeBytes",
                 "brightness_native.wgsl",
                 include_str!("shaders/brightness_native.wgsl"),
+            ),
+            PipelineOp::PutAlpha {
+                mode: PixelMode::LA,
+                ..
+            } => (
+                "PutAlphaNativeLA",
+                "put_alpha_native_la.wgsl",
+                include_str!("shaders/put_alpha_native_la.wgsl"),
             ),
             PipelineOp::Multiply { .. } if fused_screen => (
                 "__internal_multiply_screen",
@@ -9259,6 +9271,10 @@ impl GpuInner {
                 .ok_or_else(|| {
                     PilError::ValueError("GPU native brightness factor is not exact".into())
                 })?,
+            PipelineOp::PutAlpha {
+                alpha,
+                mode: PixelMode::LA,
+            } => u32::from(*alpha),
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
             PipelineOp::Invert => 0,
             PipelineOp::BlendModule { alpha, .. } => (*alpha as f32).to_bits(),
@@ -11254,6 +11270,17 @@ fn gpu_native_byte_op_channels(
                 _ => None,
             }
         }
+        PipelineOp::PutAlpha {
+            mode: PixelMode::LA,
+            ..
+        } => match image {
+            DynamicImage::ImageLumaA8(_)
+                if matches!(mode, None | Some("LA")) && image.width() > 0 && image.height() > 0 =>
+            {
+                Some(2)
+            }
+            _ => None,
+        },
         PipelineOp::Invert => match image {
             DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
             DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),

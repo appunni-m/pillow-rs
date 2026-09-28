@@ -236,6 +236,9 @@ PASTE_MASKED_PERFORMANCE_CASES = (
     ("masked-rgba-noise-1024x768", "RGBA", [1024, 768], 20261016),
     ("masked-cmyk-noise-1024x768", "CMYK", [1024, 768], 20261017),
 )
+PUTALPHA_PERFORMANCE_CASES = (
+    ("la-noise-1024x768-scalar", "LA", [1024, 768], 20261019),
+)
 BRIGHTNESS_PERFORMANCE_CASES = (
     ("la-noise-1024x768-factor-0.5", "LA", [1024, 768], 20261010, 0.5),
 )
@@ -31946,6 +31949,35 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "putalpha",
+            "requirement_suffix": "mode.la",
+            "name": "la-scalar-odd-packed-tail",
+            "observe_receiver": True,
+            "mode": "LA",
+            "size": [5, 3],
+            "edge": "noise-fill",
+            "seed": 20261020,
+            "values": {"alpha": literal(192)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "putalpha",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "values": {"alpha": literal(192)},
+                "observe_receiver": True,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in PUTALPHA_PERFORMANCE_CASES
+        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
             "requirement_suffix": "mode.p",
             "name": "p-scalar",
             "observe_receiver": True,
@@ -47974,6 +48006,54 @@ def build_inputs(
                 )
                 members.append({"workload_id": workload_id, "weight": 1})
         if surface_id == "PIL.Image.Image":
+            putalpha_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "putalpha"
+                ),
+                None,
+            )
+            if putalpha_benchmark is not None:
+                operation, requirement = putalpha_benchmark
+                for name, _mode, _size, _seed in PUTALPHA_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.putalpha.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.putalpha.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-receiver"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"putalpha-{slug(name)}",
+                                surface=surface_id,
+                                operation="putalpha",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
             paste_benchmark = next(
                 (
                     (operation, requirement)

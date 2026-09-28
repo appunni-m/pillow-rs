@@ -24873,6 +24873,19 @@ pub fn simd_put_alpha(
     else {
         return Err(PilError::ValueError("expected PutAlpha op".into()));
     };
+    if *alpha_mode == PixelMode::LA
+        && matches!(mode, None | Some("LA"))
+        && let DynamicImage::ImageLumaA8(source) = img
+    {
+        // Updating LA needs no channel shuffle. Clone the two-byte samples
+        // once and overwrite only byte 1; the generic SIMD packer would read
+        // and rewrite both bytes of every sample through temporary blocks.
+        let mut output = source.clone();
+        for pixel in output.as_mut().chunks_exact_mut(2) {
+            pixel[1] = *alpha;
+        }
+        return Ok(DynamicImage::ImageLumaA8(output));
+    }
     let Some((source_channels, output_channels, _pixels_per_vector, cmyk_source)) =
         put_alpha_shape(img, *alpha_mode, mode)
     else {
