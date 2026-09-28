@@ -9101,7 +9101,7 @@ impl GpuInner {
                         | PipelineOp::Solarize { .. }
                         | PipelineOp::Brightness { .. }
                         | PipelineOp::PutAlpha {
-                            mode: PixelMode::LA,
+                            mode: PixelMode::LA | PixelMode::PA,
                             ..
                         }
                 )
@@ -9158,6 +9158,14 @@ impl GpuInner {
                 ..
             } => (
                 "PutAlphaNativeLA",
+                "put_alpha_native_la.wgsl",
+                include_str!("shaders/put_alpha_native_la.wgsl"),
+            ),
+            PipelineOp::PutAlpha {
+                mode: PixelMode::PA,
+                ..
+            } => (
+                "PutAlphaNativePA",
                 "put_alpha_native_la.wgsl",
                 include_str!("shaders/put_alpha_native_la.wgsl"),
             ),
@@ -9274,7 +9282,7 @@ impl GpuInner {
                 })?,
             PipelineOp::PutAlpha {
                 alpha,
-                mode: PixelMode::LA,
+                mode: PixelMode::LA | PixelMode::PA,
             } => u32::from(*alpha),
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
             PipelineOp::Invert => 0,
@@ -11289,6 +11297,17 @@ fn gpu_native_byte_op_channels(
         } => match image {
             DynamicImage::ImageLumaA8(_)
                 if matches!(mode, None | Some("LA")) && image.width() > 0 && image.height() > 0 =>
+            {
+                Some(2)
+            }
+            _ => None,
+        },
+        PipelineOp::PutAlpha {
+            mode: PixelMode::PA,
+            ..
+        } => match image {
+            DynamicImage::ImageLumaA8(_)
+                if mode == Some("PA") && image.width() > 0 && image.height() > 0 =>
             {
                 Some(2)
             }

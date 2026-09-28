@@ -1,5 +1,5 @@
-// Set the alpha byte in each native LA sample without transporting RGBA.
-// Input/output bytes are [L0, A0, L1, A1, ...], packed into storage words.
+// Set the alpha byte in each native LA or PA sample without transporting
+// RGBA. Input/output bytes are [band0, A0, band1, A1, ...], packed into words.
 
 struct Params {
     columns: u32,
