@@ -6838,9 +6838,9 @@ follow-up and compact native GPU output are recorded below.
 ### Explicit RGBA callsite ledger — 2026-09-28
 
 The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 88 Rust
-source matches: 80 runtime operation calls, one GPU test, two wrapper
+source matches: 79 runtime operation calls, one GPU test, two wrapper
 delegations, one single-color conversion, two conversion method definitions,
-and two comments. The Python Qt bridge has two explicit `convert("RGBA")`
+and three comments. The Python Qt bridge has two explicit `convert("RGBA")`
 calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
 binding has none. The table lists every Rust match, grouped by what the call
 does. “Widening-capable” includes fallback sites that widen L/LA/RGB but only
@@ -6849,9 +6849,9 @@ copy an existing four-byte carrier for other modes.
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
 | Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
-| Same-layout clone or four-byte reinterpretation | 30 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2166,2249`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/pil_resize.rs:2225`; `ops/quantize.rs:2297` |
+| Same-layout clone or four-byte reinterpretation | 29 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2168,2251`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3250,3328,3401`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
-| Definition, wrapper, test, comment, or color-only | 8 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282`; `raster/dynamic.rs:327,420,423,1016` |
+| Definition, wrapper, test, comment, or color-only | 9 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
 Do not treat the 36 fallback matches as 36 guaranteed conversions. `to_rgba8()`
 expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
@@ -6871,6 +6871,52 @@ public constructors and decoder lanes do not produce the typed layouts that
 reach it. `ops/quantize.rs` now keeps logical RGB backed by `ImageRgb8` in its
 three-byte layout through FASTOCTREE; other modes and storage variants retain
 the conversion fallback until their channel semantics are proven separately.
+
+The standard byte-mode LA `ImageStat.Stat` path already enters `histogram()`
+before this RGBA fallback and counts L and alpha at their native byte offsets.
+Its remaining match is for unusual typed storage; it is not a reachable LA8
+conversion to optimize.
+
+### F boxed nearest resize: retain scalar words and skip identity work — 2026-09-28
+
+`DynamicImage::ImageRgba8` is also the internal four-byte carrier for Pillow
+mode F. Those bytes are little-endian `f32` samples, not color channels. The
+boxed F resize implementation now borrows `img.as_bytes()` directly, copies
+selected four-byte words for nearest sampling, and decodes to `f32` only for
+filtered resampling. Filtered accumulation remains in Pillow's existing
+f64-kernel/f32-store order. The CPU boxed-nearest router keeps logical mode F
+so this format-specific implementation is admitted instead of the generic
+byte-channel path.
+
+When source and destination dimensions match, a bounded scan runs Pillow's
+float32-narrowed, cumulative nearest-coordinate recurrence on each axis. Only
+if every selected index is unchanged does public `Image.resize` return
+`Image.copy()`, which shares immutable materialized storage while preserving
+copy semantics. The source box is validated before this shortcut. This avoids
+both a pixel loop and a new image buffer for fractional boxes that are
+pixel-identical.
+
+The parity-backed workload is a deterministic 512 × 512 F image with a
+fractional box and nearest resampling. The measured boundary is resize plus
+`tobytes()`, five warmups, 20 iterations × five samples, concurrency one.
+Strict CPU parity passed 19/19 F boxed-resize cases. Normal SIMD and GPU-requested
+parity each passed 19/19; strict SIMD exposed existing unsupported
+`reducing_gap` and tall-F routes, which fall back in normal mode. The final
+benchmark run passed its live-Pillow correctness gate:
+
+| Subject | Median latency | Median operations/s | Backend evidence |
+| --- | ---: | ---: | --- |
+| Pillow | 0.236 ms | 4,233 | Pillow |
+| CPU request | 0.046 ms | 21,878 | no backend dispatch; shared-copy shortcut |
+| SIMD request | 0.046 ms | 21,739 | no backend dispatch; shared-copy shortcut |
+| GPU request | 0.036 ms | 31,158 | no backend dispatch; shared-copy shortcut |
+
+These timings establish a 5.1× public-call latency win for the identity-map
+workload, not SIMD or GPU kernel speed. The GPU logical-mode gate still rejects
+F resize, and non-identity boxed F resize remains a separate performance
+blocker. A first direct-byte-only attempt did not beat run-to-run noise; the
+measured win came from preserving logical F through CPU routing and recognizing
+the exact identity map. No coverage ran.
 
 The audit found and fixed one correctness bug in `Image.getprojection`: LAB is
 stored in RGB bytes with logical A/B zero represented by 128. Its old fallback
@@ -7062,8 +7108,8 @@ everything else.
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
 | 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
-| 7 | LA `ImageStat.Stat` | Count the existing `[L, A]` bytes directly into the two 256-bin histograms instead of widening to RGBA. | Logical alpha is byte 1; preserve the exact empty-image extrema, per-band statistics, and mode-specific error order. |
-| 8 | Typed scalar copies | Borrow I/F scalar-word storage instead of copying through RGBA-shaped buffers. | These bytes encode numeric samples, not color channels; preserve exact typed rounding and output byte order. |
+| 7 | F boxed nearest resize | Preserve the four-byte scalar words; copy selected words directly and return `Image.copy()` only when both cumulative nearest maps select the same source coordinates. | Validate the narrowed box first. Retain logical F at CPU dispatch; decode to f32 only for filtered resampling and preserve f64 accumulation/f32 stores. The identity workload is 5.1× faster end-to-end but bypasses all backends; GPU F resize remains unsupported. |
+| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | The F boxed-nearest identity case is optimized. Preserve exact typed rounding, byte order, and filtered sample evaluation for remaining paths. |
 
 Treat a four-byte physical buffer as its real format: CMYK's fourth byte is K,
 RGBX's is padding, RGBa is premultiplied, LA alpha is byte 1, and I/F are scalar

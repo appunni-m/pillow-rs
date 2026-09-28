@@ -40744,6 +40744,7 @@ def build_nuanced_cases(
     cases.extend(grayscale_premultiplied_parity_cases(surface_id))
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
+    cases.extend(f_boxed_resize_materialized_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
     cases.extend(transform_mode_parity_cases(surface_id))
     if surface_id == "PIL.Image.Image":
@@ -41359,6 +41360,74 @@ def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         "steps": steps, "observations": ["call", "materialize"],
                     })
     return cases
+
+
+def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Measure boxed F resize with enough scalar samples to expose copies."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width = height = 512
+    rng = random.Random(240928)
+    raw = b"".join(
+        struct.pack("<f", rng.uniform(-1000.0, 1000.0))
+        for _ in range(width * height)
+    )
+    case_id = (
+        f"{surface_id}.resize.nuanced.f-boxed-nearest-noise-"
+        f"{width}x{height}"
+    )
+    return [
+        {
+            "case_id": case_id,
+            "surface": surface_id,
+            "operation": "resize",
+            "covers": [f"{surface_id}.resize.parameter.box"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("F"),
+                        "size": literal([width, height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "resize",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([width, height]),
+                        "resample": literal(0),
+                        "box": literal([0.25, 0.5, width - 0.25, height - 0.5]),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
 
 
 def grayscale_premultiplied_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -44873,6 +44942,39 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    f_boxed_resize_case_id = (
+        "PIL.Image.Image.resize.nuanced.f-boxed-nearest-noise-512x512"
+    )
+    f_boxed_resize_case = cases_by_id.get(f_boxed_resize_case_id)
+    if f_boxed_resize_case is None:
+        raise ValueError(
+            f"boxed F resize benchmark references missing case: "
+            f"{f_boxed_resize_case_id}"
+        )
+    f_boxed_resize_workload = {
+        "workload_id": "pipeline-chain.resizeboxed.f-boxed-nearest-noise-512x512",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "resize")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": f_boxed_resize_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            f_boxed_resize_case,
+            variant="f-boxed-nearest-noise-512x512",
+            surface="PIL.Image.Image",
+            operation="resize",
+        ),
+    }
+
     # Add one non-square size variant for every ordinary byte-image workflow
     # that has a public Image.new source. These remain benchmark-only inputs:
     # the isolated PipelineOp registry coverage stays exactly one workload per
@@ -46932,6 +47034,7 @@ def build_pipeline_benchmark_document(
         "workloads": [
             *operation_workloads,
             thumbnail_material_workload,
+            f_boxed_resize_workload,
             *matrix_workloads,
             *expanded_matrix_workloads,
             *chain_workloads,

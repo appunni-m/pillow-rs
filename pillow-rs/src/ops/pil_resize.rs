@@ -2206,12 +2206,42 @@ pub fn pil_resize(
     pil_preserve_mode(orig_img, result)
 }
 
+fn f_boxed_nearest_axis_maps_identity(
+    source_size: u32,
+    output_size: u32,
+    box_start: f64,
+    box_end: f64,
+) -> bool {
+    if source_size == 0
+        || source_size != output_size
+        || !box_start.is_finite()
+        || !box_end.is_finite()
+    {
+        return false;
+    }
+    let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(output_size);
+    if !scale.is_finite() {
+        return false;
+    }
+    let last = i64::from(source_size - 1);
+    let mut coordinate = box_start + scale * 0.5;
+    for expected in 0..output_size {
+        let selected = (coordinate.floor() as i64).clamp(0, last) as u32;
+        if selected != expected {
+            return false;
+        }
+        coordinate += scale;
+    }
+    true
+}
+
 /// Resize an F-mode image through a fractional source box.
 ///
-/// F samples are IEEE-754 values packed four bytes at a time.  They must be
-/// decoded before resampling; treating the bytes as four independent image
-/// channels is not Pillow-compatible.  The intermediate remains f32, while
-/// each separable accumulation follows Pillow's f64-kernel/f32-store order.
+/// F samples are IEEE-754 values packed four bytes at a time. They must be
+/// decoded before filtered resampling; treating the bytes as four independent
+/// image channels is not Pillow-compatible. The intermediate remains f32,
+/// while each separable accumulation follows Pillow's f64-kernel/f32-store
+/// order.
 fn pil_resize_f_boxed(
     img: &DynamicImage,
     dst_w: u32,
@@ -2222,8 +2252,12 @@ fn pil_resize_f_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
 ) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (source_width, source_height) = rgba.dimensions();
+    // F-mode bytes are stored in the four-byte carrier used by ImageRgba8,
+    // but they are scalar float samples, not RGBA channels. Borrow those
+    // sample words directly; converting through `to_rgba8()` clones the
+    // entire source before the float working set is built.
+    let source_bytes = img.as_bytes();
+    let (source_width, source_height) = (img.width(), img.height());
     let output_len = (dst_w as usize)
         .checked_mul(dst_h as usize)
         .and_then(|pixels| pixels.checked_mul(4))
@@ -2234,11 +2268,6 @@ fn pil_resize_f_boxed(
                 .unwrap_or_else(|| crate::raster::RgbaImage::new(dst_w, dst_h)),
         );
     }
-    let source: Vec<f32> = rgba
-        .as_raw()
-        .chunks_exact(4)
-        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect();
     let box_left = box_left as f32 as f64;
     let box_top = box_top as f32 as f64;
     let box_right = box_right as f32 as f64;
@@ -2247,6 +2276,17 @@ fn pil_resize_f_boxed(
     let need_vertical = dst_h != source_height || box_top != 0.0 || box_bottom != dst_h as f64;
 
     if matches!(filter, ResampleFilter::Nearest) {
+        if source_width == dst_w
+            && source_height == dst_h
+            && f_boxed_nearest_axis_maps_identity(source_width, dst_w, box_left, box_right)
+            && f_boxed_nearest_axis_maps_identity(source_height, dst_h, box_top, box_bottom)
+        {
+            // The fractional box can still select the same scalar sample at
+            // every destination coordinate. A single owned copy then has the
+            // same bytes as the general gather path and avoids its per-pixel
+            // coordinate and output loops.
+            return img.clone();
+        }
         let scale_x = (box_right as f32 - box_left as f32) as f64 / f64::from(dst_w);
         let scale_y = (box_bottom as f32 - box_top as f32) as f64 / f64::from(dst_h);
         let last_x = i64::from(source_width - 1);
@@ -2264,13 +2304,8 @@ fn pil_resize_f_boxed(
             for _ in 0..dst_w {
                 let source_x_index = source_x.floor() as i64;
                 let source_x_index = source_x_index.clamp(0, last_x) as usize;
-                output.extend_from_slice(
-                    &source[(source_y_index * source_width as usize + source_x_index)..][..1]
-                        .first()
-                        .copied()
-                        .unwrap_or(0.0)
-                        .to_le_bytes(),
-                );
+                let source_start = (source_y_index * source_width as usize + source_x_index) * 4;
+                output.extend_from_slice(&source_bytes[source_start..source_start + 4]);
                 source_x += scale_x;
             }
             source_y += scale_y;
@@ -2278,6 +2313,13 @@ fn pil_resize_f_boxed(
         return raw_to_dynamic_owned(output, dst_w, dst_h, 4);
     }
 
+    // Filtered resampling requires numeric samples and keeps Pillow's
+    // f64-accumulate/f32-store order. Decode only for this branch; nearest
+    // resampling copies the original four-byte F sample words above.
+    let source: Vec<f32> = source_bytes
+        .chunks_exact(4)
+        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+        .collect();
     let horizontal = precompute_coeffs_f64_boxed(dst_w, source_width, box_left, box_right, filter);
     let vertical = precompute_coeffs_f64_boxed(dst_h, source_height, box_top, box_bottom, filter);
     let mut intermediate = vec![0.0f32; source_height as usize * dst_w as usize];
