@@ -558,6 +558,7 @@
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgba-half-mask",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-rgba-mask",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-rgba-lowercase-mask",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.performance-rgb-1024x768",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-f-tuple-fill-error",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-tuple-fill-error",
           "PIL.ImageDraw.ImageDraw.text.nuanced.raw-p-no-palette-fallback",
