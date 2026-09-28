@@ -228,6 +228,9 @@ PASTE_PERFORMANCE_CASES = (
     ("la-noise-1024x768", "LA", [1024, 768], 20261009),
     ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002),
 )
+BRIGHTNESS_PERFORMANCE_CASES = (
+    ("la-noise-1024x768-factor-0.5", "LA", [1024, 768], 20261010, 0.5),
+)
 PAD_PERFORMANCE_CASES = (
     ("l-noise-1024x768-square", "L", [1024, 768], 20261004, 73),
     ("la-noise-1024x768-square", "LA", [1024, 768], 20261005, [73, 149]),
@@ -40500,6 +40503,7 @@ def build_nuanced_cases(
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
+    cases.extend(brightness_pixel_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
@@ -41466,6 +41470,73 @@ def contrast_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         ])
         case["observations"].extend(["repeat", "repeat-bytes"])
         cases.append(case)
+    return cases
+
+
+def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Material LA input for non-identity Brightness across each backend."""
+    target = "PIL.ImageEnhance.Brightness"
+    if surface_id != target:
+        return []
+    cases = []
+    for name, mode, size, seed, factor in BRIGHTNESS_PERFORMANCE_CASES:
+        width, height = size
+        raw = random.Random(seed).randbytes(width * height * 2)
+        case_id = f"{target}.enhance.nuanced.performance-{slug(name)}"
+        cases.append(
+            {
+                "case_id": case_id,
+                "surface": target,
+                "operation": "enhance",
+                "covers": [f"{target}.enhance.parameter.factor"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": [
+                    {
+                        "id": "pixels",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode(),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal(mode),
+                            "size": literal(size),
+                            "data": asset_value("pixels"),
+                        },
+                    },
+                    {
+                        "step_id": "enhancer",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Brightness",
+                        "receiver": None,
+                        "arguments": {"image": binding("image")},
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": target,
+                        "operation": "enhance",
+                        "receiver": binding("enhancer"),
+                        "arguments": {"factor": literal(factor)},
+                    },
+                    {
+                        "step_id": "materialize",
+                        "surface": "PIL.Image.Image",
+                        "operation": "tobytes",
+                        "receiver": binding("call"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["enhancer", "call", "materialize"],
+            }
+        )
     return cases
 
 
@@ -47510,6 +47581,54 @@ def build_inputs(
                 )
                 workloads.append(full_width_workload)
                 members.append({"workload_id": full_width_workload_id, "weight": 1})
+        if surface_id == "PIL.ImageEnhance.Brightness":
+            brightness_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "enhance"
+                ),
+                None,
+            )
+            if brightness_benchmark is not None:
+                operation, requirement = brightness_benchmark
+                for name, _mode, _size, _seed, _factor in BRIGHTNESS_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.enhance.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        f"{surface_id}.enhance.nuanced.performance-{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "materialize"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"brightness-{slug(name)}",
+                                surface=surface_id,
+                                operation="enhance",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
         if surface_id == "PIL.ImageOps":
             expand_benchmark = next(
                 (

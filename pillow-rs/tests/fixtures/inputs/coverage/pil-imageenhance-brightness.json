@@ -257,6 +257,7 @@
           "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f40-c08",
           "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f40-c09",
           "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f40-c10",
+          "PIL.ImageEnhance.Brightness.enhance.nuanced.performance-la-noise-1024x768-factor-0-5",
           "pipeline-case.brightness.materialized-smoke"
         ],
         "command_ids": []

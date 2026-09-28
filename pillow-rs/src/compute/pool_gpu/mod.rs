@@ -8983,6 +8983,7 @@ impl GpuInner {
         image: &DynamicImage,
         other: Option<&DynamicImage>,
         channels: u8,
+        logical_mode: Option<&str>,
         fused_screen: bool,
         buffers: &mut BufferPool,
     ) -> Result<DynamicImage, PilError> {
@@ -8995,7 +8996,13 @@ impl GpuInner {
                     || image.color() != other.color()
                     || other.as_bytes().len() != length
             })
-            || other.is_none() != matches!(op, PipelineOp::Invert | PipelineOp::Solarize { .. })
+            || other.is_none()
+                != matches!(
+                    op,
+                    PipelineOp::Invert
+                        | PipelineOp::Solarize { .. }
+                        | PipelineOp::Brightness { .. }
+                )
             || (fused_screen && !matches!(op, PipelineOp::Multiply { .. }))
         {
             return Err(PilError::InternalError(
@@ -9039,6 +9046,11 @@ impl GpuInner {
                 | PipelineOp::BlendModule { .. }
         );
         let (variant, shader_file, shader_source) = match op {
+            PipelineOp::Brightness { .. } => (
+                "BrightnessNativeBytes",
+                "brightness_native.wgsl",
+                include_str!("shaders/brightness_native.wgsl"),
+            ),
             PipelineOp::Multiply { .. } if fused_screen => (
                 "__internal_multiply_screen",
                 "multiply_screen.wgsl",
@@ -9135,17 +9147,55 @@ impl GpuInner {
             }
         };
         let cached = self.resolve_pipeline(variant, shader_file, shader_source)?;
-        // Bytewise mode 9 packs four independent samples. AlphaComposite mode 9
-        // packs two complete LA pixels; RGBA keeps its ordinary mode code.
-        let mode = if in_place && channels == 4 { 3 } else { 9 };
+        // Bytewise mode 9 packs four independent samples. Brightness uses
+        // native samples-per-pixel. AlphaComposite mode 9 packs two complete
+        // LA pixels; RGBA keeps its ordinary mode code.
+        let mode = if matches!(op, PipelineOp::Brightness { .. }) {
+            u32::from(channels)
+        } else if in_place && channels == 4 {
+            3
+        } else {
+            9
+        };
         let parameter = match op {
+            PipelineOp::Brightness { factor } => registry::gpu_brightness_factor_int(*factor)
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU native brightness factor is not exact".into())
+                })?,
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
             PipelineOp::Invert => 0,
             PipelineOp::BlendModule { alpha, .. } => (*alpha as f32).to_bits(),
             _ => 0,
         };
-        let parameters = [columns, rows, mode, words, parameter, 0, 0, 0];
-        let parameter_words = if matches!(op, PipelineOp::BlendModule { .. }) {
+        let byte_len = if matches!(op, PipelineOp::Brightness { .. }) {
+            u32::try_from(length).map_err(|_| {
+                PilError::ValueError("GPU native brightness input is too large".into())
+            })?
+        } else {
+            0
+        };
+        let active_channels = if matches!(op, PipelineOp::Brightness { .. }) {
+            match (logical_mode, channels) {
+                (None | Some("LA"), 2) => 1,
+                _ => u32::from(channels),
+            }
+        } else {
+            0
+        };
+        let parameters = [
+            columns,
+            rows,
+            mode,
+            words,
+            parameter,
+            byte_len,
+            active_channels,
+            0,
+        ];
+        let parameter_words = if matches!(
+            op,
+            PipelineOp::Brightness { .. } | PipelineOp::BlendModule { .. }
+        ) {
             8
         } else if in_place {
             6
@@ -11044,6 +11094,20 @@ fn gpu_native_byte_op_channels(
     mode: Option<&str>,
 ) -> Option<u8> {
     match op {
+        PipelineOp::Brightness { factor }
+            if registry::gpu_brightness_factor_int(*factor).is_some() =>
+        {
+            match image {
+                DynamicImage::ImageLumaA8(_)
+                    if matches!(mode, None | Some("LA"))
+                        && image.width() > 0
+                        && image.height() > 0 =>
+                {
+                    Some(2)
+                }
+                _ => None,
+            }
+        }
         PipelineOp::Invert => match image {
             DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
             DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
@@ -16800,6 +16864,7 @@ impl GpuPool {
                 img,
                 auxiliary.second.as_deref(),
                 channels,
+                mode,
                 fused_screen,
                 &mut buffers,
             )?;

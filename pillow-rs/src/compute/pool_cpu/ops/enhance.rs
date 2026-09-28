@@ -95,10 +95,26 @@ pub fn op_enhance_brightness(
         );
         return Ok(DynamicImage::ImageRgba8(rgba));
     }
-    if matches!(
-        img,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) {
+    if let DynamicImage::ImageLumaA8(source) = img {
+        // LA brightness changes luma and preserves alpha. Keep the two-byte
+        // source layout: widening to RGBA duplicates luma into three lanes,
+        // multiplies all three, then narrows back to the first and fourth.
+        let mut la = source.clone();
+        let (width, height) = la.dimensions();
+        apply_enhance_rows(
+            la.as_mut(),
+            width as usize,
+            height as usize,
+            2,
+            |_y, row| {
+                for pixel in row.chunks_exact_mut(2) {
+                    pixel[0] = (pixel[0] as f64 * factor).clamp(0.0, 255.0) as u8;
+                }
+            },
+        );
+        return Ok(DynamicImage::ImageLumaA8(la));
+    }
+    if matches!(img, DynamicImage::ImageRgba8(_)) {
         let mut rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
         apply_enhance_rows(
