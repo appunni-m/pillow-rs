@@ -24,7 +24,7 @@ use crate::pipeline::{
 };
 #[cfg(target_endian = "little")]
 use crate::raster::RgbImage;
-use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, RgbaImage};
+use crate::raster::{DynamicImage, GenericImageView, GrayImage, ImageBuffer, Luma, RgbaImage};
 use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
@@ -9073,6 +9073,224 @@ impl GpuInner {
         Ok(result)
     }
 
+    /// Copy or clip one unmasked L-mode Paste using one-byte samples end to
+    /// end. The shader packs four output bytes per word, avoiding the generic
+    /// four-byte RGBA staging image and its mode-restoration conversion.
+    #[cfg(target_endian = "little")]
+    fn execute_native_luma_paste(
+        &self,
+        destination: &GrayImage,
+        source: &GrayImage,
+        offset: (i32, i32),
+        dispatch: NativeLumaPasteDispatch,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let (width, height) = destination.dimensions();
+        let (source_width, source_height) = source.dimensions();
+        let destination_dims = CheckedDims::new(width, height, 1)?;
+        let source_dims = CheckedDims::new(source_width, source_height, 1)?;
+        if destination_dims.total_bytes() != dispatch.destination_bytes
+            || source_dims.total_bytes() != dispatch.source_bytes
+            || destination.as_raw().len() != dispatch.destination_bytes
+            || source.as_raw().len() != dispatch.source_bytes
+        {
+            return Err(PilError::InternalError(
+                "GPU native L Paste layout mismatch".into(),
+            ));
+        }
+        let buffer_capacity = u64::from(buffers.capacity)
+            .checked_mul(4)
+            .ok_or_else(|| PilError::ValueError("GPU native L Paste is too large".into()))?;
+        if dispatch.destination_transfer_bytes > buffer_capacity
+            || dispatch.source_transfer_bytes
+                > u64::from(self.device.limits().max_storage_buffer_binding_size)
+            || dispatch.source_transfer_bytes > self.device.limits().max_buffer_size
+        {
+            return Err(PilError::ValueError(
+                "GPU native L Paste exceeds adapter buffer limits".into(),
+            ));
+        }
+
+        buffers.img2_arena.ensure_capacity(
+            &self.device,
+            "gpu_paste_native_l_source",
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            dispatch.source_transfer_bytes as usize,
+            4,
+        );
+        buffers.params_arena.ensure_capacity(
+            &self.device,
+            "gpu_paste_native_l_params",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            32,
+            self.device.limits().min_uniform_buffer_offset_alignment as usize,
+        );
+
+        let write_padded = |buffer: &wgpu::Buffer, bytes: &[u8], transfer_bytes: u64| {
+            let size = NonZeroU64::new(transfer_bytes).ok_or_else(|| {
+                PilError::InternalError("GPU native L Paste upload is empty".into())
+            })?;
+            let mut view = self
+                .queue
+                .write_buffer_with(buffer, 0, size)
+                .ok_or_else(|| {
+                    PilError::InternalError("GPU native L Paste staging allocation failed".into())
+                })?;
+            let mapped = view.as_mut();
+            if mapped.len() != transfer_bytes as usize || bytes.len() > mapped.len() {
+                return Err(PilError::InternalError(
+                    "GPU native L Paste upload length mismatch".into(),
+                ));
+            }
+            mapped[..bytes.len()].copy_from_slice(bytes);
+            mapped[bytes.len()..].fill(0);
+            Ok::<(), PilError>(())
+        };
+        write_padded(
+            &buffers.buf_a,
+            destination.as_raw(),
+            dispatch.destination_transfer_bytes,
+        )?;
+        write_padded(
+            &buffers.img2_arena.buffer,
+            source.as_raw(),
+            dispatch.source_transfer_bytes,
+        )?;
+
+        let parameters = [
+            width,
+            height,
+            source_width,
+            source_height,
+            u32::try_from(dispatch.destination_bytes)
+                .map_err(|_| PilError::ValueError("GPU native L Paste is too large".into()))?,
+            dispatch.word_count,
+            offset.0 as u32,
+            offset.1 as u32,
+        ];
+        self.queue.write_buffer(
+            &buffers.params_arena.buffer,
+            0,
+            bytemuck::cast_slice(&parameters),
+        );
+        let cached = self.resolve_pipeline(
+            "__internal_paste_native_l",
+            "paste_native_l.wgsl",
+            include_str!("shaders/paste_native_l.wgsl"),
+        )?;
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_native_l_paste"),
+            layout: &cached.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ranged_binding(
+                        &buffers.buf_a,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.destination_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: ranged_binding(
+                        &buffers.img2_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.source_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: ranged_binding(
+                        &buffers.buf_b,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.destination_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: ranged_binding(
+                        &buffers.params_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: 32,
+                        }),
+                    )?,
+                },
+            ],
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_native_l_paste"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_native_l_paste"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&cached.pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            crate::compute::record_gpu_shader_dispatch(
+                cached.variant_name,
+                cached.shader_file,
+                u64::from(dispatch.workgroups),
+            );
+            pass.dispatch_workgroups(dispatch.workgroups, 1, 1);
+        }
+        let readback =
+            self.prepare_readback(&buffers.buf_b, dispatch.destination_transfer_bytes)?;
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                dispatch.destination_transfer_bytes,
+            );
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device("GPU native L Paste submission")?;
+        let result = self.readback_with(
+            dispatch.destination_transfer_bytes,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != dispatch.destination_transfer_bytes as usize {
+                    return Err(PilError::InternalError(
+                        "GPU native L Paste readback length mismatch".into(),
+                    ));
+                }
+                let bytes = mapped[..dispatch.destination_bytes].to_vec();
+                crate::compute::record_pipeline_allocation(bytes.len());
+                GrayImage::from_raw(width, height, bytes)
+                    .map(DynamicImage::ImageLuma8)
+                    .ok_or_else(|| {
+                        PilError::InternalError("bad GPU native L Paste readback shape".into())
+                    })
+            },
+        )?;
+        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+            upload_bytes: dispatch.destination_transfer_bytes + dispatch.source_transfer_bytes,
+            auxiliary_bytes: dispatch.source_transfer_bytes,
+            readback_bytes: dispatch.destination_transfer_bytes,
+            parameter_bytes: 32,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            mode_conversion_count: 0,
+            ..PipelineResourceTelemetry::default()
+        });
+        crate::compute::record_pipeline_dispatch_count(1);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        Ok(result)
+    }
+
     /// Execute admitted byte operations without transport mode expansion.
     #[cfg(target_endian = "little")]
     fn execute_native_byte_op(
@@ -12138,6 +12356,120 @@ fn gpu_luma16_paste_source(op: &PipelineOp, mode: u32, image: &DynamicImage) -> 
     mode == 5
         && matches!(op, PipelineOp::Paste { .. })
         && matches!(image, DynamicImage::ImageLuma16(_))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct NativeLumaPasteDispatch {
+    destination_bytes: usize,
+    source_bytes: usize,
+    destination_transfer_bytes: u64,
+    source_transfer_bytes: u64,
+    word_count: u32,
+    workgroups: u32,
+}
+
+/// Plan compact one-byte GPU Paste transport without allocating the images.
+/// The shader writes four output samples per word, so its one-dimensional
+/// dispatch is bounded by both the adapter's group limit and storage limits.
+fn plan_gpu_native_luma_paste(
+    destination_width: u32,
+    destination_height: u32,
+    source_width: u32,
+    source_height: u32,
+    max_workgroups: u32,
+    max_storage_binding_bytes: u32,
+    max_buffer_bytes: u64,
+) -> Option<NativeLumaPasteDispatch> {
+    let destination = CheckedDims::new(destination_width, destination_height, 1).ok()?;
+    let source = CheckedDims::new(source_width, source_height, 1).ok()?;
+    let destination_bytes = destination.total_bytes();
+    let source_bytes = source.total_bytes();
+    u32::try_from(destination_bytes).ok()?;
+    u32::try_from(source_bytes).ok()?;
+
+    let transfer_bytes = |bytes: usize| {
+        u64::try_from(bytes)
+            .ok()?
+            .checked_add(3)
+            .map(|aligned| aligned & !3)
+    };
+    let destination_transfer_bytes = transfer_bytes(destination_bytes)?;
+    let source_transfer_bytes = transfer_bytes(source_bytes)?;
+    let binding_limit = u64::from(max_storage_binding_bytes);
+    if destination_transfer_bytes > binding_limit
+        || source_transfer_bytes > binding_limit
+        || destination_transfer_bytes > max_buffer_bytes
+        || source_transfer_bytes > max_buffer_bytes
+    {
+        return None;
+    }
+
+    let word_count = u32::try_from(destination_transfer_bytes / 4).ok()?;
+    if word_count == 0 {
+        return None;
+    }
+    let workgroups = word_count.div_ceil(64);
+    if workgroups > max_workgroups {
+        return None;
+    }
+    Some(NativeLumaPasteDispatch {
+        destination_bytes,
+        source_bytes,
+        destination_transfer_bytes,
+        source_transfer_bytes,
+        word_count,
+        workgroups,
+    })
+}
+
+/// Admit only exact L-to-L, unmasked Paste layouts. Palette indices and other
+/// one-byte storage variants remain on their existing semantic path.
+fn gpu_native_luma_paste_offset(
+    op: &PipelineOp,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<(i32, i32)> {
+    let PipelineOp::Paste {
+        source: source_image,
+        x,
+        y,
+        w,
+        h,
+        mask: None,
+        ..
+    } = op
+    else {
+        return None;
+    };
+    if mode != Some("L") {
+        return None;
+    }
+    let source_mode = source_image.mode().ok()?;
+    if source_mode != "L" {
+        return None;
+    }
+    let DynamicImage::ImageLuma8(destination_pixels) = destination else {
+        return None;
+    };
+    let DynamicImage::ImageLuma8(source_pixels) = source else {
+        return None;
+    };
+    if *w <= 0
+        || *h <= 0
+        || (u32::try_from(*w).ok()?, u32::try_from(*h).ok()?) != source.dimensions()
+        || CheckedDims::new(destination.width(), destination.height(), 1)
+            .ok()?
+            .total_bytes()
+            != destination_pixels.as_raw().len()
+        || CheckedDims::new(source.width(), source.height(), 1)
+            .ok()?
+            .total_bytes()
+            != source_pixels.as_raw().len()
+    {
+        return None;
+    }
+    Some((*x, *y))
 }
 
 /// `F` stores one little-endian `f32` sample in each four-byte word. The
@@ -17029,6 +17361,37 @@ impl GpuPool {
             );
         }
         #[cfg(target_endian = "little")]
+        if let ([op], [auxiliary]) = (ops, auxiliary_images.as_slice())
+            && let Some(source_pixels) = auxiliary.second.as_deref()
+            && let Some(offset) = gpu_native_luma_paste_offset(op, img, source_pixels, mode)
+            && let Some(dispatch) = plan_gpu_native_luma_paste(
+                img.width(),
+                img.height(),
+                source_pixels.width(),
+                source_pixels.height(),
+                limits.max_compute_workgroups_per_dimension,
+                limits.max_storage_buffer_binding_size,
+                limits.max_buffer_size,
+            )
+        {
+            let DynamicImage::ImageLuma8(destination) = img else {
+                return Err(PilError::InternalError(
+                    "GPU native L Paste lost its admitted destination".into(),
+                ));
+            };
+            let DynamicImage::ImageLuma8(source) = source_pixels else {
+                return Err(PilError::InternalError(
+                    "GPU native L Paste lost its admitted source".into(),
+                ));
+            };
+            let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
+            let result =
+                gpu.execute_native_luma_paste(destination, source, offset, dispatch, &mut buffers)?;
+            gpu.recycle_buffers(buffers);
+            return Ok(result);
+        }
+
+        #[cfg(target_endian = "little")]
         if let (
             [
                 PipelineOp::CompositeModule {
@@ -17458,7 +17821,7 @@ mod tests {
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, gpu_shader_work_items,
         gpu_shader_work_requires_cpu, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
-        plan_extract_band_dispatch, plan_native_expand_output_dispatch,
+        plan_extract_band_dispatch, plan_gpu_native_luma_paste, plan_native_expand_output_dispatch,
         plan_packed_point_luma_dispatch, putdata_auxiliary_words, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
@@ -17472,6 +17835,31 @@ mod tests {
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn native_luma_paste_planner_checks_word_and_adapter_boundaries() {
+        let max_workgroups = 65_535;
+        let max_pixels = u64::from(max_workgroups) * 64 * 4;
+        let max_width = u32::try_from(max_pixels).expect("boundary fits image dimensions");
+        let at_limit =
+            plan_gpu_native_luma_paste(max_width, 1, 1, 1, max_workgroups, u32::MAX, u64::MAX)
+                .expect("last representable output word fits the adapter limit");
+        assert_eq!(at_limit.word_count, max_workgroups * 64);
+        assert_eq!(at_limit.workgroups, max_workgroups);
+        assert_eq!(
+            at_limit.destination_transfer_bytes, max_pixels,
+            "native L output remains byte packed"
+        );
+
+        assert!(
+            plan_gpu_native_luma_paste(max_width + 1, 1, 1, 1, max_workgroups, u32::MAX, u64::MAX,)
+                .is_none()
+        );
+        assert!(plan_gpu_native_luma_paste(8, 1, 1, 1, max_workgroups, 7, u64::MAX,).is_none());
+        assert!(
+            plan_gpu_native_luma_paste(0, 1, 1, 1, max_workgroups, u32::MAX, u64::MAX,).is_none()
+        );
+    }
 
     #[test]
     fn colorize_gpu_packs_luma_upload_and_keeps_exact_rgb() {

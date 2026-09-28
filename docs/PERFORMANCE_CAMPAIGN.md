@@ -7546,8 +7546,52 @@ blocker, not an accelerator win. These concurrency-one rates are latency
 measurements, not sustained throughput.
 
 The earlier RGB-only checkpoint remains in the campaign history above. This
-checkpoint covers unmasked same-mode CPU copies; masked paste, GPU native input
-packing, and the original throughput goal remain open.
+2026-09-28 checkpoint covered unmasked same-mode CPU copies. Its L-only native
+GPU transport follow-up is below; masked paste and the original throughput goal
+remain open.
+
+### Paste: native L GPU transport — 2026-09-29
+
+The exact unmasked L-to-L route now keeps both operands in `ImageLuma8` from
+upload through readback. Admission requires logical mode `L`, matching concrete
+L storage, and source dimensions equal to the normalized paste extent. A
+format-specific shader copies one byte per sample, packing four output bytes per
+invocation so stores do not race. It handles negative origins and right/bottom
+clipping without signed overflow, including `i32::MIN`; unsupported layouts,
+masks, or adapter limits stay on the existing route. The planner checks native
+byte lengths, 4-byte transfer alignment, `u32` indexing, storage/buffer limits,
+and the selected adapter's workgroup limit before dispatch.
+
+The 1024 × 768 material workload pastes at `[2, 2]`, clipping at the right and
+bottom edges. A new small live-oracle case pastes a 3 × 2 native L source at
+`[-1, -1]` into a 5 × 3 destination, covering negative clipping and the final
+partial packed output word. The planner unit test checks its workgroup boundary
+without allocating boundary-sized images. CPU parity passed 1/1 for the
+material case and 1/1 for the negative-offset case; strict SIMD and strict GPU
+each passed 2/2. The benchmark gate passed 3/3 backend comparisons, and its
+100 samples per implementation recorded 100/100 actual CPU, SIMD, and GPU
+executions with no fallback. No coverage was run.
+
+The baseline benchmark is `migration-benchmark-9aa456ca13ef4b89bf54ef76c297d1e6`;
+the guarded native-L run is
+`migration-benchmark-99381b39597e4470bffb74c0c0879940`, with parity evidence in
+`paste-l-native-gpu-final-parity.json` under `build/migration-parity/`.
+
+| Median latency | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| L Paste + receiver bytes, ms | 0.089230 | 0.083458 | 0.088771 | 0.935354 |
+| Reciprocal latency, operations/s | 11,207 | 11,982 | 11,265 | 1,069 |
+
+The GPU median fell from 3.426396 ms to 0.935354 ms (3.7× faster). Upload
+volume fell from 3,145,728 to 1,572,864 bytes; readback fell from 3,145,728 to
+786,432 bytes; reported mode conversions fell from one to zero. It still takes
+10.5× the SIMD median and 10.5× the Pillow median, so the GPU goal is not met.
+CPU and SIMD timings are comparison context because their implementation did
+not change. The remaining cost is dominated by a synchronous GPU submission
+and host-visible result materialization, not RGBA expansion. Further work should
+measure whether a multi-operation GPU batch can retain the native result and
+avoid a per-call readback; do not claim this single-operation route is an
+accelerator win.
 
 ### Pad: native CPU L/LA/RGB/HSV/RGBA — 2026-09-28
 
