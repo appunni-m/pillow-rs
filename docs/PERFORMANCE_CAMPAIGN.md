@@ -7582,16 +7582,61 @@ the guarded native-L run is
 | L Paste + receiver bytes, ms | 0.089230 | 0.083458 | 0.088771 | 0.935354 |
 | Reciprocal latency, operations/s | 11,207 | 11,982 | 11,265 | 1,069 |
 
-The GPU median fell from 3.426396 ms to 0.935354 ms (3.7× faster). Upload
-volume fell from 3,145,728 to 1,572,864 bytes; readback fell from 3,145,728 to
-786,432 bytes; reported mode conversions fell from one to zero. It still takes
-10.5× the SIMD median and 10.5× the Pillow median, so the GPU goal is not met.
+The GPU median fell from 3.426396 ms to 0.935354 ms (3.7× faster). Combined
+native L input volume fell from 6,291,456 to 1,572,864 bytes; readback fell
+from 3,145,728 to 786,432 bytes; reported mode conversions fell from one to
+zero. It still takes 10.5× the SIMD median and 10.5× the Pillow median, so the
+GPU goal is not met.
 CPU and SIMD timings are comparison context because their implementation did
 not change. The remaining cost is dominated by a synchronous GPU submission
 and host-visible result materialization, not RGBA expansion. Further work should
 measure whether a multi-operation GPU batch can retain the native result and
 avoid a per-call readback; do not claim this single-operation route is an
 accelerator win.
+
+### Paste: share native byte-width GPU layout with LA — 2026-09-29
+
+The L-only shader is now a native byte-width shader shared by exact logical
+L/`ImageLuma8` and LA/`ImageLumaA8` matches. The callsite gate admits only
+unmasked, same-mode image copies whose normalized source extent matches its
+storage. The shader receives one or two bytes per pixel and writes one aligned
+word: four L pixels or two complete LA pixels. It copies each active channel
+byte into its original slot, so LA's alpha remains byte 1. `La` premultiplied
+storage, palette modes, masks, mixed modes, and other variants keep their
+existing paths. Output reconstruction returns native L or LA storage directly.
+
+The planner checks dimensions, byte counts, 4-byte transfer padding, supported
+pixel widths, storage and buffer sizes, and the adapter's workgroup limit. The
+boundary unit test verifies L and LA exactly at and one word beyond 65,535
+workgroups, plus storage limits and invalid widths without allocating large
+images. A live-oracle LA case uses a 3 × 2 source at `[-1, -1]` on a 5 × 3
+receiver; distinct luma and alpha bytes test clipping, alpha placement, and the
+partial last word. Strict GPU parity passed 4/4 L/LA material and negative-
+offset cases; strict SIMD passed 4/4, CPU passed both new negative-offset
+cases, and the final benchmark gates passed 3/3 for each material workload. The
+100-sample receipts record 100/100 actual GPU executions without fallback. No
+coverage was run.
+
+The LA baseline is `migration-benchmark-a7886004407d4f8f98cd27add1e04755` and
+the native run is `migration-benchmark-6f488a92ee3a49a2b2255ed9a0030da2`, with
+parity evidence `migration-parity-benchmark-gate-af4e9d83e6ea4607a3f9898a165085c0`.
+The shared-shader L regression run is
+`migration-benchmark-aa59e79545484390a6ee2a3c0fceb391`, with parity evidence
+`migration-parity-benchmark-gate-205af27d4a3e47c2954f2108662da5ac`.
+
+| Median latency | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| LA Paste + receiver bytes, ms | 0.262896 | 0.183479 | 0.176667 | 1.283479 |
+| L Paste + receiver bytes, ms | 0.096229 | 0.098854 | 0.087437 | 0.936875 |
+
+LA GPU latency fell from 3.536125 ms to 1.283479 ms (2.8× faster); the shared
+shader kept L at 0.936875 ms, essentially the same as the earlier 0.935354 ms
+measurement. For LA, combined primary-plus-auxiliary input bytes fell from
+6,291,456 to 3,145,728 and readback fell from 3,145,728 to 1,572,864. L's
+combined input and readback bytes each fell 75% from the generic path. Neither
+native GPU path meets its speed target: LA is 7.3× slower than SIMD and 4.9×
+slower than Pillow; L remains about 10.7× slower than SIMD. Synchronous
+submission and host materialization remain the blocker.
 
 ### Pad: native CPU L/LA/RGB/HSV/RGBA — 2026-09-28
 
