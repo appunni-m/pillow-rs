@@ -259,6 +259,103 @@ pub fn op_enhance_color_saturation(
     Ok(result)
 }
 
+/// Sharpen a native byte layout while processing only its active channels.
+/// LA keeps its second byte intact; RGBA keeps byte 3 intact. CMYK explicitly
+/// opts into all four channels because byte 3 is black ink there.
+fn sharpness_native_bytes(
+    source: &[u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    active_channels: usize,
+    alpha: f32,
+) -> Option<Vec<u8>> {
+    if channels == 0 || active_channels == 0 || active_channels > channels {
+        return None;
+    }
+    let row_stride = width.checked_mul(channels)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if source.len() != expected_len {
+        return None;
+    }
+
+    let mut output = source.to_vec();
+    apply_enhance_rows(&mut output, width, height, channels, |y, row| {
+        let row_start = y * row_stride;
+        for (x, pixel) in row.chunks_exact_mut(channels).enumerate() {
+            let pixel_start = row_start + x * channels;
+            for (channel, destination) in pixel[..active_channels].iter_mut().enumerate() {
+                let index = pixel_start + channel;
+                let original = source[index];
+                let smooth = if x > 0 && x + 1 < width && y > 0 && y + 1 < height {
+                    let above = (y - 1) * row_stride;
+                    let below = (y + 1) * row_stride;
+                    let left = (x - 1) * channels + channel;
+                    let center = x * channels + channel;
+                    let right = (x + 1) * channels + channel;
+                    let weighted = u16::from(source[below + left])
+                        + u16::from(source[below + center])
+                        + u16::from(source[below + right])
+                        + u16::from(source[row_start + left])
+                        + u16::from(source[row_start + center]) * 5
+                        + u16::from(source[row_start + right])
+                        + u16::from(source[above + left])
+                        + u16::from(source[above + center])
+                        + u16::from(source[above + right]);
+                    ((weighted + 6) / 13) as u8
+                } else {
+                    original
+                };
+                *destination = alpha
+                    .mul_add(f32::from(original) - f32::from(smooth), f32::from(smooth))
+                    .clamp(0.0, 255.0) as u8;
+            }
+        }
+    });
+    Some(output)
+}
+
+/// Use native storage only when the logical mode and concrete byte layout
+/// agree. Aliases and mismatched layouts retain the established conversion
+/// path below.
+fn sharpness_native_result(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    alpha: f32,
+) -> Option<DynamicImage> {
+    let (width, height) = (img.width(), img.height());
+    let width_usize = width as usize;
+    let height_usize = height as usize;
+    match (mode, img) {
+        (None | Some("L"), DynamicImage::ImageLuma8(source)) => {
+            sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 1, 1, alpha)
+                .and_then(|bytes| crate::raster::GrayImage::from_raw(width, height, bytes))
+                .map(DynamicImage::ImageLuma8)
+        }
+        (None | Some("LA"), DynamicImage::ImageLumaA8(source)) => {
+            sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 2, 1, alpha)
+                .and_then(|bytes| crate::raster::GrayAlphaImage::from_raw(width, height, bytes))
+                .map(DynamicImage::ImageLumaA8)
+        }
+        (None | Some("RGB"), DynamicImage::ImageRgb8(source)) => {
+            sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 3, 3, alpha)
+                .and_then(|bytes| crate::raster::RgbImage::from_raw(width, height, bytes))
+                .map(DynamicImage::ImageRgb8)
+        }
+        (None | Some("RGBA"), DynamicImage::ImageRgba8(source)) => {
+            sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 4, 3, alpha)
+                .and_then(|bytes| crate::raster::RgbaImage::from_raw(width, height, bytes))
+                .map(DynamicImage::ImageRgba8)
+        }
+        (Some("CMYK"), DynamicImage::ImageRgba8(source)) => {
+            sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 4, 4, alpha)
+                .and_then(|bytes| crate::raster::RgbaImage::from_raw(width, height, bytes))
+                .map(DynamicImage::ImageRgba8)
+        }
+        _ => None,
+    }
+}
+
 pub fn op_enhance_sharpness(
     img: &DynamicImage,
     factor: f64,
@@ -270,9 +367,12 @@ pub fn op_enhance_sharpness(
         // or allocating the unused smoothed and blend buffers.
         return Ok(img.clone());
     }
+    let alpha = factor as f32;
+    if let Some(result) = sharpness_native_result(img, mode, alpha) {
+        return Ok(result);
+    }
     // PIL: apply SMOOTH filter (3x3 kernel [1,1,1; 1,5,1; 1,1,1] / 13, offset 0),
     // then use Image.blend's f32 fused difference form.
-    let alpha = factor as f32;
     // CMYK mode: operate on all 4 channels (C=R, M=G, Y=B, K=A in RGBA8)
     let has_alpha = matches!(
         img,
