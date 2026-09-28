@@ -4222,6 +4222,44 @@ impl BufferPool {
     }
 
     #[cfg(target_endian = "little")]
+    fn upload_native_channel_bytes(
+        &self,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        channels: u8,
+        raw: &[u8],
+    ) -> Result<(), PilError> {
+        let expected_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
+        if raw.len() != expected_bytes {
+            return Err(PilError::ValueError(
+                "GPU native channel input does not match its checked dimensions".into(),
+            ));
+        }
+        let transfer_bytes = expected_bytes
+            .div_ceil(std::mem::size_of::<u32>())
+            .checked_mul(std::mem::size_of::<u32>())
+            .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
+        if transfer_bytes / std::mem::size_of::<u32>() > self.capacity as usize {
+            return Err(PilError::ValueError(
+                "GPU native channel input exceeds its checked buffer".into(),
+            ));
+        }
+        let size = u64::try_from(transfer_bytes)
+            .ok()
+            .and_then(NonZeroU64::new)
+            .ok_or_else(|| PilError::ValueError("GPU channel input is empty".into()))?;
+        let mut upload = queue
+            .write_buffer_with(&self.buf_a, 0, size)
+            .ok_or_else(|| {
+                PilError::InternalError("GPU native channel staging allocation failed".into())
+            })?;
+        upload.fill(0);
+        upload[..expected_bytes].copy_from_slice(raw);
+        Ok(())
+    }
+
+    #[cfg(target_endian = "little")]
     fn upload_packed_rgb(
         &self,
         queue: &wgpu::Queue,
@@ -6963,6 +7001,7 @@ impl GpuInner {
         packed_luma_colorize: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
+        native_extract_band: bool,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -7142,6 +7181,12 @@ impl GpuInner {
             };
             let source_row_base = resize_source_row_range.map_or(0, |(first, _)| first);
             let mut params = vec![shader_w, shader_h, op_mode, source_row_base];
+            if native_extract_band && matches!(op, PipelineOp::ExtractBand { .. }) {
+                // ExtractBand's fourth fixed uniform word is otherwise
+                // unused. Mark the one-operation native-byte layout without
+                // changing the generic packed-RGBA shader contract.
+                params[3] = 1;
+            }
             if packed_luma_putdata && matches!(op, PipelineOp::PutData { .. }) {
                 let pixel_count = CheckedDims::new(cur_w, cur_h, 1)?.total_pixels();
                 params[0] = u32::try_from(pixel_count.div_ceil(4)).map_err(|_| {
@@ -9798,6 +9843,7 @@ impl GpuInner {
         packed_luma_colorize: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
+        native_extract_band: bool,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
@@ -9987,6 +10033,7 @@ impl GpuInner {
                 packed_luma_colorize,
                 packed_luma_point,
                 packed_luma_putdata,
+                native_extract_band,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -10111,6 +10158,47 @@ fn execution_mode_code(img: &DynamicImage, logical_mode: Option<&str>) -> u32 {
         Some("HSV" | "YCbCr") => 2,
         _ => mode_code(img),
     }
+}
+
+/// Return the native packed-byte channel count for a pure ExtractBand batch.
+///
+/// ExtractBand's output is already L and compact. Its input reader can consume
+/// the source's native 1/2/3/4-byte pixels directly, avoiding the generic
+/// L/LA/RGB-to-RGBA staging expansion. Keep typed I/F and I;16 layouts on
+/// their established paths, and require the dynamic image's physical storage
+/// to match the public mode's byte layout before setting the shader flag.
+#[cfg(target_endian = "little")]
+fn gpu_native_extract_band_channels(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> Option<u8> {
+    let [PipelineOp::ExtractBand { index }] = ops else {
+        return None;
+    };
+    let channels = match (execution_mode_code(image, logical_mode), image) {
+        (0, DynamicImage::ImageLuma8(_)) => 1u8,
+        (1, DynamicImage::ImageLumaA8(_)) => 2,
+        (2, DynamicImage::ImageRgb8(_)) => 3,
+        (3 | 4 | 6, DynamicImage::ImageRgba8(_)) => 4,
+        _ => return None,
+    };
+    if *index >= channels {
+        return None;
+    }
+    let input_bytes = u64::from(image.width())
+        .checked_mul(u64::from(image.height()))?
+        .checked_mul(u64::from(channels))?;
+    (input_bytes <= u64::from(u32::MAX)).then_some(channels)
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_extract_band_channels(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> Option<u8> {
+    None
 }
 
 fn gpu_resize_channel_count(mode: u32) -> u32 {
@@ -16747,6 +16835,8 @@ impl GpuPool {
             mcode,
             op_keys
         );
+        let native_extract_band_channels = gpu_native_extract_band_channels(ops, img, mode);
+        let native_extract_band = native_extract_band_channels.is_some();
         gpu_log!(
             "[GPU] step=upload start native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
         );
@@ -16774,6 +16864,8 @@ impl GpuPool {
                 ));
             };
             buffers.upload_packed_luma8(&gpu.queue, image)?;
+        } else if let Some(channels) = native_extract_band_channels {
+            buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else {
             buffers.upload_standard_image(&gpu.queue, img)?;
         }
@@ -16789,6 +16881,7 @@ impl GpuPool {
                 packed_luma_colorize,
                 packed_luma_point,
                 packed_luma_putdata,
+                native_extract_band,
                 mode,
                 contrast_mean,
                 f_resize_constant_bits,
@@ -16880,6 +16973,14 @@ impl GpuPool {
         // in-flight or device-invalid resource.
         resource_telemetry.upload_bytes = if full_luma_putdata {
             0
+        } else if let Some(channels) = native_extract_band_channels {
+            let raw_bytes = CheckedDims::new(w, h, channels)?.total_bytes();
+            let transfer_bytes = raw_bytes
+                .div_ceil(std::mem::size_of::<u32>())
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
+            u64::try_from(transfer_bytes)
+                .map_err(|_| PilError::ValueError("GPU channel input is too large".into()))?
         } else if packed_luma_colorize || packed_luma_point || packed_luma_putdata {
             compact_luma8_transfer_bytes(w, h)?
         } else {
@@ -16894,7 +16995,8 @@ impl GpuPool {
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = u64::from(
-            !packed_luma_point
+            !native_extract_band
+                && !packed_luma_point
                 && !packed_luma_putdata
                 && (native_luma16_convert
                     || native_luma16_paste
@@ -17867,6 +17969,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -22180,6 +22283,7 @@ mod tests {
                 .tobytes()
                 .expect("CPU channel extraction");
             assert_eq!(expected, expected_bytes);
+            let _ = crate::compute::take_pipeline_resource_telemetry();
             let actual = match source
                 .getchannel(channel)
                 .expect("channel operation")
@@ -22205,6 +22309,16 @@ mod tests {
             assert_eq!(telemetry.1, Backend::Gpu);
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
+            let resources = telemetry
+                .8
+                .expect("native GPU channel extraction must publish resource telemetry");
+            assert_eq!(
+                resources.upload_bytes,
+                source_bytes.len().div_ceil(4) as u64 * 4,
+                "{mode} upload must keep its native byte layout"
+            );
+            assert_eq!(resources.readback_bytes, 4);
+            assert_eq!(resources.mode_conversion_count, 0);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
     }
@@ -22414,6 +22528,12 @@ mod tests {
         assert_eq!(telemetry.1, Backend::Gpu);
         assert_eq!(telemetry.6, Some(1));
         assert_eq!(telemetry.7, None);
+        let resources = telemetry
+            .8
+            .expect("4096-square GPU extraction must publish resource telemetry");
+        assert_eq!(resources.upload_bytes, (pixel_count * 2) as u64);
+        assert_eq!(resources.readback_bytes, pixel_count as u64);
+        assert_eq!(resources.mode_conversion_count, 0);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 

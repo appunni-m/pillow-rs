@@ -202,6 +202,7 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
 # lazy target backends pay for actual extraction, synchronization, and readback.
 GETCHANNEL_PERFORMANCE_CASES = (
     ("rgb-16x16", "RGB", [16, 16], [13, 73, 211], 1),
+    ("l-1024x768", "L", [1024, 768], 173, 0),
     ("rgb-1024x768", "RGB", [1024, 768], [13, 73, 211], 1),
     ("la-1024x768", "LA", [1024, 768], [13, 211], 1),
     ("rgba-1024x768", "RGBA", [1024, 768], [13, 73, 211, 143], 3),
