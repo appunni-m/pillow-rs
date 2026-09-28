@@ -238,6 +238,7 @@ PASTE_MASKED_PERFORMANCE_CASES = (
 )
 PUTALPHA_PERFORMANCE_CASES = (
     ("la-noise-1024x768-scalar", "LA", [1024, 768], 20261019),
+    ("pa-noise-1024x768-scalar", "PA", [1024, 768], 20261022),
 )
 BRIGHTNESS_PERFORMANCE_CASES = (
     ("l-noise-1024x768-factor-0.5", "L", [1024, 768], 20261020, 0.5),
@@ -2898,7 +2899,7 @@ class WorkflowBuilder:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
             elif requested_mode in {"RGBA", "RGBa", "CMYK"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
-            elif requested_mode == "LA":
+            elif requested_mode in {"LA", "PA"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 2))
             elif requested_mode == "L":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels))

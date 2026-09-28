@@ -6912,7 +6912,9 @@ four-byte carrier for other modes.
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10739,10866,10878`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
 | Definitions, wrappers, tests, comments, or color-only | 12 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10560`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19349`, `ops/pil_resize.rs:2850` |
 
-The three operational groups total 73. Do not treat fallback callsites as
+The three operational groups total 73. The native PA `putalpha` path now
+returns before `compute/pool_simd/mod.rs:158`; that widening call remains as a
+fallback for other result variants. Do not treat fallback callsites as
 guaranteed channel expansion. For a matching `ImageRgba8`, `to_rgba8()` clones
 the existing four bytes; `into_rgba8()` moves that carrier. Logical mode still
 determines whether those bytes mean RGBA, CMYK C/M/Y/K, RGBX padding,
@@ -6936,8 +6938,8 @@ meaning from four bytes per pixel.
 The first conversion-ledger operation completed in this visit is CMYK
 grayscale; its implementation, parity, and performance evidence follow.
 
-Several common paths already avoid these conversions: native LA Brightness and
-PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
+Several common paths already avoid these conversions: native LA Brightness,
+native LA/PA PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
 composition, and native CPU/SIMD/GPU Pad and Expand. The former repeated
 per-sample whole-image conversion in nearest resize is gone; typed samples now
 convert individually, while the RGBA result materialization at
@@ -6951,6 +6953,37 @@ The standard byte-mode LA `ImageStat.Stat` path already enters `histogram()`
 before this RGBA fallback and counts L and alpha at their native byte offsets.
 Its remaining match is for unusual typed storage; it is not a reachable LA8
 conversion to optimize.
+
+### PA `Image.putalpha`: update native index/alpha pairs — 2026-09-29
+
+Logical PA is stored as `ImageLumaA8`: byte 0 is the palette index and byte 1
+is alpha. The SIMD adapter now admits this route only for that concrete storage
+variant and logical PA mode, clones the two-byte buffer once, and overwrites
+byte 1. It does not route the pair through the generic RGBA packer. SIMD result
+normalization likewise returns a native `ImageLumaA8` result directly; other
+result variants retain the previous RGBA-based normalization fallback. The GPU
+uses the existing native two-byte LA alpha shader for PA under a separate,
+exact logical-mode gate, retaining the index byte and writing only alpha.
+CPU behavior is unchanged.
+
+The generated 1024 × 768 PA-noise case passed exact parity 1/1 on CPU, strict
+SIMD, and strict GPU. The final benchmark gate passed 3/3 target profiles; its
+100 samples per target recorded CPU 100/100, SIMD 100/100, and GPU 100/100
+actual backend executions, with no fallback. The guarded-path receipt is
+`migration-benchmark-96879cca9d7945faa93e7569a45b9f9d`:
+
+| Median latency | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| PA PutAlpha + receiver bytes, ms | 0.390313 | 0.256604 | 0.229958 | 0.700042 |
+| Reciprocal latency, operations/s | 2,562 | 3,897 | 4,349 | 1,429 |
+
+The GPU moved 1,572,864 bytes in each direction, down from 3,145,728; it used
+one dispatch and reported zero mode conversions. Its median is 3.04× slower
+than SIMD and 1.79× slower than Pillow. SIMD is 1.70× faster than Pillow,
+below the 5× goal. CPU was not changed, so its timing is comparison context,
+not an attributed gain. The operation is checkpointed after three bounded
+attempts; the next work should target per-call GPU submission/readback and
+SIMD whole-call cost. No coverage was run.
 
 ### CMYK grayscale: native C/M/Y/K to packed L — 2026-09-29
 

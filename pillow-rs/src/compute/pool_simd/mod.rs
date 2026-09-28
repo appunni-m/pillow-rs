@@ -149,11 +149,11 @@ fn normalize_palette_result(
                     PilError::InternalError("SIMD P-mode buffer shape mismatch".to_string())
                 })
         }
-        // ExtractBand changes PA's native two-byte index/alpha samples to a
-        // one-byte L result. Only normalize a result that still has PA's
-        // two-byte layout; widening an extracted L band back to [sample, 255]
-        // changes both its byte contract and its public semantics.
-        Some("PA") if !matches!(result, DynamicImage::ImageLumaA8(_)) => Ok(result),
+        // PA's native ImageLumaA8 storage already is the index/alpha pair.
+        // Keep that exact layout; expanding and immediately narrowing it
+        // would allocate and copy the full frame without changing a sample.
+        // Preserve the established normalization for other result variants.
+        Some("PA") if matches!(&result, DynamicImage::ImageLumaA8(_)) => Ok(result),
         Some("PA") => {
             let rgba = result.to_rgba8();
             let (width, height) = rgba.dimensions();

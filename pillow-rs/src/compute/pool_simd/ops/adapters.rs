@@ -25019,13 +25019,15 @@ pub fn simd_put_alpha(
     else {
         return Err(PilError::ValueError("expected PutAlpha op".into()));
     };
-    if *alpha_mode == PixelMode::LA
-        && matches!(mode, None | Some("LA"))
-        && let DynamicImage::ImageLumaA8(source) = img
-    {
-        // Updating LA needs no channel shuffle. Clone the two-byte samples
-        // once and overwrite only byte 1; the generic SIMD packer would read
-        // and rewrite both bytes of every sample through temporary blocks.
+    let native_two_band_alpha = match (*alpha_mode, mode) {
+        (PixelMode::LA, None | Some("LA")) | (PixelMode::PA, Some("PA")) => true,
+        _ => false,
+    };
+    if native_two_band_alpha && let DynamicImage::ImageLumaA8(source) = img {
+        // LA stores [luma, alpha] and PA stores [index, alpha]. Both already
+        // have the requested two-byte output layout. Clone once and update
+        // only byte 1; the generic SIMD packer would rebuild both bands in
+        // temporary blocks without doing useful channel work.
         let mut output = source.clone();
         for pixel in output.as_mut().chunks_exact_mut(2) {
             pixel[1] = *alpha;
