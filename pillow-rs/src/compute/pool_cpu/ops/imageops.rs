@@ -958,6 +958,136 @@ pub fn op_fit(
     Ok(preserve_mode(img, result))
 }
 
+/// Build the padded output in the exact byte layout of canonical L, LA, RGB,
+/// or RGBA images. Other logical modes keep the general RGBA-compatible path.
+fn pad_native_rows(
+    img: &DynamicImage,
+    resized: &DynamicImage,
+    w: u32,
+    h: u32,
+    nw: u32,
+    nh: u32,
+    offset_x: usize,
+    offset_y: usize,
+    fill: (u8, u8, u8, u8),
+    explicit_mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    let (source, channels, fill_pixel) = match (img, resized, explicit_mode) {
+        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(source), None | Some("L")) => {
+            (source.as_raw(), 1, [fill.0, 0, 0, 0])
+        }
+        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(source), None | Some("LA")) => {
+            (source.as_raw(), 2, [fill.0, fill.3, 0, 0])
+        }
+        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(source), None | Some("RGB")) => {
+            (source.as_raw(), 3, [fill.0, fill.1, fill.2, 0])
+        }
+        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(source), None | Some("RGBA")) => {
+            (source.as_raw(), 4, [fill.0, fill.1, fill.2, fill.3])
+        }
+        _ => return Ok(None),
+    };
+    if w == 0 || h == 0 || nw == 0 || nh == 0 {
+        return Ok(None);
+    }
+
+    let Some(source_width) = usize::try_from(nw).ok() else {
+        return Ok(None);
+    };
+    let Some(source_height) = usize::try_from(nh).ok() else {
+        return Ok(None);
+    };
+    let Some(width) = usize::try_from(w).ok() else {
+        return Ok(None);
+    };
+    let Some(height) = usize::try_from(h).ok() else {
+        return Ok(None);
+    };
+    let Some(source_stride) = source_width.checked_mul(channels) else {
+        return Ok(None);
+    };
+    let Some(source_len) = source_stride.checked_mul(source_height) else {
+        return Ok(None);
+    };
+    if source.len() != source_len {
+        return Ok(None);
+    }
+    let Some(output_stride) = width.checked_mul(channels) else {
+        return Ok(None);
+    };
+    let Some(copy_width) = usize::try_from(nw.min(w)).ok() else {
+        return Ok(None);
+    };
+    let Some(copy_height) = usize::try_from(nh.min(h)).ok() else {
+        return Ok(None);
+    };
+    let Some(offset_x_end) = offset_x.checked_add(copy_width) else {
+        return Ok(None);
+    };
+    let Some(offset_y_end) = offset_y.checked_add(copy_height) else {
+        return Ok(None);
+    };
+    if offset_x_end > width || offset_y_end > height {
+        return Ok(None);
+    }
+    let Some(byte_count) = copy_width.checked_mul(channels) else {
+        return Ok(None);
+    };
+    let Some(output_x_bytes) = offset_x.checked_mul(channels) else {
+        return Ok(None);
+    };
+    let output_dims = CheckedDims::new(w, h, channels as u8)?;
+    let fill_pixel = &fill_pixel[..channels];
+    let fill_row = fill_pixel.repeat(width);
+    if fill_row.len() != output_stride {
+        return Ok(None);
+    }
+    let mut output = fill_row.repeat(height);
+    if output.len() != output_dims.total_bytes() {
+        return Ok(None);
+    }
+    let output_x_end = output_x_bytes + byte_count;
+    let copy_source_row = |output_y: usize, row: &mut [u8]| {
+        if output_y < offset_y || output_y >= offset_y_end {
+            return;
+        }
+
+        let source_y = output_y - offset_y;
+        let source_start = source_y * source_stride;
+        let source_end = source_start + byte_count;
+        row[output_x_bytes..output_x_end].copy_from_slice(&source[source_start..source_end]);
+    };
+
+    if output_x_bytes == 0 && copy_width == width && source_stride == output_stride {
+        let source_byte_count = source_stride * copy_height;
+        let output_start = offset_y * output_stride;
+        let output_end = output_start + source_byte_count;
+        output[output_start..output_end].copy_from_slice(&source[..source_byte_count]);
+    } else {
+        #[cfg(feature = "parallel")]
+        if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+            crate::par_rows_mut!(
+                &mut output,
+                output_stride,
+                height,
+                |_row_start, _row_end, y, row| { copy_source_row(y as usize, row) }
+            );
+        } else {
+            for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
+                copy_source_row(y, row);
+            }
+        }
+        #[cfg(not(feature = "parallel"))]
+        for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
+            copy_source_row(y, row);
+        }
+    }
+
+    Ok(Some(crate::image_utils::raw_bytes_to_image(
+        w, h, output, channels,
+    )?))
+}
+
 /// Pad: resize to fit within (w, h), then pad with fill color.
 /// PIL: contain then paste with centering, using round() for paste offset.
 pub fn op_pad(
@@ -1012,18 +1142,45 @@ pub fn op_pad(
     // channels.  Image.resize already owns the exact f64 coefficient/f32
     // store path for this representation; reuse it for Pad's contain step
     // instead of routing through pil_resize's byte-oriented generic loop.
-    let resized = if nw == 0 || nh == 0 {
+    let native_identity = iw == nw
+        && ih == nh
+        && matches!(
+            (explicit_mode, img),
+            (None | Some("L"), DynamicImage::ImageLuma8(_))
+                | (None | Some("LA"), DynamicImage::ImageLumaA8(_))
+                | (None | Some("RGB"), DynamicImage::ImageRgb8(_))
+                | (None | Some("RGBA"), DynamicImage::ImageRgba8(_))
+        );
+    let resized_storage = if nw == 0 || nh == 0 {
         // Pillow's empty-width source can resize only when the contain pass
         // keeps its source height. Preserve the zero-width result instead of
         // routing it through the generic F/byte kernels or clamping to one.
-        preserve_mode(img, pil_resize(img, nw, nh, resize_filter, explicit_mode))
+        Some(preserve_mode(
+            img,
+            pil_resize(img, nw, nh, resize_filter, explicit_mode),
+        ))
+    } else if native_identity {
+        None
     } else if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
-        execute_resize(img, nw.max(1), nh.max(1), &resize_filter, explicit_mode)?
+        Some(execute_resize(
+            img,
+            nw.max(1),
+            nh.max(1),
+            &resize_filter,
+            explicit_mode,
+        )?)
     } else {
-        pil_resize(img, nw.max(1), nh.max(1), resize_filter, explicit_mode)
+        Some(pil_resize(
+            img,
+            nw.max(1),
+            nh.max(1),
+            resize_filter,
+            explicit_mode,
+        ))
     };
+    let resized = resized_storage.as_ref().unwrap_or(img);
     if nw == w && nh == h {
-        return Ok(preserve_mode(img, resized));
+        return Ok(preserve_mode(img, resized.clone()));
     }
 
     if explicit_mode == Some("P") {
@@ -1085,13 +1242,12 @@ pub fn op_pad(
         return Ok(DynamicImage::ImageLumaA8(padded));
     }
 
-    // Step 2: pad to target size. Build the native RGBA output once and
-    // operate on disjoint rows; repeated `put_pixel` calls otherwise add a
-    // bounds-check and pixel-wrapper construction for every destination.
+    // Step 2: pad to target size. Canonical byte modes return through the
+    // native-format row path below; this RGBA route remains for modes whose
+    // sample semantics need the established conversion behavior.
     // PIL: x = round((size[0] - resized.width) * max(0, min(centering[0], 1)))
     let cx = centering.0.clamp(0.0, 1.0);
     let cy = centering.1.clamp(0.0, 1.0);
-    let src_rgba = resized.to_rgba8();
     // Pillow's ImageOps.pad uses Image.paste without a mask, so the resized
     // source replaces the destination pixels even when the source has alpha.
     let (offset_x, offset_y) = if nw != w {
@@ -1099,6 +1255,23 @@ pub fn op_pad(
     } else {
         (0usize, bankers_round((h as f64 - nh as f64) * cy) as usize)
     };
+    if let Some(native_output) = pad_native_rows(
+        img,
+        resized,
+        w,
+        h,
+        nw,
+        nh,
+        offset_x,
+        offset_y,
+        fill,
+        explicit_mode,
+    )? {
+        return Ok(native_output);
+    }
+
+    // Modes without a proven native row layout retain the compatibility path.
+    let src_rgba = resized.to_rgba8();
     let width = w as usize;
     #[cfg(feature = "parallel")]
     let height = h as usize;
@@ -1485,5 +1658,73 @@ mod equalize_histogram_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pad_native_tests {
+    use super::op_pad;
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+
+    fn native_bytes<'a>(image: &'a DynamicImage, mode: &str) -> &'a [u8] {
+        match (mode, image) {
+            ("L", DynamicImage::ImageLuma8(image)) => image.as_raw(),
+            ("LA", DynamicImage::ImageLumaA8(image)) => image.as_raw(),
+            ("RGB", DynamicImage::ImageRgb8(image)) => image.as_raw(),
+            ("RGBA", DynamicImage::ImageRgba8(image)) => image.as_raw(),
+            _ => panic!("pad must preserve native {mode} storage"),
+        }
+    }
+
+    fn check_native_pad(source: DynamicImage, mode: &str, fill: (u8, u8, u8, u8), expected: &[u8]) {
+        let result = op_pad(
+            &source,
+            2,
+            2,
+            ResampleFilter::Nearest,
+            Some(fill),
+            (0.0, 1.0),
+            Some(mode),
+        )
+        .expect("native pad");
+        assert_eq!(native_bytes(&result, mode), expected);
+    }
+
+    #[test]
+    fn pad_keeps_l_la_rgb_and_rgba_channels_in_native_storage() {
+        check_native_pad(
+            DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![11, 22]).expect("L source")),
+            "L",
+            (73, 99, 111, 157),
+            &[73, 73, 11, 22],
+        );
+        check_native_pad(
+            DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(2, 1, vec![11, 12, 22, 23]).expect("LA source"),
+            ),
+            "LA",
+            (73, 99, 111, 157),
+            &[73, 157, 73, 157, 11, 12, 22, 23],
+        );
+        check_native_pad(
+            DynamicImage::ImageRgb8(
+                RgbImage::from_raw(2, 1, vec![11, 12, 13, 22, 23, 24]).expect("RGB source"),
+            ),
+            "RGB",
+            (73, 99, 111, 157),
+            &[73, 99, 111, 73, 99, 111, 11, 12, 13, 22, 23, 24],
+        );
+        check_native_pad(
+            DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(2, 1, vec![11, 12, 13, 14, 22, 23, 24, 25])
+                    .expect("RGBA source"),
+            ),
+            "RGBA",
+            (73, 99, 111, 157),
+            &[
+                73, 99, 111, 157, 73, 99, 111, 157, 11, 12, 13, 14, 22, 23, 24, 25,
+            ],
+        );
     }
 }
