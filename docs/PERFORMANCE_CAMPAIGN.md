@@ -6897,15 +6897,18 @@ source matches: 73 operational raster calls, two wrapper delegations, one
 single-color conversion, two conversion method definitions, four comments,
 and two tests. The Python Qt bridge has two explicit `convert("RGBA")`
 calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
-binding has none. The table lists every Rust match, grouped by what the call
-does. “Widening-capable” includes fallback sites that widen L/LA/RGB but only
-copy an existing four-byte carrier for other modes.
+binding has none. Two additional `convert("RGBA")` spellings occur in
+`scripts/run_migration_imagecore_native_cases.py:512,602` and construct test
+inputs; they are not application conversion paths. The table lists every Rust
+match, grouped by what the call does. “Widening-capable” includes fallback
+sites that widen L/LA/RGB but only copy an existing four-byte carrier for
+other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 39 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
-| Same-layout clone or four-byte reinterpretation | 20 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,283`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
-| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
+| Widening-capable or mixed-format fallback | 39 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
+| Same-layout clone or four-byte reinterpretation | 20 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,383`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
 | Definitions, wrappers, tests, comments, or color-only | 11 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:118`; comments: `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10556`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19327`, `ops/pil_resize.rs:2850` |
 
 The three operational groups total 73. Do not treat fallback callsites as
@@ -6934,6 +6937,44 @@ The standard byte-mode LA `ImageStat.Stat` path already enters `histogram()`
 before this RGBA fallback and counts L and alpha at their native byte offsets.
 Its remaining match is for unusual typed storage; it is not a reachable LA8
 conversion to optimize.
+
+### CMYK `getprojection`: keep the four ink bytes native — 2026-09-29
+
+`Image.getprojection` previously routed CMYK through the generic RGBA fallback.
+The `ImageRgba8` carrier already contains the four logical samples in the same
+order, C/M/Y/K, so converting it to RGBA only cloned the full frame and gave
+the fourth K byte a misleading alpha name. The new branch requires both mode
+`CMYK` and concrete `ImageRgba8`, tests all four stored ink bytes, and updates
+the two projection vectors by row. Once each column is known nonzero, later
+rows only need a row-nonzero scan to fill the vertical projection. Other
+logical modes retain their existing paths.
+
+Seven generated CMYK parity cases passed: each of C, M, Y, and K alone; the
+existing single-channel case; a dense 1024 × 768 image; and a 1024 × 768 image
+with only three nonzero pixels. The final algorithm was measured over 100
+samples with the operation call timed and construction outside it:
+
+| Input distribution | Pillow | CPU request | SIMD request | GPU request |
+| --- | ---: | ---: | ---: | ---: |
+| Dense CMYK, 1024 × 768 | 0.356 ms | 0.0074 ms | 0.0080 ms | 0.0080 ms |
+| Three-pixel sparse CMYK, 1024 × 768 | 0.284 ms | 0.430 ms | 0.424 ms | 1.286 ms |
+
+The dense CPU result is a 48.0× speedup over Pillow because the first row covers
+all columns; it does not establish a SIMD or GPU speedup. Backend receipts for
+that case recorded no dispatch. Sparse CMYK still loses to Pillow by about
+1.5× on CPU/SIMD requests. Its GPU-profile receipt included one GPU dispatch,
+one 3 MiB full-frame copy and 3 MiB readback, while the Rust method still scans
+the materialized data on the host; this is transfer cost, not a GPU projection
+kernel win.
+
+Four bounded implementation attempts were measured. Borrowing the CMYK carrier
+alone removed the clone but produced only a small gain. Row traversal removed
+per-pixel coordinate arithmetic, and the retained early-complete-column path
+made dense data fast. A raw-byte row pre-scan regressed sparse latency to about
+0.955 ms CPU and was discarded because it scanned rows twice. The remaining
+blocker is a fast exact scan for sparse rows and a real GPU projection path;
+do not use the dense result as representative of all CMYK images. Coverage was
+not run.
 
 ### F boxed nearest resize: retain scalar words and skip identity work — 2026-09-28
 
