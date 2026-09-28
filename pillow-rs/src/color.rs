@@ -352,20 +352,34 @@ fn grayscale_rgb_bytes<const CHANNELS: usize>(
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
 /// Output dimensions match the input and each output pixel is an `L` byte.
 pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let cmyk = match img {
+        // CMYK already occupies this four-byte storage. Read its C/M/Y/K
+        // samples directly instead of cloning them through `to_rgba8()`.
+        DynamicImage::ImageRgba8(image) => Cow::Borrowed(image.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     // Pillow's ImageEnhance.Contrast.__init__ converts CMYK to L before
     // ImageStat.Stat computes its midpoint.  That conversion preserves a
     // valid zero-area image, so use the empty-result allocation boundary here
     // rather than rejecting the dimensions before the enhancement can return
     // its empty CMYK result.
     let dims = CheckedDims::new_allow_empty(w, h, 1)?;
+    let expected_source_bytes = dims
+        .total_pixels()
+        .checked_mul(4)
+        .ok_or_else(|| PilError::InternalError("CMYK grayscale size overflow".to_string()))?;
+    if cmyk.len() != expected_source_bytes {
+        return Err(PilError::InternalError(
+            "cmyk_to_grayscale source buffer mismatch".to_string(),
+        ));
+    }
     let mut gray = dims.alloc_buffer();
-    for (i, p) in rgba.pixels().enumerate() {
-        let c = p[0] as u32;
-        let m = p[1] as u32;
-        let y_ = p[2] as u32;
-        let k = p[3] as u32;
+    for (i, p) in cmyk.chunks_exact(4).enumerate() {
+        let c = u32::from(p[0]);
+        let m = u32::from(p[1]);
+        let y_ = u32::from(p[2]);
+        let k = u32::from(p[3]);
         let nk = 255u32.saturating_sub(k);
         let r = (nk as i32 - muldiv255(c, nk) as i32).clamp(0, 255) as u8;
         let g = (nk as i32 - muldiv255(m, nk) as i32).clamp(0, 255) as u8;

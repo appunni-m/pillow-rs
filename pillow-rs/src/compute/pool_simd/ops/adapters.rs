@@ -406,15 +406,18 @@ fn native_autocontrast_layout(img: &DynamicImage, mode: Option<&str>) -> Option<
 ///
 /// Grayscale produces a new `L` image. RGBa has a dedicated integer
 /// unpremultiplication pre-stage; ordinary RGBA ignores alpha, and RGBX's
-/// fourth byte is padding. Palette, color-space, CMYK, and typed modes are
-/// rejected until their mode-specific conversions can stay native rather
-/// than widening through a packed scalar representation.
+/// fourth byte is padding. CMYK is admitted only with its dedicated
+/// C/M/Y/K-to-luma kernel; treating its samples as RGBA would be incorrect.
+/// Palette, other color-space, and typed modes remain rejected until their
+/// mode-specific conversions can stay native.
 fn native_grayscale_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
         DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa")) => {
+        DynamicImage::ImageRgba8(_)
+            if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa" | "CMYK")) =>
+        {
             Some(4)
         }
         _ => None,
@@ -5500,7 +5503,9 @@ fn shape_native_grayscale_channels(shape: SimdImageShape, mode: Option<&str>) ->
         SimdLayout::Luma8 if matches!(mode, None | Some("L")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some(2),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB")) => Some(3),
-        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa")) => Some(4),
+        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa" | "CMYK")) => {
+            Some(4)
+        }
         _ => None,
     }
 }
@@ -11608,6 +11613,71 @@ fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8], output: &mut [u8]
     }
 }
 
+/// Convert sixteen native C/M/Y/K pixels directly to Pillow-compatible luma.
+/// This fuses the exact integer CMYK-to-RGB conversion with the luma formula,
+/// so the path never materializes the intermediate RGB image.
+#[inline(always)]
+fn cmyk_grayscale_block(source: &[u8]) -> [u8; 16] {
+    let load = |offset| {
+        u8x16::new(
+            source[offset..offset + 16]
+                .try_into()
+                .expect("complete CMYK grayscale vector"),
+        )
+    };
+    let blocks = [load(0), load(16), load(32), load(48)];
+    let c = u16x16::from(grayscale_channel::<4, 0>(&blocks));
+    let m = u16x16::from(grayscale_channel::<4, 1>(&blocks));
+    let y = u16x16::from(grayscale_channel::<4, 2>(&blocks));
+    let k = u16x16::from(grayscale_channel::<4, 3>(&blocks));
+    let nk = u16x16::splat(255) - k;
+    let muldiv255 = |value: u16x16| {
+        let value = value + u16x16::splat(128);
+        ((value >> 8u32) + value) >> 8u32
+    };
+    let r = nk - muldiv255(c * nk);
+    let g = nk - muldiv255(m * nk);
+    let b = nk - muldiv255(y * nk);
+
+    // Exact Pillow luma coefficients, decomposed at bit 8 to keep all
+    // intermediates within u16 lanes.
+    let base = r * const { u16x16::splat(77) }
+        + g * const { u16x16::splat(150) }
+        + b * const { u16x16::splat(29) };
+    let residual = g * const { u16x16::splat(70) } + b * const { u16x16::splat(47) }
+        - r * const { u16x16::splat(117) }
+        + const { u16x16::splat(32768) };
+    simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
+}
+
+/// Fused native-layout CMYK-to-luma conversion. Complete pixels use sixteen
+/// SIMD lanes; the final partial block is padded and writes only active pixels.
+fn native_cmyk_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+    let DynamicImage::ImageRgba8(source) = img else {
+        return None;
+    };
+    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
+    if source.as_raw().len() != pixels.checked_mul(4)? {
+        return None;
+    }
+    let mut output = vec![0u8; pixels];
+    let mut vector_blocks = 0u64;
+    let mut input_blocks = source.as_raw().chunks_exact(64);
+    let mut output_blocks = output.chunks_exact_mut(16);
+    for (input, output) in input_blocks.by_ref().zip(output_blocks.by_ref()) {
+        output.copy_from_slice(&cmyk_grayscale_block(input));
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let tail = output_blocks.into_remainder();
+    if !tail.is_empty() {
+        let mut padded = [0u8; 64];
+        padded[..input_blocks.remainder().len()].copy_from_slice(input_blocks.remainder());
+        tail.copy_from_slice(&cmyk_grayscale_block(&padded)[..tail.len()]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    Some((output, vector_blocks, 0))
+}
+
 /// Convert admitted native bytes to L. Complete groups use direct vector
 /// loads and deinterleaving; only the final partial group needs padding.
 fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8>, u64, u64)> {
@@ -11734,12 +11804,19 @@ pub fn simd_grayscale(
     let Some(channels) = native_grayscale_layout(img, mode) else {
         return Err(simd_unsupported("Grayscale"));
     };
-    let unpremultiplied =
-        matches!(mode, Some("RGBa")).then(|| crate::ops::pil_resize::unpremultiply_alpha(img));
-    let source = unpremultiplied.as_ref().unwrap_or(img);
-    let Some((output, vector_blocks, scalar_tail)) = native_grayscale_bytes(source, channels)
-    else {
-        return Err(simd_unsupported("Grayscale"));
+    let (output, vector_blocks, scalar_tail) = if mode == Some("CMYK") {
+        let Some(result) = native_cmyk_grayscale_bytes(img) else {
+            return Err(simd_unsupported("Grayscale"));
+        };
+        result
+    } else {
+        let unpremultiplied =
+            matches!(mode, Some("RGBa")).then(|| crate::ops::pil_resize::unpremultiply_alpha(img));
+        let source = unpremultiplied.as_ref().unwrap_or(img);
+        let Some(result) = native_grayscale_bytes(source, channels) else {
+            return Err(simd_unsupported("Grayscale"));
+        };
+        result
     };
     crate::compute::record_pipeline_operation_path(if vector_blocks == 0 {
         "scalar-control"
@@ -25386,6 +25463,35 @@ mod tests {
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+
+    #[test]
+    fn native_cmyk_grayscale_matches_exact_conversion_across_vector_tails() {
+        for width in [1u32, 15, 16, 17, 31, 32, 33] {
+            let height = 3u32;
+            let source: Vec<u8> = (0..width * height * 4)
+                .map(|index| ((index * 97 + index / 3 + 11) & 255) as u8)
+                .collect();
+            let expected: Vec<u8> = source
+                .chunks_exact(4)
+                .map(|pixel| {
+                    let nk = 255u32 - u32::from(pixel[3]);
+                    let red = (nk - crate::color::muldiv255(u32::from(pixel[0]), nk)) as u8;
+                    let green = (nk - crate::color::muldiv255(u32::from(pixel[1]), nk)) as u8;
+                    let blue = (nk - crate::color::muldiv255(u32::from(pixel[2]), nk)) as u8;
+                    crate::color::rgb_to_luma_u8(red, green, blue)
+                })
+                .collect();
+            let image = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(width, height, source).expect("valid CMYK storage"),
+            );
+            let (actual, vector_blocks, scalar_tail) =
+                super::native_cmyk_grayscale_bytes(&image).expect("native CMYK grayscale");
+
+            assert_eq!(actual, expected, "CMYK grayscale width {width}");
+            assert_eq!(vector_blocks, (width as u64 * height as u64).div_ceil(16));
+            assert_eq!(scalar_tail, 0);
+        }
+    }
 
     #[test]
     fn native_lut_preserves_channel_order_and_vector_tails() {
