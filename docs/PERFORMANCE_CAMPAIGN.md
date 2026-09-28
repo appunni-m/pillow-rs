@@ -6837,42 +6837,52 @@ follow-up and compact native GPU output are recorded below.
 
 ### Explicit RGBA callsite ledger — 2026-09-28
 
-`rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs/src` reports 88 matching lines
-across the Rust core. A separate binding scan finds two whole-image
-`convert("RGBA")` calls in the Python Qt bridge and no corresponding JS calls.
-This textual inventory includes conversion method definitions, delegation
-wrappers, requested output conversions, same-layout four-byte carriers,
-comments, tests, and one pixel-only color helper; it is not a count of image
-widenings. `to_rgba8()` can expand L/LA/RGB, while CMYK, RGBX, RGBa, I, and F
-use four-byte storage with different meanings.
+The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 88 Rust
+source matches: 80 runtime operation calls, one GPU test, two wrapper
+delegations, one single-color conversion, two conversion method definitions,
+and two comments. The Python Qt bridge has two explicit `convert("RGBA")`
+calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
+binding has none. The table lists every Rust match, grouped by what the call
+does. “Widening-capable” includes fallback sites that widen L/LA/RGB but only
+copy an existing four-byte carrier for other modes.
 
-| Core file | Callsite lines | Classification and first action |
-| --- | --- | --- |
-| `color.rs` | 118, 353, 776, 1082, 1099, 1118, 1134, 1146, 1158 | 118 converts one color. CMYK, I, and F use canonical four-byte samples; borrow the raw bytes where a read-only clone is the only cost. |
-| `compute/pool_cpu/ops/color.rs` | 55, 279 | Inspect the per-operation color contract before changing transport. |
-| `compute/pool_cpu/ops/draw.rs` | 43 | RGBA is the general drawing canvas; specialize only a mode whose native blending rules are proven. |
-| `compute/pool_cpu/ops/effects.rs` | 144, 629, 705, 706, 719, 845, 1054, 1205, 1206, 1373, 3162, 3208, 3228, 3301 | Paste/composite and alpha operations. Some are true expansion; four-byte masks and CMYK need their own band semantics. `putalpha` on native LA at 3208 is a true, avoidable LA→RGBA→LA round trip and is the next candidate. |
-| `compute/pool_cpu/ops/enhance.rs` | 80, 118, 263, 312 | LA Brightness's 118 path is now bypassed by its native two-byte CPU branch; CMYK and I/F byte layouts are not RGBA channel semantics. |
-| `compute/pool_cpu/ops/filter.rs` | 363, 522, 1810 | I/F are four-byte scalar samples; replace cloning with typed/raw access rather than treating them as color bands. Line 1810 is test-only. |
-| `compute/pool_cpu/ops/geometry.rs` | 303, 534, 702, 2166, 2249 | Same I/F warning; follow the original typed sample and rounding contract. |
-| `compute/pool_cpu/ops/imageops.rs` | 1281, 1574 | Pad's native CPU path covers L/LA/RGB/HSV/RGBA; unmatched layouts retain the generic route. Expand's native CPU path covers those five byte layouts; remaining conversions are guarded fallback cases. |
-| `compute/pool_gpu/mod.rs` | 3748, 3769, 4187, 7856, 7876, 10540, 10717, 10844, 10856, 10879, 19275 | Generic upload/auxiliary packing and readback use four-byte transport; one comment and one test are included. Native LA Brightness, ExtractBand, and Expand routes avoid selected expansions. `expand_rgb_into_rgba` at 4169 and its helper at 4566 are additional named RGB expansion sites outside this scan. |
-| `compute/pool_simd/mod.rs` | 143, 158 | P/PA output normalization; preserve palette index and alpha directly in L/LA result storage. |
-| `draw/mod.rs` | 1151, 1285, 1410, 1462, 2135, 2330, 2440 | 1151 remains a generic bitmap fallback after the guarded RGB native path. Other drawing operations have explicit RGBA, canonical four-byte, or CMYK-carrier semantics; prove each before changing it. |
-| `image.rs` | 3833, 3848, 5383, 5416, 6082, 6427, 6564, 7023, 7032, 7041 | Read-only analysis/accessor paths can borrow native bands. `preserve_mode` is output normalization and should be removed only when the caller can own the requested layout directly. |
-| `ops/analysis.rs` | 323, 401, 588 | Masked/generic analysis fallbacks; keep exact mask and sample semantics while borrowing or scanning native bytes. In `getbbox`, physical `ImageRgba8` storage is not enough to infer alpha semantics. |
-| `ops/convert.rs` | 365, 382, 657, 701, 1021 | Explicit RGBa/RGBX/RGBA and palette-alpha conversions; some create requested output, while alpha extraction may be narrowed to the consumed band. |
-| `ops/pil_resize.rs` | 272, 282, 1956, 2225 | 282 is a comment. 272 repeats full-image conversion for typed variants, but current public constructors/decoder lanes do not reach it; do not claim a public perf win without a real producer. 1956 and 2225 preserve conversion/typed contracts and need separate proof. |
-| `ops/quantize.rs` | 2206, 2219 | FASTOCTREE consumes alpha as RGBA; RGB expansion is candidate for native RGB input if the quantizer contract permits. |
-| `raster/dynamic.rs` | 327, 420, 423, 1016 | Conversion API definitions and `From` implementations, not independent operation algorithms. |
-| `pillow-rs-py/python/pillow_rs/image.py` | 655, 663 | Qt `toqimage` adapters explicitly request RGBA for host interoperability, outside the Rust algorithm hot path. |
+| Classification | Count | Rust callsites |
+| --- | ---: | --- |
+| Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:312`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2219` |
+| Same-layout clone or four-byte reinterpretation | 30 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2166,2249`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/pil_resize.rs:2225`; `ops/quantize.rs:2206` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3250,3328,3401`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
+| Definition, wrapper, test, comment, or color-only | 8 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19302`; `ops/pil_resize.rs:282`; `raster/dynamic.rs:327,420,423,1016` |
 
-The next action is selected by cost and reachability, not by match count: avoid
-expanding an LA image to RGBA only to replace alpha and rebuild LA. Keep RGB
-`putalpha` as RGB→RGBA because adding an alpha band changes the public result.
-Keep mode-mismatched, typed, and semantically converting paths on their
-established implementations until a separate parity-backed specialization is
-justified.
+Do not treat the 36 fallback matches as 36 guaranteed conversions. `to_rgba8()`
+expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
+means CMYK, RGBX, premultiplied RGBa, I, or F. Those bytes are not interchangeable:
+CMYK byte 3 is K, RGBX byte 3 is padding, LA alpha is byte 1, and RGBa stores
+premultiplied color. I/F bytes encode scalar samples. The GPU also has a named
+RGB upload expansion outside the method-call scan:
+`pool_gpu/mod.rs:4169` calls `expand_rgb_into_rgba` (`:4566`) for a shader that
+still consumes four-byte pixels. The Qt conversions are host-display formats,
+not core image algorithms.
+
+Several common paths already avoid these conversions: native LA Brightness and
+PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
+composition, and native CPU/SIMD/GPU Pad and Expand. `ops/pil_resize.rs:272`
+still converts a whole typed source inside its per-pixel fallback, but current
+public constructors and decoder lanes do not produce the typed layouts that
+reach it. `ops/quantize.rs:2219` is a reachable RGB→RGBA candidate, but its
+FASTOCTREE insertion order and exact palette output need dedicated parity
+cases before changing it.
+
+The audit found and fixed one correctness bug in `Image.getprojection`: LAB is
+stored in RGB bytes with logical A/B zero represented by 128. Its old fallback
+expanded to RGBA and marked every nonempty LAB pixel because the synthesized
+alpha is 255. A native LAB scan now checks `L != 0 || A != 128 || B != 128`.
+Four generated cases cover neutral zero and each logical band independently;
+the complete 25-case getprojection parity lane passed. The next performance
+candidate is L-mode Brightness: CPU currently expands its one-byte samples to
+RGB, and GPU falls back to four-byte transport, while SIMD already processes L
+directly. Keep RGB→RGBA conversions when adding alpha is the requested result,
+and retain mode-mismatched conversions until their semantics have separate
+parity-backed paths.
 
 ### RGB `ImageDraw.bitmap`: keep the canvas three bytes per pixel — 2026-09-28
 
