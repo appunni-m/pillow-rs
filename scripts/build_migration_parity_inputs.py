@@ -207,6 +207,18 @@ GETCHANNEL_PERFORMANCE_CASES = (
     ("la-1024x768", "LA", [1024, 768], [13, 211], 1),
     ("rgba-1024x768", "RGBA", [1024, 768], [13, 73, 211, 143], 3),
 )
+EXPAND_PERFORMANCE_CASES = (
+    ("l-noise-1024x768", "L", [1024, 768], 20260928, 37),
+    ("la-noise-1024x768", "LA", [1024, 768], 20260929, [37, 211]),
+    ("rgb-noise-1024x768", "RGB", [1024, 768], 20260930, [37, 113, 211]),
+    (
+        "rgba-noise-1024x768",
+        "RGBA",
+        [1024, 768],
+        20261001,
+        [37, 113, 211, 79],
+    ),
+)
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
     ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
@@ -29747,6 +29759,25 @@ def build_nuanced_cases(
             "values": {"border": literal(2)},
             "observe_result": "tobytes",
         },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "values": {
+                    "border": literal(7),
+                    "fill": literal(fill),
+                },
+                "observe_result": "tobytes",
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed, fill in EXPAND_PERFORMANCE_CASES
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "expand",
@@ -47364,6 +47395,54 @@ def build_inputs(
                 workloads.append(full_width_workload)
                 members.append({"workload_id": full_width_workload_id, "weight": 1})
         if surface_id == "PIL.ImageOps":
+            expand_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "expand"
+                ),
+                None,
+            )
+            if expand_benchmark is not None:
+                operation, requirement = expand_benchmark
+                for name, _mode, _size, _seed, _fill in EXPAND_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.expand.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.ImageOps.expand.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-result"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"expand-{slug(name)}",
+                                surface=surface_id,
+                                operation="expand",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
             colorize_benchmark = next(
                 (
                     (operation, requirement)

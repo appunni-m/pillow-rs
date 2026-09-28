@@ -1263,6 +1263,77 @@ pub fn op_scale(
     Ok(preserve_mode(img, result))
 }
 
+// Keep this fast path limited to the exact public byte mode and storage pair.
+fn native_expand_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    match (mode, img) {
+        (None, DynamicImage::ImageLuma8(_)) | (Some("L"), DynamicImage::ImageLuma8(_)) => Some(1),
+        (None, DynamicImage::ImageLumaA8(_)) | (Some("LA"), DynamicImage::ImageLumaA8(_)) => {
+            Some(2)
+        }
+        (None, DynamicImage::ImageRgb8(_)) | (Some("RGB"), DynamicImage::ImageRgb8(_)) => Some(3),
+        (None, DynamicImage::ImageRgba8(_)) | (Some("RGBA"), DynamicImage::ImageRgba8(_)) => {
+            Some(4)
+        }
+        _ => None,
+    }
+}
+
+/// Copy one of the ordinary byte layouts into its native output channel count.
+/// The fill tuple's LA alpha is byte three; the source LA pixel's alpha is byte
+/// one. L/LA/RGB/RGBA stay in their physical format from input through output.
+fn expand_native_bytes(
+    img: &DynamicImage,
+    border: u32,
+    fill: (u8, u8, u8, u8),
+    channels: usize,
+    new_w: u32,
+    new_h: u32,
+) -> Result<Option<DynamicImage>, PilError> {
+    if new_w == 0 || new_h == 0 {
+        return Ok(None);
+    }
+    let source_dims = CheckedDims::new_allow_empty(img.width(), img.height(), channels as u8)?;
+    let source = img.as_bytes();
+    if source.len() != source_dims.total_bytes() {
+        return Ok(None);
+    }
+    let output_dims = CheckedDims::new(new_w, new_h, channels as u8)?;
+    if border == 0 {
+        return Ok(Some(img.clone()));
+    }
+
+    let fill_sample = match channels {
+        1 => [fill.0, 0, 0, 0],
+        2 => [fill.0, fill.3, 0, 0],
+        3 => [fill.0, fill.1, fill.2, 0],
+        4 => [fill.0, fill.1, fill.2, fill.3],
+        _ => return Ok(None),
+    };
+    let fill_pixel = &fill_sample[..channels];
+    let fill_row = fill_pixel.repeat(new_w as usize);
+    let fill_sides = fill_pixel.repeat(border as usize);
+    let source_stride = source_dims.row_stride();
+    let source_height = img.height() as usize;
+    let offset_y = border as usize;
+
+    // Build each row exactly once. Filling the whole canvas and overwriting
+    // its center adds a second full-frame memory pass when the border is thin.
+    let mut output = Vec::with_capacity(output_dims.total_bytes());
+    for y in 0..new_h as usize {
+        if y < offset_y || y >= offset_y + source_height {
+            output.extend_from_slice(&fill_row);
+        } else {
+            output.extend_from_slice(&fill_sides);
+            let source_y = y - offset_y;
+            let source_start = source_y * source_stride;
+            output.extend_from_slice(&source[source_start..source_start + source_stride]);
+            output.extend_from_slice(&fill_sides);
+        }
+    }
+
+    crate::image_utils::raw_bytes_to_image(new_w, new_h, output, channels).map(Some)
+}
+
 /// Expand: add a border of `border` pixels with `fill` color around the image.
 /// The fill is a 4-tuple (r,g,b,a). Indexed `P`/`PA` inputs retain their raw
 /// sample layout; the tuple's first byte is the `P` index and the first and
@@ -1274,8 +1345,15 @@ pub fn op_expand(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width(), img.height());
-    let new_w = w + 2 * border;
-    let new_h = h + 2 * border;
+    let border_twice = border
+        .checked_mul(2)
+        .ok_or_else(|| PilError::DimensionError("expand border overflows dimensions".into()))?;
+    let new_w = w
+        .checked_add(border_twice)
+        .ok_or_else(|| PilError::DimensionError("expanded image width overflows".into()))?;
+    let new_h = h
+        .checked_add(border_twice)
+        .ok_or_else(|| PilError::DimensionError("expanded image height overflows".into()))?;
 
     if mode == Some("P") {
         let source = img.to_luma8();
@@ -1302,6 +1380,12 @@ pub fn op_expand(
             }
         }
         return Ok(DynamicImage::ImageLumaA8(expanded));
+    }
+
+    if let Some(channels) = native_expand_channels(img, mode)
+        && let Some(expanded) = expand_native_bytes(img, border, fill, channels, new_w, new_h)?
+    {
+        return Ok(expanded);
     }
 
     let src_rgba = img.to_rgba8();
