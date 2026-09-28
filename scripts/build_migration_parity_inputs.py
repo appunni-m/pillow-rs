@@ -40803,6 +40803,7 @@ def build_nuanced_cases(
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
+    cases.extend(cmyk_grayscale_parity_cases(surface_id))
     cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
@@ -41379,6 +41380,126 @@ def cmyk_to_rgb_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["call", "materialize"],
         }
     ]
+
+
+def cmyk_grayscale_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover CMYK ink channels and a material ImageOps.grayscale input."""
+    if surface_id != "PIL.ImageOps":
+        return []
+
+    def make_case(
+        name: str,
+        size: list[int],
+        color: list[int],
+        target_profiles: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "case_id": f"{surface_id}.grayscale.nuanced.{name}",
+            "surface": surface_id,
+            "operation": "grayscale",
+            "covers": [f"{surface_id}.grayscale.behavior.default"],
+            "target_profiles": target_profiles
+            or ["python-cpu", "python-simd", "python-gpu"],
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("CMYK"),
+                        "size": literal(size),
+                        "color": literal(color),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "grayscale",
+                    "receiver": None,
+                    "arguments": {"image": binding("image")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+
+    cases = []
+    for channel, name in enumerate(("cyan", "magenta", "yellow", "black")):
+        color = [0, 0, 0, 0]
+        color[channel] = 1
+        cases.append(make_case(f"cmyk-{name}-only", [4, 3], color))
+    cases.append(
+        make_case("material-cmyk-1024x768", [1024, 768], [17, 83, 149, 211])
+    )
+
+    width, height = 17, 13
+    varied = random.Random("cmyk-grayscale-varied-17x13").randbytes(
+        width * height * 4
+    )
+    cases.append(
+        {
+            "case_id": f"{surface_id}.grayscale.nuanced.cmyk-varied-17x13",
+            "surface": surface_id,
+            "operation": "grayscale",
+            "covers": [f"{surface_id}.grayscale.behavior.default"],
+            "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            "assets": [
+                {
+                    "id": "cmyk-pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(varied).decode("ascii"),
+                    "sha256": hashlib.sha256(varied).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("CMYK"),
+                        "size": literal([width, height]),
+                        "data": {"kind": "asset", "asset_id": "cmyk-pixels"},
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "grayscale",
+                    "receiver": None,
+                    "arguments": {"image": binding("image")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    )
+    cases.append(
+        make_case(
+            "device-grid-boundary-cmyk-4096x4096",
+            [4096, 4096],
+            [13, 89, 210, 31],
+            target_profiles=["python-cpu", "python-gpu"],
+        )
+    )
+    return cases
 
 
 def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -45865,6 +45986,43 @@ def build_pipeline_benchmark_document(
         "context": cmyk_to_rgb_context,
     }
 
+    cmyk_grayscale_case_id = (
+        "PIL.ImageOps.grayscale.nuanced.material-cmyk-1024x768"
+    )
+    cmyk_grayscale_case = cases_by_id.get(cmyk_grayscale_case_id)
+    if cmyk_grayscale_case is None:
+        raise ValueError(
+            f"CMYK grayscale benchmark references missing case: "
+            f"{cmyk_grayscale_case_id}"
+        )
+    cmyk_grayscale_context = _workflow_benchmark_context(
+        cmyk_grayscale_case,
+        variant="grayscale-material-cmyk-1024x768",
+        surface="PIL.ImageOps",
+        operation="grayscale",
+    )
+    cmyk_grayscale_context.update(size=[1024, 768], mode="CMYK")
+    cmyk_grayscale_workload = {
+        "workload_id": "pipeline-chain.grayscale.material-cmyk-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.ImageOps", "grayscale")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": cmyk_grayscale_case_id},
+        "measurement": {
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "concurrency": 1,
+            "cache_state": "warm",
+            "correctness_gate": "parity_pass",
+        },
+        "context": cmyk_grayscale_context,
+    }
+
     # Exercise the packed scalar reduction paths on a materially sized frame.
     # I and F are created through public conversion steps and all terminal
     # observations share one workflow process; this is benchmark-only input,
@@ -47642,6 +47800,7 @@ def build_pipeline_benchmark_document(
             getprojection_cmyk_workload,
             getprojection_cmyk_sparse_workload,
             cmyk_to_rgb_workload,
+            cmyk_grayscale_workload,
             *terminal_scalar_analysis_workloads,
             *terminal_masked_analysis_workloads,
             *terminal_color_count_workloads,

@@ -6806,7 +6806,8 @@ revisit Mirror after other operations receive their first optimization pass.
 
 The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 84
 textual call/declaration sites, including tests and the `DynamicImage`
-conversion helpers. These are not 84 runtime image conversions. The Python
+conversion helpers. The later exact ledger below corrects this to 85 matches;
+neither count represents runtime image conversions one-for-one. The Python
 Qt bridge has two explicit `convert("RGBA")` calls; JavaScript has none in
 the binding source. The ledger below separates runtime operations from helper
 definitions, wrappers, test-only matches, comments, and a one-pixel color
@@ -6892,35 +6893,48 @@ follow-up and compact native GPU output are recorded below.
 
 ### Explicit RGBA callsite ledger — 2026-09-29
 
-The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 84 Rust
-source matches: 73 operational raster calls, two wrapper delegations, one
-single-color conversion, two conversion method definitions, four comments,
-and two tests. The Python Qt bridge has two explicit `convert("RGBA")`
-calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
-binding has none. Two additional `convert("RGBA")` spellings occur in
-`scripts/run_migration_imagecore_native_cases.py:512,602` and construct test
-inputs; they are not application conversion paths. The table lists every Rust
-match, grouped by what the call does. “Widening-capable” includes fallback
-sites that widen L/LA/RGB but only copy an existing four-byte carrier for
-other modes.
+The exact `rg -n -o '(to_rgba8|into_rgba8)\(' pillow-rs/src --glob '*.rs'`
+scan finds 85 Rust source matches: 73 operational callsites, two wrapper
+delegations, one single-color conversion, two conversion method definitions,
+five comments, and two tests. The Python Qt bridge has two explicit
+`convert("RGBA")` calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`;
+the JavaScript binding has none. Two additional `convert("RGBA")` spellings
+occur in `scripts/run_migration_imagecore_native_cases.py:512,602` and
+construct test inputs; they are not application conversion paths. The table
+lists every Rust match, grouped by what the call does. “Widening-capable”
+includes fallback sites that widen L/LA/RGB but only copy an existing
+four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 39 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
-| Same-layout clone or four-byte reinterpretation | 20 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,383`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
-| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
-| Definitions, wrappers, tests, comments, or color-only | 11 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:118`; comments: `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10556`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19327`, `ops/pil_resize.rs:2850` |
+| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7857,7877,10901`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
+| Same-layout clone or four-byte reinterpretation | 18 | `color.rs:1104,1121,1140,1156,1168,1180`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,383`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10739,10866,10878`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
+| Definitions, wrappers, tests, comments, or color-only | 12 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10560`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19349`, `ops/pil_resize.rs:2850` |
 
 The three operational groups total 73. Do not treat fallback callsites as
-guaranteed conversions. `to_rgba8()`
-expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
-means CMYK, RGBX, premultiplied RGBa, I, or F. Those bytes are not interchangeable:
-CMYK byte 3 is K, RGBX byte 3 is padding, LA alpha is byte 1, and RGBa stores
-premultiplied color. I/F bytes encode scalar samples. The GPU also has a named
-RGB upload expansion outside the method-call scan:
-`pool_gpu/mod.rs:4169` calls `expand_rgb_into_rgba` (`:4566`) for a shader that
-still consumes four-byte pixels. The Qt conversions are host-display formats,
-not core image algorithms.
+guaranteed channel expansion. For a matching `ImageRgba8`, `to_rgba8()` clones
+the existing four bytes; `into_rgba8()` moves that carrier. Logical mode still
+determines whether those bytes mean RGBA, CMYK C/M/Y/K, RGBX padding,
+premultiplied RGBa, or one I/F scalar word. For L/LA/RGB variants,
+`to_rgba8()` performs a real expansion; typed 16-bit/float variants may
+perform numeric conversion. LA alpha is byte 1. These representations are not
+interchangeable. The GPU also has a named RGB upload expansion outside the
+method-call scan: `pool_gpu/mod.rs:4187` calls `expand_rgb_into_rgba`
+(`:4567`) for a shader that still consumes four-byte pixels. The Qt
+conversions are host-display formats, not core image algorithms.
+
+Choose native code from both logical mode and concrete `DynamicImage` variant,
+then check dimensions, sample length, and parameters before touching bytes. If
+the operation preserves mode, read and write only its active native bands and
+return the same variant. If the requested result adds bands or changes color
+semantics, keep that conversion but fuse it with the operation so no full-frame
+intermediate is created. Leave mismatched variants and unproven
+alpha/palette/typed semantics on the exact fallback. Never infer channel
+meaning from four bytes per pixel.
+
+The first conversion-ledger operation completed in this visit is CMYK
+grayscale; its implementation, parity, and performance evidence follow.
 
 Several common paths already avoid these conversions: native LA Brightness and
 PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
@@ -6937,6 +6951,56 @@ The standard byte-mode LA `ImageStat.Stat` path already enters `histogram()`
 before this RGBA fallback and counts L and alpha at their native byte offsets.
 Its remaining match is for unusual typed storage; it is not a reachable LA8
 conversion to optimize.
+
+### CMYK grayscale: native C/M/Y/K to packed L — 2026-09-29
+
+CMYK already uses a four-byte `ImageRgba8` carrier, but its samples mean
+C/M/Y/K, not RGBA. CPU grayscale now borrows those bytes and fuses the exact
+CMYK-to-RGB integer rounding with Pillow's fixed-point luma. SIMD processes
+native C/M/Y/K vectors in sixteen-pixel blocks, pads only the tail, and writes
+L directly. GPU keeps the native four-byte upload and fuses the same math in
+the shader; each invocation writes one packed word containing four L samples.
+The output buffer and readback are now one byte per pixel, so no RGBA L-output
+carrier or post-readback channel narrowing is needed. Other mismatched storage
+variants retain the existing conversion fallback.
+
+The parity inputs include four ink-isolation cases, a varied 17 × 13 image,
+the existing material 1024 × 768 input, and a 4096 × 4096 workgroup-boundary
+image. The focused CPU run passed 11/11 cases, strict SIMD passed 10/10, and
+strict GPU passed 11/11. The 4096 × 4096 image requires 65,536 workgroups in a
+flat grid, one beyond the per-dimension default; the planner selects 256 × 256
+and strict GPU parity passed without fallback. The planner test checks limits
+at that boundary and separately proves every output word is covered once for a
+small tiled grid; the SIMD unit test checks exact CMYK arithmetic across vector
+tails. No coverage was run.
+
+The parity commands used `make migration-parity-test`,
+`make migration-parity-test-simd-strict`, and
+`make migration-parity-test-gpu-strict` with the generated grayscale case IDs
+selected through `MIGRATION_PARITY_CASE_IDS`. The matching material benchmark
+uses `make migration-parity-benchmark`, pipeline profile,
+`pipeline-chain.grayscale.material-cmyk-1024x768`, the public call plus
+`tobytes()` boundary, five warmups, 100 measured calls, and concurrency one.
+Both benchmark runs passed their parity gate:
+`migration-benchmark-6f687cccd84b4d63ba62579f155a9fd7` before packed output and
+`migration-benchmark-620c55d6a00741d5a99158cbf8e0a1da` after it.
+
+| 1024 × 768 materialized latency, ms | Before packed output | Packed output |
+| --- | ---: | ---: |
+| Pillow | 0.666708 | 0.602167 |
+| CPU | 0.416083 | 0.394625 |
+| SIMD | 0.620063 | 0.607708 |
+| GPU | 1.353313 | 0.750459 |
+
+The GPU median fell 44.6% while readback dropped from 3,145,728 to 786,432
+bytes (75%). The new receipt records one GPU dispatch, 100/100 actual GPU
+executions, zero fallback, 3,145,728 upload bytes, and one full-frame device
+copy. CPU and SIMD medians moved only slightly and do not establish a change.
+CPU is 1.53× faster than Pillow on the final sample; SIMD is about the same
+latency as Pillow, far short of 5×; GPU is still 1.23× slower than SIMD. This
+visit is checkpointed after four bounded implementation attempts. Remaining
+work is to reduce GPU upload/map completion cost and improve the SIMD kernel's
+whole-operation latency; the compact readback alone does not meet the goals.
 
 ### CMYK `getprojection`: keep the four ink bytes native — 2026-09-29
 

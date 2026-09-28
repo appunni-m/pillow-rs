@@ -4422,10 +4422,11 @@ fn plan_packed_point_luma_dispatch(
     plan_packed_luma_dispatch(width, height, max_workgroups_per_dimension)
 }
 
-/// Plan the compact ExtractBand dispatch as a near-square 2D grid. One shader
-/// invocation writes one packed word containing four output pixels, and each
-/// workgroup contains 64 invocations. The shader's flattened word index uses
-/// `u32`, so reject dimensions and padded grids outside that index range.
+/// Plan compact one-channel output dispatches such as ExtractBand and
+/// Grayscale as a near-square 2D grid. One shader invocation writes one packed
+/// word containing four output pixels, and each workgroup contains 64
+/// invocations. The flattened word index uses `u32`, so reject dimensions and
+/// padded grids outside that index range.
 fn plan_extract_band_dispatch(
     width: u32,
     height: u32,
@@ -8086,7 +8087,7 @@ impl GpuInner {
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
-            "ExtractBand" => plan_extract_band_dispatch(
+            "ExtractBand" | "Grayscale" => plan_extract_band_dispatch(
                 output_dims.0,
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -10281,7 +10282,10 @@ impl GpuInner {
                     dispatch.transfer_bytes
                 } else if packed_luma_point
                     || packed_luma_putdata
-                    || matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }))
+                    || matches!(
+                        ops.last(),
+                        Some(PipelineOp::ExtractBand { .. } | PipelineOp::Grayscale)
+                    )
                 {
                     compact_luma8_transfer_bytes(final_dims.0, final_dims.1)?
                 } else {
@@ -10730,7 +10734,9 @@ fn gpu_result_as_color_type(
     result: DynamicImage,
     color_type: crate::raster::ColorType,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = result.to_rgba8();
+    // GPU readback already returns the packed RGBA transport. Consume it so
+    // narrowing L/LA/RGB outputs does not first clone a full frame.
+    let rgba = result.into_rgba8();
     let (w, h) = rgba.dimensions();
     match color_type {
         crate::raster::ColorType::L8 => {
@@ -16274,11 +16280,12 @@ impl GpuPool {
         // their index/(index, alpha) samples as Luma8/LumaA8 buffers; no
         // palette expansion is involved. CMYK is additionally safe for a
         // brightness/color-saturation batch because the core stores its
-        // C/M/Y/K bytes in the same four-byte transport and the corresponding
-        // shaders explicitly process K. EffectSpread is a separate raw-byte
-        // relocation: its host-generated map is gathered as complete packed
-        // words, so it is safe for every mode backed by the ordinary byte
-        // transport, including the logical modes below.
+        // C/M/Y/K bytes in the same four-byte transport and those shaders
+        // explicitly process K. Grayscale has a dedicated shader branch that
+        // fuses CMYK-to-RGB arithmetic with luma. EffectSpread is a separate
+        // raw-byte relocation: its host-generated map is gathered as complete
+        // packed words, so it is safe for every mode backed by the ordinary
+        // byte transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
                 // LAB shares RGB8 storage. The core has already encoded its
@@ -16663,7 +16670,8 @@ impl GpuPool {
                         .all(|op| {
                             matches!(
                                 op,
-                                PipelineOp::Brightness { .. }
+                                PipelineOp::Grayscale
+                                    | PipelineOp::Brightness { .. }
                                     | PipelineOp::Contrast { .. }
                                     | PipelineOp::ColorSaturation { .. }
                                     | PipelineOp::Sharpness { .. }
@@ -17275,6 +17283,8 @@ impl GpuPool {
             && out_mode.unwrap_or_else(|| img.color()) == crate::raster::ColorType::Rgb8;
         let native_luma8_extract = out_mode == Some(crate::raster::ColorType::L8)
             && matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }));
+        let native_luma8_grayscale = out_mode == Some(crate::raster::ColorType::L8)
+            && matches!(ops.last(), Some(PipelineOp::Grayscale));
         // All command buffers are submitted before registering the mapping. The
         // batch owns A/B exclusively until the mapped view is dropped and the
         // selected primary or staging buffer has been unmapped.
@@ -17284,7 +17294,11 @@ impl GpuPool {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
             gpu.readback_to_luma16_numeric(final_w, final_h, readback_buffer)?
-        } else if native_luma8_extract || packed_luma_point || packed_luma_putdata {
+        } else if native_luma8_extract
+            || native_luma8_grayscale
+            || packed_luma_point
+            || packed_luma_putdata
+        {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else {
             if native_expand_output {
@@ -17340,7 +17354,11 @@ impl GpuPool {
                     })?,
             )
             .map_err(|_| PilError::ValueError("GPU native image readback size overflow".into()))?
-        } else if native_luma8_extract || packed_luma_point || packed_luma_putdata {
+        } else if native_luma8_extract
+            || native_luma8_grayscale
+            || packed_luma_point
+            || packed_luma_putdata
+        {
             compact_luma8_transfer_bytes(final_w, final_h)?
         } else {
             CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
@@ -17376,7 +17394,11 @@ impl GpuPool {
             // applying mode preservation again would reallocate it.
             return Ok(result);
         }
-        if native_luma8_extract || packed_luma_point || packed_luma_putdata {
+        if native_luma8_extract
+            || native_luma8_grayscale
+            || packed_luma_point
+            || packed_luma_putdata
+        {
             return Ok(result);
         }
         if let Some(mode) = put_alpha_mode {
@@ -22766,6 +22788,15 @@ mod tests {
                 "required groups={workgroups}"
             );
         }
+
+        // A 4096x4096 image requires 65,536 workgroups when flattened, which
+        // exceeds the default per-dimension limit by one. The compact 2D grid
+        // must remain inside the adapter limit while covering every word.
+        assert_eq!(
+            plan_extract_band_dispatch(4096, 4096, 65_535)
+                .expect("4096x4096 compact output should fit a tiled grid"),
+            (256, 256)
+        );
 
         let (groups_x, groups_y) =
             plan_extract_band_dispatch(5 * 256, 1, 3).expect("small tiled grid");
