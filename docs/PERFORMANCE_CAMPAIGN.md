@@ -7667,3 +7667,30 @@ source clone is still a concrete reduction in allocation and memory traffic.
 The SIMD/GPU implementations were unchanged; both remain slower than CPU, and
 the GPU remains slower than SIMD. Benchmark receipts show six completed
 executions on each requested backend without fallback. No coverage was run.
+
+### CMYK to RGB: retain byte-copy fallback pending useful benchmark — 2026-09-28
+
+`color.rs::cmyk_to_rgb` reads the four-byte carrier as C/M/Y/K and emits RGB.
+For a matching `ImageRgba8`, `to_rgba8()` clones the same four bytes before
+the pixel loop; it does not perform CMYK color conversion. A borrowed
+`ImageRgba8` path is semantically valid only for that concrete storage variant,
+with the accessor retained for other internal variants. Focused live Pillow
+parity passed all four selected CMYK-to-RGB/RGBA/I/F cases on CPU for the
+borrowed implementations.
+
+The available workload, `pipeline-chain.reviewed.convert-cmyk-rgba`, uses an
+8 × 6 CMYK image and six measured calls, so allocation and Python workflow
+overhead dominate. Its unchanged baseline median was 14.562 µs CPU. Several
+borrowed-pixel implementations measured 37.938–40.063 µs CPU across reruns;
+Pillow ranged 12.313–15.334 µs. The implementation was removed because this
+evidence shows no CPU improvement. SIMD/GPU subject rows report empty native
+backend counts, so those rows are host-side timing only and provide no device
+performance evidence. The high sample variance also prevents attributing the
+small SIMD/GPU movements to the edit.
+
+The blocker is evidence quality and the regression in the only current CPU
+workload: add a material, parity-backed CMYK conversion input and profile
+allocation versus the pixel loop before revisiting this site. The call remains
+in the same-layout-copy ledger until a faster direct path passes parity and a
+representative benchmark. No code change is retained, no coverage was run, and
+the focused parity result is not a backend-wide parity claim.
