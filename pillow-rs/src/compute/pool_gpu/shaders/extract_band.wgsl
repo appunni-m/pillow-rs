@@ -25,16 +25,29 @@ fn main(
     if output_word >= output_word_count { return; }
     let first_pixel = output_word * 4u;
 
-    // LA stores its alpha band in byte 3; RGB/RGBA use the normal byte
-    // offsets. `getchannel(1)` must therefore select byte 3 only for the
-    // two-band transport; RGBA channel 1 remains green.
-    let alpha_band = params.mode == 1u && params.channel == 1u;
-    let shift = select(params.channel * 8u, 24u, alpha_band);
+    // The pure-operation fast path uploads original 1/2/3/4-byte pixels and
+    // marks the otherwise-unused fourth uniform word. Generic batches retain
+    // packed RGBA input, including LA alpha in byte three.
+    var native_channels = 4u;
+    if params.mode <= 2u {
+        native_channels = params.mode + 1u;
+    }
     var packed = 0u;
     for (var lane = 0u; lane < 4u; lane += 1u) {
         let pixel_index = first_pixel + lane;
         if pixel_index < pixel_count {
-            let value = (input[pixel_index] >> shift) & 0xffu;
+            var value = 0u;
+            if params._pad != 0u {
+                let byte_index = pixel_index * native_channels + params.channel;
+                let input_word = input[byte_index / 4u];
+                value = (input_word >> ((byte_index % 4u) * 8u)) & 0xffu;
+            } else {
+                // LA stores its alpha band in byte 3; RGBA channel 1 remains
+                // green in the generic four-byte transport.
+                let alpha_band = params.mode == 1u && params.channel == 1u;
+                let shift = select(params.channel * 8u, 24u, alpha_band);
+                value = (input[pixel_index] >> shift) & 0xffu;
+            }
             packed |= value << (lane * 8u);
         }
     }

@@ -6749,3 +6749,75 @@ Mirror is checkpointed incomplete after four attempts. CPU meets its latency
 goal on this workload; SIMD misses the 5× target, and GPU misses the SIMD
 latency and throughput goals. The ranked matrix must retain those blockers and
 revisit Mirror after other operations receive their first optimization pass.
+
+## Native-format conversion audit and GetChannel checkpoint — 2026-09-28
+
+The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 88
+textual call/declaration sites, including tests and the `DynamicImage`
+conversion helpers. These are not 88 runtime image conversions. The Python and
+JavaScript bindings delegate whole-image operations to core and have no such
+calls. SIMD has no runtime `to_rgba8()` conversion; its two matches are test
+comparisons. Runtime CPU call sites are concentrated in
+[`pool_cpu/ops`](../pillow-rs/src/compute/pool_cpu/ops):
+
+| Caller | Native-format opportunity and semantic boundary |
+| --- | --- |
+| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | General output code widens L/LA/RGB to four bytes and then `preserve_mode` narrows it again. Use channel strides 1/2/3/4 and mode-specific fill samples. Keep P/PA tuple-index semantics and CMYK's four active samples. |
+| [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA widens 2→4; Sharpness also repeats luma work and recovers alpha after filtering. Process active channels and preserve alpha. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
+| [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Keep mixed-mode paste/composite conversions where blending semantics require them; RGB→RGBA and explicit alpha composition change output semantics. |
+| [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I/F images use four-byte scalar samples. Their `to_rgba8()` is a same-size copy, not a color conversion; operate on the original typed/raw sample layout without treating scalar bytes as channels. |
+| [`color.rs`](../pillow-rs/src/compute/pool_cpu/ops/color.rs), [`draw.rs`](../pillow-rs/src/compute/pool_cpu/ops/draw.rs) | Explicit `convert(..., "RGBA")` and fallback drawing canvases have a canonical RGBA output contract. Avoid only after proving the caller's requested format and palette/alpha semantics allow it. |
+
+Additional references occur in `color.rs`, `ops/analysis.rs`, `ops/convert.rs`,
+`ops/pil_resize.rs`, `ops/quantize.rs`, `image.rs` (`preserve_mode`), and
+`raster/dynamic.rs` (the conversion API itself). In GPU code,
+[`pool_gpu/mod.rs`](../pillow-rs/src/compute/pool_gpu/mod.rs) contains generic
+image upload through RGBA, auxiliary-image packing, and output readback helpers.
+The generic input path widens L/LA to four bytes and RGB to four bytes; typed
+I/F and 16-bit inputs must stay on their typed contracts. Four-byte storage is
+not necessarily RGBA: CMYK's fourth byte is K, RGBX's fourth is padding,
+RGBa is premultiplied, and I/F are scalar samples. LA alpha is byte 1; RGBA
+alpha is byte 3. These distinctions rule out a universal raw four-byte path.
+
+### GetChannel: native input bytes for the one-op GPU path
+
+The pure GPU `ExtractBand` batch now uploads the source's native 1/2/3/4-byte
+L/LA/RGB/RGBA storage and selects channel bytes in the shader. The compact L
+output and one-dispatch schedule are unchanged. LA selects byte 1 in this
+native layout; the generic multi-op RGBA transport retains its existing LA
+alpha-in-byte-3 contract. The fast path checks the physical image variant,
+logical mode, selected band, checked byte count, and little-endian packed-word
+layout; typed or mismatched representations keep the existing generic route.
+This removes the temporary host expansion and cuts GPU input transfer for L,
+RGB, and LA. It does not hide GPU launch, synchronization, or readback latency.
+
+The added `L 1024 × 768` workload complements RGB, LA, and RGBA at the same
+size. Before/after receipts are
+`getchannel-native-{before,after}.json` (100 samples per subject, five warmups,
+20 iterations × five samples, materialized output). Exact parity gates passed
+for all four measured workloads. Focused strict parity also passed 31/31 cases
+on each CPU, SIMD, and GPU backend; the GPU Rust tests cover L/LA/RGB/RGBA and
+4096 × 4096 LA extraction. No coverage collection was run.
+
+| Mode, 1024 × 768 | Pillow ms | CPU ms | SIMD ms | GPU before → after ms | GPU upload before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 0.067709 → 0.067583 | 0.044500 → 0.048292 | 0.054541 → 0.052750 | 0.878584 → 0.412354 | 3,145,728 → 786,432 B |
+| RGB | 0.132667 → 0.139438 | 0.051854 → 0.055751 | 0.106230 → 0.105251 | 0.729396 → 0.580605 | 3,145,728 → 2,359,296 B |
+| LA | 0.134375 → 0.139125 | 0.091250 → 0.095312 | 0.104438 → 0.104646 | 0.965709 → 0.520500 | 3,145,728 → 1,572,864 B |
+| RGBA | 0.134604 → 0.138729 | 0.074541 → 0.089292 | 0.095834 → 0.101021 | 0.635792 → 0.641042 | 3,145,728 → 3,145,728 B |
+
+All four CPU medians remain faster than Pillow. SIMD is slower than Pillow on
+all four and misses the 5× target. GPU latency improved by 53% for L, 20% for
+RGB, and 46% for LA, but did not improve RGBA. It remains 4.2×–7.8× slower than
+SIMD. The after receipt reports actual GPU execution for 100/100 samples, one
+dispatch, no fallback, zero mode conversions, and native input bytes. GPU
+backend time still dominates the 0.4–0.64 ms calls; the remaining opportunity
+is reducing round-trip/synchronization or batching requests, not changing the
+channel-selection arithmetic. These are concurrency-one reciprocal-latency
+rates, not sustained throughput.
+
+GetChannel is checkpointed incomplete. The retained attempt removes avoidable
+GPU input widening and has strict parity, but no backend meets the full targets
+on every selected mode. The next first-pass candidates from this audit are CPU
+Expand and Pad, then Sharpness; each needs its own pre-change measurements and
+parity cohort before code changes.
