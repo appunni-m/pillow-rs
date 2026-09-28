@@ -6907,10 +6907,10 @@ four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7857,7877,10901`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
+| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7857,7877,11141`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
 | Same-layout clone or four-byte reinterpretation | 18 | `color.rs:1104,1121,1140,1156,1168,1180`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,383`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
-| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10739,10866,10878`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
-| Definitions, wrappers, tests, comments, or color-only | 12 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10560`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19349`, `ops/pil_resize.rs:2850` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10979,11106,11118`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
+| Definitions, wrappers, tests, comments, or color-only | 12 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:10800`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:19850`, `ops/pil_resize.rs:2850` |
 
 The three operational groups total 73. The native PA `putalpha` path now
 returns before `compute/pool_simd/mod.rs:158`; that widening call remains as a
@@ -6922,7 +6922,7 @@ premultiplied RGBa, or one I/F scalar word. For L/LA/RGB variants,
 `to_rgba8()` performs a real expansion; typed 16-bit/float variants may
 perform numeric conversion. LA alpha is byte 1. These representations are not
 interchangeable. The GPU also has a named RGB upload expansion outside the
-method-call scan: `pool_gpu/mod.rs:4187` calls `expand_rgb_into_rgba`
+method-call scan: `pool_gpu/mod.rs:4169` calls `expand_rgb_into_rgba`
 (`:4567`) for a shader that still consumes four-byte pixels. The Qt
 conversions are host-display formats, not core image algorithms.
 
@@ -7387,7 +7387,7 @@ everything else.
 
 | Rank | Conversion family | First native implementation | Semantic boundary |
 | --- | --- | --- | --- |
-| 1 | CPU Paste | For exact matching byte layouts with no mask, clone the native destination and copy clipped source rows at that layout's bytes per pixel. | Require logical mode and concrete storage to agree. Masked Paste blends only according to Pillow's selected L or alpha mask band; mixed-mode RGB inputs are converted before queuing and stay on the fallback. |
+| 1 | CPU/SIMD/GPU Paste | For exact matching byte layouts with no mask, copy clipped source rows at native bytes per pixel; GPU L/LA/RGB packs each output word directly. | Require logical mode and concrete storage to agree. RGB's three-byte GPU layout maps each output byte to its pixel/channel so a word crossing pixels still has one writer. Masked Paste blends only according to Pillow's selected L or alpha mask band; mixed-mode RGB inputs are converted before queuing and stay on the fallback. |
 | 2 | CPU/SIMD Pad | Keep exact native L/LA/RGB/HSV/RGBA storage, borrow the identity-contain source, repeat a fill row, and copy full-width source spans contiguously. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1. SIMD is 3.48× Pillow and GPU still uses four-byte transport on HSV. |
 | 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA bytes. Build SIMD 3-byte fill rows once; on GPU, assign each invocation one packed output word and read back the native byte count. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
@@ -7637,6 +7637,44 @@ combined input and readback bytes each fell 75% from the generic path. Neither
 native GPU path meets its speed target: LA is 7.3× slower than SIMD and 4.9×
 slower than Pillow; L remains about 10.7× slower than SIMD. Synchronous
 submission and host materialization remain the blocker.
+
+### Paste: native RGB GPU words — 2026-09-29
+
+The exact `RGB`/`ImageRgb8` unmasked route now uploads destination and source
+as three-byte pixels and returns three-byte output. The shader assigns one
+invocation to each aligned output word. For RGB, it maps each of the word's
+four byte lanes to a destination pixel and channel, then selects either that
+destination byte or its corresponding clipped source byte. This avoids races
+when one word crosses an RGB pixel or row boundary. The final transfer padding
+is zeroed and omitted from the returned image. Mixed modes, masks, HSV/YCbCr
+aliases, and other storage variants retain their existing routes.
+
+The material workload is the parity-backed 1024 × 768 RGB `Image.paste` case,
+including receiver `tobytes`, with five warmups and 100 measured samples at
+concurrency one. The baseline run is
+`migration-benchmark-2170778cc5524e7db9b3538b50593a7f`; the clean committed
+run on `79a75ba6b` is
+`migration-benchmark-6d367796258e4e43b041ea995b3cb937`, with parity gate
+`migration-parity-benchmark-gate-d61f52fdc2b648669531f96e2a9a2008`.
+The measured medians are milliseconds:
+
+| Run | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.574583 | 0.276479 | 0.302292 | 3.015250 |
+| Native RGB GPU | 0.499209 | 0.226625 | 0.238563 | 1.753833 |
+
+On the committed run, CPU is 2.20× faster than Pillow and SIMD is 2.09×
+faster, below the 5× SIMD goal. GPU latency fell 42% and throughput rose from
+332 to 570 operations/s versus the baseline; upload, auxiliary upload, and
+readback each fell from 3,145,728 to 2,359,296 bytes, and the mode-conversion
+counter fell from one to zero. The GPU executed 100/100 samples with one
+dispatch and no fallback, but remains 7.35× slower than SIMD and 3.51× slower
+than Pillow. The strict GPU/SIMD and CPU runs passed both the material case and
+a 5 × 3 destination / 3 × 2 source case pasted at `[-1, -1]`; the benchmark
+parity gate passed all three subjects. No coverage was run. Native storage is
+now correct and measured end to end; the remaining GPU cost is dispatch,
+synchronization, and materialization, while the SIMD gap needs a separate
+kernel-level investigation.
 
 ### Pad: native CPU L/LA/RGB/HSV/RGBA — 2026-09-28
 
