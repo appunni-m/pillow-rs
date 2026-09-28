@@ -269,10 +269,10 @@ fn paste_native_rows(
         return None;
     }
 
-    let source_left = x.saturating_neg().max(0).min(i64::from(source_width)) as u32;
-    let source_top = y.saturating_neg().max(0).min(i64::from(source_height)) as u32;
-    let destination_left = x.max(0).min(i64::from(destination_width)) as u32;
-    let destination_top = y.max(0).min(i64::from(destination_height)) as u32;
+    let source_left = u32::try_from(x.saturating_neg().max(0).min(i64::from(source_width))).ok()?;
+    let source_top = u32::try_from(y.saturating_neg().max(0).min(i64::from(source_height))).ok()?;
+    let destination_left = u32::try_from(x.max(0).min(i64::from(destination_width))).ok()?;
+    let destination_top = u32::try_from(y.max(0).min(i64::from(destination_height))).ok()?;
     let copy_width = source_width
         .saturating_sub(source_left)
         .min(destination_width.saturating_sub(destination_left));
@@ -311,6 +311,300 @@ fn paste_native_rows(
         destination_row
             .get_mut(destination_x_bytes..destination_x_end)?
             .copy_from_slice(source_row.get(source_x_bytes..source_x_end)?);
+    }
+    Some(output)
+}
+
+#[derive(Clone, Copy)]
+struct PasteMaskLayout {
+    channels: usize,
+    value_index: usize,
+    premultiplied: bool,
+}
+
+struct PasteMaskPixels {
+    image: Arc<DynamicImage>,
+    width: usize,
+    height: usize,
+    layout: PasteMaskLayout,
+}
+
+impl PasteMaskPixels {
+    #[inline]
+    fn value(&self, x: u32, y: u32) -> u8 {
+        debug_assert!((x as usize) < self.width);
+        debug_assert!((y as usize) < self.height);
+        let index = ((y as usize * self.width + x as usize) * self.layout.channels)
+            + self.layout.value_index;
+        self.image.as_bytes()[index]
+    }
+}
+
+fn paste_mask_layout(mode: &str, mask_alpha: bool) -> Option<PasteMaskLayout> {
+    match (mode, mask_alpha) {
+        ("1" | "L", false) => Some(PasteMaskLayout {
+            channels: 1,
+            value_index: 0,
+            premultiplied: false,
+        }),
+        ("LA", true) => Some(PasteMaskLayout {
+            channels: 2,
+            value_index: 1,
+            premultiplied: false,
+        }),
+        ("RGBA", true) => Some(PasteMaskLayout {
+            channels: 4,
+            value_index: 3,
+            premultiplied: false,
+        }),
+        ("RGBa", true) => Some(PasteMaskLayout {
+            channels: 4,
+            value_index: 3,
+            premultiplied: true,
+        }),
+        _ => None,
+    }
+}
+
+fn paste_luma16_storage_byte_shift(mode: Option<&str>, byte_offset: u32) -> u32 {
+    let high_byte_first = match mode {
+        Some("I;16L") => false,
+        Some("I;16B") => true,
+        Some("I;16" | "I;16N") | None => cfg!(target_endian = "big"),
+        _ => cfg!(target_endian = "big"),
+    };
+    if byte_offset % 2 == 0 {
+        if high_byte_first { 8 } else { 0 }
+    } else if high_byte_first {
+        0
+    } else {
+        8
+    }
+}
+
+/// Borrow the validated mask band's native bytes without expanding alpha
+/// masks into temporary RGBA images. A missing layout keeps unusual internal
+/// pipeline inputs on the existing conversion fallback.
+fn paste_mask_pixels(mask: &Image, mask_alpha: bool) -> Result<Option<PasteMaskPixels>, PilError> {
+    let mode = mask.mode()?;
+    let Some(layout) = paste_mask_layout(&mode, mask_alpha) else {
+        return Ok(None);
+    };
+    let image = mask.materialized_shared()?;
+    if paste_native_channels(&mode, image.as_ref()) != Some(layout.channels) {
+        return Ok(None);
+    }
+    let (width, height) = image.dimensions();
+    let expected_len = usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(layout.channels));
+    if expected_len != Some(image.as_bytes().len()) {
+        return Ok(None);
+    }
+    Ok(Some(PasteMaskPixels {
+        image,
+        width: width as usize,
+        height: height as usize,
+        layout,
+    }))
+}
+
+/// Blend an exact same-mode byte layout directly. This covers common modes
+/// whose storage is already native; tagged, indexed, scalar, and cross-mode
+/// cases retain the established conversion path until their contracts have
+/// separate kernels.
+fn paste_native_masked(
+    destination: &DynamicImage,
+    source: &Arc<Image>,
+    x: i64,
+    y: i64,
+    mask: &Arc<Image>,
+    mask_alpha: bool,
+    mode: &str,
+) -> Option<DynamicImage> {
+    if !matches!(mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK") {
+        return None;
+    }
+    let channels = paste_native_channels(mode, destination)?;
+    if source.mode().ok()?.as_str() != mode {
+        return None;
+    }
+    let source_image = source.materialized_shared().ok()?;
+    if paste_native_channels(mode, source_image.as_ref())? != channels {
+        return None;
+    }
+    let (source_width, source_height) = source_image.dimensions();
+    let (destination_width, destination_height) = destination.dimensions();
+    let source_stride = usize::try_from(source_width).ok()?.checked_mul(channels)?;
+    let destination_stride = usize::try_from(destination_width)
+        .ok()?
+        .checked_mul(channels)?;
+    #[cfg(feature = "parallel")]
+    let destination_height_usize = usize::try_from(destination_height).ok()?;
+    let source_len = source_stride.checked_mul(usize::try_from(source_height).ok()?)?;
+    let destination_len =
+        destination_stride.checked_mul(usize::try_from(destination_height).ok()?)?;
+    let source_bytes = source_image.as_bytes();
+    let destination_bytes = destination.as_bytes();
+    if source_bytes.len() != source_len || destination_bytes.len() != destination_len {
+        return None;
+    }
+
+    let source_left = u32::try_from(x.saturating_neg().max(0).min(i64::from(source_width))).ok()?;
+    let source_top = u32::try_from(y.saturating_neg().max(0).min(i64::from(source_height))).ok()?;
+    let destination_left = u32::try_from(x.max(0).min(i64::from(destination_width))).ok()?;
+    let destination_top = u32::try_from(y.max(0).min(i64::from(destination_height))).ok()?;
+    let copy_width = source_width
+        .saturating_sub(source_left)
+        .min(destination_width.saturating_sub(destination_left));
+    let copy_height = source_height
+        .saturating_sub(source_top)
+        .min(destination_height.saturating_sub(destination_top));
+    if copy_width == 0 || copy_height == 0 {
+        return Some(destination.clone());
+    }
+
+    let mask_pixels = paste_mask_pixels(mask, mask_alpha).ok()??;
+    if (mask_pixels.width, mask_pixels.height) != (source_width as usize, source_height as usize) {
+        return None;
+    }
+
+    let copy_width = usize::try_from(copy_width).ok()?;
+    let copy_height = usize::try_from(copy_height).ok()?;
+    let source_x = usize::try_from(source_left).ok()?.checked_mul(channels)?;
+    let destination_x = usize::try_from(destination_left)
+        .ok()?
+        .checked_mul(channels)?;
+    let copy_bytes = copy_width.checked_mul(channels)?;
+    let mask_channels = mask_pixels.layout.channels;
+    let mask_stride = mask_pixels.width.checked_mul(mask_channels)?;
+    let mask_x = usize::try_from(source_left)
+        .ok()?
+        .checked_mul(mask_channels)?;
+    let mask_copy_bytes = copy_width.checked_mul(mask_channels)?;
+    let mask_bytes = mask_pixels.image.as_bytes();
+    let source_x_end = source_x.checked_add(copy_bytes)?;
+    let destination_x_end = destination_x.checked_add(copy_bytes)?;
+    let mask_x_end = mask_x.checked_add(mask_copy_bytes)?;
+    let mask_len = mask_stride.checked_mul(mask_pixels.height)?;
+    if source_x_end > source_stride
+        || destination_x_end > destination_stride
+        || mask_x_end > mask_stride
+        || mask_bytes.len() != mask_len
+    {
+        return None;
+    }
+
+    let mut output = destination.clone();
+    let output_bytes = output.as_bytes_mut()?;
+    let source_top = usize::try_from(source_top).ok()?;
+    let destination_top = usize::try_from(destination_top).ok()?;
+    let destination_bottom = destination_top.checked_add(copy_height)?;
+    let transform_row = |destination_y: usize, row: &mut [u8]| {
+        if !(destination_top..destination_bottom).contains(&destination_y) {
+            return;
+        }
+        let source_y = source_top.saturating_add(destination_y.saturating_sub(destination_top));
+        let source_start = source_y
+            .saturating_mul(source_stride)
+            .saturating_add(source_x);
+        let mask_start = source_y.saturating_mul(mask_stride).saturating_add(mask_x);
+        let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
+        let destination_row = &mut row[destination_x..destination_x_end];
+        let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
+        for ((source_pixel, destination_pixel), mask_pixel) in source_row
+            .chunks_exact(channels)
+            .zip(destination_row.chunks_exact_mut(channels))
+            .zip(mask_row.chunks_exact(mask_channels))
+        {
+            let mask_value = mask_pixel[mask_pixels.layout.value_index];
+            if mask_value == 0 && !mask_pixels.layout.premultiplied {
+                continue;
+            }
+            if mask_value == 255 {
+                destination_pixel.copy_from_slice(source_pixel);
+                continue;
+            }
+
+            let mask = u16::from(mask_value);
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+            )]
+            let inverse = 255 - mask;
+            for (source_value, destination_value) in
+                source_pixel.iter().zip(destination_pixel.iter_mut())
+            {
+                *destination_value = if mask_pixels.layout.premultiplied {
+                    // Pillow's RGBa-mask path uses PREBLEND: add the incoming
+                    // premultiplied sample after scaling the destination.
+                    #[expect(
+                        clippy::arithmetic_side_effects,
+                        reason = "byte products and PREBLEND intermediates are bounded below u32::MAX"
+                    )]
+                    let scaled = u32::from(*destination_value) * u32::from(inverse) + 128;
+                    #[expect(
+                        clippy::arithmetic_side_effects,
+                        reason = "the proven PREBLEND intermediate is bounded below u32::MAX"
+                    )]
+                    let blended = (((scaled >> 8) + scaled) >> 8) + u32::from(*source_value);
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "Pillow stores PREBLEND's sum modulo 256 in the byte channel"
+                    )]
+                    let blended = blended as u8;
+                    blended
+                } else {
+                    #[expect(
+                        clippy::arithmetic_side_effects,
+                        reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+                    )]
+                    let weighted = u16::from(*source_value) * mask
+                        + u16::from(*destination_value) * inverse
+                        + 127;
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "DIV255 yields an 8-bit convex blend of byte channels"
+                    )]
+                    let blended = (weighted / 255) as u8;
+                    blended
+                };
+            }
+        }
+    };
+
+    #[cfg(feature = "parallel")]
+    if copy_width.saturating_mul(copy_height) >= EFFECT_PARALLEL_PIXEL_THRESHOLD {
+        use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+        use rayon::slice::ParallelSliceMut;
+        output_bytes
+            .par_chunks_mut(destination_stride)
+            .take(destination_height_usize)
+            .enumerate()
+            .for_each(|(y, row)| transform_row(y, row));
+    } else {
+        for row_index in 0..copy_height {
+            let destination_y = destination_top.saturating_add(row_index);
+            let row_start = destination_y.saturating_mul(destination_stride);
+            transform_row(
+                destination_y,
+                &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for row_index in 0..copy_height {
+        let destination_y = destination_top.saturating_add(row_index);
+        let row_start = destination_y.saturating_mul(destination_stride);
+        transform_row(
+            destination_y,
+            &mut output_bytes[row_start..row_start.saturating_add(destination_stride)],
+        );
     }
     Some(output)
 }
@@ -370,6 +664,12 @@ pub fn op_paste(
         return Ok(output);
     }
 
+    if let (Some(mode), Some(mask_image)) = (mode, mask)
+        && let Some(output) = paste_native_masked(img, source, x, y, mask_image, mask_alpha, mode)
+    {
+        return Ok(output);
+    }
+
     let src_img = if matches!(mode, Some("P" | "PA")) {
         source.materialize_indices()?
     } else if let Some(source_image) = native_source {
@@ -397,26 +697,33 @@ pub fn op_paste(
     // Keep malformed PipelineOp fallback arms out of this public-input path.
 
     if img.color() == crate::raster::ColorType::L16 {
-        // Pillow's Paste.c keeps I;16 samples as unsigned 16-bit values.
-        // The general RGBA8 path below is correct for byte-oriented modes but
-        // would truncate the high byte of an I;16 image.
+        // Pillow's masked I;16 Paste updates the first byte in the mode's
+        // storage order, preserving the other byte. The unmasked path still
+        // copies full unsigned 16-bit samples.
         let source_luma = src_img.to_luma16();
         let mut destination = img.to_luma16();
         enum Luma16PasteMask {
+            Native(PasteMaskPixels),
             Luma(crate::raster::GrayImage),
             Alpha(crate::raster::RgbaImage),
         }
         let mask_pixels = match mask {
             Some(mask_image) => {
-                let materialized = mask_image.materialize()?;
-                if mask_alpha {
-                    Some(Luma16PasteMask::Alpha(materialized.to_rgba8()))
+                if let Some(pixels) = paste_mask_pixels(mask_image, mask_alpha)? {
+                    Some(Luma16PasteMask::Native(pixels))
                 } else {
-                    Some(Luma16PasteMask::Luma(materialized.to_luma8()))
+                    let materialized = mask_image.materialize()?;
+                    if mask_alpha {
+                        Some(Luma16PasteMask::Alpha(materialized.to_rgba8()))
+                    } else {
+                        Some(Luma16PasteMask::Luma(materialized.to_luma8()))
+                    }
                 }
             }
             None => None,
         };
+        let mask_mode = mask.as_ref().map(|image| image.mode()).transpose()?;
+        let binary_mask = mask_mode.as_deref() == Some("1");
 
         for offset_y in 0..copy_height {
             let source_y = source_top + offset_y;
@@ -424,31 +731,59 @@ pub fn op_paste(
             for offset_x in 0..copy_width {
                 let source_x = source_left + offset_x;
                 let dest_x = dest_left + offset_x;
-                let source_value = source_luma.get_pixel(source_x, source_y)[0];
                 let Some(mask_image) = mask_pixels.as_ref() else {
+                    let source_value = source_luma.get_pixel(source_x, source_y)[0];
                     destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
                     continue;
                 };
                 let mask_value = match mask_image {
+                    Luma16PasteMask::Native(pixels) => pixels.value(source_x, source_y),
                     Luma16PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
                     Luma16PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
                 };
-                if mask_value == 0 {
-                    continue;
-                }
-                if mask_value == 255 {
-                    destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
+                let premultiplied_mask = matches!(
+                    mask_image,
+                    Luma16PasteMask::Native(pixels) if pixels.layout.premultiplied
+                );
+                if binary_mask {
+                    if mask_value != 0 {
+                        let source_value = source_luma.get_pixel(source_x, source_y)[0];
+                        destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
+                    }
                     continue;
                 }
 
-                let destination_value = destination.get_pixel(dest_x, dest_y)[0];
+                // Pillow's 8-bit L/RGBA/RGBa mask loops advance the I;16
+                // image8 pointer by one byte per image pixel. Preserve this
+                // odd byte stride exactly; RGBa also applies PREBLEND at a
+                // zero mask value. This is Pillow's observable contract.
+                if mask_value == 0 && !premultiplied_mask {
+                    continue;
+                }
+                let source_byte_offset = source_x;
+                let destination_byte_offset = dest_x;
+                let source_byte_x = source_byte_offset / 2;
+                let destination_byte_x = destination_byte_offset / 2;
+                let source_value = source_luma.get_pixel(source_byte_x, source_y)[0];
+                let destination_value = destination.get_pixel(destination_byte_x, dest_y)[0];
+                let source_shift = paste_luma16_storage_byte_shift(mode, source_byte_offset);
+                let destination_shift =
+                    paste_luma16_storage_byte_shift(mode, destination_byte_offset);
+                let source_byte = ((source_value >> source_shift) & 0xff) as u8;
+                let destination_byte = ((destination_value >> destination_shift) & 0xff) as u8;
                 let mask = u32::from(mask_value);
                 let inverse = 255 - mask;
-                let blended = ((u32::from(source_value) * mask
-                    + u32::from(destination_value) * inverse
-                    + 127)
-                    / 255) as u16;
-                destination.put_pixel(dest_x, dest_y, crate::raster::Luma([blended]));
+                let blended = if premultiplied_mask {
+                    let scaled = u32::from(destination_byte) * inverse + 128;
+                    ((((scaled >> 8) + scaled) >> 8) + u32::from(source_byte)) as u8
+                } else {
+                    ((u32::from(source_byte) * mask + u32::from(destination_byte) * inverse + 127)
+                        / 255) as u8
+                };
+                let byte_mask = 0xffu16 << destination_shift;
+                let updated =
+                    (destination_value & !byte_mask) | (u16::from(blended) << destination_shift);
+                destination.put_pixel(destination_byte_x, dest_y, crate::raster::Luma([updated]));
             }
         }
 
@@ -458,16 +793,21 @@ pub fn op_paste(
     let source_rgba = src_img.to_rgba8();
     let mut destination = img.to_rgba8();
     enum PasteMask {
+        Native(PasteMaskPixels),
         Luma(crate::raster::GrayImage),
         Alpha(crate::raster::RgbaImage),
     }
     let mask_pixels = match mask {
         Some(mask_image) => {
-            let materialized = mask_image.materialize()?;
-            if mask_alpha {
-                Some(PasteMask::Alpha(materialized.to_rgba8()))
+            if let Some(pixels) = paste_mask_pixels(mask_image, mask_alpha)? {
+                Some(PasteMask::Native(pixels))
             } else {
-                Some(PasteMask::Luma(materialized.to_luma8()))
+                let materialized = mask_image.materialize()?;
+                if mask_alpha {
+                    Some(PasteMask::Alpha(materialized.to_rgba8()))
+                } else {
+                    Some(PasteMask::Luma(materialized.to_luma8()))
+                }
             }
         }
         None => None,
@@ -485,10 +825,15 @@ pub fn op_paste(
                 continue;
             };
             let mask_value = match mask_image {
+                PasteMask::Native(pixels) => pixels.value(source_x, source_y),
                 PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
                 PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
             };
-            if mask_value == 0 {
+            let premultiplied_mask = matches!(
+                mask_image,
+                PasteMask::Native(pixels) if pixels.layout.premultiplied
+            );
+            if mask_value == 0 && !premultiplied_mask {
                 continue;
             }
             if mask_value == 255 {
@@ -503,7 +848,12 @@ pub fn op_paste(
             let mask = u16::from(mask_value);
             let inverse = 255u16 - mask;
             let blend = |src: u8, dst: u8| -> u8 {
-                ((u16::from(src) * mask + u16::from(dst) * inverse + 127) / 255) as u8
+                if premultiplied_mask {
+                    let scaled = u32::from(dst) * u32::from(inverse) + 128;
+                    ((((scaled >> 8) + scaled) >> 8) + u32::from(src)) as u8
+                } else {
+                    ((u16::from(src) * mask + u16::from(dst) * inverse + 127) / 255) as u8
+                }
             };
             destination.put_pixel(
                 dest_x,
@@ -3478,6 +3828,24 @@ mod tests {
         )
     }
 
+    fn native_byte_image(mode: &str, width: u32, height: u32, bytes: Vec<u8>) -> DynamicImage {
+        match mode {
+            "L" | "1" => DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, bytes).expect("L image shape"),
+            ),
+            "LA" => DynamicImage::ImageLumaA8(
+                GrayAlphaImage::from_raw(width, height, bytes).expect("LA image shape"),
+            ),
+            "RGB" => DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, bytes).expect("RGB image shape"),
+            ),
+            "RGBA" | "RGBa" | "CMYK" => DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(width, height, bytes).expect("four-byte image shape"),
+            ),
+            _ => panic!("unsupported test mode {mode}"),
+        }
+    }
+
     #[test]
     fn native_rgb_paste_copies_clipped_rows_without_changing_other_pixels() {
         let destination = DynamicImage::ImageRgb8(
@@ -3607,6 +3975,182 @@ mod tests {
                 .copied()
                 .collect::<Vec<_>>();
             assert_eq!(result.as_bytes(), expected, "native {mode} bytes");
+        }
+    }
+
+    #[test]
+    fn native_masked_paste_blends_only_clipped_native_channels() {
+        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4), ("CMYK", 4)] {
+            let destination_bytes = (0..2 * channels)
+                .map(|index| 11 + index as u8 * 7)
+                .collect::<Vec<_>>();
+            let source_bytes = (0..3 * channels)
+                .map(|index| 229 - index as u8 * 9)
+                .collect::<Vec<_>>();
+            let destination = native_byte_image(mode, 2, 1, destination_bytes.clone());
+            let source = Arc::new(crate::Image::from_dynamic(
+                native_byte_image(mode, 3, 1, source_bytes.clone()),
+                Some(mode.to_owned()),
+            ));
+            let mask = Arc::new(crate::Image::from_dynamic(
+                native_byte_image("L", 3, 1, vec![0, 128, 255]),
+                Some("L".to_owned()),
+            ));
+
+            // Clipping at x=-1 shifts the mask with the source: source/mask
+            // pixels 1 and 2 land on destination pixels 0 and 1.
+            let result = op_paste(&destination, &source, -1, 0, &Some(mask), false, Some(mode))
+                .unwrap_or_else(|error| panic!("native masked {mode} paste: {error}"));
+            let mut expected = destination_bytes;
+            for (destination_pixel, source_pixel, weight) in [(0, 1, 128u32), (1, 2, 255u32)] {
+                for channel in 0..channels {
+                    let destination_index = destination_pixel * channels + channel;
+                    let source_value = u32::from(source_bytes[source_pixel * channels + channel]);
+                    let destination_value = u32::from(expected[destination_index]);
+                    expected[destination_index] =
+                        ((source_value * weight + destination_value * (255 - weight) + 127) / 255)
+                            as u8;
+                }
+            }
+            assert_eq!(result.as_bytes(), expected, "native masked {mode} bytes");
+        }
+    }
+
+    #[test]
+    fn native_masked_paste_selects_alpha_from_la_and_rgba_masks() {
+        let destination = native_byte_image("RGBA", 1, 1, vec![10, 20, 30, 40]);
+        let source = Arc::new(crate::Image::from_dynamic(
+            native_byte_image("RGBA", 1, 1, vec![110, 120, 130, 140]),
+            Some("RGBA".to_owned()),
+        ));
+        for (mask_mode, mask_bytes) in [("LA", vec![3, 128]), ("RGBA", vec![1, 2, 3, 128])] {
+            let mask = Arc::new(crate::Image::from_dynamic(
+                native_byte_image(mask_mode, 1, 1, mask_bytes),
+                Some(mask_mode.to_owned()),
+            ));
+            let result = op_paste(&destination, &source, 0, 0, &Some(mask), true, Some("RGBA"))
+                .unwrap_or_else(|error| panic!("{mask_mode} alpha mask paste: {error}"));
+            let expected = [(10u32, 110u32), (20, 120), (30, 130), (40, 140)]
+                .map(|(dst, src)| ((src * 128 + dst * 127 + 127) / 255) as u8);
+            assert_eq!(result.as_bytes(), expected, "{mask_mode} alpha band");
+        }
+    }
+
+    #[test]
+    fn native_masked_paste_uses_rgb_a_premultiplied_mask_rule() {
+        let destination = native_byte_image(
+            "RGBA",
+            3,
+            1,
+            vec![10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+        );
+        let source = Arc::new(crate::Image::from_dynamic(
+            native_byte_image(
+                "RGBA",
+                3,
+                1,
+                vec![110, 120, 130, 140, 150, 160, 170, 180, 210, 220, 230, 240],
+            ),
+            Some("RGBA".to_owned()),
+        ));
+        let mask = Arc::new(crate::Image::from_dynamic(
+            native_byte_image(
+                "RGBa",
+                3,
+                1,
+                vec![255, 0, 7, 0, 255, 0, 7, 128, 0, 255, 7, 255],
+            ),
+            Some("RGBa".to_owned()),
+        ));
+
+        let result = op_paste(&destination, &source, 0, 0, &Some(mask), true, Some("RGBA"))
+            .expect("RGBa premultiplied mask paste");
+        let expected = [
+            (110u32, 10u32, 0u32),
+            (120, 20, 0),
+            (130, 30, 0),
+            (140, 40, 0),
+            (150, 50, 128),
+            (160, 60, 128),
+            (170, 70, 128),
+            (180, 80, 128),
+            (210, 90, 255),
+            (220, 100, 255),
+            (230, 110, 255),
+            (240, 120, 255),
+        ]
+        .map(|(source, destination, mask)| {
+            let scaled = destination * (255 - mask) + 128;
+            ((((scaled >> 8) + scaled) >> 8) + source) as u8
+        });
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn native_masked_i16_paste_blends_only_the_first_storage_byte() {
+        for (mode, shift) in [("I;16L", 0u32), ("I;16B", 8u32)] {
+            for (mask_mode, mask_alpha, premultiplied) in [
+                ("L", false, false),
+                ("RGBA", true, false),
+                ("RGBa", true, true),
+            ] {
+                for alpha in [0u8, 128, 255] {
+                    let destination_value = 0x1234u16;
+                    let source_value = 0xabcdu16;
+                    let destination =
+                        DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+                            1,
+                            1,
+                            crate::raster::Luma([destination_value]),
+                        ));
+                    let source = Arc::new(crate::Image::from_dynamic(
+                        DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+                            1,
+                            1,
+                            crate::raster::Luma([source_value]),
+                        )),
+                        Some(mode.to_owned()),
+                    ));
+                    let mask_bytes = if mask_mode == "L" {
+                        vec![alpha]
+                    } else {
+                        vec![255, 0, 17, alpha]
+                    };
+                    let mask = Arc::new(crate::Image::from_dynamic(
+                        native_byte_image(mask_mode, 1, 1, mask_bytes),
+                        Some(mask_mode.to_owned()),
+                    ));
+                    let result = op_paste(
+                        &destination,
+                        &source,
+                        0,
+                        0,
+                        &Some(mask),
+                        mask_alpha,
+                        Some(mode),
+                    )
+                    .unwrap_or_else(|error| {
+                        panic!("masked {mode} paste with {mask_mode}: {error}")
+                    });
+
+                    let source_byte = u32::from(((source_value >> shift) & 0xff) as u8);
+                    let destination_byte = u32::from(((destination_value >> shift) & 0xff) as u8);
+                    let mask_value = u32::from(alpha);
+                    let blended = if premultiplied {
+                        let scaled = destination_byte * (255 - mask_value) + 128;
+                        ((((scaled >> 8) + scaled) >> 8) + source_byte) as u8
+                    } else {
+                        ((source_byte * mask_value + destination_byte * (255 - mask_value) + 127)
+                            / 255) as u8
+                    };
+                    let expected =
+                        (destination_value & !(0xffu16 << shift)) | (u16::from(blended) << shift);
+                    let DynamicImage::ImageLuma16(result) = result else {
+                        panic!("masked {mode} paste changed the physical image type");
+                    };
+                    assert_eq!(result.as_raw()[0], expected, "{mode}/{mask_mode}/{alpha}");
+                }
+            }
         }
     }
 

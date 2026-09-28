@@ -7244,6 +7244,29 @@ impl GpuInner {
             };
             let source_row_base = resize_source_row_range.map_or(0, |(first, _)| first);
             let mut params = vec![shader_w, shader_h, op_mode, source_row_base];
+            if let PipelineOp::Paste { mask, .. } = op {
+                // Paste's fixed fourth uniform word carries mask and I;16
+                // byte-order flags because some logical modes share the same
+                // physical DynamicImage transport after materialization.
+                if mask
+                    .as_ref()
+                    .is_some_and(|mask| mask.mode().ok().as_deref() == Some("RGBa"))
+                {
+                    params[3] |= 1;
+                }
+                if let Some(mask) = mask.as_ref() {
+                    if mask.mode().ok().as_deref() == Some("1") {
+                        params[3] |= 4;
+                    }
+                }
+                if mask.is_some()
+                    && (matches!(logical_mode, Some("I;16B"))
+                        || (matches!(logical_mode, Some("I;16" | "I;16N") | None)
+                            && cfg!(target_endian = "big")))
+                {
+                    params[3] |= 2;
+                }
+            }
             if native_extract_band && matches!(op, PipelineOp::ExtractBand { .. }) {
                 // ExtractBand's fourth fixed uniform word is otherwise
                 // unused. Mark the one-operation native-byte layout without

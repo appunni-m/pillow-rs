@@ -229,6 +229,13 @@ PASTE_PERFORMANCE_CASES = (
     ("la-noise-1024x768", "LA", [1024, 768], 20261009),
     ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002),
 )
+PASTE_MASKED_PERFORMANCE_CASES = (
+    ("masked-l-noise-1024x768", "L", [1024, 768], 20261013),
+    ("masked-la-noise-1024x768", "LA", [1024, 768], 20261014),
+    ("masked-rgb-noise-1024x768", "RGB", [1024, 768], 20261015),
+    ("masked-rgba-noise-1024x768", "RGBA", [1024, 768], 20261016),
+    ("masked-cmyk-noise-1024x768", "CMYK", [1024, 768], 20261017),
+)
 BRIGHTNESS_PERFORMANCE_CASES = (
     ("la-noise-1024x768-factor-0.5", "LA", [1024, 768], 20261010, 0.5),
 )
@@ -2200,7 +2207,12 @@ class WorkflowBuilder:
         use_inline_image = self.scenario_inline_image is not None and not (
             label == "mask"
             and self.edge
-            in {"paste-i16-mask", "paste-i16-rgba-mask", "paste-i16-rgba-mask-opaque"}
+            in {
+                "paste-i16-mask",
+                "paste-i16-rgba-mask",
+                "paste-i16-rgba-mask-opaque",
+                "paste-i16-byte-mask",
+            }
         )
         if use_inline_image:
             if self.scenario_inline_image == "l16-tiff":
@@ -2445,6 +2457,18 @@ class WorkflowBuilder:
             else:
                 raise ValueError(
                     f"unknown inline image stimulus: {self.scenario_inline_image}"
+                )
+            if self.edge == "paste-i16-byte-mask" and label in {"image", "im"}:
+                value = 0x1234 if label == "image" else 0xABCD
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal([0, 0]),
+                        "value": literal(value),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-i16-byte-mask-pixel"),
                 )
             self._image_steps[cache_key] = step_id
             return step_id
@@ -2868,7 +2892,7 @@ class WorkflowBuilder:
             n_pixels = size[0] * size[1]
             if requested_mode in {"RGB", "HSV"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
-            elif requested_mode == "RGBA":
+            elif requested_mode in {"RGBA", "RGBa", "CMYK"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
             elif requested_mode == "LA":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 2))
@@ -3859,6 +3883,29 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-paste-i16-mask-pixel"),
             )
+        elif self.edge == "paste-i16-byte-mask" and label in {"image", "im", "mask"}:
+            # Distinct high/low bytes make Pillow's masked I;16 rule visible:
+            # it blends only the first stored byte, preserving the other one.
+            if label == "image":
+                value = 0x1234
+            elif label == "im":
+                value = 0xABCD
+            elif self.scenario_mask_mode == "L":
+                value = 128
+            elif self.scenario_mask_mode in {"RGBA", "RGBa"}:
+                value = [255, 17, 63, 128]
+            else:
+                raise ValueError("I;16 byte-mask parity needs an L, RGBA, or RGBa mask")
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([0, 0]),
+                    "value": literal(value),
+                },
+                step_id=self.next_step_id("setup-paste-i16-byte-mask-pixel"),
+            )
         elif self.edge == "alpha-composite-nonzero-pixel" and label in {
             "image",
             "im",
@@ -4746,6 +4793,15 @@ class WorkflowBuilder:
                 continue
             selected = required or parameter_id == focus or parameter_id in variant
             if parameter_id in self.scenario_values:
+                selected = True
+            if (
+                self.primary_surface == "PIL.Image.Image"
+                and self.primary_operation == "paste"
+                and parameter_id == "mask"
+                and self.scenario_mask_mode is not None
+            ):
+                # The maintained masked-Paste performance cases intentionally
+                # exercise Pillow's optional mask branch across native modes.
                 selected = True
             if self.scenario_font is not None and parameter_id == "font":
                 selected = True
@@ -16878,6 +16934,21 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
+            "name": "performance-rgb-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "observe_receiver": True,
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([0, 0]),
+                "fill": literal([221, 37, 109, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
             "name": "canvas-f-tuple-fill-error",
             "mode": "F",
             "bitmap_mode": "L",
@@ -22375,6 +22446,37 @@ def build_nuanced_cases(
             }
             for name, mode, size, seed in PASTE_PERFORMANCE_CASES
         ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "paste",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "paste-noise-fill",
+                "seed": seed,
+                "mask_mode": "L",
+                "values": {"box": literal([2, 2])},
+                "observe_receiver": True,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in PASTE_MASKED_PERFORMANCE_CASES
+        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "rgba-rgba-mask-alpha-band",
+            "mode": "RGBA",
+            "size": [7, 5],
+            "edge": "paste-noise-fill",
+            "seed": 20261018,
+            "mask_mode": "RGBa",
+            "values": {"box": literal([2, 1])},
+            "observe_receiver": True,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
         {
             "surface": "PIL.Image.Image",
             "operation": "paste",
@@ -35847,6 +35949,62 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16l-partial-l-mask-byte-order",
+            "mode": "I;16L",
+            "im_mode": "I;16L",
+            "mask_mode": "L",
+            "size": [2, 2],
+            "scenario_inline_image": "i16l-frombytes",
+            "edge": "paste-i16-byte-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16l-partial-rgba-mask-byte-order",
+            "mode": "I;16L",
+            "im_mode": "I;16L",
+            "mask_mode": "RGBA",
+            "size": [2, 2],
+            "scenario_inline_image": "i16l-frombytes",
+            "edge": "paste-i16-byte-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16l-partial-rgba-lowercase-mask-byte-order",
+            "mode": "I;16L",
+            "im_mode": "I;16L",
+            "mask_mode": "RGBa",
+            "size": [2, 2],
+            "scenario_inline_image": "i16l-frombytes",
+            "edge": "paste-i16-byte-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16b-partial-rgba-lowercase-mask-byte-order",
+            "mode": "I;16B",
+            "im_mode": "I;16B",
+            "mask_mode": "RGBa",
+            "size": [2, 2],
+            "scenario_inline_image": "i16b-frombytes",
+            "edge": "paste-i16-byte-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
             "requirement_suffix": "edge.negative-coords",
             "name": "negative-coords-materialized",
             "mode": "RGBA",
@@ -47770,6 +47928,51 @@ def build_inputs(
                     }
                 )
                 members.append({"workload_id": workload_id, "weight": 1})
+        if surface_id == "PIL.ImageDraw.ImageDraw":
+            bitmap_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "bitmap"
+                ),
+                None,
+            )
+            if bitmap_benchmark is not None:
+                operation, requirement = bitmap_benchmark
+                case_id = (
+                    "PIL.ImageDraw.ImageDraw.bitmap.nuanced."
+                    "performance-rgb-1024x768"
+                )
+                case = all_cases_by_id[case_id]
+                workload_id = (
+                    "pil-imagedraw-imagedraw.bitmap.native-rgb-1024x768"
+                )
+                workloads.append(
+                    {
+                        "workload_id": workload_id,
+                        "covers": [requirement["id"]],
+                        "subjects": benchmark_subjects(),
+                        "input": {"kind": "parity_case", "case_id": case_id},
+                        "measurement": {
+                            "boundary": "observed_steps",
+                            "step_ids": ["call", "observe-receiver"],
+                            "metrics": operation["benchmark"]["metrics"],
+                            "warmup_iterations": 5,
+                            "measurement_iterations": 20,
+                            "samples": 5,
+                            "concurrency": 1,
+                            "cache_state": "warm",
+                            "correctness_gate": "parity_pass",
+                        },
+                        "context": _workflow_benchmark_context(
+                            case,
+                            variant="native-rgb-1024x768",
+                            surface=surface_id,
+                            operation="bitmap",
+                        ),
+                    }
+                )
+                members.append({"workload_id": workload_id, "weight": 1})
         if surface_id == "PIL.Image.Image":
             paste_benchmark = next(
                 (
@@ -47813,6 +48016,44 @@ def build_inputs(
                             "context": _workflow_benchmark_context(
                                 case,
                                 variant=f"paste-{slug(name)}",
+                                surface=surface_id,
+                                operation="paste",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+                for name, _mode, _size, _seed in PASTE_MASKED_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.paste.masked.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.paste.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-receiver"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"paste-masked-{slug(name)}",
                                 surface=surface_id,
                                 operation="paste",
                             ),

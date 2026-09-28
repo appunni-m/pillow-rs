@@ -1022,6 +1022,97 @@ impl Draw {
             return Err(PilError::ValueError("bad transparency mask".to_string()));
         }
         let (bmp_w, bmp_h) = bitmap.size()?;
+        // PIL's BLEND: DIV255(a * (255 - mask) + b * mask)
+        let pil_blend = |bg: u8, fg: u8, m: u8| -> u8 {
+            if m == 255 {
+                return fg;
+            }
+            ((bg as u16 * (255u16 - m as u16) + fg as u16 * m as u16 + 127u16) / 255u16) as u8
+        };
+
+        let mode = self.effective_mode();
+
+        // A normal RGB drawing context can retain its three-byte canvas for
+        // the whole operation.  The shared RGB/RGBA path below creates a
+        // four-byte image, then `image_clone` converts it back to RGB after
+        // the public call.  Keep explicit RGBA-on-RGB contexts on that path:
+        // they intentionally use RGBA compositing semantics.
+        if mode == "RGB" && self.orig_mode.as_deref() == Some("RGB") {
+            let img = self.image.materialized_shared()?;
+            let mask = bitmap.materialized_shared()?;
+            let mask_layout = match (bmp_mode.as_str(), mask.as_ref()) {
+                ("1", DynamicImage::ImageLuma8(image)) => {
+                    Some((image.as_raw().as_slice(), 1, 0, true, false))
+                }
+                ("L", DynamicImage::ImageLuma8(image)) => {
+                    Some((image.as_raw().as_slice(), 1, 0, false, false))
+                }
+                ("RGBA", DynamicImage::ImageRgba8(image)) => {
+                    Some((image.as_raw().as_slice(), 4, 3, false, false))
+                }
+                // Pillow passes RGBa as a fully opaque bitmap mask and ignores
+                // its stored alpha byte in ImagingDrawBitmap.
+                ("RGBa", DynamicImage::ImageRgba8(_)) => Some((&[][..], 0, 0, false, true)),
+                _ => None,
+            };
+            if let (
+                DynamicImage::ImageRgb8(source),
+                Some((mask_bytes, mask_stride, mask_channel, binary_mask, opaque_mask)),
+            ) = (img.as_ref(), mask_layout)
+            {
+                let (img_w, img_h) = source.dimensions();
+                let mut canvas = source.clone();
+                let row_stride = img_w as usize * 3;
+                let destination = canvas.as_mut();
+                let source_x_start = (-i64::from(x)).clamp(0, i64::from(bmp_w)) as u32;
+                let source_x_end =
+                    (i64::from(img_w) - i64::from(x)).clamp(0, i64::from(bmp_w)) as u32;
+                let source_y_start = (-i64::from(y)).clamp(0, i64::from(bmp_h)) as u32;
+                let source_y_end =
+                    (i64::from(img_h) - i64::from(y)).clamp(0, i64::from(bmp_h)) as u32;
+
+                for py in source_y_start..source_y_end {
+                    let dy = i64::from(y) + i64::from(py);
+                    let destination_row = dy as usize * row_stride;
+
+                    for px in source_x_start..source_x_end {
+                        let mask_index = (py as usize * bmp_w as usize + px as usize) * mask_stride
+                            + mask_channel;
+                        let m = if opaque_mask {
+                            255
+                        } else {
+                            let value = mask_bytes[mask_index];
+                            if binary_mask && value != 0 {
+                                255
+                            } else {
+                                value
+                            }
+                        };
+                        if m == 0 {
+                            continue;
+                        }
+                        let dx = i64::from(x) + i64::from(px);
+                        let destination_offset = destination_row + dx as usize * 3;
+                        if m == 255 {
+                            destination[destination_offset] = color.0;
+                            destination[destination_offset + 1] = color.1;
+                            destination[destination_offset + 2] = color.2;
+                        } else {
+                            destination[destination_offset] =
+                                pil_blend(destination[destination_offset], color.0, m);
+                            destination[destination_offset + 1] =
+                                pil_blend(destination[destination_offset + 1], color.1, m);
+                            destination[destination_offset + 2] =
+                                pil_blend(destination[destination_offset + 2], color.2, m);
+                        }
+                    }
+                }
+
+                self.image = Image::from_dynamic(DynamicImage::ImageRgb8(canvas), None);
+                return Ok(());
+            }
+        }
+
         let raw_data = bitmap.getdata(None)?;
         let bmp_stride: usize = if matches!(bmp_mode.as_str(), "1" | "L") {
             1
@@ -1048,23 +1139,10 @@ impl Draw {
                     let pixel_idx = idx * bmp_stride;
                     data[pixel_idx + 3]
                 }
-                // Pillow's ImagingDrawBitmap passes RGBa through the same
-                // binary-mask path as a fully opaque bitmap.  Its lowercase
-                // alpha is not consulted by _imaging.c::ImagingFill2.
                 "RGBa" => 255,
                 _ => unreachable!("bitmap mode was validated before mask iteration"),
             }
         };
-
-        // PIL's BLEND: DIV255(a * (255 - mask) + b * mask)
-        let pil_blend = |bg: u8, fg: u8, m: u8| -> u8 {
-            if m == 255 {
-                return fg;
-            }
-            ((bg as u16 * (255u16 - m as u16) + fg as u16 * m as u16 + 127u16) / 255u16) as u8
-        };
-
-        let mode = self.effective_mode();
 
         match mode.as_str() {
             "RGB" | "RGBA" => {
