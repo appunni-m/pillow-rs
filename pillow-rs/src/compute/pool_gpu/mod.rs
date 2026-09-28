@@ -11260,6 +11260,13 @@ fn gpu_native_byte_op_channels(
             if registry::gpu_brightness_factor_int(*factor).is_some() =>
         {
             match image {
+                DynamicImage::ImageLuma8(_)
+                    if matches!(mode, None | Some("L"))
+                        && image.width() > 0
+                        && image.height() > 0 =>
+                {
+                    Some(1)
+                }
                 DynamicImage::ImageLumaA8(_)
                     if matches!(mode, None | Some("LA"))
                         && image.width() > 0

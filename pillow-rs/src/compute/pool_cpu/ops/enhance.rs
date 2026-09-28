@@ -114,6 +114,26 @@ pub fn op_enhance_brightness(
         );
         return Ok(DynamicImage::ImageLumaA8(la));
     }
+    if let DynamicImage::ImageLuma8(source) = img
+        && matches!(mode, None | Some("L"))
+    {
+        // L brightness is a scalar multiply. Avoid expanding each sample to
+        // three equal RGB channels only to convert the result back to L.
+        let mut luma = source.clone();
+        let (width, height) = luma.dimensions();
+        apply_enhance_rows(
+            luma.as_mut(),
+            width as usize,
+            height as usize,
+            1,
+            |_y, row| {
+                for sample in row {
+                    *sample = (*sample as f64 * factor).clamp(0.0, 255.0) as u8;
+                }
+            },
+        );
+        return Ok(DynamicImage::ImageLuma8(luma));
+    }
     if matches!(img, DynamicImage::ImageRgba8(_)) {
         let mut rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
