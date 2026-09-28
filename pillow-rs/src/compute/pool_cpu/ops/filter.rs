@@ -1805,7 +1805,7 @@ fn rank_filter_f_large_parallel(
 /// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
 /// PIL uses clamping for border pixels.
 /// Generalized to handle any number of channels (1-4).
-/// For F-mode ("F"): treats 4 RGBA bytes as a single f32 value, sorts floats.
+/// For F-mode ("F"): treats each little-endian four-byte sample as one f32.
 fn rank_filter_impl(
     img: &DynamicImage,
     size: u32,
@@ -1818,10 +1818,15 @@ fn rank_filter_impl(
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
 
-    // For F-mode: operate on f32 values stored as 4 RGBA bytes
+    // F-mode stores each scalar as one little-endian f32 in the four-byte
+    // carrier. Borrow that storage directly and retain the accessor only for
+    // mismatched internal variants.
     if mode == Some("F") {
-        let rgba = img.to_rgba8();
-        let raw = rgba.into_raw();
+        let raw: Cow<'_, [u8]> = match img {
+            DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
+            _ => Cow::Owned(img.to_rgba8().into_raw()),
+        };
+        let raw = raw.as_ref();
         let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
         if area <= SMALL_RANK_AREA {
             for y in 0..h {
@@ -1851,9 +1856,9 @@ fn rank_filter_impl(
             }
         } else {
             #[cfg(feature = "parallel")]
-            rank_filter_f_large_parallel(&raw, &mut out, w, h, half, area, rank);
+            rank_filter_f_large_parallel(raw, &mut out, w, h, half, area, rank);
             #[cfg(not(feature = "parallel"))]
-            rank_filter_f_large_serial(&raw, &mut out, w, h, half, area, rank);
+            rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank);
         }
         let result = DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
