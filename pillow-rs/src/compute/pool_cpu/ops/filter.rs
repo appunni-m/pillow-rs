@@ -10,6 +10,7 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::raster::DynamicImage;
+use std::borrow::Cow;
 
 /// Push one source index into a monotonic queue used by a byte min/max line.
 /// The queue stores indices rather than samples so stale values can be
@@ -360,10 +361,16 @@ fn filter_3x3_i32(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (w_u32, h_u32) = rgba.dimensions();
+    // I-mode stores one little-endian i32 in each four-byte pixel. Borrow that
+    // exact carrier instead of cloning it through the RGBA accessor; retain
+    // the old widening route for callers with a different concrete variant.
+    let (w_u32, h_u32) = (img.width(), img.height());
+    let raw: Cow<'_, [u8]> = match img {
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
+    let raw = raw.as_ref();
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    let raw = rgba.into_raw();
 
     // The C filter receives the raw f32 divisor, including zero and negative
     // values. Rust's IEEE-754 division and saturating float-to-int cast match
@@ -381,7 +388,7 @@ fn filter_3x3_i32(
         kernel[8] / s,
     ];
 
-    let mut out = raw.clone();
+    let mut out = raw.to_vec();
 
     let row_stride = w_u32 as usize * 4;
     #[cfg(feature = "parallel")]
@@ -391,14 +398,14 @@ fn filter_3x3_i32(
             row_stride,
             h_u32 as usize,
             |_row_start, _row_end, y, row| {
-                filter_3x3_i32_row(&raw, row, y as i32, w, h, &kd, offset);
+                filter_3x3_i32_row(raw, row, y as i32, w, h, &kd, offset);
             }
         );
     } else {
         for y in 0..h {
             let row_start = y as usize * row_stride;
             filter_3x3_i32_row(
-                &raw,
+                raw,
                 &mut out[row_start..row_start + row_stride],
                 y,
                 w,
@@ -412,7 +419,7 @@ fn filter_3x3_i32(
     for y in 0..h {
         let row_start = y as usize * row_stride;
         filter_3x3_i32_row(
-            &raw,
+            raw,
             &mut out[row_start..row_start + row_stride],
             y,
             w,

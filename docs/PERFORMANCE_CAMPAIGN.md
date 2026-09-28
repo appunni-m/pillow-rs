@@ -6767,7 +6767,7 @@ image kernels otherwise operate on native bytes. Runtime CPU call sites are conc
 | [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad and Expand CPU paths admit exact L/LA/RGB/HSV/RGBA storage. Expand also has native three-byte SIMD rows and a guarded GPU native-input/native-output path when the adapter's bounded word grid fits. Keep P/PA tuple-index semantics and CMYK's four active samples. |
 | [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness now scales byte 0 directly and preserves byte 1 on CPU; its one-op GPU path transfers native LA bytes. Sharpness still widens and repeats luma work before restoring alpha. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
 | [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Spread now borrows native 1/2/3/4-byte storage for relocation, preserving raw CMYK/RGBX/RGBa/I/F samples; typed fallbacks retain their existing numeric conversion. Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Keep mixed-mode paste/composite conversions where blending semantics require them; RGB→RGBA and explicit alpha composition change output semantics. |
-| [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I/F images use four-byte scalar samples. Their `to_rgba8()` is a same-size copy, not a color conversion; operate on the original typed/raw sample layout without treating scalar bytes as channels. |
+| [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I-mode Filter3x3 now borrows the matching four-byte scalar carrier. Filter5x5 I and F rank-filter paths still have same-size accessor copies; operate on raw/typed samples without treating them as color channels. |
 | [`color.rs`](../pillow-rs/src/compute/pool_cpu/ops/color.rs), [`draw.rs`](../pillow-rs/src/compute/pool_cpu/ops/draw.rs) | Explicit `convert(..., "RGBA")` and fallback drawing canvases have a canonical RGBA output contract. Avoid only after proving the caller's requested format and palette/alpha semantics allow it. |
 
 Additional references occur in `color.rs`, `ops/analysis.rs`, `ops/convert.rs`,
@@ -6848,8 +6848,8 @@ copy an existing four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
-| Same-layout clone or four-byte reinterpretation | 24 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
+| Widening-capable or mixed-format fallback | 37 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/filter.rs:370`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
+| Same-layout clone or four-byte reinterpretation | 23 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:529,1817`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3383,3456`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
 | Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19327`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
@@ -7109,7 +7109,7 @@ everything else.
 | 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
 | 7 | F boxed nearest resize | Preserve the four-byte scalar words; copy selected words directly and return `Image.copy()` only when both cumulative nearest maps select the same source coordinates. | Validate the narrowed box first. Retain logical F at CPU dispatch; decode to f32 only for filtered resampling and preserve f64 accumulation/f32 stores. The identity workload is 5.1× faster end-to-end but bypasses all backends; GPU F resize remains unsupported. |
-| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity, ordinary F/I CPU resize, and F/I thumbnail reduction no longer clone through the RGBA accessor. Filtered kernels still decode to typed sample vectors; preserve exact rounding, byte order, and sample evaluation. |
+| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity, ordinary F/I CPU resize, F/I thumbnail reduction, and I Filter3x3 now use their native carrier. Filter5x5 I and F rank-filter still copy through the accessor; preserve exact rounding, byte order, and sample evaluation. |
 
 Treat a four-byte physical buffer as its real format: CMYK's fourth byte is K,
 RGBX's is padding, RGBa is premultiplied, LA alpha is byte 1, and I/F are scalar
@@ -7549,3 +7549,26 @@ spread distances. The source-borrow gather path has parity coverage, but its
 standalone latency benefit is not isolated by this workload. The remaining
 conversion and GPU/SIMD parity gaps stay visible in the native-format attack
 order.
+
+### I-mode Filter3x3: borrow native scalar storage — 2026-09-28
+
+I pixels use the `ImageRgba8` carrier as one little-endian i32 word per pixel.
+The I-mode Filter3x3 CPU path used `to_rgba8()` only to clone those same bytes,
+then cloned them again to seed the output's unmodified borders. It now borrows
+the raw bytes from a matching `ImageRgba8` and allocates only the output buffer;
+the old accessor remains a fallback for a mismatched internal variant. The
+SIMD and GPU implementations are unchanged.
+
+The existing `PIL.Image.Image.filter.nuanced.i-mode-find-edges-negative` parity
+case passed 1/1 on CPU, strict SIMD, and strict GPU. The retained 1024 × 768
+I-mode convolution benchmark is `pipeline-chain.convolution-i.3x3-1024x768`;
+it measures one warmup and six timed calls, and its benchmark correctness gate
+is `successful_execution` (parity is reported separately). One pre-change run
+measured Pillow 2.134 ms, CPU 2.894 ms, SIMD 1.617 ms, and GPU 1.405 ms. Three
+post-change runs had median-of-run medians of Pillow 2.036 ms, CPU 2.623 ms,
+SIMD 1.563 ms, and GPU 1.325 ms. The CPU run medians varied from 1.672 to
+2.741 ms, so the single baseline does not establish a robust latency gain; CPU
+remains 1.29× slower than Pillow on the post-change median. The source clone
+is removed for the concrete I carrier, but CPU still misses its speed goal.
+SIMD/GPU did not change, and those noisy benchmark deltas are not attributed to
+this edit. No coverage was run.
