@@ -224,6 +224,8 @@ EXPAND_PERFORMANCE_CASES = (
     ),
 )
 PASTE_PERFORMANCE_CASES = (
+    ("l-noise-1024x768", "L", [1024, 768], 20261008),
+    ("la-noise-1024x768", "LA", [1024, 768], 20261009),
     ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002),
 )
 PAD_PERFORMANCE_CASES = (
