@@ -6572,8 +6572,116 @@ costs before tuning shader arithmetic. SIMD still needs a lower-level
 lookup/vectorization design that complies with the workspace's `unsafe_code =
 deny` policy. Point is checkpointed incomplete after four bounded attempts.
 
-The next first-pass operation is `PIL.Image.Image.putdata`: its existing
-receiver-observation workflow is easiest to scale into a materialized varied
-input with strict parity on all three backends. Existing putdata parity rows
-are CPU-only, so create the all-backend exact cohort before treating any new
-benchmark as performance evidence.
+## PIL.Image.Image.putdata checkpoint — 2026-09-28
+
+The measured boundary is `putdata` followed by receiver `tobytes`, on a varied
+1,024 × 768 native-L image with a complete byte payload. Setup is outside the
+timed steps. The standard policy runs five warmups and 100 observations across
+five samples at concurrency one. Runs used Pillow 12.2.0, CPython 3.12.13, and
+macOS 15.7.7 arm64. The source snapshot was `810fa8557` with local changes;
+each receipt records its input hashes and actual backend samples. The parity
+input was corrected during this visit, so later receipt input hashes differ,
+while the benchmark-selected L asset and timed boundary remain the same.
+No coverage was collected.
+
+The whole-call median latency and median throughput were:
+
+| Run | Pillow ms / ops/s | CPU ms / ops/s | SIMD ms / ops/s | GPU ms / ops/s |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline (`390c26a4`) | 1.410 / 709 | 3.003 / 333 | 3.011 / 332 | 6.435 / 155 |
+| Attempt 1: byte fast path (`c59dcb41`) | 1.354 / 738 | 1.471 / 680 | 1.470 / 680 | 4.818 / 208 |
+| Attempt 2: full-write CPU/SIMD paths (`fc76f071`) | 1.403 / 713 | 1.397 / 716 | 1.383 / 723 | 4.805 / 208 |
+| Attempt 3: skip old-image GPU upload (`96819204`) | 1.425 / 702 | 1.484 / 674 | 1.428 / 700 | 4.133 / 242 |
+| Attempt 4: packed-L GPU path (`15c16261`) | 1.457 / 686 | 1.361 / 735 | 1.406 / 711 | 2.815 / 355 |
+| Attempt 4 unchanged repeat (`56a57593`) | 1.331 / 751 | 1.245 / 803 | 1.323 / 756 | 2.636 / 379 |
+| Final source/input confirmation (`0805acd7`) | 1.306 / 766 | 1.251 / 799 | 1.250 / 800 | 2.535 / 394 |
+
+Attempt 1 passes exact one-byte samples directly from the bytes input instead
+of widening each byte into `PutDataValue` and encoding it back. CPU and SIMD
+median latency fell from about 3.0 ms to 1.47 ms. Attempt 2 constructs a
+complete native-layout replacement directly on CPU, avoiding a clone and
+overwrite of the old frame; SIMD likewise copies the complete payload directly
+instead of first copying the old image. These brought CPU and SIMD close to
+Pillow, but the CPU p95 remained slightly slower in that run. The SIMD full
+copy is a native copy operation; current telemetry proves SIMD backend
+selection but does not report vector blocks for that copy.
+
+Attempt 3 skips uploading the old L frame on complete replacement and makes
+the generic shader load old pixels only when a write is partial. That removed
+the 3 MiB primary-image upload, but still transferred a 3 MiB auxiliary
+payload and read back 3 MiB of expanded RGBA. GPU median improved from 4.805 to
+4.133 ms. Attempt 4 handles native-L samples four per `u32`, packs replacement
+bytes in the same layout, and reads compact L output. It keeps a compact source
+upload for partial writes, skips the source upload only for a complete write,
+preserves the exact byte prefix, and zeroes only unused transfer padding. The
+full-write benchmark now transfers 0 bytes as the primary image, 786,432
+auxiliary bytes, and 786,432 readback bytes per sample; mode conversions fell
+from one to zero. Total measured GPU image traffic fell from 9 MiB before the
+specialization to 1.5 MiB. The adapter-backed shader still ran one dispatch.
+
+The attempt-4 run and unchanged repeat show GPU medians of 2.815 and 2.636 ms,
+with 355 and 379 operations/s. Both receipts report 100/100 actual GPU
+executions and no fallback. In the same runs, GPU remains about 2× slower and
+produces about half the throughput of SIMD. CPU beats Pillow on the measured L
+workload in both runs (1.361 vs 1.457 ms, then 1.245 vs 1.331 ms); this does
+not establish CPU performance for every PutData mode. SIMD is roughly tied
+with Pillow, far below the 5× target. Thus the CPU result is good for this
+workload, but the SIMD and GPU goals remain open. The remaining GPU cost is
+per-call setup, dispatch, completion, and materialized readback after compact
+transfers; shader instruction tuning is not the next high-return change.
+
+The first generated LA/RGB/RGBA “full” cases used byte assets sized as
+`pixels × channels`. `putdata` counts each byte as a sequence entry and
+rejects those inputs before writing, so identical errors on both sides had
+looked like parity while `observe-receiver` never ran. Replacing those with
+component tuples made the cases valid, but a backend audit then found that
+tuples take the callback-preserving `putdata_value_at` path and do not queue
+`PipelineOp::PutData`. The tuple cases remain CPU-only binding-semantic checks.
+The backend cohort now uses exact integer lists to queue full LA/RGB/RGBA
+payloads and a partial RGB prefix, plus exact-length byte payloads for mode 1
+and P. The partial L case has a 1,257-sample prefix over a 1,273-pixel image;
+its final packed word replaces one byte and preserves the other lanes. All
+cases observe receiver `tobytes` output.
+
+Strict exact parity passed 11/11 CPU cases: eight queued operations recorded
+actual CPU execution, while the three tuple checks were correctly classified
+as having no deferred backend work. SIMD and GPU each passed all 8/8 queued
+cases. Their execution sidecars show eight terminal-complete receipts from
+the requested backend and no fallback. Receipts are
+`putdata-final-{cpu,simd,gpu}-parity.json` with matching
+`putdata-final-{cpu,simd,gpu}-execution.json` sidecars. Input generation and
+contract checks passed with `make migration-parity-inputs` and
+`make migration-parity-inputs-check`.
+
+The corrected GPU resource estimate counts the packed L auxiliary payload as
+four samples per `u32` and adds no aligned arena range for empty data. Its
+focused unit test covers full and partial packed lengths, the generic channel
+layout, and empty input. The final matched benchmark receipt is
+`putdata-final-benchmark.json` (run
+`migration-benchmark-0805acd7b6c1404fac8eef1ee4b559a6`) with its exact-output
+gate `putdata-final-benchmark-parity.json`; it records 100 actual samples per
+subject on the same 1,024 × 768 material-L input.
+
+The reproducible benchmark command shape is:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.putdata.standard' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/putdata-final-benchmark.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/putdata-final-benchmark-parity.json \
+make migration-parity-benchmark
+```
+
+The final source-confirmation run measures CPU at 1.251 ms, about 4% faster
+than Pillow at 1.306 ms. SIMD is effectively at parity with Pillow at 1.250
+ms, far short of the 5× goal. GPU is about 2× slower than both SIMD and Pillow
+at 2.535 ms. Its per-call reciprocal-latency throughput is 394 operations/s,
+versus about 800 for CPU and SIMD; concurrency-one rates do not establish
+sustained throughput. All benchmark correctness gates passed. The isolated
+`make build-parity` build preserved the Pillow oracle and built the final
+source. The compact resource estimate unit test and strict execution receipts
+are from the same source snapshot. Attempt 4 is checkpointed after four bounded
+optimization attempts. `putdata` remains incomplete: later work must target
+SIMD lookup/copy behavior and remove GPU per-call device round-trip cost. The
+next first-pass candidate remains `PIL.Image.Image.rotate`; materialized
+all-backend parity and a focused baseline are required before optimizing it.

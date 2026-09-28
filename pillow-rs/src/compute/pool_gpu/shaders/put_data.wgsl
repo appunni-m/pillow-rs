@@ -48,11 +48,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let index = gid.y * params.width + gid.x;
     let channels = channel_count(params.data_mode);
     let sample_start = index * channels;
-    var pixel = input[index];
 
     if sample_start >= params.data_len {
-        output[index] = pixel;
+        output[index] = input[index];
         return;
+    }
+
+    let replaced_channels = min(channels, params.data_len - sample_start);
+    var pixel = 0u;
+    if replaced_channels < channels {
+        // Only a partially replaced pixel needs its old channels. Complete
+        // writes can initialize the destination from replacement data alone.
+        pixel = input[index];
     }
 
     let replacement = data[index];
