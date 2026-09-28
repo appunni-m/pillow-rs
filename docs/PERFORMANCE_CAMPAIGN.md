@@ -6848,10 +6848,10 @@ copy an existing four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:312`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2219` |
+| Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2219` |
 | Same-layout clone or four-byte reinterpretation | 30 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2166,2249`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/pil_resize.rs:2225`; `ops/quantize.rs:2206` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3250,3328,3401`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
-| Definition, wrapper, test, comment, or color-only | 8 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19302`; `ops/pil_resize.rs:282`; `raster/dynamic.rs:327,420,423,1016` |
+| Definition, wrapper, test, comment, or color-only | 8 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282`; `raster/dynamic.rs:327,420,423,1016` |
 
 Do not treat the 36 fallback matches as 36 guaranteed conversions. `to_rgba8()`
 expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
@@ -6877,11 +6877,11 @@ stored in RGB bytes with logical A/B zero represented by 128. Its old fallback
 expanded to RGBA and marked every nonempty LAB pixel because the synthesized
 alpha is 255. A native LAB scan now checks `L != 0 || A != 128 || B != 128`.
 Four generated cases cover neutral zero and each logical band independently;
-the complete 25-case getprojection parity lane passed. The next performance
-candidate is L-mode Brightness: CPU currently expands its one-byte samples to
-RGB, and GPU falls back to four-byte transport, while SIMD already processes L
-directly. Keep RGB→RGBA conversions when adding alpha is the requested result,
-and retain mode-mismatched conversions until their semantics have separate
+the complete 25-case getprojection parity lane passed. L-mode Brightness has
+since been moved to native one-byte CPU and GPU paths, with a direct SIMD shift
+for exact factors; measurements and the remaining GPU bottleneck are recorded
+below. Keep RGB→RGBA conversions when adding alpha is the requested result, and
+retain mode-mismatched conversions until their semantics have separate
 parity-backed paths.
 
 ### RGB `ImageDraw.bitmap`: keep the canvas three bytes per pixel — 2026-09-28
@@ -7035,7 +7035,7 @@ everything else.
 | 2 | CPU/SIMD Pad | Keep exact native L/LA/RGB/HSV/RGBA storage, borrow the identity-contain source, repeat a fill row, and copy full-width source spans contiguously. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1. SIMD is 3.48× Pillow and GPU still uses four-byte transport on HSV. |
 | 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA bytes. Build SIMD 3-byte fill rows once; on GPU, assign each invocation one packed output word and read back the native byte count. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
-| 5 | LA brightness and related enhancement | Apply luma math to byte 0 and retain byte 1; for filters, avoid three copies of luma and restore alpha from native storage only when Pillow requires it. | Sharpness already has a four-attempt checkpoint; do not repeat its rejected paths without a different cost hypothesis. CMYK's fourth component is K. |
+| 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
 | 7 | Quantization and typed copies | Let FASTOCTREE consume RGB samples without synthetic alpha only if palette/index output is byte-identical; borrow I/F scalar-word storage instead of cloning it. | These are not blanket color conversions. Preserve alpha-sensitive palette choice and exact typed rounding. |
 
@@ -7302,3 +7302,54 @@ The useful kernel rule is to preserve the coverage mask in its narrowest form:
 grayscale glyphs need one coverage byte per pixel, while color glyphs need RGB
 source bytes plus alpha coverage. Expand only the channels the destination
 stores, and only after proving the logical mode and concrete raster layout.
+
+### Brightness L: preserve one-byte storage across backends — 2026-09-28
+
+The native route is admitted only for `ImageLuma8` with logical mode absent or
+`L`. CPU clones that native image once and applies Pillow-compatible `f64`
+multiply, clamp, and truncation directly to its bytes. GPU uses the existing
+channel-aware brightness shader with one active channel and constructs L from
+the native readback; the old four-byte transport is no longer needed. SIMD
+already kept L native, but its fixed-point adapter built and shuffled a 256-byte
+LUT for each operation. In that adapter's effective factor domain, factors
+0.5, 0.25, and 0.125 map exactly to byte shifts by 1, 2, and 3. The L-only
+shortcut applies that shift directly and leaves every other factor and format
+on the LUT path. Its proof domain is the effective fixed-point factor, not an
+assumption that arbitrary floating-point multiplication equals a shift.
+
+The correctness workload uses deterministic noisy 1024 × 768 L input at
+factor 0.5, and measures `enhance` plus `tobytes`. The standard run used five
+warmups, 20 iterations × five samples, concurrency one, and 100 measured calls
+per subject. Baseline run `migration-benchmark-5e0e6e159b6f4d9f99fccac499cd5e51`
+used the generic CPU/GPU routes. Native CPU/GPU run
+`migration-benchmark-9ff26cf3757b4e9b9790fb7dd050618b` introduced the native
+layout. Final run `migration-benchmark-7a47df30ee094af5b8232894e0070068`
+measured the SIMD shift shortcut. Input pixel hashes matched across the three
+runs. The final Pillow median moved between runs, so compare each target to the
+Pillow median from its own run.
+
+| Subject | Generic baseline ms | Native-format ms | Final ms | Final median ops/s |
+| --- | ---: | ---: | ---: | ---: |
+| Pillow | 0.474854 | 0.458292 | 0.465125 | 2,150 |
+| CPU | 0.943292 | 0.245167 | 0.240854 | 4,152 |
+| SIMD | 0.240792 | 0.230687 | 0.082104 | 12,180 |
+| GPU | 1.871250 | 0.564062 | 0.514479 | 1,944 |
+
+The final receipt confirms actual CPU, SIMD, and GPU execution for all 100
+samples per backend. Strict parity passed the large factor-0.5 workload on all
+three backends. A separate 257-byte L input covers every byte value plus a
+vector tail at factors 0.5, 0.25, and 0.125; all three factor cases passed on
+CPU, SIMD, and GPU (9/9), with no coverage run. Together, the four focused
+cases passed 12/12 backend comparisons.
+
+CPU improved 3.92× over its generic baseline and is 1.93× faster than Pillow in
+the final run. SIMD is 2.93× faster than its generic baseline and 5.66× faster
+than final-run Pillow, meeting the 5× SIMD target for this operation and input.
+GPU improved 3.64× over baseline but remains 1.11× slower than Pillow and 6.27×
+slower than SIMD. The GPU sends 786,432 bytes each way, makes one dispatch, and
+reports no mode conversion; its measured backend phase is still about 0.48 ms.
+The native representation removed wasted bandwidth, but device completion and
+readback now set the latency floor. Do not infer sustained throughput from this
+single-concurrency run. This operation is checkpointed: CPU and SIMD goals are
+met on the measured L case; GPU parity and native-byte reduction are proven,
+while GPU/SIMD latency and throughput remain open blockers.

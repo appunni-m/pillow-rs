@@ -240,6 +240,7 @@ PUTALPHA_PERFORMANCE_CASES = (
     ("la-noise-1024x768-scalar", "LA", [1024, 768], 20261019),
 )
 BRIGHTNESS_PERFORMANCE_CASES = (
+    ("l-noise-1024x768-factor-0.5", "L", [1024, 768], 20261020, 0.5),
     ("la-noise-1024x768-factor-0.5", "LA", [1024, 768], 20261010, 0.5),
 )
 PAD_PERFORMANCE_CASES = (
@@ -41702,14 +41703,17 @@ def contrast_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
 
 def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Material LA input for non-identity Brightness across each backend."""
+    """Material L/LA inputs for non-identity Brightness across each backend."""
     target = "PIL.ImageEnhance.Brightness"
     if surface_id != target:
         return []
     cases = []
     for name, mode, size, seed, factor in BRIGHTNESS_PERFORMANCE_CASES:
         width, height = size
-        raw = random.Random(seed).randbytes(width * height * 2)
+        channels = {"L": 1, "LA": 2}.get(mode)
+        if channels is None:
+            raise ValueError(f"Unsupported Brightness performance mode: {mode}")
+        raw = random.Random(seed).randbytes(width * height * channels)
         case_id = f"{target}.enhance.nuanced.performance-{slug(name)}"
         cases.append(
             {
@@ -41763,6 +41767,65 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     },
                 ],
                 "observations": ["enhancer", "call", "materialize"],
+            }
+        )
+    # Exercise the SIMD L brightness shift fast path over every byte value and
+    # a 16-byte vector tail. These factors have exact fixed-point shift maps.
+    raw = bytes(range(256)) + bytes([255])
+    for factor, factor_name in ((0.5, "0-5"), (0.25, "0-25"), (0.125, "0-125")):
+        case_id = f"{target}.enhance.nuanced.simd-native-l-shift-factor-{factor_name}"
+        cases.append(
+            {
+                "case_id": case_id,
+                "surface": target,
+                "operation": "enhance",
+                "covers": [f"{target}.enhance.parameter.factor"],
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                "assets": [
+                    {
+                        "id": "pixels",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode(),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("L"),
+                            "size": literal([257, 1]),
+                            "data": asset_value("pixels"),
+                        },
+                    },
+                    {
+                        "step_id": "enhancer",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Brightness",
+                        "receiver": None,
+                        "arguments": {"image": binding("image")},
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": target,
+                        "operation": "enhance",
+                        "receiver": binding("enhancer"),
+                        "arguments": {"factor": literal(factor)},
+                    },
+                    {
+                        "step_id": "materialize",
+                        "surface": "PIL.Image.Image",
+                        "operation": "tobytes",
+                        "receiver": binding("call"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["call", "materialize"],
             }
         )
     return cases
