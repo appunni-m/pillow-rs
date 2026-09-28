@@ -6263,7 +6263,8 @@ channels: one for L/LA, three for RGB/RGBA, and four for CMYK. LA alpha and
 RGBA alpha are copied unchanged; CMYK's fourth byte remains active as K. The
 path requires the logical mode and concrete `DynamicImage` variant to agree,
 so aliases and mismatched layouts continue through the established conversion
-fallback.
+fallback. In particular, La, RGBa, and RGBX still use that fallback pending
+their own alias-specific strict cases.
 
 Keep the existing integer 3×3 smooth result, `f32::mul_add` blend, clamp, and
 truncating byte store. Blend border samples too: for non-finite factors,
@@ -6277,26 +6278,34 @@ should compare serial and parallel native rows before changing the threshold.
 The maintained workload
 `pil-imageenhance-sharpness.enhance.material-la-520x512` uses five warmups and
 100 observations per subject at concurrency one, and gates every run on exact
-Pillow output. Before/after receipts are
-`sharpness-la-before.json` and `sharpness-la-after.json` with their parity
-sidecars. The whole observed workflow median changed from 3.328 ms to 0.292 ms
-on CPU (11.4× faster); Pillow measured 1.730 ms before and 1.653 ms after,
-while SIMD stayed at 0.306/0.304 ms and GPU at 1.321/1.327 ms. In the after
-receipt, CPU was 5.66× faster than Pillow and 4% faster than SIMD, but GPU
-remained 4.36× slower than SIMD. Actual backend counts were 100 CPU, 100 SIMD,
-and 100 GPU executions, with no fallback. This is one LA workload, not a
-claim about every size or mode. The CPU backend-phase median also fell from
-3.313 ms to 0.272 ms. These were separate runs about eight minutes apart, not
-alternating A/B samples: Pillow moved 4.4% between runs, while the CPU before
-and after ranges do not overlap. Both receipts identify the same Git revision
-with a dirty tree and record no extension-binary hash; raw samples are absent,
-so retain the result as a strong workload-level comparison, not a paired
-statistical experiment.
+Pillow output. The committed comparison is
+`sharpness-la-before.json` versus `sharpness-la-committed.json`, with parity
+sidecars. The before receipt predates the kernel change; the after receipt
+identifies commit `f083a6196` with a clean tree. Whole-workflow latency medians
+in milliseconds were:
+
+| Subject | Before | Committed after |
+| --- | ---: | ---: |
+| Pillow | 1.730 | 1.604 |
+| CPU | 3.328 | 0.338 |
+| SIMD | 0.306 | 0.316 |
+| GPU | 1.321 | 1.312 |
+
+CPU improved 9.86× and is 4.75× faster than the contemporaneous Pillow
+measurement; its backend-phase median fell from 3.313 ms to 0.272 ms. CPU is
+within 7% of SIMD in this receipt. GPU remains 4.16× slower than SIMD. Each
+target records 100 executions on its requested backend and no fallback. This
+is one LA workload, not a claim about every size or mode. Runs were separate,
+not alternating A/B samples: Pillow moved 7.3% between them. CPU timing ranges
+do not overlap, while SIMD/GPU ranges overlap. The receipts have no
+extension-binary hash and omit raw samples, so treat these as strong
+workload-level results rather than paired statistics.
 
 Strict Pillow parity passed all five factors for L, LA, RGB, RGBA, and CMYK:
-25 CPU cases, 25 SIMD cases, and 25 GPU cases. The new CPU path is used only
-for matching layouts; SIMD and GPU runs confirm the shared operation contract
-remains exact. No coverage collection ran.
+25 CPU cases, 25 strict SIMD cases, and 25 strict GPU cases, all on clean
+commit `f083a6196`; receipts are `sharpness-all-formats-committed-cpu.json`,
+`sharpness-all-formats-committed-simd.json`, and
+`sharpness-all-formats-committed-gpu.json`. No coverage collection ran.
 
 At this checkpoint the campaign selected `PIL.Image.Image.reduce` for a fresh
 material, parity-gated baseline. The old top-ranked `ImageOps.invert` row was a
@@ -7215,7 +7224,7 @@ everything else.
 | 2 | CPU/SIMD Pad | Keep exact native L/LA/RGB/HSV/RGBA storage, borrow the identity-contain source, repeat a fill row, and copy full-width source spans contiguously. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1. SIMD is 3.48× Pillow and GPU still uses four-byte transport on HSV. |
 | 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA bytes. Build SIMD 3-byte fill rows once; on GPU, assign each invocation one packed output word and read back the native byte count. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
-| 5 | L/LA brightness and Sharpness | For brightness, scale native L bytes or LA byte 0 and retain byte 1. For Sharpness, process one active channel for L/LA, three for RGB/RGBA, and all four for CMYK; keep alpha bytes unchanged. | LA Sharpness CPU is 5.66× Pillow and slightly faster than SIMD on the measured 520 × 512 case; GPU remains 4.36× slower than SIMD. These are one-workload results. CMYK's fourth component is K. |
+| 5 | L/LA brightness and Sharpness | For brightness, scale native L bytes or LA byte 0 and retain byte 1. For Sharpness, process one active channel for L/LA, three for RGB/RGBA, and all four for CMYK; keep alpha bytes unchanged. | LA Sharpness CPU is 4.75× Pillow and within 7% of SIMD on the committed 520 × 512 case; GPU remains 4.16× slower than SIMD. These are one-workload results. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
 | 7 | F boxed nearest resize | Preserve the four-byte scalar words; copy selected words directly and return `Image.copy()` only when both cumulative nearest maps select the same source coordinates. | Validate the narrowed box first. Retain logical F at CPU dispatch; decode to f32 only for filtered resampling and preserve f64 accumulation/f32 stores. The identity workload is 5.1× faster end-to-end but bypasses all backends; GPU F resize remains unsupported. |
 | 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity, ordinary F/I CPU resize, F/I thumbnail reduction, I Filter3x3 and Filter5x5, and F rank-filter now borrow their native carrier on CPU. Preserve exact rounding, byte order, and sample evaluation; measure SIMD/GPU separately. |
