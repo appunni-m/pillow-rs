@@ -40745,6 +40745,8 @@ def build_nuanced_cases(
     cases.extend(resize_argument_parity_cases(surface_id))
     cases.extend(resize_mode_parity_cases(surface_id))
     cases.extend(f_boxed_resize_materialized_parity_cases(surface_id))
+    cases.extend(f_resize_materialized_parity_cases(surface_id))
+    cases.extend(i_resize_materialized_parity_cases(surface_id))
     cases.extend(rotate_mode_parity_cases(surface_id))
     cases.extend(transform_mode_parity_cases(surface_id))
     if surface_id == "PIL.Image.Image":
@@ -41415,6 +41417,140 @@ def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, 
                         "size": literal([width, height]),
                         "resample": literal(0),
                         "box": literal([0.25, 0.5, width - 0.25, height - 0.5]),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
+
+
+def f_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise ordinary F-mode resize on a material, nonconstant source."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width, height = 1024, 768
+    rng = random.Random(240929)
+    raw = b"".join(
+        struct.pack("<f", rng.uniform(-1000.0, 1000.0))
+        for _ in range(width * height)
+    )
+    case_id = (
+        f"{surface_id}.resize.nuanced.f-resize-bicubic-noise-"
+        f"{width}x{height}"
+    )
+    return [
+        {
+            "case_id": case_id,
+            "surface": surface_id,
+            "operation": "resize",
+            "covers": [f"{surface_id}.resize.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("F"),
+                        "size": literal([width, height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "resize",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([width // 2, height // 2]),
+                        "resample": literal(3),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
+
+
+def i_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise ordinary I-mode resize on a material, nonconstant source."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width, height = 1024, 768
+    rng = random.Random(240930)
+    raw = b"".join(
+        struct.pack("<i", rng.randrange(-100_000, 100_000))
+        for _ in range(width * height)
+    )
+    case_id = (
+        f"{surface_id}.resize.nuanced.i-resize-bicubic-noise-"
+        f"{width}x{height}"
+    )
+    return [
+        {
+            "case_id": case_id,
+            "surface": surface_id,
+            "operation": "resize",
+            "covers": [f"{surface_id}.resize.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("I"),
+                        "size": literal([width, height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "resize",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([width // 2, height // 2]),
+                        "resample": literal(3),
                     },
                 },
                 {
@@ -44975,6 +45111,72 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    f_resize_case_id = (
+        "PIL.Image.Image.resize.nuanced.f-resize-bicubic-noise-1024x768"
+    )
+    f_resize_case = cases_by_id.get(f_resize_case_id)
+    if f_resize_case is None:
+        raise ValueError(
+            f"F resize benchmark references missing case: {f_resize_case_id}"
+        )
+    f_resize_workload = {
+        "workload_id": "pipeline-chain.resize-native-f32.bicubic-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "resize")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": f_resize_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            f_resize_case,
+            variant="native-f32-noise-1024x768",
+            surface="PIL.Image.Image",
+            operation="resize",
+        ),
+    }
+    f_resize_workload["context"]["operation_class"] = "geometry"
+
+    i_resize_case_id = (
+        "PIL.Image.Image.resize.nuanced.i-resize-bicubic-noise-1024x768"
+    )
+    i_resize_case = cases_by_id.get(i_resize_case_id)
+    if i_resize_case is None:
+        raise ValueError(
+            f"I resize benchmark references missing case: {i_resize_case_id}"
+        )
+    i_resize_workload = {
+        "workload_id": "pipeline-chain.resize-native-i32.bicubic-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "resize")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": i_resize_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "materialize"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            i_resize_case,
+            variant="native-i32-noise-1024x768",
+            surface="PIL.Image.Image",
+            operation="resize",
+        ),
+    }
+    i_resize_workload["context"]["operation_class"] = "geometry"
+
     # Add one non-square size variant for every ordinary byte-image workflow
     # that has a public Image.new source. These remain benchmark-only inputs:
     # the isolated PipelineOp registry coverage stays exactly one workload per
@@ -47035,6 +47237,8 @@ def build_pipeline_benchmark_document(
             *operation_workloads,
             thumbnail_material_workload,
             f_boxed_resize_workload,
+            f_resize_workload,
+            i_resize_workload,
             *matrix_workloads,
             *expanded_matrix_workloads,
             *chain_workloads,
@@ -47282,12 +47486,16 @@ def build_pipeline_benchmark_document(
             {
                 "suite_id": "pipeline-operations.resize-typed-suite",
                 "description": (
-                    "Public F-mode and I-mode resize workflows used to measure "
-                    "typed native row execution."
+                    "Public F-mode and I-mode resize workflows, including "
+                    "material noisy scalar sources for native-buffer execution."
                 ),
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}
-                    for item in typed_resize_workloads
+                    for item in [
+                        *typed_resize_workloads,
+                        f_resize_workload,
+                        i_resize_workload,
+                    ]
                 ],
             },
             {

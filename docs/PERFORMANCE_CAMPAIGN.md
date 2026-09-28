@@ -6752,9 +6752,9 @@ revisit Mirror after other operations receive their first optimization pass.
 
 ## Native-format conversion audit and GetChannel checkpoint — 2026-09-28
 
-The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 88
+The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 86
 textual call/declaration sites, including tests and the `DynamicImage`
-conversion helpers. These are not 88 runtime image conversions. The Python
+conversion helpers. These are not 86 runtime image conversions. The Python
 Qt bridge has two explicit `convert("RGBA")` calls; JavaScript has none in
 the binding source. The ledger below separates runtime operations from helper
 definitions, wrappers, test-only matches, comments, and a one-pixel color
@@ -6837,8 +6837,8 @@ follow-up and compact native GPU output are recorded below.
 
 ### Explicit RGBA callsite ledger — 2026-09-28
 
-The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 88 Rust
-source matches: 79 runtime operation calls, one GPU test, two wrapper
+The current `rg -n 'to_rgba8\(|into_rgba8\(' pillow-rs` scan finds 86 Rust
+source matches: 76 runtime operation calls, one GPU test, two wrapper
 delegations, one single-color conversion, two conversion method definitions,
 and three comments. The Python Qt bridge has two explicit `convert("RGBA")`
 calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`; the JavaScript
@@ -6849,9 +6849,9 @@ copy an existing four-byte carrier for other modes.
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
 | Widening-capable or mixed-format fallback | 36 | `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:144,717,793,794,807,1142,1461,3308`; `compute/pool_cpu/ops/enhance.rs:332`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7856,7876,10895`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6575`; `ops/analysis.rs:323,401,588`; `ops/pil_resize.rs:272`; `ops/quantize.rs:2317` |
-| Same-layout clone or four-byte reinterpretation | 29 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:303,534,702,2168,2251`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
+| Same-layout clone or four-byte reinterpretation | 26 | `color.rs:353,776,1082,1099,1118,1134,1146,1158`; `compute/pool_cpu/ops/effects.rs:933,1293,1294`; `compute/pool_cpu/ops/enhance.rs:80,118,263`; `compute/pool_cpu/ops/filter.rs:363,522,1810`; `compute/pool_cpu/ops/geometry.rs:2190,2273`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021`; `ops/quantize.rs:2297` |
 | Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3250,3328,3401`; `compute/pool_gpu/mod.rs:10733,10860,10872`; `image.rs:7034,7043,7052`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1956` |
-| Definition, wrapper, test, comment, or color-only | 9 | `color.rs:118`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
+| Definition, wrapper, test, comment, or color-only | 10 | `color.rs:118`; `compute/pool_cpu/ops/geometry.rs:304`; `compute/pool_gpu/mod.rs:10556,19309`; `ops/pil_resize.rs:282,2257`; `raster/dynamic.rs:327,420,423,1016` |
 
 Do not treat the 36 fallback matches as 36 guaranteed conversions. `to_rgba8()`
 expands L/LA/RGB, clones RGBA, and may copy four-byte storage that actually
@@ -7109,7 +7109,7 @@ everything else.
 | 5 | L/LA brightness and related enhancement | For L, scale each native byte; for LA, scale byte 0 and retain byte 1. On SIMD, compare exact byte maps in the adapter's quantized factor domain before building a LUT. | L CPU/SIMD beat Pillow on the measured case; GPU still trails SIMD because transfer, completion, and readback dominate. Sharpness has a four-attempt checkpoint. CMYK's fourth component is K. |
 | 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
 | 7 | F boxed nearest resize | Preserve the four-byte scalar words; copy selected words directly and return `Image.copy()` only when both cumulative nearest maps select the same source coordinates. | Validate the narrowed box first. Retain logical F at CPU dispatch; decode to f32 only for filtered resampling and preserve f64 accumulation/f32 stores. The identity workload is 5.1× faster end-to-end but bypasses all backends; GPU F resize remains unsupported. |
-| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | The F boxed-nearest identity case is optimized. Preserve exact typed rounding, byte order, and filtered sample evaluation for remaining paths. |
+| 8 | Remaining typed scalar paths | Keep I/F samples in their native numeric representation instead of treating their four bytes as color channels. | F boxed-nearest identity and ordinary F/I CPU resize no longer clone through the RGBA accessor. Filtered kernels still decode to typed sample vectors; preserve exact rounding, byte order, and sample evaluation. |
 
 Treat a four-byte physical buffer as its real format: CMYK's fourth byte is K,
 RGBX's is padding, RGBa is premultiplied, LA alpha is byte 1, and I/F are scalar
@@ -7425,3 +7425,42 @@ readback now set the latency floor. Do not infer sustained throughput from this
 single-concurrency run. This operation is checkpointed: CPU and SIMD goals are
 met on the measured L case; GPU parity and native-byte reduction are proven,
 while GPU/SIMD latency and throughput remain open blockers.
+
+### F/I `Image.resize`: borrow the scalar carrier instead of cloning RGBA — 2026-09-28
+
+The source inventory identified three misleading `to_rgba8()` calls in the
+ordinary F resize, ordinary I resize, and I `reducing_gap` boxed-resize paths.
+These modes are held internally in `ImageRgba8`, but their four bytes encode a
+single little-endian `f32` or `i32`; they are not color channels. The accessor
+therefore made a redundant full-frame clone before the existing typed decode.
+The CPU paths now match the concrete four-byte storage, borrow its raw bytes,
+and decode sample words directly into the same typed vectors used by the
+resampler. The interpolation order, coefficient precision, integer rounding,
+and output packing are unchanged. I resize exits for empty output and exact
+identity before allocating the decoded sample vector.
+
+Focused regression workloads resize deterministic noisy 1024 × 768 F and I
+images to 512 × 384 with bicubic filtering, and measure public `resize` plus
+`tobytes()`. The I `reducing_gap=2` parity case covers the boxed route. Each
+benchmark uses five warmups and 100 timed samples at concurrency one; final
+benchmark correctness gates passed separately for CPU, SIMD, and GPU; each
+backend reports 100/100 actual executions without fallback. Public CPU parity
+passed both new noisy F/I cases and the existing I reducing-gap case. The
+parity-input generator check also passed (16,868 parity cases and 857 benchmark
+workloads); no coverage was run.
+
+| Mode | Run | Pillow ms | CPU ms | SIMD ms | GPU ms |
+| --- | --- | ---: | ---: | ---: | ---: |
+| F | Before → final | 3.006313 → 2.735937 | 1.412354 → 0.848292 | 6.277125 → 6.158500 | 128.164271 → 126.657229 |
+| I | Before → final | 2.031396 → 1.965104 | 1.259646 → 0.856751 | 4.717541 → 4.759146 | 36.887251 → 36.727854 |
+
+The before/final runs use the same generated pixel assets and resize recipes.
+F CPU improved about 40% in absolute latency and is 3.22× faster than the
+final-run Pillow median. I CPU improved about 32% and is 2.29× faster than
+final-run Pillow. SIMD remains slower than
+Pillow in both modes, and GPU is much slower than SIMD; these changes affect
+the CPU scalar routes only. Treat those misses as separate backend blockers,
+not as evidence that eliminating a redundant carrier clone helps those
+executors. These are concurrency-one latency measurements, not sustained
+throughput. The conversion-audit checkpoint removes three same-layout clone
+sites; it does not convert or reinterpret scalar samples as RGBA channels.
