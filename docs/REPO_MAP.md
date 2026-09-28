@@ -150,11 +150,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- overlay.wgsl
 |   |   |   |       |-- pad.wgsl
 |   |   |   |       |-- paste.wgsl
+|   |   |   |       |-- point_luma_packed.wgsl
 |   |   |   |       |-- point_op.wgsl
 |   |   |   |       |-- posterize.wgsl
 |   |   |   |       |-- put_alpha.wgsl
 |   |   |   |       |-- put_alpha_data.wgsl
 |   |   |   |       |-- put_data.wgsl
+|   |   |   |       |-- put_data_luma_packed.wgsl
 |   |   |   |       |-- put_pixel.wgsl
 |   |   |   |       |-- rank_filter.wgsl
 |   |   |   |       |-- reduce.wgsl

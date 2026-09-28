@@ -2694,6 +2694,44 @@ pub fn op_put_data(
     // PIL: putdata accepts data shorter than the image — only the first
     // data.len() bytes are replaced; remaining pixels stay unchanged.
     let n_copy = data.len().min(expected);
+    if expected != 0 && n_copy == expected {
+        // A complete byte payload replaces every sample. When the source
+        // already has the requested native layout, construct the result from
+        // the payload directly instead of converting/cloning the old frame
+        // and copying the same bytes over it.
+        let dimensions = (w as u32, h as u32);
+        match (mode, img) {
+            (PixelMode::L, DynamicImage::ImageLuma8(_)) => {
+                if let Some(output) =
+                    GrayImage::from_raw(dimensions.0, dimensions.1, data[..expected].to_vec())
+                {
+                    return Ok(DynamicImage::ImageLuma8(output));
+                }
+            }
+            (PixelMode::LA, DynamicImage::ImageLumaA8(_)) => {
+                if let Some(output) =
+                    GrayAlphaImage::from_raw(dimensions.0, dimensions.1, data[..expected].to_vec())
+                {
+                    return Ok(DynamicImage::ImageLumaA8(output));
+                }
+            }
+            (PixelMode::RGB, DynamicImage::ImageRgb8(_)) => {
+                if let Some(output) =
+                    RgbImage::from_raw(dimensions.0, dimensions.1, data[..expected].to_vec())
+                {
+                    return Ok(DynamicImage::ImageRgb8(output));
+                }
+            }
+            (PixelMode::RGBA, DynamicImage::ImageRgba8(_)) => {
+                if let Some(output) =
+                    RgbaImage::from_raw(dimensions.0, dimensions.1, data[..expected].to_vec())
+                {
+                    return Ok(DynamicImage::ImageRgba8(output));
+                }
+            }
+            _ => {}
+        }
+    }
     match mode {
         PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
             let orig = img.to_rgb8();

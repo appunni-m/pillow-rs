@@ -2236,16 +2236,28 @@ pub fn simd_put_data(
         return Err(simd_unsupported("PutData"));
     }
 
-    let mut output = vec![0u8; expected_len];
-    let (mut vector_blocks, mut scalar_tail) = copy_native_bytes(img.as_bytes(), &mut output)
-        .ok_or_else(|| PilError::InternalError("SIMD PutData buffer shape mismatch".into()))?;
     let copy_len = data.len().min(expected_len);
-    if copy_len != 0 {
-        let (blocks, tail) = copy_native_bytes(&data[..copy_len], &mut output[..copy_len])
-            .ok_or_else(|| PilError::InternalError("SIMD PutData prefix shape mismatch".into()))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
-    }
+    let (output, vector_blocks, scalar_tail) = if copy_len == expected_len {
+        // A complete payload replaces the entire image. Copy it once into
+        // the result instead of cloning source samples that are immediately
+        // overwritten, then copying the payload a second time.
+        (data[..copy_len].to_vec(), 0, 0)
+    } else {
+        let mut output = vec![0u8; expected_len];
+        let (mut vector_blocks, mut scalar_tail) = copy_native_bytes(img.as_bytes(), &mut output)
+            .ok_or_else(|| {
+            PilError::InternalError("SIMD PutData buffer shape mismatch".into())
+        })?;
+        if copy_len != 0 {
+            let (blocks, tail) = copy_native_bytes(&data[..copy_len], &mut output[..copy_len])
+                .ok_or_else(|| {
+                    PilError::InternalError("SIMD PutData prefix shape mismatch".into())
+                })?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        }
+        (output, vector_blocks, scalar_tail)
+    };
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);

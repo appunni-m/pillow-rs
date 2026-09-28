@@ -5654,6 +5654,13 @@ impl Image {
             return Ok(true);
         }
         if matches!(mode_name.as_str(), "1" | "L" | "P") {
+            if scale == 1.0 && offset == 0.0 && data.len() == entry_count {
+                // Bytes already contain the exact one-byte samples Pillow
+                // stores for these modes. Queue them directly instead of
+                // widening every byte to PutDataValue and encoding it back.
+                self.putdata(data)?;
+                return Ok(true);
+            }
             let values = data
                 .iter()
                 .copied()

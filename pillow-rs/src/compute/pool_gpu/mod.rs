@@ -4338,23 +4338,23 @@ fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError
         .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
 }
 
-const PACKED_POINT_LUMA_WORKGROUP_SIZE: u64 = 256;
+const PACKED_LUMA_WORKGROUP_SIZE: u64 = 256;
 
-/// Plan a one-dimensional Point dispatch over packed L samples. Each
-/// invocation maps four adjacent bytes in one storage word, so the workgroup
-/// count is based on the compact transfer rather than four-byte RGBA pixels.
-fn plan_packed_point_luma_dispatch(
+/// Plan a one-dimensional dispatch over packed L samples. Each invocation
+/// handles four adjacent bytes in one storage word, so the grid follows the
+/// compact transfer rather than four-byte RGBA pixels.
+fn plan_packed_luma_dispatch(
     width: u32,
     height: u32,
     max_workgroups_per_dimension: u32,
 ) -> Result<(u32, u32), PilError> {
     let pixels = u64::from(width)
         .checked_mul(u64::from(height))
-        .ok_or_else(|| PilError::ValueError("GPU Point image is too large".into()))?;
+        .ok_or_else(|| PilError::ValueError("GPU packed-luma image is too large".into()))?;
     let words = pixels.div_ceil(4);
     if pixels == 0 || words > u64::from(u32::MAX) {
         return Err(PilError::ValueError(
-            "GPU Point dimensions exceed packed shader indexing limits".into(),
+            "GPU packed-luma dimensions exceed shader indexing limits".into(),
         ));
     }
     if max_workgroups_per_dimension == 0 {
@@ -4363,17 +4363,25 @@ fn plan_packed_point_luma_dispatch(
         ));
     }
 
-    let groups = words.div_ceil(PACKED_POINT_LUMA_WORKGROUP_SIZE).max(1);
+    let groups = words.div_ceil(PACKED_LUMA_WORKGROUP_SIZE).max(1);
     if groups > u64::from(max_workgroups_per_dimension) {
         return Err(PilError::ValueError(
-            "GPU Point dispatch exceeds adapter workgroup limits".into(),
+            "GPU packed-luma dispatch exceeds adapter workgroup limits".into(),
         ));
     }
     Ok((
         u32::try_from(groups)
-            .map_err(|_| PilError::ValueError("GPU Point dispatch is too wide".into()))?,
+            .map_err(|_| PilError::ValueError("GPU packed-luma dispatch is too wide".into()))?,
         1,
     ))
+}
+
+fn plan_packed_point_luma_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<(u32, u32), PilError> {
+    plan_packed_luma_dispatch(width, height, max_workgroups_per_dimension)
 }
 
 /// Plan the compact ExtractBand dispatch as a near-square 2D grid. One shader
@@ -4642,6 +4650,25 @@ fn pack_put_data(data: &[u8], mode: PixelMode, capacity: u32) -> Result<Vec<u32>
     Ok(packed)
 }
 
+/// Pack native-L PutData bytes four samples per storage word. This is the
+/// auxiliary layout consumed by the compact L shader on little-endian hosts.
+fn pack_luma8_putdata(data: &[u8], capacity: u32) -> Result<Vec<u32>, PilError> {
+    let word_count = data.len().div_ceil(std::mem::size_of::<u32>());
+    if word_count > capacity as usize {
+        return Err(PilError::ValueError(format!(
+            "GPU buffer capacity {} < packed-luma putdata size {}",
+            capacity, word_count
+        )));
+    }
+    let mut packed = Vec::with_capacity(word_count);
+    for chunk in data.chunks(std::mem::size_of::<u32>()) {
+        let mut bytes = [0u8; std::mem::size_of::<u32>()];
+        bytes[..chunk.len()].copy_from_slice(chunk);
+        packed.push(u32::from_le_bytes(bytes));
+    }
+    Ok(packed)
+}
+
 /// Prepare Color3DLut table entries in the same signed 12.4 representation
 /// used by the CPU interpolation path. The returned i16 values are serialized
 /// as one little-endian u32 word per table component for a read-only shader
@@ -4686,6 +4713,14 @@ fn align_up(value: usize, alignment: usize) -> usize {
 
 fn aligned_bytes(bytes: usize, alignment: usize) -> usize {
     align_up(bytes.max(1), alignment.max(4))
+}
+
+fn putdata_auxiliary_words(data_len: usize, channels: usize, packed_luma: bool) -> usize {
+    if packed_luma {
+        data_len.div_ceil(std::mem::size_of::<u32>())
+    } else {
+        data_len.div_ceil(channels)
+    }
 }
 
 fn select_gpu_chunk_end(
@@ -5744,6 +5779,7 @@ impl GpuInner {
         logical_mode: Option<&str>,
         input_dims: &[(u32, u32)],
         packed_luma_point: bool,
+        packed_luma_putdata: bool,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
         let mut resolved = Vec::with_capacity(ops.len());
         let mut index = 0usize;
@@ -5761,6 +5797,16 @@ impl GpuInner {
             }
 
             let op = &ops[index];
+            if packed_luma_putdata && matches!(op, PipelineOp::PutData { .. }) {
+                let putdata = self.resolve_pipeline(
+                    "__internal_put_data_luma_packed",
+                    "put_data_luma_packed.wgsl",
+                    include_str!("shaders/put_data_luma_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(putdata));
+                index += 1;
+                continue;
+            }
             if packed_luma_point && matches!(op, PipelineOp::Eval { .. }) {
                 let point = self.resolve_pipeline(
                     "__internal_point_luma_packed",
@@ -6522,6 +6568,7 @@ impl GpuInner {
         storage_alignment: usize,
         source_dimensions: (u32, u32),
         mode: u32,
+        packed_luma_putdata: bool,
         logical_mode: Option<&str>,
         f_resize_f64_is_exact: bool,
         f_resize_f64_ordered_is_exact: bool,
@@ -6572,23 +6619,31 @@ impl GpuInner {
         };
 
         if let PipelineOp::PutData { data, mode } = op {
-            let pixels = data.len().div_ceil(mode.channels());
-            if pixels > buffers.capacity as usize {
+            let words = putdata_auxiliary_words(
+                data.len(),
+                mode.channels(),
+                packed_luma_putdata && *mode == PixelMode::L,
+            );
+            if words > buffers.capacity as usize {
                 return Err(PilError::ValueError(format!(
-                    "GPU buffer capacity {} < putdata image size {}",
-                    buffers.capacity, pixels
+                    "GPU buffer capacity {} < putdata auxiliary size {}",
+                    buffers.capacity, words
                 )));
             }
-            total = total
-                .checked_add(aligned_bytes(
-                    pixels
-                        .checked_mul(std::mem::size_of::<u32>())
-                        .ok_or_else(|| {
-                            PilError::ValueError("GPU putdata arena size overflow".into())
-                        })?,
-                    storage_alignment,
-                ))
-                .ok_or_else(|| PilError::ValueError("GPU auxiliary arena size overflow".into()))?;
+            if words > 0 {
+                total = total
+                    .checked_add(aligned_bytes(
+                        words
+                            .checked_mul(std::mem::size_of::<u32>())
+                            .ok_or_else(|| {
+                                PilError::ValueError("GPU putdata arena size overflow".into())
+                            })?,
+                        storage_alignment,
+                    ))
+                    .ok_or_else(|| {
+                        PilError::ValueError("GPU auxiliary arena size overflow".into())
+                    })?;
+            }
         } else {
             if let Some(second) = auxiliary.second.as_ref() {
                 total = total.checked_add(image_bytes(second)?).ok_or_else(|| {
@@ -6907,6 +6962,7 @@ impl GpuInner {
         f_resize_f64_ordered_is_exact: bool,
         packed_luma_colorize: bool,
         packed_luma_point: bool,
+        packed_luma_putdata: bool,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -7086,7 +7142,18 @@ impl GpuInner {
             };
             let source_row_base = resize_source_row_range.map_or(0, |(first, _)| first);
             let mut params = vec![shader_w, shader_h, op_mode, source_row_base];
-            if packed_luma_point && matches!(op, PipelineOp::Eval { .. }) {
+            if packed_luma_putdata && matches!(op, PipelineOp::PutData { .. }) {
+                let pixel_count = CheckedDims::new(cur_w, cur_h, 1)?.total_pixels();
+                params[0] = u32::try_from(pixel_count.div_ceil(4)).map_err(|_| {
+                    PilError::ValueError(
+                        "GPU PutData dimensions exceed packed shader indexing limits".into(),
+                    )
+                })?;
+                params[1] = 1;
+                params[2] = 0;
+                params[3] = u32::try_from(pixel_count)
+                    .map_err(|_| PilError::ValueError("GPU PutData image is too large".into()))?;
+            } else if packed_luma_point && matches!(op, PipelineOp::Eval { .. }) {
                 let pixel_count = u64::from(cur_w)
                     .checked_mul(u64::from(cur_h))
                     .ok_or_else(|| PilError::ValueError("GPU Point image is too large".into()))?;
@@ -7595,7 +7662,11 @@ impl GpuInner {
                     range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
                     Some(range)
                 } else if let PipelineOp::PutData { data, mode } = op {
-                    let second_values = pack_put_data(data, *mode, buffers.capacity)?;
+                    let second_values = if packed_luma_putdata {
+                        pack_luma8_putdata(data, buffers.capacity)?
+                    } else {
+                        pack_put_data(data, *mode, buffers.capacity)?
+                    };
                     if second_values.is_empty() {
                         None
                     } else {
@@ -7867,6 +7938,11 @@ impl GpuInner {
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
+            "__internal_put_data_luma_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "ExtractBand" => plan_extract_band_dispatch(
                 output_dims.0,
                 output_dims.1,
@@ -7928,12 +8004,14 @@ impl GpuInner {
         start_is_a: bool,
         logical_mode: Option<&str>,
         packed_luma_point: bool,
+        packed_luma_putdata: bool,
     ) -> Result<bool, PilError> {
         let resolved = self.resolve_batch_pipelines(
             ops,
             logical_mode,
             &prepared.input_dims,
             packed_luma_point,
+            packed_luma_putdata,
         )?;
         let mut current_is_a = start_is_a;
         for (index, pipeline) in resolved.iter().enumerate() {
@@ -9719,6 +9797,7 @@ impl GpuInner {
         mode: u32,
         packed_luma_colorize: bool,
         packed_luma_point: bool,
+        packed_luma_putdata: bool,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
@@ -9825,6 +9904,7 @@ impl GpuInner {
                     storage_alignment,
                     resource_source_dims[index],
                     op_modes[index],
+                    packed_luma_putdata,
                     logical_mode,
                     f_resize_f64_is_exact,
                     f_resize_f64_ordered_is_exact,
@@ -9906,6 +9986,7 @@ impl GpuInner {
                 f_resize_f64_ordered_is_exact,
                 packed_luma_colorize,
                 packed_luma_point,
+                packed_luma_putdata,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -9927,11 +10008,13 @@ impl GpuInner {
                 current_is_a,
                 logical_mode,
                 packed_luma_point,
+                packed_luma_putdata,
             )?;
 
             let final_dims = prepared.final_dims;
             if chunk_end == ops.len() {
                 let size = if packed_luma_point
+                    || packed_luma_putdata
                     || matches!(ops.last(), Some(PipelineOp::ExtractBand { .. }))
                 {
                     compact_luma8_transfer_bytes(final_dims.0, final_dims.1)?
@@ -15675,6 +15758,20 @@ impl GpuPool {
             && matches!(ops, [PipelineOp::Eval { .. }])
             && img.width() != 0
             && img.height() != 0;
+        // Native L PutData can keep source and replacement bytes compact.
+        // P/1 and mode-converted images retain their separate semantics.
+        let packed_luma_putdata = cfg!(target_endian = "little")
+            && matches!(mode, None | Some("L"))
+            && img.width() != 0
+            && img.height() != 0
+            && matches!(
+                ops,
+                [PipelineOp::PutData {
+                    data,
+                    mode: PixelMode::L,
+                }] if matches!(img, DynamicImage::ImageLuma8(source)
+                    if data.len() <= source.as_raw().len())
+            );
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -16461,6 +16558,17 @@ impl GpuPool {
                 gpu.device.limits().max_compute_workgroups_per_dimension,
             )
             .is_ok();
+        let packed_luma_putdata = packed_luma_putdata
+            && plan_packed_luma_dispatch(
+                img.width(),
+                img.height(),
+                gpu.device.limits().max_compute_workgroups_per_dimension,
+            )
+            .is_ok();
+        let image_pixels = CheckedDims::new(img.width(), img.height(), 1)?.total_pixels();
+        let full_luma_putdata = packed_luma_putdata
+            && matches!(ops, [PipelineOp::PutData { data, mode: PixelMode::L }]
+                if data.len() == image_pixels);
         if gpu_dispatch_dimensions_require_cpu(
             ops,
             img.dimensions(),
@@ -16631,7 +16739,10 @@ impl GpuPool {
                 ));
             };
             buffers.upload_luma16_numeric(&gpu.queue, image)?;
-        } else if packed_luma_colorize || packed_luma_point {
+        } else if full_luma_putdata {
+            // A complete replacement has no observable source pixels. The
+            // packed shader initializes every valid destination sample.
+        } else if packed_luma_colorize || packed_luma_point || packed_luma_putdata {
             let DynamicImage::ImageLuma8(image) = img else {
                 return Err(PilError::InternalError(
                     "packed-luma GPU input requires native L samples".into(),
@@ -16652,6 +16763,7 @@ impl GpuPool {
                 mcode,
                 packed_luma_colorize,
                 packed_luma_point,
+                packed_luma_putdata,
                 mode,
                 contrast_mean,
                 f_resize_constant_bits,
@@ -16731,7 +16843,7 @@ impl GpuPool {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
             gpu.readback_to_luma16_numeric(final_w, final_h, readback_buffer)?
-        } else if native_luma8_extract || packed_luma_point {
+        } else if native_luma8_extract || packed_luma_point || packed_luma_putdata {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else {
             gpu.readback_to_image(final_w, final_h, readback_buffer, native_rgb)?
@@ -16741,20 +16853,24 @@ impl GpuPool {
         // working images. Return successful working sets to the bounded pool;
         // every error path drops its buffers instead of risking reuse of an
         // in-flight or device-invalid resource.
-        resource_telemetry.upload_bytes = if packed_luma_colorize || packed_luma_point {
+        resource_telemetry.upload_bytes = if full_luma_putdata {
+            0
+        } else if packed_luma_colorize || packed_luma_point || packed_luma_putdata {
             compact_luma8_transfer_bytes(w, h)?
         } else {
             CheckedDims::new(w, h, 4)?.total_bytes() as u64
         };
-        resource_telemetry.readback_bytes = if native_luma8_extract || packed_luma_point {
-            compact_luma8_transfer_bytes(final_w, final_h)?
-        } else {
-            CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
-        };
+        resource_telemetry.readback_bytes =
+            if native_luma8_extract || packed_luma_point || packed_luma_putdata {
+                compact_luma8_transfer_bytes(final_w, final_h)?
+            } else {
+                CheckedDims::new(final_w, final_h, 4)?.total_bytes() as u64
+            };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = u64::from(
             !packed_luma_point
+                && !packed_luma_putdata
                 && (native_luma16_convert
                     || native_luma16_paste
                     || !matches!(
@@ -16773,7 +16889,7 @@ impl GpuPool {
             // applying mode preservation again would reallocate it.
             return Ok(result);
         }
-        if native_luma8_extract || packed_luma_point {
+        if native_luma8_extract || packed_luma_point || packed_luma_putdata {
             return Ok(result);
         }
         if let Some(mode) = put_alpha_mode {
@@ -16814,7 +16930,8 @@ mod tests {
         gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients, gpu_shader_work_items,
         gpu_shader_work_requires_cpu, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
-        plan_extract_band_dispatch, plan_packed_point_luma_dispatch, readback_poll_backoff,
+        plan_extract_band_dispatch, plan_packed_point_luma_dispatch, putdata_auxiliary_words,
+        readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -17725,6 +17842,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         Some("RGBA"),
@@ -22115,7 +22233,7 @@ mod tests {
                 .expect("4K luma image fits the packed Point dispatch"),
             (16_384, 1)
         );
-        let max_pixels = 4 * super::PACKED_POINT_LUMA_WORKGROUP_SIZE * 65_535;
+        let max_pixels = 4 * super::PACKED_LUMA_WORKGROUP_SIZE * 65_535;
         assert_eq!(
             plan_packed_point_luma_dispatch(max_pixels as u32, 1, 65_535)
                 .expect("the adapter boundary should be admitted"),
@@ -22124,6 +22242,15 @@ mod tests {
         assert!(plan_packed_point_luma_dispatch(max_pixels as u32 + 1, 1, 65_535).is_err());
         assert!(plan_packed_point_luma_dispatch(1, 1, 0).is_err());
         assert!(plan_packed_point_luma_dispatch(0, 1, 65_535).is_err());
+    }
+
+    #[test]
+    fn putdata_resource_estimate_matches_packed_luma_auxiliary_words() {
+        assert_eq!(putdata_auxiliary_words(1_273, 1, false), 1_273);
+        assert_eq!(putdata_auxiliary_words(1_273, 1, true), 319);
+        assert_eq!(putdata_auxiliary_words(1_257, 1, true), 315);
+        assert_eq!(putdata_auxiliary_words(0, 1, true), 0);
+        assert_eq!(putdata_auxiliary_words(3_819, 3, false), 1_273);
     }
 
     #[test]

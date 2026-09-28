@@ -70,7 +70,6 @@ BENCHMARK_DEFAULT_EXCLUSIONS: dict[str, dict[str, str]] = {
             "pil-image-image.frombytes.standard",
             "pil-image-image.point.standard",
             "pil-image-image.putalpha.standard",
-            "pil-image-image.putdata.standard",
             "pil-image-image.putpalette.standard",
             "pil-image-image.remap-palette.standard",
             "pil-image-image.save.standard",
@@ -144,7 +143,10 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     ),
     "pil-image-image.point.standard": "PIL.Image.Image.point.mode.l",
     "pil-image-image.putalpha.standard": "PIL.Image.Image.putalpha.nuanced.rgb-scalar",
-    "pil-image-image.putdata.standard": "PIL.Image.Image.putdata.nuanced.l-bytes",
+    "pil-image-image.putdata.standard": (
+        "PIL.Image.Image.putdata.nuanced."
+        "performance-material-l-noise-1024x768-bytes"
+    ),
     "pil-image-image.putpalette.standard": "PIL.Image.Image.putpalette.mode.p",
     "pil-image-image.remap-palette.standard": "PIL.Image.Image.remap_palette.mode.p",
     "pil-image-image.save.standard": "PIL.Image.Image.save.format.png",
@@ -40343,6 +40345,7 @@ def build_nuanced_cases(
     cases.extend(chops_affine_rounding_parity_cases(surface_id))
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(native_blend_mode_parity_cases(surface_id))
+    cases.extend(putdata_materialized_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
@@ -40425,6 +40428,182 @@ def build_nuanced_cases(
             }
         )
     return cases
+
+
+def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise full and partial PutData writes on every image backend."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    def inline_asset(asset_id: str, raw: bytes) -> dict[str, Any]:
+        return {
+            "id": asset_id,
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "media_type": "application/octet-stream",
+        }
+
+    def make_case(
+        mode: str,
+        size: tuple[int, int],
+        label: str,
+        seed: int,
+        *,
+        partial: bool = False,
+        packed_integers: bool = False,
+        target_profiles: tuple[str, ...] = BENCHMARK_TARGET_PROFILES,
+    ) -> dict[str, Any]:
+        channels = {"1": 1, "L": 1, "P": 1, "LA": 2, "RGB": 3, "RGBA": 4}[mode]
+        pixel_count = size[0] * size[1]
+        byte_count = pixel_count * channels
+        replacement_pixels = pixel_count - 16 if partial else pixel_count
+        if mode == "1":
+            # Mode-1 frombytes input is row-padded and bit-packed MSB-first;
+            # the putdata replacement below is one byte per logical pixel.
+            row_bytes = (size[0] + 7) // 8
+            source = bytes(
+                (index * 37 + seed * 11 + (index >> 4)) & 0xFF
+                for index in range(row_bytes * size[1])
+            )
+        else:
+            source = bytes(
+                (index * 37 + seed * 11 + (index >> 4)) & 0xFF
+                for index in range(byte_count)
+            )
+        source_id = f"putdata-{label}-source"
+        replacement_id = f"putdata-{label}-replacement"
+        replacement_value: dict[str, Any]
+        assets = [inline_asset(source_id, source)]
+        if channels == 1:
+            replacement = bytes(
+                (index * 73 + seed * 29 + (index >> 3)) & 0xFF
+                for index in range(replacement_pixels)
+            )
+            assets.append(inline_asset(replacement_id, replacement))
+            replacement_value = asset_value(replacement_id)
+        elif packed_integers:
+            # Exact integer lists take the binding's bulk normalization path
+            # and queue PipelineOp::PutData. Pillow stores multiband integer
+            # pixels as little-endian packed ink; LA consumes byte 0 and byte
+            # 3, while RGB/RGBA consume their first three/four bytes.
+            packed_pixels = []
+            for pixel_index in range(replacement_pixels):
+                components = [
+                    (pixel_index * 73 + channel * 41 + seed * 29
+                     + (pixel_index >> 3)) & 0xFF
+                    for channel in range(channels)
+                ]
+                if mode == "LA":
+                    packed_pixels.append(components[0] | (components[1] << 24))
+                else:
+                    packed_pixels.append(
+                        sum(component << (8 * channel)
+                            for channel, component in enumerate(components))
+                    )
+            replacement_value = literal(
+                {"protocol": "list", "items": packed_pixels}
+            )
+        else:
+            # Image.putdata consumes one tuple per multiband pixel. A byte
+            # string is a sequence of scalar entries and is rejected once
+            # its byte length exceeds the image's pixel count.
+            replacement_value = literal(
+                {
+                    "protocol": "list",
+                    "items": [
+                        [
+                            (pixel_index * 73 + channel * 41 + seed * 29
+                             + (pixel_index >> 3)) & 0xFF
+                            for channel in range(channels)
+                        ]
+                        for pixel_index in range(replacement_pixels)
+                    ],
+                }
+            )
+        return {
+            "case_id": f"PIL.Image.Image.putdata.nuanced.{slug(label)}",
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "covers": ["PIL.Image.Image.putdata.performance.standard"],
+            "target_profiles": list(target_profiles),
+            "assets": assets,
+            "steps": [
+                {
+                    "step_id": "setup-image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal(list(size)),
+                        "data": asset_value(source_id),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": "PIL.Image.Image",
+                    "operation": "putdata",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"data": replacement_value},
+                },
+                {
+                    "step_id": "observe-receiver",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("setup-image"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "observe-receiver"],
+        }
+
+    return [
+        make_case(
+            "L",
+            (1024, 768),
+            "performance-material-l-noise-1024x768-bytes",
+            20260941,
+        ),
+        make_case("L", (67, 19), "backend-partial-l-noise-67x19-bytes", 20260942, partial=True),
+        # Keep tuple inputs as CPU binding-semantic checks. They deliberately
+        # use putdata_value_at and do not claim queued backend coverage.
+        make_case(
+            "LA", (67, 19), "semantic-full-la-noise-67x19-tuples", 20260943,
+            target_profiles=("python-cpu",),
+        ),
+        make_case(
+            "RGB", (67, 19), "semantic-full-rgb-noise-67x19-tuples", 20260944,
+            target_profiles=("python-cpu",),
+        ),
+        make_case(
+            "RGBA", (67, 19), "semantic-full-rgba-noise-67x19-tuples", 20260945,
+            target_profiles=("python-cpu",),
+        ),
+        make_case(
+            "LA", (67, 19), "backend-full-la-noise-67x19-packed", 20260946,
+            packed_integers=True,
+        ),
+        make_case(
+            "RGB", (67, 19), "backend-full-rgb-noise-67x19-packed", 20260947,
+            packed_integers=True,
+        ),
+        make_case(
+            "RGB", (67, 19), "backend-partial-rgb-noise-67x19-packed", 20260948,
+            partial=True,
+            packed_integers=True,
+        ),
+        make_case(
+            "RGBA", (67, 19), "backend-full-rgba-noise-67x19-packed", 20260949,
+            packed_integers=True,
+        ),
+        # These exact-length byte payloads cover the bytes shortcut's indexed
+        # one-channel modes. Mode 1's source is row-padded bit data, but its
+        # putdata input remains one byte per pixel.
+        make_case("1", (67, 19), "backend-full-mode1-noise-67x19-bytes", 20260950),
+        make_case("P", (67, 19), "backend-full-p-noise-67x19-bytes", 20260951),
+    ]
 
 
 
@@ -46816,6 +46995,11 @@ def build_inputs(
             isolated_pipeline_workload = bool(
                 pipeline_workload and pipeline_workload.get("step_ids")
             )
+            # Measure in-place PutData mutation and receiver materialization
+            # after image/data setup, so large byte transport is visible.
+            isolated_putdata = (
+                workload_id == "pil-image-image.putdata.standard"
+            )
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
             isolated_getdata = workload_id == "pil-image-image.getdata.standard"
@@ -46948,6 +47132,7 @@ def build_inputs(
                             or materialized_sharpness
                             or materialized_reduce
                             or isolated_pipeline_workload
+                            or isolated_putdata
                             or isolated_getdata
                             or isolated_get_flattened_data
                             or eager_getcolors
@@ -46977,6 +47162,8 @@ def build_inputs(
                             if isolated_pipeline_workload
                             else ["call", "observe-result"]
                             if materialized_getchannel or materialized_reduce
+                            else ["call", "observe-receiver"]
+                            if isolated_putdata
                             else ["setup-sharpness-2", "call", "observe-result"]
                             if materialized_sharpness
                             else ["call"]
@@ -47018,7 +47205,9 @@ def build_inputs(
                     },
                     "context": _workflow_benchmark_context(
                         context_source,
-                        variant=operation["id"],
+                        variant=(
+                            "PutData" if isolated_putdata else operation["id"]
+                        ),
                         surface=surface_id,
                         operation=operation["id"],
                     ),

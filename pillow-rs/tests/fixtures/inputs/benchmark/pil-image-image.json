@@ -2005,11 +2005,14 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.putdata.nuanced.l-bytes"
+        "case_id": "PIL.Image.Image.putdata.nuanced.performance-material-l-noise-1024x768-bytes"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -2023,12 +2026,12 @@
       },
       "context": {
         "size": [
-          16,
-          16
+          1024,
+          768
         ],
         "mode": "L",
         "chain_length": 1,
-        "operation_class": "point",
+        "operation_class": "terminal",
         "cache_state": "warm",
         "build_profile": "release"
       }
