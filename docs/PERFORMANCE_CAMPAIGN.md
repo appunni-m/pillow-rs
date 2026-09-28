@@ -6764,7 +6764,7 @@ kernels otherwise operate on native bytes. Runtime CPU call sites are concentrat
 
 | Caller | Native-format opportunity and semantic boundary |
 | --- | --- |
-| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad admits exact L/LA/RGB/RGBA storage; unsupported layouts retain the RGBA fallback. Expand has native CPU rows and a guarded native GPU input path for L/LA/RGB/RGBA. Keep P/PA tuple-index semantics and CMYK's four active samples. |
+| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad's CPU path now admits exact L/LA/RGB/HSV/RGBA storage; unmatched formats retain the RGBA fallback. Expand has native CPU rows and a guarded native GPU input path for L/LA/RGB/RGBA. Keep P/PA tuple-index semantics and CMYK's four active samples. |
 | [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness now scales byte 0 directly and preserves byte 1 on CPU; its one-op GPU path transfers native LA bytes. Sharpness still widens and repeats luma work before restoring alpha. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
 | [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Keep mixed-mode paste/composite conversions where blending semantics require them; RGB→RGBA and explicit alpha composition change output semantics. |
 | [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I/F images use four-byte scalar samples. Their `to_rgba8()` is a same-size copy, not a color conversion; operate on the original typed/raw sample layout without treating scalar bytes as channels. |
@@ -6828,7 +6828,11 @@ nearest resize can materialize a full RGBA copy while sampling output pixels.
 It is reachable only for typed `DynamicImage` variants that current public
 constructors and decoder lanes do not produce, so it lacks a public parity and
 benchmark route. Unmasked, same-mode RGB Paste is now checkpointed with a
-native CPU row-copy route. Pad remains the next reachable conversion target.
+native CPU row-copy route. Pad was the next reachable target and now has native
+CPU L/LA/RGB/HSV/RGBA paths plus a direct SIMD full-width vertical-pad route.
+Its remaining gaps are SIMD versus the 5× goal and GPU's four-byte transport.
+Expand's native CPU/SIMD/GPU paths currently cover L/LA/RGB/RGBA; HSV is the
+next operation-specific format candidate.
 
 ### Explicit RGBA callsite ledger — 2026-09-28
 
@@ -6849,7 +6853,7 @@ result-normalization paths; its image kernels otherwise use native bytes.
 | `compute/pool_cpu/ops/enhance.rs` | 80, 118, 263, 312 | LA Brightness's 118 path is now bypassed by its native two-byte CPU branch; CMYK and I/F byte layouts are not RGBA channel semantics. |
 | `compute/pool_cpu/ops/filter.rs` | 363, 522, 1810 | I/F are four-byte scalar samples; replace cloning with typed/raw access rather than treating them as color bands. |
 | `compute/pool_cpu/ops/geometry.rs` | 303, 534, 702, 2166, 2249 | Same I/F warning; follow the original typed sample and rounding contract. |
-| `compute/pool_cpu/ops/imageops.rs` | 1274, 1564 | Pad still widens its generic layouts. Expand's remaining call is now a guarded fallback for layouts outside the native byte fast path. |
+| `compute/pool_cpu/ops/imageops.rs` | 1281, 1571 | Pad's native CPU path covers L/LA/RGB/HSV/RGBA; its generic layouts still widen. Expand's call is a guarded fallback outside its L/LA/RGB/RGBA native byte path. |
 | `compute/pool_gpu/mod.rs` | 3748, 3769, 4187, 7766, 7786, 10394, 10571, 10698, 10710, 10733, 19094 | Generic GPU upload/auxiliary packing and readback use four-byte shader storage; 10394 is a comment and 19094 is a test. One-op LA Brightness now bypasses generic widening and consumes native two-byte input/output. Preserve typed/non-RGBA contracts on all other paths. |
 | `compute/pool_simd/mod.rs` | 143, 158 | P/PA output normalization; preserve palette index and alpha directly in L/LA result storage. |
 | `draw/mod.rs` | 1073, 1207, 1332, 1384, 2057, 2252, 2362 | RGB drawing and bitmap fallback paths may widen; RGBA composition and canonical four-byte modes keep their semantic contract. |
@@ -6913,11 +6917,12 @@ everything else.
 | Rank | Conversion family | First native implementation | Semantic boundary |
 | --- | --- | --- | --- |
 | 1 | CPU Paste | For exact matching byte layouts with no mask, clone the native destination and copy clipped source rows at that layout's bytes per pixel. | Require logical mode and concrete storage to agree. Masked Paste blends only according to Pillow's selected L or alpha mask band; mixed-mode RGB inputs are converted before queuing and stay on the fallback. |
-| 2 | CPU Pad | Construct output in the source's native mode and copy resized rows into the centered destination. | LA copies both luma and alpha; RGBA alpha is copied, not composited. Keep palette/index and CMYK handling distinct. |
-| 3 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
-| 4 | LA brightness and related enhancement | Apply luma math to byte 0 and retain byte 1; for filters, avoid three copies of luma and restore alpha from native storage only when Pillow requires it. | Sharpness already has a four-attempt checkpoint; do not repeat its rejected paths without a different cost hypothesis. CMYK's fourth component is K. |
-| 5 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
-| 6 | Quantization and typed copies | Let FASTOCTREE consume RGB samples without synthetic alpha only if palette/index output is byte-identical; borrow I/F scalar-word storage instead of cloning it. | These are not blanket color conversions. Preserve alpha-sensitive palette choice and exact typed rounding. |
+| 2 | CPU/SIMD Pad | Keep exact native L/LA/RGB/HSV/RGBA storage, borrow the identity-contain source, repeat a fill row, and copy full-width source spans contiguously. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1. SIMD is 3.48× Pillow and GPU still uses four-byte transport on HSV. |
+| 3 | CPU/SIMD Expand | Preserve the existing native row path and evaluate HSV/YCbCr/CMYK one mode at a time using mode-correct fill bytes. | P/PA remain index-specific. CMYK's fourth byte is K; don't enable modes by channel count alone. |
+| 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
+| 5 | LA brightness and related enhancement | Apply luma math to byte 0 and retain byte 1; for filters, avoid three copies of luma and restore alpha from native storage only when Pillow requires it. | Sharpness already has a four-attempt checkpoint; do not repeat its rejected paths without a different cost hypothesis. CMYK's fourth component is K. |
+| 6 | GPU input/output staging | Add per-operation native packed layouts when the shader can consume them; measure upload, output, readback, and synchronization separately. | Generic packed RGBA remains shared by many operations. Native RGB readback must handle three-byte pixels spanning 32-bit words; a smaller upload alone is not an end-to-end result. |
+| 7 | Quantization and typed copies | Let FASTOCTREE consume RGB samples without synthetic alpha only if palette/index output is byte-identical; borrow I/F scalar-word storage instead of cloning it. | These are not blanket color conversions. Preserve alpha-sensitive palette choice and exact typed rounding. |
 
 Treat a four-byte physical buffer as its real format: CMYK's fourth byte is K,
 RGBX's is padding, RGBa is premultiplied, LA alpha is byte 1, and I/F are scalar
@@ -7030,17 +7035,19 @@ The earlier RGB-only checkpoint remains in the campaign history above. This
 checkpoint covers unmasked same-mode CPU copies; masked paste, GPU native input
 packing, and the original throughput goal remain open.
 
-### Pad: native CPU L/LA/RGB/RGBA — 2026-09-28
+### Pad: native CPU L/LA/RGB/HSV/RGBA — 2026-09-28
 
 `op_pad` previously resized to contain, cloned the resized image into RGBA,
 filled a four-byte canvas, copied source rows, reconstructed RGBA storage, and
-then narrowed back to the requested mode. The native path admits only matching
-logical and physical L, LA, RGB, or RGBA layouts. It borrows the original image
-when contain dimensions are unchanged, fills an output in the requested byte
-pattern, then copies either the entire vertical source span contiguously or the
-clipped horizontal rows. P/PA keep their existing index paths; CMYK, RGBX,
-RGBa, I, F, and other layouts retain the general route. LA output stores fill
-as `[fill_luma, fill_alpha]`, while source LA alpha stays at byte 1.
+then narrowed back to the requested mode. The CPU native path admits matching
+logical and physical L, LA, RGB, HSV, or RGBA layouts. It borrows the original
+image when contain dimensions are unchanged, fills an output in the requested
+native byte pattern, then copies either the entire vertical source span
+contiguously or the clipped horizontal rows. HSV uses the same three-byte
+physical layout as RGB but copies and fills raw HSV samples. P/PA keep their
+existing index paths; CMYK, RGBX, RGBa, I, F, and other layouts retain the
+general route. LA output stores fill as `[fill_luma, fill_alpha]`, while source
+LA alpha stays at byte 1.
 
 The benchmark cases use deterministic noisy 1024 × 768 input and pad to
 1024 × 1024, which isolates the canvas-and-copy phase from resampling. Setup
@@ -7056,13 +7063,12 @@ iterations × 5 samples, concurrency one, and a parity gate. Baseline run
 | RGB | 1.381584 | 0.246396 | 1.133417 | 5.61× | 4.60× faster |
 | RGBA | 1.129125 | 0.330646 | 0.991271 | 3.41× | 3.00× faster |
 
-The final benchmark gate passed 12/12 comparisons across CPU, SIMD, and GPU;
-each backend executed 100/100 samples per mode without fallback. The focused
-CPU strict lane passed 13/13, covering all four modes, fill projection,
-fractional centering, and bilinear contain output. SIMD and GPU code were not
-changed, so their timings are observations only; GPU remains slower than SIMD
-on these cases. Input generation/contract validation, `make fmt`, focused Rust
-test, `make clippy`, and docs lint passed. No coverage collection ran.
+The earlier four-mode benchmark gate passed 12/12 comparisons across CPU,
+SIMD, and GPU, with 100 samples per subject and no fallback. After the shared
+vertical-pad path and HSV case were added, strict parity over all five material
+modes plus the named-color HSV case passed 6/6 on each of CPU, SIMD, and GPU.
+The HSV benchmark gate passed 3/3 before and after optimization, with each
+backend executing all 100 samples. No coverage collection ran.
 
 The useful tuning result was to avoid a per-pixel fill loop and per-row
 parallel copies for the common vertical pad: repeated fill-row initialization
@@ -7071,6 +7077,31 @@ Borrowing the identity-contain source also avoids an otherwise redundant full
 source clone. Keep the row-wise path for horizontal pads and preserve the
 mode-and-storage gate so CMYK's K byte and scalar I/F words never become color
 channels.
+
+The HSV follow-up added a 1024 × 768 native-three-byte noise input, padded to
+1024 × 1024 with a distinct HSV fill tuple. Baseline run
+`migration-benchmark-a25da0c8059d44fd97ca1fdee3b18f83` and final run
+`migration-benchmark-dc00396a3f204ba58165dd5446ce4a00` used the same 100-sample
+`pad` plus `tobytes` boundary. The baseline exposed two separate costs: CPU's
+RGBA round trip, and SIMD's per-lane fill construction plus a redundant source
+clone. The SIMD path now checks the identity-contain/full-width case before
+materializing a resized image, repeats one native fill row, and copies source
+bytes directly into their contiguous destination span.
+
+| Backend | Before ms | Final ms | Speedup vs before | Final vs Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| Pillow | 1.236042 | 1.128271 | — | reference |
+| CPU | 1.271271 | 0.253833 | 5.01× | 4.45× faster |
+| SIMD | 2.232562 | 0.324438 | 6.88× | 3.48× faster |
+| GPU | 1.718271 | 1.701646 | 1.01× | 1.51× slower |
+
+All three backends reported their requested backend for all 100 samples, and
+the correctness gate passed 3/3 before and after the change. Strict parity for
+the existing named-color HSV case also passed 1/1 on CPU, SIMD, and GPU. CPU
+now beats Pillow, but SIMD is still short of the 5× target. GPU still expands
+HSV into its four-byte transport and reads back 4 MiB for a 3 MiB output; it
+also records three dispatches. A native three-byte GPU Pad result path remains
+the blocker to matching SIMD latency and improving throughput.
 
 ### ImageDraw.text: native RGB glyph compositing — 2026-09-28
 
