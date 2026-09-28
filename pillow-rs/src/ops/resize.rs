@@ -37,6 +37,37 @@ fn parse_resample_name(name: &str) -> Result<ResampleFilter, PilError> {
     }
 }
 
+/// Check Pillow's cumulative boxed-nearest coordinates for an identity axis.
+fn nearest_box_axis_maps_identity(
+    source_size: u32,
+    output_size: u32,
+    box_start: f64,
+    box_end: f64,
+) -> bool {
+    if source_size == 0
+        || source_size != output_size
+        || !box_start.is_finite()
+        || !box_end.is_finite()
+    {
+        return false;
+    }
+    let box_start = f64::from(box_start as f32);
+    let box_end = f64::from(box_end as f32);
+    let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(output_size);
+    if !scale.is_finite() {
+        return false;
+    }
+    let last = i64::from(source_size - 1);
+    let mut coordinate = box_start + scale * 0.5;
+    for expected in 0..output_size {
+        if (coordinate.floor() as i64).clamp(0, last) as u32 != expected {
+            return false;
+        }
+        coordinate += scale;
+    }
+    true
+}
+
 /// Parses a public Pillow resampling value.
 pub fn parse_resample_input(input: Option<ResampleInput>) -> Result<ResampleFilter, PilError> {
     match input {
@@ -135,6 +166,21 @@ impl Image {
         let mode = self.mode()?;
         if matches!(mode.as_str(), "1" | "P") {
             filter = ResampleFilter::Nearest;
+        }
+        if mode == "F"
+            && matches!(filter, ResampleFilter::Nearest)
+            && (w, h) == (source_w, source_h)
+        {
+            // Validate before the no-op check to keep Pillow's box errors.
+            // A fractional box can still map every nearest coordinate to the
+            // same sample; return a logically independent copy that shares
+            // immutable storage instead of queuing a full pixel gather.
+            let bounds = validate_resize_box(bounds, (source_w, source_h))?;
+            if nearest_box_axis_maps_identity(source_w, w, bounds.0, bounds.2)
+                && nearest_box_axis_maps_identity(source_h, h, bounds.1, bounds.3)
+            {
+                return Ok(self.copy());
+            }
         }
         let mut source = self.clone();
         // Pillow's alpha recursion omits reducing_gap after premultiplying.

@@ -1452,8 +1452,10 @@ pub fn execute_resize_boxed(
                 image, width, height, bounds.0, bounds.1, bounds.2, bounds.3, filter,
             )
         } else {
-            // Nearest copies complete stored samples, including F's bits.
-            let mode = if matches!(filter, ResampleFilter::Nearest) {
+            // Nearest copies complete stored samples, including F's scalar
+            // words. Keep F's logical mode so the typed F path can copy those
+            // words directly; other modes use the generic raw-sample path.
+            let mode = if matches!(filter, ResampleFilter::Nearest) && mode != Some("F") {
                 None
             } else {
                 mode

@@ -18884,6 +18884,39 @@ fn boxed_nearest_indices(
     Some(indices)
 }
 
+/// Return whether boxed nearest coordinates select each same-position sample.
+/// The recurrence mirrors Pillow's affine scaler; checking one axis is linear
+/// in its extent and avoids constructing a per-output-pixel gather map.
+fn boxed_nearest_axis_maps_identity(
+    source_size: u32,
+    output_size: u32,
+    box_start: f64,
+    box_end: f64,
+) -> bool {
+    if source_size == 0
+        || source_size != output_size
+        || !box_start.is_finite()
+        || !box_end.is_finite()
+    {
+        return false;
+    }
+    let box_start = box_start as f32 as f64;
+    let box_end = box_end as f32 as f64;
+    let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(output_size);
+    if !scale.is_finite() {
+        return false;
+    }
+    let last = f64::from(source_size - 1);
+    let mut coordinate = box_start + scale * 0.5;
+    for expected in 0..output_size as usize {
+        if coordinate.floor().clamp(0.0, last) as usize != expected {
+            return false;
+        }
+        coordinate += scale;
+    }
+    true
+}
+
 /// Execute boxed resampling for an F-mode image. The source and intermediate
 /// values are f32 samples, not four independent bytes. Coordinate/index
 /// construction and sample accumulation use SIMD lanes; scalar work is
@@ -21783,6 +21816,17 @@ fn simd_resize_boxed(
         let result =
             native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("Resize"))?;
         return Ok(preserve_mode(img, result));
+    }
+
+    if mode == Some("F")
+        && matches!(effective_filter, ResampleFilter::Nearest)
+        && img.width() == output_width
+        && img.height() == output_height
+        && boxed_nearest_axis_maps_identity(img.width(), output_width, box_left, box_right)
+        && boxed_nearest_axis_maps_identity(img.height(), output_height, box_top, box_bottom)
+    {
+        crate::compute::record_pipeline_operation_path("native-f-nearest-identity");
+        return Ok(img.clone());
     }
 
     if img.width() == 0 || img.height() == 0 {

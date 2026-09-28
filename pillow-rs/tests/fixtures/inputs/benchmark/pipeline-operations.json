@@ -12474,6 +12474,62 @@
       }
     },
     {
+      "workload_id": "pipeline-chain.resizeboxed.f-boxed-nearest-noise-512x512",
+      "covers": [
+        "PIL.Image.Image.resize.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.resize.nuanced.f-boxed-nearest-noise-512x512"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          512,
+          512
+        ],
+        "mode": "F",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.resize.matrix-32x24",
       "covers": [
         "PIL.Image.Image.resize.performance.standard"
