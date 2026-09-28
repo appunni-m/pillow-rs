@@ -3090,7 +3090,7 @@
         ],
         "mode": "RGB",
         "chain_length": 1,
-        "operation_class": "point",
+        "operation_class": "geometry",
         "cache_state": "warm",
         "build_profile": "release"
       }
@@ -14786,7 +14786,7 @@
         ],
         "mode": "RGB",
         "chain_length": 1,
-        "operation_class": "point",
+        "operation_class": "geometry",
         "cache_state": "warm",
         "build_profile": "release"
       }

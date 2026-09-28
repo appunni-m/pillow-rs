@@ -6682,6 +6682,70 @@ sustained throughput. All benchmark correctness gates passed. The isolated
 source. The compact resource estimate unit test and strict execution receipts
 are from the same source snapshot. Attempt 4 is checkpointed after four bounded
 optimization attempts. `putdata` remains incomplete: later work must target
-SIMD lookup/copy behavior and remove GPU per-call device round-trip cost. The
-next first-pass candidate remains `PIL.Image.Image.rotate`; materialized
-all-backend parity and a focused baseline are required before optimizing it.
+SIMD lookup/copy behavior and remove GPU per-call device round-trip cost.
+## PIL.ImageOps.mirror checkpoint — 2026-09-28
+
+The measured workload is
+`pil-imageops.mirror.materialized-rgb-noise-1024x768`, generated from
+`PIL.ImageOps.mirror.nuanced.performance-material-rgb-noise-1024x768`. It uses
+seeded varied RGB bytes, mirrors once, then calls `tobytes`; input construction
+is outside the timed boundary. The standard policy is warm release, five
+warmups, 20 iterations × five samples (100 observations per subject), and
+concurrency one. The focused cohort also covers default behavior, L/LA/RGBA,
+odd-width L/LA/RGB/RGBA, and the materialized pipeline smoke case.
+
+The final benchmark is `build/migration-parity/mirror-final-benchmark.json`,
+run `migration-benchmark-71fae23e8b124d729a42668b8947d3e6`; its exact-output
+gate is `mirror-final-benchmark-parity.json`, evidence
+`migration-parity-benchmark-gate-e37098511c924be09b2071e35d7e3cce`. The exact
+command uses `MIGRATION_BENCHMARK_PROFILE=standard` and
+`MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.mirror.materialized-rgb-noise-1024x768'`
+with `make migration-parity-benchmark`. The receipt records 100/100 actual
+CPU, SIMD, and GPU executions with no fallback; GPU completed one dispatch per
+sample. Strict final parity outputs are
+`mirror-final-{cpu,simd,gpu}.json`, each 11/11. All receipts are from the dirty
+worktree at base revision `85c3acb6d5d67d0f4c1ed9a5210d35c11bc1fd25`; their
+manifest and parity input hashes match the generated case. Treat the figures
+as evidence for this local source snapshot, not a clean committed revision.
+
+| Subject | Median latency | Reciprocal latency rate | Result |
+| --- | ---: | ---: | --- |
+| Pillow | 0.873 ms | 1,146 ops/s | reference |
+| CPU | 0.227 ms | 4,398 ops/s | 3.84× faster than Pillow |
+| SIMD | 0.230 ms | 4,352 ops/s | 3.80× faster; below 5× goal |
+| GPU | 0.955 ms | 1,047 ops/s | 4.16× slower than SIMD |
+
+These rates are reciprocals of concurrency-one latency, not sustained request
+throughput. GPU backend time still includes synchronous submission, completion,
+and materialized readback; the shader's device time is not isolated.
+
+Four bounded implementations were tried. The first raw-row version called
+`copy_from_slice` once per small pixel and regressed CPU latency to 2.391 ms.
+Its diagnostic sample showed hundreds of `_platform_memmove`/`memcpy` frames:
+removing generic pixel access does not help if it replaces it with one tiny
+copy call per pixel. The retained CPU path specializes 1/2/3/4-channel rows
+and writes each channel directly, after `CheckedDims` validates the allocation.
+This cut the matched 1024 × 768 CPU median from 1.314 ms to 0.213 ms. Typed,
+empty, unsupported, or invalid layouts keep the original `fliph` path; whole
+pixel groups preserve LA alpha and RGB/RGBA channel order.
+
+The second SIMD attempt parallelized independent rows at a 256 KiB threshold.
+It regressed SIMD median latency from 0.201 ms to 0.362 ms, so the parallel
+branch was removed. For this light row kernel, scheduler overhead outweighed
+the work saved; the next SIMD investigation should reduce the RGB shuffle or
+copy cost before adding workers.
+
+The fourth attempt admits only a single RGB8 Mirror in `None`/`RGB` mode on
+little-endian targets and reuses the packed RGB transpose shader's
+`FlipLeftRight` mapping. This avoids RGB↔RGBA expansion and reduces upload and
+readback from 3,145,728 bytes each to 2,359,296 bytes each; the final receipt
+reports zero full-frame copies, zero mode conversions, and one dispatch. GPU
+median improved from 1.501 ms on the same workload before this path to 0.955
+ms, but remains over four times slower than SIMD. Resident device data or a
+batched host-visible API is the next GPU-sized opportunity; the remaining
+round-trip floor cannot be solved by shader instruction tuning alone.
+
+Mirror is checkpointed incomplete after four attempts. CPU meets its latency
+goal on this workload; SIMD misses the 5× target, and GPU misses the SIMD
+latency and throughput goals. The ranked matrix must retain those blockers and
+revisit Mirror after other operations receive their first optimization pass.

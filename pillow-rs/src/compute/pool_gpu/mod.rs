@@ -16678,6 +16678,31 @@ impl GpuPool {
 
         #[cfg(target_endian = "little")]
         if matches!(mode, None | Some("RGB"))
+            && matches!(ops, [PipelineOp::Mirror])
+            && let DynamicImage::ImageRgb8(rgb) = img
+            && let Some(layout) = packed_rgb_transpose_layout(
+                rgb.width(),
+                rgb.height(),
+                limits.max_compute_workgroups_per_dimension,
+            )
+        {
+            // The packed RGB transpose shader's FlipLeftRight method has the
+            // same pixel mapping as Mirror. Reuse its native three-byte input
+            // and output to avoid expanding RGB to RGBA around this operation.
+            let mirror_as_transpose = PipelineOp::Transpose {
+                method: TransposeMethod::FlipLeftRight,
+            };
+            let words = u32::try_from(layout.transfer_bytes / 4)
+                .map_err(|_| PilError::ValueError("GPU packed RGB mirror is too large".into()))?;
+            let mut buffers = gpu.acquire_buffers(words)?;
+            let result =
+                gpu.execute_packed_rgb_transpose(&mirror_as_transpose, rgb, &layout, &mut buffers)?;
+            gpu.recycle_buffers(buffers);
+            return Ok(result);
+        }
+
+        #[cfg(target_endian = "little")]
+        if matches!(mode, None | Some("RGB"))
             && let ([op @ PipelineOp::Transpose { .. }], DynamicImage::ImageRgb8(rgb)) = (ops, img)
             && let Some(layout) = packed_rgb_transpose_layout(
                 rgb.width(),

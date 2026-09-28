@@ -29654,6 +29654,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20261008,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "posterize",
             "requirement_suffix": "parameter.bits",
             "name": "materialized-rgb",
@@ -43564,6 +43576,8 @@ def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
 def _pipeline_operation_class(variant: str, surface: str, operation: str) -> str:
     """Classify a benchmark workload for operation-class performance gates."""
 
+    if surface == "PIL.ImageOps" and operation == "mirror":
+        return "geometry"
     if surface == "PIL.Image.Image" and operation in {"crop", "reduce"}:
         return "geometry"
     if surface == "PIL.ImageEnhance.Sharpness":
@@ -47214,6 +47228,35 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+            if workload_id == "pil-imageops.mirror.standard":
+                mirror_case_id = (
+                    "PIL.ImageOps.mirror.nuanced."
+                    "performance-material-rgb-noise-1024x768"
+                )
+                mirror_case = all_cases_by_id[mirror_case_id]
+                mirror_workload = copy.deepcopy(workloads[-1])
+                mirror_workload["workload_id"] = (
+                    "pil-imageops.mirror.materialized-rgb-noise-1024x768"
+                )
+                mirror_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": mirror_case_id,
+                }
+                mirror_workload["measurement"]["boundary"] = "observed_steps"
+                mirror_workload["measurement"]["step_ids"] = [
+                    "call",
+                    "observe-result",
+                ]
+                mirror_workload["context"] = _workflow_benchmark_context(
+                    mirror_case,
+                    variant="materialized-rgb-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(mirror_workload)
+                members.append(
+                    {"workload_id": mirror_workload["workload_id"], "weight": 1}
+                )
             if materialized_sharpness:
                 constructor_step = next(
                     step["step_id"]
