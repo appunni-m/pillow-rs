@@ -22945,26 +22945,47 @@ fn native_expand_bytes(
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
+    let border_usize = border as usize;
+    let border_bytes = border_usize
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("SIMD expand border stride overflow".into()))?;
+    let source_end_y = border_usize
+        .checked_add(source_height)
+        .ok_or_else(|| PilError::ValueError("SIMD expand source rows overflow".into()))?;
+
+    // Fill only the actual border. Filling the full destination and then
+    // copying the source over its center writes every source byte twice.
     for y in 0..output_height_usize {
         let output_start = y * output_stride;
-        let (blocks, tail) = native_fill_row(
-            &mut output[output_start..output_start + output_stride],
-            fill,
-            channels,
-        )
-        .ok_or_else(|| PilError::InternalError("SIMD expand fill shape mismatch".into()))?;
+        let row = &mut output[output_start..output_start + output_stride];
+        if y < border_usize || y >= source_end_y {
+            let (blocks, tail) = native_fill_row(row, fill, channels)
+                .ok_or_else(|| PilError::InternalError("SIMD expand fill shape mismatch".into()))?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+            continue;
+        }
+
+        let (blocks, tail) = native_fill_row(&mut row[..border_bytes], fill, channels)
+            .ok_or_else(|| PilError::InternalError("SIMD expand fill shape mismatch".into()))?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
-    }
-    let border_usize = border as usize;
-    for y in 0..source_height {
-        let source_start = y * source_stride;
-        let output_start = (y + border_usize) * output_stride + border_usize * channels;
+
+        let source_y = y - border_usize;
+        let source_start = source_y * source_stride;
+        let source_end = source_start + source_stride;
+        let copy_start = border_bytes;
+        let copy_end = copy_start + source_stride;
         let (blocks, tail) = copy_native_bytes(
-            &source[source_start..source_start + source_stride],
-            &mut output[output_start..output_start + source_stride],
+            &source[source_start..source_end],
+            &mut row[copy_start..copy_end],
         )
         .ok_or_else(|| PilError::InternalError("SIMD expand copy shape mismatch".into()))?;
+        vector_blocks = vector_blocks.saturating_add(blocks);
+        scalar_tail = scalar_tail.saturating_add(tail);
+
+        let (blocks, tail) = native_fill_row(&mut row[copy_end..], fill, channels)
+            .ok_or_else(|| PilError::InternalError("SIMD expand fill shape mismatch".into()))?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }

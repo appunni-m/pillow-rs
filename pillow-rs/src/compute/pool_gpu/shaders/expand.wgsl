@@ -12,7 +12,7 @@ struct Params {
     width: u32,    // source width (from header = cur_w)
     height: u32,   // source height (from header = cur_h)
     mode: u32,     // 0=L, 1=LA, 2=RGB, 3=RGBA
-    _pad: u32,
+    native_input: u32,
     border: u32,   // border width in pixels
     fill: u32,     // packed fill color (0xAABBGGRR)
 }
@@ -26,6 +26,12 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 5u 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> params: Params;
+
+fn read_native_byte(pixel_index: u32, channel: u32, channels: u32) -> u32 {
+    let byte_index = pixel_index * channels + channel;
+    let word = input[byte_index / 4u];
+    return (word >> ((byte_index % 4u) * 8u)) & 0xffu;
+}
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -61,12 +67,32 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // Inner pixel: copy from source
         let src_x = gid.x - b;
         let src_y = gid.y - b;
-        let pixel = input[src_y * params.width + src_x];
-
-        let r = pixel & 0xffu;
-        let g = (pixel >> 8u) & 0xffu;
-        let b2 = (pixel >> 16u) & 0xffu;
-        let a = (pixel >> 24u) & 0xffu;
+        let pixel_index = src_y * params.width + src_x;
+        var r = 0u;
+        var g = 0u;
+        var b2 = 0u;
+        var a = 255u;
+        if params.native_input != 0u {
+            let channels = params.mode + 1u;
+            r = read_native_byte(pixel_index, 0u, channels);
+            if params.mode == 1u {
+                // LA's native alpha is byte one; the packed shader contract
+                // stores it in the RGBA alpha byte.
+                a = read_native_byte(pixel_index, 1u, channels);
+            } else if params.mode >= 2u {
+                g = read_native_byte(pixel_index, 1u, channels);
+                b2 = read_native_byte(pixel_index, 2u, channels);
+                if params.mode == 3u {
+                    a = read_native_byte(pixel_index, 3u, channels);
+                }
+            }
+        } else {
+            let pixel = input[pixel_index];
+            r = pixel & 0xffu;
+            g = (pixel >> 8u) & 0xffu;
+            b2 = (pixel >> 16u) & 0xffu;
+            a = (pixel >> 24u) & 0xffu;
+        }
 
         let out_r = r;
         let out_g = select(0u, g, mode_has_g(params.mode));
