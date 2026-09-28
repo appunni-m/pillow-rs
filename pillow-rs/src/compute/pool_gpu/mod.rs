@@ -9073,9 +9073,9 @@ impl GpuInner {
         Ok(result)
     }
 
-    /// Copy or clip one exact-layout unmasked L/LA Paste in native bytes. The
-    /// shader packs each output word directly, avoiding RGBA staging and mode
-    /// restoration for both one-byte L and two-byte LA samples.
+    /// Copy or clip one exact-layout unmasked L/LA/RGB Paste in native bytes.
+    /// The shader packs each output word directly, avoiding RGBA staging and
+    /// mode restoration; RGB bytes that cross word boundaries share one writer.
     #[cfg(target_endian = "little")]
     fn execute_native_byte_paste(
         &self,
@@ -9096,6 +9096,7 @@ impl GpuInner {
                     DynamicImage::ImageLumaA8(_),
                     DynamicImage::ImageLumaA8(_)
                 )
+                | (3, DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_))
         ) {
             return Err(PilError::InternalError(
                 "GPU native Paste storage variant mismatch".into(),
@@ -12383,7 +12384,7 @@ struct NativeBytePasteDispatch {
     workgroups: u32,
 }
 
-/// Plan compact native L/LA Paste transport without allocating either image.
+/// Plan compact native L/LA/RGB Paste transport without allocating either image.
 /// The shader writes one aligned output word per invocation, so its flat
 /// dispatch is bounded by the adapter's workgroup and storage limits.
 fn plan_gpu_native_byte_paste(
@@ -12396,7 +12397,7 @@ fn plan_gpu_native_byte_paste(
     max_storage_binding_bytes: u32,
     max_buffer_bytes: u64,
 ) -> Option<NativeBytePasteDispatch> {
-    if !matches!(bytes_per_pixel, 1 | 2) {
+    if !matches!(bytes_per_pixel, 1 | 2 | 3) {
         return None;
     }
     let destination =
@@ -12445,8 +12446,9 @@ fn plan_gpu_native_byte_paste(
     })
 }
 
-/// Admit only exact unmasked L-to-L or LA-to-LA Paste layouts. Palette indices,
-/// premultiplied LA, and other storage variants keep their semantic path.
+/// Admit only exact unmasked L-to-L, LA-to-LA, or RGB-to-RGB Paste layouts.
+/// Palette indices, premultiplied LA, and other storage variants keep their
+/// semantic path.
 fn gpu_native_byte_paste_layout(
     op: &PipelineOp,
     destination: &DynamicImage,
@@ -12469,6 +12471,7 @@ fn gpu_native_byte_paste_layout(
     let bytes_per_pixel = match (mode, source_mode.as_str(), destination, source) {
         (Some("L"), "L", DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_)) => 1,
         (Some("LA"), "LA", DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_)) => 2,
+        (Some("RGB"), "RGB", DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_)) => 3,
         _ => return None,
     };
     if *w <= 0
@@ -17845,7 +17848,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
-    fn native_byte_paste_planner_checks_l_la_and_adapter_boundaries() {
+    fn native_byte_paste_planner_checks_l_la_rgb_and_adapter_boundaries() {
         let max_workgroups = 65_535;
         let l_max_pixels = u64::from(max_workgroups) * 64 * 4;
         let l_max_width = u32::try_from(l_max_pixels).expect("L boundary fits image dimensions");
@@ -17907,10 +17910,43 @@ mod tests {
             .is_none()
         );
 
+        let rgb_max_transfer = u64::from(max_workgroups) * 64 * 4;
+        let rgb_max_width =
+            u32::try_from(rgb_max_transfer / 3).expect("RGB boundary fits image dimensions");
+        assert_eq!(u64::from(rgb_max_width) * 3, rgb_max_transfer);
+        let rgb_at_limit = plan_gpu_native_byte_paste(
+            rgb_max_width,
+            1,
+            1,
+            1,
+            3,
+            max_workgroups,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("last RGB output word fits the adapter limit");
+        assert_eq!(rgb_at_limit.word_count, max_workgroups * 64);
+        assert_eq!(rgb_at_limit.workgroups, max_workgroups);
+        assert_eq!(rgb_at_limit.destination_bytes as u64, rgb_max_transfer);
+        assert_eq!(rgb_at_limit.destination_transfer_bytes, rgb_max_transfer);
+        assert!(
+            plan_gpu_native_byte_paste(
+                rgb_max_width + 1,
+                1,
+                1,
+                1,
+                3,
+                max_workgroups,
+                u32::MAX,
+                u64::MAX,
+            )
+            .is_none()
+        );
+
         assert!(plan_gpu_native_byte_paste(8, 1, 1, 1, 1, max_workgroups, 7, u64::MAX,).is_none());
         assert!(plan_gpu_native_byte_paste(8, 1, 1, 1, 1, max_workgroups, u32::MAX, 7,).is_none());
         assert!(
-            plan_gpu_native_byte_paste(8, 1, 1, 1, 3, max_workgroups, u32::MAX, u64::MAX,)
+            plan_gpu_native_byte_paste(8, 1, 1, 1, 4, max_workgroups, u32::MAX, u64::MAX,)
                 .is_none()
         );
         assert!(
