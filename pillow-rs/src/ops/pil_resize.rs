@@ -10,7 +10,7 @@
 //! intermediate rounding to match the two-pass quantization behavior.
 
 use crate::pipeline::ResampleFilter;
-use crate::raster::{DynamicImage, ImageBuffer, Luma};
+use crate::raster::{DynamicImage, FromColor, ImageBuffer, Luma, Rgba};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -249,6 +249,18 @@ fn f_resize_accumulate(
 // ── Pixel access helpers ──
 
 /// Get pixel as 4 f64 values (r, g, b, a). Grayscale replicates to RGB.
+#[inline]
+fn typed_pixel_as_rgba8<P>(pixel: &P) -> [f64; 4]
+where
+    Rgba<u8>: FromColor<P>,
+{
+    let mut converted = Rgba([0; 4]);
+    converted.copy_from_color(pixel);
+    converted.0.map(f64::from)
+}
+
+/// Convert one typed sample using the same channel conversion as `to_rgba8`,
+/// without materializing an RGBA copy of the complete image for each sample.
 fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
     match img {
         DynamicImage::ImageLuma8(g) => {
@@ -268,11 +280,17 @@ fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
             let p = rgba.get_pixel(x, y);
             [p[0] as f64, p[1] as f64, p[2] as f64, p[3] as f64]
         }
-        _ => {
-            let rgba = img.to_rgba8();
-            let p = rgba.get_pixel(x, y);
-            [p[0] as f64, p[1] as f64, p[2] as f64, p[3] as f64]
+        DynamicImage::ImageLuma16(image) => {
+            // The image model deliberately clips I;16 samples instead of
+            // applying the generic normalized u16-to-u8 conversion.
+            let value = image.get_pixel(x, y)[0].min(u16::from(u8::MAX)) as u8;
+            [f64::from(value), f64::from(value), f64::from(value), 255.0]
         }
+        DynamicImage::ImageLumaA16(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
+        DynamicImage::ImageRgb16(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
+        DynamicImage::ImageRgba16(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
+        DynamicImage::ImageRgb32F(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
+        DynamicImage::ImageRgba32F(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
     }
 }
 
@@ -2714,5 +2732,164 @@ fn raw_to_dynamic_owned(bytes: Vec<u8>, w: u32, h: u32, channels: usize) -> Dyna
             crate::raster::RgbaImage::from_raw(w, h, bytes)
                 .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
         ),
+    }
+}
+
+#[cfg(test)]
+mod typed_nearest_tests {
+    use super::{pil_resize, pixel_at};
+    use crate::pipeline::ResampleFilter;
+    use crate::raster::{DynamicImage, ImageBuffer, Rgb, Rgba};
+
+    fn typed_images() -> Vec<DynamicImage> {
+        vec![
+            DynamicImage::ImageLuma16(
+                ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
+                    .expect("L16 samples"),
+            ),
+            DynamicImage::ImageLumaA16(
+                ImageBuffer::from_raw(
+                    3,
+                    2,
+                    vec![
+                        0, 65_535, 1, 32_768, 32_768, 1, 65_535, 0, 257, 65_407, 129, 65_406,
+                    ],
+                )
+                .expect("LA16 samples"),
+            ),
+            DynamicImage::ImageRgb16(
+                ImageBuffer::from_raw(
+                    3,
+                    2,
+                    vec![
+                        0, 1, 65_535, 129, 32_768, 32_767, 257, 65_406, 65_535, 1, 0, 32_768,
+                        65_407, 257, 32_768, 32_767, 128, 1,
+                    ],
+                )
+                .expect("RGB16 samples"),
+            ),
+            DynamicImage::ImageRgba16(
+                ImageBuffer::from_raw(
+                    3,
+                    2,
+                    vec![
+                        0, 1, 65_535, 32_768, 129, 32_768, 32_767, 65_535, 257, 65_406, 65_535, 0,
+                        65_535, 1, 0, 257, 65_407, 257, 32_768, 32_767, 128, 1, 65_407, 65_535,
+                    ],
+                )
+                .expect("RGBA16 samples"),
+            ),
+            DynamicImage::ImageRgb32F(
+                ImageBuffer::<Rgb<f32>, Vec<f32>>::from_raw(
+                    3,
+                    2,
+                    vec![
+                        0.0,
+                        0.5,
+                        1.0,
+                        -1.0,
+                        0.25,
+                        2.0,
+                        f32::NAN,
+                        f32::INFINITY,
+                        f32::NEG_INFINITY,
+                        0.1,
+                        0.9,
+                        1.1,
+                        -0.0,
+                        0.001,
+                        0.999,
+                        0.75,
+                        0.33,
+                        0.66,
+                    ],
+                )
+                .expect("RGB32F samples"),
+            ),
+            DynamicImage::ImageRgba32F(
+                ImageBuffer::<Rgba<f32>, Vec<f32>>::from_raw(
+                    3,
+                    2,
+                    vec![
+                        0.0,
+                        0.5,
+                        1.0,
+                        1.0,
+                        -1.0,
+                        0.25,
+                        2.0,
+                        0.5,
+                        f32::NAN,
+                        f32::INFINITY,
+                        f32::NEG_INFINITY,
+                        0.0,
+                        0.1,
+                        0.9,
+                        1.1,
+                        0.25,
+                        -0.0,
+                        0.001,
+                        0.999,
+                        0.75,
+                        0.75,
+                        0.33,
+                        0.66,
+                        0.5,
+                    ],
+                )
+                .expect("RGBA32F samples"),
+            ),
+        ]
+    }
+
+    #[test]
+    fn typed_nearest_samples_match_rgba_conversion_without_frame_materialization() {
+        let destination_width = 4;
+        let destination_height = 3;
+        for image in typed_images() {
+            let rgba = image.to_rgba8();
+            for y in 0..image.height() {
+                for x in 0..image.width() {
+                    let expected = rgba.get_pixel(x, y).0.map(f64::from);
+                    assert_eq!(pixel_at(&image, x, y), expected);
+                }
+            }
+
+            // L16 has its own native nearest path. The other typed layouts
+            // exercise pixel_at from the generic affine-nearest fallback.
+            if matches!(image, DynamicImage::ImageLuma16(_)) {
+                continue;
+            }
+            let resized = pil_resize(
+                &image,
+                destination_width,
+                destination_height,
+                ResampleFilter::Nearest,
+                None,
+            );
+            let scale_x = f64::from(image.width()) / f64::from(destination_width);
+            let scale_y = f64::from(image.height()) / f64::from(destination_height);
+            let mut expected = Vec::new();
+            let mut source_y = scale_y * 0.5;
+            for _ in 0..destination_height {
+                let y = if source_y >= f64::from(image.height()) {
+                    image.height() - 1
+                } else {
+                    source_y as u32
+                };
+                let mut source_x = scale_x * 0.5;
+                for _ in 0..destination_width {
+                    let x = if source_x >= f64::from(image.width()) {
+                        image.width() - 1
+                    } else {
+                        source_x as u32
+                    };
+                    expected.extend_from_slice(&rgba.get_pixel(x, y).0);
+                    source_x += scale_x;
+                }
+                source_y += scale_y;
+            }
+            assert_eq!(resized.as_bytes(), expected);
+        }
     }
 }
