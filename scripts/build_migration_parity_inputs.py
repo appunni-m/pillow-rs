@@ -40136,6 +40136,41 @@ def build_nuanced_cases(
     },)
 
     if surface_id == "PIL.Image.Image":
+        # The standard Point workload is a 16x16 identity LUT over a black
+        # image. Keep it as the small-call row, but add an active lookup over
+        # varied bytes so the operation's native loops are measured and
+        # compared exactly on every backend.
+        point_lut = [((sample * 73) + 19) & 0xFF for sample in range(256)]
+        specs += ({
+            "surface": "PIL.Image.Image", "operation": "point",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-l-noise-1024x768-nonidentity-lut",
+            "mode": "L", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20260932, "observe_result": "tobytes",
+            "values": {"lut": literal(point_lut)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+        for mode, channels, seed in (
+            ("L", 1, 20260936),
+            ("LA", 2, 20260933),
+            ("RGB", 3, 20260934),
+            ("RGBA", 4, 20260935),
+        ):
+            lut = [
+                ((sample * 73) + 19 + 61 * channel) & 0xFF
+                for channel in range(channels)
+                for sample in range(256)
+            ]
+            specs += ({
+                "surface": "PIL.Image.Image", "operation": "point",
+                "requirement_suffix": "performance.standard",
+                "name": f"backend-noise-{mode.lower()}-67x19-nonidentity-lut",
+                "mode": mode, "size": [67, 19], "edge": "noise-fill",
+                "seed": seed, "observe_result": "tobytes",
+                "values": {"lut": literal(lut)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
         specs += ({
             "surface": "PIL.Image.Image", "operation": "crop",
             "requirement_suffix": "performance.standard",
@@ -47039,6 +47074,37 @@ def build_inputs(
                 workloads.append(identity_workload)
                 members.append(
                     {"workload_id": identity_workload_id, "weight": 1}
+                )
+            if workload_id == "pil-image-image.point.standard":
+                point_case_id = (
+                    "PIL.Image.Image.point.nuanced."
+                    "performance-material-l-noise-1024x768-nonidentity-lut"
+                )
+                point_case = all_cases_by_id[point_case_id]
+                point_workload_id = (
+                    "pil-image-image.point.materialized."
+                    "l-noise-1024x768-nonidentity-lut"
+                )
+                point_workload = copy.deepcopy(workloads[-1])
+                point_workload["workload_id"] = point_workload_id
+                point_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": point_case_id,
+                }
+                point_workload["measurement"]["boundary"] = "observed_steps"
+                point_workload["measurement"]["step_ids"] = [
+                    "call",
+                    "observe-result",
+                ]
+                point_workload["context"] = _workflow_benchmark_context(
+                    point_case,
+                    variant="materialized-l-noise-1024x768-nonidentity-lut",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(point_workload)
+                members.append(
+                    {"workload_id": point_workload_id, "weight": 1}
                 )
             if workload_id == "pil-image-image.crop.standard":
                 full_width_case_id = (

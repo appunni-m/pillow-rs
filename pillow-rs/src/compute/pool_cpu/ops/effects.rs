@@ -878,46 +878,65 @@ pub fn op_composite_module(
 /// Apply a byte LUT directly in the image's native storage layout.
 ///
 /// The generic Eval implementation widens multi-band images to RGBA before
-/// applying the table.  That preserves mode semantics, but a fused point
-/// chain already carries one table per native band, so widening creates an
-/// avoidable second full-frame buffer and conversion.  Keep this fast path
-/// limited to the four native byte layouts and exact table lengths; all typed,
-/// palette, and malformed descriptors retain the established implementation.
+/// applying the table. This path maps each native byte sample directly into
+/// one output allocation, avoiding both that conversion and a clone-then-map
+/// pass. Keep it limited to the four native byte layouts and exact table
+/// lengths; typed, palette, and malformed descriptors retain the established
+/// implementation.
+fn map_native_byte_lut<const CHANNELS: usize>(source: &[u8], lut: &[u8]) -> Option<Vec<u8>> {
+    if CHANNELS == 0 || lut.len() != CHANNELS.checked_mul(256)? || source.len() % CHANNELS != 0 {
+        return None;
+    }
+    if CHANNELS == 1 {
+        return Some(
+            source
+                .iter()
+                .map(|&sample| lut[usize::from(sample)])
+                .collect(),
+        );
+    }
+    let mut output = Vec::with_capacity(source.len());
+    for pixel in source.chunks_exact(CHANNELS) {
+        for (channel, &sample) in pixel.iter().enumerate() {
+            output.push(lut[channel * 256 + usize::from(sample)]);
+        }
+    }
+    Some(output)
+}
+
 fn eval_native_byte_lut(img: &DynamicImage, lut: &[u8]) -> Option<DynamicImage> {
     match img {
         DynamicImage::ImageLuma8(gray) if lut.len() == 256 => {
-            let mut output = gray.clone();
-            for value in output.as_mut() {
-                *value = lut[usize::from(*value)];
-            }
-            Some(DynamicImage::ImageLuma8(output))
+            let output = map_native_byte_lut::<1>(gray.as_raw(), lut)?;
+            Some(DynamicImage::ImageLuma8(GrayImage::from_raw(
+                gray.width(),
+                gray.height(),
+                output,
+            )?))
         }
         DynamicImage::ImageLumaA8(la) if lut.len() == 512 => {
-            let mut output = la.clone();
-            for pixel in output.as_mut().chunks_exact_mut(2) {
-                pixel[0] = lut[usize::from(pixel[0])];
-                pixel[1] = lut[256 + usize::from(pixel[1])];
-            }
-            Some(DynamicImage::ImageLumaA8(output))
+            let output = map_native_byte_lut::<2>(la.as_raw(), lut)?;
+            Some(DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
+                la.width(),
+                la.height(),
+                output,
+            )?))
         }
         DynamicImage::ImageRgb8(rgb) if lut.len() == 768 => {
-            let mut output = rgb.clone();
-            for pixel in output.as_mut().chunks_exact_mut(3) {
-                pixel[0] = lut[usize::from(pixel[0])];
-                pixel[1] = lut[256 + usize::from(pixel[1])];
-                pixel[2] = lut[512 + usize::from(pixel[2])];
-            }
-            Some(DynamicImage::ImageRgb8(output))
+            let output = map_native_byte_lut::<3>(rgb.as_raw(), lut)?;
+            Some(DynamicImage::ImageRgb8(RgbImage::from_raw(
+                rgb.width(),
+                rgb.height(),
+                output,
+            )?))
         }
         DynamicImage::ImageRgba8(rgba) if lut.len() == 1024 => {
-            let mut output = rgba.clone();
-            for pixel in output.as_mut().chunks_exact_mut(4) {
-                pixel[0] = lut[usize::from(pixel[0])];
-                pixel[1] = lut[256 + usize::from(pixel[1])];
-                pixel[2] = lut[512 + usize::from(pixel[2])];
-                pixel[3] = lut[768 + usize::from(pixel[3])];
-            }
-            Some(DynamicImage::ImageRgba8(output))
+            let output = map_native_byte_lut::<4>(rgba.as_raw(), lut)?;
+            Some(DynamicImage::ImageRgba8(RgbaImage::from_raw(
+                rgba.width(),
+                rgba.height(),
+                output,
+            )?))
         }
         _ => None,
     }

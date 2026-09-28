@@ -6491,3 +6491,89 @@ SIMD and remove full-frame staging/readback for GPU; the current standalone
 GPU execution model cannot amortize those transfers. Move to the next ranked
 operation and revisit crop only with a resident/batched GPU design or a direct
 typed-sample implementation to measure.
+
+## PIL.Image.Image.point checkpoint — 2026-09-28
+
+The default Point workload is a 16 × 16 identity lookup and measures dispatch
+overhead rather than pixel mapping. This visit adds a deterministic 1,024 × 768
+`L` image with varied bytes and a non-identity LUT, then observes `tobytes`.
+Image and LUT setup remain outside the timed steps (`call`, `observe-result`).
+The policy is five warmups, 100 observations across five samples, warm state,
+and concurrency one. Small varied `L`, `LA`, `RGB`, and `RGBA` cases exercise
+channel tables and tails; the odd pixel count in `L` exercises the packed
+shader's padded final word. Each exact parity lane selected all five cases and
+forced CPU, SIMD, or GPU independently. The benchmark also ran an exact-output
+gate for all three target profiles. No coverage was collected.
+
+The baseline and attempt receipts use Pillow 12.2.0, CPython 3.12.13, and
+macOS 15.7.7 arm64. They share parent revision `028295a0cd831aa0a249a260e175c5835f676832`
+and mark the source worktree dirty; the receipt IDs below distinguish the
+measured runs, while the final checkpoint commit anchors the retained source.
+Whole-workflow medians are milliseconds:
+
+| Run | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline (`7c9370e1`) | 0.342229 | 0.256271 | 0.269208 | 1.877604 |
+| Attempt 1: larger parallel threshold (`ec73c14b`, reverted) | 0.352333 | 0.252187 | 0.497917 | 1.909979 |
+| Attempt 2: direct-output mapping (`c87ce0b2`) | 0.343583 | 0.440084 | 0.256438 | 1.888542 |
+| Attempt 2 refinement: byte collect (`5d580b52`) | 0.335688 | 0.274625 | 0.277729 | 1.951896 |
+| Attempt 2 unchanged repeat (`dd01c4aa`) | 0.346021 | 0.263209 | 0.298167 | 2.033229 |
+| Attempt 3: balanced SIMD selects (`a0a3c3cf`) | 0.334500 | 0.239167 | 0.248854 | 1.908626 |
+| Attempt 3 unchanged repeat (`ac66617b`) | 0.349771 | 0.241146 | 0.268813 | 1.874333 |
+| Attempt 4: compact L GPU transfer (`b7ce40f7`) | 0.336167 | 0.257437 | 0.265604 | 0.776791 |
+| Attempt 4 unchanged repeat (`9c554abf`) | 0.337105 | 0.252521 | 0.257250 | 0.728792 |
+| Final receipt after odd-L tail parity (`bced6b7e`) | 0.376083 | 0.290520 | 0.274938 | 0.796979 |
+
+Attempt 1's higher parallel threshold nearly doubled SIMD latency and was
+reverted. Attempt 2 maps from immutable source bytes into one output allocation
+instead of cloning and rereading the clone; its first CPU builder regressed
+badly, so the `L` builder was changed to iterator collection. The unchanged
+repeat shows no stable SIMD improvement from direct-output mapping alone.
+Attempt 3 keeps that mapper but uses a Point-specific balanced selection tree:
+the sixteen LUT swizzles stay independent, while the dependent selection depth
+falls from fifteen serial selects to four levels. The two whole-call runs put
+CPU at 0.239–0.241 ms and SIMD at 0.249–0.269 ms. CPU improvement repeats;
+SIMD is neutral-to-slightly faster, not a demonstrated large gain. The general
+LUT lowering remains unchanged for other operations.
+
+Attempt 4 packs four `L` samples per storage word, maps those bytes in one
+Point shader invocation, and reads compact `L` output directly. A checked
+planner uses the adapter's workgroup limit and declines this specialization if
+the packed grid cannot fit. Its unit test exercises the 4,096 × 4,096 grid and
+the exact workgroup boundary without allocating those images. Both repeated
+benchmarks show a GPU median of 0.729–0.777 ms, about 2.4–2.6× faster than the
+baseline, with 100/100 actual GPU executions and no fallback. Upload and
+readback each fall from 3,145,728 bytes to 786,432 bytes, and the reported
+mode-conversion count falls from one to zero. The combined `backend_ns` phase
+falls from 1.817 ms to 0.652–0.697 ms; it includes upload, dispatch, polling,
+mapping, and readback, so it does not isolate transfer time.
+
+The matched attempt-4 benchmark gates passed on CPU, SIMD, and GPU. Strict exact
+parity then passed 5/5 selected cases independently on each backend (15/15
+total), including the odd-count packed `L` tail and unchanged `LA`, `RGB`, and
+`RGBA` channel semantics. The final input-hash-matched benchmark is
+`build/migration-parity/point-final.json` (run
+`migration-benchmark-bced6b7edfa843da848c5d404b337fc3`); its exact-output
+sidecar is `point-final-parity.json`. The strict final lanes are
+`point-final-cpu-parity.json`, `point-final-simd-parity.json`, and
+`point-final-gpu-parity.json`. The two attempt-4 runs remain available as
+`point-attempt4.json` and `point-attempt4-repeat.json` for the matched-change
+comparison.
+
+CPU is 1.29–1.34× faster than Pillow on these runs, meeting the CPU latency
+goal for this workload. SIMD is only 1.26–1.37× faster than Pillow, far short of
+5×. GPU remains 2.8–2.9× slower than SIMD, so neither the GPU latency target nor
+the higher-throughput target is met. Throughput here is reciprocal latency at
+concurrency one; it does not establish sustained request throughput. The
+remaining GPU gap points to per-call upload, synchronization, and materialized
+readback overhead after the compact transfer, rather than a slow LUT alone.
+Further progress likely needs resident GPU data or batched calls; measure those
+costs before tuning shader arithmetic. SIMD still needs a lower-level
+lookup/vectorization design that complies with the workspace's `unsafe_code =
+deny` policy. Point is checkpointed incomplete after four bounded attempts.
+
+The next first-pass operation is `PIL.Image.Image.putdata`: its existing
+receiver-observation workflow is easiest to scale into a materialized varied
+input with strict parity on all three backends. Existing putdata parity rows
+are CPU-only, so create the all-backend exact cohort before treating any new
+benchmark as performance evidence.
