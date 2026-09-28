@@ -222,6 +222,7 @@ EXPAND_PERFORMANCE_CASES = (
         20261001,
         [37, 113, 211, 79],
     ),
+    ("hsv-noise-1024x768", "HSV", [1024, 768], 20261012, [37, 113, 211]),
 )
 PASTE_PERFORMANCE_CASES = (
     ("l-noise-1024x768", "L", [1024, 768], 20261008),

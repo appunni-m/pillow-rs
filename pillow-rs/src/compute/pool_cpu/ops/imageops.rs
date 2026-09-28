@@ -1450,7 +1450,9 @@ fn native_expand_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usiz
         (None, DynamicImage::ImageLumaA8(_)) | (Some("LA"), DynamicImage::ImageLumaA8(_)) => {
             Some(2)
         }
-        (None, DynamicImage::ImageRgb8(_)) | (Some("RGB"), DynamicImage::ImageRgb8(_)) => Some(3),
+        (None, DynamicImage::ImageRgb8(_)) | (Some("RGB" | "HSV"), DynamicImage::ImageRgb8(_)) => {
+            Some(3)
+        }
         (None, DynamicImage::ImageRgba8(_)) | (Some("RGBA"), DynamicImage::ImageRgba8(_)) => {
             Some(4)
         }
@@ -1460,7 +1462,8 @@ fn native_expand_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usiz
 
 /// Copy one of the ordinary byte layouts into its native output channel count.
 /// The fill tuple's LA alpha is byte three; the source LA pixel's alpha is byte
-/// one. L/LA/RGB/RGBA stay in their physical format from input through output.
+/// one. L/LA/RGB/HSV/RGBA stay in their physical format from input through
+/// output.
 fn expand_native_bytes(
     img: &DynamicImage,
     border: u32,
@@ -1635,6 +1638,31 @@ pub fn op_expand(
 
     let expanded = crate::image_utils::raw_bytes_to_image(new_w, new_h, output, 4)?;
     Ok(preserve_mode(img, expanded))
+}
+
+#[cfg(test)]
+mod expand_native_tests {
+    use super::op_expand;
+    use crate::raster::{DynamicImage, RgbImage};
+
+    #[test]
+    fn expand_hsv_keeps_three_native_bytes() {
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(1, 1, vec![23, 47, 89]).expect("HSV source"),
+        );
+        let expanded =
+            op_expand(&image, 1, (7, 11, 13, 17), Some("HSV")).expect("native HSV expand");
+        let DynamicImage::ImageRgb8(expanded) = expanded else {
+            panic!("HSV expansion must retain three-byte physical storage");
+        };
+        assert_eq!(
+            expanded.as_raw(),
+            &[
+                7, 11, 13, 7, 11, 13, 7, 11, 13, 7, 11, 13, 23, 47, 89, 7, 11, 13, 7, 11, 13, 7,
+                11, 13, 7, 11, 13,
+            ]
+        );
+    }
 }
 
 #[cfg(test)]

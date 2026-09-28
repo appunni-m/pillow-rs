@@ -22984,6 +22984,41 @@ fn native_expand_bytes(
         return Ok(Some((result, vector_blocks, scalar_tail)));
     }
 
+    // Three-byte samples need only row construction and byte copies. Building
+    // a u8x16 for every 16-byte fill block repeats the RGB/HSV fill pattern
+    // calculation thousands of times, while zero-initializing the full
+    // destination before overwriting it adds another complete frame write.
+    // Precompute the native fill spans and append each output row once.
+    if channels == 3 {
+        let fill_pixel = [fill.0, fill.1, fill.2];
+        let fill_row = fill_pixel.repeat(output_width_usize);
+        let fill_sides = fill_pixel.repeat(border as usize);
+        let border_bytes = border as usize * channels;
+        let mut output = Vec::with_capacity(output_len);
+        for y in 0..output_height_usize {
+            if y < border as usize || y >= border as usize + source_height {
+                output.extend_from_slice(&fill_row);
+                continue;
+            }
+            output.extend_from_slice(&fill_sides);
+            let source_y = y - border as usize;
+            let source_start = source_y * source_stride;
+            output.extend_from_slice(&source[source_start..source_start + source_stride]);
+            output.extend_from_slice(&fill_sides);
+        }
+        if output.len() != output_len
+            || fill_row.len() != output_stride
+            || fill_sides.len() != border_bytes
+        {
+            return Err(PilError::InternalError(
+                "SIMD expand native three-channel row shape mismatch".into(),
+            ));
+        }
+        let result =
+            crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+        return Ok(Some((result, 0, 0)));
+    }
+
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
