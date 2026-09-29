@@ -8785,6 +8785,49 @@ with `cargo test --manifest-path pillow-rs/Cargo.toml gpu_native_grayscale_rgb_r
 also regenerated its derived inputs; coverage collection and coverage tests
 were not run.
 
+### P `ImageChops.invert`: keep palette indices native — 2026-09-29
+
+Mode P stores palette indices, not expanded colors. For a pointwise invert,
+Pillow complements each stored index byte and retains the palette. The SIMD
+result adapter previously expanded the L-byte index carrier to RGBA, then
+gathered the red byte back into L. An exact-size P/Luma result now bypasses
+that round trip; the old canonicalizing path remains for buffers with trailing
+samples. The SIMD kernel now allocates one output and complements source bytes
+directly, avoiding the former full-frame clone followed by a second in-place
+pass. Its channel masks and scalar tail preserve LA/RGBA alpha and CMYK's
+fourth-channel behavior. The GPU admits P's checked one-byte carrier to the
+existing native byte shader for `Invert` and the narrow P-only
+`InvertChops` route. It keeps palette indices and palette metadata intact.
+
+The local material workload used deterministic 1024 × 768 P indices
+`((i * 37 + 11) & 255)`, a nontrivial palette, five warmups, and five samples
+of 20 public calls including `tobytes()`; image setup was outside the timed
+boundary and processes were isolated. This was a manual focused benchmark,
+not a maintained migration-benchmark JSON workload. CPU/SIMD implementation
+measurements were repeated on the final SIMD code; the GPU-only admission was
+then measured separately. CPU measured 0.363–0.403 ms versus Pillow at
+0.598–0.610 ms, about 1.48–1.65× faster. Two low-variance SIMD runs measured
+0.1024 and 0.1040 ms against Pillow at 0.598 and 0.610 ms, about 5.85× and
+5.87× faster; one noisy 0.1415 ms SIMD sample is retained as variability, not
+used to claim the target. GPU measured 0.355–0.384 ms, about 3.4–3.7× slower
+than the repeated SIMD results. Actual GPU receipts showed one dispatch, no
+fallback, zero mode conversions, one byte per pixel uploaded and read back,
+and one full-frame device copy. Thus the native-format change met CPU and
+repeated SIMD goals, but GPU still misses the SIMD-throughput goal because
+submission, synchronous completion/readback, and materialization dominate;
+shader arithmetic tuning is not supported by this profile.
+
+Focused Rust tests passed for tight P storage, trailing-sample canonicalizing,
+one-pass immutable SIMD inversion, and P GPU one-byte admission. CPU parity
+passed 2/2 selected cases; strict SIMD and strict GPU parity each passed 2/2,
+with GPU executing without fallback. `make build-parity` passed and preserved
+the Pillow oracle. `cargo fmt --all -- --check` passed. No coverage was run.
+`RUSTC_WRAPPER= make fmt clippy` and `make docs-lint` also passed; Clippy emitted
+the repository's existing warning set without failing.
+Checkpoint after three bounded changes and move on; revisit GPU only with a
+new profile that isolates submission/completion/readback or improves device
+residency.
+
 Checkpoint the RGB GPU transport change here. Do not repeat input widening
 work: the remaining device costs are synchronous completion, compact readback,
 and the full-frame copy. SIMD remains below the campaign target, and prior
