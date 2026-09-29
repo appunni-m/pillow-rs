@@ -241,6 +241,9 @@ PUTALPHA_PERFORMANCE_CASES = (
     ("pa-noise-1024x768-scalar", "PA", [1024, 768], 20261022),
     ("rgb-noise-1024x768-scalar", "RGB", [1024, 768], 20261023),
 )
+PUTALPHA_MASK_PERFORMANCE_CASES = (
+    ("rgb-noise-1024x768-l-mask", "RGB", [1024, 768], 20261024),
+)
 BRIGHTNESS_PERFORMANCE_CASES = (
     ("l-noise-1024x768-factor-0.5", "L", [1024, 768], 20261020, 0.5),
     ("la-noise-1024x768-factor-0.5", "LA", [1024, 768], 20261010, 0.5),
@@ -32005,6 +32008,22 @@ def build_nuanced_cases(
             }
             for name, mode, size, seed in PUTALPHA_PERFORMANCE_CASES
         ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "putalpha",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-mask-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "mask_mode": "L",
+                "observe_receiver": True,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in PUTALPHA_MASK_PERFORMANCE_CASES
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "putalpha",
@@ -49303,6 +49322,44 @@ def build_inputs(
                             "context": _workflow_benchmark_context(
                                 case,
                                 variant=f"putalpha-{slug(name)}",
+                                surface=surface_id,
+                                operation="putalpha",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+                for name, _mode, _size, _seed in PUTALPHA_MASK_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.putalpha.mask-materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.putalpha.nuanced.performance-mask-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-receiver"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"putalpha-mask-{slug(name)}",
                                 surface=surface_id,
                                 operation="putalpha",
                             ),

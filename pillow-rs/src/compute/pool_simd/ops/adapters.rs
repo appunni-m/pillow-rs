@@ -24977,6 +24977,35 @@ fn simd_put_alpha_rgb_row(source: &[u8], output: &mut [u8], width: usize, alpha:
 }
 
 #[cfg(feature = "parallel")]
+fn simd_put_alpha_rgb_mask_row(source: &[u8], mask: &[u8], output: &mut [u8], width: usize) {
+    debug_assert_eq!(source.len(), width * 3);
+    debug_assert_eq!(mask.len(), width);
+    debug_assert_eq!(output.len(), width * 4);
+    let vector_pixels = width / 4 * 4;
+    const SHUFFLE: [u8; 16] = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15];
+    for ((source_block, mask_block), output_block) in source[..vector_pixels * 3]
+        .chunks_exact(12)
+        .zip(mask[..vector_pixels].chunks_exact(4))
+        .zip(output[..vector_pixels * 4].chunks_exact_mut(16))
+    {
+        let mut padded = [0u8; 16];
+        padded[..12].copy_from_slice(source_block);
+        padded[12..].copy_from_slice(mask_block);
+        let packed = u8x16::new(padded)
+            .swizzle_relaxed(u8x16::new(SHUFFLE))
+            .to_array();
+        output_block.copy_from_slice(&packed);
+    }
+    for pixel in vector_pixels..width {
+        let source_start = pixel * 3;
+        let output_start = pixel * 4;
+        output[output_start..output_start + 3]
+            .copy_from_slice(&source[source_start..source_start + 3]);
+        output[output_start + 3] = mask[pixel];
+    }
+}
+
+#[cfg(feature = "parallel")]
 const SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
 #[inline]
@@ -25193,6 +25222,44 @@ pub fn simd_put_alpha_data(
     let pixels = (img.width() as usize)
         .checked_mul(img.height() as usize)
         .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData pixel count overflow".into()))?;
+    #[cfg(feature = "parallel")]
+    if *alpha_mode == PixelMode::RGB
+        && pixels >= SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD
+        && let DynamicImage::ImageRgb8(source) = img
+    {
+        let width = usize::try_from(img.width())
+            .map_err(|_| PilError::ValueError("SIMD PutAlphaData width overflow".into()))?;
+        let height = usize::try_from(img.height())
+            .map_err(|_| PilError::ValueError("SIMD PutAlphaData height overflow".into()))?;
+        let source_stride = width
+            .checked_mul(3)
+            .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData row overflow".into()))?;
+        let output_stride = width
+            .checked_mul(4)
+            .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData row overflow".into()))?;
+        let output_length = pixels
+            .checked_mul(4)
+            .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData output overflow".into()))?;
+        let mut output = vec![0u8; output_length];
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                let source_start = y as usize * source_stride;
+                let mask_start = y as usize * width;
+                simd_put_alpha_rgb_mask_row(
+                    &source.as_raw()[source_start..source_start + source_stride],
+                    &mask.as_raw()[mask_start..mask_start + width],
+                    row,
+                    width,
+                );
+            }
+        );
+        crate::compute::record_pipeline_operation_vector_blocks((width / 4 * height) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail((width % 4 * height) as u64);
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 4);
+    }
     let (output, vector_blocks, scalar_tail) = simd_put_alpha_data_bytes(
         img.as_bytes(),
         mask.as_raw(),
@@ -25512,6 +25579,25 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn native_rgb_putalpha_mask_interleave_covers_vector_blocks_and_tails() {
+        for width in [1, 3, 4, 5, 17] {
+            let source: Vec<u8> = (0..width * 3)
+                .map(|index| (index * 37 + 11) as u8)
+                .collect();
+            let mask: Vec<u8> = (0..width).map(|index| (index * 53 + 7) as u8).collect();
+            let mut actual = vec![0u8; width * 4];
+            super::simd_put_alpha_rgb_mask_row(&source, &mask, &mut actual, width);
+            let expected: Vec<u8> = source
+                .chunks_exact(3)
+                .zip(&mask)
+                .flat_map(|(pixel, alpha)| [pixel[0], pixel[1], pixel[2], *alpha])
+                .collect();
+            assert_eq!(actual, expected, "width {width}");
+        }
+    }
+
     #[test]
     fn native_rgb_putalpha_interleave_covers_vector_blocks_and_tails() {
         for (width, height) in [(1, 1), (3, 2), (4, 1), (5, 3), (17, 4)] {
