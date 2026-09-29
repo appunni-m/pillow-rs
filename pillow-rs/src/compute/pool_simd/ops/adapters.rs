@@ -6991,6 +6991,48 @@ fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
     native_all_channel_transform_bytes(bytes, &|input| input ^ active_vector);
 }
 
+/// Invert an exact native byte image into one output allocation.
+///
+/// The first SIMD operation cannot mutate its caller-owned source. Copying the
+/// full image and then transforming that copy performs two memory passes;
+/// this path combines them while preserving native channel and alpha rules.
+fn native_invert_copy(
+    img: &DynamicImage,
+    channels: usize,
+    active_mask: &[u8; 16],
+) -> Option<DynamicImage> {
+    let dims = crate::checked_dims::CheckedDims::new_allow_empty(
+        img.width(),
+        img.height(),
+        u8::try_from(channels).ok()?,
+    )
+    .ok()?;
+    let source = img.as_bytes();
+    if source.len() != dims.total_bytes() || source.is_empty() {
+        return None;
+    }
+
+    let active_vector = u8x16::new(*active_mask);
+    let mut output = Vec::with_capacity(source.len());
+    let mut chunks = source.chunks_exact(16);
+    for chunk in &mut chunks {
+        let input = u8x16::new(<[u8; 16]>::try_from(chunk).ok()?);
+        output.extend_from_slice(&(input ^ active_vector).to_array());
+    }
+    let remainder = chunks.remainder();
+    let mask_offset = source.len() - remainder.len();
+    output.extend(
+        remainder
+            .iter()
+            .enumerate()
+            .map(|(index, value)| *value ^ active_mask[(mask_offset + index) % 16]),
+    );
+
+    crate::compute::record_pipeline_operation_vector_blocks((source.len() / 16) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(remainder.len() as u64);
+    crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels).ok()
+}
+
 fn apply_native_rows<F>(
     bytes: &mut [u8],
     width: usize,
@@ -7043,6 +7085,15 @@ fn native_invert(
         if has_empty_native_bytes(img, channels) {
             crate::compute::record_pipeline_operation_path("native-copy");
             return Some(img.clone());
+        }
+        let invert_alpha = invert_alpha || mode == Some("CMYK");
+        if let Some(result) = native_invert_copy(
+            img,
+            channels,
+            NATIVE_BYTE_INVERT_MASKS[channels][invert_alpha as usize],
+        ) {
+            crate::compute::record_pipeline_operation_path("vector");
+            return Some(result);
         }
         record_padded_native_row_work(img.width() as usize, img.height() as usize, channels);
     }
@@ -25881,12 +25932,31 @@ mod tests {
         transpose_native_odd_collect_admitted,
     };
     use super::{
-        native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
+        native_invert, native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
         native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band, simd_posterize,
         simd_projective_nearest_transform_bytes, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+
+    #[test]
+    fn native_invert_writes_owned_p_indices_in_one_vector_pass() {
+        for width in [1u32, 15, 16, 17, 31] {
+            let height = 3;
+            let source = (0..width * height)
+                .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
+                .collect::<Vec<_>>();
+            let image = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, source.clone()).unwrap(),
+            );
+            let inverted = native_invert(&image, Some("P"), false).unwrap();
+            let expected = source.iter().map(|value| 255 - value).collect::<Vec<_>>();
+
+            assert!(matches!(inverted, DynamicImage::ImageLuma8(_)));
+            assert_eq!(inverted.as_bytes(), expected);
+            assert_eq!(image.as_bytes(), source, "input remains immutable");
+        }
+    }
 
     #[test]
     fn native_cmyk_grayscale_matches_exact_conversion_across_vector_tails() {

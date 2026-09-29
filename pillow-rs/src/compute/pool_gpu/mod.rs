@@ -10067,6 +10067,7 @@ impl GpuInner {
                 != matches!(
                     op,
                     PipelineOp::Invert
+                        | PipelineOp::InvertChops
                         | PipelineOp::Solarize { .. }
                         | PipelineOp::Posterize { .. }
                         | PipelineOp::Brightness { .. }
@@ -10228,7 +10229,7 @@ impl GpuInner {
             // The native bytewise shader treats a u32 as four independent
             // samples (mode 9); threshold zero makes Solarize exactly invert
             // every stored byte, including alpha and a partial final word.
-            PipelineOp::Invert => (
+            PipelineOp::Invert | PipelineOp::InvertChops => (
                 "InvertNativeBytes",
                 "solarize.wgsl",
                 include_str!("shaders/solarize.wgsl"),
@@ -10261,7 +10262,7 @@ impl GpuInner {
             } => u32::from(*alpha),
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
             PipelineOp::Posterize { bits } => u32::from(*bits),
-            PipelineOp::Invert => 0,
+            PipelineOp::Invert | PipelineOp::InvertChops => 0,
             PipelineOp::BlendModule { alpha, .. } => (*alpha as f32).to_bits(),
             _ => 0,
         };
@@ -12371,10 +12372,21 @@ fn gpu_native_byte_op_channels(
             _ => None,
         },
         PipelineOp::Invert => match image {
-            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
+            DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L" | "P")) => Some(1),
             DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
             DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
             DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
+            _ => None,
+        },
+        // ImageChops.invert treats P pixels as raw palette indices. Keep that
+        // one-byte sample domain through dispatch and readback instead of
+        // expanding indices into a color carrier.
+        PipelineOp::InvertChops => match image {
+            DynamicImage::ImageLuma8(_)
+                if mode == Some("P") && image.width() > 0 && image.height() > 0 =>
+            {
+                Some(1)
+            }
             _ => None,
         },
         PipelineOp::Posterize { bits } if (1..=8).contains(bits) => match image {
@@ -24359,6 +24371,33 @@ mod tests {
                 &rgb,
                 Some("RGB")
             ),
+            None
+        );
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_invert_keeps_palette_indices_in_one_byte() {
+        let palette =
+            DynamicImage::ImageLuma8(GrayImage::from_raw(3, 1, vec![1, 127, 255]).unwrap());
+        for op in [PipelineOp::Invert, PipelineOp::InvertChops] {
+            assert_eq!(
+                super::gpu_native_byte_op_channels(&op, &palette, Some("P")),
+                Some(1)
+            );
+        }
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&PipelineOp::Invert, &palette, Some("L")),
+            Some(1)
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&PipelineOp::InvertChops, &palette, Some("L")),
+            None
+        );
+
+        let empty_palette = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&PipelineOp::InvertChops, &empty_palette, Some("P")),
             None
         );
     }

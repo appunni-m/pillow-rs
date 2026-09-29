@@ -139,6 +139,25 @@ fn normalize_palette_result(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     match mode {
+        // Palette kernels operate on native index bytes. When one has already
+        // returned the exact tightly packed L/index layout, keep that storage
+        // instead of expanding each index to RGBA and gathering red back out.
+        // Retain the conversion below for buffers with trailing samples: it
+        // canonicalizes those to the logical image dimensions.
+        Some("P")
+            if matches!(
+                &result,
+                DynamicImage::ImageLuma8(image)
+                    if crate::checked_dims::CheckedDims::new_allow_empty(
+                        image.width(),
+                        image.height(),
+                        1,
+                    )
+                    .is_ok_and(|dims| dims.total_bytes() == image.as_raw().len())
+            ) =>
+        {
+            Ok(result)
+        }
         Some("P") => {
             let rgba = result.to_rgba8();
             let (width, height) = rgba.dimensions();
@@ -786,5 +805,35 @@ mod transpose_tests {
             assert_eq!(source.tobytes()?, bytes);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod palette_normalization_tests {
+    use crate::raster::{DynamicImage, GrayImage};
+
+    #[test]
+    fn palette_indices_keep_tightly_packed_luma_storage() {
+        let image = GrayImage::from_raw(3, 1, vec![7, 129, 244]).unwrap();
+        let result =
+            super::normalize_palette_result(DynamicImage::ImageLuma8(image), Some("P")).unwrap();
+
+        let DynamicImage::ImageLuma8(result) = result else {
+            panic!("P-mode output must retain its one-byte index storage");
+        };
+        assert_eq!(result.as_raw(), &[7, 129, 244]);
+    }
+
+    #[test]
+    fn palette_indices_with_trailing_storage_are_canonicalized() {
+        let image = GrayImage::from_raw(2, 1, vec![7, 129, 244]).unwrap();
+        let result =
+            super::normalize_palette_result(DynamicImage::ImageLuma8(image), Some("P")).unwrap();
+
+        let DynamicImage::ImageLuma8(result) = result else {
+            panic!("P-mode output must use one-byte index storage");
+        };
+        assert_eq!(result.dimensions(), (2, 1));
+        assert_eq!(result.as_raw(), &[7, 129]);
     }
 }
