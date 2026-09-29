@@ -8075,6 +8075,51 @@ grayscale glyphs need one coverage byte per pixel, while color glyphs need RGB
 source bytes plus alpha coverage. Expand only the channels the destination
 stores, and only after proving the logical mode and concrete raster layout.
 
+### ImageDraw.text: explicit RGBA context on an RGB image — 2026-09-29
+
+The prior native path covered ordinary RGB drawing but missed the explicit
+`Draw(image, "RGBA")` context on an RGB destination. `effective_mode()` returns
+`RGBA` for that call even though the receiver remains logical RGB and stores
+`ImageRgb8`. The compositor's old guard checked only for effective RGB, so the
+new-looking path was never selected; parity passed because the RGBA fallback
+was correct. The routing predicate now admits both ordinary RGB and the
+specific `RGBA`-context/RGB-target combination, then relies on the helper's
+concrete `ImageRgb8` check. The fallback still handles actual RGBA destinations
+and any unmatched storage layout.
+
+Pillow's RGB destination semantics use glyph coverage as the RGB blend mask and
+ignore fill alpha. Therefore the narrow mask and native three-byte compositor
+preserve output bytes while avoiding full-frame RGB→RGBA widening/narrowing and
+grayscale-mask expansion. Regression inputs exercise ordinary glyphs with
+non-opaque four-component fill and a BGRA embedded-color glyph under the same
+explicit context.
+
+The correctness-gated 1024 × 768 noisy RGB workload measures text plus receiver
+observation, with font/image setup excluded, five warmups, 20 calls × five
+samples, and concurrency one. Baseline run
+`migration-benchmark-e3f8909370614ebd8855e0e767c4aba2` and corrected runs
+`migration-benchmark-591b64404f554ee19912aaca2518c3ea` and
+`migration-benchmark-eb012b14a99246678db77da3112a3ca9` use the same workload
+hash and policy. Each correctness gate passed for all three target profiles.
+
+| Subject/profile | Baseline ms | Corrected run 1 ms | Corrected repeat ms |
+| --- | ---: | ---: | ---: |
+| Pillow | 0.766438 | 0.747146 | 0.718750 |
+| CPU target | 1.016979 | 0.446751 | 0.450416 |
+| SIMD-labeled profile | 1.018604 | 0.480813 | 0.463333 |
+| GPU-labeled profile | 1.049313 | 0.527584 | 0.456730 |
+
+Focused CPU parity passed 2/2 before and after the route change, including the
+non-opaque-fill glyph and embedded-color BGRA glyph; the benchmark gates passed
+3/3 profile comparisons in both corrected runs. The CPU median improved about
+2.26× from baseline and is about 1.60× faster than Pillow in the repeat run.
+The SIMD- and GPU-labeled receipts report `actual_backend = null`; drawing
+remains a host-side font-mask/compositing path, so their lower timings are not
+evidence of SIMD or GPU execution. The decision lesson is to trace both the
+effective operation mode and the original destination mode: parity can pass
+through a correct fallback even when a fast-path guard makes the optimization
+unreachable.
+
 ### Brightness L: preserve one-byte storage across backends — 2026-09-28
 
 The native route is admitted only for `ImageLuma8` with logical mode absent or

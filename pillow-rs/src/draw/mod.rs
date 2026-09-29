@@ -2000,11 +2000,14 @@ impl Draw {
         let draw_x = x.saturating_add(offset.0);
         let draw_y = y.saturating_add(offset.1);
 
-        // Keep ordinary RGB text on its native three-byte canvas. The font
-        // mask already carries one coverage byte per pixel; do not expand
-        // either the full image or a grayscale glyph mask to RGBA.
-        if mode == "RGB"
-            && !self.alpha_blend_rgb()
+        // Keep RGB text on its native three-byte canvas, including an explicit
+        // RGBA draw context over an RGB image. Pillow uses glyph coverage to
+        // blend RGB in both cases and ignores the fill alpha on an RGB target;
+        // expanding the full image and grayscale mask to RGBA only to narrow
+        // them again adds work without changing those semantics.
+        let rgba_blend_rgb = self.alpha_blend_rgb();
+        let rgb_target = (mode == "RGB" && !rgba_blend_rgb) || (mode == "RGBA" && rgba_blend_rgb);
+        if rgb_target
             && self.text_compose_rgb_native(draw_x, draw_y, w, h, &mask, fill, color_mask)?
         {
             return Ok((w, h));
