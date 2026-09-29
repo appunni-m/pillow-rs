@@ -6795,6 +6795,32 @@ where
     }
 }
 
+/// Transform native posterize samples directly from the immutable source into
+/// the one output allocation. Cloning and then mutating the clone makes two
+/// full-frame passes for a point operation whose output depends only on each
+/// input byte.
+#[inline]
+fn native_byte_transform_copy_bytes<F>(input: &[u8], output: &mut [u8], transform: &F)
+where
+    F: Fn(u8x16) -> u8x16,
+{
+    let mut input_chunks = input.chunks_exact(16);
+    let mut output_chunks = output.chunks_exact_mut(16);
+    for (source, destination) in input_chunks.by_ref().zip(output_chunks.by_ref()) {
+        let vector =
+            u8x16::new(<[u8; 16]>::try_from(source).expect("chunks_exact yields 16-byte chunks"));
+        destination.copy_from_slice(&transform(vector).to_array());
+    }
+    let input_tail = input_chunks.remainder();
+    let output_tail = output_chunks.into_remainder();
+    if !input_tail.is_empty() {
+        let mut padded = [0u8; 16];
+        padded[..input_tail.len()].copy_from_slice(input_tail);
+        let transformed = transform(u8x16::new(padded)).to_array();
+        output_tail.copy_from_slice(&transformed[..input_tail.len()]);
+    }
+}
+
 #[inline]
 fn native_byte_transform<F>(
     img: &DynamicImage,
@@ -11950,11 +11976,25 @@ pub fn simd_posterize(
         .checked_sub(*bits as u32)
         .ok_or_else(|| PilError::ValueError("posterize bits must be at most 8".into()))?;
     let mask = !((1u8 << shift) - 1);
-    native_byte_transform(img, mode, |input| input & u8x16::splat(mask)).ok_or_else(|| {
-        PilError::NotImplementedError(
+    let channels = match (img, mode) {
+        (DynamicImage::ImageLuma8(_), None | Some("L")) => 1,
+        (DynamicImage::ImageRgb8(_), None | Some("RGB")) => 3,
+        _ => 0,
+    };
+    if channels == 0 || !has_nonempty_byte_data(img, channels) {
+        return Err(PilError::NotImplementedError(
             "SIMD posterize requires a validated native L or RGB byte image".into(),
-        )
-    })
+        ));
+    }
+    let source = img.as_bytes();
+    let mut bytes = vec![0u8; source.len()];
+    native_byte_transform_copy_bytes(source, &mut bytes, &|input| input & u8x16::splat(mask));
+    let vector_blocks = source.len().div_ceil(16) as u64;
+    let result =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), bytes, channels)?;
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_path("vector");
+    Ok(crate::image::preserve_mode(img, result))
 }
 
 pub fn simd_brightness(
@@ -25683,6 +25723,47 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn posterize_direct_copy_matches_all_bits_and_vector_tails() {
+        for (width, height) in [(1, 1), (5, 1), (17, 3), (256, 1), (513, 512)] {
+            let pixels = (width * height) as usize;
+            let luma_bytes = (0..pixels)
+                .map(|index| (index.wrapping_mul(73).wrapping_add(19)) as u8)
+                .collect::<Vec<_>>();
+            let rgb_bytes = (0..pixels * 3)
+                .map(|index| (index.wrapping_mul(47).wrapping_add(31)) as u8)
+                .collect::<Vec<_>>();
+            let luma = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, luma_bytes.clone()).unwrap(),
+            );
+            let rgb = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, rgb_bytes.clone()).unwrap(),
+            );
+
+            for bits in 1..=8u8 {
+                let mask = !((1u8 << (8 - bits)) - 1);
+                let operation = PipelineOp::Posterize { bits };
+                let expected_luma = luma_bytes
+                    .iter()
+                    .map(|value| value & mask)
+                    .collect::<Vec<_>>();
+                let expected_rgb = rgb_bytes
+                    .iter()
+                    .map(|value| value & mask)
+                    .collect::<Vec<_>>();
+                let actual_luma = simd_posterize(&luma, &operation, Some("L")).unwrap();
+                let actual_rgb = simd_posterize(&rgb, &operation, Some("RGB")).unwrap();
+
+                assert!(matches!(actual_luma, DynamicImage::ImageLuma8(_)));
+                assert!(matches!(actual_rgb, DynamicImage::ImageRgb8(_)));
+                assert_eq!(actual_luma.as_bytes(), expected_luma);
+                assert_eq!(actual_rgb.as_bytes(), expected_rgb);
+                assert_eq!(luma.as_bytes(), luma_bytes);
+                assert_eq!(rgb.as_bytes(), rgb_bytes);
+            }
+        }
+    }
+
     #[cfg(feature = "parallel")]
     #[test]
     fn native_rgb_putalpha_mask_interleave_covers_vector_blocks_and_tails() {
@@ -25801,7 +25882,7 @@ mod tests {
     };
     use super::{
         native_lut_apply, native_lut_map_rows, native_lut_tables_for_channels,
-        native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band,
+        native_transpose_bytes, rotate_discrete_fast_angle, simd_extract_band, simd_posterize,
         simd_projective_nearest_transform_bytes, simd_resize_f,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};

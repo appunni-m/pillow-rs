@@ -1,7 +1,7 @@
 // Posterize: quantize each active channel to `bits` levels.
 // mask = !((1 << (8 - bits)) - 1); out = in & mask
 // Mode-aware: only processes channels present in the image mode.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA; 9=four independent packed samples
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
@@ -27,7 +27,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
+    if params.mode == 9u && idx >= params._pad { return; }
     let pixel = input[idx];
+    if params.mode == 9u {
+        let shift = 8u - params.bits;
+        let byte_mask = (0xffu << shift) & 0xffu;
+        output[idx] = pixel & (byte_mask * 0x01010101u);
+        return;
+    }
     let r = pixel & 0xffu;
     let g = (pixel >> 8u) & 0xffu;
     let b = (pixel >> 16u) & 0xffu;

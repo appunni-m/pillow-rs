@@ -8655,63 +8655,74 @@ than reopening the same scalar loop without a new profile. No coverage was run.
 
 ### ImageOps.posterize: preserve native bytes and measure material inputs — 2026-09-29
 
-The ordinary posterize workload was only 16 × 16 RGB, so it could not reveal
-the cost of converting L to RGB. Add parity-backed 1024 × 768 seeded-noise L
-and RGB workloads, with image construction outside the timed boundary and
-`posterize` plus `tobytes` inside it. This avoids benchmarking repeated zero
-pages or counting setup as point-operation time. Both fixtures use `bits=4`.
+The ordinary posterize workload was only 16 × 16 RGB, so add parity-backed
+1024 × 768 seeded-noise L and RGB workloads (`bits=4`). Construct images outside
+the timed boundary and time `posterize` plus `tobytes`; zero pages would distort
+the bandwidth profile. The supported public modes are L and RGB. Keep their
+storage native on CPU and SIMD, and preserve Pillow's mode validation.
 
-The CPU implementation used `to_rgb8()` for both accepted modes and then
-`preserve_mode()` narrowed L back to one channel. For concrete L storage, clone
-the native `GrayImage`, mask each byte in place, and return `ImageLuma8`; keep
-the RGB implementation native as well. The row helper had RGB's three-byte
-stride baked in, so make channel count explicit and split L rows at `width`,
-RGB rows at `3 * width`. A wrong row stride can divide a parallel buffer inside
-a pixel row. In SIMD, Posterize is a mask operation: precompute
-`!((1 << (8 - bits)) - 1)` and apply one vector AND rather than shifting every
-lane right and left. Public validation continues to clamp bits to `1..=8` and
-reject unsupported modes before dispatch.
+CPU originally widened both modes through `to_rgb8()` and narrowed L again.
+Operate on native L and RGB bytes instead. For SIMD, posterize is an AND mask:
+compute `!((1 << (8 - bits)) - 1)` once, allocate the output once, and transform
+the immutable source directly into it. Clone-then-mutate makes two frame passes;
+one source-to-output pass is faster and does not mutate shared input. Exhaust
+bits 1 through 8 and include partial vector blocks.
 
-Four correctness-gated material runs measured five warmups, 20 iterations ×
-five samples, concurrency one, and 100 timed calls per subject. The baseline
-was `migration-benchmark-2f710e3cbac44c5bb6101f4c8641b178`; the native CPU
-change was measured in `migration-benchmark-74d9d0b61c09464fb44a4d345fb7aa7c`,
-then repeated in `migration-benchmark-71ae2189086441dea4bb5b1fb056b0a8`; the
-final run with the direct SIMD mask is
-`migration-benchmark-a5cddca5d57447a3a91f0a5c7630793f`:
+The GPU path now admits only a singleton Posterize on checked, nonempty native L
+or RGB storage with bits 1 through 8. It packs four samples into each `u32`
+word, bounds the last partial word, and uses a valid two-dimensional dispatch.
+Native input and output transfer avoid the RGBA carrier. In WGSL, narrow the
+shifted byte mask with `& 0xffu` before multiplying by `0x01010101u`; without
+that narrowing, bits spill into adjacent packed bytes and parity fails. Test L
+and RGB partial words at bit depths 1, 4, and 8.
 
-| Mode | Subject | Baseline ms | Final ms |
-| --- | --- | ---: | ---: |
-| L | Pillow | 0.373750 | 0.349938 |
-| L | CPU | 0.787312 | 0.204187 |
-| L | SIMD | 0.075896 | 0.078854 |
-| L | GPU | 1.910062 | 1.912979 |
-| RGB | Pillow | 1.253187 | 1.177812 |
-| RGB | CPU | 0.365937 | 0.383313 |
-| RGB | SIMD | 0.243000 | 0.248854 |
-| RGB | GPU | 1.651917 | 1.639354 |
+Four implementation attempts were enough to expose the remaining limits:
 
-The native L CPU path is about 74% faster than its baseline and 1.7× faster
-than Pillow on the final run. RGB CPU remains about 3.1× faster than Pillow;
-its small median movement is within host noise. SIMD reaches about 4.4× Pillow
-for L and 4.7× for RGB, below the 5× goal. The direct-mask expression removes
-a vector shift in the source formulation, but the measured change from the
-baseline is within benchmark variation; do not claim a confirmed SIMD gain.
+1. Native packed-byte GPU transport removed the conversion and cut upload and
+   readback to exact image size: L 786,432 bytes, RGB 2,359,296 bytes. It also
+   added the packed-byte shader and boundary tests.
+2. A single-pass SIMD source-to-output transform removed the clone-plus-mutate
+   second pass. This helped RGB, while repeated L runs remained just under 5×.
+3. Row-parallelizing this low-work transform by reusing the existing 256 KiB
+   threshold regressed SIMD to 0.224 ms L and 0.412 ms RGB. Each job did only a
+   few dozen vector masks. Total bytes alone did not predict enough work to pay
+   for splitting hundreds of rows.
+4. Restore one contiguous SIMD pass. Keep row parallelism out of this operation
+   until a measured per-row-work crossover supports it.
 
-GPU ran on the device 100/100 times with one dispatch and no fallback, but each
-mode reported one conversion to the RGBA carrier, a 3,145,728-byte upload and
-the same-sized readback, and one full-frame copy. GPU medians were 1.913 ms for
-L and 1.639 ms for RGB, about 24× and 6.6× SIMD latency respectively. The next
-GPU attack must preserve native bytes through both input and output transport;
-shader-only tuning is below the current transfer and materialization floor.
-The final benchmark parity gate passed all six backend comparisons across the
-two workloads (`migration-parity-benchmark-gate-a195575bd75942ea820e3f08236e9359`),
-and the focused public CPU contract passed 5/5
-(`migration-parity-fc11cd747ee44c9082c05ebbb8c8b1ed`). The Rust regression
-checks all 256 byte values at every bit depth from 1 through 8 for L and RGB.
-Checkpoint after four bounded benchmark runs and continue to the next operation;
-carry the SIMD 5× gap and GPU RGBA transport as explicit blockers. No coverage
-was run.
+The final two correctness-gated runs used five warmups, 20 iterations × five
+samples, concurrency one, and 100 timed calls per backend. Images were
+1024 × 768; setup was outside the timed boundary. Run IDs are
+`migration-benchmark-12b66672307949bca17e42c8d4aac6b2` and its repeat
+`migration-benchmark-ecb70f3b5d5c4b3c87313ba27a3aa0fc`:
+
+| Mode | Pillow, run 1 / repeat (ms) | CPU, run 1 / repeat (ms) | SIMD, run 1 / repeat (ms) | GPU, run 1 / repeat (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| L | 0.356667 / 0.324917 | 0.224938 / 0.223063 | 0.053645 / 0.073125 | 0.600167 / 0.592437 |
+| RGB | 1.165687 / 1.104583 | 0.423208 / 0.365834 | 0.212000 / 0.205250 | 0.913520 / 0.822771 |
+
+CPU beat Pillow in both modes in both runs. SIMD beat Pillow by 4.44× and 6.65×
+for L, and 5.50× and 5.38× for RGB. L therefore still misses the 5× SIMD goal
+on one of the two final runs; the earlier one-pass repeats were also 4.36× and
+4.66× for L. Keep this as an explicit blocker rather than taking the faster
+single run as proof of a stable 5×.
+
+GPU completed on-device 100/100 times with one dispatch and no fallback. It
+transferred native bytes with zero mode conversions, but retained one full-frame
+copy and synchronous readback. GPU was 8.1× slower than SIMD for L and 4.0× for
+RGB on the repeat, so native transport alone does not achieve GPU/SIMD parity.
+The next GPU work needs to identify and reduce completion, readback, and
+materialization latency; shader instruction tuning is not yet justified.
+
+Final strict parity passed 8/8 cases on each backend: CPU
+(`migration-parity-ae78dc8665774322b3a920ac322deaa1`), SIMD
+(`migration-parity-aed59825826543c8a01f969a0e80d448`), and GPU
+(`migration-parity-7e5a960a807d45eea72701d40ef69612`). Each benchmark parity
+gate passed all 6 selected backend comparisons. The focused Rust posterize
+tests passed 3/3; `make build-parity` passed and preserved the Pillow oracle.
+Inputs were regenerated and checked. No coverage collection was run. Checkpoint
+posterize after four implementation attempts and continue to the next operation
+with the L SIMD and GPU/SIMD gaps recorded.
 
 ### RGB `ImageOps.grayscale`: keep three-byte GPU input — 2026-09-29
 

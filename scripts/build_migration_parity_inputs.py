@@ -30023,6 +30023,23 @@ def build_nuanced_cases(
             {
                 "surface": "PIL.ImageOps",
                 "operation": "posterize",
+                "requirement_suffix": "parameter.bits",
+            "name": f"gpu-native-byte-tail-{mode.lower()}-3x1-bits-{bits}",
+                "mode": mode,
+                "size": [3, 1],
+                "edge": "noise-fill",
+                "seed": 20260929,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "values": {"bits": literal(bits)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("L", "RGB")
+            for bits in (1, 4, 8)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "posterize",
                 "requirement_suffix": f"mode.{mode.lower()}",
                 "name": f"simd-alpha-{mode.lower()}",
                 "mode": mode,
