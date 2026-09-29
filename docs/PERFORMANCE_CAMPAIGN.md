@@ -8574,3 +8574,63 @@ actual-backend receipts: this eager conversion bypasses those backends, so the
 timings are not SIMD/GPU evidence. Checkpoint after four bounded changes;
 carry the tail-latency variance and missing accelerated route forward rather
 than reopening the same scalar loop without a new profile. No coverage was run.
+
+### ImageOps.posterize: preserve native bytes and measure material inputs — 2026-09-29
+
+The ordinary posterize workload was only 16 × 16 RGB, so it could not reveal
+the cost of converting L to RGB. Add parity-backed 1024 × 768 seeded-noise L
+and RGB workloads, with image construction outside the timed boundary and
+`posterize` plus `tobytes` inside it. This avoids benchmarking repeated zero
+pages or counting setup as point-operation time. Both fixtures use `bits=4`.
+
+The CPU implementation used `to_rgb8()` for both accepted modes and then
+`preserve_mode()` narrowed L back to one channel. For concrete L storage, clone
+the native `GrayImage`, mask each byte in place, and return `ImageLuma8`; keep
+the RGB implementation native as well. The row helper had RGB's three-byte
+stride baked in, so make channel count explicit and split L rows at `width`,
+RGB rows at `3 * width`. A wrong row stride can divide a parallel buffer inside
+a pixel row. In SIMD, Posterize is a mask operation: precompute
+`!((1 << (8 - bits)) - 1)` and apply one vector AND rather than shifting every
+lane right and left. Public validation continues to clamp bits to `1..=8` and
+reject unsupported modes before dispatch.
+
+Four correctness-gated material runs measured five warmups, 20 iterations ×
+five samples, concurrency one, and 100 timed calls per subject. The baseline
+was `migration-benchmark-2f710e3cbac44c5bb6101f4c8641b178`; the native CPU
+change was measured in `migration-benchmark-74d9d0b61c09464fb44a4d345fb7aa7c`,
+then repeated in `migration-benchmark-71ae2189086441dea4bb5b1fb056b0a8`; the
+final run with the direct SIMD mask is
+`migration-benchmark-a5cddca5d57447a3a91f0a5c7630793f`:
+
+| Mode | Subject | Baseline ms | Final ms |
+| --- | --- | ---: | ---: |
+| L | Pillow | 0.373750 | 0.349938 |
+| L | CPU | 0.787312 | 0.204187 |
+| L | SIMD | 0.075896 | 0.078854 |
+| L | GPU | 1.910062 | 1.912979 |
+| RGB | Pillow | 1.253187 | 1.177812 |
+| RGB | CPU | 0.365937 | 0.383313 |
+| RGB | SIMD | 0.243000 | 0.248854 |
+| RGB | GPU | 1.651917 | 1.639354 |
+
+The native L CPU path is about 74% faster than its baseline and 1.7× faster
+than Pillow on the final run. RGB CPU remains about 3.1× faster than Pillow;
+its small median movement is within host noise. SIMD reaches about 4.4× Pillow
+for L and 4.7× for RGB, below the 5× goal. The direct-mask expression removes
+a vector shift in the source formulation, but the measured change from the
+baseline is within benchmark variation; do not claim a confirmed SIMD gain.
+
+GPU ran on the device 100/100 times with one dispatch and no fallback, but each
+mode reported one conversion to the RGBA carrier, a 3,145,728-byte upload and
+the same-sized readback, and one full-frame copy. GPU medians were 1.913 ms for
+L and 1.639 ms for RGB, about 24× and 6.6× SIMD latency respectively. The next
+GPU attack must preserve native bytes through both input and output transport;
+shader-only tuning is below the current transfer and materialization floor.
+The final benchmark parity gate passed all six backend comparisons across the
+two workloads (`migration-parity-benchmark-gate-a195575bd75942ea820e3f08236e9359`),
+and the focused public CPU contract passed 5/5
+(`migration-parity-fc11cd747ee44c9082c05ebbb8c8b1ed`). The Rust regression
+checks all 256 byte values at every bit depth from 1 through 8 for L and RGB.
+Checkpoint after four bounded benchmark runs and continue to the next operation;
+carry the SIMD 5× gap and GPU RGBA transport as explicit blockers. No coverage
+was run.

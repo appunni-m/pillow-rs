@@ -29908,6 +29908,25 @@ def build_nuanced_cases(
             "values": {"bits": literal(4)},
             "observe_result": "tobytes",
         },
+        # Keep Posterize's byte-layout paths parity-gated on material data.
+        # The timed benchmark observes only the operation and materialization;
+        # deterministic noise setup stays outside the timing boundary.
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "posterize",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-large-{mode.lower()}-noise-1024x768",
+                "mode": mode,
+                "size": [1024, 768],
+                "edge": "noise-fill",
+                "seed": 20260929,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "values": {"bits": literal(4)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("L", "RGB")
+        ),
         *(
             {
                 "surface": "PIL.ImageOps",
@@ -45727,6 +45746,40 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    posterize_material_workloads = []
+    posterize_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "posterize"
+    )
+    for mode in ("L", "RGB"):
+        case_id = (
+            "PIL.ImageOps.posterize.nuanced.performance-large-"
+            f"{mode.lower()}-noise-1024x768"
+        )
+        case = cases_by_id[case_id]
+        posterize_material_workloads.append(
+            {
+                "workload_id": f"pipeline-op.posterize.material-{mode.lower()}-noise-1024x768",
+                "covers": [posterize_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    **copy.deepcopy(policy),
+                    "boundary": "observed_steps",
+                    "step_ids": ["call", "observe-result"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "correctness_gate": "parity_pass",
+                },
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=f"posterize-material-{mode.lower()}-noise-1024x768",
+                    surface="PIL.ImageOps",
+                    operation="posterize",
+                ),
+            }
+        )
+
     thumbnail_scalar_workloads = []
     for mode, suffix in (("F", "f32"), ("I", "i32")):
         case_id = (
@@ -48101,6 +48154,7 @@ def build_pipeline_benchmark_document(
         "workloads": [
             *operation_workloads,
             thumbnail_material_workload,
+            *posterize_material_workloads,
             *thumbnail_scalar_workloads,
             f_boxed_resize_workload,
             f_resize_workload,
@@ -48168,6 +48222,17 @@ def build_pipeline_benchmark_document(
                 ),
                 "members": [
                     {"workload_id": thumbnail_material_workload["workload_id"], "weight": 1}
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.posterize-material-size-suite",
+                "description": (
+                    "Parity-gated 1024x768 native L and RGB posterize latency "
+                    "and throughput across CPU, SIMD, and GPU."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in posterize_material_workloads
                 ],
             },
             {

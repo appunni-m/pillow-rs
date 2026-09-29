@@ -11949,7 +11949,8 @@ pub fn simd_posterize(
     let shift = 8u32
         .checked_sub(*bits as u32)
         .ok_or_else(|| PilError::ValueError("posterize bits must be at most 8".into()))?;
-    native_byte_transform(img, mode, |input| (input >> shift) << shift).ok_or_else(|| {
+    let mask = !((1u8 << shift) - 1);
+    native_byte_transform(img, mode, |input| input & u8x16::splat(mask)).ok_or_else(|| {
         PilError::NotImplementedError(
             "SIMD posterize requires a validated native L or RGB byte image".into(),
         )
