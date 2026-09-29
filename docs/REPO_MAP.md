@@ -98,7 +98,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- blend_module.wgsl
 |   |   |   |       |-- box_blur.wgsl
 |   |   |   |       |-- box_blur_h.wgsl
+|   |   |   |       |-- box_blur_h_luma_packed.wgsl
 |   |   |   |       |-- box_blur_v.wgsl
+|   |   |   |       |-- box_blur_v_luma_packed.wgsl
 |   |   |   |       |-- brightness.wgsl
 |   |   |   |       |-- brightness_native.wgsl
 |   |   |   |       |-- color_3dlut.wgsl
@@ -154,6 +156,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- pad.wgsl
 |   |   |   |       |-- paste.wgsl
 |   |   |   |       |-- paste_native_bytes.wgsl
+|   |   |   |       |-- paste_native_masked_l.wgsl
 |   |   |   |       |-- point_luma_packed.wgsl
 |   |   |   |       |-- point_op.wgsl
 |   |   |   |       |-- posterize.wgsl
