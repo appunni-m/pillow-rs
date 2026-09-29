@@ -33,6 +33,15 @@ fn pixel_channel(pixel: u32, channel: u32) -> u32 {
     return (pixel >> (channel * 8u)) & 255u;
 }
 
+fn sample_channel(pixel_index: u32, channel: u32) -> u32 {
+    if params._pad == 0xffffffffu {
+        let byte_index = pixel_index * params.channels + channel;
+        let word = input[byte_index / 4u];
+        return (word >> ((byte_index % 4u) * 8u)) & 255u;
+    }
+    return pixel_channel(input[pixel_index], channel);
+}
+
 fn luma16_sample(word: u32) -> u32 {
     let low = word & 255u;
     let high = (word >> 8u) & 255u;
@@ -66,10 +75,10 @@ fn filtered_channel(source_y: u32, output_x: u32, channel: u32) -> u32 {
     let weight_base = 3u * params.dst_w + u32(coefficients[metadata + 2u]);
     var sum: i32 = 0;
     for (var tap = 0u; tap < count; tap = tap + 1u) {
-        let pixel = input[source_y * params.width + source_x + tap];
-        var value = pixel_channel(pixel, channel);
+        let pixel_index = source_y * params.width + source_x + tap;
+        var value = sample_channel(pixel_index, channel);
         if params.premultiply != 0u && channel + 1u < params.channels {
-            value = premultiply(value, pixel_channel(pixel, params.channels - 1u));
+            value = premultiply(value, sample_channel(pixel_index, params.channels - 1u));
         }
         sum = sum + i32(value) * coefficients[weight_base + tap];
     }
@@ -1343,7 +1352,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     // ResizeBoxed stores only rows referenced by its vertical table. `_pad`
     // carries the first original source row; output rows remain zero-based so
     // the rebased vertical table addresses this compact intermediate.
-    let source_y = gid.y + params._pad;
+    var source_y = gid.y + params._pad;
+    if params._pad == 0xffffffffu {
+        source_y = gid.y;
+    }
     if source_y >= params.height {
         return;
     }

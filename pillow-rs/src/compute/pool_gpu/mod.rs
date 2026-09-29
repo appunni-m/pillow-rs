@@ -7231,6 +7231,7 @@ impl GpuInner {
         packed_luma_putdata: bool,
         native_extract_band: bool,
         native_expand_channels: Option<u8>,
+        native_cover_input_channels: Option<u8>,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -7467,6 +7468,13 @@ impl GpuInner {
                 // These are safe because admission requires a singleton
                 // Expand batch with matching physical storage.
                 params[3] = 1 | (u32::from(native_expand_output_dispatch.is_some()) << 1);
+            }
+            if native_cover_input_channels.is_some() && matches!(op, PipelineOp::Resize { .. }) {
+                // Geometry lowering turns singleton Cover into this exact
+                // Resize node. Its source-row word is otherwise unused for
+                // ordinary Resize; reserve the sentinel for compact native
+                // input byte addressing in the horizontal shader.
+                params[3] = u32::MAX;
             }
             if packed_luma_putdata && matches!(op, PipelineOp::PutData { .. }) {
                 let pixel_count = CheckedDims::new(cur_w, cur_h, 1)?.total_pixels();
@@ -11007,6 +11015,7 @@ impl GpuInner {
         packed_luma_putdata: bool,
         native_extract_band: bool,
         native_expand_channels: Option<u8>,
+        native_cover_input_channels: Option<u8>,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
@@ -11214,6 +11223,7 @@ impl GpuInner {
                 packed_luma_putdata,
                 native_extract_band,
                 native_expand_channels,
+                native_cover_input_channels,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -11405,6 +11415,43 @@ fn gpu_native_expand_channels(
         .checked_mul(u64::from(image.height()))?
         .checked_mul(u64::from(channels))?;
     (input_bytes > 0 && input_bytes <= u64::from(u32::MAX)).then_some(channels)
+}
+
+/// Return the native input stride for a singleton Cover whose byte layout
+/// would otherwise be widened to the generic RGBA transport. The resize
+/// shader still emits its established packed output; this admission only
+/// changes how the source samples are read.
+#[cfg(target_endian = "little")]
+fn gpu_native_cover_input_channels(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> Option<u8> {
+    let [PipelineOp::Cover { .. }] = ops else {
+        return None;
+    };
+    let channels = match (logical_mode, image) {
+        (None | Some("L"), DynamicImage::ImageLuma8(_)) => 1u8,
+        (None | Some("LA"), DynamicImage::ImageLumaA8(_)) => 2,
+        (None | Some("RGB" | "HSV"), DynamicImage::ImageRgb8(_)) => 3,
+        _ => return None,
+    };
+    let input_bytes = u64::from(image.width())
+        .checked_mul(u64::from(image.height()))?
+        .checked_mul(u64::from(channels))?;
+    (input_bytes > 0
+        && input_bytes <= u64::from(u32::MAX)
+        && usize::try_from(input_bytes).ok()? == image.as_bytes().len())
+    .then_some(channels)
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_cover_input_channels(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> Option<u8> {
+    None
 }
 
 #[cfg(not(target_endian = "little"))]
@@ -17142,6 +17189,7 @@ impl GpuPool {
         let source_is_luma_point_run = ops.iter().all(|op| matches!(op, PipelineOp::Eval { .. }))
             && matches!(img, DynamicImage::ImageLuma8(_))
             && matches!(mode, None | Some("L"));
+        let native_cover_input_channels = gpu_native_cover_input_channels(ops, img, mode);
 
         // Keep the public operation list intact for routing and parity, but
         // execute contiguous exact point runs as one LUT dispatch when the
@@ -18413,6 +18461,8 @@ impl GpuPool {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else if let Some(channels) = native_expand_channels {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
+        } else if let Some(channels) = native_cover_input_channels {
+            buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else {
             buffers.upload_standard_image(&gpu.queue, img)?;
         }
@@ -18437,6 +18487,7 @@ impl GpuPool {
             packed_luma_putdata,
             native_extract_band,
             native_expand_channels,
+            native_cover_input_channels,
             mode,
             contrast_mean,
             f_resize_constant_bits,
@@ -18559,6 +18610,14 @@ impl GpuPool {
                 .ok_or_else(|| PilError::ValueError("GPU Expand input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU Expand input is too large".into()))?
+        } else if let Some(channels) = native_cover_input_channels {
+            let raw_bytes = CheckedDims::new(w, h, channels)?.total_bytes();
+            let transfer_bytes = raw_bytes
+                .div_ceil(std::mem::size_of::<u32>())
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| PilError::ValueError("GPU Cover input is too large".into()))?;
+            u64::try_from(transfer_bytes)
+                .map_err(|_| PilError::ValueError("GPU Cover input is too large".into()))?
         } else if packed_luma_colorize || packed_luma_point || packed_luma_putdata {
             compact_luma8_transfer_bytes(w, h)?
         } else {
@@ -18589,24 +18648,25 @@ impl GpuPool {
         };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
-        resource_telemetry.mode_conversion_count = if native_expand_channels.is_some() {
-            // This counter measures source widening before backend execution.
-            // Native upload avoids that conversion for all admitted layouts;
-            // RGBA readback narrowing is accounted at the output boundary.
-            0
-        } else {
-            u64::from(
-                !native_extract_band
-                    && !packed_luma_point
-                    && !packed_luma_putdata
-                    && (native_luma16_convert
-                        || native_luma16_paste
-                        || !matches!(
-                            img,
-                            DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
-                        )),
-            )
-        };
+        resource_telemetry.mode_conversion_count =
+            if native_expand_channels.is_some() || native_cover_input_channels.is_some() {
+                // This counter measures source widening before backend execution.
+                // Native upload avoids that conversion for admitted layouts;
+                // RGBA readback narrowing is accounted at the output boundary.
+                0
+            } else {
+                u64::from(
+                    !native_extract_band
+                        && !packed_luma_point
+                        && !packed_luma_putdata
+                        && (native_luma16_convert
+                            || native_luma16_paste
+                            || !matches!(
+                                img,
+                                DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
+                            )),
+                )
+            };
         crate::compute::record_pipeline_resource_telemetry(resource_telemetry);
         crate::compute::record_pipeline_dispatch_count(dispatch_count);
         if let ReadbackTarget::Staging(staging) = readback {
@@ -19689,6 +19749,7 @@ mod tests {
                         false,
                         false,
                         false,
+                        None,
                         None,
                         Some("RGBA"),
                         None,
@@ -24122,6 +24183,78 @@ mod tests {
         assert_eq!(
             super::gpu_native_expand_channels(&multiple, &rgb, Some("RGB")),
             None
+        );
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_cover_input_requires_matching_byte_layout() {
+        let cover = PipelineOp::Cover {
+            w: 8,
+            h: 12,
+            filter: ResampleFilter::Bicubic,
+        };
+        let cases = [
+            (
+                DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![3, 5]).unwrap()),
+                Some("L"),
+                Some(1),
+            ),
+            (
+                DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(2, 1, vec![3, 19, 5, 23]).unwrap(),
+                ),
+                Some("LA"),
+                Some(2),
+            ),
+            (
+                DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(2, 1, vec![3, 5, 7, 11, 13, 17]).unwrap(),
+                ),
+                Some("RGB"),
+                Some(3),
+            ),
+            (
+                DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(2, 1, vec![3, 5, 7, 11, 13, 17]).unwrap(),
+                ),
+                Some("HSV"),
+                Some(3),
+            ),
+        ];
+        for (image, mode, expected) in cases {
+            assert_eq!(
+                super::gpu_native_cover_input_channels(std::slice::from_ref(&cover), &image, mode,),
+                expected,
+                "mode {mode:?}"
+            );
+        }
+
+        let rgba = DynamicImage::ImageRgba8(RgbaImage::from_raw(1, 1, vec![3, 5, 7, 11]).unwrap());
+        assert_eq!(
+            super::gpu_native_cover_input_channels(
+                std::slice::from_ref(&cover),
+                &rgba,
+                Some("CMYK"),
+            ),
+            None,
+            "four-byte layouts already match the generic transport"
+        );
+        let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(1, 1, vec![1, 2, 3]).unwrap());
+        assert_eq!(
+            super::gpu_native_cover_input_channels(
+                std::slice::from_ref(&cover),
+                &rgb,
+                Some("CMYK"),
+            ),
+            None,
+            "logical mode must match physical storage"
+        );
+        let multiple = [cover, PipelineOp::Duplicate];
+        assert_eq!(
+            super::gpu_native_cover_input_channels(&multiple, &rgb, Some("RGB")),
+            None,
+            "native source packing is singleton-only"
         );
     }
 

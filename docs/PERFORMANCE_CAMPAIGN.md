@@ -8348,3 +8348,77 @@ materialization costs. These benchmark throughput values are reciprocals of
 single-request latency, not sustained concurrent throughput. RGB Brightness is
 checkpointed with CPU and SIMD goals met and the GPU/SIMD target retained as a
 blocker for a resident or batched GPU path. No coverage was run.
+
+### ImageOps.cover: preserve native GPU source bytes — 2026-09-29
+
+Cover normalizes its geometry to a horizontal and vertical Resize, but the
+generic GPU uploader first widens L, LA, RGB, and HSV to four bytes per pixel.
+For the horizontal pass, the coefficients address logical samples, so those
+source layouts can stay compact: one byte for L, two for LA, and three for RGB
+or HSV. Admission is limited to one Cover operation, little-endian hosts, an
+exact logical-mode/concrete-storage match, checked nonzero byte counts within
+the shader's u32 indexing range, and a byte slice matching that layout. RGBA
+and CMYK already occupy four bytes per pixel and therefore gain no upload
+reduction; other layouts retain the generic path.
+
+The host preserves the original Cover identity before geometry lowering, then
+marks only its lowered horizontal Resize with a reserved parameter sentinel.
+The shader uses `pixel_index * channels + channel` to address the compact source
+bytes; LA alpha is read from native byte 1, while the existing widened-input
+path continues to read the transported alpha from packed byte 3. The uploaded
+tail is padded to a u32 boundary. This sentinel is safe only for the admitted
+singleton Cover route because ordinary Resize/ResizeBoxed uses the same field
+for source-row rebasing. WGSL conditionals must use statement form (`var`, then
+`if` assignment); an `if` expression prevented shader pipeline validation and
+caused every strict GPU case to fail before execution.
+
+The independent material workloads use deterministic 1024 × 768 noise inputs,
+Cover size 768 × 1024, one warmup, 20 measured iterations, five samples, and
+concurrency one. Baseline and native-input receipts are
+`migration-benchmark-9848a4c0f18d4bfe9bd5658a65ad948c` and
+`migration-benchmark-3044252b9d8a40c09fe27de566aeb564`:
+
+| Mode | Subject | Baseline ms | Native-input ms |
+| --- | --- | ---: | ---: |
+| L | Pillow | 4.6713 | 4.5008 |
+| L | CPU | 1.7588 | 1.7387 |
+| L | SIMD | 1.2544 | 1.2624 |
+| L | GPU | 3.1231 | 2.5690 |
+| LA | Pillow | 8.6913 | 8.5444 |
+| LA | CPU | 3.1257 | 3.0700 |
+| LA | SIMD | 2.7909 | 2.7928 |
+| LA | GPU | 4.3873 | 3.8483 |
+| RGB | Pillow | 9.3021 | 9.7258 |
+| RGB | CPU | 3.8241 | 3.8257 |
+| RGB | SIMD | 2.9460 | 2.9411 |
+| RGB | GPU | 2.8024 | 2.6103 |
+| RGBA | Pillow | 16.3804 | 16.0403 |
+| RGBA | CPU | 5.4148 | 5.4569 |
+| RGBA | SIMD | 5.5255 | 5.5333 |
+| RGBA | GPU | 2.5933 | 3.0746 |
+| HSV | Pillow | 9.1663 | 9.0885 |
+| HSV | CPU | 3.8624 | 3.7963 |
+| HSV | SIMD | 2.9332 | 2.9742 |
+| HSV | GPU | 2.6569 | 2.6485 |
+| CMYK | Pillow | 12.6096 | 12.4992 |
+| CMYK | CPU | 4.8398 | 4.7159 |
+| CMYK | SIMD | 3.8293 | 3.8227 |
+| CMYK | GPU | 2.7126 | 2.9264 |
+
+The final GPU receipt reports 100/100 executions on GPU with no fallback and
+two dispatches per call. L/LA/RGB/HSV uploads fall from 3,145,728 bytes to
+786,432/1,572,864/2,359,296/2,359,296 bytes; RGBA and CMYK stay at 3,145,728.
+Readback remains 5,591,040 bytes for every mode, so the input change improves
+GPU latency for L, LA, and RGB but leaves GPU slower than SIMD for L and LA.
+HSV and CMYK are also timing-noisy; RGB/RGBA/HSV/CMYK GPU medians are below
+SIMD on this run. CPU beats Pillow for all six modes, while SIMD reaches only
+about 3.0–3.7× Pillow speed, below the 5× campaign goal. The unchanged large
+readback and synchronous completion are the next Cover bottleneck; this
+checkpoint does not claim the GPU/SIMD throughput goal. The first corrected
+strict parity sweep passed 6/6 each on CPU, strict SIMD, and strict GPU
+(`migration-parity-5a3e104b48a6449fb3290e15a591a2d0`,
+`migration-parity-27f34ea648e04a27b310da1623870f34`, and
+`migration-parity-f2c08022912743029fe7006e750e8325`). The new SIMD adapter also
+routes logical modes through the central typed resize dispatcher: bytes-per-
+pixel alone cannot decide whether the fourth byte is alpha, CMYK K, or scalar
+data. No coverage was run.

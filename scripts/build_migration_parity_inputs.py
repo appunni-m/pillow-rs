@@ -265,6 +265,14 @@ PAD_PERFORMANCE_CASES = (
     ("hsv-noise-1024x768-square", "HSV", [1024, 768], 20261011, [17, 83, 149]),
     ("cmyk-noise-1024x768-square", "CMYK", [1024, 768], 20261027, [17, 83, 149, 31]),
 )
+COVER_PERFORMANCE_CASES = (
+    ("l-noise-1024x768", "L", [1024, 768], 20261028),
+    ("la-noise-1024x768", "LA", [1024, 768], 20261029),
+    ("rgb-noise-1024x768", "RGB", [1024, 768], 20261030),
+    ("rgba-noise-1024x768", "RGBA", [1024, 768], 20261031),
+    ("hsv-noise-1024x768", "HSV", [1024, 768], 20261101),
+    ("cmyk-noise-1024x768", "CMYK", [1024, 768], 20261102),
+)
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
     ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
@@ -40597,6 +40605,20 @@ def build_nuanced_cases(
     },)
 
     if surface_id == "PIL.ImageOps":
+        # Cover from a 4:3 source to a portrait target forces a material resize
+        # while retaining the full covering raster. Exercise native channel
+        # layouts, including HSV and CMYK's distinct four-byte semantics.
+        for name, mode, size, seed in COVER_PERFORMANCE_CASES:
+            specs += ({
+                "surface": "PIL.ImageOps", "operation": "cover",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-material-{name}",
+                "mode": mode, "size": size, "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal([768, 1024])},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
         # Materialize the pad assembly on noisy native byte layouts. The 4:3
         # source already fits the 4:4 target width, so contain keeps its
         # dimensions and the timed operation isolates canvas fill and row copy.
@@ -49191,6 +49213,46 @@ def build_inputs(
                                 variant=f"pad-native-{slug(name)}",
                                 surface=surface_id,
                                 operation="pad",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+            cover_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "cover"
+                ),
+                None,
+            )
+            if cover_benchmark is not None:
+                operation, requirement = cover_benchmark
+                for name, _mode, _size, _seed in COVER_PERFORMANCE_CASES:
+                    workload_id = f"{storage_slug}.cover.materialized.{slug(name)}"
+                    case_id = f"PIL.ImageOps.cover.nuanced.performance-material-{slug(name)}"
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {"kind": "parity_case", "case_id": case_id},
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-result"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"cover-material-{slug(name)}",
+                                surface=surface_id,
+                                operation="cover",
                             ),
                         }
                     )
