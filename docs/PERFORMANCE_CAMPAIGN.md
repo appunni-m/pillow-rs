@@ -9418,3 +9418,62 @@ CPU, SIMD, and GPU (12/12 total). The focused
 collection ran. Keep the format-specific output kernel and compact GPU source
 upload; record SIMD 5× and GPU-throughput parity as open goals, then continue
 to the next native-format operation instead of adding another unproven branch.
+
+### RGB `convert("RGBA")` — checkpoint 2026-09-29
+
+The measured operation is `pil-image-image.convert.rgb-to-rgba-material`, a
+seeded 1,024 × 768 RGB image whose public conversion and output materialization
+are timed. The RGBA destination is required. The avoidable work was expanding
+the three-byte source to four bytes before GPU upload; the SIMD path also rebuilt
+generic RGB-to-RGBA lane maps for every small block.
+
+The native SIMD kernel uses one fixed 16-byte shuffle for each four RGB pixels.
+It copies each 12-byte source group into a padded vector, selects RGB byte
+lanes, and uses a sentinel lane to write opaque alpha. It collects fixed output
+blocks and flattens the owned arrays without a second pixel-buffer copy. A
+large-image row-parallel experiment that zero-filled the full output before
+writing was slower; collecting disjoint vector blocks removed that pass. Keep
+the measured threshold at 512² pixels for parallel collection and the serial
+path below it. The GPU route is limited to one ordinary RGB-to-RGBA Convert on
+little-endian native `ImageRgb8` storage; the shader decodes packed RGB triples
+across u32 word boundaries and writes one RGBA word per pixel. Other modes,
+custom conversion parameters, empty dimensions, and chained operations retain
+the established path.
+
+Four bounded changes were measured. Fixed SIMD shuffles reduced the SIMD
+median from 3.975 ms to 0.932 ms, but it still lost to Pillow. Row parallelism
+then measured 0.421–0.483 ms across two host-variable runs; it added a full
+output initialization pass and scheduling. Block collection without that
+zero-fill measured 0.365 ms and 0.394 ms. The final GPU-native input attempt
+reduced GPU upload from 3,145,728 to 2,359,296 bytes, source widening from one
+conversion to zero, and GPU latency from the preceding 1.233 ms repeat to
+0.962 ms. Two later receipts were 0.952 and 0.959 ms, so the GPU improvement
+persisted while RGBA readback remained 3,145,728 bytes and one dispatch.
+
+The three correctness-gated benchmark receipts for the native GPU route each
+contain 100 actual executions per requested backend and no fallback:
+
+| Receipt | Pillow | CPU | SIMD | GPU | GPU upload / readback |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `migration-benchmark-b2defcc73bf142e59cc797d739df9c02` | 0.506 ms | 0.290 ms | 0.388 ms | 0.962 ms | 2,359,296 / 3,145,728 B |
+| `migration-benchmark-5598075566384ad7a0aa76498531116f` | 0.464 ms | 0.274 ms | 0.355 ms | 0.952 ms | 2,359,296 / 3,145,728 B |
+| `migration-benchmark-49820af664ee47a0adc777e8b1887f83` | 0.592 ms | 0.295 ms | 0.350 ms | 0.959 ms | 2,359,296 / 3,145,728 B |
+
+Across these receipts, CPU beats Pillow by 1.69–2.01×. SIMD reaches only
+1.31–1.69× Pillow, short of the 5× target. GPU is still 2.48–2.74× slower
+than SIMD at concurrency one; these reciprocal-latency samples do not establish
+saturated throughput. Keep the stable native input transfer reduction, but
+checkpoint the SIMD and GPU goals as blockers and move on after these four
+attempts.
+
+Exact parity passed the 17 × 3, 0 × 3, 3 × 0, and material cases on CPU, SIMD,
+and GPU (12/12 comparisons). The focused
+`native_rgb_to_rgba_matches_exact_conversion_across_vector_tails`,
+`gpu_native_rgb_to_rgba_input_requires_exact_native_rgb_conversion`, and
+`gpu_rgb_readback_native_respects_final_mode_and_transfer_counts` Rust tests
+passed; the GPU readback test checks a 5 × 3 source, word-boundary crossings,
+compact upload accounting, zero source-widening conversions, and an actual
+single GPU dispatch. `make build-parity`, `make migration-parity-inputs-check`,
+and all three standard single-workload benchmark correctness gates passed.
+Final strict parity passed all four selected cases on CPU, SIMD, and GPU after
+the last shader edit (12/12). No coverage collection ran.

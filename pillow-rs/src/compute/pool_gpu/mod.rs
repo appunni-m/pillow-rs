@@ -7296,6 +7296,7 @@ impl GpuInner {
         f_resize_f64_ordered_is_exact: bool,
         packed_luma_colorize: bool,
         packed_luma_convert: bool,
+        native_rgb_to_rgba_input: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         native_extract_band: bool,
@@ -7601,6 +7602,9 @@ impl GpuInner {
             } else if packed_luma_convert && matches!(op, PipelineOp::Convert { .. }) {
                 // Convert reads four native L samples per input storage word.
                 params[3] = 1;
+            } else if native_rgb_to_rgba_input && matches!(op, PipelineOp::Convert { .. }) {
+                // Convert reads native RGB triples from the compact byte upload.
+                params[3] = 2;
             }
             if matches!(
                 op,
@@ -11133,6 +11137,7 @@ impl GpuInner {
         mode: u32,
         packed_luma_colorize: bool,
         packed_luma_convert: bool,
+        native_rgb_to_rgba_input: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         native_extract_band: bool,
@@ -11346,6 +11351,7 @@ impl GpuInner {
                 f_resize_f64_ordered_is_exact,
                 packed_luma_colorize,
                 packed_luma_convert,
+                native_rgb_to_rgba_input,
                 packed_luma_point,
                 packed_luma_putdata,
                 native_extract_band,
@@ -11567,6 +11573,46 @@ fn gpu_packed_luma_convert_input(
 
 #[cfg(not(target_endian = "little"))]
 fn gpu_packed_luma_convert_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
+}
+
+/// Admit a singleton RGB -> RGBA conversion that uploads native RGB bytes.
+/// The shader decodes each packed triple and emits the required RGBA output.
+#[cfg(target_endian = "little")]
+fn gpu_native_rgb_to_rgba_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(
+        ops,
+        [PipelineOp::Convert {
+            mode: ColorMode::RGBA,
+            matrix: None,
+            dither: None,
+        }]
+    ) || !matches!(logical_mode, None | Some("RGB"))
+        || image.width() == 0
+        || image.height() == 0
+    {
+        return false;
+    }
+    let DynamicImage::ImageRgb8(rgb) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 3) else {
+        return false;
+    };
+    let input_bytes = layout.total_bytes();
+    input_bytes > 0 && input_bytes <= u32::MAX as usize && rgb.as_raw().len() == input_bytes
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_rgb_to_rgba_input(
     _ops: &[PipelineOp],
     _image: &DynamicImage,
     _logical_mode: Option<&str>,
@@ -17676,6 +17722,7 @@ impl GpuPool {
         // packed four-samples-per-word source. Other targets and prefixes keep
         // the existing standard RGBA transport and shader contract.
         let packed_luma_convert = gpu_packed_luma_convert_input(ops, img, mode);
+        let native_rgb_to_rgba_input = gpu_native_rgb_to_rgba_input(ops, img, mode);
         let packed_luma_point = source_is_luma_point_run
             && matches!(ops, [PipelineOp::Eval { .. }])
             && img.width() != 0
@@ -18855,6 +18902,8 @@ impl GpuPool {
                 ));
             };
             buffers.upload_packed_luma8(&gpu.queue, image)?;
+        } else if native_rgb_to_rgba_input {
+            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
         } else if let Some(channels) = native_extract_band_channels {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else if native_grayscale_rgb_input {
@@ -18897,6 +18946,7 @@ impl GpuPool {
             mcode,
             packed_luma_colorize,
             packed_luma_convert,
+            native_rgb_to_rgba_input,
             packed_luma_point,
             packed_luma_putdata,
             native_extract_band,
@@ -19022,7 +19072,7 @@ impl GpuPool {
                 .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU channel input is too large".into()))?
-        } else if native_grayscale_rgb_input {
+        } else if native_grayscale_rgb_input || native_rgb_to_rgba_input {
             let raw_bytes = CheckedDims::new(w, h, 3)?.total_bytes();
             let transfer_bytes = raw_bytes
                 .div_ceil(std::mem::size_of::<u32>())
@@ -19097,6 +19147,7 @@ impl GpuPool {
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = if packed_luma_convert
+            || native_rgb_to_rgba_input
             || native_grayscale_rgb_input
             || native_sharpness_la_input
             || native_sharpness_rgb_input
@@ -20231,6 +20282,7 @@ mod tests {
                         false,
                         false,
                         false,
+                        false,
                         None,
                         None,
                         Some("RGBA"),
@@ -20494,6 +20546,15 @@ mod tests {
         for (mode, channels, op) in [
             ("RGB", 3, PipelineOp::Duplicate),
             (
+                "RGB",
+                3,
+                PipelineOp::Convert {
+                    mode: ColorMode::RGBA,
+                    matrix: None,
+                    dither: None,
+                },
+            ),
+            (
                 "RGBA",
                 4,
                 PipelineOp::Convert {
@@ -20560,13 +20621,23 @@ mod tests {
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
             let resources = telemetry.8.expect("native transfer counters");
-            let expected_upload_bytes = if matches!(
+            let native_three_channel_upload = matches!(
                 op,
                 PipelineOp::PutAlpha {
                     mode: PixelMode::RGB,
                     ..
                 }
-            ) {
+            ) || (cfg!(target_endian = "little")
+                && mode == "RGB"
+                && matches!(
+                    op,
+                    PipelineOp::Convert {
+                        mode: ColorMode::RGBA,
+                        matrix: None,
+                        dither: None,
+                    }
+                ));
+            let expected_upload_bytes = if native_three_channel_upload {
                 (5 * 3 * 3 + 3) & !3
             } else {
                 5 * 3 * 4
@@ -20576,6 +20647,18 @@ mod tests {
             if actual.color() == crate::raster::ColorType::Rgb8 {
                 assert_eq!(resources.host_allocation_count, 1);
                 assert_eq!(resources.host_allocated_bytes, 5 * 3 * 3);
+            }
+            if mode == "RGB"
+                && matches!(
+                    op,
+                    PipelineOp::Convert {
+                        mode: ColorMode::RGBA,
+                        matrix: None,
+                        dither: None,
+                    }
+                )
+            {
+                assert_eq!(resources.mode_conversion_count, 0);
             }
         }
         Backend::set_pipeline_telemetry_enabled(previous);
@@ -24758,6 +24841,45 @@ mod tests {
             std::slice::from_ref(&convert_rgba),
             &empty,
             Some("L")
+        ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_rgb_to_rgba_input_requires_exact_native_rgb_conversion() {
+        let convert_rgba = PipelineOp::Convert {
+            mode: ColorMode::RGBA,
+            matrix: None,
+            dither: None,
+        };
+        let rgb = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(2, 1, vec![11, 37, 83, 149, 211, 251]).unwrap(),
+        );
+        assert!(super::gpu_native_rgb_to_rgba_input(
+            std::slice::from_ref(&convert_rgba),
+            &rgb,
+            None
+        ));
+        assert!(super::gpu_native_rgb_to_rgba_input(
+            std::slice::from_ref(&convert_rgba),
+            &rgb,
+            Some("RGB")
+        ));
+        assert!(!super::gpu_native_rgb_to_rgba_input(
+            std::slice::from_ref(&convert_rgba),
+            &rgb,
+            Some("HSV")
+        ));
+        assert!(!super::gpu_native_rgb_to_rgba_input(
+            &[convert_rgba.clone(), PipelineOp::Duplicate],
+            &rgb,
+            Some("RGB")
+        ));
+        let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
+        assert!(!super::gpu_native_rgb_to_rgba_input(
+            std::slice::from_ref(&convert_rgba),
+            &empty,
+            Some("RGB")
         ));
     }
 
