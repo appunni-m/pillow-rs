@@ -9007,12 +9007,48 @@ through `make migration-parity-benchmark`.
 
 Checkpoint after the bounded packer, upload-arena, and fusion attempts. Do not
 continue tuning this shader without a profile that reduces the synchronous
-readback/completion floor. Move to `ImageOps.expand` on RGBX: the CPU native
-expand helper already handles four stored bytes, but its admission predicate
-omits `(RGBX, ImageRgba8)` and therefore widens/clones the existing carrier.
-SIMD already admits RGBX. Keep GPU separate until mode-6 shader semantics
-preserve the fourth X byte; the existing four-byte GPU transport offers no
-transfer-volume saving for this mode.
+readback/completion floor. The next case was RGBX `ImageOps.expand`.
+
+### RGBX `ImageOps.expand` — checkpoint 2026-09-29
+
+The exact CPU gate now admits logical `RGBX` only with `ImageRgba8` storage.
+The carrier is already four bytes per pixel; the generic route needlessly
+requested an RGBA copy before expanding. The native row builder copies all four
+source bytes verbatim (including arbitrary X values) and uses `fill.3` only for
+new border pixels. Mismatched logical/storage pairs stay on the prior path.
+
+SIMD already admitted RGBX, but initialized the whole output with zeroes, then
+rewrote both the border and every source row. The four-byte path now reserves
+the output, precomputes one fill row and the side spans, then appends top,
+interior, and bottom rows directly. This avoids a redundant full-frame write;
+the row-builder uses bulk byte copies, so its zero vector-block receipt is
+expected and must not be described as SIMD instructions having run.
+
+The focused CPU and SIMD tests passed. Strict parity passed for the varied
+1024 × 768 RGBA, CMYK, and RGBX cases on CPU, SIMD, and GPU-selected lanes (9/9).
+The GPU-selected RGBX benchmark did not execute on GPU: all 100 repeats report
+CPU fallback because the logical-mode GPU contract is unproven. Treat that as
+parity coverage, not GPU performance evidence.
+
+The correctness-gated standard benchmark passed its three backend parity
+preflights and collected 100 samples per subject for
+`pil-imageops.expand.materialized.rgbx-noise-1024x768`. The saved baseline had
+medians of Pillow 1.149 ms, CPU 1.005 ms, and SIMD 0.615 ms. After the CPU and
+SIMD changes, the final run measured Pillow 1.069 ms, CPU 0.558 ms, and SIMD
+0.441 ms; this is 1.80× and 1.39× faster than the saved CPU and SIMD baselines,
+respectively. In the final run, CPU was 1.92× Pillow and SIMD 2.42× Pillow,
+still below the 5× SIMD target. GPU reported 1.958 ms but executed CPU 100/100
+times, so that number is not a GPU result. Sequential standard runs varied
+enough that the first CPU-only candidate's 0.355 ms median was not retained as
+the checkpoint result; compare paired workload evidence and report the stable
+final cohort instead.
+
+Inputs are case `PIL.ImageOps.expand.nuanced.performance-rgbx-noise-1024x768`
+and workload `pil-imageops.expand.materialized.rgbx-noise-1024x768`. The final
+report is `build/migration-parity/rgbx-expand-cpu-simd-rowbuild-100.json` and
+its parity evidence is `build/migration-parity/rgbx-expand-cpu-simd-rowbuild-100-parity.json`.
+Continue with RGBX `ImageOps.pad` on CPU/SIMD. Keep GPU out of its performance
+comparison until a mode-correct route has an actual GPU receipt.
 
 ### Scalar RGBA `Image.putalpha` — checkpoint 2026-09-29
 

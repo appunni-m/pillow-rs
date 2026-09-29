@@ -1497,6 +1497,10 @@ fn native_expand_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usiz
         (None, DynamicImage::ImageRgba8(_)) | (Some("RGBA"), DynamicImage::ImageRgba8(_)) => {
             Some(4)
         }
+        // RGBX shares four-byte storage with RGBA, but the fourth sample is
+        // opaque padding. Expand copies it unchanged and uses fill.3 for the
+        // new border, so this exact logical/storage pair is safe.
+        (Some("RGBX"), DynamicImage::ImageRgba8(_)) => Some(4),
         // CMYK uses the same four-byte carrier, but its fourth byte is K.
         // Expand copies all four samples unchanged and uses the fill tuple in
         // C/M/Y/K order, so admit only this exact logical/storage pair.
@@ -1732,6 +1736,33 @@ mod expand_native_tests {
                 13, 17, 7, 11, 13, 17, 7, 11, 13, 17, 7, 11, 13, 17,
             ]
         );
+    }
+
+    #[test]
+    fn expand_rgbx_keeps_x_bytes_and_uses_fill_x_for_the_border() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![23, 47, 89, 131, 29, 31, 37, 41]).expect("RGBX source"),
+        );
+        assert_eq!(native_expand_channels(&image, Some("RGBX")), Some(4));
+        let mismatched = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(2, 1, vec![23, 47, 89, 29, 31, 37])
+                .expect("mismatched RGBX storage"),
+        );
+        assert_eq!(native_expand_channels(&mismatched, Some("RGBX")), None);
+
+        let expanded =
+            op_expand(&image, 1, (7, 11, 13, 17), Some("RGBX")).expect("native RGBX expand");
+        let DynamicImage::ImageRgba8(expanded) = expanded else {
+            panic!("RGBX expansion must retain four-byte physical storage");
+        };
+        let fill = [7, 11, 13, 17];
+        let mut expected = Vec::with_capacity(4 * 3 * 4);
+        expected.extend_from_slice(&fill.repeat(4));
+        expected.extend_from_slice(&fill);
+        expected.extend_from_slice(&[23, 47, 89, 131, 29, 31, 37, 41]);
+        expected.extend_from_slice(&fill);
+        expected.extend_from_slice(&fill.repeat(4));
+        assert_eq!(expanded.as_raw(), &expected);
     }
 }
 
