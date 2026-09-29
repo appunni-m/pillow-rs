@@ -31,6 +31,7 @@ use crate::ops::pil_resize::pil_resize;
 use crate::ops::pil_resize::pil_resize_boxed_with_parallel_pixel_threshold;
 use crate::ops::pil_resize::pil_resize_rgbx_into_window;
 use crate::pipeline::ResampleFilter;
+use wide::u8x16;
 
 #[cfg(feature = "parallel")]
 const POINT_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
@@ -694,14 +695,113 @@ pub fn op_grayscale(img: &DynamicImage, mode: Option<&str>) -> Result<DynamicIma
         Some("YCbCr") => {
             // Pillow's Convert.c maps YCbCr→L through the Y band directly,
             // not through an RGB round trip and a second luma calculation.
-            let source = img.to_rgb8();
-            crate::raster::GrayImage::from_fn(source.width(), source.height(), |x, y| {
-                crate::raster::Luma([source.get_pixel(x, y)[0]])
+            native_ycbcr_luma(img).unwrap_or_else(|| {
+                let source = img.to_rgb8();
+                crate::raster::GrayImage::from_fn(source.width(), source.height(), |x, y| {
+                    crate::raster::Luma([source.get_pixel(x, y)[0]])
+                })
             })
         }
         _ => pil_grayscale(img)?,
     };
     Ok(DynamicImage::ImageLuma8(gray))
+}
+
+/// Copy Y directly from an exact native YCbCr byte triple without first
+/// cloning the full three-channel image into an RGB buffer. Empty or
+/// mismatched storage retains the general conversion path above.
+fn native_ycbcr_luma(img: &DynamicImage) -> Option<crate::raster::GrayImage> {
+    let DynamicImage::ImageRgb8(source) = img else {
+        return None;
+    };
+    let dims = CheckedDims::new(img.width(), img.height(), 3).ok()?;
+    let pixels = dims.total_pixels();
+    if pixels == 0 || source.as_raw().len() != dims.total_bytes() {
+        return None;
+    }
+    let (output, _, _) = gather_native_channel::<3, 0>(source.as_raw());
+    crate::raster::GrayImage::from_raw(img.width(), img.height(), output)
+}
+
+/// Gather one byte channel from tightly packed native pixels. The same
+/// portable SIMD kernel serves CPU operations and SIMD adapters, with a
+/// scalar tail for pixel counts that are not a multiple of sixteen.
+pub(crate) fn gather_native_channel<const CHANNELS: usize, const CHANNEL: usize>(
+    source: &[u8],
+) -> (Vec<u8>, u64, u64) {
+    const LANES: usize = 16;
+    let pixel_count = source.len() / CHANNELS;
+    let selectors: [u8x16; CHANNELS] = std::array::from_fn(|_block| {
+        u8x16::new(std::array::from_fn(|lane| {
+            ((lane * CHANNELS + CHANNEL) % LANES) as u8
+        }))
+    });
+    let masks: [u8x16; CHANNELS] = std::array::from_fn(|block| {
+        u8x16::new(std::array::from_fn(|lane| {
+            if (lane * CHANNELS + CHANNEL) / LANES == block {
+                u8::MAX
+            } else {
+                0
+            }
+        }))
+    });
+
+    let mut output = Vec::with_capacity(pixel_count);
+    let vector_pixels = pixel_count / LANES * LANES;
+    for pixels in source[..vector_pixels * CHANNELS].chunks_exact(CHANNELS * LANES) {
+        let input_vectors: [u8x16; CHANNELS] = std::array::from_fn(|block| {
+            let mut lanes = [0u8; LANES];
+            let start = block * LANES;
+            lanes.copy_from_slice(&pixels[start..start + LANES]);
+            u8x16::new(lanes)
+        });
+        let mut selected = u8x16::splat(0);
+        for block in 0..CHANNELS {
+            selected |= input_vectors[block].swizzle_relaxed(selectors[block]) & masks[block];
+        }
+        output.extend_from_slice(&selected.to_array());
+    }
+
+    for pixel in source[vector_pixels * CHANNELS..].chunks_exact(CHANNELS) {
+        output.push(pixel[CHANNEL]);
+    }
+    debug_assert_eq!(output.len(), pixel_count);
+    (
+        output,
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    )
+}
+
+#[cfg(test)]
+mod grayscale_native_tests {
+    use super::op_grayscale;
+    use crate::raster::{DynamicImage, RgbImage};
+
+    #[test]
+    fn ycbcr_grayscale_copies_y_from_exact_native_triples() {
+        let image = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(3, 1, vec![17, 240, 3, 129, 4, 250, 231, 78, 9])
+                .expect("YCbCr byte triples"),
+        );
+
+        let result = op_grayscale(&image, Some("YCbCr")).expect("YCbCr grayscale");
+        let DynamicImage::ImageLuma8(result) = result else {
+            panic!("YCbCr grayscale must produce L storage");
+        };
+        assert_eq!(result.as_raw(), &[17, 129, 231]);
+        assert_eq!(image.as_bytes(), &[17, 240, 3, 129, 4, 250, 231, 78, 9]);
+    }
+
+    #[test]
+    fn ycbcr_grayscale_keeps_empty_image_behavior() {
+        let image = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
+        let result = op_grayscale(&image, Some("YCbCr")).expect("empty YCbCr grayscale");
+        let DynamicImage::ImageLuma8(result) = result else {
+            panic!("empty YCbCr grayscale must produce L storage");
+        };
+        assert_eq!((result.width(), result.height()), (0, 1));
+    }
 }
 
 /// Colorize: map grayscale values to a two-color gradient.

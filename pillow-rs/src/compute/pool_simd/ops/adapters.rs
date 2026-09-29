@@ -87,48 +87,7 @@ fn native_extract_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize
 fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(
     source: &[u8],
 ) -> (Vec<u8>, u64, u64) {
-    const LANES: usize = 16;
-    let pixel_count = source.len() / CHANNELS;
-    let selectors: [u8x16; CHANNELS] = std::array::from_fn(|_block| {
-        u8x16::new(std::array::from_fn(|lane| {
-            ((lane * CHANNELS + CHANNEL) % LANES) as u8
-        }))
-    });
-    let masks: [u8x16; CHANNELS] = std::array::from_fn(|block| {
-        u8x16::new(std::array::from_fn(|lane| {
-            if (lane * CHANNELS + CHANNEL) / LANES == block {
-                u8::MAX
-            } else {
-                0
-            }
-        }))
-    });
-
-    let mut output = Vec::with_capacity(pixel_count);
-    let vector_pixels = pixel_count / LANES * LANES;
-    for pixels in source[..vector_pixels * CHANNELS].chunks_exact(CHANNELS * LANES) {
-        let input_vectors: [u8x16; CHANNELS] = std::array::from_fn(|block| {
-            let mut lanes = [0u8; LANES];
-            let start = block * LANES;
-            lanes.copy_from_slice(&pixels[start..start + LANES]);
-            u8x16::new(lanes)
-        });
-        let mut selected = u8x16::splat(0);
-        for block in 0..CHANNELS {
-            selected |= input_vectors[block].swizzle_relaxed(selectors[block]) & masks[block];
-        }
-        output.extend_from_slice(&selected.to_array());
-    }
-
-    for pixel in source[vector_pixels * CHANNELS..].chunks_exact(CHANNELS) {
-        output.push(pixel[CHANNEL]);
-    }
-    debug_assert_eq!(output.len(), pixel_count);
-    (
-        output,
-        (vector_pixels / LANES) as u64,
-        (pixel_count - vector_pixels) as u64,
-    )
+    crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(source)
 }
 
 fn native_typed_filter_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
@@ -415,7 +374,7 @@ fn native_grayscale_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usi
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
-        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "YCbCr")) => Some(3),
         DynamicImage::ImageRgba8(_)
             if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa" | "CMYK")) =>
         {
@@ -5504,7 +5463,7 @@ fn shape_native_grayscale_channels(shape: SimdImageShape, mode: Option<&str>) ->
     match shape.layout {
         SimdLayout::Luma8 if matches!(mode, None | Some("L")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some(2),
-        SimdLayout::Rgb8 if matches!(mode, None | Some("RGB")) => Some(3),
+        SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "YCbCr")) => Some(3),
         SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX" | "RGBa" | "CMYK")) => {
             Some(4)
         }
@@ -11969,6 +11928,20 @@ fn native_cmyk_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)
     Some((output, vector_blocks, 0))
 }
 
+/// Extract the Y sample from each exact native YCbCr byte triple. The shared
+/// channel gather uses vector swizzles for complete groups and handles only
+/// the final incomplete group scalarly.
+fn native_ycbcr_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+    let DynamicImage::ImageRgb8(source) = img else {
+        return None;
+    };
+    let dims = CheckedDims::new(img.width(), img.height(), 3).ok()?;
+    if source.as_raw().len() != dims.total_bytes() {
+        return None;
+    }
+    Some(gather_channel::<3, 0>(source.as_raw()))
+}
+
 /// Convert admitted native bytes to L. Complete groups use direct vector
 /// loads and deinterleaving; only the final partial group needs padding.
 fn native_grayscale_bytes(img: &DynamicImage, channels: usize) -> Option<(Vec<u8>, u64, u64)> {
@@ -12095,7 +12068,12 @@ pub fn simd_grayscale(
     let Some(channels) = native_grayscale_layout(img, mode) else {
         return Err(simd_unsupported("Grayscale"));
     };
-    let (output, vector_blocks, scalar_tail) = if mode == Some("CMYK") {
+    let (output, vector_blocks, scalar_tail) = if mode == Some("YCbCr") {
+        let Some(result) = native_ycbcr_grayscale_bytes(img) else {
+            return Err(simd_unsupported("Grayscale"));
+        };
+        result
+    } else if mode == Some("CMYK") {
         let Some(result) = native_cmyk_grayscale_bytes(img) else {
             return Err(simd_unsupported("Grayscale"));
         };
@@ -26638,6 +26616,30 @@ mod tests {
             );
             assert_eq!(vector_blocks, pixels.div_ceil(16) as u64);
             assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_ycbcr_grayscale_gathers_y_across_vector_tails() {
+        for (width, height) in [(3u32, 1u32), (15, 3), (16, 3), (17, 3), (1024, 768)] {
+            let pixels = width as usize * height as usize;
+            let source: Vec<u8> = (0..pixels * 3)
+                .map(|index| ((index * 113 + index / 5 + 29) & 255) as u8)
+                .collect();
+            let expected: Vec<u8> = source.chunks_exact(3).map(|pixel| pixel[0]).collect();
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, source).expect("valid YCbCr storage"),
+            );
+            let (actual, vector_blocks, scalar_tail) =
+                super::native_ycbcr_grayscale_bytes(&image).expect("native YCbCr grayscale");
+
+            assert_eq!(actual, expected, "YCbCr grayscale {width}x{height}");
+            assert_eq!(vector_blocks, (pixels / 16) as u64);
+            assert_eq!(scalar_tail, (pixels % 16) as u64);
+
+            let result = super::simd_grayscale(&image, &PipelineOp::Grayscale, Some("YCbCr"))
+                .expect("SIMD YCbCr grayscale must be admitted");
+            assert_eq!(result.as_bytes(), actual, "SIMD output {width}x{height}");
         }
     }
 

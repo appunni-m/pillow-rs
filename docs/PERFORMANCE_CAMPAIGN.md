@@ -9720,3 +9720,56 @@ throughput claim for this API. Strict CPU parity passed all six CMYK bitmap
 cases, including partial/zero masks, clipping, and the material workload
 (6/6). Keep the native L-mask CPU path, record backend execution as a blocker,
 and move on. No coverage collection ran.
+
+### YCbCr `ImageOps.grayscale` — checkpoint 2026-09-30
+
+The workload is `pipeline-op.grayscale.material-ycbcr-noise-1024x768`, plus a
+3 × 1 odd-byte-tail parity case. Pillow's YCbCr-to-L conversion copies the
+first byte of every native three-byte pixel. The old CPU implementation
+cloned the complete source through `to_rgb8()` and then read only byte zero.
+SIMD rejected YCbCr; simply admitting it to the RGB grayscale kernel would
+have applied weighted RGB coefficients to Y/Cb/Cr. The GPU route also needed a
+narrow preflight allowance because YCbCr and RGB share execution mode code 2.
+
+The retained path reads one native sample per pixel and uses a common,
+16-lane portable-SIMD channel gather for both CPU and SIMD. It keeps a scalar
+tail for incomplete 16-pixel blocks, validates exact three-byte storage, and
+retains the existing empty-image fallback. GPU uses a separate YCbCr flag and
+reads only the Y byte from the padded native upload; it avoids both host-side
+RGB widening and chroma-word loads. The GPU fast path remains limited to one
+YCbCr grayscale operation with exact RGB8-backed storage on little-endian
+hosts. Strict GPU mode is needed to prove that this gate dispatches the shader.
+
+The benchmark gate initially refused to measure the operation: CPU parity and
+GPU-requested parity (then handled by CPU fallback) passed, but SIMD reported
+`NotImplementedError` because its YCbCr layout was not admitted (2/3 backends).
+After fixing parity, three bounded CPU
+attempts produced these 100-sample medians:
+
+| Attempt | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Direct scalar channel extraction | 0.078 ms | 0.336 ms | 0.100 ms | 1.011 ms |
+| Parallel row extraction | 0.083 ms | 0.192 ms | 0.096 ms | 0.961 ms |
+| Shared portable-SIMD gather | 0.082 ms | 0.099 ms | 0.099 ms | 0.987 ms |
+
+The benchmark receipts in table order are
+`migration-benchmark-7cb7b8ddc8354c1fb0299fc6c428f7e3`,
+`migration-benchmark-36b7c1005b5a4d9a9077f64c4cd9df1b`, and
+`migration-benchmark-bdc73427b90a43259f924b403c46a090`.
+
+The shared gather is about 3.4× faster than the initial CPU implementation,
+but CPU and SIMD remain about 20% slower than Pillow in this run. Parallel row
+dispatch helped the scalar attempt but lost to the vector gather and was
+removed. GPU executed all 100 samples with one dispatch per sample and no
+fallback, transferring 2,359,296 input bytes and reading back 786,432 output
+bytes; its roughly 0.99 ms median is about 10× SIMD, so GPU throughput does not
+meet the target at this image size. The transfer/readback round trip dominates
+the small extraction kernel. No pre-change latency is claimed because the
+correctness gate could not run all backends before SIMD support was added.
+
+The 3 × 1 and 1,024 × 768 cases passed parity on CPU, SIMD, and GPU. The final
+correctness-gated pipeline benchmark passed and reported 100/100 executions on
+each requested backend with no fallback. The focused CPU/SIMD gather tests and
+GPU native-layout test passed. Keep direct native Y extraction and record the
+remaining CPU/Pillow and GPU/SIMD gaps as blockers; move to the next operation
+after this three-attempt checkpoint. No coverage collection ran.

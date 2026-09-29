@@ -7688,9 +7688,9 @@ impl GpuInner {
                 params[3] = 1;
             }
             if native_grayscale_rgb_input && matches!(op, PipelineOp::Grayscale) {
-                // Grayscale's fourth word selects the source byte layout;
-                // keep RGB packed at three bytes per pixel through upload.
-                params[3] = 1;
+                // Grayscale's fourth word selects the native triple source
+                // semantics: RGB luma or direct YCbCr Y-byte extraction.
+                params[3] = u32::from(logical_mode == Some("YCbCr")) + 1;
             }
             if native_reduce_rgb_input && matches!(op, PipelineOp::Reduce { .. }) {
                 // Reduce's fourth word selects packed native RGB byte input;
@@ -11718,16 +11718,18 @@ fn gpu_native_extract_band_channels(
     (input_bytes <= u64::from(u32::MAX)).then_some(channels)
 }
 
-/// Admit tightly packed RGB bytes as the source for a singleton grayscale
-/// dispatch. The shader addresses byte triples through u32 words, so all
-/// products must fit its u32 indexing and the physical buffer must match.
+/// Admit tightly packed RGB or YCbCr triples as the source for a singleton
+/// grayscale dispatch. The shader addresses byte triples through u32 words,
+/// so all products must fit its u32 indexing and storage must match exactly.
 #[cfg(target_endian = "little")]
 fn gpu_native_grayscale_rgb_input(
     ops: &[PipelineOp],
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    if !matches!(ops, [PipelineOp::Grayscale]) || !matches!(logical_mode, None | Some("RGB")) {
+    if !matches!(ops, [PipelineOp::Grayscale])
+        || !matches!(logical_mode, None | Some("RGB" | "YCbCr"))
+    {
         return false;
     }
     let DynamicImage::ImageRgb8(rgb) = image else {
@@ -18222,6 +18224,11 @@ impl GpuPool {
         // byte transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                // YCbCr shares RGB8 transport but grayscale reads only its Y
+                // sample; admit exactly the singleton kernel that carries
+                // this native-mode interpretation in its fourth uniform.
+                || (logical_mode == "YCbCr"
+                    && gpu_native_grayscale_rgb_input(ops, img, mode))
                 // LAB shares RGB8 storage. The core has already encoded its
                 // public signed A/B samples into the stored +128 byte domain,
                 // so the raw three-channel PutPixel shader is exact here.
@@ -25143,7 +25150,7 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn gpu_native_grayscale_rgb_requires_singleton_rgb_storage() {
+    fn gpu_native_grayscale_native_triples_require_singleton_exact_storage() {
         let grayscale = PipelineOp::Grayscale;
         let rgb = DynamicImage::ImageRgb8(
             RgbImage::from_raw(3, 1, vec![12, 34, 56, 78, 90, 123, 234, 210, 98]).unwrap(),
@@ -25157,6 +25164,11 @@ mod tests {
             std::slice::from_ref(&grayscale),
             &rgb,
             Some("RGB")
+        ));
+        assert!(super::gpu_native_grayscale_rgb_input(
+            std::slice::from_ref(&grayscale),
+            &rgb,
+            Some("YCbCr")
         ));
         assert!(!super::gpu_native_grayscale_rgb_input(
             std::slice::from_ref(&grayscale),
