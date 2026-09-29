@@ -23805,19 +23805,26 @@ fn native_expand_bytes(
         return Ok(Some((result, vector_blocks, scalar_tail)));
     }
 
-    // Three-byte samples need only row construction and byte copies. Building
-    // a u8x16 for every 16-byte fill block repeats the RGB/HSV fill pattern
-    // calculation thousands of times, while zero-initializing the full
-    // destination before overwriting it adds another complete frame write.
-    // Precompute the native fill spans and append each output row once.
-    if channels == 3 {
-        let fill_pixel = [fill.0, fill.1, fill.2];
+    // Three- and four-byte samples need only row construction and byte copies.
+    // Building a u8x16 for every fill block repeats the fill pattern work,
+    // while zero-initializing the full destination before overwriting its
+    // source interior adds another complete frame write. Precompute native
+    // fill spans and append each output row once. Four-byte formats retain
+    // every source byte, including RGBX's non-alpha X and CMYK's K sample.
+    if channels == 3 || channels == 4 {
+        let fill_sample = [fill.0, fill.1, fill.2, fill.3];
+        let fill_pixel = &fill_sample[..channels];
         let fill_row = fill_pixel.repeat(output_width_usize);
         let fill_sides = fill_pixel.repeat(border as usize);
-        let border_bytes = border as usize * channels;
+        let border_bytes = (border as usize)
+            .checked_mul(channels)
+            .ok_or_else(|| PilError::ValueError("SIMD expand border stride overflow".into()))?;
+        let source_end_y = (border as usize)
+            .checked_add(source_height)
+            .ok_or_else(|| PilError::ValueError("SIMD expand source rows overflow".into()))?;
         let mut output = Vec::with_capacity(output_len);
         for y in 0..output_height_usize {
-            if y < border as usize || y >= border as usize + source_height {
+            if y < border as usize || y >= source_end_y {
                 output.extend_from_slice(&fill_row);
                 continue;
             }
@@ -23832,7 +23839,7 @@ fn native_expand_bytes(
             || fill_sides.len() != border_bytes
         {
             return Err(PilError::InternalError(
-                "SIMD expand native three-channel row shape mismatch".into(),
+                "SIMD expand native row shape mismatch".into(),
             ));
         }
         let result =
@@ -26194,6 +26201,30 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn expand_rgbx_appends_rows_without_changing_x_samples() {
+        let source = DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(2, 1, vec![23, 47, 89, 131, 29, 31, 37, 41])
+                .expect("RGBX source shape must be valid"),
+        );
+        let fill = (7, 11, 13, 17);
+        let operation = PipelineOp::Expand { border: 1, fill };
+        let actual = super::simd_expand(&source, &operation, Some("RGBX"))
+            .expect("SIMD RGBX expansion must succeed");
+        let expected = crate::compute::registry::execute_cpu(&operation, &source, Some("RGBX"))
+            .expect("CPU RGBX expansion must succeed");
+
+        assert_eq!(actual.as_bytes(), expected.as_bytes());
+        let fill_pixel = [7, 11, 13, 17];
+        let mut expected_bytes = Vec::with_capacity(4 * 3 * 4);
+        expected_bytes.extend_from_slice(&fill_pixel.repeat(4));
+        expected_bytes.extend_from_slice(&fill_pixel);
+        expected_bytes.extend_from_slice(&[23, 47, 89, 131, 29, 31, 37, 41]);
+        expected_bytes.extend_from_slice(&fill_pixel);
+        expected_bytes.extend_from_slice(&fill_pixel.repeat(4));
+        assert_eq!(actual.as_bytes(), expected_bytes);
+    }
+
     #[test]
     fn native_rgb_sharpness_vector_stream_matches_cpu_across_tails() {
         for (width, height) in [(3, 3), (4, 5), (5, 7), (8, 4), (9, 9), (17, 6)] {
