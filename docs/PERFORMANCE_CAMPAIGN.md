@@ -9201,3 +9201,51 @@ baseline. The next GPU attempt should test packed two-byte LA output/readback
 (or device-resident chaining) because transfer and completion still dominate.
 Record this operation as incomplete and continue through the remaining native
 format candidates; no coverage collection was run.
+
+### PA `convert("RGBA")` — checkpoint 2026-09-29
+
+The material case is
+`PIL.Image.Image.convert.nuanced.performance-material-pa-to-rgba-noise-1024x768`,
+with a seeded 1,024 × 768 PA image, a full RGB palette, public conversion, and
+`tobytes()` observation. The generated workload is
+`pil-image-image.convert.pa-to-rgba-material`. PA already stores native
+`[palette_index, per_pixel_alpha]` bytes; RGBA is required only as the requested
+output. The original path cloned the shared materialized image, cloned LA again
+through `to_luma_alpha8()`, expanded pixels with coordinate-based `get_pixel`
+and repeated palette lookups, then could clone the owned RGBA result through
+`to_rgba8()`.
+
+The retained fast path borrows the validated shared materialization when its
+concrete storage is `ImageLumaA8`. Expansion builds one 256-entry RGB lookup,
+then scans interleaved index/alpha bytes linearly and writes the requested RGBA
+buffer once. Missing palette components remain zero; alpha comes from the PA
+pixel, and palette alpha does not replace it. Checked output sizing and the
+image constructor retain the previous safe fallback; noncanonical storage
+also uses the established conversion path. The output path consumes owned RGBA
+with `into_rgba8()` where the direct borrowed route does not apply.
+
+The first attempt only changed the final owned conversion to `into_rgba8()`;
+CPU stayed at 1.640 ms versus 1.643 ms before, so avoiding one possible output
+clone was not enough. A second attempt borrowed shared LA storage but kept the
+coordinate-based expansion and measured 2.011 ms on a noisy run. The third
+attempt combined borrowing with a lookup table and contiguous scan. Its two
+parity-gated receipts, `migration-benchmark-673d53b7917a4b6fb9744c86fe1c2fc9`
+and `migration-benchmark-d9417e80250945209571aa4e57769d47`, measured:
+
+| Subject | Run 1 median | Run 2 median | Run 1 throughput | Run 2 throughput |
+| --- | ---: | ---: | ---: | ---: |
+| Pillow | 1.070 ms | 1.109 ms | 935 ops/s | 902 ops/s |
+| CPU | 0.920 ms | 0.872 ms | 1,087 ops/s | 1,146 ops/s |
+| SIMD profile | 0.912 ms | 0.897 ms | 1,097 ops/s | 1,115 ops/s |
+| GPU profile | 0.946 ms | 0.928 ms | 1,057 ops/s | 1,077 ops/s |
+
+The strict parity cohort contains the 20 maintained PA-to-mode audit cases plus
+the material case: CPU, SIMD, and GPU profile runs passed 21/21 each (63/63).
+`make build-parity` and `make migration-parity-inputs-check` passed. Both
+benchmark correctness gates passed. Benchmark execution is `not_proven` for
+SIMD and GPU profiles because this eager conversion stays on the host; those
+rows are not accelerator evidence. CPU beats Pillow by 1.16× and 1.27× in the
+two runs, meeting the CPU target only for this workload. SIMD 5× and GPU
+execution/throughput remain open. Further work needs a real bulk backend route
+whose setup and transfer costs amortize; relabeling the host converter cannot
+meet those goals. No coverage collection ran.

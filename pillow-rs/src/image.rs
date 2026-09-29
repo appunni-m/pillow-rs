@@ -7049,19 +7049,41 @@ pub(crate) fn expand_palette_alpha(
     indices_alpha: &crate::raster::GrayAlphaImage,
     palette: &[u8],
 ) -> DynamicImage {
+    let mut rgb_by_index = [[0u8; 3]; 256];
+    for (index, rgb) in rgb_by_index.iter_mut().enumerate() {
+        let base = index * 3;
+        *rgb = [
+            palette.get(base).copied().unwrap_or(0),
+            palette.get(base + 1).copied().unwrap_or(0),
+            palette.get(base + 2).copied().unwrap_or(0),
+        ];
+    }
+
+    let samples = indices_alpha.as_raw();
+    if let Some(output_len) = samples.len().checked_mul(2) {
+        let mut output = Vec::with_capacity(output_len);
+        for sample in samples.chunks_exact(2) {
+            let rgb = rgb_by_index[usize::from(sample[0])];
+            output.extend_from_slice(&[rgb[0], rgb[1], rgb[2], sample[1]]);
+        }
+        if let Some(image) = crate::raster::RgbaImage::from_raw(
+            indices_alpha.width(),
+            indices_alpha.height(),
+            output,
+        ) {
+            return DynamicImage::ImageRgba8(image);
+        }
+    }
+
+    // Preserve the image crate's checked construction fallback if dimensions
+    // cannot be represented by a flat RGBA allocation.
     DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_fn(
         indices_alpha.width(),
         indices_alpha.height(),
         |x, y| {
             let pixel = indices_alpha.get_pixel(x, y);
-            let index = usize::from(pixel[0]);
-            let base = index * 3;
-            crate::raster::Rgba([
-                palette.get(base).copied().unwrap_or(0),
-                palette.get(base + 1).copied().unwrap_or(0),
-                palette.get(base + 2).copied().unwrap_or(0),
-                pixel[1],
-            ])
+            let rgb = rgb_by_index[usize::from(pixel[0])];
+            crate::raster::Rgba([rgb[0], rgb[1], rgb[2], pixel[1]])
         },
     ))
 }

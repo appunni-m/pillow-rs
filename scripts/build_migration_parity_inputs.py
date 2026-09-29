@@ -41050,6 +41050,7 @@ def build_nuanced_cases(
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(rgba_to_pa_performance_parity_cases(surface_id))
+    cases.extend(pa_to_rgba_performance_parity_cases(surface_id))
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
     cases.extend(cmyk_to_1_parity_cases(surface_id))
     cases.extend(cmyk_grayscale_parity_cases(surface_id))
@@ -41498,6 +41499,79 @@ def rgba_to_pa_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]
                     "operation": "convert",
                     "receiver": binding("image"),
                     "arguments": {"mode": literal("PA")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
+
+
+def pa_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Benchmark material PA expansion to RGBA with palette and alpha data."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    size = [1024, 768]
+    raw = random.Random(20260929).randbytes(size[0] * size[1] * 2)
+    palette = list(random.Random(20260930).randbytes(256 * 3))
+    return [
+        {
+            "case_id": (
+                f"{surface_id}.convert.nuanced."
+                "performance-material-pa-to-rgba-noise-1024x768"
+            ),
+            "surface": surface_id,
+            "operation": "convert",
+            "covers": [
+                f"{surface_id}.convert.behavior.default",
+                f"{surface_id}.convert.performance.standard",
+            ],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "pa-pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("PA"),
+                        "size": literal(size),
+                        "data": asset_value("pa-pixels"),
+                    },
+                },
+                {
+                    "step_id": "palette",
+                    "surface": "PIL.Image.Image",
+                    "operation": "putpalette",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "data": literal(palette),
+                        "rawmode": literal("RGB"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "convert",
+                    "receiver": binding("image"),
+                    "arguments": {"mode": literal("RGBA")},
                 },
                 {
                     "step_id": "materialize",
@@ -49397,6 +49471,33 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+            if workload_id == "pil-image-image.convert.standard":
+                pa_rgba_case_id = (
+                    "PIL.Image.Image.convert.nuanced."
+                    "performance-material-pa-to-rgba-noise-1024x768"
+                )
+                pa_rgba_case = all_cases_by_id[pa_rgba_case_id]
+                pa_rgba_workload = copy.deepcopy(workloads[-1])
+                pa_rgba_workload["workload_id"] = (
+                    "pil-image-image.convert.pa-to-rgba-material"
+                )
+                pa_rgba_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": pa_rgba_case_id,
+                }
+                pa_rgba_workload["context"] = _workflow_benchmark_context(
+                    pa_rgba_case,
+                    variant="material-pa-to-rgba-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(pa_rgba_workload)
+                members.append(
+                    {
+                        "workload_id": pa_rgba_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
             if workload_id == "pil-imagedraw-imagedraw.text.standard":
                 rgba_context_case_id = (
                     "PIL.ImageDraw.ImageDraw.text.nuanced."
