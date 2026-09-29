@@ -11650,6 +11650,24 @@ fn cmyk_grayscale_block(source: &[u8]) -> [u8; 16] {
     simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
+#[inline]
+fn cmyk_grayscale_row(source: &[u8], output: &mut [u8]) {
+    let mut input_blocks = source.chunks_exact(64);
+    let mut output_blocks = output.chunks_exact_mut(16);
+    for (input, output) in input_blocks.by_ref().zip(output_blocks.by_ref()) {
+        output.copy_from_slice(&cmyk_grayscale_block(input));
+    }
+    let tail = output_blocks.into_remainder();
+    if !tail.is_empty() {
+        let mut padded = [0u8; 64];
+        padded[..input_blocks.remainder().len()].copy_from_slice(input_blocks.remainder());
+        tail.copy_from_slice(&cmyk_grayscale_block(&padded)[..tail.len()]);
+    }
+}
+
+#[cfg(feature = "parallel")]
+const SIMD_CMYK_GRAYSCALE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
 /// Fused native-layout CMYK-to-luma conversion. Complete pixels use sixteen
 /// SIMD lanes; the final partial block is padded and writes only active pixels.
 fn native_cmyk_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
@@ -11661,6 +11679,27 @@ fn native_cmyk_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)
         return None;
     }
     let mut output = vec![0u8; pixels];
+    #[cfg(feature = "parallel")]
+    if pixels >= SIMD_CMYK_GRAYSCALE_PARALLEL_PIXEL_THRESHOLD {
+        let width = img.width() as usize;
+        let source_stride = width.checked_mul(4)?;
+        let height = img.height() as usize;
+        crate::par_rows_mut!(
+            &mut output,
+            width,
+            height,
+            |_row_start, _row_end, y, row| {
+                let source_start = y as usize * source_stride;
+                cmyk_grayscale_row(
+                    &source.as_raw()[source_start..source_start + source_stride],
+                    row,
+                );
+            }
+        );
+        let blocks_per_row = width.div_ceil(16);
+        let vector_blocks = (blocks_per_row as u64).checked_mul(height as u64)?;
+        return Some((output, vector_blocks, 0));
+    }
     let mut vector_blocks = 0u64;
     let mut input_blocks = source.as_raw().chunks_exact(64);
     let mut output_blocks = output.chunks_exact_mut(16);
