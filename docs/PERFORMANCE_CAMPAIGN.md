@@ -9299,5 +9299,63 @@ about 1.1–1.5× faster in the available measurements, below 5×. GPU now avoid
 the RGBA carrier but remained about 5.4× slower than SIMD in the loaded route
 run; one-request latency does not establish its saturated throughput. Record
 the native representation fix as retained, the SIMD 5× and GPU latency /
-throughput goals as blockers, and continue to L→RGB. No coverage collection
+throughput goals as blockers, and continue to L→RGBA. No coverage collection
 ran.
+
+### L `convert("RGB")` — checkpoint 2026-09-29
+
+The material case is
+`PIL.Image.Image.convert.nuanced.performance-material-l-to-rgb-noise-1024x768`
+and the workload is `pil-image-image.convert.l-to-rgb-material`. L-to-RGB is
+exact byte replication: each gray sample appears three times in the output.
+Keep the lazy `PipelineOp::Convert` route so CPU, SIMD, and GPU all receive
+native L input and produce native RGB output.
+
+The generic SIMD layout path selected five pixels per 16-byte block because
+RGB has three channels. For every block it rebuilt all 16 shuffle indices,
+padded input, swizzled once, and appended a short output slice. At 786,432
+pixels this creates 157,287 control-heavy blocks for an operation with no pixel
+arithmetic. The retained specialization uses three fixed 16-lane shuffle
+masks to expand 16 input bytes into 48 sequential RGB bytes, stores those
+vectors together as `[[u8; 16]; 3]`, flattens the nested arrays without
+copying, then truncates only the padded final block. This reduces the large
+image block count to 49,152 and avoids a per-block dynamic index array and
+three independent vector appends.
+
+Derive each shuffle mask from the global output-byte position: output byte `j`
+reads source lane `j / 3`. The second 16-byte output vector begins two bytes
+into a pixel, so its first source lane repeats twice (`5, 5, 6, 6, 6, ...`);
+assuming each vector begins at a pixel boundary caused a real byte mismatch.
+The focused test compares against exact L-to-RGB expansion at one-pixel,
+vector-boundary, tail, and 1023 × 512 sizes. Its first failing 5 × 3 case found
+that offset error before benchmark work continued.
+
+Three bounded attempts were made. Fixed masks alone reduced the SIMD receipt
+from 2.283 ms to 0.719 ms, though host load made that first result provisional.
+Changing from three output appends per block to nested vector arrays produced
+receipt `migration-benchmark-5bb96ea19f0a42428d4d5bd2a1200f1d`: Pillow 0.756
+ms, CPU 0.330 ms, SIMD 0.337 ms, GPU 1.561 ms. Each subject recorded 100
+samples and each target profile executed 100 times on its requested backend.
+Strict parity passed the four selected cases (17 × 3, 0 × 3, 3 × 0, and the
+material 1024 × 768 case) on CPU, SIMD, and GPU, 12/12 total. The focused
+`native_luma_to_rgb_matches_exact_conversion_across_vector_tails` test passed.
+A third attempt parallelized large rows above 512² pixels using the approved
+row macro; it measured 0.491 ms and added scheduling plus a zero-fill pass, so
+that branch was removed.
+
+| Subject | Median latency | Median throughput |
+| --- | ---: | ---: |
+| Pillow | 0.756 ms | 1,322 ops/s |
+| CPU | 0.330 ms | 3,031 ops/s |
+| SIMD | 0.337 ms | 2,970 ops/s |
+| GPU | 1.561 ms | 640 ops/s |
+
+The retained SIMD path is about 2.25× faster than Pillow in its best same-run
+receipt, short of the 5× target. CPU is faster than Pillow in both available
+receipts (0.249 vs 0.599 ms at baseline; 0.330 vs 0.756 ms in the best-path
+receipt), meeting the CPU requirement for this workload. GPU remains about
+4.6× slower than SIMD at concurrency one, with one dispatch and 3,145,728 bytes
+each uploaded and read back. Launch and transfer costs dominate this small
+pointwise transform; a single shader or transfer reduction cannot establish
+the GPU goal. Record SIMD 5× and higher-throughput GPU execution as blockers
+and continue to the next native-format operation. No coverage collection ran.
