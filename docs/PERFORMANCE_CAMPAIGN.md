@@ -8900,3 +8900,52 @@ The baseline and post-edit standard workload both completed, and the strict
 RGBA blend/all-alpha-pairs cases passed on CPU, SIMD, and GPU. Those timings are
 not a performance comparison for this candidate because both runs took the
 native singleton route. Do not count them toward the GPU conversion campaign.
+
+### Scalar RGBA `Image.putalpha` — checkpoint 2026-09-29
+
+Added one 1024 × 768 noisy-RGBA input to the generated parity and benchmark
+manifests. The timed boundary is scalar `putalpha(192)` plus `tobytes()`, with
+five warmups and 20 iterations × five samples; source construction is outside
+the timer. The exact case selects CPU, SIMD, and GPU and observes the mutated
+receiver.
+
+The SIMD adapter admitted this layout but sent it through the generic
+four-channel packer, which allocated a zero-filled output and rebuilt four
+pixels per dynamic block, including a mask swizzle even though alpha is
+constant. A concrete `ImageRgba8` plus logical RGBA fast path now applies a
+16-byte transform with an explicit RGB-preserve/alpha-replace mask and handles
+the final complete-pixel tail through padded lanes. Do not reuse
+`native_byte_transform_bytes` here: its channel mask intentionally protects
+RGBA alpha. The all-channel copy helper has the correct replacement contract.
+GPU readback already returns an owned `ImageRgba8`; `put_alpha_output` now
+consumes it with `into_rgba8()` instead of cloning it through `to_rgba8()`.
+
+The generic SIMD baseline measured 1.533 ms public / 1.384 ms backend against
+Pillow at 0.623 ms. Clone-and-vector-replace variants measured 0.675 and 0.525
+ms public, with 0.394 and 0.309 ms backend phases. A source-to-output vector
+transform measured 0.578 ms public / 0.286 ms backend in an exploratory run;
+same-run Pillow was 0.929 ms. A `Vec::with_capacity` plus one append per vector
+block measured 0.902 ms public / 0.554 ms backend, so that variant was dropped.
+An unrelated `cargo-llvm-cov` build on another checkout consumed nearly all CPU
+during some exploratory runs. Treat those cross-run timings as noisy; the final
+measurement below was taken after that process exited.
+
+The final parity-gated run (`migration-benchmark-d0672761170142ae9df291cba423668b`,
+gate `migration-parity-benchmark-gate-939e7c5386f04b50ba2dc4f901dc8d19`) passed
+3/3 selected CPU, SIMD, and GPU comparisons. All 100 samples per backend
+reported actual CPU, SIMD, or GPU execution, with no fallback. Public medians
+were Pillow 0.597 ms, CPU 0.376 ms, SIMD 0.304 ms, and GPU 1.489 ms; the SIMD
+backend phase was 0.158 ms and the GPU backend phase was 1.299 ms. Thus CPU is
+about 1.59× faster than Pillow, SIMD about 1.96× faster, and GPU about 4.89×
+slower than SIMD. The 5× SIMD target would require about 0.119 ms at this Pillow
+median. GPU still uploads and reads back 3,145,728 bytes and performs one device
+full-frame copy, so consuming the owned result removes only a host clone, not
+the dominant transfer, synchronization, and materialization costs.
+
+The focused `native_rgba_putalpha_constant_preserves_rgb_and_replaces_alpha`
+test passed widths 1, 3, 4, 5, and 17 with three rows, plus invalid storage
+length. Keep the explicit native SIMD path and the GPU ownership improvement as
+the checkpoint. The unmet goals are concrete blockers: SIMD remains below 5×
+Pillow, and the one-shot GPU route remains transfer-bound and slower than SIMD.
+Move to the next operation; reopen this path only with a profile showing a
+distinct ownership or device-residency opportunity.
