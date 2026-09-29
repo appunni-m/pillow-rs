@@ -66869,6 +66869,245 @@
       ]
     },
     {
+      "case_id": "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror",
+      "surface": "PIL.Image",
+      "operation": "alpha_composite",
+      "covers": [
+        "PIL.Image.alpha_composite.behavior.default",
+        "PIL.ImageOps.mirror.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "rgba-source-0",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "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",
+          "sha256": "8e999a5decf601d9b19ebd9eecccf57e4df11db22d432bac94ee6641aab92734",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "rgba-source-1",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "iWK7i7oCMwwLpebjr4zIYCVLfDjwaMEqzY1QyHKmH5t2VjTSBaiTzcwzhHM0emycjz5CdXh2/u39q5eptIFj6VryFul6JkqIqwhUdzeuyFtD9JQTj1gDdxJPE3pD47XJJTCMldGGAKAJ3s3a7RAmx5k/NWInD0ltXDmpkIWSQH9oSfHgrqzl3iQ6uxsMnJEmmZ3oa5wkMtxAmxQ5Q5eEw8LfmuzJI1aOiQ5qZr4+5wHHozt2lCgvsBHznp2/b4acFCzXDjlLtsbt+lWMLyOouF+kkNalLtyvTV1yPBxpthjPp1o0V6aUHx/BbUZ5W7fOMnT8HF5NMcTn4/fZpUtRX8VUI23OmqwLuO8iw/gv1DpvKShwRamqcHIe0UK5so5x6KcLd+y9nIgLDHfVzb340+oyzgBlFZJmbmmRv8mP++Jw7aNhtt3kqJ/SNFbL37m4U3IBXJCn6yBjmMOf6vR+82h4SJkXVVNTmYT/+2KoAe+WICwv/00SQBA1Mptsps3/CPovkzf0X/LGSS9qCAXfoj5eUH1Za1sMMiDz2Pw1bP8FoAuQoV7ZaQe8nkMRdbxy6krPvuyeQKAVZr6YxpofIiJ04GTOkAgL2E5cUO/21pwT3t8xzsYjABowXThj8Drq3z/lQj6NH5IuebxjqStduX5F5xHhAjTMZ4HH01Sirw6K5k/1zdbtyn4uwdoFL0cicYemi+TjZHMk59tZKmxxgYOlLamw77/6SZs70tTJ2LTRvYreP3iDWAnip9idBJzYwrWs5cd1ZueSawJjouONs9h/jgllH/12fqMJ5agkmCXUNX/Hx2YL7lxfXICbP/M5Dr4zP44g8RksJLeTue68Y86ryIsIogxgcDVHtqpaRwZ8T3EcESpUqamemKfHJMmQsUEYVdYEy2O5x0KPcRVkyWWmMJdo/pFpsFMzTLjngvpccNMYb/5vF/TqZsCFBy4K5SRSnvIfwl9cilaSbOcpuSfXWOrJlW/EiVTZoIAct+375FrtC10QT/kjj/wEFi9jwRmuUd7gQKanV/SgXl4uR47nXgzOKnrB9HhUis7WyDJ7jHvK80yjzGdqOev7lud2zuX8HDUd2ThRa6umeatF9xVBJBjGbbZK3vQBhZ9NSKY9TbxLqkTpzqjjqN4TJgQNCs9NCdXdJoNVmVme5qjrixOmgeH/kkG6UwiuY2J85Mdx/dI1B00EdAddxMTYicmw1baQm0P0AQYSJCsKVkpOyFX8fBckXw5949ypY5kQiZJzZAH4zzvDvVla+FdwUEvUabxg681kePb0ZjawjYijV5G9oJebyh3KbPOCfHgk4xAELE8Fh3LehbzFEtoRvMoyZFrN3aqK4LWcRPRYxz23UIA5exMPX5qtCEREAph9M1zhyeiv7rZdmZ4O6Cofspsi0OdnbWofciR8BvqDxP/Kq+3P7PtqXYEK2xmKaesaRGPFNFRty6GJtXfXxahMmU8K4OSm78MF81ydZSIN5djWj2X2IIBZ9t3muFf7TUHmBBNvCxE9B6lqIVvRYl/W67N1Szd9eDYDwxt8a12f4XiwKVw6CPwWPWuYpm1/m1qsaGvwzbIt8x5ojJYSwHC7ECBlMvNuJdU4Fx5INYhVdc9Y3Lx8AXZKuMAULTDdWg5CjnEwLLcemgdWanlNeCsHuMVK5ArjBMIWkIOUG+MqrirfGTd1eu6KJo2tmzwOwinsjTaNoqx7V837JvSIgokI++/kOXhn1XWyPcYwPiQbPL6OgEmwbYZJo+Q+F8Wk7ozq4Cakc00Msv1M491TQRv/uRjA82VbtW7ukc5ulkG2G8XO2uV0XHlq6IDBy3LzOipwasoijHTzRhXTnNskjUwh5FKLl9OpXUw5LlQzExHtVBv1JWNL5nfZu+nVbNEeLp3lkeDMjfSOmecWBGjiPEA6YA8R74Yz16hMPm+m0qn5E1H6WpnP8lohnUWaDEkhHdhQOgHvfGZSTgiSFiRtsGVeEKXfH/zIKoj1Dx2qFS6xcBtbg+az0JjC1dH4VE828pYE2iL9RqqzeSirRvZ8TXrIER0RYjNUgc+gj3xmwPmtEKq7r/QwAQOeR5ZjTR2KUaVc9OmxBqMZ6I1gcBmjDNyBit2eX+P3NSi5usWmYPu0f6Cn+B86wWCG8GRIfNPxZIDhtrjbWOPMa5LjM7/ng4SoOABhoxrmHAyWPTZcWguvOt6QuJbzgcjSNt9temPKi60FLYXQoRIIEcvDY5xpe4odOZYWR2vxyzFAbwUi10m3jDMXbNiPo+rvSzLw3COABJMr3RZc3ICF9pJkMfwiq/R5gKICCmME7Dy6nXL3Noh3tw62ti4qRp0P18NeIlF9HaGbyRFaX7TS3WB7wwHDPAKnpxHg7nEP18ElcEH6sz8XrKLFINe+K8EsGrXarYxMrZBwsuTg5F3vpqbJJfTnPSeKb3aq6P+manmWcOMNQ1aR3hkziVUUZnk4KXvgo+SZLOGu524Qky0kABjEcT/rBEu9Fj9xzMRhh1AlkL1sKMY+8sZ8PCuZqJPKd3RgoN4M1K0XKgHvZFv65WGIUmUrkpYPvXjvtcFUxsa/3EdguBqiv84V48GgNR3Nu6Yyf7OUzqGZexZWB2pzTsNR+hf44WvO+dWakKPOlbvNSGNpe9zW0OVip2a3TAtQbvPnDh5IhJWQlGm1TGBea9bh+QewxDk6om14T+KRxOhqwwmSZh90ZqjBjszDkYcxIRYXd/9KHx1bdGH83V1rReo37lEPJKuwEfB9SpEPdmmmEW95K4v3S66imqxGb+mcLWlhw34b9O7eupu8m5Jcge75Qke3hewbXH0OYEqfcIhY+2Mm+6b8ZrUtmbwcMxXwZZIbF0zgIFHcf2swPQiziHZi5eOxVcgUoHGEBfrcSXfGfIaljNuqw/wumctEG3qwSud5E9/2CcNHnIjnMFgRZUdfDa31oQPVNqAplxrtb77uVuTEl/REWPN5/RU6s8BUlo4PG/7LPae4Pd0BoELCbHoFAQxoBUTP3HGB9yvnPVmIwSzUn0ZF4IK5ONt8E5pObgBFLKWQoO0Cd0/3NyKXGk/iUv8l4sAmDBMcRKcYgwQW6/TynkLEGVf1VKmfgF2PHWeyL6SRx8Z8N7bUMriI7gSdtbzCsaoOvnzZFHSqMkHu6zOk5FARJBoILqGBUfVEwYvUv+X5aw==",
+          "sha256": "714990165e8ad15102dca40cdc133dbcb8d9882b030ef933a7015ae7e2947804",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "image-0",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                35,
+                17
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "rgba-source-0"
+            }
+          }
+        },
+        {
+          "step_id": "image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                35,
+                17
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "rgba-source-1"
+            }
+          }
+        },
+        {
+          "step_id": "composited",
+          "surface": "PIL.Image",
+          "operation": "alpha_composite",
+          "receiver": null,
+          "arguments": {
+            "im1": {
+              "kind": "binding",
+              "step_id": "image-0"
+            },
+            "im2": {
+              "kind": "binding",
+              "step_id": "image-1"
+            }
+          }
+        },
+        {
+          "step_id": "mirrored",
+          "surface": "PIL.ImageOps",
+          "operation": "mirror",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "composited"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "mirrored"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "composited",
+        "mirrored",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror-1024x768",
+      "surface": "PIL.Image",
+      "operation": "alpha_composite",
+      "covers": [
+        "PIL.Image.alpha_composite.behavior.default",
+        "PIL.ImageOps.mirror.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "image-0",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                30,
+                60,
+                90,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                200,
+                150,
+                100,
+                192
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "composited",
+          "surface": "PIL.Image",
+          "operation": "alpha_composite",
+          "receiver": null,
+          "arguments": {
+            "im1": {
+              "kind": "binding",
+              "step_id": "image-0"
+            },
+            "im2": {
+              "kind": "binding",
+              "step_id": "image-1"
+            }
+          }
+        },
+        {
+          "step_id": "mirrored",
+          "surface": "PIL.ImageOps",
+          "operation": "mirror",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "composited"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "mirrored"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "composited",
+        "mirrored",
+        "materialize"
+      ]
+    },
+    {
       "case_id": "PIL.Image.new.nuanced.bulk-fill-l-13x7",
       "surface": "PIL.Image",
       "operation": "new",

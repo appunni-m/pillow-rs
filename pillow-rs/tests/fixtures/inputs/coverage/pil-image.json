@@ -795,6 +795,8 @@
           "pipeline-composition.linear-gradient-filter-autocontrast",
           "pipeline-composition.radial-gradient-crop-resize",
           "pipeline-composition.mandelbrot-invert-rotate",
+          "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror",
+          "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror-1024x768",
           "PIL.Image.new.nuanced.bulk-fill-l-13x7",
           "PIL.Image.new.nuanced.bulk-fill-la-13x7",
           "PIL.Image.new.nuanced.bulk-fill-rgb-13x7",
