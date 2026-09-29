@@ -27,6 +27,9 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ColorType, DynamicImage, RgbImage};
 
+#[cfg(feature = "parallel")]
+const CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
 /// Maps a codec color type to the nearest Pillow mode string.
 ///
 /// # Returns
@@ -784,6 +787,21 @@ pub fn muldiv255(a: u32, b: u32) -> u32 {
     ((t >> 8) + t) >> 8
 }
 
+#[inline]
+fn cmyk_to_rgb_row(source: &[u8], output: &mut [u8]) {
+    for (rgb, cmyk) in output.chunks_exact_mut(3).zip(source.chunks_exact(4)) {
+        let c = u32::from(cmyk[0]);
+        let m = u32::from(cmyk[1]);
+        let y = u32::from(cmyk[2]);
+        let nk = 255 - u32::from(cmyk[3]);
+        // muldiv255(channel, nk) is in 0..=nk for byte channels, so the
+        // subtraction is already the exact clipped Pillow result.
+        rgb[0] = (nk - muldiv255(c, nk)) as u8;
+        rgb[1] = (nk - muldiv255(m, nk)) as u8;
+        rgb[2] = (nk - muldiv255(y, nk)) as u8;
+    }
+}
+
 /// Converts CMYK storage to RGB using Pillow-compatible integer arithmetic.
 ///
 /// The input is an RGBA buffer interpreted as `C`, `M`, `Y`, `K`. The returned
@@ -798,16 +816,29 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
         _ => Cow::Owned(img.to_rgba8().into_raw()),
     };
     let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(cmyk.chunks_exact(4)) {
-        let c = ip[0] as u32;
-        let m = ip[1] as u32;
-        let y = ip[2] as u32;
-        let k = ip[3] as u32;
-        let nk = 255u32 - k;
-        let r = (nk as i32 - muldiv255(c, nk) as i32).clamp(0, 255) as u8;
-        let g = (nk as i32 - muldiv255(m, nk) as i32).clamp(0, 255) as u8;
-        let b = (nk as i32 - muldiv255(y, nk) as i32).clamp(0, 255) as u8;
-        *op = crate::raster::Rgb([r, g, b]);
+    if w == 0 || h == 0 {
+        return DynamicImage::ImageRgb8(out);
+    }
+    let source_stride = w as usize * 4;
+    let output_stride = w as usize * 3;
+    #[cfg(feature = "parallel")]
+    if w as usize * h as usize >= CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            out.as_mut(),
+            output_stride,
+            h as usize,
+            |_row_start, _row_end, y, row| {
+                let source_start = y as usize * source_stride;
+                cmyk_to_rgb_row(&cmyk[source_start..source_start + source_stride], row);
+            }
+        );
+        return DynamicImage::ImageRgb8(out);
+    }
+    for (source, output) in cmyk
+        .chunks_exact(source_stride)
+        .zip(out.as_mut().chunks_exact_mut(output_stride))
+    {
+        cmyk_to_rgb_row(source, output);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -1368,7 +1399,7 @@ pub fn palette_getcolor_validate_input(
 
 #[cfg(test)]
 mod tests {
-    use super::{ColorValue, getcolor};
+    use super::{ColorValue, getcolor, muldiv255};
     use crate::error::PilError;
 
     #[test]
@@ -1389,5 +1420,21 @@ mod tests {
             getcolor(255, 0, 0, 255, "XYZ"),
             Err(PilError::KeyError(mode)) if mode == "XYZ"
         ));
+    }
+
+    #[test]
+    fn muldiv255_byte_product_never_exceeds_the_second_byte() {
+        for channel in 0..=255 {
+            for inverse_black in 0..=255 {
+                let scaled = muldiv255(channel, inverse_black);
+                assert!(scaled <= inverse_black);
+                let pillow = (inverse_black as i32 - scaled as i32).clamp(0, 255) as u8;
+                let native = (inverse_black - scaled) as u8;
+                assert_eq!(
+                    native, pillow,
+                    "channel={channel} inverse_black={inverse_black}"
+                );
+            }
+        }
     }
 }

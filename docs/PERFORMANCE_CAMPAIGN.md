@@ -8422,3 +8422,37 @@ strict parity sweep passed 6/6 each on CPU, strict SIMD, and strict GPU
 routes logical modes through the central typed resize dispatcher: bytes-per-
 pixel alone cannot decide whether the fourth byte is alpha, CMYK K, or scalar
 data. No coverage was run.
+
+### CMYK→RGB revisit: row-parallel exact byte conversion — 2026-09-29
+
+The borrowed CMYK input already removed the redundant RGBA-carrier clone, but
+the 1024 × 768 conversion still measured slower than Pillow. The fourth bounded
+attempt keeps the same `C/M/Y/K → RGB` arithmetic, writes directly into the
+output byte rows, and uses the approved row-parallel macro only at or above
+512 × 512 pixels. Its inner loop no longer converts each channel to signed
+integers or clamps the subtraction. For byte `channel` and `inverse_black`,
+Pillow's `muldiv255(channel, inverse_black)` is bounded by `inverse_black`; an
+exhaustive 256 × 256 test proves that direct unsigned subtraction produces the
+same byte as the prior signed-and-clamped expression.
+
+The existing 17 × 3 mode-audit case and the 1024 × 768 CMYK→RGB material case
+passed 2/2 live-Pillow CPU parity
+(`migration-parity-d6a782338dc24b809a4dc9bcd743d83e`). The standard public-call
+workload retained five warmups, 20 iterations × five samples, and concurrency
+one. Baseline and fourth-attempt receipts are
+`migration-benchmark-d199c401a63948e7a2be43445a33cc12` and
+`migration-benchmark-7a39947944a943d5b707091d0ea28129`:
+
+| Median latency, ms | Pillow | CPU | SIMD-requested | GPU-requested |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.462688 | 0.757271 | 0.696375 | 0.682875 |
+| Row-parallel | 0.436979 | 0.486459 | 0.479834 | 0.491770 |
+
+CPU latency fell 35.8% against the current baseline and is 1.56× faster than
+its previous implementation. It remains 1.11× slower than Pillow on the final
+sample. The benchmark parity gates pass. SIMD/GPU profile rows have empty
+backend execution receipts; this conversion currently runs the shared CPU
+helper, so those rows do not prove accelerated execution. Checkpoint after the
+fourth attempt with remaining arithmetic/output-store cost and the 11% CPU gap
+recorded; no further work on this operation is justified until profiling shows
+a distinct next cause. No coverage was run.
