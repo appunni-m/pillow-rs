@@ -63223,6 +63223,59 @@
       }
     },
     {
+      "workload_id": "pipeline-chain.rank-filter.material.l-noise-256x256-size9-rank40",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.RankFilter.nuanced.performance-material-l-rank9-noise-256x256"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          256,
+          256
+        ],
+        "mode": "L",
+        "chain_length": 2,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-chain.convolution.material.l-3x3-invert.256x256",
       "covers": [
         "PIL.ImageFilter.Kernel.performance.standard"
@@ -245365,6 +245418,10 @@
         },
         {
           "workload_id": "pipeline-chain.rank-filter.material.l-9x9-256x256",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.rank-filter.material.l-noise-256x256-size9-rank40",
           "weight": 1
         }
       ]
