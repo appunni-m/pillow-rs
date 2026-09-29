@@ -19938,9 +19938,6 @@ fn native_aspect_resize_bytes(
     dimensions: fn(u32, u32, u32, u32) -> Option<(u32, u32)>,
     operation: &str,
 ) -> Result<Option<DynamicImage>, PilError> {
-    let Some(channels) = native_pad_channels_for_image(img, mode) else {
-        return Ok(None);
-    };
     let Some((output_width, output_height)) =
         dimensions(img.width(), img.height(), target_width, target_height)
     else {
@@ -19949,20 +19946,18 @@ fn native_aspect_resize_bytes(
     if !native_resize_supported_for_image(img, output_width, output_height, filter, mode) {
         return Ok(None);
     }
-    if (img.width(), img.height()) == (output_width, output_height) {
-        return native_copy_image_bytes(img, mode);
-    }
-    let result = match filter {
-        ResampleFilter::Nearest => simd_resize_nearest(img, output_width, output_height, channels),
-        _ => simd_resize_convolution(
-            img,
-            output_width,
-            output_height,
+    // Use the common resize dispatcher so logical mode controls alpha
+    // premultiplication and I/F keep their one-sample-per-pixel arithmetic.
+    // Channel count alone cannot distinguish LA/RGBA from PA/CMYK/RGBa/RGBX.
+    let result = simd_resize(
+        img,
+        &PipelineOp::Resize {
+            w: output_width,
+            h: output_height,
             filter,
-            channels,
-            matches!(channels, 2 | 4),
-        ),
-    }?;
+        },
+        mode,
+    )?;
     if result.width() != output_width || result.height() != output_height {
         return Err(PilError::InternalError(format!(
             "SIMD {operation} resize shape mismatch"
