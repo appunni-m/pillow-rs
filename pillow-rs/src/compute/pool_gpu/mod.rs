@@ -11520,6 +11520,13 @@ fn gpu_native_byte_op_channels(
                 {
                     Some(2)
                 }
+                DynamicImage::ImageRgb8(_)
+                    if matches!(mode, None | Some("RGB"))
+                        && image.width() > 0
+                        && image.height() > 0 =>
+                {
+                    Some(3)
+                }
                 _ => None,
             }
         }
