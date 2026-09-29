@@ -12199,9 +12199,16 @@ fn native_sharpness_filter_blend(
     }
     let interior_width = width - 2;
     let interior_height = height - 2;
+    let alpha = factor as f32;
+    // Preserve the scalar-gather path for finite f64 factors that overflow
+    // when Pillow's blend factor is narrowed to f32. That path also defines
+    // the unusual NaN behavior at unchanged border samples.
+    let grouped_rgb_bytes = channels == 3 && active_channels == 3 && alpha.is_finite();
     let grouped_pixels = mode == Some("RGBX") && active_channels == channels && channels == 4;
     let pixels_per_block = (8 / channels).max(1);
-    let vector_blocks = if grouped_pixels {
+    let vector_blocks = if grouped_rgb_bytes {
+        (interior_width * channels).div_ceil(8) * interior_height
+    } else if grouped_pixels {
         interior_width
             .div_ceil(pixels_per_block)
             .saturating_mul(interior_height)
@@ -12215,11 +12222,36 @@ fn native_sharpness_filter_blend(
         return None;
     }
     let scalar_tail = (width * 2 + height * 2 - 4).saturating_mul(active_channels);
-    let alpha = factor as f32;
     let apply_row = |y: usize, row: &mut [u8]| {
         let source_row = y * row_stride;
         if (1..height - 1).contains(&y) {
-            if grouped_pixels {
+            if grouped_rgb_bytes {
+                // RGB's channel bytes are contiguous. Vectorize that native
+                // stream directly instead of gathering one channel across
+                // eight pixels for each of the three channels.
+                let interior_end = (width - 1) * channels;
+                let mut byte_offset = channels;
+                while byte_offset < interior_end {
+                    let active_bytes = (interior_end - byte_offset).min(8);
+                    let smooth = native_filter_3x3_rgb_byte_block_integer(
+                        source,
+                        width,
+                        y,
+                        byte_offset,
+                        active_bytes,
+                    );
+                    let original = native_filter_load_byte_block(
+                        source,
+                        source_row + byte_offset,
+                        active_bytes,
+                    );
+                    let values = native_sharpness_blend_lanes(original, smooth, alpha).to_array();
+                    for (lane, value) in values.into_iter().enumerate().take(active_bytes) {
+                        row[byte_offset + lane] = native_sharpness_blend_result(value);
+                    }
+                    byte_offset += active_bytes;
+                }
+            } else if grouped_pixels {
                 // RGBX sharpness processes the padding byte too. One x-vector
                 // per channel performs four separate strided gathers; group
                 // two adjacent pixels so the eight lanes are one compact span.
@@ -13673,6 +13705,53 @@ fn native_filter_3x3_pixel_block_integer(
         let middle = left + channels;
         let right = middle + channels;
         (load(left), load(middle), load(right))
+    };
+
+    let (below_left, below_middle, below_right) = row(1);
+    let (center_left, center_middle, center_right) = row(0);
+    let (above_left, above_middle, above_right) = row(-1);
+    let weighted = below_left
+        + below_middle
+        + below_right
+        + center_left
+        + center_middle * u16x8::splat(5)
+        + center_right
+        + above_left
+        + above_middle
+        + above_right;
+    let rounded = (weighted + u16x8::splat(6)).to_array();
+    f32x8::from(std::array::from_fn(|lane| (rounded[lane] / 13) as f32))
+}
+
+/// Evaluate contiguous interleaved RGB channel bytes with the exact rounded
+/// 3x3 smoothing kernel. Neighbor pixels are three bytes apart, so each lane
+/// follows one channel through the left, center, and right taps without
+/// scalar per-channel gathers.
+#[inline]
+fn native_filter_3x3_rgb_byte_block_integer(
+    raw: &[u8],
+    width: usize,
+    y: usize,
+    start_byte: usize,
+    active_bytes: usize,
+) -> f32x8 {
+    debug_assert!(width >= 3);
+    debug_assert!((1..=8).contains(&active_bytes));
+    debug_assert!(start_byte >= 3 && start_byte + active_bytes <= (width - 1) * 3);
+
+    let load = |start: usize| {
+        u16x8::new(std::array::from_fn(|lane| {
+            if lane < active_bytes {
+                u16::from(raw[start + lane])
+            } else {
+                0
+            }
+        }))
+    };
+    let row = |dy: isize| {
+        let source_row = (y as isize + dy) as usize * width * 3;
+        let middle = source_row + start_byte;
+        (load(middle - 3), load(middle), load(middle + 3))
     };
 
     let (below_left, below_middle, below_right) = row(1);
@@ -25912,6 +25991,35 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_rgb_sharpness_vector_stream_matches_cpu_across_tails() {
+        for (width, height) in [(3, 3), (4, 5), (5, 7), (8, 4), (9, 9), (17, 6)] {
+            let pixels = (width * height) as usize;
+            let bytes = (0..pixels * 3)
+                .map(|index| (index.wrapping_mul(61).wrapping_add(index / 7 + 23)) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageRgb8(
+                crate::raster::RgbImage::from_raw(width, height, bytes).unwrap(),
+            );
+            for factor in [0.0, 0.5, 1.5, 2.0, f64::MAX] {
+                let op = PipelineOp::Sharpness { factor };
+                let expected =
+                    crate::compute::registry::execute_cpu(&op, &source, Some("RGB")).unwrap();
+                let actual = super::simd_sharpness(&source, &op, Some("RGB")).unwrap();
+                assert_eq!(
+                    actual.color(),
+                    expected.color(),
+                    "{width}x{height}, {factor}"
+                );
+                assert_eq!(
+                    actual.as_bytes(),
+                    expected.as_bytes(),
+                    "{width}x{height}, {factor}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn posterize_direct_copy_matches_all_bits_and_vector_tails() {
         for (width, height) in [(1, 1), (5, 1), (17, 3), (256, 1), (513, 512)] {

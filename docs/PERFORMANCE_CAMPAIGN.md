@@ -8990,3 +8990,53 @@ Pillow for these two sizes, but SIMD/GPU acceleration remains an explicit
 blocker because this API has no such reducer dispatch; solving that requires a
 new backend implementation, not relabeling the host scan. Continue to the next
 operation.
+
+### RGB `ImageEnhance.Sharpness` — checkpoint 2026-09-29
+
+The material workload is `pil-imageenhance-sharpness.enhance.standard`:
+seeded 1,024 × 768 RGB noise, public constructor/enhance/`tobytes` boundary,
+five warmups and 20 iterations × five samples at concurrency one. The parity
+input compares exact Pillow output on CPU, SIMD, and GPU. The first receipt,
+`sharpness-rgb-before.json`, passed 3/3; CPU was 3.123 ms, SIMD 4.650 ms, GPU
+2.491 ms, and Pillow 18.530 ms. The existing GPU route uploaded 3,145,728
+bytes after converting RGB to RGBA, read back 3,145,728 bytes, and recorded
+one mode conversion.
+
+The generic fused GPU shader was first taught to read packed RGB triplets from
+storage words. This removed the conversion and cut upload by 25%, but the
+cross-word gather erased the byte-transfer gain. A separate singleton RGB
+shader then computes the three color components without alpha arithmetic or a
+per-pixel layout branch. Its parity-gated receipts were
+`sharpness-rgb-native-kernel.json` and `sharpness-rgb-native-kernel-repeat.json`;
+GPU measured 2.301 and 2.533 ms. Both reported 100/100 actual GPU executions,
+one dispatch, no fallback, 2,359,296 upload bytes, 3,145,728 readback bytes,
+and zero mode conversions. Keep the specialized shader; the readback remains
+four bytes per result pixel and leaves a concrete transfer/materialization
+cost to investigate.
+
+The SIMD filter originally gathered each channel separately across eight x
+positions. The retained RGB path instead treats the native three-byte row as
+a contiguous byte stream and computes each eight-byte block with three-byte
+horizontal taps. It keeps the divisor-13 integer rounding before the float
+blend, uses bounded partial blocks, and falls back to the old path when a
+finite `f64` factor narrows to nonfinite `f32`, preserving border behavior.
+The focused `native_rgb_sharpness_vector_stream_matches_cpu_across_tails` test
+passed dimensions 3×3, 4×5, 5×7, 8×4, 9×9, and 17×6 with factors 0, 0.5, 1.5,
+2, and `f64::MAX`.
+
+Two parity-gated receipts for this exact retained code,
+`sharpness-rgb-vectorized-final.json` and
+`sharpness-rgb-vectorized-repeat.json`, each passed 3/3 CPU/SIMD/GPU comparisons
+and reported 100 actual executions per backend with no fallback. Pillow medians
+were 14.149 and 13.963 ms; CPU 1.875 and 1.807 ms; SIMD 2.697 and 2.814 ms;
+GPU 2.449 and 2.497 ms. CPU beat Pillow in both. SIMD reached 5.25× then 4.96×
+Pillow, so the 5× goal is borderline rather than stable. GPU's concurrency-one
+reciprocal-latency rate exceeded SIMD in both runs, but this is not a saturated
+throughput result.
+
+One packed 16-byte window/shuffle variation passed parity but its benchmark
+coincided with a separate image-slash-star coverage build and parity job; CPU,
+SIMD, and GPU all slowed sharply together. With no clean evidence of a win, that
+variation was reverted. Keep the simpler byte-stream path, mark stable 5× SIMD
+as unresolved, and move to another operation. Revisit only with an unloaded,
+paired run or a profile identifying a remaining RGB-specific cost.
