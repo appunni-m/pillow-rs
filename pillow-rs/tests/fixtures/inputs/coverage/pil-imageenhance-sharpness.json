@@ -1,0 +1,65 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imageenhance-sharpness.coverage-plan",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.behavior.default",
+        "PIL.ImageEnhance.Sharpness.enhance.parameter.factor"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageEnhance.Sharpness.enhance.behavior.default",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-l-0",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-l-1",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-l-2",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-l-3",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-l-4",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-la-0",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-la-1",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-la-2",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-la-3",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-la-4",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgb-0",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgb-1",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgb-2",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgb-3",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgb-4",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgba-0",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgba-1",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgba-2",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgba-3",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-rgba-4",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-0",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-1",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-2",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-3",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-4",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.unsupported-p-mode",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c01",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c02",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c03",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c04",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c05",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c06",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c07",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c08",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c09",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c10",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.performance-material-rgb-noise-1024x768-identity",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.native-l-packed-output-tail-17x9",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.rgbx-sharpness-processes-x-byte",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.parity-blend-rounding-factor-0-3-border-rgb-3x3",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.parity-fma-cancellation-factor-1-1-rgb-3x3",
+          "pipeline-case.sharpness.materialized-smoke"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-enhance"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}
