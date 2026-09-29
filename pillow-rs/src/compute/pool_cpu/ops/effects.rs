@@ -3401,6 +3401,20 @@ pub fn op_put_alpha_data(
     mask: &crate::raster::DynamicImage,
     mode: PixelMode,
 ) -> DynamicImage {
+    if mode == PixelMode::RGBA
+        && let (DynamicImage::ImageRgba8(rgba), DynamicImage::ImageLuma8(alpha)) = (img, mask)
+        && rgba.dimensions() == alpha.dimensions()
+        && rgba.as_raw().len() == alpha.as_raw().len().saturating_mul(4)
+    {
+        // RGBA already has the requested storage layout. Clone it once for
+        // the result and replace only byte 3 instead of cloning via
+        // `to_rgba8()` and copying all four channels into a second frame.
+        let mut output = rgba.clone();
+        for (pixel, alpha) in output.as_mut().chunks_exact_mut(4).zip(alpha.as_raw()) {
+            pixel[3] = *alpha;
+        }
+        return DynamicImage::ImageRgba8(output);
+    }
     if mode == PixelMode::RGB
         && let (DynamicImage::ImageRgb8(rgb), DynamicImage::ImageLuma8(alpha)) = (img, mask)
         && rgb.dimensions() == alpha.dimensions()

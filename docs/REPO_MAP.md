@@ -157,6 +157,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- posterize.wgsl
 |   |   |   |       |-- put_alpha.wgsl
 |   |   |   |       |-- put_alpha_data.wgsl
+|   |   |   |       |-- put_alpha_data_native_rgb.wgsl
 |   |   |   |       |-- put_alpha_native_la.wgsl
 |   |   |   |       |-- put_alpha_native_rgb.wgsl
 |   |   |   |       |-- put_data.wgsl

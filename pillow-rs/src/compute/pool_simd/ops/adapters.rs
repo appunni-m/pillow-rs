@@ -25005,6 +25005,13 @@ fn simd_put_alpha_rgb_mask_row(source: &[u8], mask: &[u8], output: &mut [u8], wi
     }
 }
 
+fn simd_put_alpha_rgba_mask_row(output: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(output.len(), mask.len() * 4);
+    for (pixel, &alpha) in output.chunks_exact_mut(4).zip(mask) {
+        pixel[3] = alpha;
+    }
+}
+
 #[cfg(feature = "parallel")]
 const SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
@@ -25222,6 +25229,44 @@ pub fn simd_put_alpha_data(
     let pixels = (img.width() as usize)
         .checked_mul(img.height() as usize)
         .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData pixel count overflow".into()))?;
+    if *alpha_mode == PixelMode::RGBA
+        && matches!(mode, None | Some("RGBA"))
+        && let DynamicImage::ImageRgba8(source) = img
+        && source.dimensions() == mask.dimensions()
+        && source.as_raw().len() == mask.as_raw().len().saturating_mul(4)
+    {
+        // Preserve the already-RGBA image in one output clone and overwrite
+        // only alpha bytes. The generic SIMD packer rebuilds every color byte
+        // even though Pillow's RGBA putalpha(mask) leaves them unchanged.
+        let mut output = source.clone();
+        #[cfg(feature = "parallel")]
+        if pixels >= SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD {
+            let width = usize::try_from(img.width())
+                .map_err(|_| PilError::ValueError("SIMD PutAlphaData width overflow".into()))?;
+            let height = usize::try_from(img.height())
+                .map_err(|_| PilError::ValueError("SIMD PutAlphaData height overflow".into()))?;
+            let row_stride = width
+                .checked_mul(4)
+                .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData row overflow".into()))?;
+            crate::par_rows_mut!(
+                output.as_mut(),
+                row_stride,
+                height,
+                |_row_start, _row_end, y, row| {
+                    let mask_start = y as usize * width;
+                    simd_put_alpha_rgba_mask_row(
+                        row,
+                        &mask.as_raw()[mask_start..mask_start + width],
+                    );
+                }
+            );
+        } else {
+            simd_put_alpha_rgba_mask_row(output.as_mut(), mask.as_raw());
+        }
+        #[cfg(not(feature = "parallel"))]
+        simd_put_alpha_rgba_mask_row(output.as_mut(), mask.as_raw());
+        return Ok(DynamicImage::ImageRgba8(output));
+    }
     #[cfg(feature = "parallel")]
     if *alpha_mode == PixelMode::RGB
         && pixels >= SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD
@@ -25595,6 +25640,23 @@ mod tests {
                 .flat_map(|(pixel, alpha)| [pixel[0], pixel[1], pixel[2], *alpha])
                 .collect();
             assert_eq!(actual, expected, "width {width}");
+        }
+    }
+
+    #[test]
+    fn native_rgba_putalpha_mask_replaces_only_alpha_samples() {
+        for pixels in [0, 1, 3, 4, 5, 17] {
+            let original: Vec<u8> = (0..pixels * 4)
+                .map(|index| (index * 29 + 3) as u8)
+                .collect();
+            let mask: Vec<u8> = (0..pixels).map(|index| (index * 47 + 5) as u8).collect();
+            let mut actual = original.clone();
+            super::simd_put_alpha_rgba_mask_row(&mut actual, &mask);
+            let mut expected = original.clone();
+            for (pixel, &alpha) in expected.chunks_exact_mut(4).zip(&mask) {
+                pixel[3] = alpha;
+            }
+            assert_eq!(actual, expected, "pixel count {pixels}");
         }
     }
 
