@@ -29,6 +29,8 @@ use crate::raster::{ColorType, DynamicImage, RgbImage};
 
 #[cfg(feature = "parallel")]
 const CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+#[cfg(feature = "parallel")]
+const CMYK_TO_BINARY_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
 /// Maps a codec color type to the nearest Pillow mode string.
 ///
@@ -396,25 +398,103 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage,
 /// Converts CMYK storage to Pillow's truncated binary-conversion luminance.
 ///
 /// Pillow's `convert("1")` path uses the integer `299/587/114` luma formula
-/// after expanding CMYK to RGB.  That is intentionally different from the
-/// rounded fixed-point formula used by ordinary `L` conversion, because the
-/// difference changes Floyd–Steinberg threshold decisions near 128.
+/// after expanding each CMYK sample to RGB. This is intentionally different
+/// from ordinary `L` conversion's rounded fixed-point formula because the
+/// difference changes threshold decisions near 128. Fuse both stages so the
+/// intermediate RGB frames are never materialized.
+#[inline]
+fn cmyk_pixel_to_truncated_luma(pixel: &[u8]) -> u8 {
+    let ink = 255u32 - u32::from(pixel[3]);
+    let red = (ink - muldiv255(u32::from(pixel[0]), ink)) as u8;
+    let green = (ink - muldiv255(u32::from(pixel[1]), ink)) as u8;
+    let blue = (ink - muldiv255(u32::from(pixel[2]), ink)) as u8;
+    let value =
+        (299u32 * u32::from(red) + 587u32 * u32::from(green) + 114u32 * u32::from(blue)) / 1000;
+    value.min(255) as u8
+}
+
+#[inline]
+fn cmyk_to_binary_row(source: &[u8], output: &mut [u8]) {
+    for (value, pixel) in output.iter_mut().zip(source.chunks_exact(4)) {
+        *value = if cmyk_pixel_to_truncated_luma(pixel) >= 128 {
+            255
+        } else {
+            0
+        };
+    }
+}
+
 pub fn cmyk_to_grayscale_truncate(
     img: &DynamicImage,
 ) -> Result<crate::raster::GrayImage, PilError> {
-    let rgb = cmyk_to_rgb(img).to_rgb8();
-    let (w, h) = rgb.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let cmyk = match img {
+        DynamicImage::ImageRgba8(image) => Cow::Borrowed(image.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     let dims = CheckedDims::new(w, h, 1)?;
+    let expected_source_bytes = dims
+        .total_pixels()
+        .checked_mul(4)
+        .ok_or_else(|| PilError::InternalError("CMYK binary conversion size overflow".into()))?;
+    if cmyk.len() != expected_source_bytes {
+        return Err(PilError::InternalError(
+            "CMYK binary conversion source buffer mismatch".into(),
+        ));
+    }
     let mut gray = dims.alloc_buffer();
-    for (index, pixel) in rgb.pixels().enumerate() {
-        let value = (299u32 * u32::from(pixel[0])
-            + 587u32 * u32::from(pixel[1])
-            + 114u32 * u32::from(pixel[2]))
-            / 1000;
-        gray[index] = value.min(255) as u8;
+    for (index, pixel) in cmyk.chunks_exact(4).enumerate() {
+        gray[index] = cmyk_pixel_to_truncated_luma(pixel);
     }
     crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("cmyk grayscale buffer mismatch".to_string()))
+}
+
+/// Converts CMYK storage directly to Pillow's no-dither binary output.
+///
+/// This preserves the exact truncated luminance and `>= 128` threshold while
+/// avoiding a grayscale intermediate and a second full-frame pass.
+pub fn cmyk_to_binary_truncate(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
+    let (w, h) = (img.width(), img.height());
+    let cmyk = match img {
+        DynamicImage::ImageRgba8(image) => Cow::Borrowed(image.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
+    let dims = CheckedDims::new(w, h, 1)?;
+    let expected_source_bytes = dims
+        .total_pixels()
+        .checked_mul(4)
+        .ok_or_else(|| PilError::InternalError("CMYK binary conversion size overflow".into()))?;
+    if cmyk.len() != expected_source_bytes {
+        return Err(PilError::InternalError(
+            "CMYK binary conversion source buffer mismatch".into(),
+        ));
+    }
+    let mut output = dims.alloc_buffer();
+    let source_stride = (w as usize) * 4;
+    let output_stride = w as usize;
+    #[cfg(feature = "parallel")]
+    if dims.total_pixels() >= CMYK_TO_BINARY_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            h as usize,
+            |_row_start, _row_end, y, row| {
+                let source_start = y as usize * source_stride;
+                cmyk_to_binary_row(&cmyk[source_start..source_start + source_stride], row);
+            }
+        );
+        return crate::raster::GrayImage::from_raw(w, h, output)
+            .ok_or_else(|| PilError::InternalError("cmyk binary buffer mismatch".to_string()));
+    }
+    for (source, output) in cmyk
+        .chunks_exact(source_stride)
+        .zip(output.chunks_exact_mut(output_stride))
+    {
+        cmyk_to_binary_row(source, output);
+    }
+    crate::raster::GrayImage::from_raw(w, h, output)
+        .ok_or_else(|| PilError::InternalError("cmyk binary buffer mismatch".to_string()))
 }
 
 /// Maps an RGB buffer to Pillow's default CMYK inverse: C=255-R, M=255-G,

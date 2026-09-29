@@ -40850,6 +40850,7 @@ def build_nuanced_cases(
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
+    cases.extend(cmyk_to_1_parity_cases(surface_id))
     cases.extend(cmyk_grayscale_parity_cases(surface_id))
     cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
@@ -41415,6 +41416,121 @@ def cmyk_to_rgb_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "operation": "convert",
                     "receiver": binding("image"),
                     "arguments": {"mode": literal("RGB")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
+
+
+def cmyk_to_1_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Check CMYK binary thresholds and benchmark a material conversion."""
+    if surface_id != "PIL.Image.Image":
+        return []
+    boundary_pixels = [
+        (127, 127, 127, 0),
+        (128, 128, 128, 0),
+        (126, 126, 126, 0),
+        (129, 129, 129, 0),
+        (0, 127, 127, 0),
+        (255, 127, 127, 0),
+        (127, 0, 127, 0),
+        (127, 255, 127, 0),
+        (127, 127, 0, 0),
+        (127, 127, 255, 0),
+        (0, 0, 0, 126),
+        (0, 0, 0, 127),
+        (0, 0, 0, 128),
+        (0, 0, 0, 255),
+        (255, 255, 255, 0),
+    ]
+    rng = random.Random("cmyk-binary-threshold-boundaries-17x3")
+    boundary_pixels.extend(
+        tuple(rng.randbytes(4)) for _ in range(17 * 3 - len(boundary_pixels))
+    )
+    boundary_bytes = bytes(value for pixel in boundary_pixels for value in pixel)
+    boundary_case = {
+        "case_id": f"{surface_id}.convert.nuanced.cmyk-binary-threshold-boundaries-17x3",
+        "surface": surface_id,
+        "operation": "convert",
+        "covers": [f"{surface_id}.convert.parameter.dither"],
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        "assets": [
+            {
+                "id": "cmyk-binary-threshold-boundaries",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(boundary_bytes).decode("ascii"),
+                "sha256": hashlib.sha256(boundary_bytes).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("CMYK"),
+                    "size": literal([17, 3]),
+                    "data": asset_value("cmyk-binary-threshold-boundaries"),
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "convert",
+                "receiver": binding("image"),
+                "arguments": {"mode": literal("1"), "dither": literal(0)},
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["call", "materialize"],
+    }
+    return [
+        boundary_case,
+        {
+            "case_id": f"{surface_id}.convert.nuanced.material-cmyk-to-1-1024x768",
+            "surface": surface_id,
+            "operation": "convert",
+            "covers": [f"{surface_id}.convert.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("CMYK"),
+                        "size": literal([1024, 768]),
+                        "color": literal([17, 83, 149, 211]),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "convert",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "mode": literal("1"),
+                        "dither": literal(0),
+                    },
                 },
                 {
                     "step_id": "materialize",
@@ -46149,6 +46265,40 @@ def build_pipeline_benchmark_document(
         "context": cmyk_to_rgb_context,
     }
 
+    cmyk_to_1_case_id = (
+        "PIL.Image.Image.convert.nuanced.material-cmyk-to-1-1024x768"
+    )
+    cmyk_to_1_case = cases_by_id.get(cmyk_to_1_case_id)
+    if cmyk_to_1_case is None:
+        raise ValueError(f"CMYK to 1 benchmark references missing case: {cmyk_to_1_case_id}")
+    cmyk_to_1_context = _workflow_benchmark_context(
+        cmyk_to_1_case,
+        variant="convert-material-cmyk-to-1-1024x768",
+        surface="PIL.Image.Image",
+        operation="convert",
+    )
+    cmyk_to_1_context.update(size=[1024, 768], mode="CMYK")
+    cmyk_to_1_workload = {
+        "workload_id": "pipeline-chain.convert.material-cmyk-to-1-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.Image.Image", "convert")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": cmyk_to_1_case_id},
+        "measurement": {
+            "boundary": "observed_steps",
+            "step_ids": ["call"],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "concurrency": 1,
+            "cache_state": "warm",
+            "correctness_gate": "parity_pass",
+        },
+        "context": cmyk_to_1_context,
+    }
+
     cmyk_grayscale_case_id = (
         "PIL.ImageOps.grayscale.nuanced.material-cmyk-1024x768"
     )
@@ -47962,8 +48112,9 @@ def build_pipeline_benchmark_document(
             *terminal_analysis_workloads,
             getprojection_cmyk_workload,
             getprojection_cmyk_sparse_workload,
-            cmyk_to_rgb_workload,
-            cmyk_grayscale_workload,
+        cmyk_to_rgb_workload,
+        cmyk_to_1_workload,
+        cmyk_grayscale_workload,
             *terminal_scalar_analysis_workloads,
             *terminal_masked_analysis_workloads,
             *terminal_color_count_workloads,

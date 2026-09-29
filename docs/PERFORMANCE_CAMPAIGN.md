@@ -8456,3 +8456,59 @@ helper, so those rows do not prove accelerated execution. Checkpoint after the
 fourth attempt with remaining arithmetic/output-store cost and the 11% CPU gap
 recorded; no further work on this operation is justified until profiling shows
 a distinct next cause. No coverage was run.
+
+### CMYK→1: fuse no-dither conversion and borrow source pixels — 2026-09-29
+
+`Image.convert("1", dither=NONE)` previously expanded CMYK through an RGB
+frame, produced an 8-bit grayscale frame, then allocated the binary result and
+read the grayscale frame again to threshold it. The first fusion kept CMYK
+bytes as the source and composed Pillow's exact byte expansion with its
+truncated luminance, removing the RGB intermediates. For the no-dither route,
+the final value can be written directly: compute each RGB byte as
+`inverse_K - muldiv255(C|M|Y, inverse_K)`, compute
+`floor((299R + 587G + 114B) / 1000)`, then write 255 at `>= 128`, else 0. This
+avoids both the grayscale allocation and its second full-frame pass. The
+Floyd–Steinberg path stays separate because its error values couple adjacent
+pixels and rows.
+
+The next measured bottleneck was work ownership rather than arithmetic.
+`Image::materialize()` clones an already shared `Arc<DynamicImage>`; this
+read-only eager conversion now uses `materialized_shared()` and borrows the
+native four-byte CMYK carrier. The logical mode remains CMYK, so the carrier's
+fourth byte is K, never alpha. Above the established 512 × 512 threshold, the
+no-dither point conversion uses the approved row-parallel macro; small images
+stay serial. Do not apply this row split to Floyd–Steinberg conversion.
+
+The material workload is a 1024 × 768 CMYK image with color `(17, 83, 149,
+211)`, `dither=0`, five warmups, 20 iterations × five samples, concurrency one,
+and a call-only timing boundary. The successive target CPU medians show which
+cost each change removed; each step has its own correctness-gated 100-call
+run, and Pillow varied with host load:
+
+| Stage | Pillow ms | Target CPU ms |
+| --- | ---: | ---: |
+| Baseline | 0.519854 | 2.509146 |
+| CMYK-to-truncated-luma fusion | 0.551167 | 2.350292 |
+| Direct binary threshold | 0.602917 | 1.084459 |
+| Row-parallel direct output | 0.564396 | 0.721729 |
+| Shared-source borrow | 0.544646 | 0.502062 |
+| Same final code, fresh run | 0.569104 | 0.549500 |
+| Same final code, repeat | 0.552229 | 0.498417 |
+
+The last two runs put CPU median latency 3.4% and 9.7% below Pillow; median
+throughput was 1,819.8 vs 1,757.1 and 2,006.4 vs 1,810.8 calls/s. The final p95
+moved with load: CPU was slower in the first run and faster in the repeat. The
+original 2.509 ms target median fell about 80% on the final repeat. Parity
+passed 4/4 on live Pillow for the default CMYK→1 route, randomized mode-audit
+pixels, a 17 × 3 no-dither input spanning threshold-adjacent neutral values,
+channel-weighted colors and varied K, and the material benchmark input
+(`migration-parity-ca37b252b4ac4284a74a30c1a0a4682c`). The two final standard
+benchmark receipts are `migration-benchmark-191d6622a27447da98e27a515942097a`
+and `migration-benchmark-c483d1b896d04270a196fecbcb9f6ea8`.
+
+CPU meets the no-slower-than-Pillow median goal on both final runs, but p95 is
+not consistently below Pillow. SIMD- and GPU-requested rows have no
+actual-backend receipts: this eager conversion bypasses those backends, so the
+timings are not SIMD/GPU evidence. Checkpoint after four bounded changes;
+carry the tail-latency variance and missing accelerated route forward rather
+than reopening the same scalar loop without a new profile. No coverage was run.

@@ -715,6 +715,16 @@ impl Image {
         // Special case: converting to binary mode "1" — must eagerly execute
         // because the pipeline's scalar::convert doesn't handle binary threshold/dither.
         if mode == "1" {
+            if effective_src_mode == "CMYK" && matches!(dither_enum, Some(DitherMethod::None)) {
+                // This conversion only reads source pixels. Borrow the cached
+                // materialization so we do not clone the full CMYK frame.
+                let img = self.materialized_shared()?;
+                let out = crate::color::cmyk_to_binary_truncate(img.as_ref())?;
+                return Ok(Image::from_dynamic(
+                    DynamicImage::ImageLuma8(out),
+                    Some("1".to_string()),
+                ));
+            }
             let img = self.materialize()?;
             // Use truncated grayscale (PIL uses integer truncation, not rounding)
             let gray = if effective_src_mode == "CMYK" {
