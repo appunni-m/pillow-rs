@@ -7095,6 +7095,7 @@
           "PIL.Image.Image.convert.nuanced.performance-material-pa-to-rgba-noise-1024x768",
           "PIL.Image.Image.convert.nuanced.performance-material-rgb-to-l-noise-1024x768",
           "PIL.Image.Image.convert.nuanced.performance-material-l-to-rgb-noise-1024x768",
+          "PIL.Image.Image.convert.nuanced.performance-material-l-to-rgba-noise-1024x768",
           "PIL.Image.Image.convert.nuanced.material-cmyk-to-rgb-1024x768",
           "PIL.Image.Image.convert.nuanced.cmyk-binary-threshold-boundaries-17x3",
           "PIL.Image.Image.convert.nuanced.material-cmyk-to-1-1024x768",

@@ -9359,3 +9359,62 @@ each uploaded and read back. Launch and transfer costs dominate this small
 pointwise transform; a single shader or transfer reduction cannot establish
 the GPU goal. Record SIMD 5× and higher-throughput GPU execution as blockers
 and continue to the next native-format operation. No coverage collection ran.
+
+### L `convert("RGBA")` — checkpoint 2026-09-29
+
+The material workload is
+`pil-image-image.convert.l-to-rgba-material`, backed by the seeded
+1,024 × 768 case
+`PIL.Image.Image.convert.nuanced.performance-material-l-to-rgba-noise-1024x768`.
+The four-byte RGBA destination is required by the request; widening the
+one-byte L source to RGBA before backend execution is not.
+
+The generic SIMD layout path processes four pixels per 16-byte block because
+RGBA is the wider side of the conversion. Its generic helper rebuilds the
+byte-layout shuffle for every block. The retained L-specific path loads 16 L
+samples, uses four fixed shuffles to produce 64 sequential output bytes, fills
+only the alpha lanes with 255, stores the vectors together, then flattens the
+nested arrays without copying and truncates the padded tail. The focused test
+compares against exact RGBA expansion for one pixel, widths around vector
+boundaries, non-multiple tails, and a 1,023 × 512 image.
+
+The generic GPU upload also called `to_rgba8()` for an L image, transferring
+3,145,728 source bytes and recording one source mode conversion before the
+shader ran. The new singleton L→RGBA route uses the packed-luma uploader:
+four source samples share a storage word, the Convert shader extracts the
+sample by pixel index, and the output remains RGBA. The route is limited to
+nonempty, little-endian L input with one RGBA Convert operation; empty or
+other layouts stay on the established path. This lowers upload to 786,432
+bytes and source mode conversions to zero, but RGBA readback still costs
+3,145,728 bytes and one full-frame copy.
+
+Two 100-sample receipts bracket the retained change. The generic-route baseline
+`migration-benchmark-ae6ed50f97de470d9bbc57c8b1fbb2dc` measured Pillow 0.539 ms,
+CPU 0.287 ms, SIMD 3.706 ms, and GPU 1.622 ms. After the native SIMD expansion
+and compact GPU upload,
+`migration-benchmark-378283b6ba6c4a2a8eae70b3f0108b20` measured:
+
+| Subject | Median latency | Median throughput |
+| --- | ---: | ---: |
+| Pillow | 0.586 ms | 1,707 ops/s |
+| CPU | 0.341 ms | 2,931 ops/s |
+| SIMD | 0.432 ms | 2,317 ops/s |
+| GPU | 1.137 ms | 880 ops/s |
+
+All 100 target samples ran on their requested backend with no fallback. The
+SIMD specialization improved its generic-path latency by about 8.6×, but its
+best measured speed is only 1.36× Pillow, below the 5× goal. CPU is 1.72×
+faster than Pillow for this workload. GPU upload fell to one quarter of its
+baseline size, but readback and dispatch still leave it 2.63× slower than SIMD.
+An extra GPU shader early-return passed parity but showed no positive
+end-to-end signal in a follow-up run, so that experiment was removed.
+
+Exact parity passed four cases—17 × 3, 0 × 3, 3 × 0, and the material case—on
+CPU, SIMD, and GPU (12/12 total). The focused
+`native_luma_to_rgba_matches_exact_conversion_across_vector_tails` and
+`gpu_packed_luma_convert_requires_nonempty_native_l_to_rgba` Rust tests passed.
+`make build-parity` and the standard single-workload
+`make migration-parity-benchmark` correctness gate passed. No coverage
+collection ran. Keep the format-specific output kernel and compact GPU source
+upload; record SIMD 5× and GPU-throughput parity as open goals, then continue
+to the next native-format operation instead of adding another unproven branch.
