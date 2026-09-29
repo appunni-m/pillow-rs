@@ -7358,6 +7358,10 @@ impl GpuInner {
             let native_expand_output_dispatch = if let Some(channels) = native_expand_channels
                 && ops.len() == 1
                 && matches!(op, PipelineOp::Expand { .. })
+                // CMYK already occupies the generic four-byte GPU transport.
+                // Its compact word loop would add per-byte index arithmetic
+                // without reducing input or output transfer size.
+                && logical_mode != Some("CMYK")
             {
                 let output_bytes = CheckedDims::new(out_w, out_h, channels)?.total_bytes();
                 plan_native_expand_output_dispatch(
@@ -11383,7 +11387,9 @@ fn gpu_native_expand_channels(
         (None | Some("L"), DynamicImage::ImageLuma8(_)) => 1u8,
         (None | Some("LA"), DynamicImage::ImageLumaA8(_)) => 2,
         (None | Some("RGB" | "HSV"), DynamicImage::ImageRgb8(_)) => 3,
-        (None | Some("RGBA"), DynamicImage::ImageRgba8(_)) => 4,
+        // CMYK's carrier also has four bytes, but keeps C/M/Y/K byte order;
+        // singleton Expand copies those samples without color interpretation.
+        (None | Some("RGBA" | "CMYK"), DynamicImage::ImageRgba8(_)) => 4,
         _ => return None,
     };
     let input_bytes = u64::from(image.width())
@@ -24071,6 +24077,13 @@ mod tests {
                     RgbaImage::from_raw(2, 1, vec![3, 5, 7, 11, 13, 17, 19, 23]).unwrap(),
                 ),
                 None,
+                Some(4),
+            ),
+            (
+                DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(2, 1, vec![3, 5, 7, 11, 13, 17, 19, 23]).unwrap(),
+                ),
+                Some("CMYK"),
                 Some(4),
             ),
         ];

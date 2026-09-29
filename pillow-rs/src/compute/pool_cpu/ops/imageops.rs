@@ -1456,6 +1456,10 @@ fn native_expand_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usiz
         (None, DynamicImage::ImageRgba8(_)) | (Some("RGBA"), DynamicImage::ImageRgba8(_)) => {
             Some(4)
         }
+        // CMYK uses the same four-byte carrier, but its fourth byte is K.
+        // Expand copies all four samples unchanged and uses the fill tuple in
+        // C/M/Y/K order, so admit only this exact logical/storage pair.
+        (Some("CMYK"), DynamicImage::ImageRgba8(_)) => Some(4),
         _ => None,
     }
 }
@@ -1642,8 +1646,8 @@ pub fn op_expand(
 
 #[cfg(test)]
 mod expand_native_tests {
-    use super::op_expand;
-    use crate::raster::{DynamicImage, RgbImage};
+    use super::{native_expand_channels, op_expand};
+    use crate::raster::{DynamicImage, RgbImage, RgbaImage};
 
     #[test]
     fn expand_hsv_keeps_three_native_bytes() {
@@ -1660,6 +1664,31 @@ mod expand_native_tests {
             &[
                 7, 11, 13, 7, 11, 13, 7, 11, 13, 7, 11, 13, 23, 47, 89, 7, 11, 13, 7, 11, 13, 7,
                 11, 13, 7, 11, 13,
+            ]
+        );
+    }
+
+    #[test]
+    fn expand_cmyk_keeps_k_as_the_fourth_native_sample() {
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(1, 1, vec![23, 47, 89, 131]).expect("CMYK source"),
+        );
+        assert_eq!(native_expand_channels(&image, Some("CMYK")), Some(4));
+        let mismatched = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(1, 1, vec![23, 47, 89]).expect("mismatched CMYK storage"),
+        );
+        assert_eq!(native_expand_channels(&mismatched, Some("CMYK")), None);
+
+        let expanded =
+            op_expand(&image, 1, (7, 11, 13, 17), Some("CMYK")).expect("native CMYK expand");
+        let DynamicImage::ImageRgba8(expanded) = expanded else {
+            panic!("CMYK expansion must retain four-byte storage");
+        };
+        assert_eq!(
+            expanded.as_raw(),
+            &[
+                7, 11, 13, 17, 7, 11, 13, 17, 7, 11, 13, 17, 7, 11, 13, 17, 23, 47, 89, 131, 7, 11,
+                13, 17, 7, 11, 13, 17, 7, 11, 13, 17, 7, 11, 13, 17,
             ]
         );
     }
