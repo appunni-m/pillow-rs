@@ -23180,6 +23180,346 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.bitmap.nuanced.rgba-context-rgb-binary-mask",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "bitmap",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.bitmap.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "bitmap",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "bitmap": {
+              "kind": "binding",
+              "step_id": "setup-bitmap-3"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0,
+                96
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.bitmap.nuanced.rgba-context-rgb-rgba-mask",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "bitmap",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.bitmap.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                50,
+                100,
+                200,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "bitmap",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "bitmap": {
+              "kind": "binding",
+              "step_id": "setup-bitmap-3"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0,
+                96
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.bitmap.nuanced.rgba-context-rgb-rgba-lowercase-mask",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "bitmap",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.bitmap.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                64,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "bitmap",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "bitmap": {
+              "kind": "binding",
+              "step_id": "setup-bitmap-3"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0,
+                96
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.bitmap.nuanced.performance-rgb-1024x768",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "bitmap",
@@ -23276,6 +23616,129 @@
                 37,
                 109,
                 255
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.bitmap.nuanced.performance-rgb-rgba-context-1024x768",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "bitmap",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.bitmap.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1024,
+                768
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 128
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "bitmap",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "bitmap": {
+              "kind": "binding",
+              "step_id": "setup-bitmap-3"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                221,
+                37,
+                109,
+                96
               ]
             }
           }

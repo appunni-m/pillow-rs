@@ -16988,6 +16988,48 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
+            "name": "rgba-context-rgb-binary-mask",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "bitmap_mode": "1",
+            "bitmap_color": 1,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 96]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-context-rgb-rgba-mask",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "bitmap_mode": "RGBA",
+            "bitmap_color": [50, 100, 200, 128],
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 96]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-context-rgb-rgba-lowercase-mask",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "bitmap_mode": "RGBa",
+            "bitmap_color": [16, 32, 64, 128],
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 96]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
             "name": "performance-rgb-1024x768",
             "mode": "RGB",
             "size": [1024, 768],
@@ -16998,6 +17040,23 @@ def build_nuanced_cases(
                 "xy": literal([0, 0]),
                 "fill": literal([221, 37, 109, 255]),
             },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-rgba-context-1024x768",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "size": [1024, 768],
+            "observe_receiver": True,
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([0, 0]),
+                "fill": literal([221, 37, 109, 96]),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -49674,6 +49733,33 @@ def build_inputs(
                     }
                 )
                 members.append({"workload_id": workload_id, "weight": 1})
+                rgba_context_case_id = (
+                    "PIL.ImageDraw.ImageDraw.bitmap.nuanced."
+                    "performance-rgb-rgba-context-1024x768"
+                )
+                rgba_context_case = all_cases_by_id[rgba_context_case_id]
+                rgba_context_workload = copy.deepcopy(workloads[-1])
+                rgba_context_workload["workload_id"] = (
+                    "pil-imagedraw-imagedraw.bitmap."
+                    "rgba-context-rgb-1024x768"
+                )
+                rgba_context_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": rgba_context_case_id,
+                }
+                rgba_context_workload["context"] = _workflow_benchmark_context(
+                    rgba_context_case,
+                    variant="rgba-context-rgb-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(rgba_context_workload)
+                members.append(
+                    {
+                        "workload_id": rgba_context_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
         if surface_id == "PIL.Image.Image":
             putalpha_benchmark = next(
                 (

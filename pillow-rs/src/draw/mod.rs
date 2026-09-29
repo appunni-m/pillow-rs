@@ -1032,12 +1032,14 @@ impl Draw {
 
         let mode = self.effective_mode();
 
-        // A normal RGB drawing context can retain its three-byte canvas for
-        // the whole operation.  The shared RGB/RGBA path below creates a
-        // four-byte image, then `image_clone` converts it back to RGB after
-        // the public call.  Keep explicit RGBA-on-RGB contexts on that path:
-        // they intentionally use RGBA compositing semantics.
-        if mode == "RGB" && self.orig_mode.as_deref() == Some("RGB") {
+        // Both an ordinary RGB context and an explicit RGBA context on an RGB
+        // image ultimately write a three-byte RGB destination. The shared
+        // path below widens that canvas, computes alpha, then discards it when
+        // restoring the original RGB image. With RGB input alpha fixed at 255,
+        // its visible channels are exactly the native coverage blend below.
+        let rgb_target = (mode == "RGB" && self.orig_mode.as_deref() == Some("RGB"))
+            || (mode == "RGBA" && self.alpha_blend_rgb());
+        if rgb_target {
             let img = self.image.materialized_shared()?;
             let mask = bitmap.materialized_shared()?;
             let mask_layout = match (bmp_mode.as_str(), mask.as_ref()) {
