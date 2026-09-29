@@ -122,6 +122,18 @@ def main() -> None:
                     raise SystemExit(
                         f"input drift in {lane}: {relative} differs from generator"
                     )
+        generated_assets = generated_root / "assets"
+        if generated_assets.exists():
+            generated_paths = sorted(
+                path for path in generated_assets.rglob("*") if path.is_file()
+            )
+            for generated in generated_paths:
+                relative = generated.relative_to(generated_assets)
+                active = active_root / "assets" / relative
+                if not active.is_file() or active.read_bytes() != generated.read_bytes():
+                    raise SystemExit(
+                        f"asset drift: assets/{relative.as_posix()} differs from generator"
+                    )
     print("migration parity inputs and crash quarantine reproduce exactly")
 
 

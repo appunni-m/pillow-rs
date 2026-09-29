@@ -236,7 +236,7 @@ def coverage_identity(
     for case in selected_cases:
         for asset in case.get("assets", []):
             kind = asset["kind"]
-            if kind == "ref":
+            if kind in {"ref", "ref_bytes"}:
                 locator = asset["path"]
                 digest = asset.get("sha256")
             elif kind == "inline":

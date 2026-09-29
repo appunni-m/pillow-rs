@@ -44,6 +44,11 @@ TARGET_PROFILE = "python-cpu"
 BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
+# ImageOps.mirror has an explicit three-backend benchmark lane in the fixed
+# fixture manifest; preserve that scope when regenerating the manifest.
+BENCHMARK_TARGET_PROFILE_OVERRIDES = {
+    "PIL.ImageOps.mirror": ["python-cpu", "python-simd", "python-gpu"],
+}
 
 # The legacy authority records the Qt-only ImageQt endpoints as ignored for
 # the current coverage campaign. Keep them in the active public inventory so
@@ -737,13 +742,15 @@ def requirement(
     dimension: str,
     description: str,
     lanes: list[str],
+    *,
+    target_profiles: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": requirement_id,
         "dimension": dimension,
         "description": description,
         "lanes": lanes,
-        "target_profiles": [TARGET_PROFILE],
+        "target_profiles": target_profiles or [TARGET_PROFILE],
     }
 
 
@@ -872,6 +879,9 @@ def operation_requirements(
                 "performance",
                 f"Deterministic standard workload for {endpoint.source_path}.",
                 ["parity", "benchmark"],
+                target_profiles=BENCHMARK_TARGET_PROFILE_OVERRIDES.get(
+                    endpoint.source_path
+                ),
             )
         )
     ids = [item["id"] for item in requirements]
