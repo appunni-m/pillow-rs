@@ -7431,8 +7431,9 @@ materialized destination once and updates native three-byte rows. It handles
 mode-1 masks as binary coverage, L masks as coverage, RGBA masks from byte 3,
 and RGBa as the fully opaque bitmap mask Pillow uses. Signed clipping is
 precomputed; partial coverage uses Pillow's rounded divide-by-255 blend. An
-RGBA context over RGB storage stays on the existing path because it has
-different compositing semantics.
+RGBA context over RGB storage remained on the existing path at this checkpoint;
+the follow-up below extends the native route after measuring its output
+semantics.
 
 The parity-backed 1024 × 768 workload measures bitmap plus receiver
 materialization. Strict CPU parity passed 7/7 focused cases, including each
@@ -7442,6 +7443,38 @@ mask form and clipped coordinates. CPU median fell from 3.322 ms to 1.390 ms
 destination copy and mask materialization brought it to 1.390 ms. SIMD/GPU
 profile labels report no actual backend receipt because this public draw call
 does not dispatch through those executors; no SIMD/GPU speedup is claimed.
+
+### `ImageDraw.bitmap`: explicit RGBA context on an RGB image — 2026-09-29
+
+The bitmap RGB fast path now also admits `Draw(image, "RGBA")` when the
+original image is RGB. The old path materialized the mask through `getdata`,
+widened the destination to RGBA, blended all four lanes, and discarded the
+computed alpha while restoring RGB. For this target, converted RGB input alpha
+is always 255, so RGB output depends only on mask coverage and fill RGB. The
+fast path preserves that blend in three-byte storage and uses the original
+mask bytes directly. It is gated by original RGB mode and the concrete
+`ImageRgb8` destination; actual RGBA images retain the alpha-aware path.
+
+The deterministic 1024 × 768 case uses an L mask with coverage 128, non-opaque
+fill alpha 96, and times the draw plus receiver `tobytes()` after setup. Baseline
+run `migration-benchmark-919eaaf21d344d59ae260380d08026fd` and corrected runs
+`migration-benchmark-30f43042203d406685c6da9133913b09` and
+`migration-benchmark-1e8c9717810c466e816fe91abe953ffb` share the selected case
+and benchmark-input hash. The correctness gate passed for all three profiles
+in all runs.
+
+| Subject/profile | Baseline ms | Corrected run 1 ms | Corrected repeat ms |
+| --- | ---: | ---: | ---: |
+| Pillow | 1.642625 | 1.627604 | 1.629958 |
+| CPU target | 3.531229 | 1.392562 | 1.392208 |
+| SIMD-labeled profile | 3.542875 | 1.386874 | 1.380458 |
+| GPU-labeled profile | 3.555792 | 1.397063 | 1.396958 |
+
+Focused CPU parity passed 7/7 cases across binary, L, RGBA, and RGBa masks,
+including the explicit context and the ordinary RGB path. CPU median improved
+2.54× over baseline and is 1.17× faster than Pillow in the repeat run. The
+SIMD/GPU-labeled receipts report `actual_backend = null`; bitmap remains
+host-side drawing and those profile rows do not prove accelerator execution.
 
 ### Masked `Image.paste`: native rows and measured blockers — 2026-09-28
 
