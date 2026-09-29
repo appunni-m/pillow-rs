@@ -2943,7 +2943,7 @@ class WorkflowBuilder:
                 seed += 1
             rng = random.Random(seed)
             n_pixels = size[0] * size[1]
-            if requested_mode in {"RGB", "HSV"}:
+            if requested_mode in {"RGB", "HSV", "YCbCr"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
             elif requested_mode in {"RGBA", "RGBX", "RGBa", "CMYK"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
@@ -30294,11 +30294,35 @@ def build_nuanced_cases(
             "surface": "PIL.ImageOps",
             "operation": "grayscale",
             "requirement_suffix": "performance.standard",
+            "name": "performance-ycbcr-odd-byte-tail",
+            "mode": "YCbCr",
+            "size": [3, 1],
+            "edge": "noise-fill",
+            "seed": 20260930,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "requirement_suffix": "performance.standard",
             "name": "performance-large-rgb-noise-1024x768",
             "mode": "RGB",
             "size": [1024, 768],
             "edge": "noise-fill",
             "seed": 20260929,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-ycbcr-noise-1024x768",
+            "mode": "YCbCr",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20260931,
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             "observe_result": "tobytes",
         },
@@ -46738,6 +46762,35 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    grayscale_ycbcr_case_id = (
+        "PIL.ImageOps.grayscale.nuanced."
+        "performance-material-ycbcr-noise-1024x768"
+    )
+    grayscale_ycbcr_case = cases_by_id[grayscale_ycbcr_case_id]
+    grayscale_ycbcr_material_workload = {
+        "workload_id": "pipeline-op.grayscale.material-ycbcr-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.ImageOps", "grayscale")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": grayscale_ycbcr_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "observe-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            grayscale_ycbcr_case,
+            variant="grayscale-material-ycbcr-noise-1024x768",
+            surface="PIL.ImageOps",
+            operation="grayscale",
+        ),
+    }
+
     thumbnail_scalar_workloads = []
     for mode, suffix in (("F", "f32"), ("I", "i32")):
         case_id = (
@@ -49136,6 +49189,7 @@ def build_pipeline_benchmark_document(
             *posterize_material_workloads,
             median_l_material_workload,
             grayscale_rgb_material_workload,
+            grayscale_ycbcr_material_workload,
             *thumbnail_scalar_workloads,
             f_boxed_resize_workload,
             f_resize_workload,

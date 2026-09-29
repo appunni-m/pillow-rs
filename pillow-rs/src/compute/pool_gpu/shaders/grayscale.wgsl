@@ -5,8 +5,8 @@
 struct Params {
     width: u32,
     height: u32,
-    mode: u32, // 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
-    _pad: u32, // 1 means input is tightly packed native RGB bytes.
+    mode: u32, // 0=L, 1=LA, 2=RGB/YCbCr, 3=RGBA, 4=CMYK
+    _pad: u32, // 0=packed RGBA words, 1=native RGB triples, 2=native YCbCr triples.
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -35,8 +35,8 @@ fn pixel_luma(pixel: u32) -> u32 {
     return (19595u * first + 38470u * second + 7471u * third + 32768u) >> 16u;
 }
 
-fn native_rgb_luma(pixel_index: u32) -> u32 {
-    // RGB pixels are three bytes wide, so a pixel may straddle two u32 words.
+fn native_triple(pixel_index: u32) -> u32 {
+    // RGB and YCbCr pixels are three bytes wide, so a pixel may straddle two u32 words.
     // Admission checks bound width*height*3 to u32 and upload pads the final
     // word; when shift is 16 or 24, the pixel's third byte guarantees the
     // following word is present.
@@ -47,12 +47,26 @@ fn native_rgb_luma(pixel_index: u32) -> u32 {
     if shift > 8u {
         packed |= input[word_index + 1u] << (32u - shift);
     }
-    return pixel_luma(packed);
+    return packed;
+}
+
+fn native_ycbcr_y(pixel_index: u32) -> u32 {
+    // The Y byte always fits in one word even when the remaining triple
+    // crosses a boundary, so avoid loading and joining the chroma bytes.
+    let byte_offset = pixel_index * 3u;
+    let word_index = byte_offset >> 2u;
+    let shift = (byte_offset & 3u) * 8u;
+    return (input[word_index] >> shift) & 0xffu;
 }
 
 fn source_luma(pixel_index: u32) -> u32 {
     if params._pad == 1u {
-        return native_rgb_luma(pixel_index);
+        return pixel_luma(native_triple(pixel_index));
+    }
+    if params._pad == 2u {
+        // Pillow converts YCbCr to L by copying the Y band without RGB
+        // conversion or a second weighted-luma calculation.
+        return native_ycbcr_y(pixel_index);
     }
     return pixel_luma(input[pixel_index]);
 }
