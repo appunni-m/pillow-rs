@@ -6381,7 +6381,30 @@ impl Image {
         let mut hists = vec![[0u32; 256]; n_bands];
         // Use mode-aware pixel reading (to_rgba8 remaps LA channels incorrectly for histogram)
         match img.color() {
-            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
+            crate::raster::ColorType::La8 => {
+                let crate::raster::DynamicImage::ImageLumaA8(la) = img.as_ref() else {
+                    unreachable!("La8 color must use native LA storage");
+                };
+                let raw = la.as_raw();
+                match mask_raw {
+                    Some(mask) => {
+                        for (index, px) in raw.chunks_exact(2).enumerate() {
+                            if mask[index] == 0 {
+                                continue;
+                            }
+                            hists[0][px[0] as usize] += 1;
+                            hists[1][px[1] as usize] += 1;
+                        }
+                    }
+                    None => {
+                        for px in raw.chunks_exact(2) {
+                            hists[0][px[0] as usize] += 1;
+                            hists[1][px[1] as usize] += 1;
+                        }
+                    }
+                }
+            }
+            crate::raster::ColorType::La16 => {
                 let la = img.to_luma_alpha8();
                 for (y, row) in la.rows().enumerate() {
                     for (x, px) in row.enumerate() {
@@ -6420,6 +6443,35 @@ impl Image {
                         hists[0][px[0] as usize] += 1;
                         hists[1][px[1] as usize] += 1;
                         hists[2][px[2] as usize] += 1;
+                    }
+                }
+            }
+            crate::raster::ColorType::Rgba8 => {
+                // Rgba8 storage is already the byte sequence `to_rgba8()`
+                // would return, including for four-byte carrier modes. Borrow
+                // it directly instead of cloning the entire image before the
+                // host histogram pass.
+                let crate::raster::DynamicImage::ImageRgba8(rgba) = img.as_ref() else {
+                    unreachable!("Rgba8 color must use native RGBA storage");
+                };
+                let raw = rgba.as_raw();
+                match mask_raw {
+                    Some(mask) => {
+                        for (index, px) in raw.chunks_exact(4).enumerate() {
+                            if mask[index] == 0 {
+                                continue;
+                            }
+                            for band in 0..n_bands {
+                                hists[band][px[band] as usize] += 1;
+                            }
+                        }
+                    }
+                    None => {
+                        for px in raw.chunks_exact(4) {
+                            for band in 0..n_bands {
+                                hists[band][px[band] as usize] += 1;
+                            }
+                        }
                     }
                 }
             }

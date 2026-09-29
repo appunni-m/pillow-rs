@@ -243,6 +243,10 @@ PUTALPHA_PERFORMANCE_CASES = (
     ("rgb-noise-1024x768-scalar", "RGB", [1024, 768], 20261023),
     ("rgba-noise-1024x768-scalar", "RGBA", [1024, 768], 20261027),
 )
+ENTROPY_PERFORMANCE_CASES = (
+    ("la-noise-1024x768", "LA", [1024, 768], 20261028),
+    ("rgba-noise-1024x768", "RGBA", [1024, 768], 20261029),
+)
 PUTALPHA_MASK_PERFORMANCE_CASES = (
     ("rgb-noise-1024x768-l-mask", "RGB", [1024, 768], 20261024),
     ("rgba-noise-1024x768-l-mask", "RGBA", [1024, 768], 20261025),
@@ -32159,6 +32163,20 @@ def build_nuanced_cases(
         *(
             {
                 "surface": "PIL.Image.Image",
+                "operation": "entropy",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-{name}",
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for name, mode, size, seed in ENTROPY_PERFORMANCE_CASES
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
                 "operation": "putalpha",
                 "requirement_suffix": "performance.standard",
                 "name": f"performance-{name}",
@@ -35963,6 +35981,7 @@ def build_nuanced_cases(
             "mode": "LA",
             "mask_mode": "L",
             "edge": "mask-nonzero-pixel",
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image.Image",
@@ -49841,6 +49860,54 @@ def build_inputs(
                     }
                 )
         if surface_id == "PIL.Image.Image":
+            entropy_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "entropy"
+                ),
+                None,
+            )
+            if entropy_benchmark is not None:
+                operation, requirement = entropy_benchmark
+                for name, _mode, _size, _seed in ENTROPY_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.entropy.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.entropy.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"entropy-{slug(name)}",
+                                surface=surface_id,
+                                operation="entropy",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
             putalpha_benchmark = next(
                 (
                     (operation, requirement)
