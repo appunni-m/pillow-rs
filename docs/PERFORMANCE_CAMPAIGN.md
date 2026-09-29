@@ -9155,3 +9155,47 @@ palette selection, mapping, and output generation resident on-device to pay
 back upload/readback costs. For now CPU satisfies the no-slower-than-Pillow
 requirement on this material workload; SIMD 5× and GPU execution/throughput are
 unmet backend blockers. Continue to the next operation.
+
+### LA `ImageEnhance.Sharpness` — checkpoint 2026-09-29
+
+The material workload is `pil-imageenhance-sharpness.enhance.material-la-520x512`,
+a warm 520 × 512 LA image timed through setup, the public enhance call, and
+result observation. Its lazy operation graph contains a queued LA `PutPixel`
+before Sharpness, so an initial singleton-only native GPU admission check
+correctly rejected it. Relaxing the check without implementing that prefix
+would have silently skipped a visible pixel mutation. The retained fast path
+accepts only one checked, non-palette LA `PutPixel` followed by Sharpness and
+folds the two byte values into the upload staging copy; all other sequences
+remain on the general implementation.
+
+The native GPU shader reads interleaved LA from packed 32-bit input words,
+filters luma with Pillow's integer smooth rounding before the float blend, and
+preserves alpha. It returns the existing RGBA transport shape for GPU readback,
+then decodes that buffer directly into native LA storage without creating an
+intermediate RGBA image. Strict parity passed all 5 selected cases on CPU,
+SIMD, and GPU (15/15 total). The focused Rust command
+`cargo test -p pillow-rs --features gpu --lib la_ -- --nocapture` passed 6/6
+tests, and `cargo fmt --all -- --check` and `git diff --check` passed.
+
+The parity-gated receipt is
+`migration-benchmark-59dc9d21a9c14927a082125262d2e7e8`; all 100 target
+samples completed with actual CPU, SIMD, or GPU execution and no fallback.
+Median latency / reciprocal-latency throughput was:
+
+| Backend | Median latency | Median throughput |
+| --- | ---: | ---: |
+| Pillow | 1.713 ms | 584 ops/s |
+| CPU | 0.314 ms | 3,189 ops/s |
+| SIMD | 0.332 ms | 3,008 ops/s |
+| GPU | 0.960 ms | 1,042 ops/s |
+
+CPU and SIMD meet their goals on this one workload at about 5.46× and 5.16×
+Pillow speed. GPU ran one dispatch with no mode conversion and uploaded 532,480
+native LA bytes instead of a four-byte-per-pixel carrier, but readback remained
+1,064,960 bytes. Its median latency is still 2.9× SIMD and its reciprocal
+latency rate is lower. An earlier generic-route run measured GPU at 1.470 ms;
+the change is a useful diagnostic improvement, not a paired timing guarantee.
+The next GPU attempt should test packed two-byte LA output/readback (or
+device-resident chaining) because transfer and completion still dominate.
+Record this operation as incomplete and continue through the remaining native
+format candidates; no coverage collection was run.
