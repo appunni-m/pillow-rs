@@ -8634,3 +8634,71 @@ checks all 256 byte values at every bit depth from 1 through 8 for L and RGB.
 Checkpoint after four bounded benchmark runs and continue to the next operation;
 carry the SIMD 5× gap and GPU RGBA transport as explicit blockers. No coverage
 was run.
+
+### RGB `ImageOps.grayscale`: keep three-byte GPU input — 2026-09-29
+
+CPU and SIMD already read RGB bytes directly. The GPU grayscale shader already
+packed four L outputs per word and returned compact L, but it widened every RGB
+pixel to a four-byte carrier before upload. A singleton `Grayscale` batch now
+uses native RGB upload only when logical mode is `None` or `RGB`, storage is
+`ImageRgb8`, the checked nonempty `width * height * 3` byte count fits the
+shader's `u32` indexing, and the raw buffer length matches exactly. Other modes
+and operation batches keep the old upload path. Output arithmetic, packed L
+readback, and Pillow's fixed-point coefficients are unchanged.
+
+The shader reads a pixel from byte offset `3 * pixel_index`: load the aligned
+word at `offset >> 2`, shift by `(offset & 3) * 8`, and merge the next word only
+when the shift exceeds eight bits. At shifts 16 and 24 the pixel's third byte
+crosses the word boundary; exact byte-count admission plus zero-padding to a
+whole upload word proves that next word exists. The 3 × 1 parity case has nine
+source bytes and checks the final crossing pixel. The Rust admission test also
+rejects empty images, non-RGB logical modes, mismatched storage, and multi-op
+batches.
+
+The benchmark uses deterministic noisy RGB at 1024 × 768, times the public call
+plus `tobytes()`, excludes image setup, and collects five warmups and 20
+iterations × five samples at concurrency one. Baseline, first native-input,
+and repeated native-input receipts are
+`migration-benchmark-f76f8ee80d6b46b9a21813c42ba86863`,
+`migration-benchmark-49d93f6c6e44407fbdd2ce71e827e10b`, and
+`migration-benchmark-84b5b45ff037478bba2456472b3e600a`. Their parity gates passed
+3/3 CPU, SIMD, and GPU comparisons for all runs:
+`migration-parity-benchmark-gate-7285eb8b0ec247e7bd74cc4071b85312` and
+`migration-parity-benchmark-gate-d71452137a094038abf82b297f24b165`,
+`migration-parity-benchmark-gate-5f541db8ef1c46fbbadde9b7e71490f5`.
+
+| Median latency, ms | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.203624 | 0.111563 | 0.172834 | 1.253896 |
+| Native RGB upload, run 1 | 0.221354 | 0.114146 | 0.173000 | 1.098230 |
+| Native RGB upload, repeat | 0.224750 | 0.116021 | 0.174875 | 1.073438 |
+
+GPU upload fell from 3,145,728 to 2,359,296 bytes (25%) and the source
+conversion receipt fell from one to zero. GPU median improved 12.4% and 14.4%
+in the two final runs; readback remained 786,432 bytes, one full-frame device
+copy remained, and all 100 samples in each run used one actual GPU dispatch
+without fallback. CPU and SIMD movement is within run variation. Pillow's
+median also moved from 0.204 to 0.225 ms. GPU p95 latency rose across runs
+(2.151 ms baseline, 2.363 ms, then 3.779 ms), so the tail did not improve.
+At concurrency one, reported operations/second are reciprocal latency and do
+not establish sustained multi-request throughput. The final SIMD median is
+1.28× faster than Pillow, while GPU remains 6.14× slower than SIMD; the 5× SIMD
+and GPU parity-with-SIMD goals remain open.
+
+The odd-tail input passed 1/1 strict public parity on CPU, SIMD, and GPU
+(`migration-parity-e89f5cee96a84ceca654a8f53f3c525d`,
+`migration-parity-102eee1a12114ba79949c40c78b07ed5`, and
+`migration-parity-f3ce6442312e4b9c8b42b183fc02d32a`). Existing L, LA, and RGBA
+cases passed 3/3 each on strict SIMD and GPU. The focused admission test passed
+with `cargo test --manifest-path pillow-rs/Cargo.toml gpu_native_grayscale_rgb_requires_singleton_rgb_storage --lib --all-features --locked`;
+`cargo fmt --all` and `make migration-parity-benchmark` passed. The latter uses
+`make build-parity`, preserving the Pillow oracle. The parity input generator
+also regenerated its derived inputs; coverage collection and coverage tests
+were not run.
+
+Checkpoint the RGB GPU transport change here. Do not repeat input widening
+work: the remaining device costs are synchronous completion, compact readback,
+and the full-frame copy. SIMD remains below the campaign target, and prior
+grayscale SIMD experiments found row splitting slower and safe channel gathers
+slower than the current vector path. Reopen this operation only with a new
+profile showing a distinct cause or a safer/faster RGB shuffle strategy.

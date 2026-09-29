@@ -6,7 +6,7 @@ struct Params {
     width: u32,
     height: u32,
     mode: u32, // 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
-    _pad: u32,
+    _pad: u32, // 1 means input is tightly packed native RGB bytes.
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -35,6 +35,28 @@ fn pixel_luma(pixel: u32) -> u32 {
     return (19595u * first + 38470u * second + 7471u * third + 32768u) >> 16u;
 }
 
+fn native_rgb_luma(pixel_index: u32) -> u32 {
+    // RGB pixels are three bytes wide, so a pixel may straddle two u32 words.
+    // Admission checks bound width*height*3 to u32 and upload pads the final
+    // word; when shift is 16 or 24, the pixel's third byte guarantees the
+    // following word is present.
+    let byte_offset = pixel_index * 3u;
+    let word_index = byte_offset >> 2u;
+    let shift = (byte_offset & 3u) * 8u;
+    var packed = input[word_index] >> shift;
+    if shift > 8u {
+        packed |= input[word_index + 1u] << (32u - shift);
+    }
+    return pixel_luma(packed);
+}
+
+fn source_luma(pixel_index: u32) -> u32 {
+    if params._pad == 1u {
+        return native_rgb_luma(pixel_index);
+    }
+    return pixel_luma(input[pixel_index]);
+}
+
 @compute @workgroup_size(64, 1, 1)
 fn main(
     @builtin(global_invocation_id) gid: vec3<u32>,
@@ -49,7 +71,7 @@ fn main(
     for (var lane = 0u; lane < 4u; lane += 1u) {
         let pixel_index = output_word * 4u + lane;
         if pixel_index < pixel_count {
-            packed |= pixel_luma(input[pixel_index]) << (lane * 8u);
+            packed |= source_luma(pixel_index) << (lane * 8u);
         }
     }
     output[output_word] = packed;
