@@ -316,12 +316,12 @@ fn apply_autocontrast_row(
     }
 }
 
-fn apply_point_rows<F>(bytes: &mut [u8], width: usize, height: usize, transform: F)
+fn apply_point_rows<F>(bytes: &mut [u8], width: usize, height: usize, channels: usize, transform: F)
 where
     F: Fn(&mut [u8]) + Send + Sync,
 {
     #[cfg(feature = "parallel")]
-    let stride = width.saturating_mul(3);
+    let stride = width.saturating_mul(channels);
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
         crate::par_rows_mut!(bytes, stride, height, |_row_start, _row_end, _y, row| {
@@ -331,7 +331,7 @@ where
         transform(bytes);
     }
     #[cfg(not(feature = "parallel"))]
-    let _ = (width, height);
+    let _ = (width, height, channels);
     #[cfg(not(feature = "parallel"))]
     transform(bytes);
 }
@@ -583,9 +583,21 @@ pub fn op_mirror(img: &DynamicImage) -> Result<DynamicImage, PilError> {
 /// Posterize: reduce the number of bits per channel.
 pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilError> {
     let mask = !((1u8 << (8 - bits)) - 1);
+    if let DynamicImage::ImageLuma8(source) = img {
+        // ImageOps.posterize accepts native L bytes. Expanding L to RGB and
+        // then narrowing it back triples the working set and memory traffic.
+        let mut gray = source.clone();
+        let (width, height) = gray.dimensions();
+        apply_point_rows(gray.as_mut(), width as usize, height as usize, 1, |row| {
+            for value in row {
+                *value &= mask;
+            }
+        });
+        return Ok(DynamicImage::ImageLuma8(gray));
+    }
     let mut rgb = img.to_rgb8();
     let (width, height) = rgb.dimensions();
-    apply_point_rows(rgb.as_mut(), width as usize, height as usize, |row| {
+    apply_point_rows(rgb.as_mut(), width as usize, height as usize, 3, |row| {
         for pixel in row.chunks_exact_mut(3) {
             for channel in pixel {
                 *channel &= mask;
@@ -630,7 +642,7 @@ pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, Pi
     let t = threshold;
     let mut rgb = img.to_rgb8();
     let (width, height) = rgb.dimensions();
-    apply_point_rows(rgb.as_mut(), width as usize, height as usize, |row| {
+    apply_point_rows(rgb.as_mut(), width as usize, height as usize, 3, |row| {
         for pixel in row.chunks_exact_mut(3) {
             for channel in pixel {
                 if *channel >= t {
@@ -1750,6 +1762,44 @@ mod equalize_histogram_tests {
                     assert_eq!(equalize_histogram::<4>(&data, channels), expected);
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod posterize_tests {
+    use super::op_posterize;
+    use crate::raster::{DynamicImage, GrayImage, RgbImage};
+
+    #[test]
+    fn native_l_and_rgb_preserve_each_sample_for_every_supported_bit_depth() {
+        let luma = (0..=u8::MAX).collect::<Vec<_>>();
+        let rgb = luma
+            .iter()
+            .flat_map(|&value| [value, value.wrapping_add(71), value.wrapping_add(149)])
+            .collect::<Vec<_>>();
+        let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(256, 1, luma).unwrap());
+        let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(256, 1, rgb).unwrap());
+
+        for bits in 1..=8 {
+            let mask = !((1u8 << (8 - bits)) - 1);
+            let expected_luma = luma
+                .as_bytes()
+                .iter()
+                .map(|value| value & mask)
+                .collect::<Vec<_>>();
+            let expected_rgb = rgb
+                .as_bytes()
+                .iter()
+                .map(|value| value & mask)
+                .collect::<Vec<_>>();
+            let result_luma = op_posterize(&luma, bits).unwrap();
+            let result_rgb = op_posterize(&rgb, bits).unwrap();
+
+            assert!(matches!(result_luma, DynamicImage::ImageLuma8(_)));
+            assert!(matches!(result_rgb, DynamicImage::ImageRgb8(_)));
+            assert_eq!(result_luma.as_bytes(), expected_luma);
+            assert_eq!(result_rgb.as_bytes(), expected_rgb);
         }
     }
 }

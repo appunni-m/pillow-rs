@@ -78,6 +78,14 @@ separate workload for RGB-to-LAB conversion, and `ResizeBoxed` exercises the
 public `resize(box=...)` path. The benchmark completeness check fails when a
 pipeline variant has no spec or materialized workload.
 
+`ImageOps.posterize` also has parity-gated material workloads at
+`pipeline-op.posterize.material-l-noise-1024x768` and
+`pipeline-op.posterize.material-rgb-noise-1024x768`. They use seeded nonuniform
+bytes, keep image setup outside the measured boundary, and time Posterize plus
+`tobytes` across Pillow, CPU, SIMD, and GPU. Use these rows when investigating
+native L/RGB masks; the 16×16 materialized smoke row measures mostly dispatch
+overhead.
+
 ## Correctness gate and budget gate
 
 Run the correctness gate before interpreting timing:
