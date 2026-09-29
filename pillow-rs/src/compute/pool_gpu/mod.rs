@@ -4533,6 +4533,62 @@ fn plan_native_expand_output_dispatch(
     })
 }
 
+#[cfg(target_endian = "little")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NativeRgbPutAlphaDispatch {
+    input_bytes: usize,
+    input_transfer_bytes: u64,
+    output_bytes: usize,
+    output_transfer_bytes: u64,
+    groups_x: u32,
+    groups_y: u32,
+}
+
+/// Plan native three-byte RGB input and four-byte RGBA output for scalar
+/// PutAlpha. Shader byte offsets and the linear pixel index are u32, while
+/// both storage bindings and each workgroup axis must fit the active adapter.
+#[cfg(target_endian = "little")]
+fn plan_native_rgb_put_alpha_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+    max_storage_buffer_binding_size: u32,
+    max_buffer_size: u64,
+) -> Option<NativeRgbPutAlphaDispatch> {
+    if width == 0 || height == 0 || max_workgroups_per_dimension == 0 {
+        return None;
+    }
+    let pixels = u64::from(width).checked_mul(u64::from(height))?;
+    let input_bytes = pixels.checked_mul(3)?;
+    let output_bytes = pixels.checked_mul(4)?;
+    if pixels > u64::from(u32::MAX) || input_bytes > u64::from(u32::MAX) {
+        return None;
+    }
+    let input_transfer_bytes = input_bytes.checked_add(3)? & !3;
+    let output_transfer_bytes = output_bytes.checked_add(3)? & !3;
+    let storage_limit = u64::from(max_storage_buffer_binding_size);
+    if input_transfer_bytes > storage_limit
+        || output_transfer_bytes > storage_limit
+        || input_transfer_bytes > max_buffer_size
+        || output_transfer_bytes > max_buffer_size
+    {
+        return None;
+    }
+    let groups_x = width.div_ceil(16);
+    let groups_y = height.div_ceil(16);
+    if groups_x > max_workgroups_per_dimension || groups_y > max_workgroups_per_dimension {
+        return None;
+    }
+    Some(NativeRgbPutAlphaDispatch {
+        input_bytes: usize::try_from(input_bytes).ok()?,
+        input_transfer_bytes,
+        output_bytes: usize::try_from(output_bytes).ok()?,
+        output_transfer_bytes,
+        groups_x,
+        groups_y,
+    })
+}
+
 const BLUR_WORKGROUP_SIZE: u32 = 16;
 
 /// Plan bounded 2D blur workgroups. Each invocation computes one output pixel;
@@ -9295,6 +9351,156 @@ impl GpuInner {
             parameter_bytes: 48,
             retained_cache_bytes: buffers.retained_bytes(),
             full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            mode_conversion_count: 0,
+            ..PipelineResourceTelemetry::default()
+        });
+        crate::compute::record_pipeline_dispatch_count(1);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        Ok(result)
+    }
+
+    /// Add scalar alpha to native RGB samples and write the required RGBA
+    /// result without first expanding the host upload to four bytes per pixel.
+    #[cfg(target_endian = "little")]
+    fn execute_native_rgb_put_alpha(
+        &self,
+        image: &DynamicImage,
+        alpha: u8,
+        dispatch: NativeRgbPutAlphaDispatch,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let DynamicImage::ImageRgb8(rgb) = image else {
+            return Err(PilError::InternalError(
+                "GPU native RGB PutAlpha requires ImageRgb8 storage".into(),
+            ));
+        };
+        let (width, height) = rgb.dimensions();
+        let dimensions = CheckedDims::new(width, height, 3)?;
+        if dimensions.total_bytes() != dispatch.input_bytes
+            || rgb.as_raw().len() != dispatch.input_bytes
+            || CheckedDims::new(width, height, 4)?.total_bytes() != dispatch.output_bytes
+            || dispatch.output_transfer_bytes > u64::from(buffers.capacity) * 4
+        {
+            return Err(PilError::InternalError(
+                "GPU native RGB PutAlpha layout mismatch".into(),
+            ));
+        }
+
+        buffers.upload_native_channel_bytes(&self.queue, width, height, 3, rgb.as_raw())?;
+        buffers.params_arena.ensure_capacity(
+            &self.device,
+            "gpu_put_alpha_native_rgb_params",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            16,
+            self.device.limits().min_uniform_buffer_offset_alignment as usize,
+        );
+        let parameters = [
+            width,
+            height,
+            u32::from(alpha),
+            u32::try_from(dispatch.input_bytes).map_err(|_| {
+                PilError::ValueError("GPU native RGB PutAlpha input is too large".into())
+            })?,
+        ];
+        self.queue.write_buffer(
+            &buffers.params_arena.buffer,
+            0,
+            bytemuck::cast_slice(&parameters),
+        );
+        let cached = self.resolve_pipeline(
+            "PutAlphaNativeRGB",
+            "put_alpha_native_rgb.wgsl",
+            include_str!("shaders/put_alpha_native_rgb.wgsl"),
+        )?;
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_put_alpha_native_rgb"),
+            layout: &cached.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ranged_binding(
+                        &buffers.buf_a,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.input_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: ranged_binding(
+                        &buffers.buf_b,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.output_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: ranged_binding(
+                        &buffers.params_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: 16,
+                        }),
+                    )?,
+                },
+            ],
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_put_alpha_native_rgb"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_put_alpha_native_rgb"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&cached.pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            crate::compute::record_gpu_shader_dispatch(
+                cached.variant_name,
+                cached.shader_file,
+                u64::from(dispatch.groups_x) * u64::from(dispatch.groups_y),
+            );
+            pass.dispatch_workgroups(dispatch.groups_x, dispatch.groups_y, 1);
+        }
+        let readback = self.prepare_readback(&buffers.buf_b, dispatch.output_transfer_bytes)?;
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                dispatch.output_transfer_bytes,
+            );
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device("GPU native RGB PutAlpha submission")?;
+        let result = self.readback_with(
+            dispatch.output_transfer_bytes,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != dispatch.output_transfer_bytes as usize {
+                    return Err(PilError::InternalError(
+                        "GPU native RGB PutAlpha readback length mismatch".into(),
+                    ));
+                }
+                let bytes = mapped[..dispatch.output_bytes].to_vec();
+                crate::compute::record_pipeline_allocation(bytes.len());
+                crate::image_utils::raw_bytes_to_image(width, height, bytes, 4)
+            },
+        )?;
+        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+            upload_bytes: dispatch.input_transfer_bytes,
+            readback_bytes: dispatch.output_transfer_bytes,
+            parameter_bytes: 16,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: 1 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
             mode_conversion_count: 0,
             ..PipelineResourceTelemetry::default()
         });
@@ -17450,6 +17656,33 @@ impl GpuPool {
         }
 
         #[cfg(target_endian = "little")]
+        if let [
+            PipelineOp::PutAlpha {
+                alpha,
+                mode: PixelMode::RGB,
+            },
+        ] = ops
+            && matches!(img, DynamicImage::ImageRgb8(_))
+            && matches!(mode, None | Some("RGB"))
+            && let Some(dispatch) = plan_native_rgb_put_alpha_dispatch(
+                img.width(),
+                img.height(),
+                limits.max_compute_workgroups_per_dimension,
+                limits.max_storage_buffer_binding_size,
+                limits.max_buffer_size,
+            )
+        {
+            let pixels = CheckedDims::new(img.width(), img.height(), 1)?.total_pixels();
+            let capacity = u32::try_from(pixels).map_err(|_| {
+                PilError::ValueError("GPU native RGB PutAlpha image is too large".into())
+            })?;
+            let mut buffers = gpu.acquire_buffers(capacity)?;
+            let result = gpu.execute_native_rgb_put_alpha(img, *alpha, dispatch, &mut buffers)?;
+            gpu.recycle_buffers(buffers);
+            return Ok(result);
+        }
+
+        #[cfg(target_endian = "little")]
         let native_byte_op = match (ops, auxiliary_images.as_slice()) {
             ([op], [auxiliary]) => Some((op, auxiliary, false)),
             ([op, _], [auxiliary, _]) if can_fuse_gpu_multiply_screen(ops, 0) => {
@@ -17840,7 +18073,8 @@ mod tests {
         gpu_shader_work_requires_cpu, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
         plan_extract_band_dispatch, plan_gpu_native_byte_paste, plan_native_expand_output_dispatch,
-        plan_packed_point_luma_dispatch, putdata_auxiliary_words, readback_poll_backoff,
+        plan_native_rgb_put_alpha_dispatch, plan_packed_point_luma_dispatch,
+        putdata_auxiliary_words, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -19191,7 +19425,18 @@ mod tests {
             assert_eq!(telemetry.6, Some(1));
             assert_eq!(telemetry.7, None);
             let resources = telemetry.8.expect("native transfer counters");
-            assert_eq!(resources.upload_bytes, 5 * 3 * 4);
+            let expected_upload_bytes = if matches!(
+                op,
+                PipelineOp::PutAlpha {
+                    mode: PixelMode::RGB,
+                    ..
+                }
+            ) {
+                (5 * 3 * 3 + 3) & !3
+            } else {
+                5 * 3 * 4
+            };
+            assert_eq!(resources.upload_bytes, expected_upload_bytes);
             assert_eq!(resources.readback_bytes, 5 * 3 * 4);
             if actual.color() == crate::raster::ColorType::Rgb8 {
                 assert_eq!(resources.host_allocation_count, 1);
@@ -23368,6 +23613,61 @@ mod tests {
         assert!(plan_native_expand_output_dispatch((max_grid_words + 1) * 4, 256).is_none());
         assert!(plan_native_expand_output_dispatch(1, 0).is_none());
         assert!(plan_native_expand_output_dispatch(0, 65_535).is_none());
+    }
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn native_rgb_putalpha_planner_checks_pixel_coverage_and_device_limits() {
+        let plan = plan_native_rgb_put_alpha_dispatch(19, 17, 2, u32::MAX, u64::MAX)
+            .expect("small RGB image should fit a tiled dispatch");
+        assert_eq!((plan.groups_x, plan.groups_y), (2, 2));
+        assert_eq!(plan.input_bytes, 19 * 17 * 3);
+        assert_eq!(plan.input_transfer_bytes, (19 * 17 * 3 + 3) as u64 & !3);
+        assert_eq!(plan.output_bytes, 19 * 17 * 4);
+        assert_eq!(plan.output_transfer_bytes, (19 * 17 * 4) as u64);
+
+        let mut writes = vec![0u8; 19 * 17];
+        for invocation_y in 0..plan.groups_y * 16 {
+            for invocation_x in 0..plan.groups_x * 16 {
+                if invocation_x < 19 && invocation_y < 17 {
+                    writes[(invocation_y * 19 + invocation_x) as usize] += 1;
+                }
+            }
+        }
+        assert!(writes.iter().all(|count| *count == 1));
+
+        let image_4k = plan_native_rgb_put_alpha_dispatch(4096, 4096, 256, u32::MAX, u64::MAX)
+            .expect("4096x4096 fits the default 2D compute grid");
+        assert_eq!((image_4k.groups_x, image_4k.groups_y), (256, 256));
+        assert_eq!(image_4k.input_bytes, 4096 * 4096 * 3);
+        assert_eq!(image_4k.output_bytes, 4096 * 4096 * 4);
+
+        let max_groups = 65_535;
+        let width_at_limit = 16 * max_groups;
+        assert!(
+            plan_native_rgb_put_alpha_dispatch(width_at_limit, 16, max_groups, u32::MAX, u64::MAX,)
+                .is_some()
+        );
+        assert!(
+            plan_native_rgb_put_alpha_dispatch(
+                width_at_limit + 1,
+                16,
+                max_groups,
+                u32::MAX,
+                u64::MAX,
+            )
+            .is_none()
+        );
+        assert!(plan_native_rgb_put_alpha_dispatch(16, 16, 1, 1_000, u64::MAX).is_none());
+        assert!(plan_native_rgb_put_alpha_dispatch(16, 16, 1, u32::MAX, 1_000).is_none());
+        assert!(
+            plan_native_rgb_put_alpha_dispatch(u32::MAX, 2, max_groups, u32::MAX, u64::MAX)
+                .is_none()
+        );
+        assert!(
+            plan_native_rgb_put_alpha_dispatch(0, 16, max_groups, u32::MAX, u64::MAX).is_none()
+        );
+        assert!(plan_native_rgb_put_alpha_dispatch(16, 16, 0, u32::MAX, u64::MAX).is_none());
     }
 
     #[test]

@@ -24948,6 +24948,100 @@ fn simd_put_alpha_data_bytes(
     ))
 }
 
+/// Interleave native RGB bytes with one constant alpha while building the
+/// required RGBA result. A four-pixel vector exactly fills one `u8x16`; the
+/// output grows into reserved storage so it is not zero-filled first.
+#[cfg(feature = "parallel")]
+fn simd_put_alpha_rgb_row(source: &[u8], output: &mut [u8], width: usize, alpha: u8) {
+    debug_assert_eq!(source.len(), width * 3);
+    debug_assert_eq!(output.len(), width * 4);
+    let vector_pixels = width / 4 * 4;
+    const SHUFFLE: [u8; 16] = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15];
+    for (source_block, output_block) in source[..vector_pixels * 3]
+        .chunks_exact(12)
+        .zip(output[..vector_pixels * 4].chunks_exact_mut(16))
+    {
+        let mut padded = [alpha; 16];
+        padded[..12].copy_from_slice(source_block);
+        let packed = u8x16::new(padded)
+            .swizzle_relaxed(u8x16::new(SHUFFLE))
+            .to_array();
+        output_block.copy_from_slice(&packed);
+    }
+    for pixel in vector_pixels..width {
+        let source_start = pixel * 3;
+        let output_start = pixel * 4;
+        output[output_start..output_start + 3]
+            .copy_from_slice(&source[source_start..source_start + 3]);
+    }
+}
+
+#[cfg(feature = "parallel")]
+const SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
+#[inline]
+fn simd_put_alpha_rgb_constant_bytes(
+    source: &[u8],
+    width: u32,
+    height: u32,
+    alpha: u8,
+) -> Option<(Vec<u8>, u64, u64)> {
+    let dimensions = CheckedDims::new(width, height, 3).ok()?;
+    let pixels = dimensions.total_pixels();
+    if source.len() != dimensions.total_bytes() {
+        return None;
+    }
+    let output_length = pixels.checked_mul(4)?;
+    #[cfg(feature = "parallel")]
+    if pixels >= SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD {
+        let width = usize::try_from(width).ok()?;
+        let height = usize::try_from(height).ok()?;
+        let source_stride = width.checked_mul(3)?;
+        let output_stride = width.checked_mul(4)?;
+        let mut output = vec![alpha; output_length];
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                let source_start = y as usize * source_stride;
+                simd_put_alpha_rgb_row(
+                    &source[source_start..source_start + source_stride],
+                    row,
+                    width,
+                    alpha,
+                );
+            }
+        );
+        return Some((
+            output,
+            (width / 4 * height) as u64,
+            (width % 4 * height) as u64,
+        ));
+    }
+
+    let mut output = Vec::with_capacity(output_length);
+    let vector_pixels = pixels / 4 * 4;
+    const SHUFFLE: [u8; 16] = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15];
+    for block in source[..vector_pixels * 3].chunks_exact(12) {
+        let mut padded = [alpha; 16];
+        padded[..12].copy_from_slice(block);
+        let packed = u8x16::new(padded)
+            .swizzle_relaxed(u8x16::new(SHUFFLE))
+            .to_array();
+        output.extend_from_slice(&packed);
+    }
+    for pixel in vector_pixels..pixels {
+        let start = pixel * 3;
+        output.extend_from_slice(&[source[start], source[start + 1], source[start + 2], alpha]);
+    }
+    Some((
+        output,
+        (vector_pixels / 4) as u64,
+        (pixels - vector_pixels) as u64,
+    ))
+}
+
 /// Replace alpha with one constant byte without first materializing a full
 /// mask image. The output-changing promotion cases use the same native
 /// interleave/conversion block as image-backed putalpha.
@@ -25037,6 +25131,21 @@ pub fn simd_put_alpha(
             pixel[1] = *alpha;
         }
         return Ok(DynamicImage::ImageLumaA8(output));
+    }
+    if *alpha_mode == PixelMode::RGB
+        && put_alpha_shape(img, *alpha_mode, mode).is_some()
+        && let DynamicImage::ImageRgb8(source) = img
+    {
+        let (output, vector_blocks, scalar_tail) = simd_put_alpha_rgb_constant_bytes(
+            source.as_raw(),
+            source.width(),
+            source.height(),
+            *alpha,
+        )
+        .ok_or_else(|| simd_unsupported("PutAlpha"))?;
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        return crate::image_utils::raw_bytes_to_image(source.width(), source.height(), output, 4);
     }
     let Some((source_channels, output_channels, _pixels_per_vector, cmyk_source)) =
         put_alpha_shape(img, *alpha_mode, mode)
@@ -25403,6 +25512,27 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_rgb_putalpha_interleave_covers_vector_blocks_and_tails() {
+        for (width, height) in [(1, 1), (3, 2), (4, 1), (5, 3), (17, 4)] {
+            let source: Vec<u8> = (0..width * height * 3)
+                .map(|index| (index * 37 + 11) as u8)
+                .collect();
+            let (actual, vector_blocks, scalar_tail) =
+                super::simd_put_alpha_rgb_constant_bytes(&source, width, height, 173)
+                    .expect("valid RGB storage should interleave");
+            let expected: Vec<u8> = source
+                .chunks_exact(3)
+                .flat_map(|pixel| [pixel[0], pixel[1], pixel[2], 173])
+                .collect();
+            let pixels = u64::from(width) * u64::from(height);
+            assert_eq!(actual, expected, "{width}x{height}");
+            assert_eq!(vector_blocks, pixels / 4, "{width}x{height}");
+            assert_eq!(scalar_tail, pixels % 4, "{width}x{height}");
+        }
+        assert!(super::simd_put_alpha_rgb_constant_bytes(&[1, 2], 1, 1, 173).is_none());
+    }
+
     #[test]
     fn div127_matches_every_selected_blend_product() {
         for start in (0..=32385u16).step_by(16) {

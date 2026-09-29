@@ -239,6 +239,7 @@ PASTE_MASKED_PERFORMANCE_CASES = (
 PUTALPHA_PERFORMANCE_CASES = (
     ("la-noise-1024x768-scalar", "LA", [1024, 768], 20261019),
     ("pa-noise-1024x768-scalar", "PA", [1024, 768], 20261022),
+    ("rgb-noise-1024x768-scalar", "RGB", [1024, 768], 20261023),
 )
 BRIGHTNESS_PERFORMANCE_CASES = (
     ("l-noise-1024x768-factor-0.5", "L", [1024, 768], 20261020, 0.5),

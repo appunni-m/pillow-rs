@@ -3369,13 +3369,17 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
             DynamicImage::ImageLumaA8(la)
         }
         crate::raster::ColorType::Rgb8 => {
-            let rgb = img.to_rgb8();
+            let DynamicImage::ImageRgb8(rgb) = img else {
+                unreachable!("Rgb8 color type must use ImageRgb8 storage")
+            };
             let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
-            for (o, i) in rgba.pixels_mut().zip(rgb.pixels()) {
-                o[0] = i[0];
-                o[1] = i[1];
-                o[2] = i[2];
-                o[3] = alpha;
+            for (output, input) in rgba
+                .as_mut()
+                .chunks_exact_mut(4)
+                .zip(rgb.as_raw().chunks_exact(3))
+            {
+                output[..3].copy_from_slice(input);
+                output[3] = alpha;
             }
             DynamicImage::ImageRgba8(rgba)
         }
