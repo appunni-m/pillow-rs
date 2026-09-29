@@ -6806,7 +6806,7 @@ revisit Mirror after other operations receive their first optimization pass.
 
 The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 84
 textual call/declaration sites, including tests and the `DynamicImage`
-conversion helpers. The later exact ledger below corrects this to 85 matches;
+conversion helpers. The later exact ledger below corrects this to 86 matches;
 neither count represents runtime image conversions one-for-one. The Python
 Qt bridge has two explicit `convert("RGBA")` calls; JavaScript has none in
 the binding source. The ledger below separates runtime operations from helper
@@ -6895,9 +6895,9 @@ follow-up and compact native GPU output are recorded below.
 ### Explicit RGBA callsite ledger — 2026-09-29
 
 The exact `rg -n -o '(to_rgba8|into_rgba8)\(' pillow-rs/src --glob '*.rs'`
-scan finds 85 Rust source matches: 73 operational callsites, two wrapper
+scan finds 86 Rust source matches: 73 operational callsites, two wrapper
 delegations, one single-color conversion, two conversion method definitions,
-five comments, and two tests. The Python Qt bridge has two explicit
+six comments, and two tests. The Python Qt bridge has two explicit
 `convert("RGBA")` calls at `pillow-rs-py/python/pillow_rs/image.py:655,663`;
 the JavaScript binding has none. Two additional `convert("RGBA")` spellings
 occur in `scripts/run_migration_imagecore_native_cases.py:512,602` and
@@ -6908,12 +6908,15 @@ four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,7978,7998,11601`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
+| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,8040,8060,11851`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
 | Same-layout clone or four-byte reinterpretation | 18 | `color.rs:1104,1121,1140,1156,1168,1180`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,383`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
-| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3387,3480`; `compute/pool_gpu/mod.rs:11439,11566,11578`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
-| Definitions, wrappers, tests, comments, or color-only | 12 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:11260`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:20390`, `ops/pil_resize.rs:2850` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3387,3494`; `compute/pool_gpu/mod.rs:11689,11816,11828`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
+| Definitions, wrappers, tests, comments, or color-only | 13 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/effects.rs:3411`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:11510`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:20675`, `ops/pil_resize.rs:2850` |
 
-The three operational groups total 73. The native PA `putalpha` path now
+The three operational groups total 73. The native RGBA/L-mask `putalpha` path
+returns before the generic conversion at `compute/pool_cpu/ops/effects.rs:3494`;
+that call remains the fallback for other modes and storage variants. The native
+PA `putalpha` path now
 returns before `compute/pool_simd/mod.rs:158`; that widening call remains as a
 fallback for other result variants. Do not treat fallback callsites as
 guaranteed channel expansion. For a matching `ImageRgba8`, `to_rgba8()` clones
@@ -7052,6 +7055,56 @@ interleave, native RGB+mask GPU input, and SIMD row parallelism. Retain the
 parity-safe path and revisit GPU submission/wait/map and output materialization
 as a system-level batching problem; further tuning of the per-pixel shader
 cannot close that fixed-cost gap. No coverage was run.
+
+### RGBA image-backed `Image.putalpha(mask)`: replace only native alpha — 2026-09-29
+
+For an exact RGBA image and L mask, RGBA is already the required output layout.
+The prior CPU route cloned through `to_rgba8()` and then built a second frame.
+CPU and SIMD now clone the existing four-byte pixels once and overwrite byte 3;
+the SIMD route parallelizes disjoint rows above its measured 512 × 512 cutoff.
+GPU keeps the RGBA source at four bytes per pixel, uploads the L mask at one
+byte per pixel, and writes one output word per invocation. Its planner checks
+pixel indices, padded transfer sizes, storage/buffer limits, and both
+workgroup axes against the active adapter. Logical mode, concrete storage,
+matching dimensions, and exact buffer lengths gate every native route; other
+inputs keep the fallback.
+
+The generated
+`PIL.Image.Image.putalpha.nuanced.performance-mask-rgba-noise-1024x768-l-mask`
+case passed one exact comparison on CPU, strict SIMD, and strict GPU. The
+focused Rust tests passed native RGBA alpha replacement and GPU dispatch
+planning. `make migration-parity-inputs` and
+`make migration-parity-inputs-check` passed, as did `make build-parity`. The
+targeted strict parity commands passed 1/1 each:
+
+```sh
+MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.putalpha.nuanced.performance-mask-rgba-noise-1024x768-l-mask make migration-parity-test
+MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.putalpha.nuanced.performance-mask-rgba-noise-1024x768-l-mask make migration-parity-test-simd-strict
+MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.putalpha.nuanced.performance-mask-rgba-noise-1024x768-l-mask make migration-parity-test-gpu-strict
+```
+
+The repeated standard benchmark used workload
+`pil-image-image.putalpha.mask-materialized.rgba-noise-1024x768-l-mask` and
+passed its three-subject correctness gate. Receipt
+`migration-benchmark-fe7bd65372134d3d8a5a485b7b7446ea` records 100 actual
+executions per backend, no fallback, and these medians for the public call plus
+receiver bytes:
+
+| Median latency, ms | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.594959 | 0.793437 | 2.864167 | 2.737896 |
+| Native RGBA/L mask | 0.510958 | 0.407771 | 0.519001 | 1.614625 |
+
+The GPU mask upload fell from 3,145,728 to 786,432 bytes; the required RGBA
+upload and readback remain 3,145,728 bytes each. CPU is 1.25× faster than Pillow
+on the repeat; SIMD is slightly slower than Pillow and misses the 5× goal; GPU
+is 3.16× slower than Pillow and 3.11× slower than SIMD. Relative to the initial
+target medians, CPU/SIMD/GPU improved about 49%/82%/41%, but the Pillow median
+also shifted between runs. Whole-frame copy/export dominates the CPU and SIMD
+boundary; submit/wait/map/readback dominates GPU. Concurrency-one reciprocal
+latency is not sustained-throughput evidence. Keep this exact-format route,
+record the remaining SIMD/GPU gaps, and continue with another mode. No coverage
+was run.
 
 ### CMYK grayscale: native C/M/Y/K to packed L — 2026-09-29
 
