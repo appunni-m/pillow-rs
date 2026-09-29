@@ -243,6 +243,7 @@ PUTALPHA_PERFORMANCE_CASES = (
 BRIGHTNESS_PERFORMANCE_CASES = (
     ("l-noise-1024x768-factor-0.5", "L", [1024, 768], 20261020, 0.5),
     ("la-noise-1024x768-factor-0.5", "LA", [1024, 768], 20261010, 0.5),
+    ("rgb-noise-1024x768-factor-0-5", "RGB", [1024, 768], 507032, 0.5),
 )
 PAD_PERFORMANCE_CASES = (
     ("l-noise-1024x768-square", "L", [1024, 768], 20261004, 73),
@@ -42280,14 +42281,14 @@ def contrast_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
 
 def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Material L/LA inputs for non-identity Brightness across each backend."""
+    """Material byte-mode inputs for non-identity Brightness across backends."""
     target = "PIL.ImageEnhance.Brightness"
     if surface_id != target:
         return []
     cases = []
     for name, mode, size, seed, factor in BRIGHTNESS_PERFORMANCE_CASES:
         width, height = size
-        channels = {"L": 1, "LA": 2}.get(mode)
+        channels = {"L": 1, "LA": 2, "RGB": 3}.get(mode)
         if channels is None:
             raise ValueError(f"Unsupported Brightness performance mode: {mode}")
         raw = random.Random(seed).randbytes(width * height * channels)
@@ -42403,6 +42404,106 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     },
                 ],
                 "observations": ["call", "materialize"],
+            }
+        )
+    return cases
+
+
+def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Keep native-byte paste clipping regressions in the generated corpus."""
+    target = "PIL.Image.Image"
+    if surface_id != target:
+        return []
+
+    cases = []
+    for name, mode, destination_raw, source_raw in (
+        (
+            "native-l-negative-offset-clips-source",
+            "L",
+            bytes(range(1, 16)),
+            bytes(range(101, 107)),
+        ),
+        (
+            "native-la-negative-offset-preserves-alpha",
+            "LA",
+            bytes(range(1, 31)),
+            bytes(range(101, 113)),
+        ),
+        (
+            "native-rgb-negative-offset-crosses-word-boundaries",
+            "RGB",
+            bytes((1 + 7 * index) % 256 for index in range(45)),
+            bytes(range(200, 218)),
+        ),
+    ):
+        destination_size = [5, 3]
+        source_size = [3, 2]
+        destination_asset = f"image-native-{mode.lower()}-paste-negative-destination-data"
+        source_asset = f"image-native-{mode.lower()}-paste-negative-source-data"
+
+        def asset(asset_id: str, raw: bytes) -> dict[str, Any]:
+            return {
+                "id": asset_id,
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+
+        cases.append(
+            {
+                "case_id": f"{target}.paste.nuanced.{name}",
+                "surface": target,
+                "operation": "paste",
+                "covers": [f"{target}.paste.behavior.default"],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "assets": [
+                    asset(destination_asset, destination_raw),
+                    asset(source_asset, source_raw),
+                ],
+                "steps": [
+                    {
+                        "step_id": "setup-image-1",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal(mode),
+                            "size": literal(destination_size),
+                            "data": asset_value(destination_asset),
+                        },
+                    },
+                    {
+                        "step_id": "setup-im-2",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal(mode),
+                            "size": literal(source_size),
+                            "data": asset_value(source_asset),
+                        },
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": target,
+                        "operation": "paste",
+                        "receiver": binding("setup-image-1"),
+                        "arguments": {
+                            "im": binding("setup-im-2"),
+                            "box": literal([-1, -1]),
+                        },
+                    },
+                    {
+                        "step_id": "observe-receiver",
+                        "surface": target,
+                        "operation": "tobytes",
+                        "receiver": binding("setup-image-1"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["call", "observe-receiver"],
             }
         )
     return cases
@@ -48371,9 +48472,6 @@ def build_inputs(
                 existing_signatures.add(signature)
                 appended_nuanced.append(nuanced_case)
                 added_nuanced_cases += 1
-        counts.setdefault("nuanced_parity_cases", 0)
-        counts["nuanced_parity_cases"] += added_nuanced_cases
-
         pipeline_case_pool = {
             **all_cases_by_id,
             **{case["case_id"]: case for case in parity_cases},
@@ -48391,6 +48489,21 @@ def build_inputs(
                 parity_cases.append(pipeline_case)
             pipeline_case_pool[pipeline_case["case_id"]] = pipeline_case
             pipeline_case_ids.append(pipeline_case["case_id"])
+
+        # Keep native Paste clipping cases after the shared pipeline smoke
+        # aliases in the generated corpus, while still selecting them for
+        # their behavior requirement's coverage plan.
+        native_paste_cases = native_paste_pixel_parity_cases(surface_id)
+        for native_case in native_paste_cases:
+            signature = case_signature(native_case)
+            if signature not in existing_signatures:
+                parity_cases.append(native_case)
+                existing_signatures.add(signature)
+                appended_nuanced.append(native_case)
+                added_nuanced_cases += 1
+
+        counts.setdefault("nuanced_parity_cases", 0)
+        counts["nuanced_parity_cases"] += added_nuanced_cases
 
         # Benchmark smoke aliases must share the same execution as an
         # existing parity workflow when their only difference is step labels.
