@@ -263,6 +263,7 @@
           "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-5",
           "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-25",
           "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-l-shift-factor-0-125",
+          "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-native-rgb-shift-factor-0-5",
           "pipeline-case.brightness.materialized-smoke"
         ],
         "command_ids": []

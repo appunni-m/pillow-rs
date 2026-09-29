@@ -42347,65 +42347,81 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "observations": ["enhancer", "call", "materialize"],
             }
         )
-    # Exercise the SIMD L brightness shift fast path over every byte value and
-    # a 16-byte vector tail. These factors have exact fixed-point shift maps.
-    raw = bytes(range(256)) + bytes([255])
-    for factor, factor_name in ((0.5, "0-5"), (0.25, "0-25"), (0.125, "0-125")):
-        case_id = f"{target}.enhance.nuanced.simd-native-l-shift-factor-{factor_name}"
-        cases.append(
-            {
-                "case_id": case_id,
-                "surface": target,
-                "operation": "enhance",
-                "covers": [f"{target}.enhance.parameter.factor"],
-                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
-                "assets": [
-                    {
-                        "id": "pixels",
-                        "kind": "inline",
-                        "encoding": "base64",
-                        "data": base64.b64encode(raw).decode(),
-                        "sha256": hashlib.sha256(raw).hexdigest(),
-                        "media_type": "application/octet-stream",
-                    }
-                ],
-                "steps": [
-                    {
-                        "step_id": "image",
-                        "surface": "PIL.Image",
-                        "operation": "frombytes",
-                        "receiver": None,
-                        "arguments": {
-                            "mode": literal("L"),
-                            "size": literal([257, 1]),
-                            "data": asset_value("pixels"),
+    # Exercise exact SIMD right shifts over all byte values and an incomplete
+    # 16-byte vector tail. L supports three exact factors; RGB exercises 0.5.
+    for mode, size, raw, factors in (
+        (
+            "L",
+            [257, 1],
+            bytes(range(256)) + bytes([255]),
+            ((0.5, "0-5"), (0.25, "0-25"), (0.125, "0-125")),
+        ),
+        (
+            "RGB",
+            [86, 1],
+            bytes(range(256)) + bytes([254, 255]),
+            ((0.5, "0-5"),),
+        ),
+    ):
+        for factor, factor_name in factors:
+            case_id = (
+                f"{target}.enhance.nuanced.simd-native-{mode.lower()}-"
+                f"shift-factor-{factor_name}"
+            )
+            cases.append(
+                {
+                    "case_id": case_id,
+                    "surface": target,
+                    "operation": "enhance",
+                    "covers": [f"{target}.enhance.parameter.factor"],
+                    "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+                    "assets": [
+                        {
+                            "id": "pixels",
+                            "kind": "inline",
+                            "encoding": "base64",
+                            "data": base64.b64encode(raw).decode(),
+                            "sha256": hashlib.sha256(raw).hexdigest(),
+                            "media_type": "application/octet-stream",
                         },
-                    },
-                    {
-                        "step_id": "enhancer",
-                        "surface": "PIL.ImageEnhance",
-                        "operation": "Brightness",
-                        "receiver": None,
-                        "arguments": {"image": binding("image")},
-                    },
-                    {
-                        "step_id": "call",
-                        "surface": target,
-                        "operation": "enhance",
-                        "receiver": binding("enhancer"),
-                        "arguments": {"factor": literal(factor)},
-                    },
-                    {
-                        "step_id": "materialize",
-                        "surface": "PIL.Image.Image",
-                        "operation": "tobytes",
-                        "receiver": binding("call"),
-                        "arguments": {},
-                    },
-                ],
-                "observations": ["call", "materialize"],
-            }
-        )
+                    ],
+                    "steps": [
+                        {
+                            "step_id": "image",
+                            "surface": "PIL.Image",
+                            "operation": "frombytes",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": literal(mode),
+                                "size": literal(size),
+                                "data": asset_value("pixels"),
+                            },
+                        },
+                        {
+                            "step_id": "enhancer",
+                            "surface": "PIL.ImageEnhance",
+                            "operation": "Brightness",
+                            "receiver": None,
+                            "arguments": {"image": binding("image")},
+                        },
+                        {
+                            "step_id": "call",
+                            "surface": target,
+                            "operation": "enhance",
+                            "receiver": binding("enhancer"),
+                            "arguments": {"factor": literal(factor)},
+                        },
+                        {
+                            "step_id": "materialize",
+                            "surface": "PIL.Image.Image",
+                            "operation": "tobytes",
+                            "receiver": binding("call"),
+                            "arguments": {},
+                        },
+                    ],
+                    "observations": ["call", "materialize"],
+                }
+            )
     return cases
 
 
