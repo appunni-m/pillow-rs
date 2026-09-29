@@ -3745,7 +3745,7 @@ impl GpuAuxiliaryCache {
                             let values = if matches!(op, PipelineOp::ConvertLab { .. }) {
                                 crate::lab::gpu_table_words().to_vec()
                             } else {
-                                pack_rgba(&second.to_rgba8(), capacity)?
+                                pack_dynamic_rgba(second.as_ref(), capacity)?
                             };
                             if cache.total_bytes().saturating_add(values.len() * 4)
                                 <= MAX_GPU_AUXILIARY_CACHE_BYTES
@@ -3766,7 +3766,7 @@ impl GpuAuxiliaryCache {
                 if third_counts.get(&key).copied().unwrap_or_default() > 1
                     && !cache.third_ranges.contains_key(&key)
                 {
-                    let values = pack_rgba(&third.to_rgba8(), capacity)?;
+                    let values = pack_dynamic_rgba(third.as_ref(), capacity)?;
                     if cache.total_bytes().saturating_add(values.len() * 4)
                         <= MAX_GPU_AUXILIARY_CACHE_BYTES
                     {
@@ -4890,6 +4890,92 @@ fn pack_rgba(rgba: &RgbaImage, capacity: u32) -> Result<Vec<u32>, PilError> {
             (px[0] as u32) | ((px[1] as u32) << 8) | ((px[2] as u32) << 16) | ((px[3] as u32) << 24)
         })
         .collect())
+}
+
+/// Pack an auxiliary image for the GPU without cloning one that is already
+/// RGBA. Other formats retain the existing RGBA transport semantics.
+fn pack_dynamic_rgba(image: &DynamicImage, capacity: u32) -> Result<Vec<u32>, PilError> {
+    match image {
+        DynamicImage::ImageRgba8(rgba) => pack_rgba(rgba, capacity),
+        _ => {
+            let rgba = image.to_rgba8();
+            pack_rgba(&rgba, capacity)
+        }
+    }
+}
+
+/// Append an RGBA auxiliary image directly to the reusable GPU upload arena.
+/// On little-endian targets its byte layout is already the shader's u32 layout,
+/// so this avoids both a temporary RGBA conversion and a temporary word vector.
+fn append_dynamic_rgba(
+    arena: &mut Vec<u32>,
+    image: &DynamicImage,
+    capacity: u32,
+    alignment_bytes: usize,
+) -> Result<BufferRange, PilError> {
+    match image {
+        DynamicImage::ImageRgba8(rgba) => {
+            append_rgba_to_arena(arena, rgba, capacity, alignment_bytes)
+        }
+        _ => {
+            let rgba = image.to_rgba8();
+            append_rgba_to_arena(arena, &rgba, capacity, alignment_bytes)
+        }
+    }
+}
+
+fn append_rgba_to_arena(
+    arena: &mut Vec<u32>,
+    rgba: &RgbaImage,
+    capacity: u32,
+    alignment_bytes: usize,
+) -> Result<BufferRange, PilError> {
+    let (w, h) = rgba.dimensions();
+    let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+    if pixel_count > capacity as usize {
+        return Err(PilError::ValueError(format!(
+            "GPU buffer capacity {} < image size {}",
+            capacity, pixel_count
+        )));
+    }
+
+    let alignment_words = alignment_bytes.max(4).div_ceil(4);
+    let offset_words = align_up(arena.len(), alignment_words);
+    let size_words = align_up(pixel_count.max(1), alignment_words);
+    let end_words = offset_words
+        .checked_add(size_words)
+        .ok_or_else(|| PilError::ValueError("GPU RGBA auxiliary size is too large".into()))?;
+    arena.resize(end_words, 0);
+
+    #[cfg(target_endian = "little")]
+    {
+        let packed_bytes = bytemuck::cast_slice_mut::<u32, u8>(
+            &mut arena[offset_words..offset_words + pixel_count],
+        );
+        if packed_bytes.len() != rgba.as_raw().len() {
+            return Err(PilError::InternalError(
+                "GPU RGBA auxiliary byte length does not match image dimensions".into(),
+            ));
+        }
+        packed_bytes.copy_from_slice(rgba.as_raw());
+    }
+    #[cfg(target_endian = "big")]
+    {
+        for (packed, pixel) in arena[offset_words..offset_words + pixel_count]
+            .iter_mut()
+            .zip(rgba.pixels())
+        {
+            *packed = (pixel[0] as u32)
+                | ((pixel[1] as u32) << 8)
+                | ((pixel[2] as u32) << 16)
+                | ((pixel[3] as u32) << 24);
+        }
+    }
+
+    Ok(BufferRange {
+        offset: (offset_words * std::mem::size_of::<u32>()) as u64,
+        size: (size_words * std::mem::size_of::<u32>()) as u64,
+    })
 }
 
 /// Pack typed `I;16*` samples as numeric little-endian u16 values in the low
@@ -6103,6 +6189,17 @@ impl GpuInner {
                     "__internal_multiply_screen",
                     "multiply_screen.wgsl",
                     include_str!("shaders/multiply_screen.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(fused));
+                resolved.push(ResolvedPipeline::Skip);
+                index += 2;
+                continue;
+            }
+            if can_fuse_gpu_alpha_composite_mirror(ops, index, logical_mode, input_dims[index]) {
+                let fused = self.resolve_pipeline(
+                    "__internal_alpha_composite_mirror",
+                    "alpha_composite_mirror.wgsl",
+                    include_str!("shaders/alpha_composite_mirror.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(fused));
                 resolved.push(ResolvedPipeline::Skip);
@@ -7346,6 +7443,13 @@ impl GpuInner {
                     "multiply_screen.wgsl",
                     include_str!("shaders/multiply_screen.wgsl"),
                 )?
+            } else if can_fuse_gpu_alpha_composite_mirror(ops, index, logical_mode, (cur_w, cur_h))
+            {
+                self.resolve_pipeline(
+                    "__internal_alpha_composite_mirror",
+                    "alpha_composite_mirror.wgsl",
+                    include_str!("shaders/alpha_composite_mirror.wgsl"),
+                )?
             } else if matches!(
                 &ops[index],
                 PipelineOp::Autocontrast { .. }
@@ -8160,9 +8264,12 @@ impl GpuInner {
                         } else if let Some(range) = second_cache.get(&key).copied() {
                             Some(range)
                         } else {
-                            let values = pack_rgba(&second.to_rgba8(), buffers.capacity)?;
-                            let mut range =
-                                append_arena_slice(&mut img2_arena, &values, storage_alignment);
+                            let mut range = append_dynamic_rgba(
+                                &mut img2_arena,
+                                second.as_ref(),
+                                buffers.capacity,
+                                storage_alignment,
+                            )?;
                             range.offset += (auxiliary_cache.img2_values.len() * 4) as u64;
                             second_cache.insert(key, range);
                             Some(range)
@@ -8180,8 +8287,12 @@ impl GpuInner {
                 } else if let Some(range) = third_cache.get(&key).copied() {
                     Some(range)
                 } else {
-                    let values = pack_rgba(&third.to_rgba8(), buffers.capacity)?;
-                    let mut range = append_arena_slice(&mut img3_arena, &values, storage_alignment);
+                    let mut range = append_dynamic_rgba(
+                        &mut img3_arena,
+                        third.as_ref(),
+                        buffers.capacity,
+                        storage_alignment,
+                    )?;
                     range.offset += (auxiliary_cache.img3_values.len() * 4) as u64;
                     third_cache.insert(key, range);
                     Some(range)
@@ -11216,7 +11327,7 @@ impl GpuInner {
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
-        let dispatch_count = gpu_dispatch_count(ops, logical_mode, (w, h));
+        let mut dispatch_count = 0u64;
         let mut native_expand_output = false;
         gpu_log!(
             "[GPU] batch_impl: {} ops, start dims {}x{}",
@@ -11327,6 +11438,19 @@ impl GpuInner {
                         .into(),
                 )
                 })?;
+            let chunk_ops = &ops[chunk_start..chunk_end];
+            dispatch_count = dispatch_count.saturating_add(gpu_dispatch_count(
+                chunk_ops,
+                logical_mode,
+                (cur_w, cur_h),
+            ));
+            resource_telemetry.fused_operation_count = resource_telemetry
+                .fused_operation_count
+                .saturating_add(gpu_fused_operation_count(
+                    chunk_ops,
+                    logical_mode,
+                    (cur_w, cur_h),
+                ));
             let estimated_bytes = resource_bytes[chunk_start..chunk_end]
                 .iter()
                 .fold(0usize, |total, bytes| total.saturating_add(*bytes));
@@ -13027,6 +13151,60 @@ fn can_fuse_gpu_multiply_screen(ops: &[PipelineOp], index: usize) -> bool {
     }
 }
 
+/// Return whether a full-frame RGBA alpha composite immediately followed by
+/// Mirror can be evaluated directly into the mirrored output. This shader
+/// reads both original inputs at the mirrored coordinate, so it is valid only
+/// for Pillow's zero-offset, equal-sized RGBA operation.
+fn can_fuse_gpu_alpha_composite_mirror(
+    ops: &[PipelineOp],
+    index: usize,
+    logical_mode: Option<&str>,
+    input_dimensions: (u32, u32),
+) -> bool {
+    if logical_mode != Some("RGBA") || index + 1 >= ops.len() {
+        return false;
+    }
+    match (&ops[index], &ops[index + 1]) {
+        (
+            PipelineOp::AlphaComposite {
+                source,
+                dest: (0, 0),
+                src: (0, 0),
+            },
+            PipelineOp::Mirror,
+        ) => source.size().ok() == Some(input_dimensions),
+        _ => false,
+    }
+}
+
+/// Count public operations lowered into private fused GPU dispatches for one
+/// submission. Keep the count chunk-local so the receipt never claims a pair
+/// was fused when the resource/work scheduler split it across submissions.
+fn gpu_fused_operation_count(
+    ops: &[PipelineOp],
+    logical_mode: Option<&str>,
+    image_dimensions: (u32, u32),
+) -> u64 {
+    let mut count = 0u64;
+    let mut index = 0usize;
+    let (mut cur_w, mut cur_h) = image_dimensions;
+    while index < ops.len() {
+        if can_fuse_gpu_multiply_screen(ops, index)
+            || can_fuse_gpu_alpha_composite_mirror(ops, index, logical_mode, (cur_w, cur_h))
+        {
+            count = count.saturating_add(2);
+            if let Some(next) = op_output_dims(&ops[index + 1], cur_w, cur_h) {
+                (cur_w, cur_h) = next;
+            }
+            index += 2;
+        } else {
+            (cur_w, cur_h) = op_output_dims(&ops[index], cur_w, cur_h).unwrap_or((cur_w, cur_h));
+            index += 1;
+        }
+    }
+    count
+}
+
 fn gpu_dispatch_count(
     ops: &[PipelineOp],
     logical_mode: Option<&str>,
@@ -13036,7 +13214,9 @@ fn gpu_dispatch_count(
     let mut index = 0usize;
     let (mut cur_w, mut cur_h) = image_dimensions;
     while index < ops.len() {
-        if can_fuse_gpu_multiply_screen(ops, index) {
+        if can_fuse_gpu_multiply_screen(ops, index)
+            || can_fuse_gpu_alpha_composite_mirror(ops, index, logical_mode, (cur_w, cur_h))
+        {
             count += 1;
             if let Some(next) = op_output_dims(&ops[index + 1], cur_w, cur_h) {
                 (cur_w, cur_h) = next;
@@ -19248,6 +19428,31 @@ mod tests {
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn pack_dynamic_rgba_uses_existing_rgba_storage_and_preserves_other_modes() {
+        let rgba = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![1, 2, 3, 4, 250, 129, 8, 255]).unwrap(),
+        );
+        assert_eq!(
+            super::pack_dynamic_rgba(&rgba, 2).unwrap(),
+            [0x0403_0201, 0xff08_81fa]
+        );
+
+        let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(1, 1, vec![7, 11, 13]).unwrap());
+        assert_eq!(
+            super::pack_dynamic_rgba(&rgb, 1).unwrap(),
+            super::pack_rgba(&rgb.to_rgba8(), 1).unwrap()
+        );
+
+        let mut arena = vec![0xdead_beef];
+        let range = super::append_dynamic_rgba(&mut arena, &rgba, 2, 16).unwrap();
+        assert_eq!(range.offset, 16);
+        assert_eq!(range.size, 16);
+        assert_eq!(arena[0], 0xdead_beef);
+        assert_eq!(&arena[4..6], &[0x0403_0201, 0xff08_81fa]);
+        assert_eq!(&arena[6..], &[0, 0]);
+    }
 
     #[test]
     fn put_alpha_output_keeps_native_results_and_consumes_rgba_fallback() {
@@ -30116,6 +30321,72 @@ mod tests {
             gpu_dispatch_count(std::slice::from_ref(&resized), Some("CMYK"), (1024, 768)),
             3
         );
+    }
+
+    #[test]
+    fn alpha_composite_mirror_fuses_only_matching_full_frame_rgba() {
+        let source = Arc::new(
+            crate::image::Image::new(2, 1, "RGBA", (0, 0, 0, 0)).expect("RGBA composite source"),
+        );
+        let pair = [
+            PipelineOp::AlphaComposite {
+                source: Arc::clone(&source),
+                dest: (0, 0),
+                src: (0, 0),
+            },
+            PipelineOp::Mirror,
+        ];
+        assert!(super::can_fuse_gpu_alpha_composite_mirror(
+            &pair,
+            0,
+            Some("RGBA"),
+            (2, 1),
+        ));
+        assert_eq!(super::gpu_dispatch_count(&pair, Some("RGBA"), (2, 1)), 1);
+        assert_eq!(
+            super::gpu_fused_operation_count(&pair, Some("RGBA"), (2, 1)),
+            2
+        );
+        assert!(!super::can_fuse_gpu_alpha_composite_mirror(
+            &pair,
+            0,
+            Some("RGB"),
+            (2, 1),
+        ));
+
+        let offset_pair = [
+            PipelineOp::AlphaComposite {
+                source,
+                dest: (1, 0),
+                src: (0, 0),
+            },
+            PipelineOp::Mirror,
+        ];
+        assert!(!super::can_fuse_gpu_alpha_composite_mirror(
+            &offset_pair,
+            0,
+            Some("RGBA"),
+            (2, 1),
+        ));
+
+        let wrong_size_source = Arc::new(
+            crate::image::Image::new(1, 1, "RGBA", (0, 0, 0, 0))
+                .expect("mismatched RGBA composite source"),
+        );
+        let wrong_size_pair = [
+            PipelineOp::AlphaComposite {
+                source: wrong_size_source,
+                dest: (0, 0),
+                src: (0, 0),
+            },
+            PipelineOp::Mirror,
+        ];
+        assert!(!super::can_fuse_gpu_alpha_composite_mirror(
+            &wrong_size_pair,
+            0,
+            Some("RGBA"),
+            (2, 1),
+        ));
     }
 
     #[test]

@@ -8945,25 +8945,74 @@ grayscale SIMD experiments found row splitting slower and safe channel gathers
 slower than the current vector path. Reopen this operation only with a new
 profile showing a distinct cause or a safer/faster RGB shuffle strategy.
 
-### GPU RGBA alpha-composite staging clone — deferred 2026-09-29
+### RGBA AlphaComposite → Mirror GPU batch — checkpoint 2026-09-29
 
-A generic GPU auxiliary path appeared to clone an RGBA alpha-composite source
-with `to_rgba8()` before packing it. The maintained
-`pipeline-chain.alpha-composite.rgba-1024x768` workload does not use that path:
-its single zero-offset operation is routed through `execute_native_byte_op`
-before auxiliary packing. The public cropped method lowers into crop,
-composite, and paste operations, so its small strict parity case does not prove
-the large generic packer is exercised either. A host-side helper change was
-removed because no material workload demonstrated that it ran or improved
-latency. Revisit only with a multi-operation workload that forces the generic
-GPU batch and a receipt confirming that branch. The benchmark's
-`full_frame_copy_count` records GPU buffer copies; it cannot verify removal of
-a host `RgbaImage` clone.
+The singleton `AlphaComposite` route bypasses generic auxiliary packing, so it
+cannot measure a staging optimization for that path. The exact two-operation
+`alpha_composite → mirror → tobytes` workflow does reach the generic batch.
+Its 35 × 17 seeded-RGBA parity case detects channel, rounding, transparent
+source, and hidden-RGB errors. A separate 1024 × 768 case uses the same
+operation sequence so the benchmark retains its material size without storing
+two multi-megabyte random assets. The benchmark references that parity case,
+requires `parity_pass` on Pillow and strict CPU/SIMD/GPU, and times only
+composite, mirror, and final materialization (5 warmups × 20 iterations × 5
+samples); setup is excluded.
 
-The baseline and post-edit standard workload both completed, and the strict
-RGBA blend/all-alpha-pairs cases passed on CPU, SIMD, and GPU. Those timings are
-not a performance comparison for this candidate because both runs took the
-native singleton route. Do not count them toward the GPU conversion campaign.
+The generic auxiliary packer used `to_rgba8()` even when its `DynamicImage`
+already contained `ImageRgba8`, then built a temporary packed-word vector and
+copied it into the upload arena. The RGBA branch now borrows the existing bytes
+and appends them directly into the aligned arena. This removes a carrier clone,
+temporary word vector, and host arena copy; it does not change the 3,145,728-byte
+GPU auxiliary upload. Other image variants keep the old conversion behavior.
+
+For the exact full-frame RGBA, zero-offset `AlphaComposite → Mirror` pair, a
+dual-input shader reads destination and source at `y * width + (width - 1 - x)`,
+applies Pillow's 7-bit fixed-point alpha-composite arithmetic, and writes the
+result at the output coordinate. The separate ping-pong output is required:
+mirrored reads cannot safely alias writes. Keep the `source alpha == 0` full
+destination-word copy, which preserves visible hidden RGB. The fused route
+saves one dispatch and the intermediate's read plus write, approximately 8
+device-memory bytes per pixel (6 MiB at 1024 × 768). It is admitted only for
+logical RGBA, matching full-frame source dimensions, and zero offsets; all other
+cases retain their existing routes. Receipt counts are accumulated per actual
+GPU submission, because resource/work limits can split a batch between the two
+operations.
+
+The focused Rust admission/dispatch test passed. `make build-parity` passed;
+the 35 × 17 varied and 1024 × 768 material parity cases each passed strict CPU,
+SIMD, and GPU (6/6 total). The correctness-gated benchmark passed parity 3/3
+and collected 100 samples per subject with actual CPU/SIMD/GPU execution and no
+fallback. Medians were Pillow 2.627 ms, CPU 1.055 ms, SIMD 0.955 ms, and GPU
+2.083 ms. CPU is 2.49× faster than Pillow; SIMD is 2.75× faster, below the 5×
+target. GPU executed exactly one dispatch for the two public operations and
+reported `fused_operation_count = 2`, but remained 2.18× slower than SIMD with
+about 480 versus 1,047 completed operations/second. GPU upload, auxiliary, and
+readback were each 3,145,728 bytes; it still performed one full-frame readback
+copy. The measured GPU operation phase was 0.012 ms while terminal
+materialization was 2.069 ms and backend time 1.901 ms. The critical path is
+completion/readback/materialization, not the fused arithmetic. No matched
+unfused run used the same parity-gated boundary, so the dispatch and byte
+reductions are proven but a latency gain from fusion is not.
+
+Reproducible inputs are
+`pipeline-composition.gpu-generic-alpha-composite-rgba-mirror` and
+`pipeline-composition.gpu-generic-alpha-composite-rgba-mirror-1024x768`; the
+workload is `pipeline-chain.alpha-composite.rgba-mirror-1024x768`. The measured
+report is `build/migration-parity/alpha-mirror-fused-100.json`; its parity gate
+evidence is `migration-parity-benchmark-gate-52e232db0b814fbf9516c5c19062c07f`.
+Regenerate and validate with `make migration-parity-inputs-check`. Benchmark
+with `MIGRATION_BENCHMARK_PROFILE=pipeline` and
+`MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.alpha-composite.rgba-mirror-1024x768'`
+through `make migration-parity-benchmark`.
+
+Checkpoint after the bounded packer, upload-arena, and fusion attempts. Do not
+continue tuning this shader without a profile that reduces the synchronous
+readback/completion floor. Move to `ImageOps.expand` on RGBX: the CPU native
+expand helper already handles four stored bytes, but its admission predicate
+omits `(RGBX, ImageRgba8)` and therefore widens/clones the existing carrier.
+SIMD already admits RGBX. Keep GPU separate until mode-6 shader semantics
+preserve the fourth X byte; the existing four-byte GPU transport offers no
+transfer-volume saving for this mode.
 
 ### Scalar RGBA `Image.putalpha` — checkpoint 2026-09-29
 

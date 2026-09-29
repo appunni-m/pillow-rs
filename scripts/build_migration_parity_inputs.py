@@ -557,6 +557,17 @@ PIPELINE_ALPHA_COMPOSITE_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
         "destination": [30, 60, 90, 64],
         "source": [200, 150, 100, 192],
     },
+    {
+        # Keep a second operation after AlphaComposite so the GPU cannot take
+        # its singleton native-byte route. This exercises generic auxiliary
+        # source packing at a material size. Pillow supports mirror on RGBA.
+        "name": "rgba-mirror-1024x768",
+        "mode": "RGBA",
+        "size": [1024, 768],
+        "destination": [30, 60, 90, 64],
+        "source": [200, 150, 100, 192],
+        "post_mirror": True,
+    },
 )
 
 # Typed resize workflows are retained as separate benchmark-only inputs so
@@ -12053,6 +12064,140 @@ def pipeline_composition_cases(
                     materialize("second"),
                 ], "observations": ["second", "materialize"],
             })
+    if surface_id == "PIL.Image":
+        # This nonuniform two-operation workflow takes the generic GPU batch
+        # route used by the material alpha-composite benchmark. Observe both
+        # outputs so strict backend parity checks the compositor and mirror,
+        # rather than only confirming that the workflow executes.
+        size = [35, 17]
+        assets = []
+        steps = []
+        for index in range(2):
+            asset_id = f"rgba-source-{index}"
+            raw = random.Random(f"gpu-alpha-mirror-{index}").randbytes(
+                size[0] * size[1] * 4
+            )
+            assets.append(
+                {
+                    "id": asset_id,
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            )
+            steps.append(
+                {
+                    "step_id": f"image-{index}",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGBA"),
+                        "size": literal(size),
+                        "data": asset_value(asset_id),
+                    },
+                }
+            )
+        steps.extend(
+            [
+                {
+                    "step_id": "composited",
+                    "surface": "PIL.Image",
+                    "operation": "alpha_composite",
+                    "receiver": None,
+                    "arguments": {
+                        "im1": binding("image-0"),
+                        "im2": binding("image-1"),
+                    },
+                },
+                {
+                    "step_id": "mirrored",
+                    "surface": "PIL.ImageOps",
+                    "operation": "mirror",
+                    "receiver": None,
+                    "arguments": {"image": binding("composited")},
+                },
+                materialize("mirrored"),
+            ]
+        )
+        cases.append(
+            {
+                "case_id": "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror",
+                "surface": surface_id,
+                "operation": "alpha_composite",
+                "covers": [
+                    behavior("PIL.Image", "alpha_composite"),
+                    behavior("PIL.ImageOps", "mirror"),
+                ],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "assets": assets,
+                "steps": steps,
+                "observations": ["composited", "mirrored", "materialize"],
+            }
+        )
+        # Keep the 1024x768 benchmark under the same exact-Pillow parity gate
+        # without storing two multi-megabyte random assets. The smaller seeded
+        # case above remains the adversarial alpha/color stimulus; this case
+        # proves the material-size dispatch and output bytes.
+        size = [1024, 768]
+        cases.append(
+            {
+                "case_id": "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror-1024x768",
+                "surface": surface_id,
+                "operation": "alpha_composite",
+                "covers": [
+                    behavior("PIL.Image", "alpha_composite"),
+                    behavior("PIL.ImageOps", "mirror"),
+                ],
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "image-0",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGBA"),
+                            "size": literal(size),
+                            "color": literal([30, 60, 90, 64]),
+                        },
+                    },
+                    {
+                        "step_id": "image-1",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGBA"),
+                            "size": literal(size),
+                            "color": literal([200, 150, 100, 192]),
+                        },
+                    },
+                    {
+                        "step_id": "composited",
+                        "surface": "PIL.Image",
+                        "operation": "alpha_composite",
+                        "receiver": None,
+                        "arguments": {
+                            "im1": binding("image-0"),
+                            "im2": binding("image-1"),
+                        },
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("composited")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["composited", "mirrored", "materialize"],
+            }
+        )
     return [case for case in cases if case["surface"] == surface_id]
 
 
@@ -44870,50 +45015,68 @@ def _alpha_composite_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
     """Build one material-sized public LA/RGBA alpha-composite workflow."""
 
     mode = spec["mode"]
+    steps = [
+        {
+            "step_id": "setup-destination",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(spec["size"]),
+                "color": literal(spec["destination"]),
+            },
+        },
+        {
+            "step_id": "setup-source",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(spec["size"]),
+                "color": literal(spec["source"]),
+            },
+        },
+        {
+            "step_id": "composite",
+            "surface": "PIL.Image",
+            "operation": "alpha_composite",
+            "receiver": None,
+            "arguments": {
+                "im1": binding("setup-destination"),
+                "im2": binding("setup-source"),
+            },
+        },
+    ]
+    result_id = "composite"
+    observations = ["composite"]
+    if spec.get("post_mirror"):
+        steps.append(
+            {
+                "step_id": "mirrored",
+                "surface": "PIL.ImageOps",
+                "operation": "mirror",
+                "receiver": None,
+                "arguments": {"image": binding(result_id)},
+            }
+        )
+        result_id = "mirrored"
+        observations.append("mirrored")
+    steps.append(
+        {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(result_id),
+            "arguments": {},
+        }
+    )
+    observations.append("materialize")
     return {
         "assets": [],
-        "steps": [
-            {
-                "step_id": "setup-destination",
-                "surface": "PIL.Image",
-                "operation": "new",
-                "receiver": None,
-                "arguments": {
-                    "mode": literal(mode),
-                    "size": literal(spec["size"]),
-                    "color": literal(spec["destination"]),
-                },
-            },
-            {
-                "step_id": "setup-source",
-                "surface": "PIL.Image",
-                "operation": "new",
-                "receiver": None,
-                "arguments": {
-                    "mode": literal(mode),
-                    "size": literal(spec["size"]),
-                    "color": literal(spec["source"]),
-                },
-            },
-            {
-                "step_id": "composite",
-                "surface": "PIL.Image",
-                "operation": "alpha_composite",
-                "receiver": None,
-                "arguments": {
-                    "im1": binding("setup-destination"),
-                    "im2": binding("setup-source"),
-                },
-            },
-            {
-                "step_id": "materialize",
-                "surface": "PIL.Image.Image",
-                "operation": "tobytes",
-                "receiver": binding("composite"),
-                "arguments": {},
-            },
-        ],
-        "observations": ["composite", "materialize"],
+        "steps": steps,
+        "observations": observations,
     }
 
 
@@ -48424,20 +48587,41 @@ def build_pipeline_benchmark_document(
     )
     for spec in PIPELINE_ALPHA_COMPOSITE_BENCHMARK_SPECS:
         workflow = _alpha_composite_pipeline_workflow(spec)
+        measurement = copy.deepcopy(chain_policy)
+        if spec.get("post_mirror"):
+            # Time the two GPU-eligible operations and terminal materialize
+            # separately from setup, and preflight the exact same workflow on
+            # Pillow and all three strict backend profiles.
+            measurement.update(
+                boundary="observed_steps",
+                step_ids=["composited", "mirrored", "materialize"],
+                warmup_iterations=5,
+                measurement_iterations=20,
+                samples=5,
+                correctness_gate="parity_pass",
+            )
+            parity_case_id = (
+                "pipeline-composition.gpu-generic-alpha-composite-rgba-mirror-1024x768"
+            )
+            parity_case = cases_by_id[parity_case_id]
+            benchmark_input = {"kind": "parity_case", "case_id": parity_case_id}
+        else:
+            parity_case = workflow
+            benchmark_input = {
+                "kind": "workflow",
+                "assets": workflow["assets"],
+                "steps": workflow["steps"],
+                "observations": workflow["observations"],
+            }
         alpha_composite_workloads.append(
             {
                 "workload_id": f"pipeline-chain.alpha-composite.{spec['name']}",
                 "covers": [alpha_composite_requirement],
                 "subjects": benchmark_subjects(),
-                "input": {
-                    "kind": "workflow",
-                    "assets": workflow["assets"],
-                    "steps": workflow["steps"],
-                    "observations": workflow["observations"],
-                },
-                "measurement": copy.deepcopy(chain_policy),
+                "input": benchmark_input,
+                "measurement": measurement,
                 "context": _workflow_benchmark_context(
-                    workflow,
+                    parity_case,
                     variant="alpha-composite-native",
                     surface="PIL.Image.Image",
                     operation="alpha_composite",
