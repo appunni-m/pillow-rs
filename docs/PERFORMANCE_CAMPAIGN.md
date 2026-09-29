@@ -9477,3 +9477,40 @@ single GPU dispatch. `make build-parity`, `make migration-parity-inputs-check`,
 and all three standard single-workload benchmark correctness gates passed.
 Final strict parity passed all four selected cases on CPU, SIMD, and GPU after
 the last shader edit (12/12). No coverage collection ran.
+
+### CMYK `ImageDraw.bitmap` with an L mask — checkpoint 2026-09-29
+
+The material case is
+`PIL.ImageDraw.ImageDraw.bitmap.nuanced.performance-cmyk-1024x768`, with
+workload `pil-imagedraw-imagedraw.bitmap.cmyk-1024x768`. The canvas stores
+CMYK samples in a four-byte `ImageRgba8` carrier; this bitmap route does not
+convert CMYK to RGBA colors. The previous path materialized an owned image,
+called `to_rgba8()` for another identical copy, and used per-pixel accessors.
+For the exact CMYK destination and L-mask storage variant, the retained path
+shares the mask, clones the destination once, clips the affected rectangle,
+then zips contiguous mask-row and four-byte destination slices. Other mask or
+storage variants still use the established path.
+
+Three bounded attempts were measured. Removing the extra full-frame copy and
+switching to native bytes lowered CPU median from 2.569 to 1.704 ms, but still
+lost to Pillow. An exact divide-by-255 identity was exhaustively checked over
+every possible blend numerator and retained no performance value: its CPU
+median regressed to 2.039 ms, so it was removed. Row-slice iteration lowered
+the CPU median to 0.834 ms. Each receipt contains 100 samples per subject:
+
+| Receipt | Pillow | CPU | SIMD profile | GPU profile |
+| --- | ---: | ---: | ---: | ---: |
+| `migration-benchmark-a8255d73b51b413e86bc42bd93b4c2f8` baseline | 1.570 ms | 2.569 ms | 2.572 ms | 2.548 ms |
+| `migration-benchmark-f934270f243d4809bf5c1deb8fb9f57f` native bytes | 1.512 ms | 1.704 ms | 1.697 ms | 1.703 ms |
+| `migration-benchmark-e26c84975036485d9aa698ab5dc815e2` divide identity, rejected | 1.543 ms | 2.039 ms | 1.996 ms | 2.001 ms |
+| `migration-benchmark-bc5bafea9c954f2dbe2907b2d4df5a7e` row slices | 1.519 ms | 0.834 ms | 0.849 ms | 0.844 ms |
+| `migration-benchmark-f2fe652d4c1940b28b60e27c044ef2bb` final repeat | 1.502 ms | 0.832 ms | 0.837 ms | 0.865 ms |
+
+The final retained CPU path is 1.81× faster than Pillow on this workload. The SIMD
+and GPU profile receipts are `not_proven` with no executor counts: `bitmap`
+mutates the host image eagerly and bypasses both executors. Their similar
+timings do not establish SIMD or GPU execution, so there is no SIMD 5× or GPU
+throughput claim for this API. Strict CPU parity passed all six CMYK bitmap
+cases, including partial/zero masks, clipping, and the material workload
+(6/6). Keep the native L-mask CPU path, record backend execution as a blocker,
+and move on. No coverage collection ran.

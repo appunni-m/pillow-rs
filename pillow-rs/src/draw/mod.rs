@@ -1115,6 +1115,66 @@ impl Draw {
             }
         }
 
+        // CMYK pixels use the same four-byte carrier as RGBA in this image
+        // model. Keep those bytes in place while drawing: materializing an
+        // owned image and then calling `to_rgba8()` makes two full-frame
+        // copies even though this path performs no color conversion.
+        if mode == "CMYK" && self.orig_mode.as_deref() == Some("CMYK") && bmp_mode == "L" {
+            let img = self.image.materialized_shared()?;
+            let mask = bitmap.materialized_shared()?;
+
+            if let (DynamicImage::ImageRgba8(source), DynamicImage::ImageLuma8(mask)) =
+                (img.as_ref(), mask.as_ref())
+            {
+                let (img_w, img_h) = source.dimensions();
+                let ink = [color.0, color.1, color.2, color.3];
+                let mut canvas = source.clone();
+                let row_stride = img_w as usize * 4;
+                let destination = canvas.as_mut();
+                let mask_bytes = mask.as_raw();
+                let source_x_start = (-i64::from(x)).clamp(0, i64::from(bmp_w)) as u32;
+                let source_x_end =
+                    (i64::from(img_w) - i64::from(x)).clamp(0, i64::from(bmp_w)) as u32;
+                let source_y_start = (-i64::from(y)).clamp(0, i64::from(bmp_h)) as u32;
+                let source_y_end =
+                    (i64::from(img_h) - i64::from(y)).clamp(0, i64::from(bmp_h)) as u32;
+                let clipped_width = (source_x_end - source_x_start) as usize;
+                let destination_x = (i64::from(x) + i64::from(source_x_start)) as usize;
+                let destination_row_len = clipped_width * 4;
+
+                for py in source_y_start..source_y_end {
+                    let destination_row_offset =
+                        (i64::from(y) + i64::from(py)) as usize * row_stride;
+                    let destination_start = destination_row_offset + destination_x * 4;
+                    let destination_row = &mut destination
+                        [destination_start..destination_start + destination_row_len];
+                    let mask_row_offset = py as usize * bmp_w as usize;
+                    let mask_start = mask_row_offset + source_x_start as usize;
+                    let mask_end = mask_row_offset + source_x_end as usize;
+                    let mask_row = &mask_bytes[mask_start..mask_end];
+                    for (pixel, coverage) in destination_row
+                        .chunks_exact_mut(4)
+                        .zip(mask_row.iter().copied())
+                    {
+                        if coverage == 0 {
+                            continue;
+                        }
+                        if coverage == 255 {
+                            pixel.copy_from_slice(&ink);
+                        } else {
+                            for channel in 0..4 {
+                                pixel[channel] = pil_blend(pixel[channel], ink[channel], coverage);
+                            }
+                        }
+                    }
+                }
+
+                self.image =
+                    Image::from_dynamic(DynamicImage::ImageRgba8(canvas), Some("CMYK".to_string()));
+                return Ok(());
+            }
+        }
+
         let raw_data = bitmap.getdata(None)?;
         let bmp_stride: usize = if matches!(bmp_mode.as_str(), "1" | "L") {
             1
