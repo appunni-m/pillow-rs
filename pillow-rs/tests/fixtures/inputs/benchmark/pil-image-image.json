@@ -273,6 +273,62 @@
       }
     },
     {
+      "workload_id": "pil-image-image.convert.rgb-to-l-material",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.convert.nuanced.performance-material-rgb-to-l-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pil-image-image.copy.standard",
       "covers": [
         "PIL.Image.Image.copy.performance.standard"
@@ -4357,6 +4413,10 @@
         },
         {
           "workload_id": "pil-image-image.convert.pa-to-rgba-material",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-image-image.convert.rgb-to-l-material",
           "weight": 1
         },
         {

@@ -947,6 +947,13 @@ impl Image {
         }
 
         let mode_enum = parse_mode(mode)?;
+        if src_mode == "RGB" && mode == "L" {
+            // RGB→L and ImageOps.grayscale share Pillow's exact fixed-point
+            // luma contract. Reuse its native-layout executor so SIMD can
+            // use the packed RGB kernel and GPU can upload RGB/read back L
+            // without passing the conversion through an RGBA carrier.
+            return Ok(Image::push_op(self, PipelineOp::Grayscale));
+        }
         // Pillow accepts a dither argument on convert(), but its standard
         // byte-mode converters do not consume it. Keep the descriptor free of
         // a phantom default Floyd-Steinberg value so the GPU contract can
