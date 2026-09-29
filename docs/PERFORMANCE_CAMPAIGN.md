@@ -7155,6 +7155,68 @@ visit is checkpointed after four bounded implementation attempts. Remaining
 work is to reduce GPU upload/map completion cost and improve the SIMD kernel's
 whole-operation latency; the compact readback alone does not meet the goals.
 
+### CMYK grayscale follow-up: row-parallel SIMD checkpoint — 2026-09-29
+
+The fused CMYK kernel already reads the four logical C/M/Y/K samples and writes
+L directly. The expensive part left in the portable SIMD block is extracting
+each channel from four interleaved 16-byte vectors: the four output channels
+each use four lane swizzles. A row helper now keeps complete 16-pixel blocks
+vectorized, pads only a row tail, and uses the existing 512 × 512 parallel
+threshold to split independent output rows. Small inputs stay serial. This
+change is in the SIMD adapter; it does not establish a CPU or GPU kernel win.
+
+The standard material workload is 1024 × 768 CMYK, with five warmups, 20
+iterations × five samples, one concurrent caller, a correctness gate, and the
+public call plus output materialization in the measured steps. Its baseline,
+first row-parallel run, fresh repeat, and rebuilt checkpoint run are
+`migration-benchmark-28f96b71a4c141af92c20bcda2f6bf0d`,
+`migration-benchmark-25cb6efd9d3f4a04b47ae8540c03b94f`,
+`migration-benchmark-b0c67870ca3b4fad9dcff8571630e5b2`, and
+`migration-benchmark-48df0e2840ac4139b27c0b5d14baf173`:
+
+| Median latency, ms | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.667042 | 0.413208 | 0.607187 | 0.745959 |
+| Row split, first run | 0.594688 | 0.377146 | 0.195667 | 0.717230 |
+| Row split, repeat | 0.600479 | 0.404292 | 0.227334 | 0.728834 |
+| Rebuilt checkpoint | 0.678521 | 0.414563 | 0.236417 | 0.743542 |
+
+The rebuilt SIMD result is 61.1% faster than its baseline and 2.87× faster than
+Pillow; actual-backend receipts confirmed 100 SIMD executions. It remains below
+the 5× target (about 0.136 ms at this Pillow median). CPU changes are within
+run variation and the kernel edit does not prove a CPU gain. GPU remained
+slower than Pillow and 3.15× slower than SIMD;
+its receipt showed 100 GPU executions, one dispatch, 3,145,728 upload bytes,
+and 786,432 readback bytes. The next GPU profile should separate those transfer
+and completion costs from the one shader dispatch; this run does not show
+shader arithmetic as the limiting stage.
+
+The rebuilt checkpoint reported 1,474 Pillow, 2,412 CPU, 4,230 SIMD, and 1,345 GPU
+operations/s. This benchmark runs one caller, so these rates reflect reciprocal
+latency and are not sustained multi-request throughput. The 512 × 512 split
+threshold follows the project's common parallel threshold. This operation did
+not receive a dedicated crossover sweep, so the small varied fixture proves
+tail parity, not the threshold's performance optimum.
+
+On the final source, `cargo fmt --all`, `git diff --check`, and
+`make build-parity` passed. `make migration-parity-test` passed the six selected
+cases on CPU and again on strict SIMD and strict GPU (`MIGRATION_TARGET_BACKEND`
+set to each backend and strict mode enabled for SIMD/GPU). The correctness-gated
+benchmark used `MIGRATION_BENCHMARK_PROFILE=standard` with workload
+`pipeline-chain.grayscale.material-cmyk-1024x768`. No coverage was run.
+
+Three bounded SIMD experiments set the checkpoint. First, the row split kept
+the measured gain. Second, an AArch64 `vld4q_u8` structure-load path was
+discarded at build time because the repository build denies unsafe code and
+the intrinsic requires unsafe; do not weaken that policy for this kernel.
+Third, safe per-lane `array::from_fn` gathers passed parity but raised the SIMD
+median from 0.227334 to 0.248312 ms, so they were reverted. The portable
+swizzle implementation remains. The final six CMYK cases passed on CPU, strict
+SIMD, and strict GPU: `migration-parity-9d3d1215e724495d951b2688ed49fc5f`,
+`migration-parity-e6e38cc4e3b946249e3dc53d0f1bcdd6`, and
+`migration-parity-c933738a67c3468c8bcf40c487e60d2d`. The benchmark was
+correctness-gated. No coverage was run.
+
 ### CMYK `getprojection`: keep the four ink bytes native — 2026-09-29
 
 `Image.getprojection` previously routed CMYK through the generic RGBA fallback.
