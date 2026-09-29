@@ -25754,6 +25754,23 @@ pub fn simd_convert(
     if !native_convert_supported_for_image(img, target, matrix.as_deref(), mode) {
         return Err(simd_unsupported("Convert"));
     }
+    if matches!(target, ColorMode::L)
+        && layout.source_channels == 3
+        && matches!(img, DynamicImage::ImageRgb8(_))
+        && matches!(mode, None | Some("RGB"))
+    {
+        // Use the shared 16-pixel RGB deinterleave kernel. The generic
+        // converter gathered three channels into eight u32 lanes with scalar
+        // indexing for every block, which made this SIMD route slower than
+        // the scalar CPU converter on material RGB images.
+        let Some((output, vector_blocks, scalar_tail)) = native_grayscale_bytes(img, 3) else {
+            return Err(simd_unsupported("Convert"));
+        };
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("vector");
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 1);
+    }
     let Some((output, vector_blocks, scalar_tail)) = native_convert_bytes(img, layout) else {
         return Err(simd_unsupported("Convert"));
     };
@@ -26256,6 +26273,39 @@ mod tests {
 
             assert_eq!(actual, expected, "CMYK grayscale width {width}");
             assert_eq!(vector_blocks, (width as u64 * height as u64).div_ceil(16));
+            assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_rgb_grayscale_matches_exact_conversion_across_vector_tails() {
+        for (width, height) in [
+            (1u32, 3u32),
+            (15, 3),
+            (16, 3),
+            (17, 3),
+            (31, 3),
+            (32, 3),
+            (33, 3),
+            (1023, 512),
+        ] {
+            let pixels = width as usize * height as usize;
+            let source: Vec<u8> = (0..pixels * 3)
+                .map(|index| ((index * 113 + index / 5 + 29) & 255) as u8)
+                .collect();
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, source).expect("valid RGB storage"),
+            );
+            let expected = crate::color::pil_grayscale(&image).expect("reference grayscale");
+            let (actual, vector_blocks, scalar_tail) =
+                super::native_grayscale_bytes(&image, 3).expect("native RGB grayscale");
+
+            assert_eq!(
+                actual.as_slice(),
+                expected.as_raw().as_slice(),
+                "RGB grayscale {width}x{height}"
+            );
+            assert_eq!(vector_blocks, pixels.div_ceil(16) as u64);
             assert_eq!(scalar_tail, 0);
         }
     }

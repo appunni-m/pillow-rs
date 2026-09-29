@@ -9249,3 +9249,55 @@ two runs, meeting the CPU target only for this workload. SIMD 5× and GPU
 execution/throughput remain open. Further work needs a real bulk backend route
 whose setup and transfer costs amortize; relabeling the host converter cannot
 meet those goals. No coverage collection ran.
+
+### RGB `convert("L")` — checkpoint 2026-09-29
+
+The material case
+`PIL.Image.Image.convert.nuanced.performance-material-rgb-to-l-noise-1024x768`
+uses seeded 1,024 × 768 RGB noise and observes public conversion plus `tobytes()`.
+The workload is `pil-image-image.convert.rgb-to-l`. The existing generic
+`PipelineOp::Convert` SIMD path gathered RGB into eight wide lanes with scalar
+indexing. The codebase already had an exact 16-pixel interleaved grayscale
+kernel and a native GPU `PipelineOp::Grayscale` path that uploads three-byte
+RGB and returns one-byte L.
+
+Attempt 1 made the generic SIMD converter reuse `native_grayscale_bytes` for
+canonical RGB→L. It reduced SIMD from 2.172 ms to 0.221 ms on the first
+measurement, but did not approach the 5× target. Attempt 2 parallelized
+independent rows above 512² pixels; results were 0.219 ms and then 0.256 ms
+under changing host load, so the parallel branch was removed. Attempt 3 routes
+only standard RGB→L through `PipelineOp::Grayscale`, whose CPU arithmetic is
+the same Pillow fixed-point luma and whose GPU admission already supports
+native RGB upload and compact L output. Other source modes retain their own
+conversion routes.
+
+The one-run original generic-conversion receipt,
+`migration-benchmark-8a82136c6ba84ff4a8fed3d8987bd276`, measured Pillow 0.256
+ms, CPU 0.122 ms, SIMD 2.172 ms, and GPU 1.925 ms. All target backends executed
+100 samples; GPU used one dispatch. The native-RGB SIMD attempt's receipt
+`migration-benchmark-9fecdd01044046068741d325ccea2040` measured Pillow
+0.251 ms, CPU 0.156 ms, SIMD 0.221 ms, and GPU 1.821 ms. That first SIMD change
+was about 9.8× faster than the old SIMD path, but only 1.14× faster than
+Pillow. A later route receipt,
+`migration-benchmark-1cf2f399a1cb47ff905d75f575a124d2`, measured Pillow
+0.419 ms, CPU 0.233 ms, SIMD 0.272 ms, and GPU 1.474 ms. This run coincided
+with `photolibraryd` above 100% CPU, a separate Starlette parity process, and
+the Codex renderer; these values are not a paired speedup claim.
+
+The route change did remove the concrete GPU widening: the generic receipt
+uploaded/read back 3,145,728 bytes each, recorded one full-frame copy and one
+mode conversion. The native route uploaded 2,359,296 RGB bytes and read back
+786,432 L bytes, with one dispatch, one full-frame copy, and zero mode
+conversions. Exact public parity passed 4/4 cases on CPU, SIMD, and GPU (12/12),
+including empty dimensions, vector-tail input, and the material case. The
+focused `native_rgb_grayscale_matches_exact_conversion_across_vector_tails`
+Rust test passed, and `make build-parity` and `make migration-parity-benchmark`
+passed their build and benchmark correctness gates.
+
+CPU remained faster than Pillow in every recorded run. SIMD is still only
+about 1.1–1.5× faster in the available measurements, below 5×. GPU now avoids
+the RGBA carrier but remained about 5.4× slower than SIMD in the loaded route
+run; one-request latency does not establish its saturated throughput. Record
+the native representation fix as retained, the SIMD 5× and GPU latency /
+throughput goals as blockers, and continue to L→RGB. No coverage collection
+ran.
