@@ -9948,3 +9948,94 @@ and decode. A bounded SIMD candidate is to replace the vertical kernel's
 scalar byte-to-i32 lane copies with a portable vector widen, after confirming
 the `wide` API supports it. Checkpoint Cover after four attempts and move on to
 the next ranked operation; no coverage collection ran.
+
+### Image.Image.paste masked native-L GPU — checkpoint 2026-09-30
+
+The measured public workload is
+`pil-image-image.paste.masked.materialized.masked-l-noise-1024x768`: a
+materialized 1,024 × 768 L destination, L source, and L mask with clipped
+placement. The exact Pillow byte blend is
+`(source * mask + destination * (255 - mask) + 127) / 255`. The general GPU
+Paste path widened each input to RGBA, uploading and reading back 3,145,728
+bytes in each direction. A strict native-L admission gate now requires logical
+and concrete L storage for all three images and the ordinary byte-mask
+semantics; unmatched modes and layouts keep the established path.
+
+The retained shader packs four output L pixels per `u32`, reads one-byte
+source and mask samples, uses checked clipping and adapter limits, writes the
+destination unchanged outside the overlap, and preserves Pillow's integer
+rounding. The upload coalescing attempt places source and mask in one storage
+buffer: each segment is padded to four bytes, and the mask begins at the
+checked source-transfer word offset. This removes one mapped upload and one
+binding without adding a host concatenation copy or changing transfer volume.
+The mapped queue-write view must be dropped before `queue.submit`, because
+wgpu enqueues its transfer on view drop. Keeping the view alive through submit
+caused the first strict GPU odd-tail run to read stale data and fail; the
+explicit drop fixed that actual parity defect before timing the candidate.
+
+An added 5 × 3 L case uses a negative offset and mask values 0, 1, 127, 128,
+254, and 255. Its 15-byte source and mask force a padded transfer boundary; the
+case also crosses packed words between scanlines and leaves a partial output
+word. After the upload-lifetime fix, strict parity passed on CPU, SIMD, and GPU
+for this case, and on GPU for the material workload. Receipts are
+`migration-parity-7d0b490a555547d78b41613f04a16938` (CPU tail),
+`migration-parity-ea0ebada4b4a44f8bf77dff01e3b394f` (SIMD tail),
+`migration-parity-898fc22047e9418c9bfdbb977f430d5f` (GPU tail), and
+`migration-parity-9df6823ba051445a9285440a0eeb3b10` (GPU material),
+`migration-parity-abbdfc625ea74a7ba5fdd39674aae48a` (GPU opaque L mask), and
+`migration-parity-22ba7ceb98564d7ebdbd53658b664264` (GPU partial L mask). The
+failed pre-fix GPU receipt was
+`migration-parity-29ec390d827743338d393cfa90eb7e7d`; it is retained as evidence
+of the view-lifetime failure. `make migration-parity-inputs-check`,
+`cargo test -p pillow-rs native_masked_l_paste_planner --lib`, and
+`make build-parity` passed. No coverage collection or coverage test ran.
+
+The three bounded performance attempts were: add the compact native-L path;
+remove the redundant explicit nonblocking poll before `readback_with`; and
+coalesce the source and mask writes. The measured GPU medians are:
+
+| Candidate / receipt | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGBA baseline `migration-benchmark-dd353038df5e473c8e17bae9ef4212a5` | 0.230 | 0.333 | 0.490 | 7.624 |
+| Native L, pre-map poll `migration-benchmark-0fbcc07b43be4429a1a2a5b20648be5f` | 0.229 | 0.287 | 0.525 | 1.723 |
+| Native L, poll removed `migration-benchmark-79d77f0f0c1440018973c8d8916a1a9a` | 0.243 | 0.303 | 0.467 | 0.842 |
+| Coalesced source/mask, run 1 `migration-benchmark-9c1fd88f7fcb451d8d091a3f383b30b9` | 0.230 | 0.319 | 0.459 | 0.723 |
+| Coalesced source/mask, repeat `migration-benchmark-173d10665391440da8abaea312ab2337` | 0.209 | 0.275 | 0.451 | 0.769 |
+
+All values are median latency in milliseconds from the same warm-cache policy:
+five warmups, 20 iterations × five samples, 100 calls per subject, and
+concurrency one. Both coalesced benchmark correctness gates passed. Each
+coalesced receipt records 100 CPU, 100 SIMD, and 100 actual GPU executions;
+GPU had no fallback, one dispatch per call, 2,359,296 uploaded bytes,
+786,432 readback bytes, and zero mode conversions. The two coalesced GPU
+medians are within 6.4% of each other and both beat the best earlier
+uncoalesced median, 0.842 ms, but the older uncoalesced repeats varied widely
+(0.842–1.572 ms). Treat the coalescing gain as promising rather than isolated
+causality: the runs were not interleaved, and the benchmark host had concurrent
+unrelated Rust work. Removing the redundant poll also has no stable
+separate estimate.
+
+The packed L route cuts the original 7.624 ms GPU median to 0.723–0.769 ms,
+but the target remains incomplete. In the coalesced repeats, CPU is still
+1.32–1.38× slower than Pillow and SIMD is 1.96–2.20× slower than Pillow,
+well below the 5× goal; GPU remains 1.57–1.71× slower than SIMD in
+reciprocal-latency rate. These are concurrency-one latency rates, not
+saturated throughput. The
+host-backed Paste API observes the result immediately, so the 786,432-byte
+readback and map completion remain on the critical path; further shader
+instruction tuning cannot remove that boundary. A larger gain requires
+device-resident chaining or a changed materialization boundary, not another
+small shader rewrite. Keep this improvement and checkpoint after three bounded
+attempts; no coverage was run.
+
+The next ranked material case is native-L `ImageFilter.GaussianBlur`,
+`pil-imagefilter.gaussianblur.material-l-noise-1024x768` at radius 2. Add a
+varied material-size L workload and strict case first; then test one exact-L
+GPU route that preserves the existing three horizontal and three vertical
+passes, byte rounding after each pass, fractional weights, and clamped borders.
+The RGB material baseline
+`PIL.ImageFilter.GaussianBlur.nuanced.performance-material-rgb-noise-1024x768-radius-2`
+measured Pillow 5.710 ms, CPU 4.780 ms, SIMD 4.121 ms, and GPU 2.974 ms, with
+100 actual GPU completions and 3,145,728 bytes uploaded and read back. Those RGB
+measurements do not establish an L speedup; the native-L case needs its own
+parity and benchmark evidence.

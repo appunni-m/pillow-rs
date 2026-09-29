@@ -167,6 +167,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- put_data_luma_packed.wgsl
 |   |   |   |       |-- put_pixel.wgsl
 |   |   |   |       |-- rank_filter.wgsl
+|   |   |   |       |-- rank_filter_9x9_luma_packed.wgsl
+|   |   |   |       |-- rank_filter_9x9_luma_row_packed.wgsl
 |   |   |   |       |-- reduce.wgsl
 |   |   |   |       |-- remap_palette.wgsl
 |   |   |   |       |-- resize_bilinear.wgsl

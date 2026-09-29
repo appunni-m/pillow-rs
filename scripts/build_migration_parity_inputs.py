@@ -43518,7 +43518,7 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
 
 def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Keep native-byte paste clipping regressions in the generated corpus."""
+    """Keep native-byte paste clipping and packed-tail regressions generated."""
     target = "PIL.Image.Image"
     if surface_id != target:
         return []
@@ -43614,6 +43614,98 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "observations": ["call", "observe-receiver"],
             }
         )
+
+    # Exercise the native masked-L GPU word packing with a shape that crosses
+    # row boundaries inside packed u32s and leaves a three-byte output tail.
+    # A negative offset makes the mask follow the clipped source coordinates;
+    # distinct mask values pin the exact rounded byte-blend contract.
+    width, height = 5, 3
+    destination_raw = bytes((31 + index * 13) % 256 for index in range(width * height))
+    source_raw = bytes((227 - index * 11) % 256 for index in range(width * height))
+    mask_values = (0, 1, 127, 128, 254, 255)
+    mask_raw = bytes(mask_values[index % len(mask_values)] for index in range(width * height))
+
+    def inline_asset(asset_id: str, raw: bytes) -> dict[str, Any]:
+        return {
+            "id": asset_id,
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "media_type": "application/octet-stream",
+        }
+
+    destination_asset = "image-native-l-masked-negative-destination-data"
+    source_asset = "image-native-l-masked-negative-source-data"
+    mask_asset = "image-native-l-masked-negative-mask-data"
+    cases.append(
+        {
+            "case_id": f"{target}.paste.nuanced.native-l-masked-negative-offset-word-tail",
+            "surface": target,
+            "operation": "paste",
+            "covers": [f"{target}.paste.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                inline_asset(destination_asset, destination_raw),
+                inline_asset(source_asset, source_raw),
+                inline_asset(mask_asset, mask_raw),
+            ],
+            "steps": [
+                {
+                    "step_id": "setup-image-1",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([width, height]),
+                        "data": asset_value(destination_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-im-2",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([width, height]),
+                        "data": asset_value(source_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-mask-3",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([width, height]),
+                        "data": asset_value(mask_asset),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": target,
+                    "operation": "paste",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {
+                        "im": binding("setup-im-2"),
+                        "box": literal([-1, -1]),
+                        "mask": binding("setup-mask-3"),
+                    },
+                },
+                {
+                    "step_id": "observe-receiver",
+                    "surface": target,
+                    "operation": "tobytes",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "observe-receiver"],
+        }
+    )
     return cases
 
 
