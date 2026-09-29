@@ -8949,3 +8949,44 @@ the checkpoint. The unmet goals are concrete blockers: SIMD remains below 5×
 Pillow, and the one-shot GPU route remains transfer-bound and slower than SIMD.
 Move to the next operation; reopen this path only with a profile showing a
 distinct ownership or device-residency opportunity.
+
+### Native LA/RGBA `Image.entropy` histograms — checkpoint 2026-09-29
+
+Added 1024 × 768 deterministic noisy LA and RGBA parity cases and
+call-only materialized benchmark workloads. Image construction stays outside
+the timed boundary; each workload runs five warmups and 20 iterations × five
+samples. The baseline parity-gated run was
+`migration-benchmark-822e5ed99108439ab720a30886fc6bc9` with gate
+`migration-parity-benchmark-gate-f39c29d05aff4237913fd31d5944c2a2`. CPU
+medians were 0.432 ms LA and 0.831 ms RGBA against Pillow at 0.381 and 0.696
+ms. Entropy has no backend operation: the histogram reduction is host-side,
+and the benchmark correctly marked CPU/SIMD/GPU execution as `not_proven`.
+Those profile timings are not evidence of SIMD or GPU acceleration.
+
+The direct path now matches `ColorType::La8` to `DynamicImage::ImageLumaA8`
+and reads its borrowed two-byte samples; `ColorType::Rgba8` similarly borrows
+`ImageRgba8` rather than cloning through `to_rgba8()`. Masked and unmasked
+loops remain separate, mask indices stay in row-major pixel order, all
+previously counted physical channels are retained, and LA16 stays on its
+existing conversion path. In particular, four-byte storage is not assigned
+alpha meaning: carrier modes keep the old all-four-byte histogram behavior.
+The histogram denominator and Pillow-compatible fused float accumulation are
+unchanged.
+
+The final direct-byte run was
+`migration-benchmark-604e2db5d56e4f22829c7a7b9438e2bc` with parity gate
+`migration-parity-benchmark-gate-389ab7e77e714cada7cd6761c0ff6677`. All 6/6
+LA/RGBA comparisons passed across CPU, SIMD, and GPU target profiles. CPU
+medians were 0.355 ms LA and 0.677 ms RGBA versus same-run Pillow at 0.382 and
+0.754 ms, about 1.08× and 1.11× faster. Across two direct-byte runs, target
+medians stayed near 0.345–0.355 ms for LA and 0.672–0.677 ms for RGBA; Pillow
+varied more. The focused masked LA parity case also passed 1/1 on CPU.
+
+One attempt unrolled the four RGBA histogram updates. Its run measured 0.360 ms
+LA and 0.691 ms RGBA, versus 0.355 and 0.677 ms for the direct-byte loop; the
+Pillow medians also shifted in that run, so this small delta was noisy and the
+extra unrolled code was reverted. Keep the borrowed-slice path. CPU now beats
+Pillow for these two sizes, but SIMD/GPU acceleration remains an explicit
+blocker because this API has no such reducer dispatch; solving that requires a
+new backend implementation, not relabeling the host scan. Continue to the next
+operation.
