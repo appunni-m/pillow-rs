@@ -263,6 +263,7 @@ PAD_PERFORMANCE_CASES = (
         [17, 83, 149, 191],
     ),
     ("hsv-noise-1024x768-square", "HSV", [1024, 768], 20261011, [17, 83, 149]),
+    ("cmyk-noise-1024x768-square", "CMYK", [1024, 768], 20261027, [17, 83, 149, 31]),
 )
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),

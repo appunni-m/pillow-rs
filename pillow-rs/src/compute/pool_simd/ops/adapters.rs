@@ -18101,7 +18101,6 @@ fn native_pad_bytes(
         if fill_row.len() != target_stride {
             return Ok(None);
         }
-        let mut output = fill_row.repeat(target_height_usize);
         let source = img.as_bytes();
         let expected_source = source_stride
             .checked_mul(source_height)
@@ -18109,14 +18108,39 @@ fn native_pad_bytes(
         if source.len() != expected_source {
             return Ok(None);
         }
-        let destination_start = offset_y
-            .checked_mul(target_stride)
-            .ok_or_else(|| simd_unsupported("Pad"))?;
-        let destination_end = destination_start
-            .checked_add(source.len())
-            .filter(|end| *end <= output.len())
-            .ok_or_else(|| simd_unsupported("Pad"))?;
-        output[destination_start..destination_end].copy_from_slice(source);
+        let mut output = if mode == Some("CMYK") {
+            Vec::with_capacity(output_len)
+        } else {
+            fill_row.repeat(target_height_usize)
+        };
+        if mode == Some("CMYK") {
+            // Avoid filling source rows only to overwrite them with CMYK
+            // samples: append the top border, source rows, and bottom border
+            // once each in their native C/M/Y/K layout.
+            let source_end = offset_y
+                .checked_add(source_height)
+                .filter(|end| *end <= target_height_usize)
+                .ok_or_else(|| simd_unsupported("Pad"))?;
+            for _ in 0..offset_y {
+                output.extend_from_slice(&fill_row);
+            }
+            output.extend_from_slice(source);
+            for _ in source_end..target_height_usize {
+                output.extend_from_slice(&fill_row);
+            }
+            if output.len() != output_len {
+                return Ok(None);
+            }
+        } else {
+            let destination_start = offset_y
+                .checked_mul(target_stride)
+                .ok_or_else(|| simd_unsupported("Pad"))?;
+            let destination_end = destination_start
+                .checked_add(source.len())
+                .filter(|end| *end <= output.len())
+                .ok_or_else(|| simd_unsupported("Pad"))?;
+            output[destination_start..destination_end].copy_from_slice(source);
+        }
         let result =
             crate::image_utils::raw_bytes_to_image(target_width, target_height, output, channels)?;
         return Ok(Some((preserve_mode(img, result), 0, 0)));

@@ -388,6 +388,12 @@ pub(crate) fn resolve_imageops_color(
             [_, _, _, _] if mode == "P" => Err(PilError::ValueError(
                 "cannot add non-opaque RGBA color to RGB palette".into(),
             )),
+            [cyan, magenta, yellow, black] if mode == "CMYK" => Ok(Some((
+                clamp(*cyan),
+                clamp(*magenta),
+                clamp(*yellow),
+                clamp(*black),
+            ))),
             [value, alpha] if matches!(mode, "LA" | "PA") => Ok(Some((
                 clamp(*value),
                 clamp(*value),
@@ -1438,7 +1444,7 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 mod tests {
     use super::{
         CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, fit, fit_with_input,
-        pad_with_input, scale_with_input,
+        pad_with_input, resolve_imageops_color, scale_with_input,
     };
     use crate::error::PilError;
     use crate::image::Image;
@@ -1519,6 +1525,15 @@ mod tests {
                 PilError::ValueError(message) if message == "height and width must be > 0"
             ));
         }
+    }
+
+    #[test]
+    fn pad_cmyk_color_keeps_black_ink_component() {
+        assert_eq!(
+            resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149, 31]), "CMYK")
+                .expect("four-component CMYK fill is valid"),
+            Some((17, 83, 149, 31))
+        );
     }
 
     #[test]

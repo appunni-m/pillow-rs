@@ -1628,6 +1628,62 @@
       }
     },
     {
+      "workload_id": "pil-imageops.pad.materialized.native-cmyk-noise-1024x768-square",
+      "covers": [
+        "PIL.ImageOps.pad.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageOps.pad.nuanced.performance-native-cmyk-noise-1024x768-square"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "CMYK",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pil-imageops.colorize.materialized-noise-l-1024x768",
       "covers": [
         "PIL.ImageOps.colorize.performance.standard"
@@ -1807,6 +1863,10 @@
         },
         {
           "workload_id": "pil-imageops.pad.materialized.native-hsv-noise-1024x768-square",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imageops.pad.materialized.native-cmyk-noise-1024x768-square",
           "weight": 1
         },
         {

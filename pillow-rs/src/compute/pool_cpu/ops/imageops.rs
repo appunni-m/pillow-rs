@@ -959,7 +959,7 @@ pub fn op_fit(
 }
 
 /// Build the padded output in the exact byte layout of canonical L, LA, RGB,
-/// HSV, or RGBA images. Other logical modes keep the general compatibility path.
+/// HSV, RGBA, or CMYK images. Other logical modes keep the general compatibility path.
 fn pad_native_rows(
     img: &DynamicImage,
     resized: &DynamicImage,
@@ -989,6 +989,11 @@ fn pad_native_rows(
             (source.as_raw(), 3, [fill.0, fill.1, fill.2, 0])
         }
         (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(source), None | Some("RGBA")) => {
+            (source.as_raw(), 4, [fill.0, fill.1, fill.2, fill.3])
+        }
+        // CMYK shares the four-byte carrier but its last active sample is K,
+        // not alpha. Pad only copies the source and supplied C/M/Y/K fill.
+        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(source), Some("CMYK")) => {
             (source.as_raw(), 4, [fill.0, fill.1, fill.2, fill.3])
         }
         _ => return Ok(None),
@@ -1048,8 +1053,15 @@ fn pad_native_rows(
     if fill_row.len() != output_stride {
         return Ok(None);
     }
-    let mut output = fill_row.repeat(height);
-    if output.len() != output_dims.total_bytes() {
+    let full_width_rows =
+        output_x_bytes == 0 && copy_width == width && source_stride == output_stride;
+    let cmyk_vertical = explicit_mode == Some("CMYK") && full_width_rows;
+    let mut output = if cmyk_vertical {
+        Vec::with_capacity(output_dims.total_bytes())
+    } else {
+        fill_row.repeat(height)
+    };
+    if !cmyk_vertical && output.len() != output_dims.total_bytes() {
         return Ok(None);
     }
     let output_x_end = output_x_bytes + byte_count;
@@ -1064,11 +1076,27 @@ fn pad_native_rows(
         row[output_x_bytes..output_x_end].copy_from_slice(&source[source_start..source_end]);
     };
 
-    if output_x_bytes == 0 && copy_width == width && source_stride == output_stride {
+    if full_width_rows {
         let source_byte_count = source_stride * copy_height;
-        let output_start = offset_y * output_stride;
-        let output_end = output_start + source_byte_count;
-        output[output_start..output_end].copy_from_slice(&source[..source_byte_count]);
+        if cmyk_vertical {
+            // The common CMYK Pad shape has full-width source rows and only
+            // vertical borders. Append fill, source, and fill segments so
+            // source bytes are not initialized and then overwritten.
+            for _ in 0..offset_y {
+                output.extend_from_slice(&fill_row);
+            }
+            output.extend_from_slice(&source[..source_byte_count]);
+            for _ in offset_y_end..height {
+                output.extend_from_slice(&fill_row);
+            }
+            if output.len() != output_dims.total_bytes() {
+                return Ok(None);
+            }
+        } else {
+            let output_start = offset_y * output_stride;
+            let output_end = output_start + source_byte_count;
+            output[output_start..output_end].copy_from_slice(&source[..source_byte_count]);
+        }
     } else {
         #[cfg(feature = "parallel")]
         if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
@@ -1157,6 +1185,7 @@ pub fn op_pad(
                 | (None | Some("RGB"), DynamicImage::ImageRgb8(_))
                 | (Some("HSV"), DynamicImage::ImageRgb8(_))
                 | (None | Some("RGBA"), DynamicImage::ImageRgba8(_))
+                | (Some("CMYK"), DynamicImage::ImageRgba8(_))
         );
     let resized_storage = if nw == 0 || nh == 0 {
         // Pillow's empty-width source can resize only when the contain pass
@@ -1736,7 +1765,7 @@ mod pad_native_tests {
             ("L", DynamicImage::ImageLuma8(image)) => image.as_raw(),
             ("LA", DynamicImage::ImageLumaA8(image)) => image.as_raw(),
             ("RGB" | "HSV", DynamicImage::ImageRgb8(image)) => image.as_raw(),
-            ("RGBA", DynamicImage::ImageRgba8(image)) => image.as_raw(),
+            ("RGBA" | "CMYK", DynamicImage::ImageRgba8(image)) => image.as_raw(),
             _ => panic!("pad must preserve native {mode} storage"),
         }
     }
@@ -1793,6 +1822,21 @@ mod pad_native_tests {
                     .expect("RGBA source"),
             ),
             "RGBA",
+            (73, 99, 111, 157),
+            &[
+                73, 99, 111, 157, 73, 99, 111, 157, 11, 12, 13, 14, 22, 23, 24, 25,
+            ],
+        );
+    }
+
+    #[test]
+    fn pad_keeps_cmyk_cmyk_samples_native() {
+        check_native_pad(
+            DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(2, 1, vec![11, 12, 13, 14, 22, 23, 24, 25])
+                    .expect("CMYK source"),
+            ),
+            "CMYK",
             (73, 99, 111, 157),
             &[
                 73, 99, 111, 157, 73, 99, 111, 157, 11, 12, 13, 14, 22, 23, 24, 25,
