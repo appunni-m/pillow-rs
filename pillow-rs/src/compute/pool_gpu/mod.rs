@@ -7920,35 +7920,44 @@ impl GpuInner {
                         gpu_pad_geometry(op, cur_w, cur_h).ok_or_else(|| {
                             PilError::ValueError("GPU Pad has no safe geometry".into())
                         })?;
-                    let resize_filter = if logical_mode == Some("P") {
-                        ResampleFilter::Nearest
+                    // An identity contain resize is a byte-preserving copy in
+                    // Pillow. The final placement shader reads the original
+                    // image directly, so it needs no coefficient tables.
+                    if (resize_w, resize_h) == (cur_w, cur_h) {
+                        None
                     } else {
-                        *filter
-                    };
-                    if f_resize_f64_is_exact
-                        && logical_mode == Some("F")
-                        && !matches!(resize_filter, ResampleFilter::Nearest)
-                    {
-                        let (kernel, support) = filter_from_resample(resize_filter);
-                        let horizontal = precompute_coeffs_f64(resize_w, cur_w, kernel, support);
-                        let vertical = precompute_coeffs_f64(resize_h, cur_h, kernel, support);
-                        Some(self.append_resize_f64_coeff_ranges(
-                            &mut img2_arena,
-                            auxiliary_cache,
-                            &horizontal,
-                            &vertical,
-                            storage_alignment,
-                        )?)
-                    } else {
-                        let horizontal = gpu_resize_coefficients(resize_w, cur_w, resize_filter);
-                        let vertical = gpu_resize_coefficients(resize_h, cur_h, resize_filter);
-                        Some(self.append_resize_coeff_ranges(
-                            &mut img2_arena,
-                            auxiliary_cache,
-                            &horizontal,
-                            &vertical,
-                            storage_alignment,
-                        )?)
+                        let resize_filter = if logical_mode == Some("P") {
+                            ResampleFilter::Nearest
+                        } else {
+                            *filter
+                        };
+                        if f_resize_f64_is_exact
+                            && logical_mode == Some("F")
+                            && !matches!(resize_filter, ResampleFilter::Nearest)
+                        {
+                            let (kernel, support) = filter_from_resample(resize_filter);
+                            let horizontal =
+                                precompute_coeffs_f64(resize_w, cur_w, kernel, support);
+                            let vertical = precompute_coeffs_f64(resize_h, cur_h, kernel, support);
+                            Some(self.append_resize_f64_coeff_ranges(
+                                &mut img2_arena,
+                                auxiliary_cache,
+                                &horizontal,
+                                &vertical,
+                                storage_alignment,
+                            )?)
+                        } else {
+                            let horizontal =
+                                gpu_resize_coefficients(resize_w, cur_w, resize_filter);
+                            let vertical = gpu_resize_coefficients(resize_h, cur_h, resize_filter);
+                            Some(self.append_resize_coeff_ranges(
+                                &mut img2_arena,
+                                auxiliary_cache,
+                                &horizontal,
+                                &vertical,
+                                storage_alignment,
+                            )?)
+                        }
                     }
                 }
                 PipelineOp::Fit {
@@ -12595,8 +12604,12 @@ fn gpu_dispatch_count(
         {
             2
         } else if matches!(&ops[index], PipelineOp::Pad { .. }) {
-            // Pad is an exact resize followed by a fill/copy placement pass.
-            3
+            // Identity contain sizing skips both resize passes and places the
+            // original bytes directly. Other Pad shapes run H, V, then place.
+            match gpu_pad_geometry(&ops[index], cur_w, cur_h) {
+                Some(((resize_w, resize_h), _)) if (resize_w, resize_h) == (cur_w, cur_h) => 1,
+                _ => 3,
+            }
         } else {
             GpuInner::blur_pass_count(&ops[index]).map_or(1usize, |passes| passes.saturating_mul(2))
                 as u64
@@ -28980,6 +28993,37 @@ mod tests {
                 None
             );
         }
+    }
+
+    #[test]
+    fn pad_dispatch_count_skips_identity_contain_resize() {
+        let identity_resize = PipelineOp::Pad {
+            w: 1024,
+            h: 1024,
+            filter: ResampleFilter::Lanczos,
+            color: Some((17, 83, 149, 31)),
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_dispatch_count(
+                std::slice::from_ref(&identity_resize),
+                Some("CMYK"),
+                (1024, 768)
+            ),
+            1
+        );
+
+        let resized = PipelineOp::Pad {
+            w: 1200,
+            h: 900,
+            filter: ResampleFilter::Lanczos,
+            color: Some((17, 83, 149, 31)),
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&resized), Some("CMYK"), (1024, 768)),
+            3
+        );
     }
 
     #[test]
