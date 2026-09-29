@@ -505,6 +505,7 @@
           "PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor",
           "PIL.ImageDraw.ImageDraw.text.nuanced.bytes-latin1",
           "PIL.ImageDraw.ImageDraw.text.nuanced.explicit-truetype-font",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgba-context-rgb",
           "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgb",
           "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-color-l-mode-error",
           "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgba",

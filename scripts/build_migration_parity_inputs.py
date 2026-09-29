@@ -16291,6 +16291,39 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "text",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-rgba-context-noise-1024x768",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20260928,
+            "font": "font/fonts/DejaVuSans.ttf",
+            "font_size": 20,
+            "values": {
+                "text": literal("Native RGB glyph composite"),
+                "fill": literal([231, 73, 19, 96]),
+            },
+            "observe_receiver": True,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.embedded-color",
+            "name": "embedded-bgra-rgba-context-rgb",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "fill": literal([200, 10, 20, 64]),
+                "embedded_color": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
             "requirement_suffix": "parameter.embedded-color",
             "name": "embedded-bgra-rgb",
             "font": "font/fonts/sbit-bgra-format1.ttf",
@@ -49169,6 +49202,34 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+            if workload_id == "pil-imagedraw-imagedraw.text.standard":
+                rgba_context_case_id = (
+                    "PIL.ImageDraw.ImageDraw.text.nuanced."
+                    "performance-rgb-rgba-context-noise-1024x768"
+                )
+                rgba_context_case = all_cases_by_id[rgba_context_case_id]
+                rgba_context_workload = copy.deepcopy(workloads[-1])
+                rgba_context_workload["workload_id"] = (
+                    "pil-imagedraw-imagedraw.text."
+                    "rgba-context-rgb-noise-1024x768"
+                )
+                rgba_context_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": rgba_context_case_id,
+                }
+                rgba_context_workload["context"] = _workflow_benchmark_context(
+                    rgba_context_case,
+                    variant="rgba-context-rgb-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(rgba_context_workload)
+                members.append(
+                    {
+                        "workload_id": rgba_context_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
             if workload_id == "pil-imageops.mirror.standard":
                 mirror_case_id = (
                     "PIL.ImageOps.mirror.nuanced."
