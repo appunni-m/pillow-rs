@@ -40955,6 +40955,29 @@ def build_nuanced_cases(
         "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
+    # GPU Sharpness currently expands L to the generic RGBA transport even
+    # though the CPU and SIMD implementations process one native luma byte.
+    # Keep a material L case so the compact GPU input/readback path has an
+    # operation-sized parity gate and benchmark.
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "performance.standard",
+        "name": "performance-material-l-noise-1024x768-active",
+        "mode": "L", "size": [1024, 768], "edge": "noise-fill",
+        "seed": 20261033, "observe_result": "tobytes",
+        "values": {"factor": literal(1.5)},
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+    },)
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "parameter.factor",
+        "name": "native-l-packed-output-tail-17x9",
+        "mode": "L", "size": [17, 9], "edge": "noise-fill",
+        "seed": 20261034, "observe_result": "tobytes",
+        "values": {"factor": literal(1.5)},
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+    },)
+
     # RGBX shares four-byte storage with RGBA, but Pillow Sharpness filters
     # byte 3 as well. A varied small case pins that per-operation behavior;
     # the material case exercises native four-byte row processing without an
@@ -50436,6 +50459,44 @@ def build_inputs(
                 la_workload["context"]["chain_length"] = 1
                 workloads.append(la_workload)
                 members.append({"workload_id": la_workload_id, "weight": 1})
+                # L Sharpness is already native on CPU/SIMD; its GPU path was
+                # still widening each one-byte source sample to RGBA. This
+                # material workload measures the native-L GPU route end to end.
+                l_case_id = (
+                    "PIL.ImageEnhance.Sharpness.enhance.nuanced."
+                    "performance-material-l-noise-1024x768-active"
+                )
+                l_case = all_cases_by_id[l_case_id]
+                l_workload_id = (
+                    "pil-imageenhance-sharpness.enhance."
+                    "material-l-noise-1024x768"
+                )
+                l_workload = copy.deepcopy(identity_workload)
+                l_workload["workload_id"] = l_workload_id
+                l_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": l_case_id,
+                }
+                l_constructor_step = next(
+                    step["step_id"]
+                    for step in l_case["steps"]
+                    if step["surface"] == "PIL.ImageEnhance"
+                    and step["operation"] == "Sharpness"
+                )
+                l_workload["measurement"]["step_ids"] = [
+                    l_constructor_step,
+                    "call",
+                    "observe-result",
+                ]
+                l_workload["context"] = _workflow_benchmark_context(
+                    l_case,
+                    variant="material-l-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                l_workload["context"]["chain_length"] = 1
+                workloads.append(l_workload)
+                members.append({"workload_id": l_workload_id, "weight": 1})
                 # RGBX keeps the four-byte carrier but its fourth byte is
                 # padding, not RGBA alpha. Benchmark its native channel-aware
                 # path separately from RGB and RGBA material inputs.

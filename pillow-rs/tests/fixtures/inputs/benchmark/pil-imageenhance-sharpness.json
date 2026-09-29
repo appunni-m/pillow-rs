@@ -173,6 +173,63 @@
       }
     },
     {
+      "workload_id": "pil-imageenhance-sharpness.enhance.material-l-noise-1024x768",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageEnhance.Sharpness.enhance.nuanced.performance-material-l-noise-1024x768-active"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "setup-sharpness-2",
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "L",
+        "chain_length": 1,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pil-imageenhance-sharpness.enhance.material-rgbx-x-byte-1024x768",
       "covers": [
         "PIL.ImageEnhance.Sharpness.enhance.performance.standard"
@@ -245,6 +302,10 @@
         },
         {
           "workload_id": "pil-imageenhance-sharpness.enhance.material-la-520x512",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imageenhance-sharpness.enhance.material-l-noise-1024x768",
           "weight": 1
         },
         {

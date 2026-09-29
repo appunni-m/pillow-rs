@@ -9773,3 +9773,57 @@ each requested backend with no fallback. The focused CPU/SIMD gather tests and
 GPU native-layout test passed. Keep direct native Y extraction and record the
 remaining CPU/Pillow and GPU/SIMD gaps as blockers; move to the next operation
 after this three-attempt checkpoint. No coverage collection ran.
+
+### GPU `ImageEnhance.Sharpness` on native L — checkpoint 2026-09-30
+
+The material workload is
+`pil-imageenhance-sharpness.enhance.material-l-noise-1024x768`. Before this
+change, the GPU fast path widened L to RGBA for both upload and output even
+though the sharpen filter only needs one gray sample per pixel. The retained
+path admits only a singleton Sharpness operation on exact `ImageLuma8`
+storage, uploads and returns packed native L bytes, and reports zero mode
+conversions. It leaves LA on its existing route. The shader preserves the
+CPU's clamped 3 × 3 box-blur borders, integer blur rounding, and admitted
+fixed-point blend factor. Four adjacent output samples share overlapping
+stencil loads when row packing is aligned; odd widths use the bounded generic
+layout and zero-fill the unused tail byte. Dispatch planning respects the
+device workgroup-grid limit.
+
+Three bounded GPU attempts were correctness-gated and measured with 100
+executions per requested backend:
+
+| Attempt | Pillow | CPU | SIMD | GPU | GPU upload / readback |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Native-L packed transfer | 4.006 ms | 0.847 ms | 1.074 ms | 1.468 ms | 786,432 / 786,432 B |
+| Reuse stencil across four packed outputs | 3.951 ms | 0.953 ms | 1.251 ms | 1.364 ms | 786,432 / 786,432 B |
+| Row-aware 16 × 16 dispatch | 3.990 ms | 0.774 ms | 1.095 ms | 1.374 ms | 786,432 / 786,432 B |
+
+The receipts, in table order, are
+`migration-benchmark-1de7c5e6354f4b4083223ffd280ece38`,
+`migration-benchmark-1a93252a1d0146b6a46d9aa69eeb65f3`, and
+`migration-benchmark-c6f870d2e9c44940954af755cac9cf43`. Against the earlier
+RGBA GPU baseline (receipt
+`migration-benchmark-dd276227b94c4ca3963586e4c1085a9c`, 2.640 ms), native-L
+transport cut input and output bytes by 75% and reduced GPU latency by about
+48%. The second attempt was the fastest GPU sample; the row-aware third
+attempt was slightly slower, so there is no measured evidence that its lower
+workgroup count improves latency. CPU was about 5.15× faster than Pillow in
+the final sample, SIMD about 3.64× faster, and GPU latency remained about
+25.5% slower than SIMD. The SIMD 5× target and GPU-versus-SIMD target remain
+open. These are single-workload reciprocal-latency measurements, not
+saturated-throughput results.
+
+Strict CPU, SIMD, and GPU parity passed the 1,024 × 768 material case and
+17 × 9 packed-tail case (2/2 per backend). Strict GPU sidecar evidence records
+two actual GPU executions, no fallback, and a complete pipeline. Focused
+Rust tests cover exact-L admission, LA admission, and bounded row/flat dispatch
+planning. The final native-L pipeline benchmark's correctness gate passed 3/3,
+with 100 actual executions per backend and no fallback. An LA preservation
+benchmark/parity check also passed 1/1; its route and transfer sizes remain
+unchanged. `make build-parity` and `make migration-parity-inputs-check` passed.
+No coverage collection ran.
+
+Keep this native-L route, but stop spending attempts here: the latest dispatch
+layout did not beat stencil reuse, and the GPU still trails SIMD. Next, select
+another explicit format-widening hotspot using conversion-site evidence and a
+material workload that proves the requested backend actually ran.

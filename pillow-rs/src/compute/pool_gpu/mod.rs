@@ -4513,6 +4513,91 @@ fn plan_extract_band_dispatch(
     ))
 }
 
+const SHARPNESS_L_WORKGROUP_WIDTH: u64 = 16;
+const SHARPNESS_L_WORKGROUP_HEIGHT: u64 = 16;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SharpnessLDispatch {
+    groups_x: u32,
+    groups_y: u32,
+    row_aligned: bool,
+}
+
+/// Plan one invocation per four-pixel output word. Word-aligned widths map
+/// directly to image rows; other dimensions use a bounded flattened 2D grid.
+/// The shader's fourth uniform word selects the same layout returned here.
+fn plan_sharpness_l_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<SharpnessLDispatch, PilError> {
+    let pixel_count = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| PilError::ValueError("GPU Sharpness image is too large".into()))?;
+    if pixel_count == 0 || pixel_count > u64::from(u32::MAX) {
+        return Err(PilError::ValueError(
+            "GPU Sharpness dimensions exceed shader indexing limits".into(),
+        ));
+    }
+    if max_workgroups_per_dimension == 0 {
+        return Err(PilError::ValueError(
+            "GPU adapter reports no compute workgroups per dimension".into(),
+        ));
+    }
+
+    let max_groups = u64::from(max_workgroups_per_dimension);
+    if width % 4 == 0 {
+        let words_per_row = u64::from(width) / 4;
+        let groups_x = words_per_row.div_ceil(SHARPNESS_L_WORKGROUP_WIDTH);
+        let groups_y = u64::from(height).div_ceil(SHARPNESS_L_WORKGROUP_HEIGHT);
+        if groups_x <= max_groups && groups_y <= max_groups {
+            return Ok(SharpnessLDispatch {
+                groups_x: u32::try_from(groups_x).map_err(|_| {
+                    PilError::ValueError("GPU Sharpness dispatch is too wide".into())
+                })?,
+                groups_y: u32::try_from(groups_y).map_err(|_| {
+                    PilError::ValueError("GPU Sharpness dispatch is too tall".into())
+                })?,
+                row_aligned: true,
+            });
+        }
+    }
+
+    let output_words = pixel_count.div_ceil(4);
+    let invocations_per_group = SHARPNESS_L_WORKGROUP_WIDTH * SHARPNESS_L_WORKGROUP_HEIGHT;
+    let required_groups = output_words.div_ceil(invocations_per_group).max(1);
+    let mut groups_x = required_groups.isqrt();
+    if groups_x * groups_x < required_groups {
+        groups_x = groups_x
+            .checked_add(1)
+            .ok_or_else(|| PilError::ValueError("GPU Sharpness dispatch overflows".into()))?;
+    }
+    groups_x = groups_x.min(max_groups);
+    let groups_y = required_groups.div_ceil(groups_x);
+    if groups_y > max_groups {
+        return Err(PilError::ValueError(
+            "GPU Sharpness dispatch exceeds adapter workgroup limits".into(),
+        ));
+    }
+    let padded_words = groups_x
+        .checked_mul(groups_y)
+        .and_then(|groups| groups.checked_mul(invocations_per_group))
+        .ok_or_else(|| PilError::ValueError("GPU Sharpness dispatch overflows".into()))?;
+    if padded_words.saturating_sub(1) > u64::from(u32::MAX) {
+        return Err(PilError::ValueError(
+            "GPU Sharpness dispatch exceeds shader indexing limits".into(),
+        ));
+    }
+
+    Ok(SharpnessLDispatch {
+        groups_x: u32::try_from(groups_x)
+            .map_err(|_| PilError::ValueError("GPU Sharpness dispatch is too wide".into()))?,
+        groups_y: u32::try_from(groups_y)
+            .map_err(|_| PilError::ValueError("GPU Sharpness dispatch is too tall".into()))?,
+        row_aligned: false,
+    })
+}
+
 const NATIVE_EXPAND_WORKGROUP_WIDTH: u64 = 16;
 const NATIVE_EXPAND_WORKGROUP_HEIGHT: u64 = 16;
 
@@ -6183,6 +6268,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_median: bool,
+        native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
@@ -6240,6 +6326,16 @@ impl GpuInner {
                     include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(median));
+                index += 1;
+                continue;
+            }
+            if native_sharpness_l_input && matches!(op, PipelineOp::Sharpness { .. }) {
+                let sharpness = self.resolve_pipeline(
+                    "__internal_sharpness_l_native",
+                    "sharpness_l_native.wgsl",
+                    include_str!("shaders/sharpness_l_native.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(sharpness));
                 index += 1;
                 continue;
             }
@@ -7427,6 +7523,7 @@ impl GpuInner {
         packed_luma_median: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
+        native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
         native_reduce_rgb_input: bool,
@@ -7547,6 +7644,12 @@ impl GpuInner {
                     "__internal_median_filter_3x3_luma_packed",
                     "median_filter_3x3_luma_packed.wgsl",
                     include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
+                )?
+            } else if native_sharpness_l_input && matches!(op, PipelineOp::Sharpness { .. }) {
+                self.resolve_pipeline(
+                    "__internal_sharpness_l_native",
+                    "sharpness_l_native.wgsl",
+                    include_str!("shaders/sharpness_l_native.wgsl"),
                 )?
             } else if native_sharpness_la_input && matches!(op, PipelineOp::Sharpness { .. }) {
                 self.resolve_pipeline(
@@ -7691,6 +7794,16 @@ impl GpuInner {
                 // Grayscale's fourth word selects the native triple source
                 // semantics: RGB luma or direct YCbCr Y-byte extraction.
                 params[3] = u32::from(logical_mode == Some("YCbCr")) + 1;
+            }
+            if native_sharpness_l_input && matches!(op, PipelineOp::Sharpness { .. }) {
+                params[3] = u32::from(
+                    plan_sharpness_l_dispatch(
+                        cur_w,
+                        cur_h,
+                        limits.max_compute_workgroups_per_dimension,
+                    )?
+                    .row_aligned,
+                );
             }
             if native_reduce_rgb_input && matches!(op, PipelineOp::Reduce { .. }) {
                 // Reduce's fourth word selects packed native RGB byte input;
@@ -8549,6 +8662,14 @@ impl GpuInner {
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
+            "__internal_sharpness_l_native" => {
+                let plan = plan_sharpness_l_dispatch(
+                    output_dims.0,
+                    output_dims.1,
+                    self.device.limits().max_compute_workgroups_per_dimension,
+                )?;
+                (plan.groups_x, plan.groups_y)
+            }
             "Expand" if resources.native_expand_output.is_some() => {
                 let plan = resources
                     .native_expand_output
@@ -8616,6 +8737,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_median: bool,
+        native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
     ) -> Result<bool, PilError> {
@@ -8626,6 +8748,7 @@ impl GpuInner {
             packed_luma_point,
             packed_luma_putdata,
             packed_luma_median,
+            native_sharpness_l_input,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
         )?;
@@ -11316,6 +11439,7 @@ impl GpuInner {
         packed_luma_median: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
+        native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
         native_reduce_rgb_input: bool,
@@ -11544,6 +11668,7 @@ impl GpuInner {
                 packed_luma_median,
                 native_extract_band,
                 native_grayscale_rgb_input,
+                native_sharpness_l_input,
                 native_sharpness_la_input,
                 native_sharpness_rgb_input,
                 native_reduce_rgb_input,
@@ -11573,6 +11698,7 @@ impl GpuInner {
                 packed_luma_point,
                 packed_luma_putdata,
                 packed_luma_median,
+                native_sharpness_l_input,
                 native_sharpness_la_input,
                 native_sharpness_rgb_input,
             )?;
@@ -11584,6 +11710,7 @@ impl GpuInner {
                 } else if packed_luma_point
                     || packed_luma_putdata
                     || packed_luma_median
+                    || native_sharpness_l_input
                     || matches!(
                         ops.last(),
                         Some(PipelineOp::ExtractBand { .. } | PipelineOp::Grayscale)
@@ -11886,6 +12013,28 @@ fn gpu_native_sharpness_la_putpixel(
     Some((usize::try_from(byte_offset).ok()?, [color.0, color.3]))
 }
 
+/// Admit tightly packed L bytes for singleton Sharpness. The shader consumes
+/// and emits four samples per storage word so transfers and working data stay
+/// compact throughout the GPU operation.
+#[cfg(target_endian = "little")]
+fn gpu_native_sharpness_l_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(ops, [PipelineOp::Sharpness { .. }]) || !matches!(logical_mode, None | Some("L")) {
+        return false;
+    }
+    let DynamicImage::ImageLuma8(luma) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 1) else {
+        return false;
+    };
+    let input_bytes = layout.total_bytes();
+    input_bytes > 0 && input_bytes <= u32::MAX as usize && luma.as_raw().len() == input_bytes
+}
+
 /// Admit tightly packed LA bytes for singleton Sharpness, optionally folding
 /// one queued LA PutPixel into the upload. The shader reads native two-byte
 /// pixels and emits the existing packed RGBA transport, which the readback
@@ -12056,6 +12205,15 @@ fn gpu_native_sharpness_la_putpixel(
     _logical_mode: Option<&str>,
 ) -> Option<(usize, [u8; 2])> {
     None
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_sharpness_l_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
 }
 
 #[cfg(not(target_endian = "little"))]
@@ -19229,6 +19387,7 @@ impl GpuPool {
         let native_extract_band_channels = gpu_native_extract_band_channels(ops, img, mode);
         let native_extract_band = native_extract_band_channels.is_some();
         let native_grayscale_rgb_input = gpu_native_grayscale_rgb_input(ops, img, mode);
+        let native_sharpness_l_input = gpu_native_sharpness_l_input(ops, img, mode);
         let native_sharpness_la_input = gpu_native_sharpness_la_input(ops, img, mode);
         let native_sharpness_rgb_input = gpu_native_sharpness_rgb_input(ops, img, mode);
         let native_reduce_rgb_input = gpu_native_reduce_rgb_input(ops, img, mode);
@@ -19271,6 +19430,13 @@ impl GpuPool {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else if native_grayscale_rgb_input {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
+        } else if native_sharpness_l_input {
+            let DynamicImage::ImageLuma8(image) = img else {
+                return Err(PilError::InternalError(
+                    "native-L Sharpness input requires an ImageLuma8 source".into(),
+                ));
+            };
+            buffers.upload_packed_luma8(&gpu.queue, image)?;
         } else if native_sharpness_la_input {
             buffers.upload_native_channel_bytes_with_la_patch(
                 &gpu.queue,
@@ -19315,6 +19481,7 @@ impl GpuPool {
             packed_luma_median,
             native_extract_band,
             native_grayscale_rgb_input,
+            native_sharpness_l_input,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
             native_reduce_rgb_input,
@@ -19406,6 +19573,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_median
+            || native_sharpness_l_input
         {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else if native_sharpness_la_input {
@@ -19445,6 +19613,8 @@ impl GpuPool {
                 .ok_or_else(|| PilError::ValueError("GPU native RGB input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))?
+        } else if native_sharpness_l_input {
+            compact_luma8_transfer_bytes(w, h)?
         } else if native_sharpness_la_input {
             let raw_bytes = CheckedDims::new(w, h, 2)?.total_bytes();
             let transfer_bytes = raw_bytes
@@ -19482,6 +19652,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_median
+            || native_sharpness_l_input
         {
             compact_luma8_transfer_bytes(w, h)?
         } else {
@@ -19506,6 +19677,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_median
+            || native_sharpness_l_input
         {
             compact_luma8_transfer_bytes(final_w, final_h)?
         } else {
@@ -19517,6 +19689,7 @@ impl GpuPool {
             || packed_luma_median
             || native_rgb_to_rgba_input
             || native_grayscale_rgb_input
+            || native_sharpness_l_input
             || native_sharpness_la_input
             || native_sharpness_rgb_input
             || native_reduce_rgb_input
@@ -19531,6 +19704,7 @@ impl GpuPool {
             u64::from(
                 !native_extract_band
                     && !native_grayscale_rgb_input
+                    && !native_sharpness_l_input
                     && !native_sharpness_la_input
                     && !native_sharpness_rgb_input
                     && !native_reduce_rgb_input
@@ -19551,7 +19725,7 @@ impl GpuPool {
             gpu.recycle_staging(staging);
         }
         gpu.recycle_buffers(buffers);
-        if native_rgb || native_sharpness_la_input {
+        if native_rgb || native_sharpness_l_input || native_sharpness_la_input {
             // The final native layout was decoded directly from the mapping;
             // applying mode preservation again would reallocate it.
             return Ok(result);
@@ -19606,7 +19780,8 @@ mod tests {
         plan_extract_band_dispatch, plan_gpu_native_byte_paste, plan_native_expand_output_dispatch,
         plan_native_rgb_put_alpha_data_dispatch, plan_native_rgb_put_alpha_dispatch,
         plan_native_rgba_put_alpha_data_dispatch, plan_packed_luma_dispatch,
-        plan_packed_point_luma_dispatch, putdata_auxiliary_words, readback_poll_backoff,
+        plan_packed_point_luma_dispatch, plan_sharpness_l_dispatch, putdata_auxiliary_words,
+        readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -20669,6 +20844,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -25380,6 +25556,49 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
+    fn gpu_native_sharpness_l_requires_singleton_l_storage() {
+        let sharpness = PipelineOp::Sharpness { factor: 1.5 };
+        let luma = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(3, 2, vec![12, 34, 56, 78, 90, 123]).unwrap(),
+        );
+        assert!(super::gpu_native_sharpness_l_input(
+            std::slice::from_ref(&sharpness),
+            &luma,
+            None
+        ));
+        assert!(super::gpu_native_sharpness_l_input(
+            std::slice::from_ref(&sharpness),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_native_sharpness_l_input(
+            std::slice::from_ref(&sharpness),
+            &luma,
+            Some("LA")
+        ));
+
+        let multiple = [sharpness, PipelineOp::Duplicate];
+        assert!(!super::gpu_native_sharpness_l_input(
+            &multiple,
+            &luma,
+            Some("L")
+        ));
+        let rgb = DynamicImage::ImageRgb8(RgbImage::new(3, 2));
+        assert!(!super::gpu_native_sharpness_l_input(
+            &[PipelineOp::Sharpness { factor: 1.5 }],
+            &rgb,
+            Some("L")
+        ));
+        let empty = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
+        assert!(!super::gpu_native_sharpness_l_input(
+            &[PipelineOp::Sharpness { factor: 1.5 }],
+            &empty,
+            Some("L")
+        ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
     fn gpu_native_sharpness_la_requires_singleton_la_storage() {
         let sharpness = PipelineOp::Sharpness { factor: 1.5 };
         let la = DynamicImage::ImageLumaA8(
@@ -25712,6 +25931,74 @@ mod tests {
         assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
         assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
         assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+    }
+
+    #[test]
+    fn sharpness_l_dispatch_selects_safe_row_or_flat_layouts() {
+        assert_eq!(
+            plan_sharpness_l_dispatch(1024, 768, 65_535).unwrap(),
+            super::SharpnessLDispatch {
+                groups_x: 16,
+                groups_y: 48,
+                row_aligned: true,
+            }
+        );
+        assert_eq!(
+            plan_sharpness_l_dispatch(4096, 4096, 65_535).unwrap(),
+            super::SharpnessLDispatch {
+                groups_x: 64,
+                groups_y: 256,
+                row_aligned: true,
+            }
+        );
+        assert_eq!(
+            plan_sharpness_l_dispatch(17, 9, 65_535).unwrap(),
+            super::SharpnessLDispatch {
+                groups_x: 1,
+                groups_y: 1,
+                row_aligned: false,
+            }
+        );
+
+        // If a row grid exceeds an adapter dimension, use the flattened
+        // packed-word layout when that bounded grid still fits.
+        assert_eq!(
+            plan_sharpness_l_dispatch(320, 3, 4).unwrap(),
+            super::SharpnessLDispatch {
+                groups_x: 1,
+                groups_y: 1,
+                row_aligned: false,
+            }
+        );
+        assert_eq!(
+            plan_sharpness_l_dispatch(4096, 4096, 255).unwrap(),
+            super::SharpnessLDispatch {
+                groups_x: 128,
+                groups_y: 128,
+                row_aligned: false,
+            }
+        );
+
+        let plan = plan_sharpness_l_dispatch(10_239, 1, 4).unwrap();
+        assert_eq!((plan.groups_x, plan.groups_y), (4, 3));
+        assert!(!plan.row_aligned);
+        let output_words = 10_239usize.div_ceil(4);
+        let invocation_width = plan.groups_x as usize * 16;
+        let mut written = vec![false; output_words];
+        for y in 0..plan.groups_y as usize * 16 {
+            for x in 0..invocation_width {
+                let word = x + y * invocation_width;
+                if word < output_words {
+                    assert!(!written[word], "packed word {word} was written twice");
+                    written[word] = true;
+                }
+            }
+        }
+        assert!(written.into_iter().all(|word| word));
+
+        assert!(plan_sharpness_l_dispatch(1024, 768, 0).is_err());
+        assert!(plan_sharpness_l_dispatch(1024, 768, 1).is_err());
+        assert!(plan_sharpness_l_dispatch(u32::MAX, 2, 65_535).is_err());
     }
 
     #[test]
