@@ -29989,6 +29989,30 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "requirement_suffix": "mode.rgb",
+            "name": "rgb-odd-byte-tail",
+            "mode": "RGB",
+            "size": [3, 1],
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-large-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20260929,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "expand",
             "requirement_suffix": "parameter.border",
             "name": "materialized-border",
@@ -45780,6 +45804,34 @@ def build_pipeline_benchmark_document(
             }
         )
 
+    grayscale_rgb_case_id = (
+        "PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768"
+    )
+    grayscale_rgb_case = cases_by_id[grayscale_rgb_case_id]
+    grayscale_rgb_material_workload = {
+        "workload_id": "pipeline-op.grayscale.material-rgb-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.ImageOps", "grayscale")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": grayscale_rgb_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "observe-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            grayscale_rgb_case,
+            variant="grayscale-material-rgb-noise-1024x768",
+            surface="PIL.ImageOps",
+            operation="grayscale",
+        ),
+    }
+
     thumbnail_scalar_workloads = []
     for mode, suffix in (("F", "f32"), ("I", "i32")):
         case_id = (
@@ -48155,6 +48207,7 @@ def build_pipeline_benchmark_document(
             *operation_workloads,
             thumbnail_material_workload,
             *posterize_material_workloads,
+            grayscale_rgb_material_workload,
             *thumbnail_scalar_workloads,
             f_boxed_resize_workload,
             f_resize_workload,

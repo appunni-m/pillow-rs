@@ -7230,6 +7230,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         native_extract_band: bool,
+        native_grayscale_rgb_input: bool,
         native_expand_channels: Option<u8>,
         native_cover_input_channels: Option<u8>,
         buffers: &'a mut BufferPool,
@@ -7460,6 +7461,11 @@ impl GpuInner {
                 // ExtractBand's fourth fixed uniform word is otherwise
                 // unused. Mark the one-operation native-byte layout without
                 // changing the generic packed-RGBA shader contract.
+                params[3] = 1;
+            }
+            if native_grayscale_rgb_input && matches!(op, PipelineOp::Grayscale) {
+                // Grayscale's fourth word selects the source byte layout;
+                // keep RGB packed at three bytes per pixel through upload.
                 params[3] = 1;
             }
             if native_expand_channels.is_some() && matches!(op, PipelineOp::Expand { .. }) {
@@ -11014,6 +11020,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         native_extract_band: bool,
+        native_grayscale_rgb_input: bool,
         native_expand_channels: Option<u8>,
         native_cover_input_channels: Option<u8>,
         logical_mode: Option<&str>,
@@ -11222,6 +11229,7 @@ impl GpuInner {
                 packed_luma_point,
                 packed_luma_putdata,
                 native_extract_band,
+                native_grayscale_rgb_input,
                 native_expand_channels,
                 native_cover_input_channels,
                 buffers,
@@ -11389,6 +11397,28 @@ fn gpu_native_extract_band_channels(
     (input_bytes <= u64::from(u32::MAX)).then_some(channels)
 }
 
+/// Admit tightly packed RGB bytes as the source for a singleton grayscale
+/// dispatch. The shader addresses byte triples through u32 words, so all
+/// products must fit its u32 indexing and the physical buffer must match.
+#[cfg(target_endian = "little")]
+fn gpu_native_grayscale_rgb_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(ops, [PipelineOp::Grayscale]) || !matches!(logical_mode, None | Some("RGB")) {
+        return false;
+    }
+    let DynamicImage::ImageRgb8(rgb) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 3) else {
+        return false;
+    };
+    let input_bytes = layout.total_bytes();
+    input_bytes > 0 && input_bytes <= u32::MAX as usize && rgb.as_raw().len() == input_bytes
+}
+
 /// Return the packed native-byte channel count for a singleton Expand batch.
 /// When the adapter's bounded output-word grid fits, the shader also writes
 /// the result in this compact native layout; otherwise the generic RGBA output
@@ -11470,6 +11500,15 @@ fn gpu_native_extract_band_channels(
     _logical_mode: Option<&str>,
 ) -> Option<u8> {
     None
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_grayscale_rgb_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
 }
 
 fn gpu_resize_channel_count(mode: u32) -> u32 {
@@ -18429,6 +18468,7 @@ impl GpuPool {
         );
         let native_extract_band_channels = gpu_native_extract_band_channels(ops, img, mode);
         let native_extract_band = native_extract_band_channels.is_some();
+        let native_grayscale_rgb_input = gpu_native_grayscale_rgb_input(ops, img, mode);
         let native_expand_channels = gpu_native_expand_channels(ops, img, mode);
         gpu_log!(
             "[GPU] step=upload start native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
@@ -18459,6 +18499,8 @@ impl GpuPool {
             buffers.upload_packed_luma8(&gpu.queue, image)?;
         } else if let Some(channels) = native_extract_band_channels {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
+        } else if native_grayscale_rgb_input {
+            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
         } else if let Some(channels) = native_expand_channels {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else if let Some(channels) = native_cover_input_channels {
@@ -18486,6 +18528,7 @@ impl GpuPool {
             packed_luma_point,
             packed_luma_putdata,
             native_extract_band,
+            native_grayscale_rgb_input,
             native_expand_channels,
             native_cover_input_channels,
             mode,
@@ -18602,6 +18645,16 @@ impl GpuPool {
                 .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU channel input is too large".into()))?
+        } else if native_grayscale_rgb_input {
+            let raw_bytes = CheckedDims::new(w, h, 3)?.total_bytes();
+            let transfer_bytes = raw_bytes
+                .div_ceil(std::mem::size_of::<u32>())
+                .checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU grayscale RGB input is too large".into())
+                })?;
+            u64::try_from(transfer_bytes)
+                .map_err(|_| PilError::ValueError("GPU grayscale RGB input is too large".into()))?
         } else if let Some(channels) = native_expand_channels {
             let raw_bytes = CheckedDims::new(w, h, channels)?.total_bytes();
             let transfer_bytes = raw_bytes
@@ -18648,25 +18701,28 @@ impl GpuPool {
         };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
-        resource_telemetry.mode_conversion_count =
-            if native_expand_channels.is_some() || native_cover_input_channels.is_some() {
-                // This counter measures source widening before backend execution.
-                // Native upload avoids that conversion for admitted layouts;
-                // RGBA readback narrowing is accounted at the output boundary.
-                0
-            } else {
-                u64::from(
-                    !native_extract_band
-                        && !packed_luma_point
-                        && !packed_luma_putdata
-                        && (native_luma16_convert
-                            || native_luma16_paste
-                            || !matches!(
-                                img,
-                                DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
-                            )),
-                )
-            };
+        resource_telemetry.mode_conversion_count = if native_grayscale_rgb_input
+            || native_expand_channels.is_some()
+            || native_cover_input_channels.is_some()
+        {
+            // This counter measures source widening before backend execution.
+            // Native upload avoids that conversion for admitted layouts;
+            // RGBA readback narrowing is accounted at the output boundary.
+            0
+        } else {
+            u64::from(
+                !native_extract_band
+                    && !native_grayscale_rgb_input
+                    && !packed_luma_point
+                    && !packed_luma_putdata
+                    && (native_luma16_convert
+                        || native_luma16_paste
+                        || !matches!(
+                            img,
+                            DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
+                        )),
+            )
+        };
         crate::compute::record_pipeline_resource_telemetry(resource_telemetry);
         crate::compute::record_pipeline_dispatch_count(dispatch_count);
         if let ReadbackTarget::Staging(staging) = readback {
@@ -19745,6 +19801,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -24184,6 +24241,55 @@ mod tests {
             super::gpu_native_expand_channels(&multiple, &rgb, Some("RGB")),
             None
         );
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_grayscale_rgb_requires_singleton_rgb_storage() {
+        let grayscale = PipelineOp::Grayscale;
+        let rgb = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(3, 1, vec![12, 34, 56, 78, 90, 123, 234, 210, 98]).unwrap(),
+        );
+        assert!(super::gpu_native_grayscale_rgb_input(
+            std::slice::from_ref(&grayscale),
+            &rgb,
+            None
+        ));
+        assert!(super::gpu_native_grayscale_rgb_input(
+            std::slice::from_ref(&grayscale),
+            &rgb,
+            Some("RGB")
+        ));
+        assert!(!super::gpu_native_grayscale_rgb_input(
+            std::slice::from_ref(&grayscale),
+            &rgb,
+            Some("HSV")
+        ));
+        let rgba = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                3,
+                1,
+                vec![12, 34, 56, 78, 90, 123, 234, 210, 98, 76, 54, 32],
+            )
+            .unwrap(),
+        );
+        assert!(!super::gpu_native_grayscale_rgb_input(
+            std::slice::from_ref(&grayscale),
+            &rgba,
+            Some("RGB")
+        ));
+        let multiple = [grayscale, PipelineOp::Duplicate];
+        assert!(!super::gpu_native_grayscale_rgb_input(
+            &multiple,
+            &rgb,
+            Some("RGB")
+        ));
+        let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
+        assert!(!super::gpu_native_grayscale_rgb_input(
+            &[PipelineOp::Grayscale],
+            &empty,
+            Some("RGB")
+        ));
     }
 
     #[test]
