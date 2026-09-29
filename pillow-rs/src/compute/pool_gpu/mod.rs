@@ -10068,6 +10068,7 @@ impl GpuInner {
                     op,
                     PipelineOp::Invert
                         | PipelineOp::Solarize { .. }
+                        | PipelineOp::Posterize { .. }
                         | PipelineOp::Brightness { .. }
                         | PipelineOp::PutAlpha {
                             mode: PixelMode::LA | PixelMode::PA,
@@ -10219,6 +10220,11 @@ impl GpuInner {
                 "solarize.wgsl",
                 include_str!("shaders/solarize.wgsl"),
             ),
+            PipelineOp::Posterize { .. } => (
+                "PosterizeNativeBytes",
+                "posterize.wgsl",
+                include_str!("shaders/posterize.wgsl"),
+            ),
             // The native bytewise shader treats a u32 as four independent
             // samples (mode 9); threshold zero makes Solarize exactly invert
             // every stored byte, including alpha and a partial final word.
@@ -10254,6 +10260,7 @@ impl GpuInner {
                 mode: PixelMode::LA | PixelMode::PA,
             } => u32::from(*alpha),
             PipelineOp::Solarize { threshold } => u32::from(*threshold),
+            PipelineOp::Posterize { bits } => u32::from(*bits),
             PipelineOp::Invert => 0,
             PipelineOp::BlendModule { alpha, .. } => (*alpha as f32).to_bits(),
             _ => 0,
@@ -12368,6 +12375,21 @@ fn gpu_native_byte_op_channels(
             DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
             DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
             DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
+            _ => None,
+        },
+        PipelineOp::Posterize { bits } if (1..=8).contains(bits) => match image {
+            DynamicImage::ImageLuma8(_)
+                if matches!(mode, None | Some("L")) && image.width() > 0 && image.height() > 0 =>
+            {
+                Some(1)
+            }
+            DynamicImage::ImageRgb8(_)
+                if matches!(mode, None | Some("RGB"))
+                    && image.width() > 0
+                    && image.height() > 0 =>
+            {
+                Some(3)
+            }
             _ => None,
         },
         PipelineOp::Multiply { .. }
@@ -24290,6 +24312,55 @@ mod tests {
             &empty,
             Some("RGB")
         ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_posterize_requires_matching_l_or_rgb_storage() {
+        let posterize = PipelineOp::Posterize { bits: 4 };
+        let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(3, 1, vec![1, 127, 255]).unwrap());
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&posterize, &luma, None),
+            Some(1)
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&posterize, &luma, Some("L")),
+            Some(1)
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&posterize, &luma, Some("P")),
+            None
+        );
+
+        let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(1, 1, vec![1, 127, 255]).unwrap());
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&posterize, &rgb, None),
+            Some(3)
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&posterize, &rgb, Some("RGB")),
+            Some(3)
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(&posterize, &rgb, Some("HSV")),
+            None
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(
+                &posterize,
+                &DynamicImage::ImageRgba8(RgbaImage::new(1, 1)),
+                Some("RGBA")
+            ),
+            None
+        );
+        assert_eq!(
+            super::gpu_native_byte_op_channels(
+                &PipelineOp::Posterize { bits: 0 },
+                &rgb,
+                Some("RGB")
+            ),
+            None
+        );
     }
 
     #[test]
