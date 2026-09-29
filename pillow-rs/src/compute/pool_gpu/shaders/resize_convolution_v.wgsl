@@ -17,6 +17,7 @@ struct Params {
 }
 
 const FIXED_BIAS: i32 = 2097152;
+const NATIVE_COVER_LUMA_PACKED_OUTPUT: u32 = 0xfffffffeu;
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -62,10 +63,58 @@ fn filtered_channel(output_x: u32, output_y: u32, channel: u32) -> u32 {
     let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
     var sum: i32 = 0;
     for (var tap = 0u; tap < count; tap = tap + 1u) {
-        let pixel = input[(source_y + tap) * params.dst_w + output_x];
-        sum = sum + i32(pixel_channel(pixel, channel)) * coefficients[weight_base + tap];
+        var sample: u32;
+        if params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
+            let words_per_row =
+                params.dst_w / 4u + select(0u, 1u, params.dst_w % 4u != 0u);
+            let word = input[(source_y + tap) * words_per_row + output_x / 4u];
+            sample = (word >> ((output_x % 4u) * 8u)) & 255u;
+        } else {
+            let pixel = input[(source_y + tap) * params.dst_w + output_x];
+            sample = pixel_channel(pixel, channel);
+        }
+        sum = sum + i32(sample) * coefficients[weight_base + tap];
     }
     return fixed_to_byte(sum);
+}
+
+fn filtered_luma_quartet(word_x: u32, output_y: u32) -> u32 {
+    // Four adjacent output pixels share the same vertical coefficient row.
+    // Load each packed horizontal intermediate word and coefficient once per
+    // tap, while preserving the independent ascending-tap accumulation order
+    // and byte rounding used by filtered_channel.
+    let metadata = output_y * 3u;
+    let source_y = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
+    let words_per_row = params.dst_w / 4u + select(0u, 1u, params.dst_w % 4u != 0u);
+    var sum0: i32 = 0;
+    var sum1: i32 = 0;
+    var sum2: i32 = 0;
+    var sum3: i32 = 0;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let samples = input[(source_y + tap) * words_per_row + word_x];
+        let weight = coefficients[weight_base + tap];
+        sum0 = sum0 + i32(samples & 255u) * weight;
+        sum1 = sum1 + i32((samples >> 8u) & 255u) * weight;
+        sum2 = sum2 + i32((samples >> 16u) & 255u) * weight;
+        sum3 = sum3 + i32((samples >> 24u) & 255u) * weight;
+    }
+    let first_x = word_x * 4u;
+    var result = 0u;
+    if first_x < params.dst_w {
+        result = result | fixed_to_byte(sum0);
+    }
+    if first_x + 1u < params.dst_w {
+        result = result | (fixed_to_byte(sum1) << 8u);
+    }
+    if first_x + 2u < params.dst_w {
+        result = result | (fixed_to_byte(sum2) << 16u);
+    }
+    if first_x + 3u < params.dst_w {
+        result = result | (fixed_to_byte(sum3) << 24u);
+    }
+    return result;
 }
 
 fn filtered_float(output_x: u32, output_y: u32) -> f32 {
@@ -1236,6 +1285,14 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
 
 @compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
+        let words_per_row = params.dst_w / 4u + select(0u, 1u, params.dst_w % 4u != 0u);
+        if gid.x >= words_per_row || gid.y >= params.dst_h {
+            return;
+        }
+        output[gid.y * words_per_row + gid.x] = filtered_luma_quartet(gid.x, gid.y);
+        return;
+    }
     if gid.x >= params.dst_w || gid.y >= params.dst_h {
         return;
     }
