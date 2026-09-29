@@ -609,7 +609,23 @@ impl Image {
             let src_mode = effective_src_mode_name;
             // Extract palette before materializing (P-mode palette may be on Pipeline)
             let palette = self.palette();
-            let img = self.materialize()?;
+            let img = if src_mode == "PA" && mode == "RGBA" {
+                // PA pixels are already stored as native [index, alpha]
+                // samples. Borrow that validated materialization and expand
+                // directly into the requested owned RGBA result, avoiding
+                // both the DynamicImage clone and a second LA clone.
+                let shared = self.materialized_shared_for_ops()?;
+                if let DynamicImage::ImageLumaA8(indices_alpha) = shared.as_ref() {
+                    let expanded = crate::image::expand_palette_alpha(
+                        indices_alpha,
+                        palette.as_deref().unwrap_or_default(),
+                    );
+                    return Ok(Image::from_dynamic(expanded, explicit_mode_for(mode)));
+                }
+                shared.as_ref().clone()
+            } else {
+                self.materialize()?
+            };
             let converted = if src_mode == "PA" {
                 // PA stores a palette index and a per-pixel alpha byte.
                 // Expand both before grayscale/CMYK conversion; treating
@@ -700,7 +716,10 @@ impl Image {
                         ));
                     }
                 }
-                DynamicImage::ImageRgba8(converted.to_rgba8())
+                // PA expansion already owns RGBA pixels. Consume that buffer
+                // instead of cloning the entire frame at the output boundary;
+                // other source variants keep DynamicImage's conversion path.
+                DynamicImage::ImageRgba8(converted.into_rgba8())
             } else {
                 converted
             };
