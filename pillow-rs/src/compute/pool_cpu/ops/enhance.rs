@@ -260,8 +260,10 @@ pub fn op_enhance_color_saturation(
 }
 
 /// Sharpen a native byte layout while processing only its active channels.
-/// LA keeps its second byte intact; RGBA keeps byte 3 intact. CMYK explicitly
-/// opts into all four channels because byte 3 is black ink there.
+/// LA keeps its second byte intact; RGBA keeps byte 3 intact. CMYK processes
+/// all four channels because byte 3 is black ink. Pillow's Sharpness filter
+/// also processes RGBX byte 3 even though other RGBX operations treat it as
+/// padding.
 fn sharpness_native_bytes(
     source: &[u8],
     width: usize,
@@ -341,6 +343,11 @@ fn sharpness_native_result(
             sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 3, 3, alpha)
                 .and_then(|bytes| crate::raster::RgbImage::from_raw(width, height, bytes))
                 .map(DynamicImage::ImageRgb8)
+        }
+        (Some("RGBX"), DynamicImage::ImageRgba8(source)) => {
+            sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 4, 4, alpha)
+                .and_then(|bytes| crate::raster::RgbaImage::from_raw(width, height, bytes))
+                .map(DynamicImage::ImageRgba8)
         }
         (None | Some("RGBA"), DynamicImage::ImageRgba8(source)) => {
             sharpness_native_bytes(source.as_raw(), width_usize, height_usize, 4, 3, alpha)

@@ -17642,11 +17642,14 @@ impl GpuPool {
                 // byte relocation, so the RGBA transport can preserve all
                 // four bytes without applying alpha semantics. PutPixel is
                 // likewise a raw four-byte write in this logical mode.
+                // Sharpness has a dedicated mode-6 shader branch that filters
+                // all four stored bytes, matching Pillow's RGBX behavior.
                 || (logical_mode == "RGBX"
                     && ops.iter().all(|op| {
                         matches!(
                             op,
-                            PipelineOp::PutPixel { .. }
+                            PipelineOp::Sharpness { .. }
+                                | PipelineOp::PutPixel { .. }
                                 | PipelineOp::EffectSpread { .. }
                                 | PipelineOp::Transpose { .. }
                                 | PipelineOp::Paste { mask: None, .. }

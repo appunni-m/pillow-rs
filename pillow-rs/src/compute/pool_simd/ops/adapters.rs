@@ -222,8 +222,8 @@ fn native_enhance_layout(img: &DynamicImage, mode: Option<&str>) -> Option<(usiz
 /// Return the native layout and active-channel count used by Sharpness.
 ///
 /// Pillow applies Sharpness to RGB samples and preserves alpha for LA/RGBA;
-/// CMYK is different because all four stored bytes are color samples. Keeping
-/// that distinction here lets the neighborhood kernel operate in-place on the
+/// CMYK and RGBX process all four stored bytes (including RGBX's X byte).
+/// Keeping that distinction here lets the neighborhood kernel operate in the
 /// native interleaved buffer without widening through packed RGBA storage.
 fn native_sharpness_layout(img: &DynamicImage, mode: Option<&str>) -> Option<(usize, usize)> {
     match img {
@@ -231,6 +231,7 @@ fn native_sharpness_layout(img: &DynamicImage, mode: Option<&str>) -> Option<(us
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some((2, 1)),
         DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some((3, 3)),
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some((4, 3)),
+        DynamicImage::ImageRgba8(_) if mode == Some("RGBX") => Some((4, 4)),
         DynamicImage::ImageRgba8(_) if mode == Some("CMYK") => Some((4, 4)),
         _ => None,
     }
@@ -5481,6 +5482,7 @@ fn shape_native_sharpness_channels(
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA")) => Some((2, 1)),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB")) => Some((3, 3)),
         SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA")) => Some((4, 3)),
+        SimdLayout::Rgba8 if mode == Some("RGBX") => Some((4, 4)),
         SimdLayout::Rgba8 if mode == Some("CMYK") => Some((4, 4)),
         _ => None,
     }
@@ -12179,6 +12181,7 @@ fn native_sharpness_filter_blend(
     height: usize,
     channels: usize,
     active_channels: usize,
+    mode: Option<&str>,
     kernel: &[f32; 9],
     rounding_bias: f32,
     factor: f64,
@@ -12196,10 +12199,18 @@ fn native_sharpness_filter_blend(
     }
     let interior_width = width - 2;
     let interior_height = height - 2;
-    let vector_blocks = interior_width
-        .div_ceil(8)
-        .saturating_mul(interior_height)
-        .saturating_mul(active_channels);
+    let grouped_pixels = mode == Some("RGBX") && active_channels == channels && channels == 4;
+    let pixels_per_block = (8 / channels).max(1);
+    let vector_blocks = if grouped_pixels {
+        interior_width
+            .div_ceil(pixels_per_block)
+            .saturating_mul(interior_height)
+    } else {
+        interior_width
+            .div_ceil(8)
+            .saturating_mul(interior_height)
+            .saturating_mul(active_channels)
+    };
     if vector_blocks == 0 {
         return None;
     }
@@ -12208,39 +12219,76 @@ fn native_sharpness_filter_blend(
     let apply_row = |y: usize, row: &mut [u8]| {
         let source_row = y * row_stride;
         if (1..height - 1).contains(&y) {
-            for channel in 0..active_channels {
-                let first = source_row + channel;
-                row[channel] = native_sharpness_blend_value(source[first], source[first], alpha);
+            if grouped_pixels {
+                // RGBX sharpness processes the padding byte too. One x-vector
+                // per channel performs four separate strided gathers; group
+                // two adjacent pixels so the eight lanes are one compact span.
                 let mut x = 1usize;
                 while x < width - 1 {
-                    let active = (width - 1 - x).min(8);
-                    let smooth = native_filter_3x3_vector(
+                    let active_pixels = (width - 1 - x).min(pixels_per_block);
+                    let smooth_lanes = native_filter_3x3_pixel_block_integer(
                         source,
                         width,
                         channels,
-                        channel,
                         y,
                         x,
-                        kernel,
-                        rounding_bias,
+                        active_pixels * channels,
                     );
-                    let original: [f32; 8] = std::array::from_fn(|lane| {
-                        let pixel_x = (x + lane).min(width - 2);
-                        f32::from(source[source_row + pixel_x * channels + channel])
-                    });
-                    let smooth: [f32; 8] = std::array::from_fn(|lane| f32::from(smooth[lane]));
-                    let smooth_lanes = f32x8::from(smooth);
+                    let active_bytes = active_pixels * channels;
+                    let source_start = source_row + x * channels;
+                    let original =
+                        native_filter_load_byte_block(source, source_start, active_bytes);
                     let values =
-                        native_sharpness_blend_lanes(f32x8::from(original), smooth_lanes, alpha)
-                            .to_array();
-                    for (lane, value) in values.into_iter().enumerate().take(active) {
-                        row[(x + lane) * channels + channel] = native_sharpness_blend_result(value);
+                        native_sharpness_blend_lanes(original, smooth_lanes, alpha).to_array();
+                    for pixel in 0..active_pixels {
+                        for channel in 0..channels {
+                            let lane = pixel * channels + channel;
+                            row[(x + pixel) * channels + channel] =
+                                native_sharpness_blend_result(values[lane]);
+                        }
                     }
-                    x += active;
+                    x += active_pixels;
                 }
-                let last = source_row + (width - 1) * channels + channel;
-                row[(width - 1) * channels + channel] =
-                    native_sharpness_blend_value(source[last], source[last], alpha);
+            } else {
+                for channel in 0..active_channels {
+                    let first = source_row + channel;
+                    row[channel] =
+                        native_sharpness_blend_value(source[first], source[first], alpha);
+                    let mut x = 1usize;
+                    while x < width - 1 {
+                        let active = (width - 1 - x).min(8);
+                        let smooth = native_filter_3x3_vector(
+                            source,
+                            width,
+                            channels,
+                            channel,
+                            y,
+                            x,
+                            kernel,
+                            rounding_bias,
+                        );
+                        let original: [f32; 8] = std::array::from_fn(|lane| {
+                            let pixel_x = (x + lane).min(width - 2);
+                            f32::from(source[source_row + pixel_x * channels + channel])
+                        });
+                        let smooth: [f32; 8] = std::array::from_fn(|lane| f32::from(smooth[lane]));
+                        let smooth_lanes = f32x8::from(smooth);
+                        let values = native_sharpness_blend_lanes(
+                            f32x8::from(original),
+                            smooth_lanes,
+                            alpha,
+                        )
+                        .to_array();
+                        for (lane, value) in values.into_iter().enumerate().take(active) {
+                            row[(x + lane) * channels + channel] =
+                                native_sharpness_blend_result(value);
+                        }
+                        x += active;
+                    }
+                    let last = source_row + (width - 1) * channels + channel;
+                    row[(width - 1) * channels + channel] =
+                        native_sharpness_blend_value(source[last], source[last], alpha);
+                }
             }
         } else {
             for x in 0..width {
@@ -12361,6 +12409,7 @@ pub fn simd_sharpness(
         height,
         channels,
         active_channels,
+        mode,
         &kernel,
         0.5,
         *factor,
@@ -13588,6 +13637,58 @@ fn native_filter_load_byte_block(raw: &[u8], start: usize, active_bytes: usize) 
         values[lane] = raw[start + lane] as f32;
     }
     f32x8::from(values)
+}
+
+/// Evaluate the rounded 3x3 byte smoothing kernel in eight integer lanes.
+///
+/// The weighted sum is in `0..=3315`, so `u16x8` cannot overflow. Since the
+/// divisor is 13, `(sum + 6) / 13` is exactly nearest-integer rounding; this
+/// preserves Pillow's intermediate byte while avoiding per-channel float
+/// gathers for packed four-byte pixels.
+#[inline]
+fn native_filter_3x3_pixel_block_integer(
+    raw: &[u8],
+    width: usize,
+    channels: usize,
+    y: usize,
+    x_start: usize,
+    active_bytes: usize,
+) -> f32x8 {
+    debug_assert!((1..=4).contains(&channels));
+    debug_assert!(active_bytes <= 8);
+    debug_assert!(x_start >= 1 && x_start + active_bytes.div_ceil(channels) < width);
+
+    let load = |start: usize| {
+        u16x8::new(std::array::from_fn(|lane| {
+            if lane < active_bytes {
+                u16::from(raw[start + lane])
+            } else {
+                0
+            }
+        }))
+    };
+    let row = |dy: isize| {
+        let source_row = (y as isize + dy) as usize * width * channels;
+        let left = source_row + (x_start - 1) * channels;
+        let middle = left + channels;
+        let right = middle + channels;
+        (load(left), load(middle), load(right))
+    };
+
+    let (below_left, below_middle, below_right) = row(1);
+    let (center_left, center_middle, center_right) = row(0);
+    let (above_left, above_middle, above_right) = row(-1);
+    let weighted = below_left
+        + below_middle
+        + below_right
+        + center_left
+        + center_middle * u16x8::splat(5)
+        + center_right
+        + above_left
+        + above_middle
+        + above_right;
+    let rounded = (weighted + u16x8::splat(6)).to_array();
+    f32x8::from(std::array::from_fn(|lane| (rounded[lane] / 13) as f32))
 }
 
 /// Evaluate a block of complete interleaved pixels in parallel.

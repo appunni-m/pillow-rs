@@ -2913,7 +2913,7 @@ class WorkflowBuilder:
             n_pixels = size[0] * size[1]
             if requested_mode in {"RGB", "HSV"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
-            elif requested_mode in {"RGBA", "RGBa", "CMYK"}:
+            elif requested_mode in {"RGBA", "RGBX", "RGBa", "CMYK"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
             elif requested_mode in {"LA", "PA"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 2))
@@ -40734,6 +40734,30 @@ def build_nuanced_cases(
         "target_profiles": list(BENCHMARK_TARGET_PROFILES),
     },)
 
+    # RGBX shares four-byte storage with RGBA, but Pillow Sharpness filters
+    # byte 3 as well. A varied small case pins that per-operation behavior;
+    # the material case exercises native four-byte row processing without an
+    # RGB extraction plus RGBA reconstruction.
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "parameter.factor",
+        "name": "rgbx-sharpness-processes-x-byte",
+        "mode": "RGBX", "size": [3, 3], "edge": "noise-fill",
+        "seed": 20260929, "observe_result": "tobytes",
+        "values": {"factor": literal(1.5)},
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+    },)
+
+    specs += ({
+        "surface": "PIL.ImageEnhance.Sharpness", "operation": "enhance",
+        "requirement_suffix": "performance.standard",
+        "name": "performance-material-rgbx-x-byte-1024x768-active",
+        "mode": "RGBX", "size": [1024, 768], "edge": "noise-fill",
+        "seed": 20260929, "observe_result": "tobytes",
+        "values": {"factor": literal(1.5)},
+        "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+    },)
+
     # Image.blend preserves equal edge samples exactly. A weighted f64 blend
     # can round an unchanged byte downward for non-dyadic factors such as 0.3.
     specs += ({
@@ -49423,6 +49447,44 @@ def build_inputs(
                 la_workload["context"]["chain_length"] = 1
                 workloads.append(la_workload)
                 members.append({"workload_id": la_workload_id, "weight": 1})
+                # RGBX keeps the four-byte carrier but its fourth byte is
+                # padding, not RGBA alpha. Benchmark its native channel-aware
+                # path separately from RGB and RGBA material inputs.
+                rgbx_case_id = (
+                    "PIL.ImageEnhance.Sharpness.enhance.nuanced."
+                    "performance-material-rgbx-x-byte-1024x768-active"
+                )
+                rgbx_case = all_cases_by_id[rgbx_case_id]
+                rgbx_workload_id = (
+                    "pil-imageenhance-sharpness.enhance."
+                    "material-rgbx-x-byte-1024x768"
+                )
+                rgbx_workload = copy.deepcopy(identity_workload)
+                rgbx_workload["workload_id"] = rgbx_workload_id
+                rgbx_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": rgbx_case_id,
+                }
+                rgbx_constructor_step = next(
+                    step["step_id"]
+                    for step in rgbx_case["steps"]
+                    if step["surface"] == "PIL.ImageEnhance"
+                    and step["operation"] == "Sharpness"
+                )
+                rgbx_workload["measurement"]["step_ids"] = [
+                    rgbx_constructor_step,
+                    "call",
+                    "observe-result",
+                ]
+                rgbx_workload["context"] = _workflow_benchmark_context(
+                    rgbx_case,
+                    variant="material-rgbx-x-byte-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                rgbx_workload["context"]["chain_length"] = 1
+                workloads.append(rgbx_workload)
+                members.append({"workload_id": rgbx_workload_id, "weight": 1})
             if workload_id == "pil-image-image.point.standard":
                 point_case_id = (
                     "PIL.Image.Image.point.nuanced."

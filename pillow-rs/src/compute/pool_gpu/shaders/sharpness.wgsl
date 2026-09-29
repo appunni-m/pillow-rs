@@ -18,7 +18,7 @@
 struct Params {
     width: u32,
     height: u32,
-    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
+    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 6=RGBX
     _pad: u32,
     factor: u32,  // (factor * 1000) as u32, e.g. 1000 → identity
 }
@@ -126,11 +126,11 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     let out_g = blend_fixed(blur_g_u, orig_g, params.factor);
     let out_b = blend_fixed(blur_b_u, orig_b, params.factor);
     // ImageEnhance preserves alpha for LA/RGBA. CMYK uses byte three as the K
-    // channel, so it follows the same sharpened-channel path as C/M/Y.
+    // channel, and Pillow's RGBX Sharpness filter processes its X byte too.
     var out_a = 255u;
     if (params.mode == 1u || params.mode == 3u) {
         out_a = orig_a;
-    } else if (params.mode == 4u) {
+    } else if (params.mode == 4u || params.mode == 6u) {
         out_a = blend_fixed(blur_a_u, orig_a, params.factor);
     }
 
