@@ -9075,6 +9075,37 @@ RGBX `ImageOps.pad` was next. Its filtered full-width resize now has a mode-6
 GPU route with strict parity and an actual device receipt; see the checkpoint
 below.
 
+### RGBX `ImageOps.expand` — parallel-row trial rejected, 2026-09-30
+
+The existing native RGBX row builder already writes each output byte once:
+reserve the final `Vec`, append the precomputed border spans, and copy each
+source row including arbitrary X samples. The material workload writes only
+101,136 border bytes out of a 3,246,864-byte output. SIMD reports zero vector
+blocks here because its dominant operations are bulk copies, not vector lane
+transforms.
+
+A bounded trial replaced that builder only for large RGBX images with safe
+Rayon row writes into `vec![0; output_len]`. It passed focused Rust tests and
+strict parity for `PIL.ImageOps.expand.nuanced.performance-rgbx-noise-1024x768`
+on CPU and SIMD. However, the initialized buffer adds a full-frame write and
+the parallel scheduling cost exceeded any row-level gain. Against a fresh
+clean-revision baseline, median end-to-end latency for
+`pil-imageops.expand.materialized.rgbx-noise-1024x768` regressed from CPU
+0.345 ms to 0.457 ms and SIMD 0.354 ms to 0.477 ms. Pillow stayed effectively
+flat at 0.853 ms and 0.849 ms. CPU backend time rose from 0.217 ms to 0.267 ms;
+SIMD backend time rose from 0.223 ms to 0.282 ms. The trial was removed, so
+the sequential one-write native builders remain.
+
+The correctness-gated reports are
+`build/migration-parity/rgbx-expand-parallel-before.json` and
+`build/migration-parity/rgbx-expand-parallel-after.json`; the latter records
+the temporary working-tree revision. The benchmark's GPU-selected lane fell
+back to CPU for all 100 samples because the logical RGBX GPU contract remains
+unproven. Neither GPU timing is GPU evidence. Revisit this case only if a
+materialization design can remove an output-buffer pass across the lazy image
+and Python `bytes` boundary; parallelizing the current safe initialized buffer
+is not a viable speedup.
+
 ### RGBX `ImageOps.pad`: write resize rows into final canvas — checkpoint 2026-09-29
 
 Keep the logical-mode gate (`RGBX`) paired with the concrete `ImageRgba8`
