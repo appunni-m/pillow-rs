@@ -137,6 +137,10 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
         "PIL.Image.Image.reduce.nuanced."
         "performance-material-rgb-noise-1024x768-factor-3x5"
     ),
+    "pil-image-image.convert.standard": (
+        "PIL.Image.Image.convert.nuanced."
+        "performance-material-rgba-to-pa-noise-1024x768"
+    ),
     "pil-imageenhance-sharpness.enhance.standard": (
         "PIL.ImageEnhance.Sharpness.enhance.nuanced."
         "performance-material-rgb-noise-1024x768-active"
@@ -41045,6 +41049,7 @@ def build_nuanced_cases(
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
     cases.extend(convert_mode_audit_parity_cases(surface_id))
+    cases.extend(rgba_to_pa_performance_parity_cases(surface_id))
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
     cases.extend(cmyk_to_1_parity_cases(surface_id))
     cases.extend(cmyk_grayscale_parity_cases(surface_id))
@@ -41443,6 +41448,68 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         for target in ("I", "F", "P", "PA", "HSV", "YCbCr"):
             cases.append(make_case(mode, target, (7, 2), raw, "typed-boundaries"))
     return cases
+
+
+def rgba_to_pa_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Benchmark RGBA-to-PA conversion with a material varied source image."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    size = [1024, 768]
+    raw = random.Random(20261025).randbytes(size[0] * size[1] * 4)
+    return [
+        {
+            "case_id": (
+                f"{surface_id}.convert.nuanced."
+                "performance-material-rgba-to-pa-noise-1024x768"
+            ),
+            "surface": surface_id,
+            "operation": "convert",
+            "covers": [
+                f"{surface_id}.convert.behavior.default",
+                f"{surface_id}.convert.performance.standard",
+            ],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "rgba-noise",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGBA"),
+                        "size": literal(size),
+                        "data": asset_value("rgba-noise"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "convert",
+                    "receiver": binding("image"),
+                    "arguments": {"mode": literal("PA")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
 
 
 def getprojection_cmyk_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -49091,6 +49158,11 @@ def build_inputs(
                 workload_id == "pil-imageenhance-sharpness.enhance.standard"
             )
             materialized_reduce = workload_id == "pil-image-image.reduce.standard"
+            # Exclude the material RGBA-to-PA input setup while timing the
+            # public conversion and its output observation.
+            materialized_convert = (
+                workload_id == "pil-image-image.convert.standard"
+            )
             isolated_pipeline_workload = bool(
                 pipeline_workload and pipeline_workload.get("step_ids")
             )
@@ -49236,6 +49308,7 @@ def build_inputs(
                             if materialized_getchannel
                             or materialized_sharpness
                             or materialized_reduce
+                            or materialized_convert
                             or isolated_pipeline_workload
                             or isolated_putdata
                             or isolated_getdata
@@ -49268,6 +49341,8 @@ def build_inputs(
                             if isolated_pipeline_workload
                             else ["call", "observe-result"]
                             if materialized_getchannel or materialized_reduce
+                            else ["call", "materialize"]
+                            if materialized_convert
                             else ["call", "observe-receiver"]
                             if isolated_putdata
                             else ["setup-sharpness-2", "call", "observe-result"]

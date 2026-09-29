@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::color;
 use crate::error::PilError;
 use crate::image::{Image, PipelineOps};
@@ -979,12 +981,50 @@ fn identity_grayscale_palette() -> Vec<u8> {
         .collect()
 }
 
+/// Splits RGBA bytes for Pillow's RGBA-to-PA conversion without widening or
+/// copying an already materialized RGBA source.  Pillow quantizes RGB only,
+/// then carries the original alpha bytes into the PA result.
+fn split_rgba_for_palette(
+    source: &DynamicImage,
+) -> Result<(crate::raster::RgbImage, Vec<u8>), PilError> {
+    let rgba: Cow<'_, crate::raster::RgbaImage> = match source {
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba),
+        other => Cow::Owned(other.to_rgba8()),
+    };
+    let width = rgba.width();
+    let height = rgba.height();
+    let pixel_count = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+    let rgb_len = pixel_count
+        .checked_mul(3)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+    let rgba_len = pixel_count
+        .checked_mul(4)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+    let input = rgba
+        .as_raw()
+        .get(..rgba_len)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+    let mut rgb = Vec::with_capacity(rgb_len);
+    let mut alpha = Vec::with_capacity(pixel_count);
+    for pixel in input.chunks_exact(4) {
+        rgb.extend_from_slice(&pixel[..3]);
+        alpha.push(pixel[3]);
+    }
+    let rgb = crate::raster::RgbImage::from_raw(width, height, rgb)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+    Ok((rgb, alpha))
+}
+
 fn convert_to_palette_alpha(
     image: &Image,
     source_mode: &str,
     dither: Option<DitherMethod>,
 ) -> Result<Image, PilError> {
-    let source = image.materialize()?;
+    // Keep shared source storage for read-only conversions while preserving
+    // the logical-mode validation performed by Image::materialize().
+    let source = image.materialized_shared_for_ops()?;
     let (indices, palette, alpha) = match source_mode {
         "P" => {
             let indices = source.to_luma8();
@@ -1028,13 +1068,8 @@ fn convert_to_palette_alpha(
             // band into PA.  Quantizing RGBA and moving transparent entries
             // afterward produces different palette-index order for valid
             // images with distinct transparent and visible colors.
-            let rgba = source.to_rgba8();
-            let alpha: Vec<u8> = rgba.pixels().map(|pixel| pixel[3]).collect();
-            let (width, height) = rgba.dimensions();
-            let mut rgb = crate::raster::RgbImage::new(width, height);
-            for (output, input) in rgb.pixels_mut().zip(rgba.pixels()) {
-                *output = crate::raster::Rgb([input[0], input[1], input[2]]);
-            }
+            let (rgb, alpha) = split_rgba_for_palette(source.as_ref())?;
+            let (width, height) = rgb.dimensions();
             let quantized =
                 Image::from_dynamic(DynamicImage::ImageRgb8(rgb), Some("RGB".to_owned()))
                     // Image.convert("PA") calls RGB.quantize() without a method;
@@ -1203,6 +1238,32 @@ fn convert_with_matrix(
 mod tests {
     use crate::image::Image;
     use crate::ops::paste::PasteSource;
+
+    #[test]
+    fn rgba_palette_split_preserves_rgb_and_alpha_bytes() {
+        let source = crate::raster::DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80])
+                .expect("valid RGBA source"),
+        );
+
+        let (rgb, alpha) =
+            super::split_rgba_for_palette(&source).expect("split RGBA palette source");
+        assert_eq!(rgb.into_raw(), [10, 20, 30, 50, 60, 70]);
+        assert_eq!(alpha, [40, 80]);
+    }
+
+    #[test]
+    fn rgba_palette_split_ignores_trailing_storage() {
+        let source = crate::raster::DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(1, 1, vec![10, 20, 30, 40, 50, 60, 70, 80])
+                .expect("valid RGBA source with trailing storage"),
+        );
+
+        let (rgb, alpha) =
+            super::split_rgba_for_palette(&source).expect("split logical RGBA pixels");
+        assert_eq!(rgb.into_raw(), [10, 20, 30]);
+        assert_eq!(alpha, [40]);
+    }
 
     #[test]
     fn luma8_to_luma16_conversion_and_paste_preserve_numeric_sample() {

@@ -2461,10 +2461,17 @@ impl Image {
     /// Returns [`PilError`] when lazy decoding, pipeline execution, or format
     /// conversion fails.
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
+        let image = self.materialized_shared_for_ops()?;
+        Ok(image.as_ref().clone())
+    }
+
+    /// Returns operation-ready shared pixels after validating the logical
+    /// mode against their storage, without cloning the materialized buffer.
+    pub(crate) fn materialized_shared_for_ops(&self) -> Result<Arc<DynamicImage>, PilError> {
         let image = self.materialized_shared()?;
         let mode = self.mode_from_materialized(&image);
         validate_scalar_storage(&image, &mode)?;
-        Ok(image.as_ref().clone())
+        Ok(image)
     }
 
     /// Materialize a lazy image once before creating independent branches.
