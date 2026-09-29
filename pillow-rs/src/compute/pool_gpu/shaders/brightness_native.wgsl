@@ -28,7 +28,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var lane = 0u; lane < 4u; lane += 1u) {
         let sample_index = word_index * 4u + lane;
         if sample_index < params.byte_len
-            && sample_index % params.channels < params.active_channels {
+            && (params.active_channels == params.channels
+                || sample_index % params.channels < params.active_channels) {
             let shift = lane * 8u;
             let sample = (source >> shift) & 0xffu;
             let scaled = min((sample * params.factor_int) / 1000u, 255u);
