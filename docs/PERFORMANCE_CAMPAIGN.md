@@ -6818,7 +6818,7 @@ image kernels otherwise operate on native bytes. Runtime CPU call sites are conc
 | Caller | Native-format opportunity and semantic boundary |
 | --- | --- |
 | [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad and Expand CPU paths admit exact L/LA/RGB/HSV/RGBA storage. Expand also has native three-byte SIMD rows and a guarded GPU native-input/native-output path when the adapter's bounded word grid fits. Keep P/PA tuple-index semantics and CMYK's four active samples. |
-| [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness scales byte 0 directly and preserves byte 1 on CPU; its one-op GPU path transfers native LA bytes. CPU Sharpness now processes matching L/LA/RGB/RGBA/CMYK bytes with semantic active-channel counts; aliases retain the conversion fallback. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
+| [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness scales byte 0 directly and preserves byte 1; RGB Brightness stays in three-byte storage. CPU Sharpness processes matching L/LA/RGB/RGBA/CMYK bytes with semantic active-channel counts; aliases retain the conversion fallback. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
 | [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Spread now borrows native 1/2/3/4-byte storage for relocation, preserving raw CMYK/RGBX/RGBa/I/F samples; typed fallbacks retain their existing numeric conversion. Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Keep mixed-mode paste/composite conversions where blending semantics require them; RGB→RGBA and explicit alpha composition change output semantics. |
 | [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I-mode Filter3x3, I-mode Filter5x5, and F-mode rank filtering now borrow matching scalar carriers; preserve the guarded accessor fallback and exact sample representation. |
 | [`color.rs`](../pillow-rs/src/compute/pool_cpu/ops/color.rs), [`draw.rs`](../pillow-rs/src/compute/pool_cpu/ops/draw.rs) | Explicit `convert(..., "RGBA")` and fallback drawing canvases have a canonical RGBA output contract. Avoid only after proving the caller's requested format and palette/alpha semantics allow it. |
@@ -6829,7 +6829,7 @@ Additional references occur in `color.rs`, `ops/analysis.rs`, `ops/convert.rs`,
 [`pool_gpu/mod.rs`](../pillow-rs/src/compute/pool_gpu/mod.rs) contains generic
 image upload through RGBA, auxiliary-image packing, and output readback helpers.
 The generic input path widens L/LA/RGB to four bytes, except for guarded
-operation-specific paths such as one-op LA Brightness, ExtractBand, and
+operation-specific paths such as one-op L/LA/RGB Brightness, ExtractBand, and
 Expand; typed I/F and 16-bit inputs must stay on their typed contracts.
 Four-byte storage is not necessarily
 RGBA: CMYK's fourth byte is K, RGBX's fourth is padding, RGBa is premultiplied,
@@ -6938,7 +6938,7 @@ meaning from four bytes per pixel.
 The first conversion-ledger operation completed in this visit is CMYK
 grayscale; its implementation, parity, and performance evidence follow.
 
-Several common paths already avoid these conversions: native LA Brightness,
+Several common paths already avoid these conversions: native LA/RGB Brightness,
 native LA/PA PutAlpha, native L/LA/RGB/RGBA/CMYK masked Paste, native RGB bitmap/text
 composition, and native CPU/SIMD/GPU Pad and Expand. The former repeated
 per-sample whole-image conversion in nearest resize is gone; typed samples now
@@ -8082,3 +8082,51 @@ allocation versus the pixel loop before revisiting this site. The call remains
 in the same-layout-copy ledger until a faster direct path passes parity and a
 representative benchmark. No code change is retained, no coverage was run, and
 the focused parity result is not a backend-wide parity claim.
+
+### RGB Brightness: native bytes and exact SIMD shifts — 2026-09-29
+
+RGB Brightness now keeps `ImageRgb8` in three-byte storage on every backend.
+The GPU admission check requires the concrete RGB8 variant and logical `None`
+or `RGB`, with nonzero dimensions; mismatched layouts remain on the generic
+route. Its shader consumes three bytes per pixel and returns native RGB bytes.
+The final partial u32 word is padded only for transport and trimmed using the
+checked byte length. Because RGB has no preserved alpha lane, the shader also
+skips the per-byte channel-modulo check when every channel is active. LA keeps
+its separate alpha-preserving rule.
+
+SIMD Brightness now bypasses the 256-byte LUT for exact RGB factors represented
+by fixed-point shifts. At factor 0.5, each RGB sample maps exactly to
+`sample >> 1`; unlike LA/RGBA, there is no alpha byte to preserve. The admission check
+requires matching RGB8 storage and RGB logical mode. A generated 86 × 1 case
+contains all 256 input byte values and a two-byte SIMD tail; a material
+1024 × 768 RGB case gates the benchmark. Both cases passed live Pillow parity
+on CPU, strict SIMD, and strict GPU.
+
+The paired material workload is
+`pil-imageenhance-brightness.enhance.materialized.rgb-noise-1024x768-factor-0-5`.
+Its clean baseline and final receipts are
+`migration-benchmark-5aeb41c3a2b94d6c8f09ede248d1bc89` and
+`migration-benchmark-af813df0a4ec444fad52bae903bc0316`; both used the same
+manifest and input hashes, standard warm-cache policy, one warmup, 20 measured
+iterations, five samples, and 100 executions per subject.
+
+| Median latency | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline, ms | 1.961313 | 0.630083 | 0.734479 | 1.549501 |
+| Native RGB, ms | 1.992666 | 0.511000 | 0.228542 | 0.966562 |
+
+The host run showed ordinary Pillow timing variation. CPU improved 18.9%; SIMD
+improved 3.21× and reached 8.72× Pillow speed. GPU improved 37.6% and reached
+1.60× Pillow speed. The final GPU receipt reports 100/100 actual GPU
+executions, one dispatch, no fallback, and zero mode conversions. Native RGB
+reduces upload and readback from 3,145,728 to 2,359,296 bytes each. The shader
+branch then improved GPU latency another 9.7% versus the same native transfer
+path without the branch.
+
+GPU still measures 0.966562 ms versus SIMD at 0.228542 ms, about 4.23× slower;
+its benchmark backend phase remains about 0.84 ms. Compact input/output and
+removing lane math do not eliminate synchronous submission, mapping, and
+materialization costs. These benchmark throughput values are reciprocals of
+single-request latency, not sustained concurrent throughput. RGB Brightness is
+checkpointed with CPU and SIMD goals met and the GPU/SIMD target retained as a
+blocker for a resident or batched GPU path. No coverage was run.
