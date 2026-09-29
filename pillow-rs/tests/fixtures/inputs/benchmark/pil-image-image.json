@@ -185,11 +185,14 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.convert.behavior.default"
+        "case_id": "PIL.Image.Image.convert.nuanced.performance-material-rgba-to-pa-noise-1024x768"
       },
       "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "materialize"
+        ],
         "metrics": [
           "latency",
           "throughput"
@@ -203,11 +206,11 @@
       },
       "context": {
         "size": [
-          16,
-          16
+          1024,
+          768
         ],
-        "mode": "RGB",
-        "chain_length": 1,
+        "mode": "RGBA",
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"

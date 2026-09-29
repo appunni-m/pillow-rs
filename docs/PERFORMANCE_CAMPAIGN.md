@@ -9104,3 +9104,54 @@ SIMD, and GPU all slowed sharply together. With no clean evidence of a win, that
 variation was reverted. Keep the simpler byte-stream path, mark stable 5× SIMD
 as unresolved, and move to another operation. Revisit only with an unloaded,
 paired run or a profile identifying a remaining RGB-specific cost.
+
+### RGBA `convert("PA")` — checkpoint 2026-09-29
+
+The retained fast path keeps the canonical `ImageRgba8` source in its shared
+materialized `Arc`, after applying the same logical-mode/storage validation as
+`Image::materialize()`. The old route cloned the entire `DynamicImage`, cloned
+the RGBA image again with `to_rgba8()`, scanned RGBA separately for alpha and
+RGB, then zero-filled and overwrote the packed RGB buffer. The new route borrows
+the native RGBA bytes and emits packed RGB plus alpha in one pass. It bounds
+that pass to checked `width * height * 4` logical bytes because raster backing
+storage may legally contain trailing bytes beyond the image dimensions. Other
+storage variants still use `to_rgba8()` as a compatibility fallback.
+
+The conversion contract stays Pillow-compatible: quantize RGB only with
+MEDIANCUT, then pair each resulting index with the original alpha byte. An
+RGBA quantizer or transparent-color relocation changes observable palette
+indices. The remaining packed RGB allocation feeds the existing shared
+`median_cut_quantize_rgb` implementation; that quantizer is a host-side path
+without SIMD or GPU execution. Strict CPU/SIMD/GPU parity runs therefore prove
+output equality only. The benchmark receipts report backend execution as
+`not_proven` for all target profiles, so none of these timings are evidence of
+SIMD/GPU acceleration or GPU throughput.
+
+The deterministic workload uses 1,024 × 768 random RGBA pixels, constructs the
+source outside the timed boundary, then measures public `convert("PA")` plus
+`tobytes()` at concurrency one (five warmups, 20 iterations × five samples).
+The final parity-gated receipt is
+`migration-benchmark-12b2b0d24be84fe3874357da806b809a`, with gate
+`migration-parity-benchmark-gate-fd55214dfa3a438cbe680b29586b1f51`. All 3/3
+CPU/SIMD/GPU-profile comparisons passed. Median latency/throughput was Pillow
+225.638 ms / 4.432 ops/s, CPU 145.202 ms / 6.887 ops/s, SIMD profile 146.842 ms
+/ 6.810 ops/s, and GPU profile 143.993 ms / 6.945 ops/s. CPU is 1.55× faster
+than Pillow for this input. No unmodified-code baseline was collected, so this
+does not quantify the improvement from the copy reduction. The almost equal
+target-profile timings and missing executor receipts confirm that this workload
+currently follows the same serial CPU quantizer under every requested profile.
+
+The focused split tests preserve channel bytes and ignore extra backing bytes;
+both passed. `make build-parity`, the generated-input consistency check, and the
+single-case CPU, strict-SIMD, strict-GPU, and benchmark parity gates passed. The
+next useful optimization, if reopening this operation, is to teach the median
+cut reader and mapper to consume selected RGB channels directly from a four-byte
+source stride, eliminating the packed RGB intermediate without changing the
+palette algorithm. Then profile histogram insertion and pixel-to-palette
+mapping separately before designing deterministic parallel/SIMD histogram
+updates; palette ordering depends on the existing quantizer's traversal and
+tie-break behavior. A real GPU path must keep enough of histogram construction,
+palette selection, mapping, and output generation resident on-device to pay
+back upload/readback costs. For now CPU satisfies the no-slower-than-Pillow
+requirement on this material workload; SIMD 5× and GPU execution/throughput are
+unmet backend blockers. Continue to the next operation.
