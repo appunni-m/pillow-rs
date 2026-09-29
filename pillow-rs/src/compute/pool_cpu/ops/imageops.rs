@@ -29,6 +29,7 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::pil_resize;
 use crate::ops::pil_resize::pil_resize_boxed_with_parallel_pixel_threshold;
+use crate::ops::pil_resize::pil_resize_rgbx_into_window;
 use crate::pipeline::ResampleFilter;
 
 #[cfg(feature = "parallel")]
@@ -971,7 +972,7 @@ pub fn op_fit(
 }
 
 /// Build the padded output in the exact byte layout of canonical L, LA, RGB,
-/// HSV, RGBA, or CMYK images. Other logical modes keep the general compatibility path.
+/// HSV, RGBA, RGBX, or CMYK images. Other logical modes keep the general compatibility path.
 fn pad_native_rows(
     img: &DynamicImage,
     resized: &DynamicImage,
@@ -1001,6 +1002,11 @@ fn pad_native_rows(
             (source.as_raw(), 3, [fill.0, fill.1, fill.2, 0])
         }
         (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(source), None | Some("RGBA")) => {
+            (source.as_raw(), 4, [fill.0, fill.1, fill.2, fill.3])
+        }
+        // RGBX uses an RGBA carrier, but its X byte is opaque padding. Preserve
+        // source X values and use the fourth fill component for new pixels.
+        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(source), Some("RGBX")) => {
             (source.as_raw(), 4, [fill.0, fill.1, fill.2, fill.3])
         }
         // CMYK shares the four-byte carrier but its last active sample is K,
@@ -1067,13 +1073,13 @@ fn pad_native_rows(
     }
     let full_width_rows =
         output_x_bytes == 0 && copy_width == width && source_stride == output_stride;
-    let cmyk_vertical = explicit_mode == Some("CMYK") && full_width_rows;
-    let mut output = if cmyk_vertical {
+    let append_vertical_rows = matches!(explicit_mode, Some("CMYK" | "RGBX")) && full_width_rows;
+    let mut output = if append_vertical_rows {
         Vec::with_capacity(output_dims.total_bytes())
     } else {
         fill_row.repeat(height)
     };
-    if !cmyk_vertical && output.len() != output_dims.total_bytes() {
+    if !append_vertical_rows && output.len() != output_dims.total_bytes() {
         return Ok(None);
     }
     let output_x_end = output_x_bytes + byte_count;
@@ -1089,11 +1095,13 @@ fn pad_native_rows(
     };
 
     if full_width_rows {
-        let source_byte_count = source_stride * copy_height;
-        if cmyk_vertical {
-            // The common CMYK Pad shape has full-width source rows and only
-            // vertical borders. Append fill, source, and fill segments so
-            // source bytes are not initialized and then overwritten.
+        let Some(source_byte_count) = source_stride.checked_mul(copy_height) else {
+            return Ok(None);
+        };
+        if append_vertical_rows {
+            // Common packed four-byte Pad shapes have full-width source rows
+            // and only vertical borders. Append fill, source, and fill
+            // segments so source bytes are not initialized and overwritten.
             for _ in 0..offset_y {
                 output.extend_from_slice(&fill_row);
             }
@@ -1151,7 +1159,8 @@ pub fn op_pad(
         img.color(),
         crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
     );
-    let default_fill = if has_alpha {
+    let zero_fourth_default = matches!(explicit_mode, Some("RGBX" | "CMYK"));
+    let default_fill = if has_alpha || zero_fourth_default {
         (0, 0, 0, 0)
     } else {
         (0, 0, 0, 255)
@@ -1197,8 +1206,47 @@ pub fn op_pad(
                 | (None | Some("RGB"), DynamicImage::ImageRgb8(_))
                 | (Some("HSV"), DynamicImage::ImageRgb8(_))
                 | (None | Some("RGBA"), DynamicImage::ImageRgba8(_))
+                | (Some("RGBX"), DynamicImage::ImageRgba8(_))
                 | (Some("CMYK"), DynamicImage::ImageRgba8(_))
         );
+
+    // For RGBX contain-resizes that keep the full canvas width, write the
+    // unchanged Pillow vertical-resize result directly into its final padded
+    // rows. RGBX's fourth byte is filtered as data, never as alpha. This
+    // avoids materializing a separate contained image and copying it into the
+    // final canvas.
+    if explicit_mode == Some("RGBX")
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && !matches!(resize_filter, ResampleFilter::Nearest)
+        && (iw, ih) != (nw, nh)
+        && nw == w
+        && nh < h
+    {
+        let canvas_dims = CheckedDims::new(w, h, 4)?;
+        let content_dims = CheckedDims::new(nw, nh, 4)?;
+        let offset_y =
+            bankers_round((f64::from(h) - f64::from(nh)) * centering.1.clamp(0.0, 1.0)) as usize;
+        let window_start = offset_y
+            .checked_mul(canvas_dims.row_stride())
+            .ok_or_else(|| PilError::DimensionError("RGBX pad offset overflow".into()))?;
+        let window_end = window_start
+            .checked_add(content_dims.total_bytes())
+            .filter(|end| *end <= canvas_dims.total_bytes())
+            .ok_or_else(|| PilError::DimensionError("RGBX pad window overflow".into()))?;
+        let fill_row = [fill.0, fill.1, fill.2, fill.3].repeat(canvas_dims.width as usize);
+        let mut output = fill_row.repeat(canvas_dims.height as usize);
+        if pil_resize_rgbx_into_window(
+            img,
+            nw,
+            nh,
+            resize_filter,
+            &mut output[window_start..window_end],
+        ) {
+            let result = crate::image_utils::raw_bytes_to_image(w, h, output, 4)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
+
     let resized_storage = if nw == 0 || nh == 0 {
         // Pillow's empty-width source can resize only when the contain pass
         // keeps its source height. Preserve the zero-width result instead of
@@ -1846,7 +1894,7 @@ mod pad_native_tests {
             ("L", DynamicImage::ImageLuma8(image)) => image.as_raw(),
             ("LA", DynamicImage::ImageLumaA8(image)) => image.as_raw(),
             ("RGB" | "HSV", DynamicImage::ImageRgb8(image)) => image.as_raw(),
-            ("RGBA" | "CMYK", DynamicImage::ImageRgba8(image)) => image.as_raw(),
+            ("RGBA" | "RGBX" | "CMYK", DynamicImage::ImageRgba8(image)) => image.as_raw(),
             _ => panic!("pad must preserve native {mode} storage"),
         }
     }
@@ -1922,6 +1970,56 @@ mod pad_native_tests {
             &[
                 73, 99, 111, 157, 73, 99, 111, 157, 11, 12, 13, 14, 22, 23, 24, 25,
             ],
+        );
+    }
+
+    #[test]
+    fn pad_preserves_rgbx_source_and_fill_x_bytes() {
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![23, 47, 89, 131, 29, 31, 37, 41]).expect("RGBX source"),
+        );
+        let fill = (7, 11, 13, 17);
+        let result = op_pad(
+            &source,
+            2,
+            4,
+            ResampleFilter::Nearest,
+            Some(fill),
+            (0.0, 0.5),
+            Some("RGBX"),
+        )
+        .expect("native RGBX pad");
+
+        let fill_row = [7, 11, 13, 17, 7, 11, 13, 17];
+        let expected = [
+            fill_row.as_slice(),
+            &fill_row,
+            &[23, 47, 89, 131, 29, 31, 37, 41],
+            &fill_row,
+        ]
+        .concat();
+        assert_eq!(native_bytes(&result, "RGBX"), expected);
+    }
+
+    #[test]
+    fn pad_defaults_rgbx_x_sample_to_zero() {
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![23, 47, 89, 131, 29, 31, 37, 41]).expect("RGBX source"),
+        );
+        let result = op_pad(
+            &source,
+            2,
+            2,
+            ResampleFilter::Nearest,
+            None,
+            (0.0, 0.5),
+            Some("RGBX"),
+        )
+        .expect("native RGBX pad");
+
+        assert_eq!(
+            native_bytes(&result, "RGBX"),
+            &[23, 47, 89, 131, 29, 31, 37, 41, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
 }

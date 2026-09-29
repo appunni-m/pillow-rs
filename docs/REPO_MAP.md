@@ -91,6 +91,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- add.wgsl
 |   |   |   |       |-- add_modulo.wgsl
 |   |   |   |       |-- alpha_composite.wgsl
+|   |   |   |       |-- alpha_composite_mirror.wgsl
 |   |   |   |       |-- autocontrast.wgsl
 |   |   |   |       |-- autocontrast_cutoff.wgsl
 |   |   |   |       |-- autocontrast_remap.wgsl

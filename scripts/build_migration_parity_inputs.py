@@ -274,6 +274,17 @@ PAD_PERFORMANCE_CASES = (
     ),
     ("hsv-noise-1024x768-square", "HSV", [1024, 768], 20261011, [17, 83, 149]),
     ("cmyk-noise-1024x768-square", "CMYK", [1024, 768], 20261027, [17, 83, 149, 31]),
+    ("rgbx-noise-1024x768-square", "RGBX", [1024, 768], 20261032, [17, 83, 149, 31]),
+)
+PAD_RESIZE_PERFORMANCE_CASES = (
+    (
+        "rgbx-resize-1024x768-to-768-square",
+        "RGBX",
+        [1024, 768],
+        20261035,
+        [17, 83, 149, 31],
+        [768, 768],
+    ),
 )
 COVER_PERFORMANCE_CASES = (
     ("l-noise-1024x768", "L", [1024, 768], 20261028),
@@ -40995,6 +41006,59 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+        # This case forces a real contain resize before padding. Keep it
+        # separate from identity-contain workloads to expose the temporary
+        # resized raster and the opportunity to write directly into the final
+        # native canvas.
+        for name, mode, size, seed, fill, target_size in PAD_RESIZE_PERFORMANCE_CASES:
+            specs += ({
+                "surface": "PIL.ImageOps", "operation": "pad",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-native-{name}",
+                "mode": mode, "size": size, "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(target_size), "color": literal(fill)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
+        # RGBX stores its padding byte in the four-byte carrier. Keep the
+        # default (zero X), scalar (zero X), and explicit four-component fill
+        # rules visible in public parity rather than only testing the carrier.
+        specs += ({
+            "surface": "PIL.ImageOps", "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "rgbx-default-fill-x-3x2",
+            "mode": "RGBX", "size": [3, 2], "edge": "noise-fill",
+            "seed": 20261033, "observe_result": "tobytes",
+            "values": {"size": literal([3, 3]), "color": literal(None)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+        specs += ({
+            "surface": "PIL.ImageOps", "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "rgbx-scalar-fill-x-3x2",
+            "mode": "RGBX", "size": [3, 2], "edge": "noise-fill",
+            "seed": 20261034, "observe_result": "tobytes",
+            "values": {"size": literal([3, 3]), "color": literal(17)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+        # This filtered case forces Pillow's ties-to-even contain height
+        # (3 * 5 / 6 = 2.5 -> 2) and paste offset ((5 - 2) / 2 = 1.5 -> 2).
+        # It also exercises partial GPU workgroups and preserves the varying
+        # RGBX X byte through the fused resize/pad route.
+        specs += ({
+            "surface": "PIL.ImageOps", "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "rgbx-round-even-resize-fill-x-6x3-to-5x5",
+            "mode": "RGBX", "size": [6, 3], "edge": "noise-fill",
+            "seed": 20261036, "observe_result": "tobytes",
+            "values": {
+                "size": literal([5, 5]),
+                "color": literal([17, 83, 149, 31]),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
     if surface_id == "PIL.Image.Image":
         # The standard Point workload is a 16x16 identity LUT over a black
         # image. Keep it as the small-call row, but add an active lookup over
@@ -50468,6 +50532,44 @@ def build_inputs(
             if pad_benchmark is not None:
                 operation, requirement = pad_benchmark
                 for name, _mode, _size, _seed, _fill in PAD_PERFORMANCE_CASES:
+                    workload_id = (
+                        f"{storage_slug}.pad.materialized.native-{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.ImageOps.pad.nuanced.performance-native-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call", "observe-result"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"pad-native-{slug(name)}",
+                                surface=surface_id,
+                                operation="pad",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+                for name, _mode, _size, _seed, _fill, _target_size in PAD_RESIZE_PERFORMANCE_CASES:
                     workload_id = (
                         f"{storage_slug}.pad.materialized.native-{slug(name)}"
                     )

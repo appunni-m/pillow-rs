@@ -17972,7 +17972,8 @@ fn native_pad_offsets(
 
 /// Pillow keeps `P` and `PA` in their native indexed sample layouts during
 /// `ImageOps.pad`; `F` and `I` keep one scalar sample in four raw bytes, and
-/// HSV/CMYK use their ordinary packed byte layouts.  The adapter must admit
+/// HSV/CMYK use their ordinary packed byte layouts, and RGBX uses its
+/// four-byte carrier while preserving the X sample. The adapter must admit
 /// those logical modes without pretending that the stored bytes are RGBA.
 fn native_pad_channels_for_image(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
@@ -17981,7 +17982,9 @@ fn native_pad_channels_for_image(img: &DynamicImage, mode: Option<&str>) -> Opti
         DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => {
             Some(3)
         }
-        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK" | "I" | "F")) => {
+        DynamicImage::ImageRgba8(_)
+            if matches!(mode, None | Some("RGBA" | "RGBX" | "CMYK" | "I" | "F")) =>
+        {
             Some(4)
         }
         _ => None,
@@ -17993,7 +17996,9 @@ fn native_pad_channels_for_shape(shape: SimdImageShape, mode: Option<&str>) -> O
         SimdLayout::Luma8 if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         SimdLayout::LumaA8 if matches!(mode, None | Some("LA" | "PA")) => Some(2),
         SimdLayout::Rgb8 if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) => Some(3),
-        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "CMYK" | "I" | "F")) => Some(4),
+        SimdLayout::Rgba8 if matches!(mode, None | Some("RGBA" | "RGBX" | "CMYK" | "I" | "F")) => {
+            Some(4)
+        }
         _ => None,
     }
 }
@@ -18592,15 +18597,16 @@ fn native_pad_bytes(
         if source.len() != expected_source {
             return Ok(None);
         }
-        let mut output = if mode == Some("CMYK") {
+        let append_vertical_rows = matches!(mode, Some("CMYK" | "RGBX"));
+        let mut output = if append_vertical_rows {
             Vec::with_capacity(output_len)
         } else {
             fill_row.repeat(target_height_usize)
         };
-        if mode == Some("CMYK") {
-            // Avoid filling source rows only to overwrite them with CMYK
-            // samples: append the top border, source rows, and bottom border
-            // once each in their native C/M/Y/K layout.
+        if append_vertical_rows {
+            // Avoid initializing full-width packed four-byte source rows and
+            // overwriting them: append the native source bytes between the
+            // top and bottom fill rows.
             let source_end = offset_y
                 .checked_add(source_height)
                 .filter(|end| *end <= target_height_usize)
@@ -18625,6 +18631,48 @@ fn native_pad_bytes(
                 .ok_or_else(|| simd_unsupported("Pad"))?;
             output[destination_start..destination_end].copy_from_slice(source);
         }
+        let result =
+            crate::image_utils::raw_bytes_to_image(target_width, target_height, output, channels)?;
+        return Ok(Some((preserve_mode(img, result), 0, 0)));
+    }
+
+    // Keep RGBX's exact separable resize arithmetic, but let its vertical
+    // pass store directly into the full-width content window of the final
+    // padded canvas. The previous route materialized a contained image, then
+    // initialized a second canvas and copied every resized row into it.
+    if mode == Some("RGBX")
+        && !matches!(filter, ResampleFilter::Nearest)
+        && (img.width(), img.height()) != (contained_width, contained_height)
+        && offset_x == 0
+        && source_width == target_width_usize
+    {
+        let fill_pixel = (0..channels)
+            .map(|channel| native_expand_fill_sample(fill, channels, channel))
+            .collect::<Vec<_>>();
+        let fill_row = fill_pixel.repeat(target_width_usize);
+        if fill_row.len() != target_stride {
+            return Ok(None);
+        }
+        let mut output = fill_row.repeat(target_height_usize);
+        let content_len = source_stride
+            .checked_mul(source_height)
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        let window_start = offset_y
+            .checked_mul(target_stride)
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        let window_end = window_start
+            .checked_add(content_len)
+            .filter(|end| *end <= output.len())
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        simd_resize_convolution_into(
+            img,
+            contained_width,
+            contained_height,
+            filter,
+            channels,
+            false,
+            &mut output[window_start..window_end],
+        )?;
         let result =
             crate::image_utils::raw_bytes_to_image(target_width, target_height, output, channels)?;
         return Ok(Some((preserve_mode(img, result), 0, 0)));
@@ -19852,6 +19900,35 @@ fn simd_resize_convolution(
     channels: usize,
     premultiplied_alpha: bool,
 ) -> Result<DynamicImage, PilError> {
+    let output_dims = CheckedDims::new_allow_empty(output_width, output_height, channels as u8)?;
+    let mut output = output_dims.alloc_buffer();
+    simd_resize_convolution_into(
+        img,
+        output_width,
+        output_height,
+        filter,
+        channels,
+        premultiplied_alpha,
+        &mut output,
+    )?;
+    let result =
+        crate::image_utils::raw_bytes_to_image(output_width, output_height, output, channels)?;
+    Ok(preserve_mode(img, result))
+}
+
+/// Run the existing two-pass SIMD resize into a caller-owned contiguous
+/// output window. ImageOps.pad uses this only when the contain raster spans
+/// the entire destination width, so the window has the ordinary resize row
+/// stride while sitting inside the final canvas.
+fn simd_resize_convolution_into(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    channels: usize,
+    premultiplied_alpha: bool,
+    output: &mut [u8],
+) -> Result<(), PilError> {
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Resize"))?;
     let output_width = usize::try_from(output_width).map_err(|_| simd_unsupported("Resize"))?;
@@ -19864,6 +19941,11 @@ fn simd_resize_convolution(
         .checked_mul(output_width)
         .and_then(|pixels| pixels.checked_mul(channels))
         .ok_or_else(|| simd_unsupported("Resize"))?;
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "SIMD resize output window shape mismatch".into(),
+        ));
+    }
     let source_len = source_width
         .checked_mul(source_height)
         .and_then(|pixels| pixels.checked_mul(channels))
@@ -19961,13 +20043,12 @@ fn simd_resize_convolution(
         })
         .ok_or_else(|| simd_unsupported("Resize"))?;
     }
-    let mut output = vec![0u8; output_len];
     let output_stride = intermediate_stride;
     #[cfg(feature = "parallel")]
     {
         let failed = AtomicBool::new(false);
         crate::par_rows_mut!(
-            &mut output,
+            output,
             output_stride,
             output_height,
             |row_start, row_end, output_y, output_row| {
@@ -20045,13 +20126,7 @@ fn simd_resize_convolution(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    let result = crate::image_utils::raw_bytes_to_image(
-        output_width as u32,
-        output_height as u32,
-        output,
-        channels,
-    )?;
-    Ok(preserve_mode(img, result))
+    Ok(())
 }
 
 /// Resize a fractional source box with the native SIMD two-pass resampler.
@@ -26201,6 +26276,45 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pad_rgbx_preserves_x_samples_and_fills_new_pixels_from_fill_x() {
+        let image = DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(2, 1, vec![23, 47, 89, 131, 29, 31, 37, 41])
+                .expect("RGBX source shape must be valid"),
+        );
+        assert_eq!(
+            super::native_pad_channels_for_image(&image, Some("RGBX")),
+            Some(4)
+        );
+        let mismatched = DynamicImage::ImageRgb8(
+            crate::raster::RgbImage::from_raw(2, 1, vec![23, 47, 89, 29, 31, 37])
+                .expect("mismatched RGBX storage shape must be valid"),
+        );
+        assert_eq!(
+            super::native_pad_channels_for_image(&mismatched, Some("RGBX")),
+            None
+        );
+
+        let fill = (7, 11, 13, 17);
+        let operation = crate::pipeline::PipelineOp::Pad {
+            w: 2,
+            h: 4,
+            filter: crate::pipeline::ResampleFilter::Nearest,
+            color: Some(fill),
+            centering: (0.0, 0.5),
+        };
+        let result =
+            super::simd_pad(&image, &operation, Some("RGBX")).expect("SIMD RGBX pad must succeed");
+
+        let fill_row = [7, 11, 13, 17, 7, 11, 13, 17];
+        let mut expected = Vec::with_capacity(2 * 4 * 4);
+        expected.extend_from_slice(&fill_row);
+        expected.extend_from_slice(&fill_row);
+        expected.extend_from_slice(&[23, 47, 89, 131, 29, 31, 37, 41]);
+        expected.extend_from_slice(&fill_row);
+        assert_eq!(result.as_bytes(), expected);
+    }
+
     #[test]
     fn expand_rgbx_appends_rows_without_changing_x_samples() {
         let source = DynamicImage::ImageRgba8(

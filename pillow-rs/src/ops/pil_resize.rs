@@ -2224,6 +2224,81 @@ pub fn pil_resize(
     pil_preserve_mode(orig_img, result)
 }
 
+/// Resize RGBX bytes into an existing, full-width output window.
+///
+/// ImageOps.pad can use this when contain preserves the destination width and
+/// adds only top/bottom borders. The exact Pillow coefficient tables and
+/// horizontal/vertical kernels remain unchanged; only the temporary resized
+/// output allocation is removed. RGBX byte three is data, so this route must
+/// never enable alpha premultiplication.
+pub(crate) fn pil_resize_rgbx_into_window(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    filter: ResampleFilter,
+    output: &mut [u8],
+) -> bool {
+    let DynamicImage::ImageRgba8(_) = img else {
+        return false;
+    };
+    if matches!(filter, ResampleFilter::Nearest)
+        || dst_w == 0
+        || dst_h == 0
+        || img.width() == 0
+        || img.height() == 0
+    {
+        return false;
+    }
+    let Ok(source_dims) = crate::checked_dims::CheckedDims::new(img.width(), img.height(), 4)
+    else {
+        return false;
+    };
+    let Ok(output_dims) = crate::checked_dims::CheckedDims::new(dst_w, dst_h, 4) else {
+        return false;
+    };
+    if img.as_bytes().len() != source_dims.total_bytes()
+        || output.len() != output_dims.total_bytes()
+    {
+        return false;
+    }
+    let Ok(source_height) = usize::try_from(img.height()) else {
+        return false;
+    };
+    let Ok(output_width) = usize::try_from(dst_w) else {
+        return false;
+    };
+    let Some(intermediate_len) = source_height
+        .checked_mul(output_width)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return false;
+    };
+
+    let horizontal = precompute_coeffs(dst_w, img.width(), filter);
+    let vertical = precompute_coeffs(dst_h, img.height(), filter);
+    let mut intermediate = vec![0u8; intermediate_len];
+    horizontal_pass_rows(
+        img.as_bytes(),
+        img.width(),
+        img.height(),
+        4,
+        &horizontal,
+        dst_w,
+        &mut intermediate,
+    );
+    vertical_pass_rows(
+        &intermediate,
+        img.height(),
+        dst_w,
+        dst_h,
+        4,
+        &vertical,
+        output,
+        0,
+    );
+    true
+}
+
 fn f_boxed_nearest_axis_maps_identity(
     source_size: u32,
     output_size: u32,

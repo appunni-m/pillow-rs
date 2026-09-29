@@ -281,8 +281,11 @@ pub(crate) fn resolve_imageops_color(
         )
     }
 
-    fn is_alpha_mode(mode: &str) -> bool {
-        matches!(mode, "LA" | "RGBA" | "PA")
+    fn has_zero_scalar_fourth_byte(mode: &str) -> bool {
+        // Pillow's integer color for packed four-band modes writes the fourth
+        // byte as zero. RGBX's X and CMYK's K are not alpha, but follow the
+        // same packed-sample rule as RGBA/RGBa here.
+        matches!(mode, "LA" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "PA")
     }
 
     fn invalid_color(mode: &str) -> PilError {
@@ -324,7 +327,16 @@ pub(crate) fn resolve_imageops_color(
         if mode == "P" {
             return (value, 0, 0, u8::MAX);
         }
-        (value, 0, 0, if is_alpha_mode(mode) { 0 } else { u8::MAX })
+        (
+            value,
+            0,
+            0,
+            if has_zero_scalar_fourth_byte(mode) {
+                0
+            } else {
+                u8::MAX
+            },
+        )
     }
 
     fn color_value(value: crate::color::ColorValue, mode: &str) -> (u8, u8, u8, u8) {
@@ -404,7 +416,7 @@ pub(crate) fn resolve_imageops_color(
                 clamp(*r),
                 clamp(*g),
                 clamp(*b),
-                if mode == "RGBA" && values.len() == 4 {
+                if matches!(mode, "RGBA" | "RGBa" | "RGBX") && values.len() == 4 {
                     clamp(values[3])
                 } else {
                     u8::MAX
@@ -1533,6 +1545,30 @@ mod tests {
             resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149, 31]), "CMYK")
                 .expect("four-component CMYK fill is valid"),
             Some((17, 83, 149, 31))
+        );
+    }
+
+    #[test]
+    fn pad_rgbx_color_resolution_preserves_pillow_fourth_byte_rules() {
+        assert_eq!(
+            resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149, 31]), "RGBX")
+                .expect("four-component RGBX fill is valid"),
+            Some((17, 83, 149, 31))
+        );
+        assert_eq!(
+            resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149]), "RGBX")
+                .expect("three-component RGBX fill is valid"),
+            Some((17, 83, 149, u8::MAX))
+        );
+        assert_eq!(
+            resolve_imageops_color(ImageOpsColor::Scalar(17), "RGBX")
+                .expect("scalar RGBX fill is valid"),
+            Some((17, 0, 0, 0))
+        );
+        assert_eq!(
+            resolve_imageops_color(ImageOpsColor::None, "RGBX")
+                .expect("default RGBX fill is valid"),
+            None
         );
     }
 
