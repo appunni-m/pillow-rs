@@ -3401,6 +3401,26 @@ pub fn op_put_alpha_data(
     mask: &crate::raster::DynamicImage,
     mode: PixelMode,
 ) -> DynamicImage {
+    if mode == PixelMode::RGB
+        && let (DynamicImage::ImageRgb8(rgb), DynamicImage::ImageLuma8(alpha)) = (img, mask)
+        && rgb.dimensions() == alpha.dimensions()
+        && rgb.as_raw().len() == alpha.as_raw().len().saturating_mul(3)
+    {
+        // RGB putalpha must return RGBA, but widening the source first and
+        // copying that temporary into another RGBA allocation is redundant.
+        // Read native three-byte pixels and write the required result once.
+        let mut output = RgbaImage::new(rgb.width(), rgb.height());
+        for ((destination, source), alpha) in output
+            .as_mut()
+            .chunks_exact_mut(4)
+            .zip(rgb.as_raw().chunks_exact(3))
+            .zip(alpha.as_raw())
+        {
+            destination[..3].copy_from_slice(source);
+            destination[3] = *alpha;
+        }
+        return DynamicImage::ImageRgba8(output);
+    }
     if mode == PixelMode::CMYK {
         let rgb = crate::color::cmyk_to_rgb(img).to_rgb8();
         let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
