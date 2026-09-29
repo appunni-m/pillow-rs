@@ -17,6 +17,7 @@ struct Params {
 }
 
 const FIXED_BIAS: i32 = 2097152;
+const NATIVE_COVER_LUMA_PACKED_OUTPUT: u32 = 0xfffffffeu;
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -34,7 +35,7 @@ fn pixel_channel(pixel: u32, channel: u32) -> u32 {
 }
 
 fn sample_channel(pixel_index: u32, channel: u32) -> u32 {
-    if params._pad == 0xffffffffu {
+    if params._pad == 0xffffffffu || params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
         let byte_index = pixel_index * params.channels + channel;
         let word = input[byte_index / 4u];
         return (word >> ((byte_index % 4u) * 8u)) & 255u;
@@ -1353,10 +1354,33 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     // carries the first original source row; output rows remain zero-based so
     // the rebased vertical table addresses this compact intermediate.
     var source_y = gid.y + params._pad;
-    if params._pad == 0xffffffffu {
+    if params._pad == 0xffffffffu || params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
         source_y = gid.y;
     }
     if source_y >= params.height {
+        return;
+    }
+    if params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
+        // Singleton native-L Cover packs four exact horizontal byte results
+        // per word. The vertical pass extracts these before applying its own
+        // coefficients, preserving Pillow's intermediate byte rounding.
+        let words_per_row = params.dst_w / 4u + select(0u, 1u, params.dst_w % 4u != 0u);
+        if gid.x >= words_per_row {
+            return;
+        }
+        let first_x = gid.x * 4u;
+        var word = 0u;
+        for (var lane = 0u; lane < 4u; lane = lane + 1u) {
+            let output_x = first_x + lane;
+            if output_x < params.dst_w {
+                let value = filtered_channel(source_y, output_x, 0u);
+                word = word | (value << (lane * 8u));
+            }
+        }
+        output[gid.y * words_per_row + gid.x] = word;
+        return;
+    }
+    if gid.x >= params.dst_w {
         return;
     }
     output[gid.y * params.dst_w + gid.x] = pack_filtered(source_y, gid.x);

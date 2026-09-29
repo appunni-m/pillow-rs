@@ -18649,6 +18649,7 @@ fn native_pad_bytes(
             filter,
             channels,
             false,
+            false,
             &mut output[window_start..window_end],
         )?;
         let result =
@@ -18691,6 +18692,7 @@ fn native_pad_bytes(
                     4 => matches!(mode, None | Some("RGBA")),
                     _ => false,
                 },
+                false,
             )?,
         }
     };
@@ -18913,11 +18915,48 @@ fn resize_fixed_point_i64_to_u8(sum: i64) -> u8 {
     value.clamp(0, 255) as u8
 }
 
+#[inline(always)]
+fn resize_fixed_point_i32_to_u8(sum: i32) -> u8 {
+    let value = (sum + (1_i32 << 21)) >> 22;
+    value.clamp(0, 255) as u8
+}
+
 #[inline]
 fn resize_coeff_slice(coeffs: &FilterCoeffs, index: usize) -> Option<&[i64]> {
     let start = *coeffs.offsets.get(index)?;
     let count = *coeffs.count.get(index)?;
     coeffs.weights.get(start..start.checked_add(count)?)
+}
+
+/// Prove that every ordered partial sum for a byte sample row fits in i32,
+/// including Pillow's positive fixed-point rounding bias. `wide::i32x8`
+/// arithmetic wraps, so the specialized Cover path uses it only after both
+/// resize-axis coefficient tables pass this proof.
+fn resize_u8_coefficients_fit_i32(coeffs: &FilterCoeffs) -> bool {
+    if coeffs.count.len() != coeffs.offsets.len() {
+        return false;
+    }
+    for index in 0..coeffs.count.len() {
+        let Some(weights) = resize_coeff_slice(coeffs, index) else {
+            return false;
+        };
+        let Some(sum_abs) = weights.iter().try_fold(0u64, |sum, &weight| {
+            i32::try_from(weight).ok()?;
+            sum.checked_add(weight.unsigned_abs())
+        }) else {
+            return false;
+        };
+        let Some(bound) = sum_abs
+            .checked_mul(255)
+            .and_then(|bound| bound.checked_add(1 << 21))
+        else {
+            return false;
+        };
+        if bound > i32::MAX as u64 {
+            return false;
+        }
+    }
+    true
 }
 
 #[derive(Clone)]
@@ -19225,6 +19264,116 @@ fn resize_vertical_vector_row(
         for channel in 0..channels {
             *output_row.get_mut(output_start + channel)? = result[channel];
         }
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
+/// L-only horizontal convolution with a checked, non-wrapping i32
+/// accumulator. The regular SIMD kernel remains the fallback for coefficient
+/// tables that do not satisfy the byte-domain bound.
+fn resize_horizontal_luma_i32_vector_row(
+    source_row: &[u8],
+    coeffs: &FilterCoeffs,
+    plan: &ResizeHorizontalPlan,
+    output_width: usize,
+    output_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for (block_index, output_x) in (0..plan.vector_width)
+        .step_by(SIMD_RESIZE_LANES)
+        .enumerate()
+    {
+        let mut sum = i32x8::splat(0);
+        let block = plan.blocks.get(block_index)?;
+        for tap in &block.taps {
+            let mut samples = [0u8; SIMD_RESIZE_LANES];
+            for lane in 0..SIMD_RESIZE_LANES {
+                if tap.active[lane] {
+                    samples[lane] = *source_row.get(tap.source_bases[lane])?;
+                }
+            }
+            sum += i32x8::new(samples.map(i32::from)) * i32x8::new(tap.weights);
+        }
+        let result = sum.to_array().map(resize_fixed_point_i32_to_u8);
+        for lane in 0..SIMD_RESIZE_LANES {
+            if output_x + lane < output_width {
+                *output_row.get_mut(output_x + lane)? = result[lane];
+            }
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let scalar_start = if output_width < SIMD_RESIZE_LANES {
+        output_width
+    } else {
+        plan.vector_width
+    };
+    for output_x in scalar_start..output_width {
+        *output_row.get_mut(output_x)? =
+            resize_horizontal_scalar(source_row, 1, coeffs, output_x, 0, false)?;
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
+/// L-only vertical convolution with a checked i32 accumulator. It preserves
+/// the horizontal byte intermediate and the same fixed-point rounding at
+/// each axis boundary as Pillow's two-pass resampler.
+fn resize_vertical_luma_i32_vector_row(
+    intermediate: &[u8],
+    output_width: usize,
+    source_height: usize,
+    coeffs: &FilterCoeffs,
+    output_y: usize,
+    output_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    let weights = resize_coeff_slice(coeffs, output_y)?;
+    let y0 = usize::try_from(*coeffs.xmin.get(output_y)?).ok()?;
+    let vector_width = if output_width < SIMD_RESIZE_LANES {
+        SIMD_RESIZE_LANES
+    } else {
+        output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
+    };
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for output_x in (0..vector_width).step_by(SIMD_RESIZE_LANES) {
+        let count = (output_width - output_x).min(SIMD_RESIZE_LANES);
+        let mut sum = i32x8::splat(0);
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_y = y0.checked_add(tap)?;
+            if source_y >= source_height {
+                return None;
+            }
+            let source_start = source_y.checked_mul(output_width)?.checked_add(output_x)?;
+            let source_end = source_start.checked_add(count)?;
+            let source_pixels = intermediate.get(source_start..source_end)?;
+            let mut samples = [0i32; SIMD_RESIZE_LANES];
+            for (lane, &sample) in source_pixels.iter().enumerate() {
+                samples[lane] = i32::from(sample);
+            }
+            let weight = i32::try_from(weight).ok()?;
+            sum += i32x8::new(samples) * i32x8::splat(weight);
+        }
+        let result = sum.to_array().map(resize_fixed_point_i32_to_u8);
+        for lane in 0..count {
+            *output_row.get_mut(output_x + lane)? = result[lane];
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    let scalar_start = if output_width < SIMD_RESIZE_LANES {
+        output_width
+    } else {
+        vector_width
+    };
+    for output_x in scalar_start..output_width {
+        let mut sum = 0.0;
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_y = y0.checked_add(tap)?;
+            let source_index = source_y.checked_mul(output_width)?.checked_add(output_x)?;
+            sum += f64::from(*intermediate.get(source_index)?) * weight as f64;
+        }
+        *output_row.get_mut(output_x)? = resize_fixed_point_to_u8(sum);
         scalar_tail = scalar_tail.saturating_add(1);
     }
     Some((vector_blocks, scalar_tail))
@@ -19877,6 +20026,7 @@ fn simd_resize_convolution(
     filter: ResampleFilter,
     channels: usize,
     premultiplied_alpha: bool,
+    cover_luma_i32: bool,
 ) -> Result<DynamicImage, PilError> {
     let output_dims = CheckedDims::new_allow_empty(output_width, output_height, channels as u8)?;
     let mut output = output_dims.alloc_buffer();
@@ -19887,6 +20037,7 @@ fn simd_resize_convolution(
         filter,
         channels,
         premultiplied_alpha,
+        cover_luma_i32,
         &mut output,
     )?;
     let result =
@@ -19905,6 +20056,7 @@ fn simd_resize_convolution_into(
     filter: ResampleFilter,
     channels: usize,
     premultiplied_alpha: bool,
+    cover_luma_i32: bool,
     output: &mut [u8],
 ) -> Result<(), PilError> {
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
@@ -19935,6 +20087,12 @@ fn simd_resize_convolution_into(
     }
     let horizontal = precompute_coeffs(output_width as u32, source_width as u32, filter);
     let vertical = precompute_coeffs(output_height as u32, source_height as u32, filter);
+    let cover_luma_i32 = cover_luma_i32
+        && channels == 1
+        && !premultiplied_alpha
+        && matches!(filter, ResampleFilter::Bicubic)
+        && resize_u8_coefficients_fit_i32(&horizontal)
+        && resize_u8_coefficients_fit_i32(&vertical);
     let horizontal_plan = build_resize_horizontal_plan(&horizontal, output_width, channels)
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let mut intermediate = vec![0u8; intermediate_len];
@@ -19973,17 +20131,26 @@ fn simd_resize_convolution_into(
                     failed.store(true, Ordering::Relaxed);
                     return;
                 };
-                if resize_horizontal_vector_row(
-                    source_row,
-                    channels,
-                    &horizontal,
-                    &horizontal_plan,
-                    output_width,
-                    intermediate_row,
-                    premultiplied_alpha,
-                )
-                .is_none()
-                {
+                let row_result = if cover_luma_i32 {
+                    resize_horizontal_luma_i32_vector_row(
+                        source_row,
+                        &horizontal,
+                        &horizontal_plan,
+                        output_width,
+                        intermediate_row,
+                    )
+                } else {
+                    resize_horizontal_vector_row(
+                        source_row,
+                        channels,
+                        &horizontal,
+                        &horizontal_plan,
+                        output_width,
+                        intermediate_row,
+                        premultiplied_alpha,
+                    )
+                };
+                if row_result.is_none() {
                     failed.store(true, Ordering::Relaxed);
                 }
             }
@@ -20006,20 +20173,31 @@ fn simd_resize_convolution_into(
         let intermediate_row = intermediate
             .get_mut(intermediate_start..intermediate_start + intermediate_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        resize_horizontal_vector_row(
-            source_row,
-            channels,
-            &horizontal,
-            &horizontal_plan,
-            output_width,
-            intermediate_row,
-            premultiplied_alpha,
-        )
-        .map(|(blocks, tail)| {
-            vector_blocks = vector_blocks.saturating_add(blocks);
-            scalar_tail = scalar_tail.saturating_add(tail);
-        })
-        .ok_or_else(|| simd_unsupported("Resize"))?;
+        let row_result = if cover_luma_i32 {
+            resize_horizontal_luma_i32_vector_row(
+                source_row,
+                &horizontal,
+                &horizontal_plan,
+                output_width,
+                intermediate_row,
+            )
+        } else {
+            resize_horizontal_vector_row(
+                source_row,
+                channels,
+                &horizontal,
+                &horizontal_plan,
+                output_width,
+                intermediate_row,
+                premultiplied_alpha,
+            )
+        };
+        row_result
+            .map(|(blocks, tail)| {
+                vector_blocks = vector_blocks.saturating_add(blocks);
+                scalar_tail = scalar_tail.saturating_add(tail);
+            })
+            .ok_or_else(|| simd_unsupported("Resize"))?;
     }
     let output_stride = intermediate_stride;
     #[cfg(feature = "parallel")]
@@ -20031,18 +20209,28 @@ fn simd_resize_convolution_into(
             output_height,
             |row_start, row_end, output_y, output_row| {
                 let _ = (row_start, row_end);
-                if resize_vertical_vector_row(
-                    &intermediate,
-                    output_width,
-                    source_height,
-                    channels,
-                    &vertical,
-                    output_y as usize,
-                    output_row,
-                    premultiplied_alpha,
-                )
-                .is_none()
-                {
+                let row_result = if cover_luma_i32 {
+                    resize_vertical_luma_i32_vector_row(
+                        &intermediate,
+                        output_width,
+                        source_height,
+                        &vertical,
+                        output_y as usize,
+                        output_row,
+                    )
+                } else {
+                    resize_vertical_vector_row(
+                        &intermediate,
+                        output_width,
+                        source_height,
+                        channels,
+                        &vertical,
+                        output_y as usize,
+                        output_row,
+                        premultiplied_alpha,
+                    )
+                };
+                if row_result.is_none() {
                     failed.store(true, Ordering::Relaxed);
                 }
             }
@@ -20059,21 +20247,33 @@ fn simd_resize_convolution_into(
         let output_row = output
             .get_mut(output_start..output_start + output_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        resize_vertical_vector_row(
-            &intermediate,
-            output_width,
-            source_height,
-            channels,
-            &vertical,
-            output_y,
-            output_row,
-            premultiplied_alpha,
-        )
-        .map(|(blocks, tail)| {
-            vector_blocks = vector_blocks.saturating_add(blocks);
-            scalar_tail = scalar_tail.saturating_add(tail);
-        })
-        .ok_or_else(|| simd_unsupported("Resize"))?;
+        let row_result = if cover_luma_i32 {
+            resize_vertical_luma_i32_vector_row(
+                &intermediate,
+                output_width,
+                source_height,
+                &vertical,
+                output_y,
+                output_row,
+            )
+        } else {
+            resize_vertical_vector_row(
+                &intermediate,
+                output_width,
+                source_height,
+                channels,
+                &vertical,
+                output_y,
+                output_row,
+                premultiplied_alpha,
+            )
+        };
+        row_result
+            .map(|(blocks, tail)| {
+                vector_blocks = vector_blocks.saturating_add(blocks);
+                scalar_tail = scalar_tail.saturating_add(tail);
+            })
+            .ok_or_else(|| simd_unsupported("Resize"))?;
     }
     #[cfg(feature = "parallel")]
     {
@@ -20474,6 +20674,7 @@ fn native_aspect_resize_bytes(
     mode: Option<&str>,
     dimensions: fn(u32, u32, u32, u32) -> Option<(u32, u32)>,
     operation: &str,
+    allow_cover_luma_i32: bool,
 ) -> Result<Option<DynamicImage>, PilError> {
     let Some((output_width, output_height)) =
         dimensions(img.width(), img.height(), target_width, target_height)
@@ -20486,15 +20687,20 @@ fn native_aspect_resize_bytes(
     // Use the common resize dispatcher so logical mode controls alpha
     // premultiplication and I/F keep their one-sample-per-pixel arithmetic.
     // Channel count alone cannot distinguish LA/RGBA from PA/CMYK/RGBa/RGBX.
-    let result = simd_resize(
-        img,
-        &PipelineOp::Resize {
-            w: output_width,
-            h: output_height,
-            filter,
-        },
-        mode,
-    )?;
+    let resize = PipelineOp::Resize {
+        w: output_width,
+        h: output_height,
+        filter,
+    };
+    let use_cover_luma_i32 = allow_cover_luma_i32
+        && matches!(filter, ResampleFilter::Bicubic)
+        && matches!(mode, None | Some("L"))
+        && matches!(img, DynamicImage::ImageLuma8(_));
+    let result = if use_cover_luma_i32 {
+        simd_resize_impl(img, &resize, mode, true)?
+    } else {
+        simd_resize(img, &resize, mode)?
+    };
     if result.width() != output_width || result.height() != output_height {
         return Err(PilError::InternalError(format!(
             "SIMD {operation} resize shape mismatch"
@@ -22556,6 +22762,15 @@ pub fn simd_resize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_resize_impl(img, op, mode, false)
+}
+
+fn simd_resize_impl(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+    cover_luma_i32: bool,
+) -> Result<DynamicImage, PilError> {
     let (w, h, filter) = match op {
         PipelineOp::Resize { w, h, filter } => (w, h, filter),
         PipelineOp::ResizeBoxed {
@@ -22631,7 +22846,15 @@ pub fn simd_resize(
     }
     match filter {
         ResampleFilter::Nearest => simd_resize_nearest(img, *w, *h, channels),
-        _ => simd_resize_convolution(img, *w, *h, *filter, channels, premultiplied_alpha),
+        _ => simd_resize_convolution(
+            img,
+            *w,
+            *h,
+            *filter,
+            channels,
+            premultiplied_alpha,
+            cover_luma_i32,
+        ),
     }
 }
 
@@ -22792,6 +23015,7 @@ pub fn simd_thumbnail(
             effective_filter,
             channels,
             premultiplied_alpha,
+            false,
         ),
     }
 }
@@ -22821,6 +23045,7 @@ pub fn simd_contain(
         mode,
         native_pad_contained_dimensions,
         "Contain",
+        false,
     )?
     .ok_or_else(|| simd_unsupported("Contain"))
 }
@@ -22836,8 +23061,17 @@ pub fn simd_cover(
     let PipelineOp::Cover { w, h, filter } = op else {
         return Err(PilError::ValueError("expected Cover op".into()));
     };
-    native_aspect_resize_bytes(img, *w, *h, *filter, mode, native_cover_dimensions, "Cover")?
-        .ok_or_else(|| simd_unsupported("Cover"))
+    native_aspect_resize_bytes(
+        img,
+        *w,
+        *h,
+        *filter,
+        mode,
+        native_cover_dimensions,
+        "Cover",
+        true,
+    )?
+    .ok_or_else(|| simd_unsupported("Cover"))
 }
 
 /// Execute `ImageOps.fit` with scalar crop-box construction and a native
@@ -26537,6 +26771,87 @@ mod tests {
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+
+    #[test]
+    fn cover_luma_i32_coefficient_guard_fails_closed() {
+        let horizontal = super::precompute_coeffs(1365, 1024, ResampleFilter::Bicubic);
+        let vertical = super::precompute_coeffs(1024, 768, ResampleFilter::Bicubic);
+        assert!(super::resize_u8_coefficients_fit_i32(&horizontal));
+        assert!(super::resize_u8_coefficients_fit_i32(&vertical));
+
+        let at_bound = super::FilterCoeffs {
+            xmin: vec![0],
+            count: vec![1],
+            offsets: vec![0],
+            weights: vec![8_413_280],
+        };
+        assert!(super::resize_u8_coefficients_fit_i32(&at_bound));
+        let above_bound = super::FilterCoeffs {
+            xmin: vec![0],
+            count: vec![1],
+            offsets: vec![0],
+            weights: vec![8_413_281],
+        };
+        assert!(!super::resize_u8_coefficients_fit_i32(&above_bound));
+        let outside_i32 = super::FilterCoeffs {
+            xmin: vec![0],
+            count: vec![1],
+            offsets: vec![0],
+            weights: vec![i64::MAX],
+        };
+        assert!(!super::resize_u8_coefficients_fit_i32(&outside_i32));
+    }
+
+    #[test]
+    fn cover_luma_i32_two_pass_matches_widened_for_extreme_samples() {
+        let width = 37u32;
+        let height = 17u32;
+        let output_width = 53u32;
+        let output_height = 23u32;
+        for pattern in 0..4u32 {
+            let samples = (0..width * height)
+                .map(|index| match pattern {
+                    0 => 0,
+                    1 => 255,
+                    2 => {
+                        let x = index % width;
+                        let y = index / width;
+                        if (x + y) % 2 == 0 { 0 } else { 255 }
+                    }
+                    _ => index.wrapping_mul(97).wrapping_add(index / width * 53) as u8,
+                })
+                .collect::<Vec<_>>();
+            let image = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, samples).expect("test L image shape"),
+            );
+            let output_len = (output_width * output_height) as usize;
+            let mut widened = vec![0u8; output_len];
+            let mut narrow = vec![0u8; output_len];
+            super::simd_resize_convolution_into(
+                &image,
+                output_width,
+                output_height,
+                ResampleFilter::Bicubic,
+                1,
+                false,
+                false,
+                &mut widened,
+            )
+            .expect("widened Cover resize must succeed");
+            super::simd_resize_convolution_into(
+                &image,
+                output_width,
+                output_height,
+                ResampleFilter::Bicubic,
+                1,
+                false,
+                true,
+                &mut narrow,
+            )
+            .expect("bounded i32 Cover resize must succeed");
+            assert_eq!(narrow, widened, "sample pattern {pattern}");
+        }
+    }
 
     #[test]
     fn native_invert_writes_owned_p_indices_in_one_vector_pass() {

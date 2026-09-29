@@ -294,6 +294,18 @@ COVER_PERFORMANCE_CASES = (
     ("hsv-noise-1024x768", "HSV", [1024, 768], 20261101),
     ("cmyk-noise-1024x768", "CMYK", [1024, 768], 20261102),
 )
+COVER_PACKED_L_PARITY_CASES = (
+    # The covering resize retains its full aspect-preserving raster. These
+    # source/target pairs produce output widths with every row-packed tail
+    # size (width % 4 = 0, 1, 2, 3) and use distinct non-nearest filters.
+    ("packed-l-tail-0-bicubic", [12, 8], [6, 13], 3, 20261103),
+    ("packed-l-tail-1-bilinear", [13, 8], [6, 13], 2, 20261104),
+    ("packed-l-tail-2-lanczos", [11, 8], [6, 13], 1, 20261105),
+    ("packed-l-tail-3-box", [14, 8], [6, 13], 4, 20261106),
+    # The varied nearest case exercises Cover's one-tap coefficient path,
+    # including the compact source layout and packed-output tails.
+    ("nearest-native-l-noise", [7, 5], [4, 7], 0, 20261107),
+)
 GETCOLORS_PERFORMANCE_CASES = (
     ("varied-rgb-16x16", "RGB", [16, 16], 20260925),
     ("high-cardinality-rgb-1024x768", "RGB", [1024, 768], 20260926),
@@ -41025,6 +41037,20 @@ def build_nuanced_cases(
     },)
 
     if surface_id == "PIL.ImageOps":
+        for name, source_size, target_size, method, seed in COVER_PACKED_L_PARITY_CASES:
+            specs += ({
+                "surface": "PIL.ImageOps", "operation": "cover",
+                "requirement_suffix": "parameter.method",
+                "name": name,
+                "mode": "L", "size": source_size, "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal(target_size),
+                    "method": literal(method),
+                },
+                "target_profiles": ["python-cpu", "python-simd", "python-gpu"],
+            },)
+
         # Cover from a 4:3 source to a portrait target forces a material resize
         # while retaining the full covering raster. Exercise native channel
         # layouts, including HSV and CMYK's distinct four-byte semantics.

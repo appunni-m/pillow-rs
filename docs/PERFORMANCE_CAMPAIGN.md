@@ -9881,3 +9881,70 @@ cost are unknown, so compare it against the retained row cache before keeping
 it. Do not reintroduce the measured slower balanced-count variant. This visit
 is checkpointed after four attempts; move to the next ranked operation and
 revisit the GPU/SIMD gap later. No coverage collection ran.
+
+### ImageOps.cover native-L packed resize — checkpoint 2026-09-30
+
+The material case is `pil-imageops.cover.materialized.l-noise-1024x768`: native
+L noise, default Bicubic, resized from 1024 × 768 to 1365 × 1024. Cover uses a
+separable byte resize, so the horizontal pass must round to bytes before the
+vertical pass. The retained GPU path keeps source L bytes compact, packs four
+horizontal intermediate samples per word, and writes four vertical results per
+word. Readback is 1,400,832 bytes (three padding bytes per row), versus the
+5,591,040-byte widened RGBA readback. No mode conversion is reported.
+
+Four bounded changes were attempted. First, pack the final native-L output;
+second, pack the horizontal intermediate as well; third, use checked i32
+accumulators for the Cover-only L/Bicubic SIMD resize; fourth, compute four
+vertical output bytes together, reusing the coefficient row and packed input
+word per tap. The i32 path is admitted only when both actual coefficient tables
+prove `255 * sum(abs(weights)) + fixed-point bias <= i32::MAX`; otherwise the
+existing widened i64 SIMD path remains. The quartet retains an independent
+accumulator and ascending tap order for each byte, and applies the same byte
+rounding independently after the loop.
+
+Benchmark receipts use the standard warm-cache policy (five warmups, 20
+iterations × five samples, 100 calls per subject, concurrency one), with
+parity as a correctness gate. They are `migration-benchmark-1c4249a8c9e2492da3be891e419681a9`
+(packed output), `migration-benchmark-870c6b8cb7d0449ab1d2bfabbc49b106`
+(packed H and V), `migration-benchmark-34114237cd614c41a248683b783d1125`
+(checked i32 SIMD), and the quartet repeats
+`migration-benchmark-f43df92b17ce44e8b89d37069dfd2693` and
+`migration-benchmark-3af6552438974f0e903d51a13ad47b85`:
+
+| Median latency, ms | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Packed output | 4.801 | 2.016 | 1.429 | 1.652 |
+| Packed H and V | 4.854 | 2.606 | 1.536 | 1.538 |
+| Checked i32 SIMD | 4.641 | 1.977 | 1.042 | 1.694 |
+| Quartet, run 1 | 7.508 | 3.127 | 2.110 | 1.586 |
+| Quartet, repeat | 4.808 | 2.004 | 1.170 | 1.509 |
+
+The first quartet run was noisy across Pillow, CPU, and SIMD as well as GPU.
+The repeat's GPU median is 1.9% below the best earlier packed-H/V run, while
+the first quartet run is 3.1% above it; the evidence does not establish a
+stable end-to-end gain for the quartet. Keep the simple load-reuse kernel as a
+parity-preserving candidate, but do not claim that it closes the GPU gap. On
+the repeat, CPU is 2.40× faster than Pillow; SIMD is 4.11× faster, below the
+5× goal; and GPU is 1.29× slower than SIMD (663 versus 855 reciprocal-latency
+operations/s). These rates are single-request reciprocal latency, not
+saturated throughput.
+
+Strict CPU, SIMD, and GPU parity each passed all six selected cases. The GPU
+strict receipt is `migration-parity-761bec7fc1f7406e90c458bf985e3412`; the CPU
+and SIMD receipts are `migration-parity-b4e35433f36f439f816c4a353e196fa7` and
+`migration-parity-c25c21fdf0f747f39910db72299d671d`. The cases cover the
+material Bicubic image, four tail widths across Bicubic/Bilinear/Lanczos/Box,
+and nearest. Both quartet benchmark parity gates passed 3/3. `make docs-lint`,
+`cargo fmt --all --check`, and the parity-input reproduction check passed. No
+coverage collection or coverage test was run.
+
+The remaining blockers are concrete: SIMD must cut another 11% or more from
+the best stable material latency to reach 5× Pillow, and GPU must close the
+latency gap to SIMD while improving throughput. Current host backend timing
+combines device execution with `map_async` wait and row depadding, so it cannot
+show whether shader compute or completion/materialization dominates. Before a
+later Cover GPU attempt, measure H/V GPU timestamps separately from map wait
+and decode. A bounded SIMD candidate is to replace the vertical kernel's
+scalar byte-to-i32 lane copies with a portable vector widen, after confirming
+the `wide` API supports it. Checkpoint Cover after four attempts and move on to
+the next ranked operation; no coverage collection ran.
