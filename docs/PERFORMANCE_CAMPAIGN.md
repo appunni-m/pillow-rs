@@ -7068,6 +7068,37 @@ not an attributed gain. The operation is checkpointed after three bounded
 attempts; the next work should target per-call GPU submission/readback and
 SIMD whole-call cost. No coverage was run.
 
+### GPU PutAlpha finalization: retain native LA/PA output — 2026-09-29
+
+The native LA and PA GPU byte kernels already read back an owned
+`ImageLumaA8`. `put_alpha_output` previously widened that result to RGBA and
+immediately collected byte 0 and byte 3 into another LA allocation. It now
+returns a matching native LA carrier directly. The generic fallback consumes
+its owned RGBA result with `into_rgba8()`, avoiding a clone while preserving
+conversion behavior for other storage variants. A focused Rust test covers
+native LA and PA results; the public LA and PA material workloads each passed
+exact parity on CPU, SIMD, and GPU (6/6 comparisons total), with 100 actual
+executions per backend for each workload and no fallback. GPU upload and
+readback remained 1,572,864 bytes per case, confirming native two-byte
+transport. `cargo fmt --all` and
+`env -u RUSTC_WRAPPER cargo test -p pillow-rs --lib put_alpha_output_keeps_native_results_and_consumes_rgba_fallback`
+passed; the unit test checks both the LA/PA direct return and RGBA fallback.
+
+The correctness-gated command was:
+
+```sh
+RUSTC_WRAPPER= make migration-parity-benchmark MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/putalpha-la-pa-native-output.json MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/putalpha-la-pa-native-output-parity.json MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.putalpha.materialized.pa-noise-1024x768-scalar --workload-id pil-image-image.putalpha.materialized.la-noise-1024x768-scalar'
+```
+
+Its
+receipts are `build/migration-parity/putalpha-la-pa-native-output.json` and
+`putalpha-la-pa-native-output-parity.json`. Latency is unproven: a separate
+`image-slash-star` `cargo-llvm-cov` build and other heavy host processes were
+active during measurement, and the GPU sample variance was several times its
+median. Do not claim a speedup from this run. The native output removes one
+full-frame widen-and-repack sequence; GPU submission and readback remain the
+larger measured-system blocker. No coverage was started by this task.
+
 ### RGB `Image.putalpha`: keep RGB input native through the required RGBA result — 2026-09-29
 
 Scalar RGB `putalpha` changes the public result to RGBA, so the four-byte

@@ -12016,7 +12016,15 @@ fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> Result<DynamicImag
         mode,
         PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA
     ) {
-        let rgba = result.to_rgba8();
+        let rgba = match result {
+            // Native LA/PA byte dispatch already returned the public
+            // two-band representation. Do not widen it to RGBA and pack it
+            // straight back into the same two bytes.
+            DynamicImage::ImageLumaA8(image) => return Ok(DynamicImage::ImageLumaA8(image)),
+            // The generic GPU path returns an owned RGBA readback; consume
+            // that carrier so the fallback does not clone it before packing.
+            result => result.into_rgba8(),
+        };
         let (w, h) = rgba.dimensions();
         let samples = rgba
             .pixels()
@@ -18939,6 +18947,25 @@ mod tests {
     use crate::{Backend, Image, ResampleInput};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn put_alpha_output_keeps_native_results_and_consumes_rgba_fallback() {
+        let bytes = vec![17, 201, 83, 149];
+        for mode in [PixelMode::LA, PixelMode::PA] {
+            let image =
+                DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(2, 1, bytes.clone()).unwrap());
+            let result = super::put_alpha_output(image, mode).unwrap();
+            assert!(matches!(&result, DynamicImage::ImageLumaA8(_)));
+            assert_eq!(result.as_bytes(), bytes);
+        }
+
+        let rgba = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![17, 22, 33, 201, 83, 91, 102, 149]).unwrap(),
+        );
+        let output = super::put_alpha_output(rgba, PixelMode::L).unwrap();
+        assert!(matches!(&output, DynamicImage::ImageLumaA8(_)));
+        assert_eq!(output.as_bytes(), [17, 201, 83, 149]);
+    }
 
     #[test]
     fn native_byte_paste_planner_checks_l_la_rgb_and_adapter_boundaries() {
