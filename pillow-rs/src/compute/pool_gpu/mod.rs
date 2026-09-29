@@ -6182,6 +6182,7 @@ impl GpuInner {
         input_dims: &[(u32, u32)],
         packed_luma_point: bool,
         packed_luma_putdata: bool,
+        packed_luma_median: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
@@ -6229,6 +6230,16 @@ impl GpuInner {
                     include_str!("shaders/point_luma_packed.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(point));
+                index += 1;
+                continue;
+            }
+            if packed_luma_median && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
+                let median = self.resolve_pipeline(
+                    "__internal_median_filter_3x3_luma_packed",
+                    "median_filter_3x3_luma_packed.wgsl",
+                    include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(median));
                 index += 1;
                 continue;
             }
@@ -7413,6 +7424,7 @@ impl GpuInner {
         native_rgb_to_rgba_input: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
+        packed_luma_median: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_la_input: bool,
@@ -7529,6 +7541,12 @@ impl GpuInner {
                     "__internal_point_luma_packed",
                     "point_luma_packed.wgsl",
                     include_str!("shaders/point_luma_packed.wgsl"),
+                )?
+            } else if packed_luma_median && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
+                self.resolve_pipeline(
+                    "__internal_median_filter_3x3_luma_packed",
+                    "median_filter_3x3_luma_packed.wgsl",
+                    include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
                 )?
             } else if native_sharpness_la_input && matches!(op, PipelineOp::Sharpness { .. }) {
                 self.resolve_pipeline(
@@ -8521,6 +8539,11 @@ impl GpuInner {
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
+            "__internal_median_filter_3x3_luma_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "ExtractBand" | "Grayscale" => plan_extract_band_dispatch(
                 output_dims.0,
                 output_dims.1,
@@ -8592,6 +8615,7 @@ impl GpuInner {
         logical_mode: Option<&str>,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
+        packed_luma_median: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
     ) -> Result<bool, PilError> {
@@ -8601,6 +8625,7 @@ impl GpuInner {
             &prepared.input_dims,
             packed_luma_point,
             packed_luma_putdata,
+            packed_luma_median,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
         )?;
@@ -11288,6 +11313,7 @@ impl GpuInner {
         native_rgb_to_rgba_input: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
+        packed_luma_median: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_la_input: bool,
@@ -11515,6 +11541,7 @@ impl GpuInner {
                 native_rgb_to_rgba_input,
                 packed_luma_point,
                 packed_luma_putdata,
+                packed_luma_median,
                 native_extract_band,
                 native_grayscale_rgb_input,
                 native_sharpness_la_input,
@@ -11545,6 +11572,7 @@ impl GpuInner {
                 logical_mode,
                 packed_luma_point,
                 packed_luma_putdata,
+                packed_luma_median,
                 native_sharpness_la_input,
                 native_sharpness_rgb_input,
             )?;
@@ -11555,6 +11583,7 @@ impl GpuInner {
                     dispatch.transfer_bytes
                 } else if packed_luma_point
                     || packed_luma_putdata
+                    || packed_luma_median
                     || matches!(
                         ops.last(),
                         Some(PipelineOp::ExtractBand { .. } | PipelineOp::Grayscale)
@@ -11730,6 +11759,39 @@ fn gpu_packed_luma_convert_input(
         && matches!(logical_mode, None | Some("L"))
         && image.width() != 0
         && image.height() != 0
+}
+
+/// Admit the exact native-L 3x3 median specialization. Its shader operates on
+/// four adjacent L samples packed into one word, so prefixes, palette modes,
+/// empty images, and malformed backing lengths keep the ordinary path.
+#[cfg(target_endian = "little")]
+fn gpu_packed_luma_median_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(ops, [PipelineOp::MedianFilter { size: 3 }])
+        || !matches!(logical_mode, None | Some("L"))
+    {
+        return false;
+    }
+    let DynamicImage::ImageLuma8(luma) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 1) else {
+        return false;
+    };
+    let pixel_count = layout.total_pixels();
+    pixel_count > 0 && pixel_count <= u32::MAX as usize && luma.as_raw().len() == pixel_count
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_packed_luma_median_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
 }
 
 #[cfg(not(target_endian = "little"))]
@@ -18024,6 +18086,7 @@ impl GpuPool {
                 }] if matches!(img, DynamicImage::ImageLuma8(source)
                     if data.len() <= source.as_raw().len())
             );
+        let packed_luma_median = gpu_packed_luma_median_input(ops, img, mode);
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -18846,16 +18909,25 @@ impl GpuPool {
                 gpu.device.limits().max_compute_workgroups_per_dimension,
             )
             .is_ok();
+        let packed_luma_median = packed_luma_median
+            && plan_packed_luma_dispatch(
+                img.width(),
+                img.height(),
+                gpu.device.limits().max_compute_workgroups_per_dimension,
+            )
+            .is_ok();
         let image_pixels = CheckedDims::new(img.width(), img.height(), 1)?.total_pixels();
         let full_luma_putdata = packed_luma_putdata
             && matches!(ops, [PipelineOp::PutData { data, mode: PixelMode::L }]
                 if data.len() == image_pixels);
-        if gpu_dispatch_dimensions_require_cpu(
-            ops,
-            img.dimensions(),
-            gpu.device.limits().max_compute_workgroups_per_dimension,
-            mode,
-        ) {
+        if !packed_luma_median
+            && gpu_dispatch_dimensions_require_cpu(
+                ops,
+                img.dimensions(),
+                gpu.device.limits().max_compute_workgroups_per_dimension,
+                mode,
+            )
+        {
             gpu_log!("[GPU] dispatch preflight routed batch to CPU: adapter workgroup limit");
             return self.preflight_failure(
                 ops,
@@ -19178,6 +19250,7 @@ impl GpuPool {
             || packed_luma_convert
             || packed_luma_point
             || packed_luma_putdata
+            || packed_luma_median
         {
             let DynamicImage::ImageLuma8(image) = img else {
                 return Err(PilError::InternalError(
@@ -19232,6 +19305,7 @@ impl GpuPool {
             native_rgb_to_rgba_input,
             packed_luma_point,
             packed_luma_putdata,
+            packed_luma_median,
             native_extract_band,
             native_grayscale_rgb_input,
             native_sharpness_la_input,
@@ -19324,6 +19398,7 @@ impl GpuPool {
             || native_luma8_grayscale
             || packed_luma_point
             || packed_luma_putdata
+            || packed_luma_median
         {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
         } else if native_sharpness_la_input {
@@ -19399,6 +19474,7 @@ impl GpuPool {
             || packed_luma_convert
             || packed_luma_point
             || packed_luma_putdata
+            || packed_luma_median
         {
             compact_luma8_transfer_bytes(w, h)?
         } else {
@@ -19422,6 +19498,7 @@ impl GpuPool {
             || native_luma8_grayscale
             || packed_luma_point
             || packed_luma_putdata
+            || packed_luma_median
         {
             compact_luma8_transfer_bytes(final_w, final_h)?
         } else {
@@ -19430,6 +19507,7 @@ impl GpuPool {
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = if packed_luma_convert
+            || packed_luma_median
             || native_rgb_to_rgba_input
             || native_grayscale_rgb_input
             || native_sharpness_la_input
@@ -19451,6 +19529,7 @@ impl GpuPool {
                     && !native_reduce_rgb_input
                     && !packed_luma_point
                     && !packed_luma_putdata
+                    && !packed_luma_median
                     && (native_luma16_convert
                         || native_luma16_paste
                         || !matches!(
@@ -19474,6 +19553,7 @@ impl GpuPool {
             || native_luma8_grayscale
             || packed_luma_point
             || packed_luma_putdata
+            || packed_luma_median
         {
             return Ok(result);
         }
@@ -19518,8 +19598,8 @@ mod tests {
         gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
         plan_extract_band_dispatch, plan_gpu_native_byte_paste, plan_native_expand_output_dispatch,
         plan_native_rgb_put_alpha_data_dispatch, plan_native_rgb_put_alpha_dispatch,
-        plan_native_rgba_put_alpha_data_dispatch, plan_packed_point_luma_dispatch,
-        putdata_auxiliary_words, readback_poll_backoff,
+        plan_native_rgba_put_alpha_data_dispatch, plan_packed_luma_dispatch,
+        plan_packed_point_luma_dispatch, putdata_auxiliary_words, readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -20582,6 +20662,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -25155,6 +25236,50 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
+    fn gpu_packed_luma_median_admits_only_exact_native_l_singletons() {
+        let median = PipelineOp::MedianFilter { size: 3 };
+        let luma = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(3, 2, vec![5, 40, 250, 100, 80, 10]).unwrap(),
+        );
+        assert!(super::gpu_packed_luma_median_input(
+            std::slice::from_ref(&median),
+            &luma,
+            None
+        ));
+        assert!(super::gpu_packed_luma_median_input(
+            std::slice::from_ref(&median),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_median_input(
+            std::slice::from_ref(&median),
+            &luma,
+            Some("P")
+        ));
+        assert!(!super::gpu_packed_luma_median_input(
+            &[PipelineOp::MedianFilter { size: 5 }],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_median_input(
+            &[median.clone(), PipelineOp::Duplicate],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_median_input(
+            std::slice::from_ref(&median),
+            &DynamicImage::ImageRgb8(RgbImage::from_raw(2, 1, vec![1, 2, 3, 4, 5, 6]).unwrap()),
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_median_input(
+            std::slice::from_ref(&median),
+            &DynamicImage::ImageLuma8(GrayImage::new(0, 1)),
+            Some("L")
+        ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
     fn gpu_native_rgb_to_rgba_input_requires_exact_native_rgb_conversion() {
         let convert_rgba = PipelineOp::Convert {
             mode: ColorMode::RGBA,
@@ -25575,6 +25700,26 @@ mod tests {
         assert!(plan_extract_band_dispatch(5 * 256, 1, 0).is_err());
         assert!(plan_extract_band_dispatch(5 * 256, 1, 1).is_err());
         assert!(plan_extract_band_dispatch(u32::MAX, 2, 65_535).is_err());
+    }
+
+    #[test]
+    fn packed_luma_dispatch_respects_workgroup_and_index_boundaries() {
+        assert_eq!(
+            plan_packed_luma_dispatch(4096, 4096, 65_535)
+                .expect("4096x4096 L median fits a one-dimensional packed grid"),
+            (16_384, 1)
+        );
+
+        let max_pixels = 65_535u32 * 256 * 4;
+        assert_eq!(
+            plan_packed_luma_dispatch(max_pixels, 1, 65_535)
+                .expect("the last permitted packed workgroup fits"),
+            (65_535, 1)
+        );
+        assert!(plan_packed_luma_dispatch(max_pixels + 1, 1, 65_535).is_err());
+        assert!(plan_packed_luma_dispatch(1, 1, 0).is_err());
+        assert!(plan_packed_luma_dispatch(0, 1, 65_535).is_err());
+        assert!(plan_packed_luma_dispatch(u32::MAX, 2, 65_535).is_err());
     }
 
     #[test]

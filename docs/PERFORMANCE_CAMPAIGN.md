@@ -4905,13 +4905,15 @@ failures, skipped cases, or infrastructure errors. The campaign build required
 this host's permissions. No fixtures, expected outputs, or comparison rules
 were changed, and no coverage ran.
 
-## MedianFilter 3 × 3 checkpoint — 2026-09-26
+## MedianFilter 3 × 3 checkpoint — updated 2026-09-29
 
 Three bounded attempts optimized `PIL.Image.Image.filter` with
-`MedianFilter(3)`. CPU strict parity passes all 756 Filter workflows; the
-dedicated GPU shader passes all 13 selected size-3 median workflows across
-byte modes and the F-mode control. No expected output or comparison rule was
-changed.
+`MedianFilter(3)`. A fourth, L-specific GPU attempt now keeps the input and
+output in packed native bytes and processes four output pixels per invocation.
+CPU strict parity passes all 756 Filter workflows; the dedicated GPU shader
+passes the earlier 13 selected size-3 workflows across byte modes and the
+F-mode control. The new varied-L edge/material cohort passes all 12 CPU, SIMD,
+and GPU comparisons. No expected output or comparison rule was changed.
 
 The first CPU change recognizes uniform native-byte images for every rank, not
 only min/max, and returns a clone before allocating the output. Every rank of a
@@ -4959,6 +4961,28 @@ the following medians in microseconds, compared with
 | RGB 1,024 × 768 | 36,733 → 39,671 | 2,882 → 1,926 | 4,119 → 5,342 | 21,960 → 3,348 |
 | MedianFilter materialized 16 × 16 | 27.60 → 30.58 | 141.73 → 16.62 | 14.71 → 16.08 | 530.92 → 282.54 |
 
+The fourth attempt addresses the specific L-mode cost visible above: the
+existing GPU path widened L to RGBA for upload, sorted four channel lanes even
+though only L was observable, then narrowed the RGBA result. The new exact
+singleton `ImageLuma8`/`MedianFilter(3)` route packs four adjacent output
+pixels into the shader's vector lanes and packs those four medians into one
+word. Each lane computes its own x/y coordinates and clamps each axis
+independently, so odd image widths and row edges retain Pillow's replicated
+edge semantics. On a seeded varied 1,024 × 768 L image, upload and readback
+each fell from 3,145,728 to 786,432 bytes, and the reported mode-conversion
+count fell from one to zero.
+
+The correctness-gated material benchmark row
+`pipeline-op.medianfilter.material-l-noise-1024x768` compares Pillow, CPU,
+SIMD, and GPU over 100 timed executions per subject. Before → after medians
+were Pillow 41.823 → 41.803 ms, CPU 3.761 → 4.103 ms, SIMD 1.476 → 1.694 ms,
+and GPU 2.485 → 1.372 ms. The GPU path improved 1.81× in throughput and now
+beats SIMD by 1.23× on this material L case. CPU remains about 10.2× faster
+than Pillow and SIMD about 24.7× faster. CPU/SIMD changes across the two runs
+are run-to-run variation; their implementations were unchanged. This one case
+meets the stated backend latency relationship, but it does not resolve the
+small 16 × 16 CPU regression or establish the target on every mode and size.
+
 The official filter generator uses constant-zero images, so the first four rows
 do not measure median-selection throughput on varied pixels. The direct
 patterned diagnostics are separate and do not include the official workflow's
@@ -4966,14 +4990,13 @@ instrumentation or establish sustained request throughput. Rerun variance also
 affects the unrelated 1 × 1 row; do not interpret that row as a filter-kernel
 change.
 
-Checkpoint blockers: patterned 16 × 16 CPU is slower than Pillow; SIMD remains
-below 5× Pillow for small and medium
-inputs; GPU loses to SIMD for small inputs and is only approximately tied at
-256 × 256. Add representative patterned benchmark inputs before using the
-official cohort to rank this operation. The next revisit should first attribute
-small-call fixed costs, then test a selection network or specialized 3×3
-median kernel and measure the GPU transfer/dispatch crossover. This operation
-is checkpointed, not complete. No coverage ran.
+Remaining blockers: patterned 16 × 16 CPU is slower than Pillow; SIMD remains
+below 5× Pillow for small and medium inputs; GPU still needs measured
+small/medium crossover evidence. The new varied-L material row closes the
+constant-input gap for L, but does not characterize LA, RGB, or RGBA material
+throughput. Keep this operation checkpointed and move to the next operation;
+revisit only with new representative evidence for those outstanding cases. No
+coverage ran.
 
 ## Image.Image.getchannel checkpoint — 2026-09-26
 
