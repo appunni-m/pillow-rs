@@ -6895,7 +6895,7 @@ image kernels otherwise operate on native bytes. Runtime CPU call sites are conc
 
 | Caller | Native-format opportunity and semantic boundary |
 | --- | --- |
-| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad admits exact L/LA/RGB/HSV/RGBA/CMYK storage; Expand admits those byte layouts with CMYK C/M/Y/K intact. SIMD keeps native rows; GPU keeps CMYK's four stored bytes and skips identity-resize coefficient work. Keep P/PA tuple-index semantics. |
+| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad admits exact L/LA/RGB/HSV/RGBA/RGBX/CMYK storage; Expand admits those byte layouts with CMYK C/M/Y/K intact. SIMD keeps native rows; GPU keeps CMYK's four stored bytes, skips identity-resize coefficient work, and fuses RGBX full-width vertical resize with canvas placement. Keep P/PA tuple-index semantics. |
 | [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness scales byte 0 directly and preserves byte 1; RGB Brightness stays in three-byte storage. CPU Sharpness processes matching L/LA/RGB/RGBA/RGBX/CMYK bytes with operation-specific active-channel counts; aliases retain the conversion fallback. RGBX Sharpness processes byte 3 even though other RGBX operations may treat it as padding. |
 | [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Spread now borrows native 1/2/3/4-byte storage for relocation, preserving raw CMYK/RGBX/RGBa/I/F samples; typed fallbacks retain their existing numeric conversion. Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Scalar RGB PutAlpha reads three-byte RGB directly and fuses the required RGBA output write; mixed-mode paste/composite conversions remain where semantics require them. |
 | [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I-mode Filter3x3, I-mode Filter5x5, and F-mode rank filtering now borrow matching scalar carriers; preserve the guarded accessor fallback and exact sample representation. |
@@ -6964,9 +6964,10 @@ materialized RGBA reference. These variants are not produced by current public
 constructors or decoder lanes, so this internal route still lacks public
 migration parity and benchmark coverage. Unmasked, same-mode RGB Paste is now
 checkpointed with a native CPU row-copy route. Pad was the next reachable
-target and now has native CPU L/LA/RGB/HSV/RGBA/CMYK paths plus direct SIMD
-full-width vertical-pad assembly. Its remaining gaps are SIMD versus the 5×
-goal and GPU's full-image upload/readback.
+target and now has native CPU L/LA/RGB/HSV/RGBA/RGBX/CMYK paths, direct
+full-width CPU/SIMD resize output, and an RGBX GPU resize-placement fusion. Its
+remaining gaps are SIMD versus the 5× goal and a stable GPU throughput win over
+SIMD after full-frame upload/readback.
 Expand's native CPU/SIMD/GPU paths now cover L/LA/RGB/HSV/RGBA. The HSV
 follow-up and compact native GPU output are recorded below.
 
@@ -7713,7 +7714,7 @@ everything else.
 | Rank | Conversion family | First native implementation | Semantic boundary |
 | --- | --- | --- | --- |
 | 1 | CPU/SIMD/GPU Paste | For exact matching byte layouts with no mask, copy clipped source rows at native bytes per pixel; GPU L/LA/RGB packs each output word directly. | Require logical mode and concrete storage to agree. RGB's three-byte GPU layout maps each output byte to its pixel/channel so a word crossing pixels still has one writer. Masked Paste blends only according to Pillow's selected L or alpha mask band; mixed-mode RGB inputs are converted before queuing and stay on the fallback. |
-| 2 | CPU/SIMD/GPU Pad | Keep exact native L/LA/RGB/HSV/RGBA/CMYK storage, borrow an identity-contain source, and assemble full-width vertical output from fill/source/fill spans. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1; CMYK's fourth byte is K. GPU must skip identity resize work, but 3 MiB upload plus 4 MiB readback still dominates this case. |
+| 2 | CPU/SIMD/GPU Pad | Keep exact native L/LA/RGB/HSV/RGBA/RGBX/CMYK storage, borrow identity-contain input, and write full-width vertical resize rows into the final canvas. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1; CMYK's fourth byte is K; RGBX filters X as data. GPU identity placement is one dispatch; filtered full-width RGBX resize is two. Transfer/readback still limits one-shot throughput. |
 | 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA and CMYK C/M/Y/K bytes. Build SIMD 3-byte fill rows once; on GPU, use native source bytes and packed output only when it reduces transfer size. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
 | 5 | Scalar RGB `Image.putalpha` | Read three-byte RGB directly and write the required four-byte RGBA result; use a dedicated SIMD interleave and native RGB GPU upload. | Gate on `ImageRgb8` plus logical RGB. GPU must bounds-check each packed RGB byte lookup and the output dispatch. Current CPU is 1.40× and SIMD 1.64× Pillow; GPU remains 1.75× slower than Pillow. This is a checkpoint, not a completed speed target. |
@@ -9047,8 +9048,74 @@ Inputs are case `PIL.ImageOps.expand.nuanced.performance-rgbx-noise-1024x768`
 and workload `pil-imageops.expand.materialized.rgbx-noise-1024x768`. The final
 report is `build/migration-parity/rgbx-expand-cpu-simd-rowbuild-100.json` and
 its parity evidence is `build/migration-parity/rgbx-expand-cpu-simd-rowbuild-100-parity.json`.
-Continue with RGBX `ImageOps.pad` on CPU/SIMD. Keep GPU out of its performance
-comparison until a mode-correct route has an actual GPU receipt.
+RGBX `ImageOps.pad` was next. Its filtered full-width resize now has a mode-6
+GPU route with strict parity and an actual device receipt; see the checkpoint
+below.
+
+### RGBX `ImageOps.pad`: write resize rows into final canvas — checkpoint 2026-09-29
+
+Keep the logical-mode gate (`RGBX`) paired with the concrete `ImageRgba8`
+carrier. Byte 3 is stored X data: preserve source X on identity copies, filter X
+with the same four-channel fixed-point resize coefficients when dimensions
+change, and use the fourth fill component only for new pixels. A missing fill
+and scalar zero are different public inputs even when both yield zero X; the
+parity fixture must pass `color=None` explicitly if it claims to cover the
+default.
+
+For identity contain sizing, check dimensions before constructing an owned
+resize result. The full-width vertical route can append filled top rows, the
+borrowed source span, then filled bottom rows, avoiding a fill pass that is
+immediately overwritten. For a non-nearest resize whose contained image spans
+the full canvas width, CPU and SIMD retain the exact horizontal pass and its
+coefficients, but write the vertical result into the middle row window of one
+final, prefilled canvas. Gate on non-identity geometry, full output width, and
+zero horizontal offset; keep other geometries on the established resize-then-
+place path. This removes the temporary contained image and its full-frame copy
+without changing Pillow's resampling order.
+
+The GPU specialization keeps the same horizontal pass and replaces vertical
+resize plus placement with one RGBX shader. Use resize-local `y` to index the
+vertical coefficient table and intermediate, but use the canvas width for the
+output address. Every in-bounds canvas invocation must store exactly once:
+filter all four bytes inside the contain rectangle (without alpha
+premultiplication) and store the packed fill outside. Limit admission to
+filtered RGBX cases that span the output width; identity, nearest, horizontally
+padded, typed, and other mode routes remain unchanged. Count this as two
+dispatches and estimate the fused pass over the full canvas. The GPU still
+uploads and materializes full four-byte buffers, so fewer shader work items do
+not establish a throughput win by themselves.
+
+Parity must include both a large full-width resize and a small rounding case.
+For RGBX 6×3 padded to 5×5 at center `(0.5, 0.5)`, Pillow rounds the contain
+height 2.5 to 2 and the vertical paste offset 1.5 to 2. This simultaneously
+checks the filtered X byte, both ties-to-even decisions, and partial 16×16 GPU
+workgroups. Also keep distinct omitted, scalar, and four-component fills.
+
+Strict parity passed 5/5 cases on CPU, SIMD, and GPU. The set covers identity
+contain, large filtered resize, omitted fill, scalar fill, and the 6×3 rounding
+case; each observes full output bytes. The GPU resize shader passed on-device
+with two dispatches, 3,145,728 upload bytes, 2,359,296 readback bytes, and no
+fallback. Focused `pad_` unit tests passed 16/16. `make build-parity`,
+`make migration-parity-inputs`, and `make migration-parity-inputs-check` passed;
+no coverage was run.
+
+Two correctness-gated benchmark runs used five warmups and 100 measured calls
+per subject for `pil-imageops.pad.materialized.native-rgbx-resize-1024x768-to-768-square`:
+
+| Run | Pillow ms | CPU ms | SIMD ms | GPU ms | GPU dispatches |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `604417b0547e4ceca13e8fcd3ef10c06` | 7.255 | 2.814 | 3.993 | 2.887 | 2 |
+| `8c44a6ae1f634a4d89854594e8d5bff5` | 7.169 | 2.810 | 2.668 | 2.833 | 2 |
+
+The SIMD timing varied substantially between these paired runs, so do not use
+the first row as evidence that GPU beats SIMD. In the steadier second row, CPU
+is 2.55× Pillow and SIMD is 2.69× Pillow, short of the 5× SIMD target (about
+1.43 ms at that Pillow median). GPU is nearly level with CPU but about 6% slower
+than SIMD. Two dispatches and exact parity are established; a stable GPU
+throughput advantage and the 5× SIMD target remain blockers. Checkpoint Pad
+after the bounded four optimization attempts and move to the next operation;
+revisit only with evidence for removing more host resize work or reducing the
+full-frame upload/readback boundary.
 
 ### Scalar RGBA `Image.putalpha` — checkpoint 2026-09-29
 

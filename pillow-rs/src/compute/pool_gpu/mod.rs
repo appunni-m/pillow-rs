@@ -5875,6 +5875,10 @@ enum ResolvedPipeline {
         horizontal: Arc<CachedPipeline>,
         vertical: Arc<CachedPipeline>,
         place: Arc<CachedPipeline>,
+        /// RGBX resize variant that writes the vertical result into the final
+        /// canvas, including its fill rows, instead of materializing a resized
+        /// frame for the placement pass.
+        vertical_pad_rgbx: Option<Arc<CachedPipeline>>,
     },
     /// Histogram-driven ImageOps keep all control/data passes on the device:
     /// clear the reusable histogram, accumulate the current image, derive a
@@ -6344,10 +6348,23 @@ impl GpuInner {
                     "pad.wgsl",
                     include_str!("shaders/pad.wgsl"),
                 )?;
+                let vertical_pad_rgbx =
+                    if gpu_pad_rgbx_fused_vertical_geometry(op, input_dims[index], logical_mode)
+                        .is_some()
+                    {
+                        Some(self.resolve_pipeline(
+                            "__internal_resize_v_pad_rgbx",
+                            "resize_convolution_v_pad_rgbx.wgsl",
+                            include_str!("shaders/resize_convolution_v_pad_rgbx.wgsl"),
+                        )?)
+                    } else {
+                        None
+                    };
                 resolved.push(ResolvedPipeline::Pad {
                     horizontal,
                     vertical,
                     place,
+                    vertical_pad_rgbx,
                 });
             } else if matches!(op, PipelineOp::Fit { .. } | PipelineOp::ResizeBoxed { .. }) {
                 let horizontal = self.resolve_pipeline(
@@ -6836,7 +6853,7 @@ impl GpuInner {
             });
         } else if matches!(
             cached.variant_name,
-            "__internal_resize_h" | "__internal_resize_v"
+            "__internal_resize_h" | "__internal_resize_v" | "__internal_resize_v_pad_rgbx"
         ) {
             let (horizontal, vertical) = resources
                 .resize_coeff_ranges
@@ -8305,7 +8322,7 @@ impl GpuInner {
             let lut_values = if cached.is_lut
                 && !matches!(
                     cached.variant_name,
-                    "__internal_resize_h" | "__internal_resize_v"
+                    "__internal_resize_h" | "__internal_resize_v" | "__internal_resize_v_pad_rgbx"
                 ) {
                 Some(extract_lut(op, op_mode).ok_or_else(|| {
                     PilError::ValueError(format!(
@@ -8522,6 +8539,9 @@ impl GpuInner {
             )?,
             "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
             "__internal_resize_v" => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
+            "__internal_resize_v_pad_rgbx" => {
+                (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16))
+            }
             "__internal_equalize_histogram" => {
                 // About 16 packed pixels per lane amortizes each group's
                 // shared histogram. Cap groups to bound global bin merges;
@@ -8695,6 +8715,7 @@ impl GpuInner {
                     horizontal,
                     vertical,
                     place,
+                    ..
                 } = pipeline
                 else {
                     unreachable!("typed I Pad pipeline shape changed")
@@ -8828,6 +8849,7 @@ impl GpuInner {
                 horizontal,
                 vertical,
                 place,
+                vertical_pad_rgbx,
             } = pipeline
             {
                 let resize_dims = prepared.pad_resize_dims[index].ok_or_else(|| {
@@ -8843,25 +8865,40 @@ impl GpuInner {
                         prepared.input_dims[index],
                         resize_dims,
                     )?;
+                    if let Some(vertical_pad_rgbx) = vertical_pad_rgbx {
+                        current_is_a = self.encode_dispatch(
+                            &mut cpass,
+                            vertical_pad_rgbx,
+                            index,
+                            current_is_a,
+                            &prepared.resources,
+                            prepared.input_dims[index],
+                            prepared.output_dims[index],
+                        )?;
+                        continue;
+                    } else {
+                        current_is_a = self.encode_dispatch(
+                            &mut cpass,
+                            vertical,
+                            index,
+                            current_is_a,
+                            &prepared.resources,
+                            prepared.input_dims[index],
+                            resize_dims,
+                        )?;
+                    }
+                }
+                if vertical_pad_rgbx.is_none() {
                     current_is_a = self.encode_dispatch(
                         &mut cpass,
-                        vertical,
+                        place,
                         index,
                         current_is_a,
                         &prepared.resources,
-                        prepared.input_dims[index],
                         resize_dims,
+                        prepared.output_dims[index],
                     )?;
                 }
-                current_is_a = self.encode_dispatch(
-                    &mut cpass,
-                    place,
-                    index,
-                    current_is_a,
-                    &prepared.resources,
-                    resize_dims,
-                    prepared.output_dims[index],
-                )?;
             } else if let ResolvedPipeline::Histogram {
                 clear,
                 histogram,
@@ -13254,9 +13291,20 @@ fn gpu_dispatch_count(
             2
         } else if matches!(&ops[index], PipelineOp::Pad { .. }) {
             // Identity contain sizing skips both resize passes and places the
-            // original bytes directly. Other Pad shapes run H, V, then place.
+            // original bytes directly. An eligible RGBX contain resize uses
+            // H plus a vertical pass that writes the final canvas; other Pad
+            // shapes run H, V, then place.
             match gpu_pad_geometry(&ops[index], cur_w, cur_h) {
                 Some(((resize_w, resize_h), _)) if (resize_w, resize_h) == (cur_w, cur_h) => 1,
+                _ if gpu_pad_rgbx_fused_vertical_geometry(
+                    &ops[index],
+                    (cur_w, cur_h),
+                    logical_mode,
+                )
+                .is_some() =>
+                {
+                    2
+                }
                 _ => 3,
             }
         } else {
@@ -13592,6 +13640,43 @@ fn gpu_pad_geometry(
     Some(((resize_w, resize_h), (offset_x, offset_y)))
 }
 
+/// Return Pad geometry admitted by the RGBX fused vertical-resize path.
+/// Horizontal resize remains the existing exact kernel; the second dispatch
+/// writes both the resized rows and the pad fill directly into the destination
+/// canvas. Keep this narrow to non-nearest resizes whose contain image spans
+/// the canvas width, leaving identity and horizontally padded cases unchanged.
+fn gpu_pad_rgbx_fused_vertical_geometry(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    logical_mode: Option<&str>,
+) -> Option<((u32, u32), (u32, u32))> {
+    if logical_mode != Some("RGBX") {
+        return None;
+    }
+    let PipelineOp::Pad { w, h, filter, .. } = op else {
+        return None;
+    };
+    if matches!(filter, ResampleFilter::Nearest) {
+        return None;
+    }
+
+    let (resize_dimensions, offsets) =
+        gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)?;
+    let (resize_w, resize_h) = resize_dimensions;
+    let (offset_x, offset_y) = offsets;
+    if resize_dimensions == source_dimensions || resize_w != *w || offset_x != 0 {
+        return None;
+    }
+    if offset_y
+        .checked_add(resize_h)
+        .is_none_or(|end_y| end_y > *h)
+    {
+        return None;
+    }
+
+    Some((resize_dimensions, offsets))
+}
+
 fn gpu_pad_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) -> u32 {
     let PipelineOp::Pad { color, .. } = op else {
         return 0;
@@ -13605,9 +13690,14 @@ fn gpu_pad_fill(op: &PipelineOp, logical_mode: Option<&str>, mode: u32) -> u32 {
         let (a, b, c, d) = color.unwrap_or((0, 0, 0, 0));
         return u32::from(a) | (u32::from(b) << 8) | (u32::from(c) << 16) | (u32::from(d) << 24);
     }
-    let has_alpha =
-        matches!(logical_mode, Some("LA" | "PA" | "RGBA" | "RGBa")) || matches!(mode, 1 | 3);
-    let (r, g, b, a) = color.unwrap_or((0, 0, 0, if has_alpha { 0 } else { 255 }));
+    // Pillow creates the destination in the source mode before pasting, so
+    // omitted color uses zero for packed four-byte modes. RGBX's X and CMYK's
+    // K are not alpha, but their fourth stored samples still default to zero.
+    let zero_fourth_default = matches!(
+        logical_mode,
+        Some("LA" | "PA" | "RGBA" | "RGBa" | "RGBX" | "CMYK")
+    ) || matches!(mode, 1 | 3);
+    let (r, g, b, a) = color.unwrap_or((0, 0, 0, if zero_fourth_default { 0 } else { 255 }));
     u32::from(r) | (u32::from(g) << 8) | (u32::from(b) << 16) | (u32::from(a) << 24)
 }
 
@@ -15169,13 +15259,26 @@ fn gpu_shader_work_items(
             return None;
         };
         // Horizontal resize visits source rows for every intermediate
-        // column, vertical resize visits every intermediate pixel, and the
-        // final placement visits the requested canvas once.
+        // column. The fused RGBX vertical pass and the ordinary final
+        // placement each visit the destination canvas once; the unfused path
+        // also materializes the intermediate resized frame.
+        let vertical_work = if gpu_pad_rgbx_fused_vertical_geometry(
+            op,
+            source_dimensions,
+            logical_mode,
+        )
+        .is_some()
+        {
+            output_pixels
+        } else {
+            u64::from(resize_w)
+                .saturating_mul(u64::from(resize_h))
+                .saturating_add(output_pixels)
+        };
         return Some(
             u64::from(source_dimensions.1)
                 .saturating_mul(u64::from(resize_w))
-                .saturating_add(u64::from(resize_w).saturating_mul(u64::from(resize_h)))
-                .saturating_add(output_pixels),
+                .saturating_add(vertical_work),
         );
     }
     let inner_work = match op {
@@ -19405,7 +19508,8 @@ mod tests {
         gpu_f64_ordered_round, gpu_f64_ordered_state_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
-        gpu_nearest_affine_is_exact, gpu_operation_requires_image_context, gpu_pad_geometry,
+        gpu_nearest_affine_is_exact, gpu_operation_requires_image_context, gpu_pad_fill,
+        gpu_pad_geometry, gpu_pad_rgbx_fused_vertical_geometry,
         gpu_palette_alpha_projective_relocation_is_admitted,
         gpu_palette_first_rgb_merge_is_supported, gpu_projective_filtered_constant_is_admitted,
         gpu_projective_filtered_relocation_is_admitted, gpu_projective_nearest_is_exact,
@@ -30320,6 +30424,87 @@ mod tests {
         assert_eq!(
             gpu_dispatch_count(std::slice::from_ref(&resized), Some("CMYK"), (1024, 768)),
             3
+        );
+    }
+
+    #[test]
+    fn rgbx_vertical_pad_fusion_is_limited_to_full_width_filtered_resize() {
+        let resized = PipelineOp::Pad {
+            w: 768,
+            h: 768,
+            filter: ResampleFilter::Lanczos,
+            color: Some((17, 83, 149, 31)),
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_pad_rgbx_fused_vertical_geometry(&resized, (1024, 768), Some("RGBX")),
+            Some(((768, 576), (0, 96)))
+        );
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&resized), Some("RGBX"), (1024, 768)),
+            2
+        );
+        assert_eq!(
+            gpu_shader_work_items(&resized, (1024, 768), (768, 768), Some("RGBX")),
+            Some(1_179_648)
+        );
+
+        assert_eq!(
+            gpu_pad_rgbx_fused_vertical_geometry(&resized, (1024, 768), Some("CMYK")),
+            None
+        );
+        assert_eq!(
+            gpu_dispatch_count(std::slice::from_ref(&resized), Some("CMYK"), (1024, 768)),
+            3
+        );
+
+        let nearest = PipelineOp::Pad {
+            w: 768,
+            h: 768,
+            filter: ResampleFilter::Nearest,
+            color: Some((17, 83, 149, 31)),
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_pad_rgbx_fused_vertical_geometry(&nearest, (1024, 768), Some("RGBX")),
+            None
+        );
+
+        let horizontal_padding = PipelineOp::Pad {
+            w: 1200,
+            h: 768,
+            filter: ResampleFilter::Lanczos,
+            color: Some((17, 83, 149, 31)),
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_pad_rgbx_fused_vertical_geometry(&horizontal_padding, (1024, 768), Some("RGBX")),
+            None
+        );
+    }
+
+    #[test]
+    fn gpu_pad_fill_keeps_rgbx_and_cmyk_fourth_byte_semantics() {
+        let default_fill = PipelineOp::Pad {
+            w: 2,
+            h: 3,
+            filter: ResampleFilter::Bicubic,
+            color: None,
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(gpu_pad_fill(&default_fill, Some("RGBX"), 6), 0);
+        assert_eq!(gpu_pad_fill(&default_fill, Some("CMYK"), 4), 0);
+
+        let explicit_fill = PipelineOp::Pad {
+            w: 2,
+            h: 3,
+            filter: ResampleFilter::Bicubic,
+            color: Some((17, 83, 149, 31)),
+            centering: (0.5, 0.5),
+        };
+        assert_eq!(
+            gpu_pad_fill(&explicit_fill, Some("RGBX"), 6),
+            17 | (83 << 8) | (149 << 16) | (31 << 24)
         );
     }
 
