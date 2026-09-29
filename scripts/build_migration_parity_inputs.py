@@ -41249,6 +41249,19 @@ def build_nuanced_cases(
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
+        # Keep a material native-L case beside the RGB GaussianBlur baseline.
+        # It isolates whether the six-pass GPU route pays for widening a
+        # one-byte source and output through its generic RGBA transport.
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "GaussianBlur",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-l-noise-1024x768-radius-2",
+            "mode": "L", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20260930, "observe_result": "tobytes",
+            "values": {"radius": literal(2.0)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
         # MedianFilter's maintained material workload used a constant image,
         # which skipped the order-statistic work on every pixel. Keep a seeded
         # native-L workload and small edge/tail shapes so backend measurements
@@ -50353,6 +50366,33 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+            if workload_id == "pil-imagefilter.gaussianblur.standard":
+                l_case_id = (
+                    "PIL.ImageFilter.GaussianBlur.nuanced."
+                    "performance-material-l-noise-1024x768-radius-2"
+                )
+                l_case = all_cases_by_id[l_case_id]
+                l_workload = copy.deepcopy(workloads[-1])
+                l_workload["workload_id"] = (
+                    "pipeline-op.gaussianblur.material-l-noise-1024x768"
+                )
+                l_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": l_case_id,
+                }
+                l_workload["context"] = _workflow_benchmark_context(
+                    l_case,
+                    variant="material-l-noise-1024x768-radius-2",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(l_workload)
+                members.append(
+                    {
+                        "workload_id": l_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
             if workload_id == "pil-image-image.convert.standard":
                 standard_workload = copy.deepcopy(workloads[-1])
                 pa_rgba_case_id = (

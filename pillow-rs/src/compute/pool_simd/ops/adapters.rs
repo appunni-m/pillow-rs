@@ -16190,6 +16190,173 @@ fn simd_transpose_interleaved_rows(
     );
 }
 
+/// Apply one exact native-L vertical radius-one box pass directly in row-major
+/// storage. Each output vector gathers its three integer-window rows and two
+/// fractional-edge rows, then keeps Pillow's 24-bit multiply and byte rounding
+/// intact. This avoids transposing the complete image solely to make columns
+/// contiguous for the generic sliding-line kernel.
+fn simd_luma_vertical_radius_one_row(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    y: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert!(y < height);
+    debug_assert_eq!(source.len(), width * height);
+    debug_assert_eq!(destination.len(), width);
+
+    let last_y = height - 1;
+    let sum_top = y.saturating_sub(1);
+    let sum_bottom = y.saturating_add(1).min(last_y);
+    let edge_top = y.saturating_sub(2);
+    let edge_bottom = y.saturating_add(2).min(last_y);
+    let sum_top_base = sum_top * width;
+    let sum_bottom_base = sum_bottom * width;
+    let edge_top_base = edge_top * width;
+    let edge_bottom_base = edge_bottom * width;
+
+    for x in (0..width).step_by(8) {
+        let count = (width - x).min(8);
+        let mut sums = [0u32; 8];
+        let mut edges = [0u32; 8];
+        for lane in 0..count {
+            let column = x + lane;
+            sums[lane] = u32::from(source[sum_top_base + column])
+                + u32::from(source[y * width + column])
+                + u32::from(source[sum_bottom_base + column]);
+            edges[lane] = u32::from(source[edge_top_base + column])
+                + u32::from(source[edge_bottom_base + column]);
+        }
+
+        let weighted = u32x8::new(sums) * u32x8::splat(whole_weight)
+            + u32x8::new(edges) * u32x8::splat(fractional_weight)
+            + u32x8::splat(SIMD_BOX_BLUR_BIAS);
+        let values = (weighted >> 24u32).to_array();
+        for lane in 0..count {
+            destination[x + lane] = values[lane] as u8;
+        }
+    }
+}
+
+fn simd_luma_vertical_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    debug_assert_eq!(source.len(), width * height);
+    debug_assert_eq!(destination.len(), source.len());
+    let vector_blocks = width.div_ceil(8).saturating_mul(height) as u64;
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(destination, width, height, |row_start, row_end, y, row| {
+            let _ = (row_start, row_end);
+            simd_luma_vertical_radius_one_row(
+                source,
+                row,
+                width,
+                height,
+                y as usize,
+                whole_weight,
+                fractional_weight,
+            );
+        });
+    } else {
+        for y in 0..height {
+            let start = y * width;
+            simd_luma_vertical_radius_one_row(
+                source,
+                &mut destination[start..start + width],
+                width,
+                height,
+                y,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let start = y * width;
+        simd_luma_vertical_radius_one_row(
+            source,
+            &mut destination[start..start + width],
+            width,
+            height,
+            y,
+            whole_weight,
+            fractional_weight,
+        );
+    }
+}
+
+fn simd_pil_gaussian_blur_l_radius_one(
+    img: &DynamicImage,
+    radius: f32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let dimensions = CheckedDims::new(img.width(), img.height(), 1)?;
+    if img.as_bytes().len() != dimensions.total_bytes() || (radius as i32) != 1 {
+        return Err(simd_unsupported("GaussianBlur"));
+    }
+    if native_small_uniform_byte_image(img, 1) {
+        return native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("GaussianBlur"));
+    }
+
+    let whole_weight = (SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+    let integer_window = 3u32;
+    let fractional_weight =
+        SIMD_BOX_BLUR_SCALE.wrapping_sub(integer_window.wrapping_mul(whole_weight)) / 2;
+    let width = dimensions.width as usize;
+    let height = dimensions.height as usize;
+    crate::compute::record_pipeline_operation_path("vector");
+    let mut work = img.as_bytes().to_vec();
+    let mut scratch = dimensions.alloc_buffer();
+
+    // Pillow performs all three horizontal byte-rounded passes before all
+    // three vertical byte-rounded passes. Preserve that ordering while the
+    // direct row-major vertical kernel removes both full-frame transposes.
+    for _ in 0..3 {
+        simd_blur_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            1,
+            1,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+    }
+    for _ in 0..3 {
+        simd_luma_vertical_radius_one_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+    }
+
+    let result =
+        crate::image_utils::raw_bytes_to_image(dimensions.width, dimensions.height, work, 1)?;
+    Ok(preserve_mode(img, result))
+}
+
 fn simd_pil_box_blur(
     img: &DynamicImage,
     radius: f32,
@@ -23445,6 +23612,13 @@ pub fn simd_gaussian_blur(
             gaussian_blur_radius(sigma).ok_or_else(|| simd_unsupported("GaussianBlur"))?;
         if blur_radius <= 0.0 {
             return Err(simd_unsupported("GaussianBlur"));
+        }
+        if channels == 1
+            && matches!(img, DynamicImage::ImageLuma8(_))
+            && matches!(mode, None | Some("L"))
+            && (1.0..2.0).contains(&blur_radius)
+        {
+            return simd_pil_gaussian_blur_l_radius_one(img, blur_radius, mode);
         }
         return simd_pil_box_blur(img, blur_radius, 3, channels, mode);
     }

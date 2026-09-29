@@ -10039,3 +10039,99 @@ measured Pillow 5.710 ms, CPU 4.780 ms, SIMD 4.121 ms, and GPU 2.974 ms, with
 100 actual GPU completions and 3,145,728 bytes uploaded and read back. Those RGB
 measurements do not establish an L speedup; the native-L case needs its own
 parity and benchmark evidence.
+
+### GaussianBlur native-L packed and direct-row follow-up — checkpoint 2026-09-30
+
+The selected case is `pipeline-op.gaussianblur.material-l-noise-1024x768`,
+which calls `GaussianBlur(radius=2)` on native L noise. Pillow computes a
+three-box approximation with effective per-axis radius about 1.375: each axis
+pass has a radius-one three-sample sum plus fractional samples at offsets ±2.
+Parity depends on keeping the three horizontal passes before the three
+vertical passes, clamping only at true image edges, using the same fixed-point
+weights, and storing a rounded byte after every one of the six passes. Combining
+passes into a single wider convolution would change those intermediate byte
+rounding points.
+
+Four bounded attempts were made in this visit. The retained GPU path stores
+native L data as packed words rather than converting to RGBA. This cuts each
+transfer from 3,145,728 to 786,432 bytes, removes all reported mode
+conversions, and keeps one operation and six dispatches. The aligned-width
+vertical shader shares each tap across four adjacent bytes when `width % 4 ==
+0`; odd widths keep the original linear-pixel path. The retained SIMD
+radius-one native-L specialization keeps the existing horizontal passes, then
+computes vertical rows directly in row-major storage, avoiding both full-frame
+transposes. Its admission is restricted to ImageLuma8 with logical mode absent
+or `L` and effective radius in `[1, 2)`; every other layout/radius uses the
+existing kernel.
+
+The material workload was measured with the standard warm-cache policy: five
+warmups, 20 iterations × five samples, 100 calls per subject, and concurrency
+one. The final exact-source benchmark is
+`migration-benchmark-08d08fc2d3c3447699910b677ffed999`; its integrated strict
+parity gate is `migration-parity-benchmark-gate-bb999d50c3d649e39a7dda9f3cf192ac`.
+
+| Final run, median latency | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| `08d08fc2` | 3.885 ms | 3.422 ms | 1.572 ms | 1.189 ms |
+
+The final run recorded 100 actual executions on each requested CPU, SIMD, and
+GPU backend, with no fallback; GPU used six dispatches, uploaded and read back
+786,432 bytes, and reported zero mode conversions. At concurrency one, median
+reciprocal latency was 257 ops/s for Pillow, 292 for CPU, 636 for SIMD, and 841
+for GPU. This case is therefore 1.14× faster on CPU and 2.47× faster on SIMD
+than Pillow; GPU latency is 1.32× faster than SIMD latency, with correspondingly
+higher single-request reciprocal throughput. These figures do not establish
+saturated throughput or parity outside this operation/case.
+
+The native-L GPU transfer reduction was repeatable: packed-route runs
+`migration-benchmark-babe206338b14ba683a4d609595c8d29` and
+`migration-benchmark-c46819d3e95d495891462a0032ca5e11` measured GPU medians
+1.876 and 1.879 ms. The aligned vertical-word follow-up runs
+`migration-benchmark-c0f4bb5500c84c47b2ed5cd0b717b72b` and
+`migration-benchmark-ad3fb08f80fc45838997fb4cfe0c98d6` measured 1.686 and
+1.699 ms. The direct-row SIMD runs
+`migration-benchmark-a341f52e1c3d481081830797cd0111dc`,
+`migration-benchmark-ef39999c90624182b04f8102b0bf6741`, and the final run
+measured SIMD medians 1.586, 1.635, and 1.572 ms. The prior aligned-GPU
+sample before direct-row SIMD measured 2.553 ms on SIMD; treat that comparison
+as directional because runs were not interleaved and the host's timings varied
+by backend. The final strict benchmark gate passed 3/3 (CPU, SIMD, GPU), and
+focused exact-output parity passed on the aligned small-L case and the odd-width
+65 × 47 fallback case. The material L case also passed its strict GPU parity
+case. The GPU scalar fallback remains necessary for odd row widths because a
+packed word can otherwise cross a scanline boundary.
+
+Attempt four tested a packed `vec4<u32>` horizontal radius-one shader for
+aligned rows. It assembled ±1/±2 vectors from current and neighboring packed
+words, including explicit replicated-edge lanes. Strict GPU parity passed on
+the small aligned, material aligned, and odd-width cases, but the two material
+benchmark medians were 1.160 and 1.139 ms versus 1.086 and 0.984 ms in the two
+immediately preceding no-horizontal-specialization samples. Backend noise was
+also visible in Pillow and CPU timing. The candidate did not establish a
+stable complete-call win and was removed; the retained horizontal shader is
+the previously measured scalar-per-output packed implementation.
+
+The next GPU ceiling is not another arithmetic rewrite: fuse the three
+same-axis passes into one tiled dispatch per axis, reducing six dispatches to
+two and keeping intermediate bytes in workgroup scratch. For this radius, the
+three passes need a six-pixel halo; compute each intermediate as a byte with
+the current fixed-point round before the next stage, and replicate only at the
+true image edge, never at tile boundaries. Workgroup barriers must separate
+scratch stages. A read-only design review estimates a 512-output horizontal
+tile needs 524 staged samples and a 128-row vertical tile needs 140 staged
+rows; verify actual indexing, adapter limits, scratch occupancy, and boundary
+coverage before implementation. [GPU Gems' separable filter discussion](https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-27-advanced-high-quality-filtering)
+supports separating axes; the [WGSL workgroup memory/barrier rules](https://www.w3.org/TR/WGSL/)
+and [WebGPU workgroup-storage limits](https://gpuweb.github.io/gpuweb/#limits)
+bound the design. These sources do not predict the speed on this adapter.
+
+The SIMD path still gathers samples scalar-first before its vector fixed-point
+multiply, and its 1.57 ms final median is only 2.47× faster than Pillow, short
+of the 5× goal. The next SIMD attempt should use contiguous byte loads and
+vector widening in the radius-one horizontal stencil; preserve a scalar edge
+and tail path until exact parity proves the widened lanes. The CPU path already
+beats Pillow on this case but only by 1.14×; a native-L direct-row vertical
+stencil could remove the parallel transpose pair, but must demonstrate a
+complete-call gain because non-contiguous source traffic can erase the saved
+copies. Checkpoint this visit after four attempts and rank the next operation
+from a fresh single-workload benchmark. No coverage collection ran.
