@@ -8880,3 +8880,23 @@ and the full-frame copy. SIMD remains below the campaign target, and prior
 grayscale SIMD experiments found row splitting slower and safe channel gathers
 slower than the current vector path. Reopen this operation only with a new
 profile showing a distinct cause or a safer/faster RGB shuffle strategy.
+
+### GPU RGBA alpha-composite staging clone — deferred 2026-09-29
+
+A generic GPU auxiliary path appeared to clone an RGBA alpha-composite source
+with `to_rgba8()` before packing it. The maintained
+`pipeline-chain.alpha-composite.rgba-1024x768` workload does not use that path:
+its single zero-offset operation is routed through `execute_native_byte_op`
+before auxiliary packing. The public cropped method lowers into crop,
+composite, and paste operations, so its small strict parity case does not prove
+the large generic packer is exercised either. A host-side helper change was
+removed because no material workload demonstrated that it ran or improved
+latency. Revisit only with a multi-operation workload that forces the generic
+GPU batch and a receipt confirming that branch. The benchmark's
+`full_frame_copy_count` records GPU buffer copies; it cannot verify removal of
+a host `RgbaImage` clone.
+
+The baseline and post-edit standard workload both completed, and the strict
+RGBA blend/all-alpha-pairs cases passed on CPU, SIMD, and GPU. Those timings are
+not a performance comparison for this candidate because both runs took the
+native singleton route. Do not count them toward the GPU conversion campaign.
