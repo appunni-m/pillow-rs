@@ -48,6 +48,7 @@
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c09",
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c10",
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.performance-material-rgb-noise-1024x768-identity",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.rgbx-sharpness-processes-x-byte",
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.parity-blend-rounding-factor-0-3-border-rgb-3x3",
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.parity-fma-cancellation-factor-1-1-rgb-3x3",
           "pipeline-case.sharpness.materialized-smoke"
