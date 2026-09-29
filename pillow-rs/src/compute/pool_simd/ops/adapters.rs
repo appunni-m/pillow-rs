@@ -25263,6 +25263,29 @@ fn simd_put_alpha_rgba_mask_row(output: &mut [u8], mask: &[u8]) {
     }
 }
 
+/// Replace the alpha lane of native RGBA storage with one constant using
+/// 16-byte vectors, preserving the three color lanes without repacking pixels.
+fn simd_put_alpha_rgba_constant_bytes(
+    source: &[u8],
+    width: u32,
+    height: u32,
+    alpha: u8,
+) -> Option<(Vec<u8>, u64)> {
+    let dimensions = CheckedDims::new(width, height, 4).ok()?;
+    if source.len() != dimensions.total_bytes() {
+        return None;
+    }
+    let mut output = vec![0; source.len()];
+    let rgba_mask = u8x16::new(NATIVE_BYTE_RGBA_MASK);
+    let alpha_values = u8x16::splat(alpha) & (u8x16::splat(u8::MAX) ^ rgba_mask);
+    let transform = |input| (input & rgba_mask) | alpha_values;
+    native_byte_transform_copy_bytes(source, &mut output, &transform);
+    Some((
+        output,
+        u64::try_from(dimensions.total_pixels().div_ceil(4)).ok()?,
+    ))
+}
+
 #[cfg(feature = "parallel")]
 const SIMD_PUT_ALPHA_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
@@ -25418,6 +25441,20 @@ pub fn simd_put_alpha(
             pixel[1] = *alpha;
         }
         return Ok(DynamicImage::ImageLumaA8(output));
+    }
+    if *alpha_mode == PixelMode::RGBA
+        && put_alpha_shape(img, *alpha_mode, mode).is_some()
+        && let DynamicImage::ImageRgba8(source) = img
+    {
+        let (output, vector_blocks) = simd_put_alpha_rgba_constant_bytes(
+            source.as_raw(),
+            source.width(),
+            source.height(),
+            *alpha,
+        )
+        .ok_or_else(|| simd_unsupported("PutAlpha"))?;
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        return crate::image_utils::raw_bytes_to_image(source.width(), source.height(), output, 4);
     }
     if *alpha_mode == PixelMode::RGB
         && put_alpha_shape(img, *alpha_mode, mode).is_some()
@@ -25971,6 +26008,33 @@ mod tests {
             assert_eq!(scalar_tail, pixels % 4, "{width}x{height}");
         }
         assert!(super::simd_put_alpha_rgb_constant_bytes(&[1, 2], 1, 1, 173).is_none());
+    }
+
+    #[test]
+    fn native_rgba_putalpha_constant_preserves_rgb_and_replaces_alpha() {
+        for width in [1usize, 3, 4, 5, 17] {
+            let height = 3;
+            let original: Vec<u8> = (0..width * height * 4)
+                .map(|index| (index * 31 + 7) as u8)
+                .collect();
+            let source = original.clone();
+            let mut expected = original;
+            for pixel in expected.chunks_exact_mut(4) {
+                pixel[3] = 173;
+            }
+
+            let (actual, vector_count) = super::simd_put_alpha_rgba_constant_bytes(
+                &source,
+                width as u32,
+                height as u32,
+                173,
+            )
+            .expect("valid RGBA storage should replace alpha");
+
+            assert_eq!(vector_count, (width * height).div_ceil(4) as u64);
+            assert_eq!(actual, expected, "width {width}");
+        }
+        assert!(super::simd_put_alpha_rgba_constant_bytes(&[0, 1], 1, 1, 173).is_none());
     }
 
     #[test]

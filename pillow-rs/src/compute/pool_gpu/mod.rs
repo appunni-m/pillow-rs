@@ -11934,7 +11934,7 @@ fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> Result<DynamicImag
                 PilError::InternalError("GPU putalpha buffer shape mismatch".to_string())
             })
     } else {
-        Ok(DynamicImage::ImageRgba8(result.to_rgba8()))
+        Ok(DynamicImage::ImageRgba8(result.into_rgba8()))
     }
 }
 

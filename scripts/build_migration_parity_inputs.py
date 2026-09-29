@@ -241,6 +241,7 @@ PUTALPHA_PERFORMANCE_CASES = (
     ("la-noise-1024x768-scalar", "LA", [1024, 768], 20261019),
     ("pa-noise-1024x768-scalar", "PA", [1024, 768], 20261022),
     ("rgb-noise-1024x768-scalar", "RGB", [1024, 768], 20261023),
+    ("rgba-noise-1024x768-scalar", "RGBA", [1024, 768], 20261027),
 )
 PUTALPHA_MASK_PERFORMANCE_CASES = (
     ("rgb-noise-1024x768-l-mask", "RGB", [1024, 768], 20261024),
