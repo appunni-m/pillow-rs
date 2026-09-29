@@ -9177,25 +9177,27 @@ SIMD, and GPU (15/15 total). The focused Rust command
 `cargo test -p pillow-rs --features gpu --lib la_ -- --nocapture` passed 6/6
 tests, and `cargo fmt --all -- --check` and `git diff --check` passed.
 
-The parity-gated receipt is
-`migration-benchmark-59dc9d21a9c14927a082125262d2e7e8`; all 100 target
-samples completed with actual CPU, SIMD, or GPU execution and no fallback.
-Median latency / reciprocal-latency throughput was:
+The exact checkpoint commit is
+`97ba857183cb2512cf21770233e57016ae79cb5e`. Its clean benchmark receipts are
+`migration-benchmark-770195da72544afa84902ffd00c5448a` and
+`migration-benchmark-3072669a14604caeabaa6875b092b3a5`. Each completed 100
+samples per subject, with actual CPU/SIMD/GPU execution and no fallback.
+Median latency and reciprocal-latency throughput across the two runs were:
 
-| Backend | Median latency | Median throughput |
+| Backend | Median latency range | Median throughput range |
 | --- | ---: | ---: |
-| Pillow | 1.713 ms | 584 ops/s |
-| CPU | 0.314 ms | 3,189 ops/s |
-| SIMD | 0.332 ms | 3,008 ops/s |
-| GPU | 0.960 ms | 1,042 ops/s |
+| Pillow | 1.749–1.816 ms | 551–572 ops/s |
+| CPU | 0.354–0.363 ms | 2,752–2,829 ops/s |
+| SIMD | 0.388–0.410 ms | 2,440–2,580 ops/s |
+| GPU | 0.958–1.005 ms | 996–1,043 ops/s |
 
-CPU and SIMD meet their goals on this one workload at about 5.46× and 5.16×
-Pillow speed. GPU ran one dispatch with no mode conversion and uploaded 532,480
-native LA bytes instead of a four-byte-per-pixel carrier, but readback remained
-1,064,960 bytes. Its median latency is still 2.9× SIMD and its reciprocal
-latency rate is lower. An earlier generic-route run measured GPU at 1.470 ms;
-the change is a useful diagnostic improvement, not a paired timing guarantee.
-The next GPU attempt should test packed two-byte LA output/readback (or
-device-resident chaining) because transfer and completion still dominate.
+CPU meets the no-slower-than-Pillow requirement. SIMD is about 4.43–4.51×
+faster than Pillow, so the 5× goal is not met consistently. GPU ran one
+dispatch with no mode conversion and uploaded 532,480 native LA bytes instead
+of a four-byte-per-pixel carrier, but readback remained 1,064,960 bytes. Its
+latency and reciprocal-latency throughput remained about 2.5× behind SIMD. An
+earlier generic-route run measured GPU at 1.470 ms; that was not a paired clean
+baseline. The next GPU attempt should test packed two-byte LA output/readback
+(or device-resident chaining) because transfer and completion still dominate.
 Record this operation as incomplete and continue through the remaining native
 format candidates; no coverage collection was run.
