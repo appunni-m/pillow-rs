@@ -11940,11 +11940,15 @@ pub fn simd_brightness(
     // 256-entry map once and apply it in native L/LA/RGB/RGBA/CMYK storage;
     // CMYK is admitted explicitly because all four bytes are active samples.
     let factor_fp = (*factor * 1000.0) as u32;
-    // For L, the common power-of-two factors are exact right shifts in the
-    // adapter's fixed-point domain. Skip building and shuffling a 256-byte
-    // lookup table when the byte mapping is exactly the same.
-    if matches!(img, DynamicImage::ImageLuma8(_))
-        && matches!(mode, None | Some("L"))
+    // For L and RGB, these power-of-two factors are exact right shifts in the
+    // adapter's fixed-point domain. RGB has no preserved alpha lane, so the
+    // transform applies to every byte in its native three-byte layout.
+    let shift_layout = match (img, mode) {
+        (DynamicImage::ImageLuma8(_), None | Some("L"))
+        | (DynamicImage::ImageRgb8(_), None | Some("RGB")) => true,
+        _ => false,
+    };
+    if shift_layout
         && let Some(shift) = match factor_fp {
             500 => Some(1),
             250 => Some(2),
