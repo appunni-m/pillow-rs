@@ -587,6 +587,7 @@ def _validate_asset(asset: Any, path: str, asset_ids: set[str], fixture_root: Pa
     kind = asset.get("kind")
     key_sets = {
         "ref": {"id", "kind", "path", "sha256", "media_type"},
+        "ref_bytes": {"id", "kind", "path", "sha256", "media_type"},
         "inline": {"id", "kind", "encoding", "data", "sha256", "media_type"},
         "builtin": {"id", "kind", "name"},
         "missing": {"id", "kind", "path"},
@@ -600,9 +601,9 @@ def _validate_asset(asset: Any, path: str, asset_ids: set[str], fixture_root: Pa
     if asset_id in asset_ids:
         raise _error(f"{path}.id", "duplicate asset ID")
     asset_ids.add(asset_id)
-    if kind in {"ref", "missing", "generated", "remote_mock"}:
+    if kind in {"ref", "ref_bytes", "missing", "generated", "remote_mock"}:
         _relative_path(asset["path"], f"{path}.path")
-    if kind == "ref" and fixture_root is not None:
+    if kind in {"ref", "ref_bytes"} and fixture_root is not None:
         referenced = fixture_root / "assets" / asset["path"]
         if not referenced.is_file():
             raise _error(f"{path}.path", f"missing active asset {asset['path']}")
@@ -626,9 +627,9 @@ def _validate_asset(asset: Any, path: str, asset_ids: set[str], fixture_root: Pa
             raise _error(f"{path}.data", "invalid inline encoding") from exc
         if hashlib.sha256(raw).hexdigest() != asset["sha256"]:
             raise _error(f"{path}.sha256", "inline asset digest does not match data")
-    if kind in {"ref", "generated", "remote_mock"}:
+    if kind in {"ref", "ref_bytes", "generated", "remote_mock"}:
         _sha(asset["sha256"], f"{path}.sha256")
-    if kind in {"ref", "inline", "generated", "remote_mock"}:
+    if kind in {"ref", "ref_bytes", "inline", "generated", "remote_mock"}:
         _string(asset["media_type"], f"{path}.media_type")
     return asset_id
 

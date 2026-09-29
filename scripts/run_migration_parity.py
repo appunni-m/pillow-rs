@@ -444,6 +444,8 @@ class AssetStore:
         kind = asset["kind"]
         if kind == "ref":
             value: Any = str(self._root / asset["path"])
+        elif kind == "ref_bytes":
+            value = (self._root / asset["path"]).read_bytes()
         elif kind == "inline":
             if asset.get("encoding") != "base64":
                 raise ValueError(f"unsupported inline encoding: {asset_id}")
@@ -1349,7 +1351,7 @@ def _workflow_asset_bytes(
     if kind == "builtin":
         name = asset.get("name")
         return ENCODED_INPUTS.get(name) if isinstance(name, str) else None
-    if kind != "ref":
+    if kind not in {"ref", "ref_bytes"}:
         return None
     relative = asset.get("path")
     if not isinstance(relative, str):
@@ -3117,7 +3119,7 @@ def build_identity(
         input_path = case_inputs[case["case_id"]]
         for asset in case.get("assets", []):
             kind = asset["kind"]
-            if kind == "ref":
+            if kind in {"ref", "ref_bytes"}:
                 locator = asset["path"]
                 digest = asset.get("sha256")
             elif kind == "inline":

@@ -384,6 +384,23 @@ def js_asset_payload(
                         "media_type": asset.get("media_type"),
                     },
                 )
+            elif kind == "ref_bytes":
+                path = assets_root / asset["path"]
+                if not path.is_file():
+                    raise ValueError(f"missing JS input asset: {asset['path']}")
+                add(
+                    asset_id,
+                    {
+                        "kind": (
+                            "path-bytes"
+                            if source_id in open_fp_asset_ids
+                            and not asset.get("media_type", "").startswith("image/")
+                            else "bytes"
+                        ),
+                        "data_base64": base64.b64encode(path.read_bytes()).decode("ascii"),
+                        "media_type": asset.get("media_type"),
+                    },
+                )
             elif kind == "ref":
                 path = assets_root / asset["path"]
                 if not path.is_file():

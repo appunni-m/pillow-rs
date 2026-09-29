@@ -187,7 +187,7 @@ def coverage_input_hashes(
 
     for case in cases:
         for asset in case.get("assets", []):
-            if asset["kind"] == "ref":
+            if asset["kind"] in {"ref", "ref_bytes"}:
                 add_asset(FIXTURE_ROOT / "assets" / asset["path"])
     if "run_migration_font_native_cases.py" in supplements:
         from run_migration_font_native_cases import asset_path
