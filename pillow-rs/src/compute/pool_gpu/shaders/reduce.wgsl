@@ -31,6 +31,20 @@ fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 fn mode_has_fourth(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
 
+// Singleton RGB Reduce may keep its three-byte source layout through upload.
+// Assemble each packed sample from adjacent storage words and synthesize the
+// opaque alpha expected by the shared RGB averaging logic.
+fn native_rgb_pixel(pixel_index: u32) -> u32 {
+    let byte_offset = pixel_index * 3u;
+    let word_index = byte_offset >> 2u;
+    let shift = (byte_offset & 3u) * 8u;
+    var packed = input[word_index] >> shift;
+    if shift > 8u {
+        packed = packed | (input[word_index + 1u] << (32u - shift));
+    }
+    return (packed & 0x00ffffffu) | 0xff000000u;
+}
+
 // This matches Reduce.c's division_UINT32(divider, 8) path:
 // multiplier = floor(2^32 / (256 * divider)) = floor(2^24 / divider),
 // result = ((sum + divider/2) * multiplier) >> 24.
@@ -73,7 +87,13 @@ fn reduce_pixel(dx: u32, dy: u32) -> u32 {
         var sx = sx0;
         loop {
             if sx >= sx_end { break; }
-            let pixel = input[sy * src_w + sx];
+            let pixel_index = sy * src_w + sx;
+            var pixel: u32;
+            if params._pad != 0u {
+                pixel = native_rgb_pixel(pixel_index);
+            } else {
+                pixel = input[pixel_index];
+            }
             let alpha = (pixel >> 24u) & 0xffu;
             let red = pixel & 0xffu;
             let green = (pixel >> 8u) & 0xffu;

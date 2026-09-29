@@ -7243,6 +7243,7 @@ impl GpuInner {
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_rgb_input: bool,
+        native_reduce_rgb_input: bool,
         native_expand_channels: Option<u8>,
         native_cover_input_channels: Option<u8>,
         buffers: &'a mut BufferPool,
@@ -7484,6 +7485,11 @@ impl GpuInner {
             if native_grayscale_rgb_input && matches!(op, PipelineOp::Grayscale) {
                 // Grayscale's fourth word selects the source byte layout;
                 // keep RGB packed at three bytes per pixel through upload.
+                params[3] = 1;
+            }
+            if native_reduce_rgb_input && matches!(op, PipelineOp::Reduce { .. }) {
+                // Reduce's fourth word selects packed native RGB byte input;
+                // this is admitted only for a singleton RGB operation.
                 params[3] = 1;
             }
             if native_expand_channels.is_some() && matches!(op, PipelineOp::Expand { .. }) {
@@ -11050,6 +11056,7 @@ impl GpuInner {
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_rgb_input: bool,
+        native_reduce_rgb_input: bool,
         native_expand_channels: Option<u8>,
         native_cover_input_channels: Option<u8>,
         logical_mode: Option<&str>,
@@ -11260,6 +11267,7 @@ impl GpuInner {
                 native_extract_band,
                 native_grayscale_rgb_input,
                 native_sharpness_rgb_input,
+                native_reduce_rgb_input,
                 native_expand_channels,
                 native_cover_input_channels,
                 buffers,
@@ -11473,6 +11481,28 @@ fn gpu_native_sharpness_rgb_input(
     input_bytes > 0 && input_bytes <= u32::MAX as usize && rgb.as_raw().len() == input_bytes
 }
 
+/// Admit tightly packed RGB bytes for a singleton Reduce dispatch. The
+/// shader gathers each three-byte sample from storage words and supplies the
+/// opaque alpha byte that the existing RGB averaging path expects.
+#[cfg(target_endian = "little")]
+fn gpu_native_reduce_rgb_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(ops, [PipelineOp::Reduce { .. }]) || !matches!(logical_mode, None | Some("RGB")) {
+        return false;
+    }
+    let DynamicImage::ImageRgb8(rgb) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 3) else {
+        return false;
+    };
+    let input_bytes = layout.total_bytes();
+    input_bytes > 0 && input_bytes <= u32::MAX as usize && rgb.as_raw().len() == input_bytes
+}
+
 /// Return the packed native-byte channel count for a singleton Expand batch.
 /// When the adapter's bounded output-word grid fits, the shader also writes
 /// the result in this compact native layout; otherwise the generic RGBA output
@@ -11567,6 +11597,15 @@ fn gpu_native_grayscale_rgb_input(
 
 #[cfg(not(target_endian = "little"))]
 fn gpu_native_sharpness_rgb_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_native_reduce_rgb_input(
     _ops: &[PipelineOp],
     _image: &DynamicImage,
     _logical_mode: Option<&str>,
@@ -18562,6 +18601,7 @@ impl GpuPool {
         let native_extract_band = native_extract_band_channels.is_some();
         let native_grayscale_rgb_input = gpu_native_grayscale_rgb_input(ops, img, mode);
         let native_sharpness_rgb_input = gpu_native_sharpness_rgb_input(ops, img, mode);
+        let native_reduce_rgb_input = gpu_native_reduce_rgb_input(ops, img, mode);
         let native_expand_channels = gpu_native_expand_channels(ops, img, mode);
         gpu_log!(
             "[GPU] step=upload start native_luma16={native_luma16} native_luma16_convert={native_luma16_convert} native_luma16_paste={native_luma16_paste}"
@@ -18596,6 +18636,8 @@ impl GpuPool {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
         } else if native_sharpness_rgb_input {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
+        } else if native_reduce_rgb_input {
+            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 3, img.as_bytes())?;
         } else if let Some(channels) = native_expand_channels {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, channels, img.as_bytes())?;
         } else if let Some(channels) = native_cover_input_channels {
@@ -18625,6 +18667,7 @@ impl GpuPool {
             native_extract_band,
             native_grayscale_rgb_input,
             native_sharpness_rgb_input,
+            native_reduce_rgb_input,
             native_expand_channels,
             native_cover_input_channels,
             mode,
@@ -18741,7 +18784,10 @@ impl GpuPool {
                 .ok_or_else(|| PilError::ValueError("GPU channel input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU channel input is too large".into()))?
-        } else if native_grayscale_rgb_input || native_sharpness_rgb_input {
+        } else if native_grayscale_rgb_input
+            || native_sharpness_rgb_input
+            || native_reduce_rgb_input
+        {
             let raw_bytes = CheckedDims::new(w, h, 3)?.total_bytes();
             let transfer_bytes = raw_bytes
                 .div_ceil(std::mem::size_of::<u32>())
@@ -18797,6 +18843,7 @@ impl GpuPool {
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = if native_grayscale_rgb_input
             || native_sharpness_rgb_input
+            || native_reduce_rgb_input
             || native_expand_channels.is_some()
             || native_cover_input_channels.is_some()
         {
@@ -18809,6 +18856,7 @@ impl GpuPool {
                 !native_extract_band
                     && !native_grayscale_rgb_input
                     && !native_sharpness_rgb_input
+                    && !native_reduce_rgb_input
                     && !packed_luma_point
                     && !packed_luma_putdata
                     && (native_luma16_convert
@@ -19897,6 +19945,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -24433,6 +24482,61 @@ mod tests {
         let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
         assert!(!super::gpu_native_sharpness_rgb_input(
             &[PipelineOp::Sharpness { factor: 1.5 }],
+            &empty,
+            Some("RGB")
+        ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_reduce_rgb_requires_singleton_rgb_storage() {
+        let reduce = PipelineOp::Reduce {
+            x_factor: 3,
+            y_factor: 5,
+        };
+        let rgb = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(3, 1, vec![12, 34, 56, 78, 90, 123, 234, 210, 98]).unwrap(),
+        );
+        assert!(super::gpu_native_reduce_rgb_input(
+            std::slice::from_ref(&reduce),
+            &rgb,
+            None
+        ));
+        assert!(super::gpu_native_reduce_rgb_input(
+            std::slice::from_ref(&reduce),
+            &rgb,
+            Some("RGB")
+        ));
+        assert!(!super::gpu_native_reduce_rgb_input(
+            std::slice::from_ref(&reduce),
+            &rgb,
+            Some("HSV")
+        ));
+        let rgba = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                3,
+                1,
+                vec![12, 34, 56, 78, 90, 123, 234, 210, 98, 76, 54, 32],
+            )
+            .unwrap(),
+        );
+        assert!(!super::gpu_native_reduce_rgb_input(
+            std::slice::from_ref(&reduce),
+            &rgba,
+            Some("RGB")
+        ));
+        let multiple = [reduce, PipelineOp::Duplicate];
+        assert!(!super::gpu_native_reduce_rgb_input(
+            &multiple,
+            &rgb,
+            Some("RGB")
+        ));
+        let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 1));
+        assert!(!super::gpu_native_reduce_rgb_input(
+            &[PipelineOp::Reduce {
+                x_factor: 3,
+                y_factor: 5,
+            }],
             &empty,
             Some("RGB")
         ));

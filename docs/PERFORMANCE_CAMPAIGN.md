@@ -6420,6 +6420,39 @@ The CPU goal is met only for this 1,024 × 768 RGB workload. SIMD and GPU goals
 remain open; stop this operation at four attempts and proceed to the next
 ranked, uncheckpointed operation.
 
+### RGB-native GPU input follow-up — 2026-09-29
+
+A separate singleton-RGB GPU trial keeps `Image.reduce` input at three bytes
+per pixel. Host admission requires one `Reduce`, an RGB logical mode, a
+matching `ImageRgb8` buffer, nonempty checked dimensions, and little-endian
+storage. The shader gathers byte triples from packed words and supplies opaque
+alpha; all existing fixed-point averaging and four-byte output/readback logic
+remain in place. The focused admission test passed, and two
+`make migration-parity-benchmark` runs each passed the material RGB case on
+CPU, SIMD, and GPU (3/3 comparisons, 100 backend executions per target, no
+fallback).
+
+The GPU upload fell from 3,145,728 to 2,359,296 bytes (25%); mode conversions
+fell from one to zero. Readback stayed 210,672 bytes and the GPU still made one
+full-frame copy. The first run's GPU median was 0.836 ms, but the repeat was
+1.031 ms, effectively the earlier 1.032 ms baseline. The first run also had
+high timing variance across backends; the repeat was stable and measured
+Pillow 0.428 ms, CPU 0.267 ms, SIMD 0.264 ms, and GPU 1.031 ms. Treat the
+upload reduction as confirmed, but do not claim a GPU latency gain. Per-sample
+byte gathering and the unchanged output transfer/synchronization can consume
+the saved transfer time. Receipts:
+`build/migration-parity/reduce-native-rgb-final.json`,
+`reduce-native-rgb-final-parity.json`, `reduce-native-rgb-repeat.json`, and
+`reduce-native-rgb-repeat-parity.json`. They report source revision
+`23e7d337c3265c21fa159fb39712cd92fa58fbf8` and `dirty: true`.
+
+Exact command for both runs:
+`RUSTC_WRAPPER= make migration-parity-benchmark MIGRATION_BENCHMARK_PROFILE=standard MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.reduce.standard'`
+with unique benchmark and parity output paths. No coverage ran. This bounded
+GPU follow-up did not resolve Reduce's GPU latency blocker; continue with the
+next ranked operation rather than extending the already-checkpointed SIMD
+campaign.
+
 ## PIL.ImageFilter.GaussianBlur checkpoint — 2026-09-28
 
 Three bounded implementation attempts are checkpointed. The retained change is
