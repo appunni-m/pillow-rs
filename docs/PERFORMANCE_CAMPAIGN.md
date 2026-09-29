@@ -6805,8 +6805,7 @@ revisit Mirror after other operations receive their first optimization pass.
 ## Native-format conversion audit and GetChannel checkpoint — 2026-09-28
 
 The source scan `rg -n 'to_rgba8\\(|into_rgba8\\(' pillow-rs/src` found 84
-textual call/declaration sites, including tests and the `DynamicImage`
-conversion helpers. The later exact ledger below corrects this to 86 matches;
+source lines. The exact `-o` ledger below counts 86 spellings on those lines;
 neither count represents runtime image conversions one-for-one. The Python
 Qt bridge has two explicit `convert("RGBA")` calls; JavaScript has none in
 the binding source. The ledger below separates runtime operations from helper
@@ -6817,7 +6816,7 @@ image kernels otherwise operate on native bytes. Runtime CPU call sites are conc
 
 | Caller | Native-format opportunity and semantic boundary |
 | --- | --- |
-| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad and Expand CPU paths admit exact L/LA/RGB/HSV/RGBA storage. Expand also has native three-byte SIMD rows and a guarded GPU native-input/native-output path when the adapter's bounded word grid fits. Keep P/PA tuple-index semantics and CMYK's four active samples. |
+| [`imageops.rs`](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs): Pad, Expand | Pad and Expand CPU paths admit exact L/LA/RGB/HSV/RGBA storage; Expand also admits CMYK only with its four-byte carrier. SIMD keeps native rows; GPU uses native CMYK input but the generic four-byte output because compact packing saves no bytes. Keep P/PA tuple-index semantics and CMYK's C/M/Y/K samples. |
 | [`enhance.rs`](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs): Brightness, Sharpness | LA Brightness scales byte 0 directly and preserves byte 1; RGB Brightness stays in three-byte storage. CPU Sharpness processes matching L/LA/RGB/RGBA/CMYK bytes with semantic active-channel counts; aliases retain the conversion fallback. CMYK's fourth stored byte is K, unlike RGBA's alpha. |
 | [`effects.rs`](../pillow-rs/src/compute/pool_cpu/ops/effects.rs): Spread, Paste, Composite, Eval, PutData, PutAlpha | Spread now borrows native 1/2/3/4-byte storage for relocation, preserving raw CMYK/RGBX/RGBa/I/F samples; typed fallbacks retain their existing numeric conversion. Avoid widening for same-layout copies, validated channel extraction, and LA alpha replacement. Scalar RGB PutAlpha reads three-byte RGB directly and fuses the required RGBA output write; mixed-mode paste/composite conversions remain where semantics require them. |
 | [`filter.rs`](../pillow-rs/src/compute/pool_cpu/ops/filter.rs), [`geometry.rs`](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | I-mode Filter3x3, I-mode Filter5x5, and F-mode rank filtering now borrow matching scalar carriers; preserve the guarded accessor fallback and exact sample representation. |
@@ -6908,10 +6907,10 @@ four-byte carrier for other modes.
 
 | Classification | Count | Rust callsites |
 | --- | ---: | --- |
-| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1574`; `compute/pool_gpu/mod.rs:3748,3769,4187,8040,8060,11851`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
+| Widening-capable or mixed-format fallback | 41 | `color.rs:360,798`; `compute/pool_cpu/ops/color.rs:279`; `compute/pool_cpu/ops/draw.rs:43`; `compute/pool_cpu/ops/effects.rs:176,772,848,849,862,1197,1516,3363`; `compute/pool_cpu/ops/enhance.rs:432`; `compute/pool_cpu/ops/filter.rs:370,535,1827`; `compute/pool_cpu/ops/imageops.rs:1281,1578`; `compute/pool_gpu/mod.rs:3748,3769,4187,8044,8064,11857`; `compute/pool_simd/mod.rs:143,158`; `draw/mod.rs:1151,1462,2135`; `image.rs:3833,3848,5383,5416,6082,6427,6604`; `ops/analysis.rs:323,401,588`; `ops/quantize.rs:2304,2325` |
 | Same-layout clone or four-byte reinterpretation | 18 | `color.rs:1104,1121,1140,1156,1168,1180`; `compute/pool_cpu/ops/effects.rs:988,1348,1349`; `compute/pool_cpu/ops/enhance.rs:80,138,383`; `draw/mod.rs:1285,1410,2330,2440`; `ops/convert.rs:657,1021` |
-| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3387,3494`; `compute/pool_gpu/mod.rs:11689,11816,11828`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
-| Definitions, wrappers, tests, comments, or color-only | 13 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/effects.rs:3411`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:11510`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:20675`, `ops/pil_resize.rs:2850` |
+| Requested output or mode-restoration conversion | 14 | `compute/pool_cpu/ops/color.rs:55`; `compute/pool_cpu/ops/effects.rs:3305,3387,3494`; `compute/pool_gpu/mod.rs:11695,11822,11834`; `image.rs:7063,7072,7081`; `ops/convert.rs:365,382,701`; `ops/pil_resize.rs:1974` |
+| Definitions, wrappers, tests, comments, or color-only | 13 | Definitions: `raster/dynamic.rs:327,420`; wrappers: `raster/dynamic.rs:423,1016`; color-only: `color.rs:120`; comments: `color.rs:358`, `compute/pool_cpu/ops/effects.rs:3411`, `compute/pool_cpu/ops/geometry.rs:304`, `compute/pool_gpu/mod.rs:11516`, `ops/pil_resize.rs:300,2275`; tests: `compute/pool_gpu/mod.rs:20681`, `ops/pil_resize.rs:2850` |
 
 The three operational groups total 73. The native RGBA/L-mask `putalpha` path
 returns before the generic conversion at `compute/pool_cpu/ops/effects.rs:3494`;
@@ -7510,7 +7509,7 @@ everything else.
 | --- | --- | --- | --- |
 | 1 | CPU/SIMD/GPU Paste | For exact matching byte layouts with no mask, copy clipped source rows at native bytes per pixel; GPU L/LA/RGB packs each output word directly. | Require logical mode and concrete storage to agree. RGB's three-byte GPU layout maps each output byte to its pixel/channel so a word crossing pixels still has one writer. Masked Paste blends only according to Pillow's selected L or alpha mask band; mixed-mode RGB inputs are converted before queuing and stay on the fallback. |
 | 2 | CPU/SIMD Pad | Keep exact native L/LA/RGB/HSV/RGBA storage, borrow the identity-contain source, repeat a fill row, and copy full-width source spans contiguously. | Preserve logical mode with concrete storage checks; LA fill alpha is byte 3 in the color tuple but destination byte 1. SIMD is 3.48× Pillow and GPU still uses four-byte transport on HSV. |
-| 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA bytes. Build SIMD 3-byte fill rows once; on GPU, assign each invocation one packed output word and read back the native byte count. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
+| 3 | CPU/SIMD/GPU Expand | Preserve native L/LA/RGB/HSV/RGBA and CMYK C/M/Y/K bytes. Build SIMD 3-byte fill rows once; on GPU, use native source bytes and packed output only when it reduces transfer size. | Match logical mode and concrete storage. P/PA remain index-specific; CMYK's fourth byte is K. Use the adapter's real workgroup limits, never one writer per 3-byte pixel. |
 | 4 | RGB drawing and read-only analysis | Draw to native RGB storage where the raster primitive supports the same blend; scan requested bands directly for stats, projections, bounds, and data exports. | Preserve antialiasing, masks, palette mapping, and logical band order. Read-only paths should borrow; mutating paths must own their output. |
 | 5 | Scalar RGB `Image.putalpha` | Read three-byte RGB directly and write the required four-byte RGBA result; use a dedicated SIMD interleave and native RGB GPU upload. | Gate on `ImageRgb8` plus logical RGB. GPU must bounds-check each packed RGB byte lookup and the output dispatch. Current CPU is 1.40× and SIMD 1.64× Pillow; GPU remains 1.75× slower than Pillow. This is a checkpoint, not a completed speed target. |
 | 6 | RGB image-backed `Image.putalpha(mask)` | Interleave native RGB and L-mask bytes into the required RGBA output; use a four-pixel SIMD shuffle with scalar tail and native RGB+L GPU upload. | Exact parity passes. CPU is 1.31× Pillow and SIMD 1.58× Pillow, below 5×; GPU is 2.05× slower than Pillow and 3.24× slower than SIMD. Checkpoint after three bounded changes; batching/synchronization remains the GPU blocker. |
@@ -7625,6 +7624,52 @@ than SIMD, so neither accelerator goal is met. Compact transport reduced bytes
 but did not remove dispatch, map, and synchronization latency. These are
 single-workload latency measurements, not sustained-throughput proof; no
 coverage collection ran.
+
+### Expand: native CMYK C/M/Y/K — 2026-09-29
+
+CMYK stores four active ink samples in `ImageRgba8`; `to_rgba8()` on that
+variant clones the bytes but does not convert them to RGBA. The CPU Expand
+route previously paid for that clone and then assembled the padded frame. The
+native path now requires the exact logical `CMYK` plus `ImageRgba8` pair,
+checks the byte layout, and builds each output row once. The fill tuple and
+source keep C/M/Y/K order, including K; an `ImageRgb8` mislabeled as CMYK
+continues through the fallback. SIMD already copied four native bytes and did
+not need a CMYK kernel change.
+
+GPU mode numbers are not channel counts. The shader's earlier `mode + 1`
+calculation treated CMYK mode code 4 as five channels, which broke exact
+parity. A mode-to-native-channel mapping now explicitly gives CMYK four bytes
+and reads the fourth as K without alpha interpretation. The native GPU input
+route is admitted for exact CMYK storage. Compact word output is disabled for
+CMYK: its four-byte result has the same transfer size as generic RGBA-shaped
+transport, so the extra per-byte packing work saved no bytes. The final route
+reports zero mode conversions and one dispatch, but still transfers 3,145,728
+input bytes and 3,246,864 output bytes; synchronous GPU completion dominates.
+
+The generated noisy 1024 × 768 CMYK case uses border 7 and materializes
+`tobytes()`. The benchmark gate uses five warmups and 100 measured calls per
+subject. Baseline run `migration-benchmark-514461c564e84c80ad3d2b85ca1e7805`
+passed 3/3 live parity comparisons. Final runs
+`migration-benchmark-82c13565fdfd4ffabed71cc8e6343e5d` and
+`migration-benchmark-82ff6fdda7014ee9a5503486d5efe837` each passed 3/3 with
+actual CPU/SIMD/GPU execution, zero fallback, and one GPU dispatch.
+
+| CMYK, 1024 × 768 | Pillow ms | CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Before native CPU route | 0.739188 | 0.592750 | 0.379563 | 1.471105 |
+| Final native route, repeat 1 | 0.732958 | 0.275166 | 0.431980 | 1.540417 |
+| Final native route, repeat 2 | 0.748792 | 0.273292 | 0.395271 | 1.535792 |
+
+CPU removed the redundant four-byte clone and improved about 2.17× over its
+baseline, reaching 2.74× Pillow speed on the final repeat. SIMD was already
+native and showed no gain (the final measurements were slower than baseline
+within run-to-run variation), so it remains below the 5× target. GPU showed no
+measurable win and was about 3.9× slower than SIMD; the final repeat was about
+4.4% slower than baseline, a difference too small to claim as a regression or
+improvement without tighter controls. Full strict Expand parity passed for
+L/LA/RGB/RGBA/HSV/CMYK on CPU, SIMD, and GPU (6/6 each). No coverage was run.
+Checkpoint CMYK after this first native pass; CPU is faster than Pillow, while
+the SIMD and GPU targets remain open.
 
 ### Paste: native same-mode CPU rows — 2026-09-28
 

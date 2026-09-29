@@ -2,7 +2,8 @@
 // Output dimensions = (w + 2*border) x (h + 2*border)
 // Border pixels = fill_color; inner region = source image.
 // Mode-aware: fill color respects image mode channels.
-// Mode codes: 0=L, 1=LA, 2=RGB/HSV, 3=RGBA
+// Mode codes: 0=L, 1=LA, 2=RGB/HSV, 3=RGBA, 4=CMYK. The CMYK native route
+// transports K in the fourth byte without interpreting it as alpha.
 // Generic output is packed u32 RGBA. The bounded native-output route packs
 // each four-byte word from the requested 1/2/3/4-byte channel layout.
 //
@@ -25,6 +26,14 @@ struct Params {
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 5u || m == 8u; }
+
+fn native_channel_count(m: u32) -> u32 {
+    if m == 0u { return 1u; }
+    if m == 1u { return 2u; }
+    if m == 2u { return 3u; }
+    if m == 3u || m == 4u { return 4u; }
+    return 0u;
+}
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -65,7 +74,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (params.native_input & 2u) != 0u {
         let word_index = gid.y * params.dst_w + gid.x;
         if gid.x >= params.dst_w || word_index >= params.dst_h { return; }
-        let channels = params.mode + 1u;
+        let channels = native_channel_count(params.mode);
+        if channels == 0u { return; }
         let output_byte_count = out_w * out_h * channels;
         var packed = 0u;
         for (var lane = 0u; lane < 4u; lane = lane + 1u) {
@@ -106,7 +116,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         var b2 = 0u;
         var a = 255u;
         if (params.native_input & 1u) != 0u {
-            let channels = params.mode + 1u;
+            let channels = native_channel_count(params.mode);
+            if channels == 0u { return; }
             r = read_native_byte(pixel_index, 0u, channels);
             if params.mode == 1u {
                 // LA's native alpha is byte one; the packed shader contract
@@ -115,7 +126,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             } else if params.mode >= 2u {
                 g = read_native_byte(pixel_index, 1u, channels);
                 b2 = read_native_byte(pixel_index, 2u, channels);
-                if params.mode == 3u {
+                if params.mode == 3u || params.mode == 4u {
                     a = read_native_byte(pixel_index, 3u, channels);
                 }
             }
