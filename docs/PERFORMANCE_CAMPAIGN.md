@@ -9827,3 +9827,57 @@ Keep this native-L route, but stop spending attempts here: the latest dispatch
 layout did not beat stencil reuse, and the GPU still trails SIMD. Next, select
 another explicit format-widening hotspot using conversion-site evidence and a
 material workload that proves the requested backend actually ran.
+
+### Native-L `RankFilter(9)` — checkpoint 2026-09-30
+
+The material operation is the whole-workflow workload
+`pipeline-chain.rank-filter.material.l-noise-256x256-size9-rank40`, with input
+construction outside the timed steps. The prior generic GPU path widened the
+one-byte L image to RGBA, transferred 262,144 bytes in each direction, and
+measured 15.095 ms. It also used the four-channel insertion-sort shader for a
+single scalar order statistic. The retained specialization is admitted only
+for a nonempty, exact native `ImageLuma8` image, logical mode L (or the
+canonical implicit mode), and a singleton 9 × 9 RankFilter on a little-endian
+target. It transfers packed L bytes (65,536 bytes each direction at 256 × 256),
+reports zero mode conversions, clamps the requested zero-based rank to 80, and
+keeps Pillow's replicated border behavior.
+
+Four bounded attempts were measured or parity-checked:
+
+| Attempt | GPU method | GPU median | GPU throughput | Result |
+| --- | --- | ---: | ---: | --- |
+| 1 | Pack native L and use radix order selection | about 4.30 ms in a focused dispatch trace | not measured | Exact GPU parity passed 5/5; too slow to retain as the selector. |
+| 2 | Cache four adjacent neighborhoods and use eight exact binary lower-bound passes | 1.723 ms | 580.6 ops/s | Parity-gated benchmark passed; retained as a major improvement over the generic path. |
+| 3 | For widths divisible by four, cache three packed source words per clamped row and gather the four output lanes from this 27-word cache; odd widths use the generic packed kernel | 1.272 ms | 786.2 ops/s | Strict GPU parity passed 7/7; retained. |
+| 4 | Reduce each row's comparison count independently and combine row counts as a balanced tree | 1.758 ms | 569.0 ops/s | Strict GPU parity and benchmark parity passed; regressed versus attempt 3 and was reverted. |
+
+The formal attempt-2, attempt-3, and attempt-4 receipts are respectively
+`migration-benchmark-f6ec2fa79a4148c987f16a69dcd3e26e`,
+`migration-benchmark-ac8d6fe0ce0f4c2fa935db0388d5f061`, and
+`migration-benchmark-04a11e9502d74f0bb6f522b5194a2c8b`. All three benchmark
+parity gates passed 3/3, and each measured six completed executions for every
+requested backend without fallback. The attempt-3 strict corpus passed 7/7 on
+CPU, SIMD, and GPU. Its GPU execution receipt reports actual GPU completion for
+all seven cases with no fallback; the WGSL receipt shows four generic packed
+dispatches and three aligned-row packed dispatches. The workload uses
+`successful_execution` as its benchmark requirement, so the separate exact
+output parity gate and backend receipts are retained alongside the timing.
+
+Attempt 3's whole-workflow medians were Pillow 36.336 ms, CPU 0.755 ms, SIMD
+1.133 ms, and GPU 1.272 ms. CPU was 48.1× faster than Pillow and SIMD was
+32.1× faster on this workload. GPU improved 91.6% from the generic 15.095 ms
+baseline, but remains 12.3% slower in latency than SIMD; reciprocal throughput
+was 786 versus 883 operations/s. Attempt 4's GPU backend phase also regressed,
+from 1.124 to 1.617 ms, so its balanced reduction was removed. These results
+establish this material case only, not all L image sizes or ranks.
+
+The remaining GPU cost is the exact selector: eight threshold passes still
+inspect all 81 samples for each of the four output lanes. A later revisit can
+test a rolling byte histogram within one packed four-pixel word: initialize
+one 81-sample window, then slide across the next three lanes by removing and
+adding nine samples per step. A packed 256-bin plus 16-bin coarse histogram
+would use about 272 bytes of invocation-local state; its occupancy and spill
+cost are unknown, so compare it against the retained row cache before keeping
+it. Do not reintroduce the measured slower balanced-count variant. This visit
+is checkpointed after four attempts; move to the next ranked operation and
+revisit the GPU/SIMD gap later. No coverage collection ran.

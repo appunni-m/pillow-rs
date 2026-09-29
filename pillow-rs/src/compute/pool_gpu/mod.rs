@@ -6267,7 +6267,7 @@ impl GpuInner {
         input_dims: &[(u32, u32)],
         packed_luma_point: bool,
         packed_luma_putdata: bool,
-        packed_luma_median: bool,
+        packed_luma_order_statistic: bool,
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
@@ -6319,13 +6319,31 @@ impl GpuInner {
                 index += 1;
                 continue;
             }
-            if packed_luma_median && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
+            if packed_luma_order_statistic && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
                 let median = self.resolve_pipeline(
                     "__internal_median_filter_3x3_luma_packed",
                     "median_filter_3x3_luma_packed.wgsl",
                     include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(median));
+                index += 1;
+                continue;
+            }
+            if packed_luma_order_statistic && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
+                let rank = if input_dims[index].0 % 4 == 0 {
+                    self.resolve_pipeline(
+                        "__internal_rank_filter_9x9_luma_row_packed",
+                        "rank_filter_9x9_luma_row_packed.wgsl",
+                        include_str!("shaders/rank_filter_9x9_luma_row_packed.wgsl"),
+                    )?
+                } else {
+                    self.resolve_pipeline(
+                        "__internal_rank_filter_9x9_luma_packed",
+                        "rank_filter_9x9_luma_packed.wgsl",
+                        include_str!("shaders/rank_filter_9x9_luma_packed.wgsl"),
+                    )?
+                };
+                resolved.push(ResolvedPipeline::Single(rank));
                 index += 1;
                 continue;
             }
@@ -7520,7 +7538,7 @@ impl GpuInner {
         native_rgb_to_rgba_input: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
-        packed_luma_median: bool,
+        packed_luma_order_statistic: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_l_input: bool,
@@ -7639,11 +7657,30 @@ impl GpuInner {
                     "point_luma_packed.wgsl",
                     include_str!("shaders/point_luma_packed.wgsl"),
                 )?
-            } else if packed_luma_median && matches!(op, PipelineOp::MedianFilter { size: 3 }) {
+            } else if packed_luma_order_statistic
+                && matches!(op, PipelineOp::MedianFilter { size: 3 })
+            {
                 self.resolve_pipeline(
                     "__internal_median_filter_3x3_luma_packed",
                     "median_filter_3x3_luma_packed.wgsl",
                     include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
+                )?
+            } else if packed_luma_order_statistic
+                && matches!(op, PipelineOp::RankFilter { size: 9, .. })
+                && cur_w % 4 == 0
+            {
+                self.resolve_pipeline(
+                    "__internal_rank_filter_9x9_luma_row_packed",
+                    "rank_filter_9x9_luma_row_packed.wgsl",
+                    include_str!("shaders/rank_filter_9x9_luma_row_packed.wgsl"),
+                )?
+            } else if packed_luma_order_statistic
+                && matches!(op, PipelineOp::RankFilter { size: 9, .. })
+            {
+                self.resolve_pipeline(
+                    "__internal_rank_filter_9x9_luma_packed",
+                    "rank_filter_9x9_luma_packed.wgsl",
+                    include_str!("shaders/rank_filter_9x9_luma_packed.wgsl"),
                 )?
             } else if native_sharpness_l_input && matches!(op, PipelineOp::Sharpness { .. }) {
                 self.resolve_pipeline(
@@ -8657,6 +8694,16 @@ impl GpuInner {
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
+            "__internal_rank_filter_9x9_luma_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_rank_filter_9x9_luma_row_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "ExtractBand" | "Grayscale" => plan_extract_band_dispatch(
                 output_dims.0,
                 output_dims.1,
@@ -8736,7 +8783,7 @@ impl GpuInner {
         logical_mode: Option<&str>,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
-        packed_luma_median: bool,
+        packed_luma_order_statistic: bool,
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
@@ -8747,7 +8794,7 @@ impl GpuInner {
             &prepared.input_dims,
             packed_luma_point,
             packed_luma_putdata,
-            packed_luma_median,
+            packed_luma_order_statistic,
             native_sharpness_l_input,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
@@ -11436,7 +11483,7 @@ impl GpuInner {
         native_rgb_to_rgba_input: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
-        packed_luma_median: bool,
+        packed_luma_order_statistic: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_l_input: bool,
@@ -11665,7 +11712,7 @@ impl GpuInner {
                 native_rgb_to_rgba_input,
                 packed_luma_point,
                 packed_luma_putdata,
-                packed_luma_median,
+                packed_luma_order_statistic,
                 native_extract_band,
                 native_grayscale_rgb_input,
                 native_sharpness_l_input,
@@ -11697,7 +11744,7 @@ impl GpuInner {
                 logical_mode,
                 packed_luma_point,
                 packed_luma_putdata,
-                packed_luma_median,
+                packed_luma_order_statistic,
                 native_sharpness_l_input,
                 native_sharpness_la_input,
                 native_sharpness_rgb_input,
@@ -11709,7 +11756,7 @@ impl GpuInner {
                     dispatch.transfer_bytes
                 } else if packed_luma_point
                     || packed_luma_putdata
-                    || packed_luma_median
+                    || packed_luma_order_statistic
                     || native_sharpness_l_input
                     || matches!(
                         ops.last(),
@@ -11890,17 +11937,20 @@ fn gpu_packed_luma_convert_input(
         && image.height() != 0
 }
 
-/// Admit the exact native-L 3x3 median specialization. Its shader operates on
-/// four adjacent L samples packed into one word, so prefixes, palette modes,
-/// empty images, and malformed backing lengths keep the ordinary path.
+/// Admit native-L order-statistic specializations. Their shaders operate on
+/// four adjacent samples packed into one word; keep prefixes, palette modes,
+/// empty images, unsupported filter sizes, and malformed backing lengths on
+/// the ordinary path.
 #[cfg(target_endian = "little")]
-fn gpu_packed_luma_median_input(
+fn gpu_packed_luma_order_statistic_input(
     ops: &[PipelineOp],
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    if !matches!(ops, [PipelineOp::MedianFilter { size: 3 }])
-        || !matches!(logical_mode, None | Some("L"))
+    if !matches!(
+        ops,
+        [PipelineOp::MedianFilter { size: 3 }] | [PipelineOp::RankFilter { size: 9, .. }]
+    ) || !matches!(logical_mode, None | Some("L"))
     {
         return false;
     }
@@ -11914,8 +11964,25 @@ fn gpu_packed_luma_median_input(
     pixel_count > 0 && pixel_count <= u32::MAX as usize && luma.as_raw().len() == pixel_count
 }
 
+fn gpu_packed_luma_rank_filter_9_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    matches!(ops, [PipelineOp::RankFilter { size: 9, .. }])
+        && gpu_packed_luma_order_statistic_input(ops, image, logical_mode)
+}
+
+fn gpu_packed_luma_rank_filter_9_work_items(output_dimensions: (u32, u32)) -> u64 {
+    // Eight binary-search passes inspect each of the 81 window samples once
+    // per output lane. Count all four lanes in the final packed word too, even
+    // if the image has a partial word, so the watchdog estimate stays conservative.
+    let pixels = u64::from(output_dimensions.0).saturating_mul(u64::from(output_dimensions.1));
+    pixels.div_ceil(4).saturating_mul(4).saturating_mul(8 * 81)
+}
+
 #[cfg(not(target_endian = "little"))]
-fn gpu_packed_luma_median_input(
+fn gpu_packed_luma_order_statistic_input(
     _ops: &[PipelineOp],
     _image: &DynamicImage,
     _logical_mode: Option<&str>,
@@ -14857,6 +14924,12 @@ fn gpu_dimensions_require_cpu(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
+    // Native-L RankFilter(9) uses eight binary-search passes over its
+    // 81-sample neighborhood. The ordinary packed-RGBA shader sorts four
+    // channels and has a much larger watchdog estimate; do not let that
+    // conservative estimate reject the exact native-L specialization before
+    // the order-statistic admission below can select it.
+    let packed_luma_rank_filter_9 = gpu_packed_luma_rank_filter_9_input(ops, image, logical_mode);
     let dimensions_fit = |w: u32, h: u32| {
         CheckedDims::new(w, h, 1)
             .map(|dims| dims.total_pixels() <= GPU_BUFFER_CAPACITY as usize)
@@ -14968,7 +15041,11 @@ fn gpu_dimensions_require_cpu(
         if next.0 == 0 || next.1 == 0 || !dimensions_fit(next.0, next.1) {
             return true;
         }
-        if gpu_shader_work_requires_cpu(op, (cur_w, cur_h), next, None) {
+        if packed_luma_rank_filter_9 && matches!(op, PipelineOp::RankFilter { size: 9, .. }) {
+            if gpu_packed_luma_rank_filter_9_work_items(next) > MAX_GPU_SHADER_WORK_ITEMS {
+                return true;
+            }
+        } else if gpu_shader_work_requires_cpu(op, (cur_w, cur_h), next, None) {
             return true;
         }
         (cur_w, cur_h) = next;
@@ -18246,7 +18323,7 @@ impl GpuPool {
                 }] if matches!(img, DynamicImage::ImageLuma8(source)
                     if data.len() <= source.as_raw().len())
             );
-        let packed_luma_median = gpu_packed_luma_median_input(ops, img, mode);
+        let packed_luma_order_statistic = gpu_packed_luma_order_statistic_input(ops, img, mode);
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -19074,18 +19151,31 @@ impl GpuPool {
                 gpu.device.limits().max_compute_workgroups_per_dimension,
             )
             .is_ok();
-        let packed_luma_median = packed_luma_median
+        let packed_luma_order_statistic_requested = packed_luma_order_statistic;
+        let packed_luma_order_statistic = packed_luma_order_statistic_requested
             && plan_packed_luma_dispatch(
                 img.width(),
                 img.height(),
                 gpu.device.limits().max_compute_workgroups_per_dimension,
             )
             .is_ok();
+        if packed_luma_order_statistic_requested && !packed_luma_order_statistic {
+            gpu_log!(
+                "[GPU] dispatch preflight routed packed L order statistic to CPU: adapter workgroup limit"
+            );
+            return self.preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "adapter workgroup limit",
+            );
+        }
         let image_pixels = CheckedDims::new(img.width(), img.height(), 1)?.total_pixels();
         let full_luma_putdata = packed_luma_putdata
             && matches!(ops, [PipelineOp::PutData { data, mode: PixelMode::L }]
                 if data.len() == image_pixels);
-        if !packed_luma_median
+        if !packed_luma_order_statistic
             && gpu_dispatch_dimensions_require_cpu(
                 ops,
                 img.dimensions(),
@@ -19416,7 +19506,7 @@ impl GpuPool {
             || packed_luma_convert
             || packed_luma_point
             || packed_luma_putdata
-            || packed_luma_median
+            || packed_luma_order_statistic
         {
             let DynamicImage::ImageLuma8(image) = img else {
                 return Err(PilError::InternalError(
@@ -19478,7 +19568,7 @@ impl GpuPool {
             native_rgb_to_rgba_input,
             packed_luma_point,
             packed_luma_putdata,
-            packed_luma_median,
+            packed_luma_order_statistic,
             native_extract_band,
             native_grayscale_rgb_input,
             native_sharpness_l_input,
@@ -19572,7 +19662,7 @@ impl GpuPool {
             || native_luma8_grayscale
             || packed_luma_point
             || packed_luma_putdata
-            || packed_luma_median
+            || packed_luma_order_statistic
             || native_sharpness_l_input
         {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
@@ -19651,7 +19741,7 @@ impl GpuPool {
             || packed_luma_convert
             || packed_luma_point
             || packed_luma_putdata
-            || packed_luma_median
+            || packed_luma_order_statistic
             || native_sharpness_l_input
         {
             compact_luma8_transfer_bytes(w, h)?
@@ -19676,7 +19766,7 @@ impl GpuPool {
             || native_luma8_grayscale
             || packed_luma_point
             || packed_luma_putdata
-            || packed_luma_median
+            || packed_luma_order_statistic
             || native_sharpness_l_input
         {
             compact_luma8_transfer_bytes(final_w, final_h)?
@@ -19686,7 +19776,7 @@ impl GpuPool {
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = if packed_luma_convert
-            || packed_luma_median
+            || packed_luma_order_statistic
             || native_rgb_to_rgba_input
             || native_grayscale_rgb_input
             || native_sharpness_l_input
@@ -19710,7 +19800,7 @@ impl GpuPool {
                     && !native_reduce_rgb_input
                     && !packed_luma_point
                     && !packed_luma_putdata
-                    && !packed_luma_median
+                    && !packed_luma_order_statistic
                     && (native_luma16_convert
                         || native_luma16_paste
                         || !matches!(
@@ -19734,7 +19824,7 @@ impl GpuPool {
             || native_luma8_grayscale
             || packed_luma_point
             || packed_luma_putdata
-            || packed_luma_median
+            || packed_luma_order_statistic
         {
             return Ok(result);
         }
@@ -25424,46 +25514,79 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn gpu_packed_luma_median_admits_only_exact_native_l_singletons() {
+    fn gpu_packed_luma_order_statistic_admits_only_exact_native_l_singletons() {
         let median = PipelineOp::MedianFilter { size: 3 };
+        let rank = PipelineOp::RankFilter { size: 9, rank: 40 };
         let luma = DynamicImage::ImageLuma8(
             GrayImage::from_raw(3, 2, vec![5, 40, 250, 100, 80, 10]).unwrap(),
         );
-        assert!(super::gpu_packed_luma_median_input(
+        assert!(super::gpu_packed_luma_order_statistic_input(
             std::slice::from_ref(&median),
             &luma,
             None
         ));
-        assert!(super::gpu_packed_luma_median_input(
+        assert!(super::gpu_packed_luma_order_statistic_input(
             std::slice::from_ref(&median),
             &luma,
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_median_input(
+        assert!(super::gpu_packed_luma_order_statistic_input(
+            std::slice::from_ref(&rank),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_order_statistic_input(
             std::slice::from_ref(&median),
             &luma,
             Some("P")
         ));
-        assert!(!super::gpu_packed_luma_median_input(
+        assert!(!super::gpu_packed_luma_order_statistic_input(
             &[PipelineOp::MedianFilter { size: 5 }],
             &luma,
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_median_input(
+        assert!(!super::gpu_packed_luma_order_statistic_input(
+            &[PipelineOp::RankFilter { size: 7, rank: 20 }],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_order_statistic_input(
             &[median.clone(), PipelineOp::Duplicate],
             &luma,
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_median_input(
+        assert!(!super::gpu_packed_luma_order_statistic_input(
             std::slice::from_ref(&median),
             &DynamicImage::ImageRgb8(RgbImage::from_raw(2, 1, vec![1, 2, 3, 4, 5, 6]).unwrap()),
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_median_input(
+        assert!(!super::gpu_packed_luma_order_statistic_input(
             std::slice::from_ref(&median),
             &DynamicImage::ImageLuma8(GrayImage::new(0, 1)),
             Some("L")
         ));
+    }
+
+    #[test]
+    fn gpu_packed_luma_rank_filter_9_work_estimate_tracks_binary_search_passes() {
+        let workload = super::gpu_packed_luma_rank_filter_9_work_items((256, 256));
+        assert_eq!(workload, 42_467_328);
+        assert!(workload < super::MAX_GPU_SHADER_WORK_ITEMS);
+        assert_eq!(
+            super::gpu_packed_luma_rank_filter_9_work_items((1, 1)),
+            2_592
+        );
+
+        let maximum_packed_words = super::MAX_GPU_SHADER_WORK_ITEMS / (4 * 8 * 81);
+        let maximum_pixels = maximum_packed_words * 4;
+        assert!(
+            super::gpu_packed_luma_rank_filter_9_work_items((maximum_pixels as u32, 1))
+                <= super::MAX_GPU_SHADER_WORK_ITEMS
+        );
+        assert!(
+            super::gpu_packed_luma_rank_filter_9_work_items(((maximum_pixels + 1) as u32, 1))
+                > super::MAX_GPU_SHADER_WORK_ITEMS
+        );
     }
 
     #[test]

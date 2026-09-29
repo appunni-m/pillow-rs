@@ -179,6 +179,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- scale.wgsl
 |   |   |   |       |-- screen.wgsl
 |   |   |   |       |-- sharpness.wgsl
+|   |   |   |       |-- sharpness_l_native.wgsl
 |   |   |   |       |-- sharpness_la_native.wgsl
 |   |   |   |       |-- sharpness_rgb_native.wgsl
 |   |   |   |       |-- soft_light.wgsl

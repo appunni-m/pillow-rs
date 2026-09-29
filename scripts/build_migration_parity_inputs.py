@@ -41243,6 +41243,29 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+        # The existing 9x9 material RankFilter input is constant-valued, which
+        # makes insertion-sort comparisons exit immediately and does not
+        # exercise useful order-statistic work. Keep varied native-L inputs
+        # for rank endpoints, row/word tails, and the material benchmark.
+        for name, size, rank, seed in (
+            ("backend-native-l-rank9-min-tail-17x9", [17, 9], 0, 20261037),
+            ("backend-native-l-rank9-middle-tail-17x9", [17, 9], 40, 20261038),
+            ("backend-native-l-rank9-max-tail-17x9", [17, 9], 80, 20261039),
+            ("backend-native-l-rank9-single-column-1x11", [1, 11], 40, 20261040),
+            ("backend-native-l-row-rank9-min-16x9", [16, 9], 0, 20261042),
+            ("backend-native-l-row-rank9-max-16x9", [16, 9], 80, 20261043),
+            ("performance-material-l-rank9-noise-256x256", [256, 256], 40, 20261041),
+        ):
+            specs += ({
+                "surface": "PIL.ImageFilter", "operation": "RankFilter",
+                "requirement_suffix": "performance.standard",
+                "name": name, "mode": "L", "size": size,
+                "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(9), "rank": literal(rank)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
         # Keep channel and alpha behavior in the strict backend cohort without
         # multiplying the large material benchmark cost.
         for mode, requirement_suffix, seed in (
@@ -48250,6 +48273,36 @@ def build_pipeline_benchmark_document(
                 ),
             }
         )
+
+    rank_material_case_id = (
+        "PIL.ImageFilter.RankFilter.nuanced."
+        "performance-material-l-rank9-noise-256x256"
+    )
+    rank_material_case = cases_by_id.get(rank_material_case_id)
+    if rank_material_case is None:
+        raise ValueError(
+            f"rank-filter benchmark references missing case: {rank_material_case_id}"
+        )
+    rank_material_measurement = copy.deepcopy(chain_policy)
+    rank_material_measurement["correctness_gate"] = "parity_pass"
+    rank_filter_workloads.append(
+        {
+            "workload_id": "pipeline-chain.rank-filter.material.l-noise-256x256-size9-rank40",
+            "covers": [rank_requirement],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "parity_case",
+                "case_id": rank_material_case_id,
+            },
+            "measurement": rank_material_measurement,
+            "context": _workflow_benchmark_context(
+                rank_material_case,
+                variant="rank-filter-material-noise-256x256",
+                surface=rank_material_case["surface"],
+                operation=rank_material_case["operation"],
+            ),
+        }
+    )
 
     # Keep the convolution kernels visible in a materially sized lazy
     # pipeline. The isolated operation matrix exercises construction and
