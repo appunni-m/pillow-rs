@@ -17070,6 +17070,22 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-cmyk-1024x768",
+            "mode": "CMYK",
+            "size": [1024, 768],
+            "observe_receiver": True,
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([0, 0]),
+                "fill": literal([221, 37, 109, 203]),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
             "requirement_suffix": "behavior.default",
             "name": "canvas-f-tuple-fill-error",
             "mode": "F",
@@ -50431,6 +50447,32 @@ def build_inputs(
                     }
                 )
                 members.append({"workload_id": workload_id, "weight": 1})
+                cmyk_case_id = (
+                    "PIL.ImageDraw.ImageDraw.bitmap.nuanced."
+                    "performance-cmyk-1024x768"
+                )
+                cmyk_case = all_cases_by_id[cmyk_case_id]
+                cmyk_workload = copy.deepcopy(workloads[-1])
+                cmyk_workload["workload_id"] = (
+                    "pil-imagedraw-imagedraw.bitmap.cmyk-1024x768"
+                )
+                cmyk_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": cmyk_case_id,
+                }
+                cmyk_workload["context"] = _workflow_benchmark_context(
+                    cmyk_case,
+                    variant="cmyk-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(cmyk_workload)
+                members.append(
+                    {
+                        "workload_id": cmyk_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
                 rgba_context_case_id = (
                     "PIL.ImageDraw.ImageDraw.bitmap.nuanced."
                     "performance-rgb-rgba-context-1024x768"
