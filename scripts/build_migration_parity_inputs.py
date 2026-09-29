@@ -41054,6 +41054,7 @@ def build_nuanced_cases(
     cases.extend(rgb_to_l_performance_parity_cases(surface_id))
     cases.extend(l_to_rgb_performance_parity_cases(surface_id))
     cases.extend(l_to_rgba_performance_parity_cases(surface_id))
+    cases.extend(rgb_to_rgba_performance_parity_cases(surface_id))
     cases.extend(cmyk_to_rgb_parity_cases(surface_id))
     cases.extend(cmyk_to_1_parity_cases(surface_id))
     cases.extend(cmyk_grayscale_parity_cases(surface_id))
@@ -41753,6 +41754,68 @@ def l_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         "mode": literal("L"),
                         "size": literal(size),
                         "data": asset_value("l-pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "convert",
+                    "receiver": binding("image"),
+                    "arguments": {"mode": literal("RGBA")},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+    ]
+
+
+def rgb_to_rgba_performance_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Benchmark material native RGB-to-RGBA conversion."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    size = [1024, 768]
+    raw = random.Random(20261003).randbytes(size[0] * size[1] * 3)
+    return [
+        {
+            "case_id": (
+                f"{surface_id}.convert.nuanced."
+                "performance-material-rgb-to-rgba-noise-1024x768"
+            ),
+            "surface": surface_id,
+            "operation": "convert",
+            "covers": [
+                f"{surface_id}.convert.behavior.default",
+                f"{surface_id}.convert.performance.standard",
+            ],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "rgb-pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal(size),
+                        "data": asset_value("rgb-pixels"),
                     },
                 },
                 {
@@ -49829,6 +49892,32 @@ def build_inputs(
                 members.append(
                     {
                         "workload_id": l_rgba_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
+                rgb_rgba_case_id = (
+                    "PIL.Image.Image.convert.nuanced."
+                    "performance-material-rgb-to-rgba-noise-1024x768"
+                )
+                rgb_rgba_case = all_cases_by_id[rgb_rgba_case_id]
+                rgb_rgba_workload = copy.deepcopy(standard_workload)
+                rgb_rgba_workload["workload_id"] = (
+                    "pil-image-image.convert.rgb-to-rgba-material"
+                )
+                rgb_rgba_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": rgb_rgba_case_id,
+                }
+                rgb_rgba_workload["context"] = _workflow_benchmark_context(
+                    rgb_rgba_case,
+                    variant="material-rgb-to-rgba-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(rgb_rgba_workload)
+                members.append(
+                    {
+                        "workload_id": rgb_rgba_workload["workload_id"],
                         "weight": 1,
                     }
                 )

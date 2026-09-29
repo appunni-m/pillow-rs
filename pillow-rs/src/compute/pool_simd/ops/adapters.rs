@@ -8576,6 +8576,8 @@ const NATIVE_RGBA_ALPHA_LANES: u8x16 =
 const NATIVE_RGBA_COLOR_LANES: u8x16 = u8x16::new([
     255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0,
 ]);
+const NATIVE_RGB_TO_RGBA_BYTES: u8x16 =
+    u8x16::new([0, 1, 2, 15, 3, 4, 5, 15, 6, 7, 8, 15, 9, 10, 11, 15]);
 
 /// Expand native L samples to packed RGB with fixed 16-pixel byte shuffles.
 /// The three vectors concatenate into 48 consecutive output bytes, avoiding
@@ -8657,6 +8659,68 @@ fn native_luma_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> 
     output.truncate(output_bytes);
     Some((output, vector_blocks, 0))
 }
+
+#[inline]
+fn native_rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: usize) -> [u8; 16] {
+    debug_assert!((1..=4).contains(&active_pixels));
+    let source_start = start_pixel * 3;
+    let active_bytes = active_pixels * 3;
+    let mut input = [0u8; 16];
+    input[..active_bytes].copy_from_slice(&source[source_start..source_start + active_bytes]);
+    input[15] = u8::MAX;
+    u8x16::new(input)
+        .swizzle_relaxed(NATIVE_RGB_TO_RGBA_BYTES)
+        .to_array()
+}
+
+/// Expand native RGB pixels with one fixed shuffle per four-pixel vector.
+/// The generic layout converter rebuilds the same 3-to-4 channel indices for
+/// every block; this path keeps RGB packed until it writes the required RGBA
+/// output and supplies opaque alpha from a sentinel input lane.
+fn native_rgb_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+    let DynamicImage::ImageRgb8(rgb) = img else {
+        return None;
+    };
+
+    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
+    let source_bytes = pixels.checked_mul(3)?;
+    let output_bytes = pixels.checked_mul(4)?;
+    let source = rgb.as_raw();
+    if source.len() != source_bytes {
+        return None;
+    }
+
+    #[cfg(feature = "parallel")]
+    if pixels >= SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD {
+        let block_count = pixels.div_ceil(4);
+        let min_blocks = usize::try_from(img.width()).ok()?.div_ceil(4).max(1);
+        let blocks: Vec<[u8; 16]> = crate::par_row_blocks_collect!(
+            block_count,
+            min_blocks,
+            || (),
+            |_state, block_index| {
+                let start_pixel = block_index * 4;
+                let active_pixels = (pixels - start_pixel).min(4);
+                native_rgb_to_rgba_block(source, start_pixel, active_pixels)
+            }
+        );
+        let mut output = blocks.into_flattened();
+        output.truncate(output_bytes);
+        return Some((output, u64::try_from(block_count).ok()?, 0));
+    }
+
+    let mut blocks = Vec::<[u8; 16]>::with_capacity(pixels.div_ceil(4));
+    for start in (0..pixels).step_by(4) {
+        let active_pixels = (pixels - start).min(4);
+        blocks.push(native_rgb_to_rgba_block(source, start, active_pixels));
+    }
+    let mut output = blocks.into_flattened();
+    output.truncate(output_bytes);
+    Some((output, pixels.div_ceil(4) as u64, 0))
+}
+
+#[cfg(feature = "parallel")]
+const SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
 fn native_convert_bytes(
     img: &DynamicImage,
@@ -25880,6 +25944,19 @@ pub fn simd_convert(
         crate::compute::record_pipeline_operation_path("vector");
         return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 1);
     }
+    if matches!(target, ColorMode::RGBA)
+        && layout.source_channels == 3
+        && matches!(img, DynamicImage::ImageRgb8(_))
+        && matches!(mode, None | Some("RGB"))
+    {
+        let Some((output, vector_blocks, scalar_tail)) = native_rgb_to_rgba_bytes(img) else {
+            return Err(simd_unsupported("Convert"));
+        };
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("vector");
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 4);
+    }
     let Some((output, vector_blocks, scalar_tail)) = native_convert_bytes(img, layout) else {
         return Err(simd_unsupported("Convert"));
     };
@@ -26484,6 +26561,44 @@ mod tests {
                 "{width}x{height}"
             );
             assert_eq!(vector_blocks, pixels.div_ceil(16) as u64);
+            assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_rgb_to_rgba_matches_exact_conversion_across_vector_tails() {
+        for (width, height) in [
+            (0u32, 3u32),
+            (3, 0),
+            (1, 1),
+            (3, 1),
+            (4, 1),
+            (5, 1),
+            (15, 3),
+            (16, 3),
+            (17, 3),
+            (31, 3),
+            (32, 3),
+            (33, 3),
+            (1023, 512),
+        ] {
+            let pixels = width as usize * height as usize;
+            let source: Vec<u8> = (0..pixels * 3)
+                .map(|index| ((index * 73 + index / 11 + 19) & 255) as u8)
+                .collect();
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, source).expect("valid RGB storage"),
+            );
+            let expected = image.to_rgba8();
+            let (actual, vector_blocks, scalar_tail) =
+                super::native_rgb_to_rgba_bytes(&image).expect("native RGB to RGBA");
+
+            assert_eq!(
+                actual.as_slice(),
+                expected.as_raw().as_slice(),
+                "{width}x{height}"
+            );
+            assert_eq!(vector_blocks, pixels.div_ceil(4) as u64);
             assert_eq!(scalar_tail, 0);
         }
     }

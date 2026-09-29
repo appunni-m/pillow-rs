@@ -212,13 +212,31 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let idx = gid.y * params.width + gid.x;
     let src = params.mode;
-    var pixel = input[idx];
+    let native_rgb_to_rgba = params._pad == 2u && src == 2u && params.target_mode == 3u;
+    var pixel = 0u;
+    if !native_rgb_to_rgba {
+        pixel = input[idx];
+    }
     if params._pad == 1u && src == 0u {
         // Native L input is packed four samples per storage word. Expand only
         // the current sample in registers; do not widen the source on host.
         let packed = input[idx / 4u];
         let luma = (packed >> ((idx % 4u) * 8u)) & 0xffu;
         pixel = luma | (luma << 8u) | (luma << 16u) | (255u << 24u);
+    }
+    if native_rgb_to_rgba {
+        // Native RGB input is a packed three-byte stream. A pixel can cross a
+        // u32 boundary; the checked host admission keeps this byte index in
+        // range and the uploader pads the final storage word.
+        let byte_offset = idx * 3u;
+        let word_index = byte_offset >> 2u;
+        let shift = (byte_offset & 3u) * 8u;
+        var packed = input[word_index] >> shift;
+        if shift > 8u {
+            packed = packed | (input[word_index + 1u] << (32u - shift));
+        }
+        output[idx] = (packed & 0x00ffffffu) | 0xff000000u;
+        return;
     }
 
     // Always unpack all 4 bytes from the source pixel.
