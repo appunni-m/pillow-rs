@@ -41176,6 +41176,26 @@ def build_nuanced_cases(
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
+        # MedianFilter's maintained material workload used a constant image,
+        # which skipped the order-statistic work on every pixel. Keep a seeded
+        # native-L workload and small edge/tail shapes so backend measurements
+        # exercise varied samples and the packed GPU path's row and word tails.
+        for name, size, seed in (
+            ("performance-material-l-noise-1024x768-size-3", [1024, 768], 20260930),
+            ("backend-noise-l-1x1-size-3", [1, 1], 20261003),
+            ("backend-noise-l-1x3-size-3", [1, 3], 20261004),
+            ("backend-noise-l-33x35-size-3", [33, 35], 20261005),
+        ):
+            specs += ({
+                "surface": "PIL.ImageFilter", "operation": "MedianFilter",
+                "requirement_suffix": "performance.standard",
+                "name": name, "mode": "L", "size": size,
+                "edge": "noise-fill", "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(3)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
+
         # Keep channel and alpha behavior in the strict backend cohort without
         # multiplying the large material benchmark cost.
         for mode, requirement_suffix, seed in (
@@ -46660,6 +46680,36 @@ def build_pipeline_benchmark_document(
             }
         )
 
+    median_l_case_id = (
+        "PIL.ImageFilter.MedianFilter.nuanced."
+        "performance-material-l-noise-1024x768-size-3"
+    )
+    median_l_case = cases_by_id[median_l_case_id]
+    median_l_material_workload = {
+        "workload_id": "pipeline-op.medianfilter.material-l-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.ImageFilter", "MedianFilter")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": median_l_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["apply-filter", "observe-filter-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            median_l_case,
+            variant="medianfilter-material-l-noise-1024x768-size-3",
+            surface="PIL.ImageFilter",
+            operation="MedianFilter",
+        ),
+    }
+    median_l_material_workload["context"]["operation_class"] = "neighborhood"
+
     grayscale_rgb_case_id = (
         "PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768"
     )
@@ -49084,6 +49134,7 @@ def build_pipeline_benchmark_document(
             *operation_workloads,
             thumbnail_material_workload,
             *posterize_material_workloads,
+            median_l_material_workload,
             grayscale_rgb_material_workload,
             *thumbnail_scalar_workloads,
             f_boxed_resize_workload,

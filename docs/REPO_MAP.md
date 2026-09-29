@@ -143,6 +143,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- max_filter.wgsl
 |   |   |   |       |-- median_filter.wgsl
 |   |   |   |       |-- median_filter_3x3.wgsl
+|   |   |   |       |-- median_filter_3x3_luma_packed.wgsl
 |   |   |   |       |-- merge.wgsl
 |   |   |   |       |-- min_filter.wgsl
 |   |   |   |       |-- mirror.wgsl
@@ -171,6 +172,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- resize_bilinear.wgsl
 |   |   |   |       |-- resize_convolution_h.wgsl
 |   |   |   |       |-- resize_convolution_v.wgsl
+|   |   |   |       |-- resize_convolution_v_pad_rgbx.wgsl
 |   |   |   |       |-- resize_nearest.wgsl
 |   |   |   |       |-- rgb_to_lab.wgsl
 |   |   |   |       |-- rotate.wgsl

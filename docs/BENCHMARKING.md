@@ -86,6 +86,17 @@ bytes, keep image setup outside the measured boundary, and time Posterize plus
 native L/RGB masks; the 16×16 materialized smoke row measures mostly dispatch
 overhead.
 
+`Image.Image.filter(MedianFilter(3))` has a parity-gated varied-L workload at
+`pipeline-op.medianfilter.material-l-noise-1024x768`. It uses the same seeded
+1024×768 input for Pillow, CPU, SIMD, and GPU, excludes image/filter setup,
+and measures filter execution plus `tobytes`. Select it with:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-l-noise-1024x768" \
+make migration-parity-benchmark
+```
+
 ## Correctness gate and budget gate
 
 Run the correctness gate before interpreting timing:
