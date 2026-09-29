@@ -211,7 +211,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
-    let pixel = input[idx];
+    let src = params.mode;
+    var pixel = input[idx];
+    if params._pad == 1u && src == 0u {
+        // Native L input is packed four samples per storage word. Expand only
+        // the current sample in registers; do not widen the source on host.
+        let packed = input[idx / 4u];
+        let luma = (packed >> ((idx % 4u) * 8u)) & 0xffu;
+        pixel = luma | (luma << 8u) | (luma << 16u) | (255u << 24u);
+    }
 
     // Always unpack all 4 bytes from the source pixel.
     // For L mode: only byte0 (R) carries the value; G,B are typically 0.
@@ -221,9 +229,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let b = (pixel >> 16u) & 0xffu;
     let a = (pixel >> 24u) & 0xffu;
 
-    let src = params.mode;
-    let dst = params.target_mode;
-
     // I and F are scalar Pillow modes, but their four-byte little-endian
     // sample is still carried by the packed transport. Write the complete
     // word and return before byte-channel normalization can reinterpret it as
@@ -232,6 +237,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let rgb_r = source_rgb_r(src, r);
     let rgb_g = source_rgb_g(src, r, g);
     let rgb_b = source_rgb_b(src, r, b);
+    let dst = params.target_mode;
     if dst == 7u {
         let l = bt601_luma(rgb_r, rgb_g, rgb_b);
         output[idx] = bitcast<u32>(i32(l));

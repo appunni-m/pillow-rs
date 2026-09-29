@@ -7295,6 +7295,7 @@ impl GpuInner {
         f_resize_f64_is_exact: bool,
         f_resize_f64_ordered_is_exact: bool,
         packed_luma_colorize: bool,
+        packed_luma_convert: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         native_extract_band: bool,
@@ -7596,6 +7597,9 @@ impl GpuInner {
             } else if packed_luma_colorize && matches!(op, PipelineOp::Colorize { .. }) {
                 // Colorize has no row-offset input; reuse that word to select
                 // the packed four-luma-samples-per-u32 upload layout.
+                params[3] = 1;
+            } else if packed_luma_convert && matches!(op, PipelineOp::Convert { .. }) {
+                // Convert reads four native L samples per input storage word.
                 params[3] = 1;
             }
             if matches!(
@@ -11128,6 +11132,7 @@ impl GpuInner {
         h: u32,
         mode: u32,
         packed_luma_colorize: bool,
+        packed_luma_convert: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         native_extract_band: bool,
@@ -11340,6 +11345,7 @@ impl GpuInner {
                 f_resize_f64_is_exact,
                 f_resize_f64_ordered_is_exact,
                 packed_luma_colorize,
+                packed_luma_convert,
                 packed_luma_point,
                 packed_luma_putdata,
                 native_extract_band,
@@ -11536,6 +11542,36 @@ fn gpu_native_grayscale_rgb_input(
     };
     let input_bytes = layout.total_bytes();
     input_bytes > 0 && input_bytes <= u32::MAX as usize && rgb.as_raw().len() == input_bytes
+}
+
+/// Admit a singleton L -> RGBA conversion whose shader can unpack source
+/// samples directly from four-byte storage words. Empty images retain the
+/// ordinary path because the packed uploader requires a nonzero transfer.
+#[cfg(target_endian = "little")]
+fn gpu_packed_luma_convert_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    matches!(
+        ops,
+        [PipelineOp::Convert {
+            mode: ColorMode::RGBA,
+            ..
+        }]
+    ) && matches!(image, DynamicImage::ImageLuma8(_))
+        && matches!(logical_mode, None | Some("L"))
+        && image.width() != 0
+        && image.height() != 0
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_packed_luma_convert_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
 }
 
 /// Resolve a queued LA PutPixel immediately before Sharpness to the byte
@@ -17636,6 +17672,10 @@ impl GpuPool {
         // word upload; preceding GPU kernels leave the ordinary RGBA transport.
         let packed_luma_colorize = matches!(ops, [PipelineOp::Colorize { .. }])
             && matches!(img, DynamicImage::ImageLuma8(_));
+        // A standalone L -> RGBA conversion can read the native L bytes as a
+        // packed four-samples-per-word source. Other targets and prefixes keep
+        // the existing standard RGBA transport and shader contract.
+        let packed_luma_convert = gpu_packed_luma_convert_input(ops, img, mode);
         let packed_luma_point = source_is_luma_point_run
             && matches!(ops, [PipelineOp::Eval { .. }])
             && img.width() != 0
@@ -18804,7 +18844,11 @@ impl GpuPool {
         } else if full_luma_putdata {
             // A complete replacement has no observable source pixels. The
             // packed shader initializes every valid destination sample.
-        } else if packed_luma_colorize || packed_luma_point || packed_luma_putdata {
+        } else if packed_luma_colorize
+            || packed_luma_convert
+            || packed_luma_point
+            || packed_luma_putdata
+        {
             let DynamicImage::ImageLuma8(image) = img else {
                 return Err(PilError::InternalError(
                     "packed-luma GPU input requires native L samples".into(),
@@ -18852,6 +18896,7 @@ impl GpuPool {
             h,
             mcode,
             packed_luma_colorize,
+            packed_luma_convert,
             packed_luma_point,
             packed_luma_putdata,
             native_extract_band,
@@ -19017,7 +19062,11 @@ impl GpuPool {
                 .ok_or_else(|| PilError::ValueError("GPU Cover input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU Cover input is too large".into()))?
-        } else if packed_luma_colorize || packed_luma_point || packed_luma_putdata {
+        } else if packed_luma_colorize
+            || packed_luma_convert
+            || packed_luma_point
+            || packed_luma_putdata
+        {
             compact_luma8_transfer_bytes(w, h)?
         } else {
             CheckedDims::new(w, h, 4)?.total_bytes() as u64
@@ -19047,7 +19096,8 @@ impl GpuPool {
         };
         resource_telemetry.retained_cache_bytes = buffers.retained_bytes();
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
-        resource_telemetry.mode_conversion_count = if native_grayscale_rgb_input
+        resource_telemetry.mode_conversion_count = if packed_luma_convert
+            || native_grayscale_rgb_input
             || native_sharpness_la_input
             || native_sharpness_rgb_input
             || native_reduce_rgb_input
@@ -20172,6 +20222,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -24663,6 +24714,50 @@ mod tests {
             &[PipelineOp::Grayscale],
             &empty,
             Some("RGB")
+        ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_luma_convert_requires_nonempty_native_l_to_rgba() {
+        let convert_rgba = PipelineOp::Convert {
+            mode: ColorMode::RGBA,
+            matrix: None,
+            dither: None,
+        };
+        let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![31, 207]).unwrap());
+        assert!(super::gpu_packed_luma_convert_input(
+            std::slice::from_ref(&convert_rgba),
+            &luma,
+            None
+        ));
+        assert!(super::gpu_packed_luma_convert_input(
+            std::slice::from_ref(&convert_rgba),
+            &luma,
+            Some("L")
+        ));
+
+        let rgb = PipelineOp::Convert {
+            mode: ColorMode::RGB,
+            matrix: None,
+            dither: None,
+        };
+        assert!(!super::gpu_packed_luma_convert_input(
+            std::slice::from_ref(&rgb),
+            &luma,
+            Some("L")
+        ));
+        let multiple = [convert_rgba.clone(), PipelineOp::Duplicate];
+        assert!(!super::gpu_packed_luma_convert_input(
+            &multiple,
+            &luma,
+            Some("L")
+        ));
+        let empty = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
+        assert!(!super::gpu_packed_luma_convert_input(
+            std::slice::from_ref(&convert_rgba),
+            &empty,
+            Some("L")
         ));
     }
 
