@@ -10499,3 +10499,98 @@ Remaining blockers are a stable SIMD result proving ≥5× and the structural
 one-shot GPU readback gap. Do not spend more attempts on this Pad case until a
 cleaner benchmark window or a fused device-resident workload becomes
 available; continue the campaign with the next measured operation.
+
+### Masked native-LA Paste — LA/L-mask specialization checkpoint, 2026-09-30
+
+The active materialized workload is
+`pil-image-image.paste.masked.materialized.masked-la-noise-1024x768`, with
+parity case
+`PIL.Image.Image.paste.nuanced.performance-masked-la-noise-1024x768`. It
+pastes a 1024 × 768 LA source into an LA receiver through a same-sized L mask
+at offset `(2, 2)`, then observes receiver bytes; the effective pasted region
+is 1022 × 766. The GPU, CPU, and SIMD routes now operate on native LA bytes
+instead of widening destination, source, and mask to RGBA. CPU already used a
+native-format algorithm; its main retained improvement is parallel SIMD row
+work, not a format conversion.
+
+The GPU route packs two LA pixels per storage word, blends both stored bytes
+with the same L coverage byte, and returns LA directly. It batches compact
+source and mask bytes in one upload and dispatches once. The latest receipt
+reports 3,932,160 upload bytes, 2,359,296 auxiliary bytes, 1,572,864 readback
+bytes, zero mode conversions, one dispatch per operation, and zero fallback
+for 100 GPU executions. The pre-specialization GPU diagnostic was 4.597 ms;
+the latest median is 1.385 ms. This is a substantial reduction in generic RGBA
+transport, but a single materialized operation still pays for host-to-device
+input and a synchronous 1.5 MiB result readback. The latest GPU standard
+deviation is 0.335 ms and p95 is 2.247 ms. This one-shot API has no
+device-resident successor with which to amortize the transfers.
+
+The compact route is selected before generic RGBA-sized buffer and 16 × 16
+dispatch preflights. Those checks can reject a native LA layout whose own
+packed word count and combined source/mask buffer fit. A planner boundary test
+uses a 17 × 1 LA output: under a 56-byte buffer limit, generic storage needs
+68 bytes and its 16 × 16 grid needs two x-groups, while the compact output and
+combined input need 36 and 56 bytes and one packed workgroup. The route also
+retains the shared 4,096 × 4,096 image cap; if its native planner cannot prove
+all limits, normal fallback/preflight remains in force.
+
+The SIMD path has an LA/L-mask row kernel. One mask byte is duplicated across
+the pixel's luminance and alpha lanes, the existing exact weighted blend is
+used for both bytes, vector tails are bounded, and large non-overlapping rows
+are processed in parallel. The first native LA SIMD measurements were about
+1.1 ms because this format used the generic serial channel adapter; the row
+kernel receipt measured 0.343 ms, and the prior retained receipt measured
+0.364 ms. After correcting compact-route admission before the generic RGBA
+preflights, a new 100-sample-per-subject run measured Pillow/CPU/SIMD/GPU
+medians of 0.762/0.479/0.328/1.385 ms. CPU is 1.59× faster than Pillow and
+SIMD is 2.32× faster, still short of the 5× SIMD goal; GPU is 4.22× slower
+than SIMD by median. Their standard deviations were 0.079/0.124/0.047/0.335 ms
+and p95 values were 0.915/0.618/0.426/2.247 ms. The native row kernel is a
+real SIMD improvement, but the requested campaign targets are not met.
+
+Four bounded follow-ups were tried. Mapping the flat GPU grid as even-width
+rows made two earlier medians look faster, but a later retained-tree result
+returned to the flat baseline; it was reverted. Removing a shader modulo and
+hoisting a mask load each failed to produce a repeatable improvement and were
+also reverted. Finally, the SIMD blend was rewritten as a signed delta to
+remove one multiply. An exhaustive test proved all 2²⁴ byte triples exact, but
+the candidate receipts measured SIMD at 0.416 ms and 0.371 ms, versus retained
+standard-blend receipts of 0.343, 0.361, and 0.364 ms. The alternate formula
+adds compare/select work and did not win on this target, so its helpers and
+exhaustive candidate-only test were removed. Keep the standard Pillow blend
+expression; investigate mask-lane expansion and generated AArch64 code before
+trying more arithmetic rewrites.
+
+Correctness on the retained tree passed 5 cases on each backend (15/15 total):
+the material 1024 × 768 workload, LA alpha preservation at a negative offset,
+L odd-word-tail clipping, LA odd-word-tail clipping, and an even-width LA
+negative-offset/source-tail case. CPU, strict SIMD, and strict GPU all passed;
+GPU and SIMD reported their requested backend with no fallback. The focused
+GPU planner filter passed 6 tests and the LA vector-tail test passed. `make
+fmt clippy`, `make docs-lint`, and `make repo-map-update repo-map-check` passed;
+Clippy emitted the repository's existing warning set. The correctness-gated
+standard benchmark receipt is
+`migration-benchmark-84cf25dd85774523a21085410577258c`; its parity gate
+`migration-parity-benchmark-gate-95bb024ae2134f54a0d93fda414ab0fd` passed all
+three target backends. The GPU was selected 100/100 times, with no fallback.
+This receipt was taken from the pre-commit worktree (`dirty=true`); rerun the
+same gate after checkpointing to record clean-commit evidence. No coverage
+collection ran.
+
+The final benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-la-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/paste-masked-la-preflight-final.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/paste-masked-la-preflight-final-parity.json \
+make migration-parity-benchmark
+```
+
+Checkpoint LA Paste here after the native GPU format path, parallel SIMD LA
+rows, three reverted micro-optimizations, and one rejected blend-formula
+experiment. Do not claim parity with the performance goals. Move to the next
+case: masked RGBA `Image.putalpha` with an L mask. It already preserves native
+RGBA storage on all backends, but its SIMD helper still writes each alpha byte
+scalar-by-scalar; first refresh its parity-gated CPU/SIMD/GPU baseline, then
+test a bounded alpha-lane vector store against that sparse-store baseline.
