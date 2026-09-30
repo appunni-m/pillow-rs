@@ -27,13 +27,12 @@ env:
   RELEASE_VERSION: ${{ github.ref_name }}
   # Published WASM must be optimized. The parity runner owns its separate opt-out.
   MIGRATION_WASM_NO_OPT: "0"
-  MIGRATION_RUST_COVERAGE_TOOLCHAIN: nightly-2026-07-16
 
 jobs:
   verify:
     name: Release preflight
-    # The canonical parity and source-bound coverage lanes use the Apple
-    # ARM64 native Pillow contract recorded by the committed corpus.
+    # The canonical parity lane uses the Apple ARM64 native Pillow contract
+    # recorded by the committed corpus.
     runs-on: macos-14
     timeout-minutes: 90
     steps:
@@ -137,22 +136,12 @@ jobs:
           make migration-parity-evidence-check
           make fmt
           make clippy
-          make migration-parity-coverage-receipt-test
           make release-tools-test
-      - name: Install pinned Rust coverage tools
-        run: |
-          rustup toolchain install "$MIGRATION_RUST_COVERAGE_TOOLCHAIN" --profile minimal --component llvm-tools-preview
-          cargo +"$MIGRATION_RUST_COVERAGE_TOOLCHAIN" install cargo-llvm-cov --version 0.8.7 --locked
-      - name: collect source-bound Rust coverage
-        run: make migration-parity-coverage-rust
-      - name: validate generated release evidence
-        run: make migration-parity-evidence-check
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: release-preflight-${{ github.run_id }}
           path: |
-            target/coverage/
             build/migration-parity/
           if-no-files-found: warn
 

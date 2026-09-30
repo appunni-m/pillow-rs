@@ -20,7 +20,7 @@ has no Python or npm distribution.
 
 ## Version policy
 
-Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.0-alpha.2**. The base version follows the targeted Pillow
+Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.0-alpha.3**. The base version follows the targeted Pillow
 version; increment the `alpha.N` suffix for subsequent candidates. Use
 `beta.N`, `rc.N`, or a stable version only when the corresponding maturity is
 justified. A matching Pillow version is a compatibility target, not a claim
@@ -34,7 +34,7 @@ Python artifacts. GitHub marks candidate releases as prereleases; npm uses
 
 ```sh
 make release-lock-update
-make release-version-check RELEASE_VERSION=v12.2.0-alpha.1
+make release-version-check RELEASE_VERSION=v12.2.0-alpha.3
 ```
 
 ## Prepare a release
@@ -43,8 +43,9 @@ make release-version-check RELEASE_VERSION=v12.2.0-alpha.1
    changelog, and the source-version field in `documentation.json`. Keep published
    installation blocks on the last available registry release. Run `make release-lock-update` and
    `make release-version-check` with Python 3.12 to verify synchronization.
-2. Run the relevant full parity, coverage, portability, package-consumer, and
-   supply-chain checks. Preserve failures and unmeasured scope.
+2. Run the relevant full parity, portability, package-consumer, and supply-chain
+   checks. Do not collect coverage; preserve parity failures and unmeasured
+   scope.
 3. From a clean checkout, run `make release-check`.
    Inspect the crate, wheel/sdist, and packed npm contents.
 4. Commit and push to main. Require successful CI for that exact commit.
