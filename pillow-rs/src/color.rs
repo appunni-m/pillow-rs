@@ -989,10 +989,15 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// This function matches PIL pixel-for-pixel by mimicking the exact precision
 /// flow: f32 divisions → f64 promotions for constant arithmetic → f32 storage.
 pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let rgb = match img {
+        // Native RGB bytes are already the converter's input layout. Borrow
+        // them instead of cloning the full image through `to_rgb8`.
+        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgb8().into_raw()),
+    };
     let mut out = crate::raster::RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+    for (op, ip) in out.pixels_mut().zip(rgb.chunks_exact(3)) {
         let r = ip[0];
         let g = ip[1];
         let b = ip[2];
@@ -1490,7 +1495,7 @@ pub fn palette_getcolor_validate_input(
 
 #[cfg(test)]
 mod tests {
-    use super::{ColorValue, getcolor, muldiv255};
+    use super::{ColorValue, getcolor, muldiv255, rgb_to_hsv};
     use crate::error::PilError;
 
     #[test]
@@ -1527,5 +1532,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn rgb_to_hsv_preserves_pillow_bytes_for_native_rgb() {
+        let rgb_bytes = [
+            0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 254, 1, 0, 13, 127, 249,
+        ];
+        let source = crate::raster::DynamicImage::ImageRgb8(
+            crate::raster::RgbImage::from_raw(7, 1, rgb_bytes.to_vec())
+                .expect("valid native RGB samples"),
+        );
+
+        let converted = rgb_to_hsv(&source);
+
+        assert_eq!(
+            converted.as_bytes(),
+            [
+                0, 0, 0, 0, 0, 255, 0, 255, 255, 85, 255, 255, 170, 255, 255, 0, 255, 254, 149,
+                241, 249,
+            ]
+        );
     }
 }
