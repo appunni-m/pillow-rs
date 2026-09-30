@@ -1782,7 +1782,7 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "unsharpMask")]
-    pub fn unsharp(&self, r: f32, p: i32, t: u8) -> Result<Image, JsValue> {
+    pub fn unsharp(&self, r: f32, p: i32, t: i32) -> Result<Image, JsValue> {
         self.inner
             .unsharp_mask(r, p, t)
             .map(|i| Image { inner: i })

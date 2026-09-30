@@ -15045,6 +15045,19 @@ def build_nuanced_cases(
             }
             for name, mode, size, seed in GETCOLORS_PERFORMANCE_CASES
         ),
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "UnsharpMask",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-varied-rgb-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20260926,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+            "timed_filter_result": True,
+        },
         *(
             {
                 "surface": "PIL.Image.Image",
@@ -31164,6 +31177,57 @@ def build_nuanced_cases(
                 "threshold": literal(0),
             },
         },
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "UnsharpMask",
+                "requirement_suffix": "behavior.default",
+                "name": f"unsupported-mode-{mode.lower()}",
+                "mode": mode,
+            }
+            for mode in ("1", "P", "PA", "I", "F", "I;16", "I;16B", "YCbCr", "LAB", "HSV")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "UnsharpMask",
+                "requirement_suffix": "behavior.default",
+                "name": f"preserve-mode-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "size": [5, 5],
+                "values": {
+                    "radius": literal(1),
+                    "percent": literal(150),
+                    "threshold": literal(0),
+                },
+            }
+            for mode, pixel in (
+                ("CMYK", [32, 16, 24, 8]),
+                ("RGBX", [64, 32, 16, 9]),
+                ("RGBa", [48, 24, 12, 6]),
+                ("La", [64, 9]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "UnsharpMask",
+                "requirement_suffix": "behavior.default",
+                "name": f"signed-threshold-{label}",
+                "mode": "L",
+                "edge": "nonzero-pixel",
+                "pixel": 255,
+                "size": [5, 5],
+                "values": {
+                    "radius": literal(1),
+                    "percent": literal(150),
+                    "threshold": literal(threshold),
+                },
+            }
+            for label, threshold in (("negative", -1), ("above-byte", 256))
+        ),
         {
             "surface": "PIL.ImageFilter",
             "operation": "Color3DLUT",
@@ -41523,6 +41587,23 @@ def build_nuanced_cases(
             scenario_outline_empty=spec.get("outline_empty", False),
             scenario_comparisons=spec.get("comparisons"),
         )
+        if spec.get("timed_filter_result"):
+            # The benchmark runner always includes the step named `call` in
+            # observed-step timing. Put source setup and UnsharpMask
+            # construction before `call`, then use that ID for Image.filter
+            # and observe-result for tobytes so setup stays outside timing.
+            steps_by_id = {step["step_id"]: step for step in case["steps"]}
+            setup_image = steps_by_id["setup-image-1"]
+            setup_filter = steps_by_id["call"]
+            apply_filter = steps_by_id["apply-filter"]
+            observe_filter = steps_by_id["observe-filter-result"]
+            setup_filter["step_id"] = "setup-filter"
+            apply_filter["step_id"] = "call"
+            apply_filter["arguments"]["filter"]["step_id"] = "setup-filter"
+            observe_filter["step_id"] = "observe-result"
+            observe_filter["receiver"]["step_id"] = "call"
+            case["steps"] = [setup_image, setup_filter, apply_filter, observe_filter]
+            case["observations"] = ["setup-filter", "call", "observe-result"]
         if "target_profiles" in spec:
             case["target_profiles"] = list(spec["target_profiles"])
         cases.append(case)

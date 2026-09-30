@@ -887,10 +887,10 @@ pub fn active_backends() -> Result<Vec<Backend>, PilError> {
 /// logical image mode before using this narrow byte kernel.
 pub(crate) fn simd_unsharp_blend_rgb_150(
     original: &[u8],
-    blurred: &[u8],
-    threshold: u8,
-) -> Option<Vec<u8>> {
-    pool_simd::ops::adapters::simd_unsharp_blend_rgb_150(original, blurred, threshold)
+    blurred_output: &mut [u8],
+    threshold: i32,
+) -> bool {
+    pool_simd::ops::adapters::simd_unsharp_blend_rgb_150(original, blurred_output, threshold)
 }
 
 // ── Pool registry ──────────────────────────────────────────────────────────

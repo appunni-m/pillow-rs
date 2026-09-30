@@ -1346,8 +1346,186 @@ fn pad_native_rows(
     )?))
 }
 
-/// Pad: resize to fit within (w, h), then pad with fill color.
-/// PIL: contain then paste with centering, using round() for paste offset.
+#[inline]
+fn fill_pad_span(span: &mut [u8], fill: &[u8]) {
+    if fill.iter().all(|&sample| sample == 0) {
+        // The output allocation is zero-initialized, so black L/RGB borders
+        // are already correct. In particular, do not write a second time to
+        // the native zero-fill fast path.
+        return;
+    }
+    for pixel in span.chunks_exact_mut(fill.len()) {
+        pixel.copy_from_slice(fill);
+    }
+}
+
+#[inline]
+fn pad_native_row(
+    row: &mut [u8],
+    output_y: usize,
+    source: &[u8],
+    source_stride: usize,
+    offset_y: usize,
+    offset_x_bytes: usize,
+    copy_height: usize,
+    copy_byte_count: usize,
+    fill: &[u8],
+) {
+    if output_y < offset_y || output_y - offset_y >= copy_height {
+        fill_pad_span(row, fill);
+        return;
+    }
+
+    let content_end = offset_x_bytes + copy_byte_count;
+    fill_pad_span(&mut row[..offset_x_bytes], fill);
+    let source_start = (output_y - offset_y) * source_stride;
+    row[offset_x_bytes..content_end]
+        .copy_from_slice(&source[source_start..source_start + copy_byte_count]);
+    fill_pad_span(&mut row[content_end..], fill);
+}
+
+/// Fill only the border spans and copy the contained pixels in one row pass.
+/// Keeping native channels avoids RGBA expansion for L/LA/RGB, and writing
+/// each destination byte once reduces the bandwidth of large pads.
+fn pad_native_bytes(
+    original: &DynamicImage,
+    resized: &DynamicImage,
+    w: u32,
+    h: u32,
+    nw: u32,
+    nh: u32,
+    color: (u8, u8, u8, u8),
+    centering: (f64, f64),
+    explicit_mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    // Physical storage alone is not enough to identify sample semantics:
+    // ImageRgba8 also carries F/I values and RGBX/CMYK have non-alpha fourth
+    // bytes. Keep this admission identical to the row-copy path below.
+    let channels = match (original, resized, explicit_mode) {
+        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_), None | Some("L")) => 1,
+        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_), None | Some("LA")) => 2,
+        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_), None | Some("RGB" | "HSV")) => 3,
+        (
+            DynamicImage::ImageRgba8(_),
+            DynamicImage::ImageRgba8(_),
+            None | Some("RGBA" | "RGBX" | "CMYK"),
+        ) => 4,
+        _ => return Ok(None),
+    };
+    if w == 0 || h == 0 {
+        return Ok(None);
+    }
+
+    let width =
+        usize::try_from(w).map_err(|_| PilError::ValueError("pad width overflow".into()))?;
+    let height =
+        usize::try_from(h).map_err(|_| PilError::ValueError("pad height overflow".into()))?;
+    let source_width = usize::try_from(nw)
+        .map_err(|_| PilError::ValueError("pad source width overflow".into()))?;
+    let source_height = usize::try_from(nh)
+        .map_err(|_| PilError::ValueError("pad source height overflow".into()))?;
+    let source_stride = source_width
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("pad source stride overflow".into()))?;
+    let expected_source_len = source_stride
+        .checked_mul(source_height)
+        .ok_or_else(|| PilError::ValueError("pad source length overflow".into()))?;
+    let source = resized.as_bytes();
+    if source.len() != expected_source_len {
+        return Ok(None);
+    }
+
+    let copy_width = source_width.min(width);
+    let copy_height = source_height.min(height);
+    let (cx, cy) = (centering.0.clamp(0.0, 1.0), centering.1.clamp(0.0, 1.0));
+    let (offset_x, offset_y) = if nw != w {
+        (bankers_round((w as f64 - nw as f64) * cx) as usize, 0usize)
+    } else {
+        (0usize, bankers_round((h as f64 - nh as f64) * cy) as usize)
+    };
+    let offset_x_bytes = offset_x
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("pad destination offset overflow".into()))?;
+    let copy_byte_count = copy_width
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("pad copy length overflow".into()))?;
+    let output_stride = width
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("pad output stride overflow".into()))?;
+    let Some(content_end) = offset_x_bytes.checked_add(copy_byte_count) else {
+        return Ok(None);
+    };
+    let Some(copy_end_y) = offset_y.checked_add(copy_height) else {
+        return Ok(None);
+    };
+    if content_end > output_stride || copy_end_y > height {
+        return Ok(None);
+    }
+
+    let fill = match channels {
+        1 => [color.0, 0, 0, 0],
+        2 => [color.0, color.3, 0, 0],
+        3 => [color.0, color.1, color.2, 0],
+        4 => [color.0, color.1, color.2, color.3],
+        _ => return Ok(None),
+    };
+    let fill = &fill[..channels];
+    let mut output = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
+
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                pad_native_row(
+                    row,
+                    y as usize,
+                    source,
+                    source_stride,
+                    offset_y,
+                    offset_x_bytes,
+                    copy_height,
+                    copy_byte_count,
+                    fill,
+                );
+            }
+        );
+    } else {
+        for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
+            pad_native_row(
+                row,
+                y,
+                source,
+                source_stride,
+                offset_y,
+                offset_x_bytes,
+                copy_height,
+                copy_byte_count,
+                fill,
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
+        pad_native_row(
+            row,
+            y,
+            source,
+            source_stride,
+            offset_y,
+            offset_x_bytes,
+            copy_height,
+            copy_byte_count,
+            fill,
+        );
+    }
+
+    let padded = crate::image_utils::raw_bytes_to_image(w, h, output, channels)?;
+    Ok(Some(preserve_mode(original, padded)))
+}
+
 pub fn op_pad(
     img: &DynamicImage,
     w: u32,
@@ -1397,6 +1575,22 @@ pub fn op_pad(
     } else {
         filter
     };
+    // When contain preserves the source dimensions, placing pixels into the
+    // larger canvas can read them directly. Avoid pil_resize's identity clone
+    // and let the native row writer make the only destination copy.
+    if iw != 0
+        && ih != 0
+        && nw == iw
+        && nh == ih
+        && (nw != w || nh != h)
+        && !matches!(explicit_mode, Some("P" | "PA"))
+    {
+        if let Some(padded) =
+            pad_native_bytes(img, img, w, h, nw, nh, fill, centering, explicit_mode)?
+        {
+            return Ok(padded);
+        }
+    }
     // F-mode samples are four-byte IEEE words, not four independent byte
     // channels.  Image.resize already owns the exact f64 coefficient/f32
     // store path for this representation; reuse it for Pad's contain step

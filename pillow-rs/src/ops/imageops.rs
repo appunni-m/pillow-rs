@@ -799,7 +799,9 @@ pub fn contain_with_input(
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
-/// Resizes an image to cover `(w, h)`, cropping overflow.
+/// Resizes an image to cover `(w, h)` while preserving its aspect ratio.
+///
+/// The returned dimensions may exceed `(w, h)`; overflow is not cropped.
 ///
 /// # Errors
 ///
@@ -995,6 +997,12 @@ pub fn pad(
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
+    if w > 0 && h > 0 && image.size()? == (w, h) {
+        // `ImageOps.pad` returns an independent copy when no resize or border
+        // is needed. Skip a queued Pad pass so every backend avoids the
+        // identity placement work, including callers below the Python facade.
+        return Ok(image.copy());
+    }
     Ok(Image::push_op(
         image,
         PipelineOp::Pad {
@@ -1048,6 +1056,13 @@ pub fn pad_with_input(
         }
     }
     if containment_axes == Some((false, false)) {
+        if (source_width, source_height) == (w, h) {
+            // ImageOps.pad still returns an independent copy when the input
+            // already has the requested size. Match Image.copy semantics
+            // (including clearing source format metadata) without scheduling
+            // a no-op Pad pass on CPU, SIMD, or GPU.
+            return Ok(image.copy());
+        }
         return Ok(Image::push_op(
             image,
             PipelineOp::Pad {
@@ -1456,7 +1471,7 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 mod tests {
     use super::{
         CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, fit, fit_with_input,
-        pad_with_input, resolve_imageops_color, scale_with_input,
+        pad, pad_with_input, resolve_imageops_color, scale_with_input,
     };
     use crate::error::PilError;
     use crate::image::Image;
@@ -1465,6 +1480,15 @@ mod tests {
 
     fn empty_image(size: (u32, u32)) -> Image {
         Image::new(size.0, size.1, "L", (0, 0, 0, 0)).expect("empty image dimensions are valid")
+    }
+
+    #[test]
+    fn pad_same_size_returns_copy_without_adding_operation() {
+        let image = empty_image((2, 3));
+        let result = pad(&image, 2, 3, None, None, (0.5, 0.5))
+            .expect("same-size Pad returns an independent copy");
+        assert_eq!(result.size().expect("copy dimensions are known"), (2, 3));
+        assert!(!matches!(result, Image::Pipeline { .. }));
     }
 
     #[test]

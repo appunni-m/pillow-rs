@@ -126,6 +126,18 @@ impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
     pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
         let mode = self.mode()?;
+        // Pillow's ImagingUnsharpMask accepts only byte modes with native
+        // band storage. Keep the native operation's wrong-mode error for
+        // indexed, scalar, and color-space modes instead of expanding them
+        // through a generic RGBA conversion.
+        if filter_name == "UnsharpMask"
+            && !matches!(
+                mode.as_str(),
+                "L" | "LA" | "La" | "RGB" | "RGBA" | "RGBX" | "RGBa" | "CMYK"
+            )
+        {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
         if mode == "P" && filter_name != "Mode" {
             return Err(PilError::ValueError("cannot filter palette images".into()));
         }
