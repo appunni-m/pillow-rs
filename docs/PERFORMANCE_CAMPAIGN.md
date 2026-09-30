@@ -6646,6 +6646,54 @@ GPU execution model cannot amortize those transfers. Move to the next ranked
 operation and revisit crop only with a resident/batched GPU design or a direct
 typed-sample implementation to measure.
 
+## Native RGB GPU crop follow-up checkpoint — 2026-09-30
+
+The explicit RGB-format audit found that the existing GPU crop widened packed
+RGB to RGBA and then narrowed it again. The retained follow-up adds a dedicated
+single-operation RGB crop shader that uploads and returns three-byte pixels
+without mode conversion. Its planner checks dimensions, byte counts, aligned
+transfer sizes, buffer/storage limits, and workgroup limits before selecting
+the route; unsupported or unrepresentable shapes stay on the generic path. The
+shader maps crop-relative pixel groups to packed source bytes and masks the
+final output words, so odd row tails do not write beyond the returned image.
+
+Two bounded kernel variants were measured: one invocation per output pixel,
+then four pixels per invocation with three unique output-word stores. Both
+passed the benchmark's exact-output CPU/SIMD/GPU gate (3/3). The grouped kernel
+is the retained variant. On the clean commit, the focused benchmark and all
+three strict parity lanes ran against revision
+`8d29f41ad555ff63a237be8f4836a5925061190c`, with `dirty=false`:
+
+| Workload / backend | Median latency | Median throughput |
+| --- | ---: | ---: |
+| Pillow | 0.425021 ms | 2,352.8 ops/s |
+| pillow-rs CPU | 0.172063 ms | 5,811.8 ops/s |
+| pillow-rs SIMD | 0.173709 ms | 5,756.8 ops/s |
+| pillow-rs GPU | 0.827958 ms | 1,207.8 ops/s |
+
+The focused benchmark exact-output gate passed 3/3. Separate strict parity
+passed 1/1 on CPU, 1/1 on SIMD, and 1/1 on GPU with fallback prohibited. The
+GPU executed 100/100 observations on GPU with no fallback, one dispatch per
+call, zero mode conversions, 2,359,296 uploaded bytes, and 1,593,028 readback
+bytes. Its backend phase median was 0.722 ms of the 0.828 ms total. CPU and
+SIMD are about 2.5× faster than Pillow on this materialized crop, but SIMD is
+still below the 5× campaign target; GPU is about 4.8× slower than SIMD. The
+result does not meet the GPU throughput target. The decisive cost is transferring
+the full source and synchronously reading back the crop, not RGB widening or
+shader arithmetic. Further standalone crop-kernel tuning is checkpointed; a
+resident/batched GPU pipeline or operation fusion is needed to avoid those
+transfers. Move to the next ranked operation.
+
+The clean benchmark receipt is `build/migration-parity/crop-rgb-native-clean.json`
+with exact-output gate `migration-parity-benchmark-gate-03ea4501e0e44e568f7c7f71297f4b5f`.
+The clean strict parity receipts are `crop-rgb-final-cpu.json`,
+`crop-rgb-final-simd-strict.json`, and `crop-rgb-final-gpu-strict.json` (run IDs
+`migration-parity-3de0d60f8b4d49b3914964df4ca7075c`,
+`migration-parity-9872fb9e6cc54fd8811a426cb3c570e6`, and
+`migration-parity-dc860e7a449143e390335c86bdb56652`). The two tuning receipts
+were dirty working-tree experiments and are retained as diagnostics, not as
+clean-commit performance claims. No coverage collection ran.
+
 ## PIL.Image.Image.point checkpoint — 2026-09-28
 
 The default Point workload is a 16 × 16 identity lookup and measures dispatch
