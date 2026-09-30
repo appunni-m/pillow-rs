@@ -517,6 +517,7 @@ impl Image {
             let img = self.materialize()?;
             let result = match (effective_src_mode_name, mode) {
                 ("I", "F") => color::i_to_f(&img),
+                ("I", "RGB") => color::i_to_rgb(&img),
                 ("F", "I") => color::f_to_i(&img),
                 _ => {
                     let luma = if effective_src_mode_name == "I" {
@@ -1289,6 +1290,35 @@ mod tests {
             super::split_rgba_for_palette(&source).expect("split logical RGBA pixels");
         assert_eq!(rgb.into_raw(), [10, 20, 30]);
         assert_eq!(alpha, [40]);
+    }
+
+    #[test]
+    fn integer_to_rgb_clamps_native_i_samples_and_broadcasts_them() {
+        let samples = [-1_i32, 0, 1, 127, 255, 256, i32::MIN, i32::MAX];
+        let source_bytes: Vec<u8> = samples
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::from_dynamic(
+            crate::raster::DynamicImage::ImageRgba8(
+                crate::raster::RgbaImage::from_raw(samples.len() as u32, 1, source_bytes)
+                    .expect("valid I-mode carrier"),
+            ),
+            Some("I".to_owned()),
+        );
+
+        let converted = source
+            .convert("RGB", None, None, None, None)
+            .expect("I to RGB conversion");
+
+        assert_eq!(converted.mode().expect("converted mode"), "RGB");
+        assert_eq!(
+            converted.tobytes().expect("converted bytes"),
+            [
+                0, 0, 0, 0, 0, 0, 1, 1, 1, 127, 127, 127, 255, 255, 255, 255, 255, 255, 0, 0, 0,
+                255, 255, 255,
+            ]
+        );
     }
 
     #[test]
