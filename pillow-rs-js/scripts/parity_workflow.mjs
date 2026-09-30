@@ -695,6 +695,24 @@ function imageColor(value, mode) {
     return colorChannels(values, mode);
 }
 
+function expandColor(value, mode) {
+    if (value == null) return undefined;
+
+    // Expand writes the fill in the image's native band order. CMYK's fourth
+    // byte is K and RGBX's fourth byte is X; neither is an RGBA alpha channel.
+    // Keep these four-band tuples intact instead of routing them through the
+    // RGBA-oriented colorChannels adapter.
+    if ((mode === 'CMYK' || mode === 'RGBX') && Array.isArray(value) && value.length === 4) {
+        return value.map((item) => {
+            const number = Number(item);
+            if (!Number.isFinite(number)) throw new TypeError('color must contain finite numbers');
+            return Math.max(0, Math.min(255, Math.trunc(number)));
+        });
+    }
+
+    return imageColor(value, mode);
+}
+
 function channelIndex(value, mode) {
     if (typeof value === 'string') {
         const index = [...mode].indexOf(value);
@@ -2054,7 +2072,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
         }
         if (operation === 'crop') return wasm.ImageOps[name](image, args.border);
         if (operation === 'expand') {
-            const color = imageColor(args.fill, image.mode)
+            const color = expandColor(args.fill, image.mode)
                 ?? (image.mode === 'PA' ? [0, 0, 0, 0] : [0, 0, 0, 255]);
             return wasm.ImageOps[name](image, args.border, ...color);
         }
