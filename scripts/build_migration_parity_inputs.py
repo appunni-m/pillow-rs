@@ -133,6 +133,9 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
     "pil-image-image.frombytes.standard": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
     "pil-image-image.getchannel.standard": "PIL.Image.Image.getchannel.nuanced.performance-rgb-16x16",
+    "pil-image-image.split.standard": (
+        "PIL.Image.Image.split.nuanced.performance-scalar-i-1024x768"
+    ),
     "pil-imageops.flip.standard": (
         "PIL.ImageOps.flip.nuanced."
         "performance-material-rgb-noise-1024x768"
@@ -34523,6 +34526,116 @@ def build_nuanced_cases(
             "name": "opened-rgba",
             "scenario_asset": "image/rgba-small.png",
         },
+        # I and F are logically single-band Pillow modes even though the
+        # Rust raster carrier uses four bytes per sample. Keep varied scalar
+        # values here so split parity checks both the returned mode and the
+        # original typed sample bytes rather than counting carrier channels.
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "integer-scalar-mode",
+            "mode": "I",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 305419896,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "float-scalar-mode",
+            "mode": "F",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 1.25,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-integer-scalar-mode",
+            "scenario_inline_image": "i32-tiff",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-float-scalar-mode",
+            "scenario_inline_image": "f32-tiff",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "one-bit-mode",
+            "mode": "1",
+            "size": [9, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "unsigned-16-mode",
+            "mode": "I;16",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 4660,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "little-endian-16-mode",
+            "mode": "I;16L",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 4660,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "big-endian-16-mode",
+            "mode": "I;16B",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 4660,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "native-endian-16-mode",
+            "mode": "I;16N",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 4660,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-scalar-i-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "nonzero-pixel",
+            "pixel": 305419896,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-scalar-f-1024x768",
+            "mode": "F",
+            "size": [1024, 768],
+            "edge": "nonzero-pixel",
+            "pixel": 1.25,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
@@ -50687,6 +50800,10 @@ def build_inputs(
             isolated_get_flattened_data = (
                 workload_id == "pil-image-image.get-flattened-data.standard"
             )
+            # Measure Image.split separately from allocating its large typed
+            # source, so scalar same-mode sharing can be compared with
+            # Pillow's copy without setup dominating the result.
+            isolated_split = workload_id == "pil-image-image.split.standard"
             eager_getcolors = workload_id == "pil-image-image.getcolors.standard"
             # Measure getmetrics after its setup-font step; the constructor is
             # a separate public workload and must not dominate this getter.
@@ -50821,6 +50938,7 @@ def build_inputs(
                             or isolated_putdata
                             or isolated_getdata
                             or isolated_get_flattened_data
+                            or isolated_split
                             or eager_getcolors
                             or isolated_getmetrics
                             or isolated_transposedfont
@@ -50861,6 +50979,7 @@ def build_inputs(
                             if eager_getcolors
                             or isolated_getdata
                             or isolated_get_flattened_data
+                            or isolated_split
                             or isolated_getmetrics
                             or isolated_transposedfont
                             or isolated_transposed_getlength
@@ -50905,6 +51024,30 @@ def build_inputs(
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
+            if workload_id == "pil-image-image.split.standard":
+                f_case_id = (
+                    "PIL.Image.Image.split.nuanced."
+                    "performance-scalar-f-1024x768"
+                )
+                f_case = all_cases_by_id[f_case_id]
+                f_workload = copy.deepcopy(workloads[-1])
+                f_workload["workload_id"] = (
+                    "pil-image-image.split.scalar-f-1024x768"
+                )
+                f_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": f_case_id,
+                }
+                f_workload["context"] = _workflow_benchmark_context(
+                    f_case,
+                    variant="split-scalar-f-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(f_workload)
+                members.append(
+                    {"workload_id": f_workload["workload_id"], "weight": 1}
+                )
             if workload_id == "pil-imagefilter.gaussianblur.standard":
                 l_case_id = (
                     "PIL.ImageFilter.GaussianBlur.nuanced."
