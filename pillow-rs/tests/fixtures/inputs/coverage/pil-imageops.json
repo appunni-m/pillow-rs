@@ -1474,6 +1474,7 @@
           "PIL.ImageOps.mirror.nuanced.simd-cov-f20-c03",
           "PIL.ImageOps.mirror.nuanced.simd-cov-f20-c09",
           "PIL.ImageOps.mirror.nuanced.simd-cov-f20-c10",
+          "PIL.ImageOps.flip.nuanced.coverage-batch-imageops-flip-native-mode1",
           "PIL.ImageOps.cover.nuanced.packed-l-tail-0-bicubic",
           "PIL.ImageOps.cover.nuanced.packed-l-tail-1-bilinear",
           "PIL.ImageOps.cover.nuanced.packed-l-tail-2-lanczos",

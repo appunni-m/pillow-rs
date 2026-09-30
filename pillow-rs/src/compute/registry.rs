@@ -1760,10 +1760,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Flip) {
-                    op_flip(img)
+                    op_flip(img, mode)
                 } else {
                     Err(PilError::ValueError("expected Flip op".into()))
                 }
