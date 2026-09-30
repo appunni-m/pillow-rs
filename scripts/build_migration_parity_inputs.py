@@ -41302,6 +41302,40 @@ def build_nuanced_cases(
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
+        # The standard UnsharpMask input is a tiny constant RGB image. Keep a
+        # material varied RGB case so the Gaussian blur and per-channel
+        # threshold/blend work are measured without an implicit mode change.
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "UnsharpMask",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768-radius-2",
+            "mode": "RGB", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20261110, "observe_result": "tobytes",
+            "values": {
+                "radius": literal(2),
+                "percent": literal(150),
+                "threshold": literal(3),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        # Keep a tiny nonuniform RGB case whose packed byte length ends in a
+        # 15-byte SIMD tail, so strict backend parity exercises both the
+        # vector body and the scalar remainder of the 150% blend.
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "UnsharpMask",
+            "requirement_suffix": "performance.standard",
+            "name": "backend-noise-rgb-7x3-radius-2",
+            "mode": "RGB", "size": [7, 3], "edge": "noise-fill",
+            "seed": 20261112, "observe_result": "tobytes",
+            "values": {
+                "radius": literal(2),
+                "percent": literal(150),
+                "threshold": literal(3),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
         # MedianFilter's maintained material workload used a constant image,
         # which skipped the order-statistic work on every pixel. Keep a seeded
         # native-L workload and small edge/tail shapes so backend measurements
@@ -50464,6 +50498,40 @@ def build_inputs(
                 members.append(
                     {
                         "workload_id": l_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
+            if workload_id == "pil-imagefilter.unsharpmask.standard":
+                rgb_case_id = (
+                    "PIL.ImageFilter.UnsharpMask.nuanced."
+                    "performance-material-rgb-noise-1024x768-radius-2"
+                )
+                rgb_case = all_cases_by_id[rgb_case_id]
+                rgb_workload = copy.deepcopy(workloads[-1])
+                rgb_workload["workload_id"] = (
+                    "pipeline-op.unsharpmask.material-rgb-noise-1024x768-radius-2"
+                )
+                rgb_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": rgb_case_id,
+                }
+                rgb_workload["measurement"]["boundary"] = "observed_steps"
+                rgb_workload["measurement"]["step_ids"] = [
+                    "apply-filter",
+                    "observe-filter-result",
+                ]
+                rgb_workload["measurement"]["correctness_gate"] = "parity_pass"
+                rgb_workload["context"] = _workflow_benchmark_context(
+                    rgb_case,
+                    variant="material-rgb-noise-1024x768-radius-2",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                rgb_workload["context"]["operation_class"] = "neighborhood"
+                workloads.append(rgb_workload)
+                members.append(
+                    {
+                        "workload_id": rgb_workload["workload_id"],
                         "weight": 1,
                     }
                 )

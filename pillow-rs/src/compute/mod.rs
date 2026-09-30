@@ -881,6 +881,18 @@ pub fn active_backends() -> Result<Vec<Backend>, PilError> {
     Ok(v)
 }
 
+/// Apply the exact native RGB 150% UnsharpMask blend through the SIMD adapter.
+///
+/// The caller is responsible for selecting the SIMD route and validating the
+/// logical image mode before using this narrow byte kernel.
+pub(crate) fn simd_unsharp_blend_rgb_150(
+    original: &[u8],
+    blurred: &[u8],
+    threshold: u8,
+) -> Option<Vec<u8>> {
+    pool_simd::ops::adapters::simd_unsharp_blend_rgb_150(original, blurred, threshold)
+}
+
 // ── Pool registry ──────────────────────────────────────────────────────────
 
 fn pools() -> &'static [Box<dyn BackendImpl>] {
