@@ -18,39 +18,52 @@
 - Preserve unrelated changes and existing safety/lint checks. Keep library
   diagnostics in `log` macros; do not commit temporary prints or traces.
 
-## Behavior and evidence
+## Development workflow
 
+- Read the affected code and its callers first. Reuse existing functions, types,
+  and backend paths before adding new implementations.
+- Make the smallest cohesive change that solves the problem. Preserve existing
+  APIs unless the task requires changing them. Refactor only as needed for the
+  task; avoid broad rewrites, duplicate implementations, unrelated cleanup, and
+  speculative abstractions.
+- During development, use focused builds, reproductions, or diagnostics when
+  they resolve a specific uncertainty. Routine verification belongs at Git push,
+  not after each edit or local commit.
 - Fix implementation failures without weakening assertions, thresholds, or the
   selected contract. Do not special-case fixture identities in runtime code.
-- Update generator-owned inputs through their maintained generators when
-  behavior changes. Keep active inputs free of expected outputs and run status.
-  Start from [the public manifest](pillow-rs/tests/fixtures/manifest.yaml).
-- Add cases for changed behavior and collect changed-line coverage for runtime
-  fixes. Report parity, measured coverage, fallback, and unmeasured paths
-  separately. Coverage receipts must match the measured source and inputs.
 - For Pillow comparisons, use `make build-parity` and isolated processes or
   environments. `make build` installs the replacement `PIL` namespace and can
   overwrite the oracle in that environment.
 - Record subtle reference behavior beside the implementation. Keep user guides
   separate from contributor procedures, and retain README acknowledgements.
 
-## Verification and references
+## Verification before Git push only
 
-Use existing Makefile targets; `make help` and `make help-all` list them.
-Direct commands are fine for focused diagnostics or a task without a suitable
-target. Add a maintained target when introducing a reusable workflow.
+Run this checklist immediately before an authorized `git push`, or when the user
+explicitly requests verification. Use existing Makefile targets; `make help` and
+`make help-all` list them. Direct commands are fine when no suitable target
+exists. Add a target only when repeated use justifies maintaining it.
 
-Run checks relevant to the change. Documentation edits use `make docs-lint`;
-site changes also use `make docs-test docs-build`. Rust changes use the focused
-tests and `make fmt clippy`; behavior changes also need the affected parity
-lanes. Run broader campaigns when the change affects their scope. Report
-failures and checks that could not run; do not describe old results as fresh.
+- Documentation changes: `make docs-lint`.
+- Site changes: also `make docs-test docs-build`.
+- Rust changes: affected tests and `make fmt clippy`.
+- Behavior changes: affected parity lanes.
+- Added, moved, or removed files: `make repo-map-update repo-map-check`.
+
+Check the final changes once; repeat only affected checks after further changes
+or failures. Broader campaigns are needed only when the push affects their
+scope. Report failures and checks that could not run; do not describe old
+results as fresh.
+
+## References
+
+Consult these as needed for the task. This guide controls when verification
+runs; linked contributor checklists are not additional development chores.
 
 - [Contributing](CONTRIBUTING.md): setup and change workflow.
 - [Command reference](docs/COMMANDS.md): targets, prerequisites, and side effects.
 - [Architecture](docs/ARCHITECTURE.md) and [repository map](docs/REPO_MAP.md):
-  ownership. Use `make repo-map-update repo-map-check` when files move, are
-  added, or are removed.
+  ownership.
 - [Coverage](docs/COVERAGE.md) and [benchmarking](docs/BENCHMARKING.md):
   evidence collection and interpretation.
 - [Releasing](RELEASING.md): version synchronization, package checks, and

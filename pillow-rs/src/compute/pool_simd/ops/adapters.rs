@@ -1275,7 +1275,10 @@ fn native_paste_plan_from_layout(
             // Pillow contracts are not the same as L/LA/RGB/RGBA blending.
             // Reject them before execution rather than silently applying an
             // RGBA-shaped alpha formula to indexed, typed, or tagged data.
-            if !matches!(layout.mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK" | "I;16") {
+            if !matches!(
+                layout.mode,
+                "L" | "LA" | "PA" | "RGB" | "RGBA" | "CMYK" | "I;16"
+            ) {
                 return None;
             }
             let mask_mode = mask.mode().ok()?;
@@ -1891,6 +1894,85 @@ fn native_paste_la_masked_row(
     }
 }
 
+/// Blend a native-PA row with an L mask. Palette indices and alpha remain two
+/// independent byte samples; this is a PA-specific kernel, not an LA/RGBA
+/// conversion or alpha-aware color blend.
+#[inline]
+fn native_paste_pa_masked_row(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    allow_short_masked_tail: bool,
+) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 2, 0);
+    debug_assert_eq!(source.len() / 2, mask.len());
+
+    let vector_len16 = source.len() / 16 * 16;
+    for start in (0..vector_len16).step_by(16) {
+        let source_block = <[u8; 16]>::try_from(&source[start..start + 16])
+            .expect("validated PA Paste row has a complete 16-byte block");
+        let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
+            .expect("validated PA Paste row has a complete 16-byte destination block");
+        let mask_block = std::array::from_fn(|lane| mask[start / 2 + lane / 2]);
+        let blended = native_paste_blend_vector16(source_block, destination_block, mask_block);
+        destination[start..start + 16].copy_from_slice(&blended);
+    }
+
+    let vector_len8 = source.len() / 8 * 8;
+    for start in (vector_len16..vector_len8).step_by(8) {
+        let source_block = <[u8; 8]>::try_from(&source[start..start + 8])
+            .expect("validated PA Paste row has a complete 8-byte block");
+        let destination_block = <[u8; 8]>::try_from(&destination[start..start + 8])
+            .expect("validated PA Paste row has a complete 8-byte destination block");
+        let mask_block = std::array::from_fn(|lane| mask[start / 2 + lane / 2]);
+        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+        destination[start..start + 8].copy_from_slice(&blended);
+    }
+
+    let tail = source.len() - vector_len8;
+    if tail == 0 {
+        return;
+    }
+    if allow_short_masked_tail {
+        let mut source_block = [0u8; 8];
+        let mut destination_block = [0u8; 8];
+        source_block[..tail].copy_from_slice(&source[vector_len8..]);
+        destination_block[..tail].copy_from_slice(&destination[vector_len8..]);
+        let mask_block = std::array::from_fn(|lane| {
+            if lane < tail {
+                mask[vector_len8 / 2 + lane / 2]
+            } else {
+                0
+            }
+        });
+        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+        destination[vector_len8..].copy_from_slice(&blended[..tail]);
+    } else {
+        for index in vector_len8..source.len() {
+            let mask_value = u16::from(mask[index / 2]);
+            let source_value = u16::from(source[index]);
+            let destination_value = u16::from(destination[index]);
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+            )]
+            let inverse = 255 - mask_value;
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+            )]
+            let weighted = source_value * mask_value + destination_value * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            destination[index] = blended;
+        }
+    }
+}
+
 /// Blend an interleaved RGB row with an L mask without rebuilding mask
 /// addresses in the generic channel adapter. Each mask sample covers three
 /// adjacent byte lanes, including vector blocks that begin mid-pixel.
@@ -2025,6 +2107,108 @@ fn native_paste_apply(
         || region.destination_top.saturating_add(region.height) > destination_height
     {
         return false;
+    }
+
+    if plan.layout.mode == "PA"
+        && plan.layout.channels == 2
+        && region.width != 0
+        && region.height != 0
+        && let Some((mask_layout, mask_row_stride)) = mask_layout
+        && mask_layout.channels == 1
+        && mask_layout.value_index == 0
+        && !mask_layout.premultiplied
+        && !mask_layout.binary
+    {
+        let Some(destination_region_start) =
+            region.destination_top.checked_mul(destination_row_stride)
+        else {
+            return false;
+        };
+        let Some(destination_region_len) = region.height.checked_mul(destination_row_stride) else {
+            return false;
+        };
+        let Some(destination_region_end) =
+            destination_region_start.checked_add(destination_region_len)
+        else {
+            return false;
+        };
+        let Some(destination_rows) =
+            destination.get_mut(destination_region_start..destination_region_end)
+        else {
+            return false;
+        };
+        let mask = mask.expect("a validated L mask layout always has mask bytes");
+        let Some(destination_left) = region.destination_left.checked_mul(2) else {
+            return false;
+        };
+        let Some(destination_right) = region
+            .destination_left
+            .checked_add(region.width)
+            .and_then(|right| right.checked_mul(2))
+        else {
+            return false;
+        };
+        let apply_pa_row = |row_index: usize, destination_row: &mut [u8]| {
+            let source_y = region.source_top + row_index;
+            let source_row_start = source_y * source_row_stride + region.source_left * 2;
+            let source_row = &source[source_row_start..source_row_start + region_row_bytes];
+            let mask_row_start = source_y * mask_row_stride + region.source_left;
+            let mask_row = &mask[mask_row_start..mask_row_start + region.width];
+            native_paste_pa_masked_row(
+                source_row,
+                &mut destination_row[destination_left..destination_right],
+                mask_row,
+                allow_short_masked_tail,
+            );
+        };
+
+        #[cfg(feature = "parallel")]
+        if region.height > 1
+            && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
+        {
+            crate::par_rows_mut!(
+                destination_rows,
+                destination_row_stride,
+                region.height,
+                |_row_start, _row_end, row, destination_row| {
+                    apply_pa_row(row as usize, destination_row);
+                }
+            );
+        } else {
+            for (row_index, destination_row) in destination_rows
+                .chunks_exact_mut(destination_row_stride)
+                .enumerate()
+            {
+                apply_pa_row(row_index, destination_row);
+            }
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        for (row_index, destination_row) in destination_rows
+            .chunks_exact_mut(destination_row_stride)
+            .enumerate()
+        {
+            apply_pa_row(row_index, destination_row);
+        }
+
+        let vector_len16 = region_row_bytes / 16 * 16;
+        let vector_len8 = region_row_bytes / 8 * 8;
+        let vector_blocks_per_row = (vector_len16 / 16 + (vector_len8 - vector_len16) / 8)
+            + usize::from(allow_short_masked_tail && vector_len8 < region_row_bytes);
+        let vector_blocks = vector_blocks_per_row.saturating_mul(region.height) as u64;
+        let scalar_tail = if allow_short_masked_tail {
+            0
+        } else {
+            (region_row_bytes - vector_len8).saturating_mul(region.height) as u64
+        };
+        if vector_blocks != 0 {
+            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        }
+        if scalar_tail != 0 {
+            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        }
+        crate::compute::record_pipeline_operation_path("vector");
+        return true;
     }
 
     if plan.layout.mode == "LA"
@@ -27995,6 +28179,75 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_pa_masked_paste_plan_uses_packed_pa_bytes_and_clipped_mask() {
+        let source_bytes = vec![17, 201, 83, 149, 26, 222, 91, 163, 240, 7];
+        let destination_bytes = vec![31, 42, 53, 64, 75, 86, 97, 108];
+        let mask_bytes = vec![0, 1, 127, 128, 254];
+        let source_image = crate::raster::DynamicImage::ImageLumaA8(
+            crate::raster::GrayAlphaImage::from_raw(5, 1, source_bytes.clone())
+                .expect("PA source shape"),
+        );
+        let destination = crate::raster::DynamicImage::ImageLumaA8(
+            crate::raster::GrayAlphaImage::from_raw(4, 1, destination_bytes.clone())
+                .expect("PA destination shape"),
+        );
+        let source = std::sync::Arc::new(crate::Image::from_dynamic(
+            source_image,
+            Some("PA".to_owned()),
+        ));
+        let mask = std::sync::Arc::new(crate::Image::from_dynamic(
+            crate::raster::DynamicImage::ImageLuma8(
+                crate::raster::GrayImage::from_raw(5, 1, mask_bytes.clone()).expect("L mask shape"),
+            ),
+            Some("L".to_owned()),
+        ));
+
+        let plan = super::native_paste_plan_for_image(
+            &destination,
+            &source,
+            -1,
+            0,
+            5,
+            1,
+            Some(&mask),
+            false,
+            Some("PA"),
+        )
+        .expect("PA/L plan is admitted directly");
+        assert_eq!(plan.layout.mode, "PA");
+        assert_eq!(plan.layout.channels, 2);
+        assert_eq!((plan.region.source_left, plan.region.width), (1, 4));
+
+        let source_pixels = source.materialized_shared().expect("native PA bytes");
+        let mask_pixels = mask.materialized_shared().expect("native L mask bytes");
+        let mut actual = destination.as_bytes().to_vec();
+        assert!(super::native_paste_apply(
+            &mut actual,
+            source_pixels.as_bytes(),
+            Some(mask_pixels.as_bytes()),
+            4,
+            1,
+            plan,
+            true,
+        ));
+
+        let mut expected = destination_bytes;
+        for destination_pixel in 0..4 {
+            let source_pixel = destination_pixel + 1;
+            let weight = u32::from(mask_bytes[source_pixel]);
+            for channel in 0..2 {
+                let byte = destination_pixel * 2 + channel;
+                let source_value = u32::from(source_bytes[source_pixel * 2 + channel]);
+                let destination_value = u32::from(expected[byte]);
+                expected[byte] =
+                    ((source_value * weight + destination_value * (255 - weight) + 127) / 255)
+                        as u8;
+            }
+        }
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn native_l_masked_paste_rows_keep_positive_clipped_short_tail_exact() {
         let destination = vec![11, 22, 33, 44, 55, 66];

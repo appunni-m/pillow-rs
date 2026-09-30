@@ -579,6 +579,75 @@ fn paste_mask_pixels(mask: &Image, mask_alpha: bool) -> Result<Option<PasteMaskP
     }))
 }
 
+/// Blend PA's palette-index/alpha pairs in their native two-byte layout.
+/// The palette index is a stored sample here, not a request to expand colors.
+fn paste_native_masked_pa_row(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    mask_layout: PasteMaskLayout,
+) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 2, 0);
+    debug_assert_eq!(source.len() / 2 * mask_layout.channels, mask.len());
+
+    for ((source_pixel, destination_pixel), mask_pixel) in source
+        .chunks_exact(2)
+        .zip(destination.chunks_exact_mut(2))
+        .zip(mask.chunks_exact(mask_layout.channels))
+    {
+        let mask_value = mask_pixel[mask_layout.value_index];
+        if mask_value == 0 && !mask_layout.premultiplied {
+            continue;
+        }
+        if mask_value == 255 {
+            destination_pixel.copy_from_slice(source_pixel);
+            continue;
+        }
+
+        let mask = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - mask;
+        for channel in 0..2 {
+            destination_pixel[channel] = if mask_layout.premultiplied {
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "byte products and PREBLEND intermediates are bounded below u32::MAX"
+                )]
+                let scaled = u32::from(destination_pixel[channel]) * u32::from(inverse) + 128;
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "the proven PREBLEND intermediate is bounded below u32::MAX"
+                )]
+                let blended = (((scaled >> 8) + scaled) >> 8) + u32::from(source_pixel[channel]);
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "Pillow stores PREBLEND's sum modulo 256 in the byte channel"
+                )]
+                let blended = blended as u8;
+                blended
+            } else {
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+                )]
+                let weighted = u16::from(source_pixel[channel]) * mask
+                    + u16::from(destination_pixel[channel]) * inverse
+                    + 127;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "DIV255 yields an 8-bit convex blend of byte channels"
+                )]
+                let blended = (weighted / 255) as u8;
+                blended
+            };
+        }
+    }
+}
+
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
 /// cases retain the established conversion path until their contracts have
@@ -592,7 +661,7 @@ fn paste_native_masked(
     mask_alpha: bool,
     mode: &str,
 ) -> Option<DynamicImage> {
-    if !matches!(mode, "L" | "LA" | "RGB" | "RGBA" | "CMYK") {
+    if !matches!(mode, "L" | "LA" | "PA" | "RGB" | "RGBA" | "CMYK") {
         return None;
     }
     let channels = paste_native_channels(mode, destination)?;
@@ -682,63 +751,67 @@ fn paste_native_masked(
         let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
         let destination_row = &mut row[destination_x..destination_x_end];
         let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
-        for ((source_pixel, destination_pixel), mask_pixel) in source_row
-            .chunks_exact(channels)
-            .zip(destination_row.chunks_exact_mut(channels))
-            .zip(mask_row.chunks_exact(mask_channels))
-        {
-            let mask_value = mask_pixel[mask_pixels.layout.value_index];
-            if mask_value == 0 && !mask_pixels.layout.premultiplied {
-                continue;
-            }
-            if mask_value == 255 {
-                destination_pixel.copy_from_slice(source_pixel);
-                continue;
-            }
-
-            let mask = u16::from(mask_value);
-            #[expect(
-                clippy::arithmetic_side_effects,
-                reason = "mask is a byte, so subtracting it from 255 cannot underflow"
-            )]
-            let inverse = 255 - mask;
-            for (source_value, destination_value) in
-                source_pixel.iter().zip(destination_pixel.iter_mut())
+        if mode == "PA" {
+            paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_pixels.layout);
+        } else {
+            for ((source_pixel, destination_pixel), mask_pixel) in source_row
+                .chunks_exact(channels)
+                .zip(destination_row.chunks_exact_mut(channels))
+                .zip(mask_row.chunks_exact(mask_channels))
             {
-                *destination_value = if mask_pixels.layout.premultiplied {
-                    // Pillow's RGBa-mask path uses PREBLEND: add the incoming
-                    // premultiplied sample after scaling the destination.
-                    #[expect(
-                        clippy::arithmetic_side_effects,
-                        reason = "byte products and PREBLEND intermediates are bounded below u32::MAX"
-                    )]
-                    let scaled = u32::from(*destination_value) * u32::from(inverse) + 128;
-                    #[expect(
-                        clippy::arithmetic_side_effects,
-                        reason = "the proven PREBLEND intermediate is bounded below u32::MAX"
-                    )]
-                    let blended = (((scaled >> 8) + scaled) >> 8) + u32::from(*source_value);
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "Pillow stores PREBLEND's sum modulo 256 in the byte channel"
-                    )]
-                    let blended = blended as u8;
-                    blended
-                } else {
-                    #[expect(
-                        clippy::arithmetic_side_effects,
-                        reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
-                    )]
-                    let weighted = u16::from(*source_value) * mask
-                        + u16::from(*destination_value) * inverse
-                        + 127;
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "DIV255 yields an 8-bit convex blend of byte channels"
-                    )]
-                    let blended = (weighted / 255) as u8;
-                    blended
-                };
+                let mask_value = mask_pixel[mask_pixels.layout.value_index];
+                if mask_value == 0 && !mask_pixels.layout.premultiplied {
+                    continue;
+                }
+                if mask_value == 255 {
+                    destination_pixel.copy_from_slice(source_pixel);
+                    continue;
+                }
+
+                let mask = u16::from(mask_value);
+                #[expect(
+                    clippy::arithmetic_side_effects,
+                    reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+                )]
+                let inverse = 255 - mask;
+                for (source_value, destination_value) in
+                    source_pixel.iter().zip(destination_pixel.iter_mut())
+                {
+                    *destination_value = if mask_pixels.layout.premultiplied {
+                        // Pillow's RGBa-mask path uses PREBLEND: add the incoming
+                        // premultiplied sample after scaling the destination.
+                        #[expect(
+                            clippy::arithmetic_side_effects,
+                            reason = "byte products and PREBLEND intermediates are bounded below u32::MAX"
+                        )]
+                        let scaled = u32::from(*destination_value) * u32::from(inverse) + 128;
+                        #[expect(
+                            clippy::arithmetic_side_effects,
+                            reason = "the proven PREBLEND intermediate is bounded below u32::MAX"
+                        )]
+                        let blended = (((scaled >> 8) + scaled) >> 8) + u32::from(*source_value);
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "Pillow stores PREBLEND's sum modulo 256 in the byte channel"
+                        )]
+                        let blended = blended as u8;
+                        blended
+                    } else {
+                        #[expect(
+                            clippy::arithmetic_side_effects,
+                            reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+                        )]
+                        let weighted = u16::from(*source_value) * mask
+                            + u16::from(*destination_value) * inverse
+                            + 127;
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "DIV255 yields an 8-bit convex blend of byte channels"
+                        )]
+                        let blended = (weighted / 255) as u8;
+                        blended
+                    };
+                }
             }
         }
     };
@@ -4070,7 +4143,7 @@ mod tests {
             "L" | "1" => DynamicImage::ImageLuma8(
                 GrayImage::from_raw(width, height, bytes).expect("L image shape"),
             ),
-            "LA" => DynamicImage::ImageLumaA8(
+            "LA" | "PA" => DynamicImage::ImageLumaA8(
                 GrayAlphaImage::from_raw(width, height, bytes).expect("LA image shape"),
             ),
             "RGB" => DynamicImage::ImageRgb8(
@@ -4217,7 +4290,14 @@ mod tests {
 
     #[test]
     fn native_masked_paste_blends_only_clipped_native_channels() {
-        for (mode, channels) in [("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4), ("CMYK", 4)] {
+        for (mode, channels) in [
+            ("L", 1),
+            ("LA", 2),
+            ("PA", 2),
+            ("RGB", 3),
+            ("RGBA", 4),
+            ("CMYK", 4),
+        ] {
             let destination_bytes = (0..2 * channels)
                 .map(|index| 11 + index as u8 * 7)
                 .collect::<Vec<_>>();

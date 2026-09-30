@@ -249,6 +249,7 @@ PASTE_PERFORMANCE_CASES = (
 PASTE_MASKED_PERFORMANCE_CASES = (
     ("masked-l-noise-1024x768", "L", [1024, 768], 20261013),
     ("masked-la-noise-1024x768", "LA", [1024, 768], 20261014),
+    ("masked-pa-noise-1024x768", "PA", [1024, 768], 20261101),
     ("masked-rgb-noise-1024x768", "RGB", [1024, 768], 20261015),
     ("masked-rgba-noise-1024x768", "RGBA", [1024, 768], 20261016),
     ("masked-cmyk-noise-1024x768", "CMYK", [1024, 768], 20261017),
@@ -44135,6 +44136,40 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["call", "observe-receiver"],
         }
     )
+
+    # PA uses the same two-byte physical carrier as LA, but its first byte is
+    # a palette index. Keep the logical PA route distinct while exercising
+    # the odd-width packed tail, clipped source/mask coordinates, and every
+    # L-mask endpoint used by the LA case above.
+    pa_masked_case = copy.deepcopy(cases[-1])
+    pa_masked_case["case_id"] = (
+        f"{target}.paste.nuanced.native-pa-masked-negative-offset-word-tail"
+    )
+    asset_ids: dict[str, str] = {}
+    for asset in pa_masked_case["assets"]:
+        previous_id = asset["id"]
+        replacement_id = previous_id.replace("native-la-", "native-pa-")
+        asset_ids[previous_id] = replacement_id
+        asset["id"] = replacement_id
+    for step in pa_masked_case["steps"]:
+        arguments = step.get("arguments", {})
+        if step["step_id"] in {"setup-image-1", "setup-im-2"}:
+            arguments["mode"] = literal("PA")
+        data = arguments.get("data")
+        if data and data.get("kind") == "asset":
+            data["asset_id"] = asset_ids[data["asset_id"]]
+    cases.append(pa_masked_case)
+
+    # The positive offset also observes untouched destination bytes after the
+    # clipped two-byte PA pixels have been blended.
+    pa_positive_case = copy.deepcopy(pa_masked_case)
+    pa_positive_case["case_id"] = (
+        f"{target}.paste.nuanced.native-pa-masked-positive-offset-word-tail"
+    )
+    for step in pa_positive_case["steps"]:
+        if step["step_id"] == "call":
+            step["arguments"]["box"] = literal([2, 1])
+    cases.append(pa_positive_case)
 
     # Exercise the even-width LA row-pair GPU mapping while clipping a
     # five-pixel-wide source and mask into a four-pixel-wide destination.
