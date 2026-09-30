@@ -154,9 +154,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- offset.wgsl
 |   |   |   |       |-- overlay.wgsl
 |   |   |   |       |-- pad.wgsl
+|   |   |   |       |-- pad_luma_packed.wgsl
 |   |   |   |       |-- paste.wgsl
 |   |   |   |       |-- paste_native_bytes.wgsl
 |   |   |   |       |-- paste_native_masked_l.wgsl
+|   |   |   |       |-- paste_native_masked_la.wgsl
+|   |   |   |       |-- paste_native_rgb_to_rgba.wgsl
 |   |   |   |       |-- point_luma_packed.wgsl
 |   |   |   |       |-- point_op.wgsl
 |   |   |   |       |-- posterize.wgsl

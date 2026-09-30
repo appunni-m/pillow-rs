@@ -43811,6 +43811,172 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["call", "observe-receiver"],
         }
     )
+
+    # Exercise compact LA output packing with a native L mask. Fifteen output
+    # pixels leave one padded LA word; the negative offset also clips source
+    # and mask coordinates at the top/left while crossing packed row words.
+    la_destination_raw = bytes((index * 37 + 11) % 256 for index in range(width * height * 2))
+    la_source_raw = bytes((index * 53 + 7) % 256 for index in range(width * height * 2))
+    la_mask_raw = bytes(mask_values[index % len(mask_values)] for index in range(width * height))
+    la_destination_asset = "image-native-la-masked-odd-destination-data"
+    la_source_asset = "image-native-la-masked-odd-source-data"
+    la_mask_asset = "image-native-la-masked-odd-mask-data"
+    cases.append(
+        {
+            "case_id": f"{target}.paste.nuanced.native-la-masked-negative-offset-word-tail",
+            "surface": target,
+            "operation": "paste",
+            "covers": [f"{target}.paste.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                inline_asset(la_destination_asset, la_destination_raw),
+                inline_asset(la_source_asset, la_source_raw),
+                inline_asset(la_mask_asset, la_mask_raw),
+            ],
+            "steps": [
+                {
+                    "step_id": "setup-image-1",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("LA"),
+                        "size": literal([width, height]),
+                        "data": asset_value(la_destination_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-im-2",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("LA"),
+                        "size": literal([width, height]),
+                        "data": asset_value(la_source_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-mask-3",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([width, height]),
+                        "data": asset_value(la_mask_asset),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": target,
+                    "operation": "paste",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {
+                        "im": binding("setup-im-2"),
+                        "box": literal([-1, -1]),
+                        "mask": binding("setup-mask-3"),
+                    },
+                },
+                {
+                    "step_id": "observe-receiver",
+                    "surface": target,
+                    "operation": "tobytes",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "observe-receiver"],
+        }
+    )
+
+    # Exercise the even-width LA row-pair GPU mapping while clipping a
+    # five-pixel-wide source and mask into a four-pixel-wide destination.
+    even_destination_width = 4
+    even_height = 3
+    even_source_width = 5
+    even_destination_raw = bytes(
+        (index * 29 + 17) % 256
+        for index in range(even_destination_width * even_height * 2)
+    )
+    even_source_raw = bytes(
+        (index * 47 + 13) % 256 for index in range(even_source_width * even_height * 2)
+    )
+    even_mask_raw = bytes(
+        mask_values[index % len(mask_values)]
+        for index in range(even_source_width * even_height)
+    )
+    even_destination_asset = "image-native-la-even-destination-data"
+    even_source_asset = "image-native-la-even-source-data"
+    even_mask_asset = "image-native-la-even-mask-data"
+    cases.append(
+        {
+            "case_id": f"{target}.paste.nuanced.native-la-even-negative-offset-source-tail",
+            "surface": target,
+            "operation": "paste",
+            "covers": [f"{target}.paste.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                inline_asset(even_destination_asset, even_destination_raw),
+                inline_asset(even_source_asset, even_source_raw),
+                inline_asset(even_mask_asset, even_mask_raw),
+            ],
+            "steps": [
+                {
+                    "step_id": "setup-image-1",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("LA"),
+                        "size": literal([even_destination_width, even_height]),
+                        "data": asset_value(even_destination_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-im-2",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("LA"),
+                        "size": literal([even_source_width, even_height]),
+                        "data": asset_value(even_source_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-mask-3",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([even_source_width, even_height]),
+                        "data": asset_value(even_mask_asset),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": target,
+                    "operation": "paste",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {
+                        "im": binding("setup-im-2"),
+                        "box": literal([-1, -1]),
+                        "mask": binding("setup-mask-3"),
+                    },
+                },
+                {
+                    "step_id": "observe-receiver",
+                    "surface": target,
+                    "operation": "tobytes",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "observe-receiver"],
+        }
+    )
     return cases
 
 
