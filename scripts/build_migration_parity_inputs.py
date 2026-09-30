@@ -30429,6 +30429,28 @@ def build_nuanced_cases(
             {
                 "surface": "PIL.ImageOps",
                 "operation": "expand",
+                "requirement_suffix": "parameter.fill",
+                "name": f"native-{mode.lower()}-{fill_kind}-fill",
+                "mode": mode,
+                "size": [1, 1],
+                "edge": "nonzero-pixel",
+                "pixel": [23, 47, 89, 131],
+                "values": {
+                    "border": literal(1),
+                    "fill": literal(fill),
+                },
+                "observe_result": "tobytes",
+            }
+            for mode in ("CMYK", "RGBX")
+            for fill_kind, fill in (
+                ("three-component", [17, 83, 149]),
+                ("invalid-two-component", [17, 83]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
                 "requirement_suffix": "performance.standard",
                 "name": f"performance-{name}",
                 "mode": mode,

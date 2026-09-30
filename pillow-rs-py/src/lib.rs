@@ -4315,25 +4315,16 @@ fn ops_expand(
         ));
     };
 
-    // Resolve fill: int -> (v, 0, 0, 0), 2-tuple -> (v, v, v, alpha),
-    // 3-tuple -> (v0, v1, v2, 0), 4-tuple as-is. The pair form is the
-    // public LA/PA fill representation; the core selects the native bands.
-    let fill_val: (u8, u8, u8, u8) = if let Ok(i) = fill.extract::<u8>() {
-        (i, 0, 0, 0)
-    } else if let Ok((value, alpha)) = fill.extract::<(u8, u8)>() {
-        (value, value, value, alpha)
-    } else if let Ok((r, g, b)) = fill.extract::<(u8, u8, u8)>() {
-        (r, g, b, 0)
-    } else if let Ok((r, g, b, a)) = fill.extract::<(u8, u8, u8, u8)>() {
-        (r, g, b, a)
-    } else {
-        (0, 0, 0, 0)
-    };
+    // Preserve the public scalar/string/component input until core knows the
+    // image mode. CMYK and RGBX use four-byte storage too, but their fourth
+    // samples are K and X rather than RGBA alpha.
+    let fill = imageops_color_from_python(Some(fill));
 
     let inner = image.borrow().inner.clone();
-    let rs =
-        Python::attach(|py| py.detach(|| pillow_rs::imageops_expand(&inner, border_val, fill_val)))
-            .map_err(map_error)?;
+    let rs = Python::attach(|py| {
+        py.detach(|| pillow_rs::imageops_expand_with_input(&inner, border_val, fill))
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 

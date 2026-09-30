@@ -263,6 +263,7 @@ pub use crate::ops::imageops::exif_get_orientation;
 pub use crate::ops::imageops::exif_remove_orientation;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 pub use crate::ops::imageops::expand as imageops_expand;
+pub use crate::ops::imageops::expand_with_input as imageops_expand_with_input;
 pub use crate::ops::imageops::fit as imageops_fit;
 pub use crate::ops::imageops::fit_with_input as imageops_fit_with_input;
 pub use crate::ops::imageops::flip as imageops_flip;
