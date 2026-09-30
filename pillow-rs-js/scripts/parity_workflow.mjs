@@ -643,13 +643,15 @@ function exifRecord(value) {
     return record;
 }
 
+function colorByte(item, fallback = 0) {
+    const number = Number(item ?? fallback);
+    if (!Number.isFinite(number)) throw new TypeError('color must contain finite numbers');
+    return Math.max(0, Math.min(255, Math.trunc(number)));
+}
+
 function colorChannels(value, mode) {
     const values = Array.isArray(value) ? value : [value ?? 0];
-    const byte = (item, fallback = 0) => {
-        const number = Number(item ?? fallback);
-        if (!Number.isFinite(number)) throw new TypeError('color must contain finite numbers');
-        return Math.max(0, Math.min(255, Math.trunc(number)));
-    };
+    const byte = colorByte;
     if (mode === 'RGBA') {
         return [byte(values[0]), byte(values[1]), byte(values[2]), byte(values[3], 255)];
     }
@@ -695,19 +697,21 @@ function imageColor(value, mode) {
     return colorChannels(values, mode);
 }
 
-function expandColor(value, mode) {
+function expandColor(value, mode, wasm) {
     if (value == null) return undefined;
 
-    // Expand writes the fill in the image's native band order. CMYK's fourth
-    // byte is K and RGBX's fourth byte is X; neither is an RGBA alpha channel.
-    // Keep these four-band tuples intact instead of routing them through the
-    // RGBA-oriented colorChannels adapter.
-    if ((mode === 'CMYK' || mode === 'RGBX') && Array.isArray(value) && value.length === 4) {
-        return value.map((item) => {
-            const number = Number(item);
-            if (!Number.isFinite(number)) throw new TypeError('color must contain finite numbers');
-            return Math.max(0, Math.min(255, Math.trunc(number)));
-        });
+    // Expand writes native samples. CMYK's fourth byte is K and RGBX's is X,
+    // so do not route either mode through the generic RGBA color adapter.
+    if (mode === 'CMYK' || mode === 'RGBX') {
+        const resolved = typeof value === 'string' ? wasm.getColor(value, mode) : value;
+        const values = Array.isArray(resolved) ? resolved : [resolved];
+        if (![1, 3, 4].includes(values.length)) {
+            throw namedError('TypeError', 'color must be int, or tuple of one, three or four elements');
+        }
+        const components = values.map((item) => colorByte(item));
+        if (components.length === 1) return [components[0], 0, 0, 0];
+        if (components.length === 3) return [...components, 255];
+        return components;
     }
 
     return imageColor(value, mode);
@@ -2072,7 +2076,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
         }
         if (operation === 'crop') return wasm.ImageOps[name](image, args.border);
         if (operation === 'expand') {
-            const color = expandColor(args.fill, image.mode)
+            const color = expandColor(args.fill, image.mode, wasm)
                 ?? (image.mode === 'PA' ? [0, 0, 0, 0] : [0, 0, 0, 255]);
             return wasm.ImageOps[name](image, args.border, ...color);
         }
