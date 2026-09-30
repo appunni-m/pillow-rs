@@ -908,7 +908,7 @@ def execution_identity() -> dict[str, Any]:
                 "dirty": git_dirty(),
                 "runtime": platform.python_version(),
                 "backend": backend,
-                "features": ["all-features"],
+                "features": ["default"],
             }
             for backend in TARGET_BACKENDS
         ],

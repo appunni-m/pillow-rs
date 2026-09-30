@@ -3161,7 +3161,7 @@ def build_identity(
         ],
         "assets": assets,
         "oracles": [{"oracle_id": ORACLE_ID, "name": "Pillow", "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
-        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": ["all-features"]}],
+        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": ["default"]}],
         "command": command,
     }
 

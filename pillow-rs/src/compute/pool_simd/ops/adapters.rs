@@ -32,6 +32,46 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use wide::{f32x4, f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8, u32x16};
 
+// `parallel` may be enabled to select Parallel CPU kernels, but it must not
+// silently add Rayon scheduling to the SIMD backend. Keep feature-gated SIMD
+// routes row-serial while retaining their vectorized inner loops.
+#[cfg(feature = "parallel")]
+macro_rules! simd_rows_mut_serial {
+    ($data:expr, $stride:expr, $height:expr,
+     |$row_start:ident, $row_end:ident, $y:ident, $row:ident| $body:block) => {{
+        let _data: &mut [u8] = $data;
+        let _stride: usize = $stride;
+        let _height: usize = $height;
+        _data
+            .chunks_mut(_stride)
+            .take(_height)
+            .enumerate()
+            .for_each(|(_y_idx, _row)| {
+                let $row_start: usize = _y_idx * _stride;
+                let $row_end: usize = $row_start + _stride;
+                let $y: u32 = _y_idx as u32;
+                let $row: &mut [u8] = _row;
+                $body
+            });
+    }};
+}
+
+#[cfg(feature = "parallel")]
+macro_rules! simd_row_blocks_collect_serial {
+    ($blocks:expr, $min_blocks:expr, $initialize:expr, $map:expr) => {{ simd_row_blocks_collect_serial_impl($blocks, $min_blocks, $initialize, $map) }};
+}
+
+#[cfg(feature = "parallel")]
+fn simd_row_blocks_collect_serial_impl<State, Output>(
+    blocks: usize,
+    _min_blocks: usize,
+    mut initialize: impl FnMut() -> State,
+    mut map: impl FnMut(&mut State, usize) -> Output,
+) -> Vec<Output> {
+    let mut state = initialize();
+    (0..blocks).map(|index| map(&mut state, index)).collect()
+}
+
 fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
@@ -2166,7 +2206,7 @@ fn native_paste_apply(
         if region.height > 1
             && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
         {
-            crate::par_rows_mut!(
+            simd_rows_mut_serial!(
                 destination_rows,
                 destination_row_stride,
                 region.height,
@@ -2268,7 +2308,7 @@ fn native_paste_apply(
         if region.height > 1
             && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
         {
-            crate::par_rows_mut!(
+            simd_rows_mut_serial!(
                 destination_rows,
                 destination_row_stride,
                 region.height,
@@ -2370,7 +2410,7 @@ fn native_paste_apply(
         if region.height > 1
             && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
         {
-            crate::par_rows_mut!(
+            simd_rows_mut_serial!(
                 destination_rows,
                 destination_row_stride,
                 region.height,
@@ -2466,7 +2506,7 @@ fn native_paste_apply(
         if region.height > 1
             && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
         {
-            crate::par_rows_mut!(
+            simd_rows_mut_serial!(
                 destination_rows,
                 destination_row_stride,
                 region.height,
@@ -3080,7 +3120,7 @@ fn simd_paste_rgb_to_rgba(
     if region.height > 1
         && region.width.saturating_mul(region.height) >= SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD
     {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             destination_rows,
             destination_stride,
             region.height,
@@ -7956,7 +7996,7 @@ fn apply_native_rows<F>(
     let row_stride = width.saturating_mul(channels);
     #[cfg(feature = "parallel")]
     if bytes.len() >= 256 * 1024 && row_stride != 0 {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             bytes,
             row_stride,
             height,
@@ -8308,8 +8348,8 @@ fn native_rgb_lut_bytes(bytes: &mut [u8], tables: &[[u8x16; 16]; 4]) {
 /// Apply one LUT per native byte band. The table lookup is vectorized with
 /// `u8x16`; only the interleaved-band gather/scatter is scalar because the
 /// portable `wide` API has no byte-gather instruction. Independent scanlines
-/// are split through `apply_native_rows` so large LUT passes use the same
-/// row-parallel execution policy as the other point kernels.
+/// are processed through `apply_native_rows` so large LUT passes preserve
+/// exclusive row ownership without adding Rayon to the SIMD backend.
 fn native_lut_apply(
     bytes: &mut [u8],
     width: usize,
@@ -8424,7 +8464,7 @@ fn native_lut_map_rows(
     }
     #[cfg(feature = "parallel")]
     if source.len() >= 256 * 1024 {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             destination,
             row_stride,
             height,
@@ -9602,7 +9642,7 @@ fn native_rgb_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     if pixels >= SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD {
         let block_count = pixels.div_ceil(4);
         let min_blocks = usize::try_from(img.width()).ok()?.div_ceil(4).max(1);
-        let blocks: Vec<[u8; 16]> = crate::par_row_blocks_collect!(
+        let blocks: Vec<[u8; 16]> = simd_row_blocks_collect_serial!(
             block_count,
             min_blocks,
             || (),
@@ -9904,7 +9944,7 @@ fn apply_native_blend_rows(
     if output.len() >= 4 * 1024 * 1024 {
         const TILE_BYTES: usize = 64 * 1024;
         let tiles = output.len().div_ceil(TILE_BYTES);
-        crate::par_rows_mut!(output, TILE_BYTES, tiles, |start, _end, _tile, bytes| {
+        simd_rows_mut_serial!(output, TILE_BYTES, tiles, |start, _end, _tile, bytes| {
             let end = start + bytes.len();
             apply_row(&left[start..end], &right[start..end], bytes);
         });
@@ -9964,7 +10004,7 @@ fn apply_native_blend_rows_in_place(
     if left.len() >= 4 * 1024 * 1024 {
         const TILE_BYTES: usize = 64 * 1024;
         let tiles = left.len().div_ceil(TILE_BYTES);
-        crate::par_rows_mut!(left, TILE_BYTES, tiles, |start, _end, _tile, bytes| {
+        simd_rows_mut_serial!(left, TILE_BYTES, tiles, |start, _end, _tile, bytes| {
             let end = start + bytes.len();
             apply_row(bytes, &right[start..end]);
         });
@@ -10306,7 +10346,7 @@ fn native_chops_soft_light(
     if left.len() >= 1024 * 1024 {
         const TILE_BYTES: usize = 64 * 1024;
         let tiles = left.len().div_ceil(TILE_BYTES);
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             TILE_BYTES,
             tiles,
@@ -10935,7 +10975,7 @@ pub(crate) fn simd_fused_multiply_screen(
     if output.len() >= 4 * 1024 * 1024 {
         const TILE_BYTES: usize = 64 * 1024;
         let tiles = output.len().div_ceil(TILE_BYTES);
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             TILE_BYTES,
             tiles,
@@ -12077,7 +12117,7 @@ fn transpose_native_tiled<const CHANNELS: usize, const TILE: usize>(
     };
     #[cfg(feature = "parallel")]
     if width * height >= 256 * 1024 {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             output,
             group_stride,
             groups,
@@ -12111,7 +12151,7 @@ fn transpose_native_collect_admitted(
     total_bytes: usize,
     method: &TransposeMethod,
 ) -> bool {
-    // The extra row cache pays off only above small-image scheduling costs;
+    // The extra row cache pays off only for this bounded size and aspect ratio;
     // larger outputs favor the existing direct-write kernel's memory traffic.
     matches!(channels, 3 | 4)
         && width.is_multiple_of(4)
@@ -12150,7 +12190,7 @@ impl TransposeNativeCollectCounters {
             crate::compute::record_pipeline_allocation(scratch_bytes);
         }
         // One four-row cache rebuild processes height four-pixel vectors.
-        // Rayon can split within a row group, causing both tasks to rebuild it.
+        // Rebuilds count actual cache misses in the serial SIMD collector.
         let blocks = self.cache_rebuilds.load(Ordering::Relaxed) as u64 * height as u64;
         (output, blocks)
     }
@@ -12268,7 +12308,7 @@ fn transpose_native_collect<const CHANNELS: usize, const BLOCK_BYTES: usize>(
         return None;
     }
     let counters = TransposeNativeCollectCounters::default();
-    let output: Vec<[u8; BLOCK_BYTES]> = crate::par_row_blocks_collect!(
+    let output: Vec<[u8; BLOCK_BYTES]> = simd_row_blocks_collect_serial!(
         block_count,
         min_blocks,
         || TransposeNativeRowCache::new(&scratch_dims, &counters),
@@ -12286,7 +12326,7 @@ fn transpose_native_odd_collect_admitted(
     total_bytes: usize,
     method: &TransposeMethod,
 ) -> bool {
-    // Odd four-byte rasters benefit only after scheduling costs amortize.
+    // Odd four-byte rasters benefit only within this bounded shape range.
     // Bound the four-row cache to 32 KiB and avoid narrow images whose
     // repeated cache fills lose the direct-write kernel's locality.
     channels == 4
@@ -12407,8 +12447,7 @@ impl<'a> TransposeNativeOddRowCache<'a> {
 #[cfg(feature = "parallel")]
 impl Drop for TransposeNativeOddRowCache<'_> {
     fn drop(&mut self) {
-        // Count actual work, including groups rebuilt after a Rayon split.
-        // Merge once per task and publish allocation telemetry on the parent.
+        // Count actual work and publish allocation telemetry after collection.
         self.counters
             .vector_blocks
             .fetch_add(self.vector_blocks, Ordering::Relaxed);
@@ -12435,7 +12474,7 @@ fn transpose_native_odd_collect(
     }
     let scratch_dims = CheckedDims::new(u32::try_from(height).ok()?, 4, 4).ok()?;
     let counters = TransposeNativeOddCollectCounters::default();
-    let output: Vec<[u8; 16]> = crate::par_row_blocks_collect!(
+    let output: Vec<[u8; 16]> = simd_row_blocks_collect_serial!(
         block_count,
         height,
         || TransposeNativeOddRowCache::new(&scratch_dims, &counters),
@@ -12688,7 +12727,7 @@ fn native_transpose_bytes(
             #[cfg(feature = "parallel")]
             {
                 if pixels >= 256 * 1024 {
-                    crate::par_rows_mut!(
+                    simd_rows_mut_serial!(
                         &mut output,
                         output_row_bytes,
                         out_height,
@@ -13005,7 +13044,7 @@ fn native_cmyk_grayscale_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)
         let width = img.width() as usize;
         let source_stride = width.checked_mul(4)?;
         let height = img.height() as usize;
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             width,
             height,
@@ -13465,7 +13504,8 @@ fn native_sharpness_filter_blend(
     // when Pillow's blend factor is narrowed to f32. That path also defines
     // the unusual NaN behavior at unchanged border samples.
     let grouped_rgb_bytes = channels == 3 && active_channels == 3 && alpha.is_finite();
-    let grouped_pixels = mode == Some("RGBX") && active_channels == channels && channels == 4;
+    let grouped_pixels =
+        mode == Some("RGBX") && active_channels == channels && channels == 4 && alpha.is_finite();
     let pixels_per_block = (8 / channels).max(1);
     let vector_blocks = if grouped_rgb_bytes {
         (interior_width * channels).div_ceil(8) * interior_height
@@ -13519,7 +13559,7 @@ fn native_sharpness_filter_blend(
                 let mut x = 1usize;
                 while x < width - 1 {
                     let active_pixels = (width - 1 - x).min(pixels_per_block);
-                    let smooth_lanes = native_filter_3x3_pixel_block_integer(
+                    let smooth_bytes = native_filter_3x3_pixel_block_integer(
                         source,
                         width,
                         channels,
@@ -13529,15 +13569,19 @@ fn native_sharpness_filter_blend(
                     );
                     let active_bytes = active_pixels * channels;
                     let source_start = source_row + x * channels;
-                    let original =
-                        native_filter_load_byte_block(source, source_start, active_bytes);
+                    let original_bytes = std::array::from_fn(|lane| {
+                        if lane < active_bytes {
+                            source[source_start + lane]
+                        } else {
+                            0
+                        }
+                    });
                     let values =
-                        native_sharpness_blend_lanes(original, smooth_lanes, alpha).to_array();
+                        native_sharpness_blend_integer_block(original_bytes, smooth_bytes, alpha);
                     for pixel in 0..active_pixels {
                         for channel in 0..channels {
                             let lane = pixel * channels + channel;
-                            row[(x + pixel) * channels + channel] =
-                                native_sharpness_blend_result(values[lane]);
+                            row[(x + pixel) * channels + channel] = values[lane];
                         }
                     }
                     x += active_pixels;
@@ -13550,28 +13594,41 @@ fn native_sharpness_filter_blend(
                     let mut x = 1usize;
                     while x < width - 1 {
                         let active = (width - 1 - x).min(8);
-                        let smooth = native_filter_3x3_vector(
-                            source,
-                            width,
-                            channels,
-                            channel,
-                            y,
-                            x,
-                            kernel,
-                            rounding_bias,
-                        );
+                        let smooth = if alpha.is_finite() {
+                            if channels == 1 && active == 8 {
+                                native_filter_3x3_luma_block_integer(source, width, y, x)
+                                    .unwrap_or_else(|| {
+                                        native_filter_3x3_channel_block_integer(
+                                            source, width, channels, channel, y, x, active,
+                                        )
+                                    })
+                            } else {
+                                native_filter_3x3_channel_block_integer(
+                                    source, width, channels, channel, y, x, active,
+                                )
+                            }
+                        } else {
+                            // Keep the established floating path for finite
+                            // f64 factors that overflow when narrowed to f32.
+                            let smooth = native_filter_3x3_vector(
+                                source,
+                                width,
+                                channels,
+                                channel,
+                                y,
+                                x,
+                                kernel,
+                                rounding_bias,
+                            );
+                            f32x8::from(smooth.map(f32::from))
+                        };
                         let original: [f32; 8] = std::array::from_fn(|lane| {
                             let pixel_x = (x + lane).min(width - 2);
                             f32::from(source[source_row + pixel_x * channels + channel])
                         });
-                        let smooth: [f32; 8] = std::array::from_fn(|lane| f32::from(smooth[lane]));
-                        let smooth_lanes = f32x8::from(smooth);
-                        let values = native_sharpness_blend_lanes(
-                            f32x8::from(original),
-                            smooth_lanes,
-                            alpha,
-                        )
-                        .to_array();
+                        let values =
+                            native_sharpness_blend_lanes(f32x8::from(original), smooth, alpha)
+                                .to_array();
                         for (lane, value) in values.into_iter().enumerate().take(active) {
                             row[(x + lane) * channels + channel] =
                                 native_sharpness_blend_result(value);
@@ -13595,7 +13652,7 @@ fn native_sharpness_filter_blend(
     };
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
+    simd_rows_mut_serial!(
         output,
         row_stride,
         height,
@@ -13641,6 +13698,41 @@ fn native_sharpness_blend_lanes(original: f32x8, smooth: f32x8, alpha: f32) -> f
             alpha[lane].mul_add(delta[lane], smooth[lane])
         }))
     }
+}
+
+/// Blend grouped byte lanes with exact integer forms for common binary factors.
+/// For 0.5, 1.5, and 2.0 the reference FMA is exact on byte-valued inputs; the
+/// integer forms preserve its clamp and truncation while avoiding float lanes.
+#[inline]
+fn native_sharpness_blend_integer_block(original: [u8; 8], smooth: [u8; 8], alpha: f32) -> [u8; 8] {
+    if alpha == 0.0 {
+        return smooth;
+    }
+    let original = i16x8::new(original.map(i16::from));
+    let smooth_lanes = i16x8::new(smooth.map(i16::from));
+    let blended = if alpha == 0.5 {
+        (original + smooth_lanes) >> 1u32
+    } else if alpha == 1.5 {
+        ((original * i16x8::splat(3) - smooth_lanes)
+            .max(i16x8::splat(0))
+            .min(i16x8::splat(510)))
+            >> 1u32
+    } else if alpha == 2.0 {
+        (original * i16x8::splat(2) - smooth_lanes)
+            .max(i16x8::splat(0))
+            .min(i16x8::splat(255))
+    } else {
+        return native_sharpness_blend_lanes(
+            f32x8::from(original.to_array().map(f32::from)),
+            f32x8::from(smooth_lanes.to_array().map(f32::from)),
+            alpha,
+        )
+        .to_array()
+        .map(native_sharpness_blend_result);
+    };
+    blended
+        .to_array()
+        .map(|value| u8::try_from(value).unwrap_or_default())
 }
 
 #[inline]
@@ -14946,7 +15038,7 @@ fn native_filter_3x3_pixel_block_integer(
     y: usize,
     x_start: usize,
     active_bytes: usize,
-) -> f32x8 {
+) -> [u8; 8] {
     debug_assert!((1..=4).contains(&channels));
     debug_assert!(active_bytes <= 8);
     debug_assert!(x_start >= 1 && x_start + active_bytes.div_ceil(channels) < width);
@@ -14981,7 +15073,102 @@ fn native_filter_3x3_pixel_block_integer(
         + above_middle
         + above_right;
     let rounded = (weighted + u16x8::splat(6)).to_array();
+    rounded.map(|value| (value / 13) as u8)
+}
+
+/// Evaluate one native channel across eight adjacent pixels using the exact
+/// integer SMOOTH kernel. This avoids nine floating-point vector gathers for
+/// L, LA, RGBA, and CMYK while preserving their distinct active-channel rules.
+#[inline]
+fn native_filter_3x3_channel_block_integer(
+    raw: &[u8],
+    width: usize,
+    channels: usize,
+    channel: usize,
+    y: usize,
+    x_start: usize,
+    active_pixels: usize,
+) -> f32x8 {
+    debug_assert!((1..=4).contains(&channels));
+    debug_assert!(channel < channels);
+    debug_assert!((1..=8).contains(&active_pixels));
+    debug_assert!(x_start >= 1 && x_start + active_pixels <= width - 1);
+
+    let row = |dy: isize| {
+        let source_row = (y as isize + dy) as usize * width * channels;
+        let load = |offset: isize| {
+            u16x8::new(std::array::from_fn(|lane| {
+                if lane < active_pixels {
+                    let x = (x_start + lane) as isize + offset;
+                    u16::from(raw[source_row + x as usize * channels + channel])
+                } else {
+                    0
+                }
+            }))
+        };
+        (load(-1), load(0), load(1))
+    };
+
+    let (below_left, below_middle, below_right) = row(1);
+    let (center_left, center_middle, center_right) = row(0);
+    let (above_left, above_middle, above_right) = row(-1);
+    let weighted = below_left
+        + below_middle
+        + below_right
+        + center_left
+        + center_middle * u16x8::splat(5)
+        + center_right
+        + above_left
+        + above_middle
+        + above_right;
+    let rounded = (weighted + u16x8::splat(6)).to_array();
     f32x8::from(std::array::from_fn(|lane| (rounded[lane] / 13) as f32))
+}
+
+/// Load a contiguous sixteen-byte window for eight adjacent L samples, then
+/// shuffle the left, center, and right taps into native vectors. This replaces
+/// 24 scalar byte gathers per row with one contiguous load and three shuffles.
+#[inline]
+fn native_filter_3x3_luma_block_integer(
+    raw: &[u8],
+    width: usize,
+    y: usize,
+    x_start: usize,
+) -> Option<f32x8> {
+    const LEFT: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0];
+    const CENTER: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0];
+    const RIGHT: [u8; 16] = [2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    if width < 3 || x_start < 1 || x_start + 15 > width {
+        return None;
+    }
+    let load_row = |row: usize| -> Option<(u16x8, u16x8, u16x8)> {
+        let start = row.checked_mul(width)?.checked_add(x_start - 1)?;
+        let window: [u8; 16] = raw.get(start..start.checked_add(16)?)?.try_into().ok()?;
+        let window = u8x16::new(window);
+        Some((
+            u16x8::from_u8x16_low(window.swizzle_relaxed(u8x16::new(LEFT))),
+            u16x8::from_u8x16_low(window.swizzle_relaxed(u8x16::new(CENTER))),
+            u16x8::from_u8x16_low(window.swizzle_relaxed(u8x16::new(RIGHT))),
+        ))
+    };
+
+    let (below_left, below_middle, below_right) = load_row(y + 1)?;
+    let (center_left, center_middle, center_right) = load_row(y)?;
+    let (above_left, above_middle, above_right) = load_row(y - 1)?;
+    let weighted = below_left
+        + below_middle
+        + below_right
+        + center_left
+        + center_middle * u16x8::splat(5)
+        + center_right
+        + above_left
+        + above_middle
+        + above_right;
+    let rounded = (weighted + u16x8::splat(6)).to_array();
+    Some(f32x8::from(std::array::from_fn(|lane| {
+        (rounded[lane] / 13) as f32
+    })))
 }
 
 /// Evaluate contiguous interleaved RGB channel bytes with the exact rounded
@@ -15210,7 +15397,7 @@ fn native_filter_3x3_rgb_byte_stream(
     };
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+    simd_rows_mut_serial!(out, row_stride, height, |_row_start, _row_end, y, row| {
         let y = y as usize;
         if (1..height - 1).contains(&y) {
             apply_row(y, row);
@@ -15318,7 +15505,7 @@ fn native_filter_3x3_rows_active(
     };
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+    simd_rows_mut_serial!(out, row_stride, height, |_row_start, _row_end, y, row| {
         let y = y as usize;
         if (1..height - 1).contains(&y) {
             apply_row(y, row);
@@ -15517,7 +15704,7 @@ fn native_filter_5x5_rows(
     };
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+    simd_rows_mut_serial!(out, row_stride, height, |_row_start, _row_end, y, row| {
         let y = y as usize;
         if (2..height - 2).contains(&y) {
             apply_row(y, row);
@@ -15608,7 +15795,7 @@ fn native_filter_3x3_i32_rows(
     };
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+    simd_rows_mut_serial!(out, row_stride, height, |_row_start, _row_end, y, row| {
         let y = y as usize;
         if (1..height - 1).contains(&y) {
             apply_row(y, row);
@@ -15698,7 +15885,7 @@ fn native_filter_5x5_i32_rows(
     };
 
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+    simd_rows_mut_serial!(out, row_stride, height, |_row_start, _row_end, y, row| {
         let y = y as usize;
         if (2..height - 2).contains(&y) {
             apply_row(y, row);
@@ -16247,7 +16434,7 @@ fn rank_filter_vertical_scalar(
 
 /// Process one row of the horizontal native-byte extrema pass.  The source
 /// row is immutable while the destination row is exclusively owned by the
-/// caller, which lets the outer pass use `par_rows_mut!` without changing the
+/// caller, which lets the outer pass use row-exclusive output without changing the
 /// per-pixel clamp or vector reduction order.
 fn rank_filter_horizontal_vectorized_row(
     raw: &[u8],
@@ -16316,8 +16503,8 @@ fn rank_filter_horizontal_vectorized_row(
 /// Horizontal native-byte extrema pass. It intentionally keeps all source
 /// samples in their Pillow layout and vectorizes comparisons across output
 /// pixels, while clamped edge coordinates remain scalar control. Rows are
-/// independent and therefore run through the repository's audited row
-/// parallelism macro when the crate's parallel feature is enabled.
+/// independent and retain separate row writes. The SIMD adapter traverses
+/// them serially even when the Parallel CPU feature is enabled.
 fn rank_filter_horizontal_vectorized(
     raw: &[u8],
     horizontal: &mut [u8],
@@ -16329,7 +16516,7 @@ fn rank_filter_horizontal_vectorized(
 ) -> (u64, u64) {
     let row_stride = width * channels;
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
+    simd_rows_mut_serial!(
         horizontal,
         row_stride,
         height,
@@ -16439,7 +16626,7 @@ fn rank_filter_vertical_vectorized(
 ) -> (u64, u64) {
     let row_stride = width * channels;
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
+    simd_rows_mut_serial!(
         output,
         row_stride,
         height,
@@ -16810,7 +16997,7 @@ fn simd_order_statistic_filter(
     let rank = rank as usize;
     let mut output = vec![0u8; expected_len];
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
+    simd_rows_mut_serial!(
         &mut output,
         row_stride,
         height,
@@ -17052,7 +17239,7 @@ fn simd_float_order_statistic_filter(
     let mut output = raw.to_vec();
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             width * 4,
             height,
@@ -17386,7 +17573,7 @@ fn simd_blur_rows(
 
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             destination,
             row_stride,
             height,
@@ -17471,7 +17658,7 @@ fn simd_transpose_interleaved_rows(
 
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             destination,
             destination_row_stride,
             width,
@@ -17580,7 +17767,7 @@ fn simd_luma_vertical_radius_one_rows(
 
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= SIMD_BLUR_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(destination, width, height, |row_start, row_end, y, row| {
+        simd_rows_mut_serial!(destination, width, height, |row_start, row_end, y, row| {
             let _ = (row_start, row_end);
             simd_luma_vertical_radius_one_row(
                 source,
@@ -18285,11 +18472,9 @@ fn native_reduce_bytes(
         output_width % SIMD_REDUCE_LANES
     };
 
-    // Reduction output rows are independent, but a Rayon task per tiny row
-    // costs more than the scalar address setup around this SIMD kernel. Keep
-    // the same vector arithmetic and exact source gathers while using a
-    // serial row loop below the small-output threshold; large reductions still
-    // use the shared row-parallel execution policy.
+    // Reduction output rows are independent. Keep their SIMD arithmetic and
+    // exact source gathers while traversing rows serially; Parallel CPU is a
+    // distinct backend and does not change the SIMD scheduler.
     let process_row = |y: usize, row: &mut [u8]| -> bool {
         let vector_limit = if output_width < SIMD_REDUCE_LANES {
             output_width
@@ -18340,7 +18525,7 @@ fn native_reduce_bytes(
     #[cfg(feature = "parallel")]
     if output_pixels >= SIMD_REDUCE_PARALLEL_PIXEL_THRESHOLD {
         let failed = AtomicBool::new(false);
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             output_width * channels,
             output_height,
@@ -18805,8 +18990,8 @@ fn native_cover_dimensions(
     }
 }
 
-// Aspect-resize operations are often used on thumbnail-sized images. Rayon
-// row dispatch can cost more than the SIMD work for fewer than 32 × 32 pixels.
+// Keep feature-gated aspect-resize block paths limited to images with enough
+// pixels to amortize their setup; SIMD row scheduling remains serial.
 const SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 
 /// Compute the source box used by `ImageOps.fit` without touching pixels.
@@ -21747,12 +21932,12 @@ fn simd_resize_convolution_into(
         }
     } else {
         // Horizontal rows are independent once the coefficient table is
-        // built.  Keep the same per-row tap order, but let Rayon schedule
-        // rows across cores; this is the same ownership proof used by the
-        // CPU resampler and avoids the former single-thread SIMD bottleneck
+        // built. Keep the same per-row tap order and row-exclusive writes;
+        // the SIMD path remains serial while Parallel CPU is selected through
+        // the CPU backend.
         // on large downscales.
         let failed = AtomicBool::new(false);
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut intermediate,
             intermediate_stride,
             source_height,
@@ -21857,7 +22042,7 @@ fn simd_resize_convolution_into(
         }
     } else {
         let failed = AtomicBool::new(false);
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             output,
             output_stride,
             output_height,
@@ -21984,8 +22169,8 @@ fn simd_resize_convolution_boxed(
     premultiplied_alpha: bool,
     parallel_pixel_threshold: usize,
 ) -> Result<DynamicImage, PilError> {
-    // Non-parallel builds still use this helper; the threshold only controls
-    // the optional Rayon row dispatch below.
+    // Every SIMD build uses the same serial row scheduler. The threshold
+    // selects the vectorized route only when the Parallel CPU feature exists.
     let _ = parallel_pixel_threshold;
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Fit"))?;
     let source_height = usize::try_from(img.height()).map_err(|_| simd_unsupported("Fit"))?;
@@ -22098,7 +22283,7 @@ fn simd_resize_convolution_boxed(
             #[cfg(feature = "parallel")]
             {
                 let failed = AtomicBool::new(false);
-                crate::par_rows_mut!(
+                simd_rows_mut_serial!(
                     &mut intermediate,
                     intermediate_stride,
                     intermediate_rows,
@@ -22224,7 +22409,7 @@ fn simd_resize_convolution_boxed(
             #[cfg(feature = "parallel")]
             {
                 let failed = AtomicBool::new(false);
-                crate::par_rows_mut!(
+                simd_rows_mut_serial!(
                     &mut output,
                     output_stride,
                     output_height,
@@ -27547,7 +27732,7 @@ fn simd_put_alpha_rgb_constant_bytes(
         let source_stride = width.checked_mul(3)?;
         let output_stride = width.checked_mul(4)?;
         let mut output = vec![alpha; output_length];
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             output_stride,
             height,
@@ -27774,7 +27959,7 @@ pub fn simd_put_alpha_data(
             let row_stride = width
                 .checked_mul(4)
                 .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData row overflow".into()))?;
-            crate::par_rows_mut!(
+            simd_rows_mut_serial!(
                 output.as_mut(),
                 row_stride,
                 height,
@@ -27812,7 +27997,7 @@ pub fn simd_put_alpha_data(
             .checked_mul(4)
             .ok_or_else(|| PilError::ValueError("SIMD PutAlphaData output overflow".into()))?;
         let mut output = vec![0u8; output_length];
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             output_stride,
             height,
@@ -28133,7 +28318,7 @@ fn simd_alpha_composite_native(
     if output.len() >= 1024 * 1024 {
         let tile_bytes = 64 * 1024;
         let tiles = output.len().div_ceil(tile_bytes);
-        crate::par_rows_mut!(
+        simd_rows_mut_serial!(
             &mut output,
             tile_bytes,
             tiles,
@@ -28498,6 +28683,65 @@ mod tests {
                     expected.as_bytes(),
                     "{width}x{height}, {factor}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn native_sharpness_integer_channels_match_cpu_for_all_byte_modes() {
+        for (mode, channels) in [
+            ("L", 1usize),
+            ("LA", 2),
+            ("RGB", 3),
+            ("RGBA", 4),
+            ("RGBX", 4),
+            ("CMYK", 4),
+        ] {
+            for (width, height) in [
+                (3, 3),
+                (4, 5),
+                (5, 7),
+                (9, 4),
+                (10, 9),
+                (17, 6),
+                (18, 5),
+                (25, 8),
+                (33, 4),
+            ] {
+                let pixels = width as usize * height as usize;
+                let bytes = (0..pixels * channels)
+                    .map(|index| (index.wrapping_mul(61).wrapping_add(index / 7 + 23)) as u8)
+                    .collect::<Vec<_>>();
+                let image = match channels {
+                    1 => {
+                        DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, bytes).unwrap())
+                    }
+                    2 => DynamicImage::ImageLumaA8(
+                        GrayAlphaImage::from_raw(width, height, bytes).unwrap(),
+                    ),
+                    3 => DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, bytes).unwrap()),
+                    4 => {
+                        DynamicImage::ImageRgba8(RgbaImage::from_raw(width, height, bytes).unwrap())
+                    }
+                    _ => unreachable!(),
+                };
+                for factor in [0.0, 0.5, 1.5, 2.0, f64::MAX] {
+                    let operation = PipelineOp::Sharpness { factor };
+                    let expected =
+                        crate::compute::registry::execute_cpu(&operation, &image, Some(mode))
+                            .unwrap();
+                    let actual = super::simd_sharpness(&image, &operation, Some(mode)).unwrap();
+                    assert_eq!(
+                        actual.color(),
+                        expected.color(),
+                        "{mode} {width}x{height} {factor}"
+                    );
+                    assert_eq!(
+                        actual.as_bytes(),
+                        expected.as_bytes(),
+                        "{mode} {width}x{height} {factor}"
+                    );
+                }
             }
         }
     }

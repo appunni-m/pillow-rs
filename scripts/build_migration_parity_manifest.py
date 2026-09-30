@@ -1264,7 +1264,7 @@ def build_manifest() -> dict[str, Any]:
                 "id": f"python-{backend}",
                 "target_id": TARGET_ID,
                 "backend": backend,
-                "features": ["all-features"],
+                "features": ["default"],
             }
             for backend in BENCHMARK_BACKENDS
         ],

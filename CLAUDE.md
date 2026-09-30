@@ -10,6 +10,10 @@
   delegation. Keep image algorithms in core. The public Python namespace is
   `PIL`; `pillow_rs` contains internal binding modules.
 - Draw in the image's native pixel format. Mode conversion must be explicit.
+- Keep Rayon behind the default-off `parallel` feature. Report its work as
+  Parallel CPU, separately from serial CPU and single-thread SIMD. Do not run
+  Rayon work in SIMD adapters or GPU dispatches, and do not count Rayon
+  scheduling as SIMD.
 - fontdone and image-slash-star are separate repositories. Follow their own
   instructions when a task includes them. `build/fontdone-src/` may contain
   active standalone work; preserve it and do not reset it to `FONTDONE_REF`.

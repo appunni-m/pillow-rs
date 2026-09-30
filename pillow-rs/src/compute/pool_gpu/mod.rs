@@ -5154,22 +5154,8 @@ fn rgb_from_packed_readback(w: u32, h: u32, packed: &[u8]) -> Result<DynamicImag
             }
         }
     };
-    #[cfg(feature = "parallel")]
-    if rgb_dims.total_pixels() >= 256 * 1024 && h > 1 {
-        crate::par_rows_mut!(
-            &mut rgb,
-            rgb_dims.row_stride(),
-            h as usize,
-            |_start, _end, y, row| {
-                unpack_row(row, y as usize);
-            }
-        );
-    } else {
-        for (y, row) in rgb.chunks_exact_mut(rgb_dims.row_stride()).enumerate() {
-            unpack_row(row, y);
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
+    // Keep GPU result materialization independent of the Parallel CPU
+    // feature; the GPU path must not schedule host Rayon work.
     for (y, row) in rgb.chunks_exact_mut(rgb_dims.row_stride()).enumerate() {
         unpack_row(row, y);
     }

@@ -41,8 +41,12 @@ The reference describes arguments, return values, and errors.
 
 The [Cargo manifest](../pillow-rs/Cargo.toml) defines defaults and optional
 features. Codec features select image-slash-star support. `gpu` enables GPU
-infrastructure; it does not make every operation native GPU work. `parallel`
-enables the configured parallel paths.
+infrastructure; it does not make every operation native GPU work. The default
+build keeps Rayon `parallel` disabled; enable it explicitly with
+`--features parallel` only in runs reported as Parallel CPU. Keep those results
+separate from default single-thread SIMD and GPU measurements. The SIMD
+backend keeps row scheduling serial even when `parallel` is enabled, and GPU
+readback never schedules Rayon work.
 
 The [compatibility guide](COMPATIBILITY.md) explains the supported scope.
 GPU availability and acceleration depend on the operation and host.
