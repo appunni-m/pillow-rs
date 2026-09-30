@@ -1,7 +1,7 @@
 # Python recipes
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.2](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.2).**
+**Latest release: [12.2.0-alpha.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.3).**
 <!-- /release:summary -->
 
 These examples use `PIL` after installing pillow-rs in its own environment.
