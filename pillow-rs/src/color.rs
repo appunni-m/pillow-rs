@@ -1235,10 +1235,15 @@ pub fn i_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// The input is RGBA storage interpreted as little-endian `f32` pixels. Each
 /// value is clamped to `0..=255`, truncated to a byte, and broadcast to `R=G=B`.
 pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let rgba = match img {
+        // F mode is already stored as four little-endian bytes per sample.
+        // Borrow that carrier instead of cloning it through `to_rgba8`.
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+    for (op, ip) in out.pixels_mut().zip(rgba.chunks_exact(4)) {
         let val = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
         // PIL: F→X casts float to int via truncation
         let clamped = val.clamp(0.0, 255.0) as u8;
