@@ -30,7 +30,7 @@ use crate::raster::{
 #[cfg(feature = "parallel")]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
-use wide::{f32x4, f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8};
+use wide::{f32x4, f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8, u32x16};
 
 fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
@@ -16411,10 +16411,11 @@ fn simd_transpose_interleaved_rows(
 }
 
 /// Apply one exact native-L vertical radius-one box pass directly in row-major
-/// storage. Each output vector gathers its three integer-window rows and two
-/// fractional-edge rows, then keeps Pillow's 24-bit multiply and byte rounding
-/// intact. This avoids transposing the complete image solely to make columns
-/// contiguous for the generic sliding-line kernel.
+/// storage. Each vector loads 16 contiguous samples from the three
+/// integer-window rows, widens before summation, and keeps Pillow's 24-bit
+/// multiply and byte rounding intact. Fractional-edge rows are loaded only
+/// when their weight is nonzero. This avoids transposing the complete image
+/// solely to make columns contiguous for the generic sliding-line kernel.
 fn simd_luma_vertical_radius_one_row(
     source: &[u8],
     destination: &mut [u8],
@@ -16440,22 +16441,22 @@ fn simd_luma_vertical_radius_one_row(
     let edge_top_base = edge_top * width;
     let edge_bottom_base = edge_bottom * width;
 
-    for x in (0..width).step_by(8) {
-        let count = (width - x).min(8);
-        let mut sums = [0u32; 8];
-        let mut edges = [0u32; 8];
-        for lane in 0..count {
-            let column = x + lane;
-            sums[lane] = u32::from(source[sum_top_base + column])
-                + u32::from(source[y * width + column])
-                + u32::from(source[sum_bottom_base + column]);
-            edges[lane] = u32::from(source[edge_top_base + column])
-                + u32::from(source[edge_bottom_base + column]);
-        }
-
-        let weighted = u32x8::new(sums) * u32x8::splat(whole_weight)
-            + u32x8::new(edges) * u32x8::splat(fractional_weight)
-            + u32x8::splat(SIMD_BOX_BLUR_BIAS);
+    for x in (0..width).step_by(16) {
+        let count = (width - x).min(16);
+        let load = |base: usize| {
+            let mut bytes = [0u8; 16];
+            bytes[..count].copy_from_slice(&source[base + x..base + x + count]);
+            u32x16::from(u16x16::from(u8x16::new(bytes)))
+        };
+        let sum = load(sum_top_base) + load(y * width) + load(sum_bottom_base);
+        let edge = if fractional_weight == 0 {
+            u32x16::splat(0)
+        } else {
+            load(edge_top_base) + load(edge_bottom_base)
+        };
+        let weighted = sum * u32x16::splat(whole_weight)
+            + edge * u32x16::splat(fractional_weight)
+            + u32x16::splat(SIMD_BOX_BLUR_BIAS);
         let values = (weighted >> 24u32).to_array();
         for lane in 0..count {
             destination[x + lane] = values[lane] as u8;
@@ -16473,7 +16474,7 @@ fn simd_luma_vertical_radius_one_rows(
 ) {
     debug_assert_eq!(source.len(), width * height);
     debug_assert_eq!(destination.len(), source.len());
-    let vector_blocks = width.div_ceil(8).saturating_mul(height) as u64;
+    let vector_blocks = width.div_ceil(16).saturating_mul(height) as u64;
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     }
@@ -16626,6 +16627,44 @@ fn simd_pil_box_blur_xy(
 
     let mut work = img.as_bytes().to_vec();
     let mut scratch = dimensions.alloc_buffer();
+    if channels == 1
+        && matches!(img, DynamicImage::ImageLuma8(_))
+        && matches!(mode, None | Some("L"))
+        && passes == 1
+        && radius_x == 1.0
+        && radius_y == 1.0
+    {
+        // Keep the horizontal byte-rounded pass, then gather the three
+        // vertical samples directly from row-major L storage. This avoids
+        // transposing the full image before and after a single vertical pass.
+        simd_blur_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            1,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+        simd_luma_vertical_radius_one_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            vertical_weight,
+            vertical_fractional_weight,
+        );
+        let result = crate::image_utils::raw_bytes_to_image(
+            dimensions.width,
+            dimensions.height,
+            scratch,
+            channels,
+        )?;
+        return Ok(preserve_mode(img, result));
+    }
+
     for _ in 0..passes {
         simd_blur_rows(
             &work,

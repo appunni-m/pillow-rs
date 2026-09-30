@@ -10211,3 +10211,64 @@ bounded, measured question: remove the redundant pre-readback GPU poll and
 measure GPU latency, or improve the CPU RGB-to-RGBA interleave without restoring
 a full RGBA source allocation. Neither experiment is needed to interpret this
 checkpoint. No coverage collection ran.
+
+### Native-L `BoxBlur(1)` material throughput — checkpoint 2026-09-30
+
+The original BoxBlur benchmark input was a uniform black 16 × 16 image. It
+mostly measured identity/dispatch overhead, so it could not rank CPU, SIMD, and
+GPU filter throughput. The new material workload is seeded varied native-L
+noise at 1024 × 768, radius 1, with the full output observed. An additional
+65 × 47 noise parity case exercises odd-width packed words and the final partial
+word. Input generation is deterministic and uses the live Pillow oracle; no
+fixture identity is special-cased in runtime code.
+
+Pillow implements this radius as separately rounded horizontal and vertical
+byte passes. Its fixed-point kernel uses a 24-bit reciprocal and rounding bias
+([Pillow `BoxBlur.c`](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/BoxBlur.c));
+fusing the two axes into one nine-sample average would change output bytes.
+Keep the intermediate horizontal bytes and their rounding observable.
+
+The work was bounded to four attempts. First, the GPU admission path began
+keeping a singleton native-L `BoxBlur(1)` in the existing packed-L two-pass
+shaders. The workload's GPU median fell from the generic RGBA-transport baseline
+of 2.394 ms to 1.003 ms on the repeat; upload and readback fell from 3,145,728
+to 786,432 bytes each, and the mode-conversion count fell from one to zero.
+Second, SIMD used a direct row-major vertical radius-one pass after the existing
+horizontal pass, removing two full-frame transposes; its median fell from the
+baseline 1.136 ms to 0.773 ms. Third, that vertical pass widened 16 contiguous
+bytes to `u32x16`, retained the fixed-point multiply/bias/shift, clamped edge
+rows, and avoided edge-row loads when their fractional weight was zero. This
+cut SIMD latency further to 0.657 ms. Fourth, skipping the terminal GPU poll
+before mapped readback did not improve GPU latency (1.031 ms on that run versus
+1.010 ms immediately before); the code change was removed. The mapped-readback
+poll remains the authoritative completion and health check.
+
+Final focused exact-output parity passed both cases on all three backends:
+CPU `migration-parity-96712a5f577c49afba4f47b80183e503`, strict SIMD
+`migration-parity-71a1222eeed64160bd3aa8463ce1f85f`, and strict GPU
+`migration-parity-47c134924c06442d8f3aa5e1c0534722` (2/2 each, no failures or
+infrastructure errors). The final retained-source benchmark is
+`migration-benchmark-4fd35c1a047649d5ba8363b4c25e85ff`; its correctness gate
+`migration-parity-benchmark-gate-9aaa15389f514d7fa0f2d782984350db` passed all
+three backend executions.
+
+| Final median | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Native-L BoxBlur(1), 1024 × 768 | 1.812 ms | 1.765 ms | 0.657 ms | 1.010 ms |
+| Throughput at concurrency 1 | 552 ops/s | 567 ops/s | 1,521 ops/s | 990 ops/s |
+
+The CPU is only 1.03× faster than Pillow on this material case, SIMD is 2.76×
+faster, and GPU is 1.79× faster than Pillow but 1.54× slower than SIMD by
+latency. All 100 target executions per backend used the requested backend with
+no fallback. GPU reports two dispatches, 786,432 upload bytes, 786,432 readback
+bytes, and zero mode conversions. The native-L GPU route closes most of the
+prior transfer gap, but does not meet the GPU-throughput target. The SIMD path
+also remains below the 5× goal. Do not combine byte-rounded passes or widen the
+SIMD input contract without a new exact-parity proof.
+
+Checkpoint and continue with a better measured operation. The next candidate is
+a material native-RGB `UnsharpMask(radius=2, percent=150, threshold=3)` case:
+the existing standard input is only 16 × 16, while the operation has a blur
+materialization followed by a separate per-channel threshold/blend loop. Build
+the image outside the timed boundary and observe the full output; keep RGB
+native throughout. No coverage collection ran.

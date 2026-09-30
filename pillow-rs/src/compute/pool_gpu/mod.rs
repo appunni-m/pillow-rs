@@ -6397,7 +6397,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
-        packed_luma_gaussian_blur: bool,
+        packed_luma_blur: bool,
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
@@ -6573,34 +6573,37 @@ impl GpuInner {
                 // These internal variants expand one public blur operation
                 // into horizontal and vertical dispatches without a host
                 // materialization between them.
-                let (horizontal, vertical) =
-                    if packed_luma_gaussian_blur && matches!(op, PipelineOp::GaussianBlur { .. }) {
-                        (
-                            self.resolve_pipeline(
-                                "__internal_blur_h_luma_packed",
-                                "box_blur_h_luma_packed.wgsl",
-                                include_str!("shaders/box_blur_h_luma_packed.wgsl"),
-                            )?,
-                            self.resolve_pipeline(
-                                "__internal_blur_v_luma_packed",
-                                "box_blur_v_luma_packed.wgsl",
-                                include_str!("shaders/box_blur_v_luma_packed.wgsl"),
-                            )?,
-                        )
-                    } else {
-                        (
-                            self.resolve_pipeline(
-                                "__internal_blur_h",
-                                "box_blur_h.wgsl",
-                                include_str!("shaders/box_blur_h.wgsl"),
-                            )?,
-                            self.resolve_pipeline(
-                                "__internal_blur_v",
-                                "box_blur_v.wgsl",
-                                include_str!("shaders/box_blur_v.wgsl"),
-                            )?,
-                        )
-                    };
+                let (horizontal, vertical) = if packed_luma_blur
+                    && matches!(
+                        op,
+                        PipelineOp::GaussianBlur { .. } | PipelineOp::BoxBlur { radius: 1 }
+                    ) {
+                    (
+                        self.resolve_pipeline(
+                            "__internal_blur_h_luma_packed",
+                            "box_blur_h_luma_packed.wgsl",
+                            include_str!("shaders/box_blur_h_luma_packed.wgsl"),
+                        )?,
+                        self.resolve_pipeline(
+                            "__internal_blur_v_luma_packed",
+                            "box_blur_v_luma_packed.wgsl",
+                            include_str!("shaders/box_blur_v_luma_packed.wgsl"),
+                        )?,
+                    )
+                } else {
+                    (
+                        self.resolve_pipeline(
+                            "__internal_blur_h",
+                            "box_blur_h.wgsl",
+                            include_str!("shaders/box_blur_h.wgsl"),
+                        )?,
+                        self.resolve_pipeline(
+                            "__internal_blur_v",
+                            "box_blur_v.wgsl",
+                            include_str!("shaders/box_blur_v.wgsl"),
+                        )?,
+                    )
+                };
                 resolved.push(ResolvedPipeline::Blur {
                     horizontal,
                     vertical,
@@ -7707,7 +7710,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
-        packed_luma_gaussian_blur: bool,
+        packed_luma_blur: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_l_input: bool,
@@ -7780,7 +7783,12 @@ impl GpuInner {
                     "histogram_clear.wgsl",
                     include_str!("shaders/histogram_clear.wgsl"),
                 )?
-            } else if packed_luma_gaussian_blur && matches!(op, PipelineOp::GaussianBlur { .. }) {
+            } else if packed_luma_blur
+                && matches!(
+                    op,
+                    PipelineOp::GaussianBlur { .. } | PipelineOp::BoxBlur { radius: 1 }
+                )
+            {
                 self.resolve_pipeline(
                     "__internal_blur_h_luma_packed",
                     "box_blur_h_luma_packed.wgsl",
@@ -8988,7 +8996,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
-        packed_luma_gaussian_blur: bool,
+        packed_luma_blur: bool,
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
@@ -9000,7 +9008,7 @@ impl GpuInner {
             packed_luma_point,
             packed_luma_putdata,
             packed_luma_order_statistic,
-            packed_luma_gaussian_blur,
+            packed_luma_blur,
             native_sharpness_l_input,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
@@ -12212,7 +12220,7 @@ impl GpuInner {
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
-        packed_luma_gaussian_blur: bool,
+        packed_luma_blur: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_l_input: bool,
@@ -12443,7 +12451,7 @@ impl GpuInner {
                 packed_luma_point,
                 packed_luma_putdata,
                 packed_luma_order_statistic,
-                packed_luma_gaussian_blur,
+                packed_luma_blur,
                 native_extract_band,
                 native_grayscale_rgb_input,
                 native_sharpness_l_input,
@@ -12477,7 +12485,7 @@ impl GpuInner {
                 packed_luma_point,
                 packed_luma_putdata,
                 packed_luma_order_statistic,
-                packed_luma_gaussian_blur,
+                packed_luma_blur,
                 native_sharpness_l_input,
                 native_sharpness_la_input,
                 native_sharpness_rgb_input,
@@ -12492,7 +12500,7 @@ impl GpuInner {
                 } else if packed_luma_point
                     || packed_luma_putdata
                     || packed_luma_order_statistic
-                    || packed_luma_gaussian_blur
+                    || packed_luma_blur
                     || native_sharpness_l_input
                     || matches!(
                         ops.last(),
@@ -12700,22 +12708,23 @@ fn gpu_packed_luma_order_statistic_input(
     pixel_count > 0 && pixel_count <= u32::MAX as usize && luma.as_raw().len() == pixel_count
 }
 
-/// Keep a singleton native-L GaussianBlur in four-sample packed storage for
-/// every intermediate box pass. The shader's word-to-pixel arithmetic is
-/// u32, so admission proves the full image index fits before upload.
+/// Keep singleton native-L BoxBlur(1) and GaussianBlur operations in
+/// four-sample packed storage for every intermediate box pass. The shader's
+/// word-to-pixel arithmetic is u32, so admission proves the full image index
+/// fits before upload.
 #[cfg(target_endian = "little")]
-fn gpu_packed_luma_gaussian_blur_input(
+fn gpu_packed_luma_blur_input(
     ops: &[PipelineOp],
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    let [PipelineOp::GaussianBlur { sigma }] = ops else {
-        return false;
+    let supported = match ops {
+        [PipelineOp::GaussianBlur { sigma }] => registry::separable_gaussian_blur_radius(*sigma)
+            .is_some_and(|radius| radius <= MAX_GPU_BLUR_RADIUS),
+        [PipelineOp::BoxBlur { radius: 1 }] => true,
+        _ => false,
     };
-    if !matches!(logical_mode, None | Some("L"))
-        || registry::separable_gaussian_blur_radius(*sigma)
-            .is_none_or(|radius| radius > MAX_GPU_BLUR_RADIUS)
-    {
+    if !supported || !matches!(logical_mode, None | Some("L")) {
         return false;
     }
     let DynamicImage::ImageLuma8(luma) = image else {
@@ -12755,7 +12764,7 @@ fn gpu_packed_luma_order_statistic_input(
 }
 
 #[cfg(not(target_endian = "little"))]
-fn gpu_packed_luma_gaussian_blur_input(
+fn gpu_packed_luma_blur_input(
     _ops: &[PipelineOp],
     _image: &DynamicImage,
     _logical_mode: Option<&str>,
@@ -19407,7 +19416,7 @@ impl GpuPool {
                     if data.len() <= source.as_raw().len())
             );
         let packed_luma_order_statistic = gpu_packed_luma_order_statistic_input(ops, img, mode);
-        let packed_luma_gaussian_blur = gpu_packed_luma_gaussian_blur_input(ops, img, mode);
+        let packed_luma_blur = gpu_packed_luma_blur_input(ops, img, mode);
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -20243,8 +20252,8 @@ impl GpuPool {
                 gpu.device.limits().max_compute_workgroups_per_dimension,
             )
             .is_ok();
-        let packed_luma_gaussian_blur_requested = packed_luma_gaussian_blur;
-        let packed_luma_gaussian_blur = packed_luma_gaussian_blur_requested
+        let packed_luma_blur_requested = packed_luma_blur;
+        let packed_luma_blur = packed_luma_blur_requested
             && plan_packed_luma_dispatch(
                 img.width(),
                 img.height(),
@@ -20263,9 +20272,9 @@ impl GpuPool {
                 "adapter workgroup limit",
             );
         }
-        if packed_luma_gaussian_blur_requested && !packed_luma_gaussian_blur {
+        if packed_luma_blur_requested && !packed_luma_blur {
             gpu_log!(
-                "[GPU] dispatch preflight routed packed-L GaussianBlur to CPU: adapter workgroup limit"
+                "[GPU] dispatch preflight routed packed-L blur to CPU: adapter workgroup limit"
             );
             return self.preflight_failure(
                 ops,
@@ -20678,7 +20687,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_order_statistic
-            || packed_luma_gaussian_blur
+            || packed_luma_blur
         {
             let DynamicImage::ImageLuma8(image) = img else {
                 return Err(PilError::InternalError(
@@ -20741,7 +20750,7 @@ impl GpuPool {
             packed_luma_point,
             packed_luma_putdata,
             packed_luma_order_statistic,
-            packed_luma_gaussian_blur,
+            packed_luma_blur,
             native_extract_band,
             native_grayscale_rgb_input,
             native_sharpness_l_input,
@@ -20839,7 +20848,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_order_statistic
-            || packed_luma_gaussian_blur
+            || packed_luma_blur
             || native_sharpness_l_input
         {
             gpu.readback_to_luma8(final_w, final_h, readback_buffer)?
@@ -20882,7 +20891,7 @@ impl GpuPool {
                 .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))?
         } else if native_sharpness_l_input {
             compact_luma8_transfer_bytes(w, h)?
-        } else if packed_luma_gaussian_blur {
+        } else if packed_luma_blur {
             compact_luma8_transfer_bytes(w, h)?
         } else if native_sharpness_la_input {
             let raw_bytes = CheckedDims::new(w, h, 2)?.total_bytes();
@@ -20921,7 +20930,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_order_statistic
-            || packed_luma_gaussian_blur
+            || packed_luma_blur
             || native_sharpness_l_input
         {
             compact_luma8_transfer_bytes(w, h)?
@@ -20949,7 +20958,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_order_statistic
-            || packed_luma_gaussian_blur
+            || packed_luma_blur
             || native_sharpness_l_input
         {
             compact_luma8_transfer_bytes(final_w, final_h)?
@@ -20960,7 +20969,7 @@ impl GpuPool {
         resource_telemetry.full_frame_copy_count = readback.full_frame_copy_count();
         resource_telemetry.mode_conversion_count = if packed_luma_convert
             || packed_luma_order_statistic
-            || packed_luma_gaussian_blur
+            || packed_luma_blur
             || native_rgb_to_rgba_input
             || native_grayscale_rgb_input
             || native_sharpness_l_input
@@ -20985,7 +20994,7 @@ impl GpuPool {
                     && !packed_luma_point
                     && !packed_luma_putdata
                     && !packed_luma_order_statistic
-                    && !packed_luma_gaussian_blur
+                    && !packed_luma_blur
                     && (native_luma16_convert
                         || native_luma16_paste
                         || !matches!(
@@ -21014,7 +21023,7 @@ impl GpuPool {
             || packed_luma_point
             || packed_luma_putdata
             || packed_luma_order_statistic
-            || packed_luma_gaussian_blur
+            || packed_luma_blur
         {
             return Ok(result);
         }
@@ -26896,51 +26905,86 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn gpu_packed_luma_gaussian_blur_admits_only_exact_native_l_singletons() {
+    fn gpu_packed_luma_blur_admits_only_exact_native_l_singletons() {
         let blur = PipelineOp::GaussianBlur { sigma: 2.0 };
+        let box_blur = PipelineOp::BoxBlur { radius: 1 };
         let luma =
             DynamicImage::ImageLuma8(GrayImage::from_raw(65, 47, vec![37; 65 * 47]).unwrap());
-        assert!(super::gpu_packed_luma_gaussian_blur_input(
+        assert!(super::gpu_packed_luma_blur_input(
             std::slice::from_ref(&blur),
             &luma,
             None
         ));
-        assert!(super::gpu_packed_luma_gaussian_blur_input(
+        assert!(super::gpu_packed_luma_blur_input(
             std::slice::from_ref(&blur),
             &luma,
             Some("L")
         ));
-        assert!(super::gpu_packed_luma_gaussian_blur_input(
+        assert!(super::gpu_packed_luma_blur_input(
             &[PipelineOp::GaussianBlur { sigma: -2.0 }],
             &luma,
             Some("L")
         ));
-        assert!(super::gpu_packed_luma_gaussian_blur_input(
+        assert!(super::gpu_packed_luma_blur_input(
             &[PipelineOp::GaussianBlur { sigma: 0.0 }],
             &luma,
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_gaussian_blur_input(
+        assert!(super::gpu_packed_luma_blur_input(
+            std::slice::from_ref(&box_blur),
+            &luma,
+            None
+        ));
+        assert!(super::gpu_packed_luma_blur_input(
+            std::slice::from_ref(&box_blur),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_blur_input(
+            &[PipelineOp::BoxBlur { radius: 0 }],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_blur_input(
+            &[PipelineOp::BoxBlur { radius: 2 }],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_blur_input(
+            &[PipelineOp::BoxBlurXY {
+                radius_x: 1.0,
+                radius_y: 1.0,
+                passes: 1,
+            }],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_blur_input(
             &[blur.clone(), PipelineOp::Duplicate],
             &luma,
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_gaussian_blur_input(
+        assert!(!super::gpu_packed_luma_blur_input(
+            &[box_blur, PipelineOp::Duplicate],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_blur_input(
             std::slice::from_ref(&blur),
             &luma,
             Some("RGB")
         ));
-        assert!(!super::gpu_packed_luma_gaussian_blur_input(
+        assert!(!super::gpu_packed_luma_blur_input(
             std::slice::from_ref(&blur),
             &DynamicImage::ImageRgb8(RgbImage::from_raw(65, 47, vec![0; 65 * 47 * 3]).unwrap()),
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_gaussian_blur_input(
+        assert!(!super::gpu_packed_luma_blur_input(
             &[PipelineOp::GaussianBlur { sigma: f32::NAN }],
             &luma,
             Some("L")
         ));
-        assert!(!super::gpu_packed_luma_gaussian_blur_input(
+        assert!(!super::gpu_packed_luma_blur_input(
             std::slice::from_ref(&blur),
             &DynamicImage::ImageLuma8(GrayImage::new(0, 1)),
             Some("L")
