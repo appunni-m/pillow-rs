@@ -10028,7 +10028,76 @@ device-resident chaining or a changed materialization boundary, not another
 small shader rewrite. Keep this improvement and checkpoint after three bounded
 attempts; no coverage was run.
 
-The next ranked material case is native-L `ImageFilter.GaussianBlur`,
+### Masked-L Paste CPU/SIMD row-kernel follow-up — checkpoint 2026-09-30
+
+This follow-up targets the same 1024 × 768 masked-L material workload after
+the GPU route was already checkpointed. The additional SIMD work stays in the
+shared native paste adapter and is admitted only for exact L destination,
+source, and nonbinary L-mask layouts. It blends contiguous clipped row spans,
+uses 16-byte then 8-byte vectors with a bounded tail, and parallelizes distinct
+destination rows above the existing 512²-pixel threshold. Source and mask
+rows remain read-only; each worker owns a disjoint destination row. Other mode,
+mask, and storage combinations retain the prior adapter path. Compile-time
+constant vectors also replace runtime splats in the shared blend helpers.
+
+The new positive-offset small-image unit test checks right/bottom clipping, a
+two-byte tail, exact Pillow rounding, and preservation of destination bytes
+outside the overlap. It passed with
+`cargo test --manifest-path pillow-rs/Cargo.toml --all-features --lib
+native_l_masked_paste_rows_keep_positive_clipped_short_tail_exact -- --nocapture`.
+`make fmt clippy` passed; Clippy reported the repository's existing warnings.
+The standard correctness-gated benchmark selected only
+`pil-image-image.paste.masked.materialized.masked-l-noise-1024x768`; its exact
+source runs are `migration-benchmark-c206112606d945759120fa7ae767b52d` and
+`migration-benchmark-b0477ddea44143b2aa3b2535f9f44f90`; their strict parity
+gates are `migration-parity-benchmark-gate-d8c9568e3ef0427e856cf6159224e4b4`
+and `migration-parity-benchmark-gate-d4f7f3af13a84dcfadd979673ad806a1` (CPU,
+SIMD, and GPU each passed 1/1 in both runs). Each target recorded 100 actual
+backend executions with no fallback. The benchmark had five warmups, 20
+iterations × five samples, 100 calls per subject, and concurrency one.
+
+| Median latency, ms | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline `migration-benchmark-5394c127a7d84ee7afb85f04673005d3` | 0.223 | 0.296 | 0.461 | 0.792 |
+| Row-kernel run `migration-benchmark-c206112606d945759120fa7ae767b52d` | 0.173 | 0.279 | 0.205 | 0.786 |
+| Exact-source repeat `migration-benchmark-b0477ddea44143b2aa3b2535f9f44f90` | 0.220 | 0.281 | 0.204 | 0.752 |
+
+The two row-kernel runs put SIMD backend time at 0.158 and 0.157 ms, and
+end-to-end SIMD latency at 0.205 and 0.204 ms. That is about 2.26× faster than
+the earlier SIMD baseline, but still nowhere near 5×. Pillow moved from 0.173
+to 0.220 ms across the two runs, so its comparison is host-sensitive: one run
+puts SIMD 1.18× slower and the repeat 1.08× faster than Pillow. CPU was 1.61×
+slower than Pillow in the first row-kernel run and 1.28× slower on the repeat.
+The final GPU repeat was 3.69× slower than SIMD; this follow-up did not change
+GPU code. GPU recorded one dispatch, zero mode conversions, and 2,359,296 bytes
+uploaded / 786,432 bytes read back. Attribute the SIMD improvement to the
+combined retained candidate, not separately to parallel rows or constant
+vectors. The L CPU, SIMD, and GPU performance goals remain open. No coverage
+collection ran.
+
+A third bounded attempt replaced the 16-byte row blocks' slice-to-array lane
+assembly with `wide`'s unaligned vector loads. The strict benchmark parity gate
+passed, but that candidate did not improve the recorded measurements: SIMD
+backend median moved from 0.158 ms to 0.165 ms, and observed SIMD latency from
+0.205 ms to 0.213 ms. The surrounding subjects also shifted (Pillow 0.173 ms
+to 0.230 ms), so the result is noisy and does not establish a regression or a
+gain. Since the candidate added a cast and showed no backend-level improvement,
+the code was removed. Its run is
+`migration-benchmark-cfb3ee2ddcae4589bb4ffffd6bf22002` with strict parity gate
+`migration-parity-benchmark-gate-4257954d39674f269a1e36c001bff44f`.
+
+This bounded L follow-up is checkpointed; further low-level L blend tuning is
+deferred. The next specific conversion target is masked-L-mask Paste with LA
+destination and source: workload
+`pil-image-image.paste.masked.materialized.masked-la-noise-1024x768`, parity
+case `PIL.Image.Image.paste.nuanced.performance-masked-la-noise-1024x768`.
+The existing GPU gate specializes only L images, leaving LA on the generic
+RGBA upload/packing path. A native LA route should blend both stored bytes
+with the same L mask, preserve the exact `/255` rounding and clipped untouched
+pixels, and add odd-width/negative-offset parity before timing.
+
+At the time of this checkpoint, the next ranked material case was native-L
+`ImageFilter.GaussianBlur`,
 `pil-imagefilter.gaussianblur.material-l-noise-1024x768` at radius 2. Add a
 varied material-size L workload and strict case first; then test one exact-L
 GPU route that preserves the existing three horizontal and three vertical
