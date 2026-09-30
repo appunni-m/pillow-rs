@@ -10541,12 +10541,15 @@ are processed in parallel. The first native LA SIMD measurements were about
 1.1 ms because this format used the generic serial channel adapter; the row
 kernel receipt measured 0.343 ms, and the prior retained receipt measured
 0.364 ms. After correcting compact-route admission before the generic RGBA
-preflights, a new 100-sample-per-subject run measured Pillow/CPU/SIMD/GPU
-medians of 0.762/0.479/0.328/1.385 ms. CPU is 1.59× faster than Pillow and
-SIMD is 2.32× faster, still short of the 5× SIMD goal; GPU is 4.22× slower
-than SIMD by median. Their standard deviations were 0.079/0.124/0.047/0.335 ms
-and p95 values were 0.915/0.618/0.426/2.247 ms. The native row kernel is a
-real SIMD improvement, but the requested campaign targets are not met.
+preflights, the pre-commit 100-sample-per-subject run measured
+Pillow/CPU/SIMD/GPU medians of 0.762/0.479/0.328/1.385 ms. The clean-commit
+rerun measured 0.830/0.575/0.409/1.692 ms, with standard deviations
+0.068/0.059/0.048/0.861 ms and p95 values 0.968/0.681/0.493/4.279 ms. For
+that clean receipt, CPU is 1.45× faster than Pillow and SIMD is 2.03× faster,
+still short of the 5× SIMD goal; GPU is 4.14× slower than SIMD by median. The
+run-to-run spread is material, especially for GPU, so treat these as noisy
+latency evidence. The native row kernel is a real SIMD improvement, but the
+requested campaign targets are not met.
 
 Four bounded follow-ups were tried. Mapping the flat GPU grid as even-width
 rows made two earlier medians look faster, but a later retained-tree result
@@ -10569,12 +10572,15 @@ GPU and SIMD reported their requested backend with no fallback. The focused
 GPU planner filter passed 6 tests and the LA vector-tail test passed. `make
 fmt clippy`, `make docs-lint`, and `make repo-map-update repo-map-check` passed;
 Clippy emitted the repository's existing warning set. The correctness-gated
-standard benchmark receipt is
+pre-commit standard receipt is
 `migration-benchmark-84cf25dd85774523a21085410577258c`; its parity gate
 `migration-parity-benchmark-gate-95bb024ae2134f54a0d93fda414ab0fd` passed all
-three target backends. The GPU was selected 100/100 times, with no fallback.
-This receipt was taken from the pre-commit worktree (`dirty=true`); rerun the
-same gate after checkpointing to record clean-commit evidence. No coverage
+three target backends. The clean-commit receipt is
+`migration-benchmark-bab3147042fc4741899423403d425c38`; its parity gate
+`migration-parity-benchmark-gate-3e191a5795e343569b55239a228ecdf9` also passed
+all three. Both runs selected GPU 100/100 times, with one dispatch per
+operation and no fallback. The clean run used commit
+`9ee73b88ee0b4ea59888df09eed1fac0b7b5f3bb` with `dirty=false`. No coverage
 collection ran.
 
 The final benchmark command was:
@@ -10582,15 +10588,27 @@ The final benchmark command was:
 ```sh
 MIGRATION_BENCHMARK_PROFILE=standard \
 MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-la-noise-1024x768' \
-MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/paste-masked-la-preflight-final.json \
-MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/paste-masked-la-preflight-final-parity.json \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/paste-masked-la-clean-commit.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/paste-masked-la-clean-commit-parity.json \
 make migration-parity-benchmark
 ```
 
 Checkpoint LA Paste here after the native GPU format path, parallel SIMD LA
 rows, three reverted micro-optimizations, and one rejected blend-formula
-experiment. Do not claim parity with the performance goals. Move to the next
-case: masked RGBA `Image.putalpha` with an L mask. It already preserves native
-RGBA storage on all backends, but its SIMD helper still writes each alpha byte
-scalar-by-scalar; first refresh its parity-gated CPU/SIMD/GPU baseline, then
-test a bounded alpha-lane vector store against that sparse-store baseline.
+experiment. Do not claim parity with the performance goals. The next case is
+masked RGB `Image.paste` with an L mask:
+`pil-image-image.paste.masked.materialized.masked-rgb-noise-1024x768` /
+`PIL.Image.Image.paste.nuanced.performance-masked-rgb-noise-1024x768`. It uses
+1024 × 768 RGB destination and source images plus an L mask, pastes at `(2, 2)`
+and observes receiver bytes. CPU and SIMD already blend native RGB bytes; the
+GPU's compact masked-paste route handles only L and LA, so this RGB workload
+uses generic auxiliary-image packing that widens non-RGBA inputs. First take a
+fresh parity-gated CPU/SIMD/GPU baseline and verify actual GPU execution. If
+that confirms the widening path, test a separate RGB byte-stream shader with
+one invocation owning each four-byte output word: RGB pixels cross u32 word
+boundaries, so do not extend the L/LA per-pixel packing assumptions. Add a
+masked RGB negative-offset fixture with an odd output byte length and mask
+values spanning 0, 1, 127, 128, 254, and 255; require exact parity and a
+specialized-dispatch receipt before retaining the route. RGBA `putalpha` has a
+scalar SIMD alpha store, but it is a lower-priority candidate because it
+already keeps RGBA native and does not remove an avoidable conversion.
