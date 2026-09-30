@@ -9289,6 +9289,8 @@
           "PIL.Image.Image.paste.nuanced.native-la-negative-offset-preserves-alpha",
           "PIL.Image.Image.paste.nuanced.native-rgb-negative-offset-crosses-word-boundaries",
           "PIL.Image.Image.paste.nuanced.native-l-masked-negative-offset-word-tail",
+          "PIL.Image.Image.paste.nuanced.native-rgb-masked-negative-offset-byte-tail",
+          "PIL.Image.Image.paste.nuanced.native-rgb-masked-positive-offset-byte-tail",
           "PIL.Image.Image.paste.nuanced.native-la-masked-negative-offset-word-tail",
           "PIL.Image.Image.paste.nuanced.native-la-even-negative-offset-source-tail",
           "pipeline-case.resize.materialized-smoke",

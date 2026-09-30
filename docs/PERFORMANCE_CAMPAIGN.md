@@ -10593,22 +10593,68 @@ MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/paste-masked-la-clean-c
 make migration-parity-benchmark
 ```
 
-Checkpoint LA Paste here after the native GPU format path, parallel SIMD LA
-rows, three reverted micro-optimizations, and one rejected blend-formula
-experiment. Do not claim parity with the performance goals. The next case is
-masked RGB `Image.paste` with an L mask:
-`pil-image-image.paste.masked.materialized.masked-rgb-noise-1024x768` /
-`PIL.Image.Image.paste.nuanced.performance-masked-rgb-noise-1024x768`. It uses
-1024 × 768 RGB destination and source images plus an L mask, pastes at `(2, 2)`
-and observes receiver bytes. CPU and SIMD already blend native RGB bytes; the
-GPU's compact masked-paste route handles only L and LA, so this RGB workload
-uses generic auxiliary-image packing that widens non-RGBA inputs. First take a
-fresh parity-gated CPU/SIMD/GPU baseline and verify actual GPU execution. If
-that confirms the widening path, test a separate RGB byte-stream shader with
-one invocation owning each four-byte output word: RGB pixels cross u32 word
-boundaries, so do not extend the L/LA per-pixel packing assumptions. Add a
-masked RGB negative-offset fixture with an odd output byte length and mask
-values spanning 0, 1, 127, 128, 254, and 255; require exact parity and a
-specialized-dispatch receipt before retaining the route. RGBA `putalpha` has a
-scalar SIMD alpha store, but it is a lower-priority candidate because it
-already keeps RGBA native and does not remove an avoidable conversion.
+### Masked RGB Paste checkpoint
+
+This visit targeted same-mode RGB Paste through an L mask:
+`pil-image-image.paste.masked.materialized.masked-rgb-noise-1024x768` and
+`PIL.Image.Image.paste.nuanced.performance-masked-rgb-noise-1024x768`. The
+1,024 × 768 workload pastes at (2, 2), then observes receiver bytes. Pillow's
+per-channel rule is `(source * mask + destination * (255 - mask) + 127) / 255`.
+
+The clean baseline receipt `migration-benchmark-f8b6548275744a1ba97fd4f110e4febb`
+measured medians of 1.082/0.615/1.499/3.578 ms for Pillow/CPU/SIMD/GPU. CPU
+already beat Pillow; SIMD was 1.39× slower than Pillow and 2.44× slower than
+CPU; GPU was 2.39× slower than Pillow and SIMD. GPU execution was selected
+100/100 times with one dispatch and no fallback, but generic transport widened
+RGB and L-mask inputs through RGBA and recorded one mode conversion.
+
+The SIMD diagnosis was structural: CPU split this large clipped region across
+disjoint rows, while the generic RGB masked SIMD adapter was serial. A native
+RGB/L row kernel retained the exact blend and tail behavior and used the
+existing parallel-area threshold. Its row test covered widths 1–24 with padded
+and scalar tails. In the gated attempt, SIMD moved to 0.532 ms versus 1.499 ms
+before (2.82× faster); CPU was 0.634 ms and Pillow 1.044 ms. The later combined
+native-route run measured SIMD at 0.515 ms, CPU at 0.580 ms, and Pillow at
+1.015 ms. SIMD is about 1.97× faster than Pillow on that run, still below the
+5× goal.
+
+The first GPU attempt extended compact masked-byte Paste to exact RGB/RGB/L
+storage and added `paste_native_masked_rgb.wgsl`. An invocation owns four
+consecutive RGB pixels (twelve bytes) and writes their three aligned words;
+this keeps a unique writer even when pixels and rows cross word boundaries.
+Mask lookup follows the clipped source pixel. Transfers are native RGB plus L,
+padded to u32 boundaries and trimmed on readback. This removed RGBA staging,
+cut upload/readback traffic, and reduced the GPU median from 3.578 to 1.803 ms.
+The receipt reported 5,505,024 upload bytes, 3,145,728 auxiliary bytes,
+2,359,296 readback bytes, zero mode conversions, and GPU execution 100/100
+without fallback. Upload and auxiliary telemetry overlap on this executor;
+do not sum them as separate physical transfers. Despite the near-2× improvement,
+GPU remained about 3.5× slower than SIMD, so its target is unmet.
+
+The route planner rejects mismatched dimensions, unsupported byte layouts,
+static-pixel overflow, combined-binding overflow, buffer-size overflow, and
+workgroup overflow before dispatch. Planner tests cover the 65,535-workgroup
+edge and padded 5 × 3 RGB transfers (45→48 destination/source bytes, 15→16
+mask bytes). The permanent parity fixtures use a 5 × 3 image, negative and
+positive clipping, odd output tails, masks 0/1/127/128/254/255, and explicit
+rounding-boundary samples. A GPU execution test asserts those bytes against CPU,
+one dispatch of `__internal_paste_native_masked_rgb`, no fallback, and zero mode
+conversion.
+
+Final focused parity artifacts passed all three cases on each target backend:
+CPU `migration-parity-4c6cbe7a1b9e4019ab993222b83e23bf`, strict SIMD
+`migration-parity-b6e14d64e85d4e4792a2a3abfcac0892`, and strict GPU
+`migration-parity-ff2f345ba61f453f9d77ce29404a0f19`. The correctness-gated
+native GPU benchmark receipt is `migration-benchmark-bd6ed89b106a4e3e9485e323dd46b91e`,
+with gate `migration-parity-benchmark-gate-ab8ceea8d76c4098bced7f2be52bb38f`.
+Those were dirty-tree diagnostics; rerun the chosen 64-thread shader on its
+clean checkpoint commit before using the benchmark as final evidence.
+
+A 128-thread RGB shader variant did not demonstrate a relative win: GPU/SIMD
+remained about 3.5× apart while all backend medians shifted similarly, so the
+change was reverted. After three bounded attempts, checkpoint the native row
+SIMD kernel and compact GPU route, then move on. CPU meets its target on this
+workload; SIMD's 5× goal and GPU's match-SIMD goal remain blockers. Revisit GPU
+completion/readback and larger-image throughput before further shader arithmetic;
+inspect SIMD code generation and memory throughput before another blend rewrite.
+No coverage collection was run.
