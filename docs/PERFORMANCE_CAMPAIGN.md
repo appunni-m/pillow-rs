@@ -10927,3 +10927,69 @@ same whole-workflow benchmark on the current source first, because Filter3x3
 changed its shared smooth-filter helper. Then test only whether a validated
 factor-1 call can return an independent source copy without the smooth pass
 and blend. No coverage collection ran.
+
+## PIL.ImageEnhance.Sharpness checkpoint — 2026-09-30
+
+Three SIMD attempts retained exact mode parity and improved two material
+formats. Attempt 1 replaced per-channel floating filter gathers with the exact
+integer `[1,1,1; 1,5,1; 1,1,1] / 13` accumulation. The five-workload standard
+benchmark `sharpness-integer-simd-attempt-1.json` passed its correctness gate
+(13/13 selected parity comparisons). On 1024 × 768 L, SIMD fell from 7.410 ms
+to 6.077 ms; LA 520 × 512 fell from 1.497 ms to 1.280 ms. The exact all-mode
+regression covers L, LA, RGB, RGBA, RGBX, and CMYK, widths spanning vector
+blocks and tails, factors 0, 0.5, 1.5, 2, and `f64::MAX`. It also caught and
+fixed RGBX's overflowed-f32 factor path.
+
+Attempt 2 added a contiguous 16-byte L window with fixed shuffles for the
+three horizontal taps. `sharpness-l-shuffle-attempt-2.json` passed 3/3 strict
+CPU/SIMD/GPU comparisons. On the same 1024 × 768 L workload, median latency was
+Pillow 3.988 ms, CPU 2.688 ms, SIMD 3.493 ms, and GPU 1.411 ms. The L SIMD
+path improved 52.9% against the saved serial baseline (7.410 ms), but remains
+30.0% slower than CPU and achieves only 1.14× Pillow throughput.
+
+Attempt 3 added exact integer blend lanes for grouped RGBX at factors 0, 0.5,
+1.5, and 2. Both 1024 × 768 RGBX benchmark runs passed 3/3 strict
+CPU/SIMD/GPU comparisons. Against attempt 1's 24.724 ms SIMD median, the
+repeat measured 19.573 ms (20.8% lower); Pillow was 16.356 ms, CPU 11.111 ms,
+and GPU 2.187 ms in that repeat. The first run was noisier (Pillow 16.975 ms,
+CPU 20.607 ms, SIMD 20.100 ms, GPU 2.372 ms), so use the repeat only as a
+directional comparison. The integer blend is retained because the independent
+repeat returned to the prior CPU/Pillow range and reproduced the SIMD gain.
+
+The material RGB row remains 16.456 ms SIMD versus 13.691 ms Pillow and
+8.232 ms CPU in attempt 1. LA SIMD now beats Pillow but is still slower than
+CPU. RGBX SIMD remains slower than both CPU and Pillow after attempt 3. GPU
+completed one dispatch on each active measured workload and remains faster
+than SIMD; the identity workload is a no-dispatch bypass. The 5× SIMD goal is
+not met, so Sharpness is checkpointed as a remaining SIMD blocker. The runs
+identify source revision `533de8607` with `dirty=true`; their manifest and
+input hashes are recorded in the benchmark artifacts. No coverage collection
+ran.
+
+## Parallel CPU isolation checkpoint — 2026-09-30
+
+Rayon is now an explicit, default-off feature in both the core and Python
+binding. Default benchmark and parity identities name `default`; opt-in Rayon
+results must be identified and reported as Parallel CPU. The SIMD adapters no
+longer call the Rayon row/block macros: feature-gated SIMD rows and block
+collectors retain their vector kernels but traverse serially. GPU readback is
+also serial, so enabling Parallel CPU does not add host Rayon work to GPU.
+
+Validation passed for 48 default SIMD unit tests, 60 SIMD unit tests with
+`parallel` enabled and one test thread, and both default and parallel Python
+binding checks. The Pillow adapter regression cases for CMYK and RGBX fills
+passed 2/2 on CPU. Sharpness's four active L, LA, RGB, and RGBX cases passed
+4/4 on each of CPU, SIMD, and GPU; the SIMD-specific integer-channel tests
+also preserve exact CPU output across those modes and vector tails. Three GPU
+RGB readback unit tests passed. `make fmt clippy`, docs lint/tests/site build,
+fixture validation, and release-tool tests passed. No coverage collection ran.
+
+A full feature-enabled library unit sweep reported five GPU admission or
+backend-selection assertion failures: `cmyk_filtered_rotate_stays_on_exact_host_control`,
+three specialized F resize checks, and
+`typed_luma16_nearest_affine_transform_uses_native_word_path`. The CMYK
+assertion also fails with default features, so it is not caused by the SIMD
+Rayon removal. The four backend receipt assertions compare equal output bytes
+but observe CPU where the test expects GPU; the I;16 case rejects the affine
+exactness proof. They remain investigation items and are not represented as
+passing unit coverage or Pillow parity.

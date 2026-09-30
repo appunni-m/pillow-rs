@@ -300,7 +300,7 @@ def coverage_identity(
                 "dirty": git_dirty(),
                 "runtime": platform.python_version(),
                 "backend": TARGET_BACKEND,
-                "features": ["all-features"],
+                "features": ["default"],
             }
         ],
         "command": command,

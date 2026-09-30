@@ -266,7 +266,7 @@ class BenchmarkIdentityTests(unittest.TestCase):
             "dirty": False,
             "runtime": "CPython 3.12",
             "backend": "cpu",
-            "features": ["all-features"],
+            "features": ["default"],
         }
 
         identities = benchmark_target_identities({"targets": [cpu_identity]})

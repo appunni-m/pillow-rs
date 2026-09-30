@@ -15,6 +15,11 @@ backend limitations in the documentation remain part of its contract.
 - Pin fontdone 2.14.3-alpha.12 to include reused-face charmap metadata fixes.
 - Preserve native CMYK and RGBX fill bytes in the Node/browser WASM parity
   adapter for `ImageOps.expand`.
+- Keep Rayon `parallel` default-off and expose it explicitly through the Python
+  binding; keep SIMD row scheduling and GPU result readback serial even in
+  parallel-enabled builds.
+- Add exact integer SIMD filtering for native Sharpness modes and a contiguous
+  shuffled lane load for L images, preserving CPU parity across modes and tails.
 
 ## Unreleased
 
