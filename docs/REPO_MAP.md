@@ -161,6 +161,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- paste_native_bytes.wgsl
 |   |   |   |       |-- paste_native_masked_l.wgsl
 |   |   |   |       |-- paste_native_masked_la.wgsl
+|   |   |   |       |-- paste_native_masked_pa.wgsl
 |   |   |   |       |-- paste_native_masked_rgb.wgsl
 |   |   |   |       |-- paste_native_rgb_to_rgba.wgsl
 |   |   |   |       |-- point_luma_packed.wgsl
