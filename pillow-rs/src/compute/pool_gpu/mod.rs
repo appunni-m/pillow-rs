@@ -10421,7 +10421,7 @@ impl GpuInner {
         Ok(result)
     }
 
-    /// Execute exact masked L/LA Paste with compact native-band GPU buffers.
+    /// Execute exact masked L/LA/RGB Paste with compact native-band GPU buffers.
     #[cfg(target_endian = "little")]
     fn execute_native_masked_byte_paste(
         &self,
@@ -10448,6 +10448,14 @@ impl GpuInner {
                 (
                     DynamicImage::ImageLumaA8(_),
                     DynamicImage::ImageLumaA8(_),
+                    DynamicImage::ImageLuma8(_)
+                )
+            ),
+            3 => matches!(
+                (destination, source, mask),
+                (
+                    DynamicImage::ImageRgb8(_),
+                    DynamicImage::ImageRgb8(_),
                     DynamicImage::ImageLuma8(_)
                 )
             ),
@@ -10604,6 +10612,11 @@ impl GpuInner {
                 "paste_native_masked_la.wgsl",
                 include_str!("shaders/paste_native_masked_la.wgsl"),
             ),
+            3 => (
+                "__internal_paste_native_masked_rgb",
+                "paste_native_masked_rgb.wgsl",
+                include_str!("shaders/paste_native_masked_rgb.wgsl"),
+            ),
             _ => {
                 return Err(PilError::InternalError(
                     "GPU native masked Paste has an unsupported pixel layout".into(),
@@ -10611,10 +10624,11 @@ impl GpuInner {
             }
         };
         let cached = self.resolve_pipeline(pipeline_variant, shader_file, shader_source)?;
-        let label = if dispatch.bytes_per_pixel == 1 {
-            "gpu_native_masked_l_paste"
-        } else {
-            "gpu_native_masked_la_paste"
+        let label = match dispatch.bytes_per_pixel {
+            1 => "gpu_native_masked_l_paste",
+            2 => "gpu_native_masked_la_paste",
+            3 => "gpu_native_masked_rgb_paste",
+            _ => unreachable!("storage variant validated above"),
         };
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),
@@ -15103,8 +15117,9 @@ struct NativeMaskedBytePasteDispatch {
     workgroups: u32,
 }
 
-/// Plan compact native-byte transport for exact L- or LA-to-same-mode masked
-/// Paste with an L mask. A packed output word owns four L or two LA pixels.
+/// Plan compact native-byte transport for exact L-, LA-, or RGB-to-same-mode
+/// masked Paste with an L mask. RGB invocations own four pixels and emit three
+/// aligned output words, avoiding three separate shader invocations per pixel.
 #[cfg(test)]
 fn plan_gpu_native_masked_l_paste(
     destination_width: u32,
@@ -15143,7 +15158,7 @@ fn plan_gpu_native_masked_byte_paste(
     max_storage_binding_bytes: u32,
     max_buffer_bytes: u64,
 ) -> Option<NativeMaskedBytePasteDispatch> {
-    if !matches!(bytes_per_pixel, 1 | 2) {
+    if !matches!(bytes_per_pixel, 1 | 2 | 3) {
         return None;
     }
     let destination =
@@ -15193,7 +15208,12 @@ fn plan_gpu_native_masked_byte_paste(
     if word_count == 0 {
         return None;
     }
-    let workgroups = word_count.div_ceil(64);
+    let work_items = if bytes_per_pixel == 3 {
+        destination_pixels.div_ceil(4)
+    } else {
+        word_count
+    };
+    let workgroups = work_items.div_ceil(64);
     if workgroups > max_workgroups {
         return None;
     }
@@ -15429,7 +15449,7 @@ fn gpu_native_rgb_to_rgba_paste_layout(
     Some((*x, *y))
 }
 
-/// Admit exact same-mode L or LA Paste with a native L mask. Other logical
+/// Admit exact same-mode L, LA, or RGB Paste with a native L mask. Other logical
 /// modes and mask semantics retain the established generic GPU implementation.
 fn gpu_native_masked_byte_paste_layout(
     op: &PipelineOp,
@@ -15470,6 +15490,13 @@ fn gpu_native_masked_byte_paste_layout(
             DynamicImage::ImageLumaA8(_),
             DynamicImage::ImageLuma8(_),
         ) => 2,
+        (
+            Some("RGB"),
+            "RGB",
+            DynamicImage::ImageRgb8(_),
+            DynamicImage::ImageRgb8(_),
+            DynamicImage::ImageLuma8(_),
+        ) => 3,
         _ => return None,
     };
     let (source_width, source_height) = source.dimensions();
@@ -21704,6 +21731,144 @@ mod tests {
                 1,
                 1,
                 1,
+                4,
+                max_workgroups,
+                u32::MAX,
+                u64::MAX,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn native_masked_rgb_paste_planner_checks_three_byte_words_and_limits() {
+        let max_workgroups = 65_535;
+        let max_pixels = max_workgroups * 64 * 4;
+        let at_limit = plan_gpu_native_masked_byte_paste(
+            max_pixels,
+            1,
+            4,
+            1,
+            4,
+            1,
+            3,
+            max_workgroups,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("last four-pixel RGB workgroup fits the adapter limit");
+        assert_eq!(at_limit.destination_pixels, max_pixels);
+        assert_eq!(at_limit.source_pixels, 4);
+        assert_eq!(at_limit.bytes_per_pixel, 3);
+        assert_eq!(at_limit.destination_bytes, max_pixels as usize * 3);
+        assert_eq!(
+            at_limit.destination_transfer_bytes,
+            u64::from(max_pixels) * 3
+        );
+        assert_eq!(at_limit.word_count, max_workgroups * 64 * 3);
+        assert_eq!(at_limit.workgroups, max_workgroups);
+
+        assert!(
+            plan_gpu_native_masked_byte_paste(
+                max_pixels + 1,
+                1,
+                4,
+                1,
+                4,
+                1,
+                3,
+                max_workgroups,
+                u32::MAX,
+                u64::MAX,
+            )
+            .is_none(),
+            "an extra pixel would exceed the one-dimensional workgroup limit"
+        );
+        assert!(
+            plan_gpu_native_masked_byte_paste(
+                GPU_BUFFER_CAPACITY + 1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                3,
+                u32::MAX,
+                u32::MAX,
+                u64::MAX,
+            )
+            .is_none(),
+            "the native route retains the shared static image pixel cap"
+        );
+
+        let global_limit = plan_gpu_native_masked_byte_paste(
+            GPU_BUFFER_CAPACITY,
+            1,
+            4,
+            1,
+            4,
+            1,
+            3,
+            65_536,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("the global pixel cap remains independently enforced");
+        assert_eq!(global_limit.destination_pixels, GPU_BUFFER_CAPACITY);
+        assert_eq!(global_limit.workgroups, 65_536);
+
+        let odd_pixels = plan_gpu_native_masked_byte_paste(
+            5,
+            3,
+            5,
+            3,
+            5,
+            3,
+            3,
+            max_workgroups,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("odd RGB byte counts use padded native transfers");
+        assert_eq!(odd_pixels.destination_bytes, 45);
+        assert_eq!(odd_pixels.destination_transfer_bytes, 48);
+        assert_eq!(odd_pixels.source_bytes, 45);
+        assert_eq!(odd_pixels.source_transfer_bytes, 48);
+        assert_eq!(odd_pixels.mask_bytes, 15);
+        assert_eq!(odd_pixels.mask_transfer_bytes, 16);
+        assert_eq!(odd_pixels.input_transfer_bytes, 64);
+        assert_eq!(odd_pixels.word_count, 12);
+        assert_eq!(odd_pixels.workgroups, 1);
+
+        assert!(
+            plan_gpu_native_masked_byte_paste(5, 3, 5, 3, 5, 3, 3, max_workgroups, 63, u64::MAX,)
+                .is_none(),
+            "the coalesced RGB source/mask binding needs 64 padded bytes"
+        );
+        assert!(
+            plan_gpu_native_masked_byte_paste(
+                5,
+                3,
+                5,
+                3,
+                4,
+                3,
+                3,
+                max_workgroups,
+                u32::MAX,
+                u64::MAX,
+            )
+            .is_none(),
+            "mask and source geometry must agree"
+        );
+        assert!(
+            plan_gpu_native_masked_byte_paste(
+                0,
+                1,
+                1,
+                1,
+                1,
+                1,
                 3,
                 max_workgroups,
                 u32::MAX,
@@ -21746,6 +21911,114 @@ mod tests {
             56,
             56
         ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn native_masked_rgb_paste_uses_its_shader_and_preserves_byte_tails() {
+        use crate::ops::paste::PasteSource;
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("native masked RGB GPU initialization failed: {error}"),
+        }
+
+        struct RestoreDiagnostics {
+            telemetry: bool,
+            shader_coverage: bool,
+        }
+        impl Drop for RestoreDiagnostics {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.telemetry);
+                Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
+            }
+        }
+        let _restore = RestoreDiagnostics {
+            telemetry: Backend::set_pipeline_telemetry_enabled(true),
+            shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
+        };
+        let _ = Backend::take_gpu_shader_coverage();
+
+        let mut destination_bytes = (0..45)
+            .map(|index| (index * 41 + 19) as u8)
+            .collect::<Vec<_>>();
+        let mut source_bytes = (0..45)
+            .map(|index| (231i32 - index * 17) as u8)
+            .collect::<Vec<_>>();
+        for pixel in [0usize, 1, 7, 8] {
+            destination_bytes[pixel * 3..pixel * 3 + 3].copy_from_slice(&[100, 100, 100]);
+        }
+        for pixel in [0usize, 1, 6, 7] {
+            source_bytes[pixel * 3..pixel * 3 + 3].copy_from_slice(&[101, 99, 100]);
+        }
+        let mut mask_bytes = vec![
+            0, 1, 127, 128, 254, 255, 127, 128, 127, 128, 254, 255, 254, 1, 127,
+        ];
+        mask_bytes[0..2].copy_from_slice(&[127, 128]);
+        let positions = [(-1, -1), (2, 1)];
+        for position in positions {
+            let source = Image::frombytes("RGB", (5, 3), &source_bytes).unwrap();
+            let mask = Image::frombytes("L", (5, 3), &mask_bytes).unwrap();
+            let mut expected_image = Image::frombytes("RGB", (5, 3), &destination_bytes).unwrap();
+            expected_image
+                .paste_at(
+                    PasteSource::Image(Box::new(source.clone())),
+                    Some(position),
+                    Some(&mask),
+                )
+                .unwrap();
+            let expected = expected_image
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU masked RGB Paste reference");
+
+            let mut actual_image = Image::frombytes("RGB", (5, 3), &destination_bytes).unwrap();
+            actual_image
+                .paste_at(
+                    PasteSource::Image(Box::new(source)),
+                    Some(position),
+                    Some(&mask),
+                )
+                .unwrap();
+            let actual = actual_image
+                .use_backend(Backend::Gpu)
+                .tobytes()
+                .expect("native GPU masked RGB Paste");
+            assert_eq!(actual, expected, "masked RGB Paste at {position:?}");
+
+            let receipt = Backend::take_pipeline_telemetry()
+                .expect("native masked RGB Paste must publish a telemetry receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native masked RGB GPU resources");
+            assert_eq!(resources.mode_conversion_count, 0);
+            assert_eq!(resources.upload_bytes, 48 + 48 + 16);
+            assert_eq!(resources.auxiliary_bytes, 48 + 16);
+            assert_eq!(resources.readback_bytes, 48);
+
+            let shader_dispatches = Backend::take_gpu_shader_coverage();
+            assert_eq!(shader_dispatches.len(), 1);
+            assert_eq!(
+                shader_dispatches[0].variant_name,
+                "__internal_paste_native_masked_rgb"
+            );
+            assert_eq!(
+                shader_dispatches[0].shader_file,
+                "paste_native_masked_rgb.wgsl"
+            );
+            assert_eq!(shader_dispatches[0].dispatches, 1);
+            assert_eq!(shader_dispatches[0].workgroups, 1);
+        }
     }
 
     #[test]

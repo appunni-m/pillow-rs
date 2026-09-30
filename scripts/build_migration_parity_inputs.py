@@ -43812,6 +43812,121 @@ def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         }
     )
 
+    # RGB pixels cross packed GPU output words because the native layout has
+    # three bytes per pixel. Exercise that boundary together with negative
+    # clipping and the exact L-mask rounding endpoints.
+    rgb_destination_values = [
+        (index * 41 + 19) % 256 for index in range(width * height * 3)
+    ]
+    rgb_source_values = [
+        (231 - index * 17) % 256 for index in range(width * height * 3)
+    ]
+    rgb_mask_values = [0, 1, 127, 128, 254, 255, 0, 1, 127, 128, 254, 255, 254, 1, 127]
+    # Pin the rounded byte blend on both sides of the half-byte boundary for
+    # the negative and positive offset cases below.
+    for pixel in (0, 1, 7, 8):
+        rgb_destination_values[pixel * 3 : pixel * 3 + 3] = [100, 100, 100]
+    for pixel in (0, 1, 6, 7):
+        rgb_source_values[pixel * 3 : pixel * 3 + 3] = [101, 99, 100]
+    rgb_mask_values[0:2] = [127, 128]
+    rgb_mask_values[6:8] = [127, 128]
+    rgb_destination_raw = bytes(rgb_destination_values)
+    rgb_source_raw = bytes(rgb_source_values)
+    rgb_mask_raw = bytes(rgb_mask_values)
+    rgb_destination_asset = "image-native-rgb-masked-negative-destination-data"
+    rgb_source_asset = "image-native-rgb-masked-negative-source-data"
+    rgb_mask_asset = "image-native-rgb-masked-negative-mask-data"
+    cases.append(
+        {
+            "case_id": f"{target}.paste.nuanced.native-rgb-masked-negative-offset-byte-tail",
+            "surface": target,
+            "operation": "paste",
+            "covers": [f"{target}.paste.behavior.default"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                inline_asset(rgb_destination_asset, rgb_destination_raw),
+                inline_asset(rgb_source_asset, rgb_source_raw),
+                inline_asset(rgb_mask_asset, rgb_mask_raw),
+            ],
+            "steps": [
+                {
+                    "step_id": "setup-image-1",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal([width, height]),
+                        "data": asset_value(rgb_destination_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-im-2",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal([width, height]),
+                        "data": asset_value(rgb_source_asset),
+                    },
+                },
+                {
+                    "step_id": "setup-mask-3",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([width, height]),
+                        "data": asset_value(rgb_mask_asset),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": target,
+                    "operation": "paste",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {
+                        "im": binding("setup-im-2"),
+                        "box": literal([-1, -1]),
+                        "mask": binding("setup-mask-3"),
+                    },
+                },
+                {
+                    "step_id": "observe-receiver",
+                    "surface": target,
+                    "operation": "tobytes",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "observe-receiver"],
+        }
+    )
+
+    # Positive clipping shares the byte/rounding values, but requires the
+    # shader to preserve destination pixels before and after the pasted area.
+    positive_rgb_case = {
+        **cases[-1],
+        "case_id": f"{target}.paste.nuanced.native-rgb-masked-positive-offset-byte-tail",
+        "steps": [
+            {
+                **step,
+                "arguments": {
+                    **step.get("arguments", {}),
+                    **(
+                        {"box": literal([2, 1])}
+                        if step.get("step_id") == "call"
+                        else {}
+                    ),
+                },
+            }
+            for step in cases[-1]["steps"]
+        ],
+    }
+    cases.append(positive_rgb_case)
+
     # Exercise compact LA output packing with a native L mask. Fifteen output
     # pixels leave one padded LA word; the negative offset also clips source
     # and mask coordinates at the top/left while crossing packed row words.
