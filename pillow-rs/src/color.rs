@@ -1212,10 +1212,16 @@ pub fn ycbcr_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// The input is RGBA storage interpreted as little-endian `i32` pixels. Each
 /// value is clamped to `0..=255` and broadcast to `R=G=B`.
 pub fn i_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let rgba = match img {
+        // I mode is already stored as four little-endian bytes per sample.
+        // Borrow that carrier instead of cloning the full frame through the
+        // convenience accessor.
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+    for (op, ip) in out.pixels_mut().zip(rgba.chunks_exact(4)) {
         // I mode packs int32 as RGBA bytes (little-endian)
         let val = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
         let clamped = val.clamp(0, 255) as u8;
