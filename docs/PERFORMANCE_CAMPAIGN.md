@@ -10266,9 +10266,75 @@ prior transfer gap, but does not meet the GPU-throughput target. The SIMD path
 also remains below the 5× goal. Do not combine byte-rounded passes or widen the
 SIMD input contract without a new exact-parity proof.
 
-Checkpoint and continue with a better measured operation. The next candidate is
-a material native-RGB `UnsharpMask(radius=2, percent=150, threshold=3)` case:
-the existing standard input is only 16 × 16, while the operation has a blur
-materialization followed by a separate per-channel threshold/blend loop. Build
-the image outside the timed boundary and observe the full output; keep RGB
-native throughout. No coverage collection ran.
+Checkpoint and continue with a better measured operation. The next candidate
+was a material native-RGB `UnsharpMask(radius=2, percent=150, threshold=3)`;
+its results and the next measured target are recorded below. No coverage
+collection ran.
+
+### Native-RGB `UnsharpMask(2, 150, 3)` — checkpoint 2026-09-30
+
+The standard `UnsharpMask` input was only 16 × 16, so the new benchmark uses
+seeded 1024 × 768 RGB noise, builds the source outside the timed boundary, and
+observes the full output. A 7 × 3 RGB case covers borders and SIMD tails; its
+63-byte image leaves a 15-byte remainder after 16-byte vector blocks. Both
+inputs use Pillow's exact output as the parity oracle.
+
+Four bounded changes were explored. First, `unsharp_mask` stopped deep-copying
+both read-only materialized frames and instead shares their backing storage;
+the output remains a fresh buffer. Second, the RGB 150% SIMD blend processes
+packed bytes directly, because the arithmetic is independent per channel byte
+and does not require RGB-to-RGBA expansion. Third, CPU and GPU-host-side 150%
+blend loops use the exact signed half of `diff * 3`, avoiding the generic
+multiply/divide and nested pixel/channel indexing. Fourth, the SIMD blend uses
+the saturating `narrow_i16x8` pack for final clipping, removing a vector
+compare/select: for byte inputs the adjustment is at most 382, so a wrapped
+decrease reinterprets as an `i16` in `[-382, -1]`, while an increase is at most
+637. The existing exhaustive 256 × 256 byte-pair test and 17-byte tail test
+check this narrowing and the strict threshold rule.
+
+Focused validation passed: `cargo test --manifest-path
+pillow-rs/Cargo.toml --all-features --lib unsharp_mask_150 -- --nocapture`
+(2 tests), `make build-parity`, and strict SIMD parity for both cases
+(`migration-parity-7ec15501afe441afb1cb8354795c259f`, 2/2). The dedicated
+strict CPU, SIMD, and GPU lanes also passed both cases before attempt four
+(`migration-parity-78dc82ba0e2342f3b915a1e96276e7f0`,
+`migration-parity-1fdda973cd534ebb94bf6612df2eddf8`, and
+`migration-parity-78dab49c8eaa489890fc022a275c682c`, 2/2 each). Before attempt
+four,
+the correctness-gated material benchmark `migration-benchmark-12fa233f4f18422f9f64c98e380214c1`
+passed all three backend executions. Its medians were Pillow 7.772 ms, CPU
+6.156 ms, SIMD 5.161 ms, and GPU 3.992 ms. A nearby same-source result
+(`migration-benchmark-31165f4f7206415abfd92799cdf77890`) measured 7.645, 5.574,
+4.623, and 3.857 ms respectively. These runs put CPU at roughly 1.3× Pillow,
+SIMD at 1.5–1.7×, and GPU at about 1.9–2.0×; GPU is about 1.3× faster than
+SIMD. The GPU executed all 100 measured samples without fallback but still
+reported six dispatches, 3,145,728 upload bytes, 3,145,728 readback bytes, and
+one RGB mode conversion.
+
+Attempt four's public SIMD parity passed both cases. Its benchmark gate also
+passed all three target backends, but the timing result
+(`migration-benchmark-29952087d620428892fd4d725aaf3ac1`) is excluded from
+comparisons: concurrent system media analysis raised all four median latencies
+to 13–58 ms, several times the neighboring runs. Therefore the saturating-pack
+change is exact and removes instructions, but its whole-operation latency gain
+has not been established. Keep this run as a contention record, not as a
+performance claim.
+
+The main remaining cost is GaussianBlur: the blend-specific SIMD change cannot
+close the gap to the 5× target while six byte-rounded horizontal/vertical blur
+passes remain the dominant work. Do not combine those passes; Pillow rounds
+each pass independently. A larger GPU follow-up would keep the original RGB
+image resident and fuse the final threshold/blend into the sixth blur pass, but
+that is broader than this checkpoint. No coverage collection ran.
+
+Continue with the largest evidenced native-format gap: GPU `ImageOps.pad` on
+native `L`, workload
+`pil-imageops.pad.materialized.native-l-noise-1024x768-square`, parity case
+`PIL.ImageOps.pad.nuanced.performance-native-l-noise-1024x768-square`. Existing
+parity-gated evidence (`build/migration-parity/perf-all-after-gaussianblur-20260930.json`)
+measures Pillow at 0.280 ms, CPU at 0.087 ms, SIMD at 0.065 ms, and GPU at
+2.353 ms. GPU upload/readback are 3,145,728/4,194,304 bytes for a native-L
+786,432/1,048,576-byte input/output, with one mode conversion and one dispatch.
+The next experiment should keep this singleton L path packed through upload,
+placement, and readback; preserve exact fill bytes and add an odd-width tail
+parity case. CPU/SIMD Pad paths are already native and should remain untouched.

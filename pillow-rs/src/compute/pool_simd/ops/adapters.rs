@@ -10052,6 +10052,65 @@ fn simd_pack_u16x16(value: u16x16) -> u8x16 {
     u8x16::narrow_i16x8(low, high)
 }
 
+/// Apply Pillow's exact 150% UnsharpMask blend to packed native RGB bytes.
+///
+/// At 150%, `diff * percent / 100` is truncating `diff * 3 / 2`. Computing
+/// the magnitude first makes the signed truncation exact with unsigned lanes:
+/// `sign(diff) * floor(abs(diff) * 3 / 2)`. The input is interleaved RGB, but
+/// the operation is independent per byte and therefore needs no channel
+/// conversion or shuffle.
+pub(crate) fn simd_unsharp_blend_rgb_150(
+    original: &[u8],
+    blurred: &[u8],
+    threshold: u8,
+) -> Option<Vec<u8>> {
+    if original.len() != blurred.len() {
+        return None;
+    }
+
+    let mut output = Vec::with_capacity(original.len());
+    let mut original_chunks = original.chunks_exact(16);
+    let mut blurred_chunks = blurred.chunks_exact(16);
+    for (original_chunk, blurred_chunk) in original_chunks.by_ref().zip(blurred_chunks.by_ref()) {
+        let original_lanes = <[u8; 16]>::try_from(original_chunk).ok()?;
+        let blurred_lanes = <[u8; 16]>::try_from(blurred_chunk).ok()?;
+        let original_lanes = u16x16::from(u8x16::new(original_lanes));
+        let blurred_lanes = u16x16::from(u8x16::new(blurred_lanes));
+        let original_is_greater = original_lanes.simd_ge(blurred_lanes);
+        let distance = original_is_greater.select(
+            original_lanes - blurred_lanes,
+            blurred_lanes - original_lanes,
+        );
+        let adjustment = (distance * u16x16::splat(3)) >> 1u32;
+        // Preserve the signed subtraction through the u16 -> i16 reinterpret
+        // in `simd_pack_u16x16`; its saturating narrow clamps both underflow
+        // and overflow to the byte range. The adjustment is at most 382, so
+        // wrapped negative lanes remain within i16's signed range.
+        let sharpened =
+            original_is_greater.select(original_lanes + adjustment, original_lanes - adjustment);
+        let apply = distance.simd_gt(u16x16::splat(u16::from(threshold)));
+        let result = apply.select(sharpened, original_lanes);
+        output.extend_from_slice(&simd_pack_u16x16(result).to_array());
+    }
+
+    for (&original, &blurred) in original_chunks
+        .remainder()
+        .iter()
+        .zip(blurred_chunks.remainder())
+    {
+        let difference = i32::from(original) - i32::from(blurred);
+        let sharpened = if difference.unsigned_abs() > u32::from(threshold) {
+            let adjustment = difference * 150 / 100;
+            (i32::from(original) + adjustment).clamp(0, 255) as u8
+        } else {
+            original
+        };
+        output.push(sharpened);
+    }
+
+    Some(output)
+}
+
 #[inline]
 fn simd_fused_multiply_screen_row(
     left_bytes: &[u8],
@@ -28748,5 +28807,70 @@ mod tests {
         };
         assert_eq!(word_at(10), 0x8000_0000);
         assert_eq!(word_at(14), 0x8000_0000);
+    }
+
+    #[test]
+    fn unsharp_mask_150_blend_matches_scalar_for_every_byte_pair() {
+        use super::simd_unsharp_blend_rgb_150;
+
+        let mut original = Vec::with_capacity(256 * 256);
+        let mut blurred = Vec::with_capacity(256 * 256);
+        for source in 0..=u8::MAX {
+            for smooth in 0..=u8::MAX {
+                original.push(source);
+                blurred.push(smooth);
+            }
+        }
+
+        for threshold in [0, 3, u8::MAX] {
+            let expected: Vec<u8> = original
+                .iter()
+                .zip(&blurred)
+                .map(|(&source, &smooth)| {
+                    let difference = i32::from(source) - i32::from(smooth);
+                    if difference.unsigned_abs() > u32::from(threshold) {
+                        (i32::from(source) + difference * 150 / 100).clamp(0, 255) as u8
+                    } else {
+                        source
+                    }
+                })
+                .collect();
+
+            assert_eq!(
+                simd_unsharp_blend_rgb_150(&original, &blurred, threshold)
+                    .expect("matching byte buffers use the exact SIMD blend"),
+                expected,
+                "threshold={threshold}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsharp_mask_150_blend_handles_scalar_tail_and_mismatched_buffers() {
+        use super::simd_unsharp_blend_rgb_150;
+
+        let original = [
+            0, 1, 2, 3, 128, 254, 255, 100, 101, 200, 10, 11, 12, 250, 7, 9, 16,
+        ];
+        let blurred = [
+            255, 255, 255, 0, 127, 255, 0, 105, 96, 190, 20, 8, 9, 0, 10, 11, 20,
+        ];
+        let expected: Vec<u8> = original
+            .iter()
+            .zip(blurred)
+            .map(|(&source, smooth)| {
+                let difference = i32::from(source) - i32::from(smooth);
+                if difference.unsigned_abs() > 3 {
+                    (i32::from(source) + difference * 150 / 100).clamp(0, 255) as u8
+                } else {
+                    source
+                }
+            })
+            .collect();
+        assert_eq!(
+            simd_unsharp_blend_rgb_150(&original, &blurred, 3),
+            Some(expected)
+        );
+        assert!(simd_unsharp_blend_rgb_150(&original, &blurred[..16], 3).is_none());
     }
 }
