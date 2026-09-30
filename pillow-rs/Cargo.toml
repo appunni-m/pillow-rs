@@ -11,6 +11,8 @@ description = "Pure Rust image processing — Pillow reimplementation"
 readme = "../README.md"
 keywords = ["image", "pillow", "graphics", "gpu"]
 categories = ["multimedia::images"]
+# The repository parity corpus is test evidence, not part of the published crate.
+exclude = ["tests/fixtures/**"]
 
 [lib]
 name = "pillow_rs"
