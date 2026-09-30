@@ -44,9 +44,25 @@ where
     P: Pixel,
 {
     let (width, height) = image.dimensions();
-    ImageBuffer::from_fn(width, height, |x, y| {
-        *image.get_pixel(x, height.saturating_sub(1).saturating_sub(y))
-    })
+    let source = image.as_raw();
+    if height == 0 {
+        return image.clone();
+    }
+    let row_len = source.len() / height as usize;
+    if row_len == 0 {
+        return image.clone();
+    }
+
+    // A vertical flip changes only row order. Copy complete native sample
+    // spans so packed RGB and typed 16-bit/float pixels never go through
+    // per-pixel accessors or a color conversion. Growing from capacity also
+    // avoids zero-initializing bytes that are immediately overwritten.
+    let mut output = Vec::with_capacity(source.len());
+    for row in source.chunks_exact(row_len).rev() {
+        output.extend_from_slice(row);
+    }
+    ImageBuffer::from_raw(width, height, output)
+        .expect("vertical flip preserves the source sample count")
 }
 
 fn rotate_clockwise<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> ImageBuffer<P, Vec<P::Subpixel>>
@@ -610,30 +626,10 @@ impl DynamicImage {
     #[must_use]
     pub fn flipv(&self) -> DynamicImage {
         match self {
-            DynamicImage::ImageLuma8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(x, h.saturating_sub(1).saturating_sub(y))
-                }))
-            }
-            DynamicImage::ImageLumaA8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(x, h.saturating_sub(1).saturating_sub(y))
-                }))
-            }
-            DynamicImage::ImageRgb8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(x, h.saturating_sub(1).saturating_sub(y))
-                }))
-            }
-            DynamicImage::ImageRgba8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(x, h.saturating_sub(1).saturating_sub(y))
-                }))
-            }
+            DynamicImage::ImageLuma8(p) => DynamicImage::ImageLuma8(flip_vertical(p)),
+            DynamicImage::ImageLumaA8(p) => DynamicImage::ImageLumaA8(flip_vertical(p)),
+            DynamicImage::ImageRgb8(p) => DynamicImage::ImageRgb8(flip_vertical(p)),
+            DynamicImage::ImageRgba8(p) => DynamicImage::ImageRgba8(flip_vertical(p)),
             DynamicImage::ImageLuma16(p) => DynamicImage::ImageLuma16(flip_vertical(p)),
             DynamicImage::ImageLumaA16(p) => DynamicImage::ImageLumaA16(flip_vertical(p)),
             DynamicImage::ImageRgb16(p) => DynamicImage::ImageRgb16(flip_vertical(p)),

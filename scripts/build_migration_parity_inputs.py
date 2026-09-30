@@ -133,6 +133,10 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-image-image.alpha-composite.standard": "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
     "pil-image-image.frombytes.standard": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
     "pil-image-image.getchannel.standard": "PIL.Image.Image.getchannel.nuanced.performance-rgb-16x16",
+    "pil-imageops.flip.standard": (
+        "PIL.ImageOps.flip.nuanced."
+        "performance-material-rgb-noise-1024x768"
+    ),
     "pil-image-image.reduce.standard": (
         "PIL.Image.Image.reduce.nuanced."
         "performance-material-rgb-noise-1024x768-factor-3x5"
@@ -30207,6 +30211,39 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "noise-fill",
+            "seed": 20261008,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "observe_result": "tobytes",
+        },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "flip",
+                "requirement_suffix": "performance.standard",
+                "name": f"performance-native-{label}-1024x768",
+                "mode": mode,
+                "size": [1024, 768],
+                "edge": edge,
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                "observe_result": "tobytes",
+                **({"seed": seed} if seed is not None else {}),
+                **({"pixel": pixel} if pixel is not None else {}),
+            }
+            for label, mode, edge, seed, pixel in (
+                ("mode1", "1", "uniform-fill", None, 1),
+                ("l", "L", "noise-fill", 20261101, None),
+                ("pa", "PA", "noise-fill", 20261102, None),
+                ("rgba", "RGBA", "noise-fill", 20261103, None),
+            )
+        ),
+        {
+            "surface": "PIL.ImageOps",
             "operation": "posterize",
             "requirement_suffix": "parameter.bits",
             "name": "materialized-rgb",
@@ -40688,6 +40725,19 @@ def build_nuanced_cases(
         + tuple(simd_campaign_brightness_specs)
         + tuple(putdata_bytes_campaign_specs)
     )
+    specs += (
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-imageops-flip-native-mode1",
+            "mode": "1",
+            "size": [5, 3],
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+            "observe_result": "tobytes",
+        },
+    )
 
     specs += tuple(
         {
@@ -50994,6 +51044,58 @@ def build_inputs(
                         "weight": 1,
                     }
                 )
+            if workload_id == "pil-imageops.flip.standard":
+                flip_case_id = (
+                    "PIL.ImageOps.flip.nuanced."
+                    "performance-material-rgb-noise-1024x768"
+                )
+                flip_case = all_cases_by_id[flip_case_id]
+                flip_workload = copy.deepcopy(workloads[-1])
+                flip_workload["workload_id"] = (
+                    "pil-imageops.flip.materialized-rgb-noise-1024x768"
+                )
+                flip_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": flip_case_id,
+                }
+                flip_workload["measurement"]["boundary"] = "observed_steps"
+                flip_workload["measurement"]["step_ids"] = [
+                    "call",
+                    "observe-result",
+                ]
+                flip_workload["context"] = _workflow_benchmark_context(
+                    flip_case,
+                    variant="materialized-rgb-noise-1024x768",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(flip_workload)
+                members.append(
+                    {"workload_id": flip_workload["workload_id"], "weight": 1}
+                )
+                for label in ("mode1", "l", "pa", "rgba"):
+                    mode_case_id = (
+                        f"PIL.ImageOps.flip.nuanced.performance-native-{label}-1024x768"
+                    )
+                    mode_case = all_cases_by_id[mode_case_id]
+                    mode_workload = copy.deepcopy(flip_workload)
+                    mode_workload["workload_id"] = (
+                        f"pil-imageops.flip.native-{label}-1024x768"
+                    )
+                    mode_workload["input"] = {
+                        "kind": "parity_case",
+                        "case_id": mode_case_id,
+                    }
+                    mode_workload["context"] = _workflow_benchmark_context(
+                        mode_case,
+                        variant=f"native-{label}-1024x768",
+                        surface=surface_id,
+                        operation=operation["id"],
+                    )
+                    workloads.append(mode_workload)
+                    members.append(
+                        {"workload_id": mode_workload["workload_id"], "weight": 1}
+                    )
             if workload_id == "pil-imageops.mirror.standard":
                 mirror_case_id = (
                     "PIL.ImageOps.mirror.nuanced."

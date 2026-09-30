@@ -3917,6 +3917,120 @@ struct PackedRgbTransposeLayout {
 }
 
 #[cfg(target_endian = "little")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NativeByteFlipDispatch {
+    row_bytes: usize,
+    words_per_row: u32,
+    word_count: u32,
+    transfer_bytes: u64,
+    groups_x: u32,
+    groups_y: u32,
+}
+
+#[cfg(target_endian = "little")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeFlipFormat {
+    Mode1,
+    L,
+    Palette,
+    LA,
+    PA,
+    RGB,
+    RGBA,
+}
+
+#[cfg(target_endian = "little")]
+impl NativeFlipFormat {
+    fn channels(self) -> u8 {
+        match self {
+            Self::Mode1 | Self::L | Self::Palette => 1,
+            Self::LA | Self::PA => 2,
+            Self::RGB => 3,
+            Self::RGBA => 4,
+        }
+    }
+}
+
+/// Keep the logical image mode attached to its concrete byte layout before
+/// selecting the native Flip kernels. Mode 1 and P use one stored byte per
+/// pixel; PA and LA use two; RGB and RGBA retain their own packed kernels.
+#[cfg(target_endian = "little")]
+fn gpu_native_flip_format(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> Option<NativeFlipFormat> {
+    if !matches!(ops, [PipelineOp::Flip]) {
+        return None;
+    }
+    match (logical_mode, image) {
+        (Some("1"), DynamicImage::ImageLuma8(_)) => Some(NativeFlipFormat::Mode1),
+        (Some("L") | None, DynamicImage::ImageLuma8(_)) => Some(NativeFlipFormat::L),
+        (Some("P"), DynamicImage::ImageLuma8(_)) => Some(NativeFlipFormat::Palette),
+        (Some("LA") | None, DynamicImage::ImageLumaA8(_)) => Some(NativeFlipFormat::LA),
+        (Some("PA"), DynamicImage::ImageLumaA8(_)) => Some(NativeFlipFormat::PA),
+        (Some("RGB") | None, DynamicImage::ImageRgb8(_)) => Some(NativeFlipFormat::RGB),
+        (Some("RGBA") | None, DynamicImage::ImageRgba8(_)) => Some(NativeFlipFormat::RGBA),
+        _ => None,
+    }
+}
+
+/// Plan one native one- or two-byte-per-pixel Flip. Each GPU row is padded to
+/// a four-byte boundary at upload, so each shader invocation can copy one
+/// complete word and owns exactly one output word. Reject any shape whose
+/// products, adapter limits, working set, or flattened two-dimensional grid
+/// cannot be represented by the shader's u32 indexing.
+#[cfg(target_endian = "little")]
+fn plan_native_byte_flip_dispatch(
+    width: u32,
+    height: u32,
+    channels: u8,
+    max_workgroups_per_dimension: u32,
+    max_storage_buffer_binding_size: u32,
+    max_buffer_size: u64,
+    buffer_capacity_words: u32,
+) -> Option<NativeByteFlipDispatch> {
+    if width == 0 || height == 0 || !matches!(channels, 1 | 2) || max_workgroups_per_dimension == 0
+    {
+        return None;
+    }
+    let dimensions = CheckedDims::new(width, height, channels).ok()?;
+    let row_bytes = usize::try_from(width)
+        .ok()?
+        .checked_mul(usize::from(channels))?;
+    let native_bytes = dimensions.total_bytes();
+    if u32::try_from(native_bytes).is_err() || row_bytes > u32::MAX as usize {
+        return None;
+    }
+    let words_per_row = u32::try_from(row_bytes.div_ceil(4)).ok()?;
+    let word_count = u64::from(words_per_row).checked_mul(u64::from(height))?;
+    let transfer_bytes = word_count.checked_mul(4)?;
+    if word_count == 0
+        || word_count > u64::from(u32::MAX)
+        || word_count > u64::from(buffer_capacity_words)
+        || transfer_bytes > u64::from(max_storage_buffer_binding_size)
+        || transfer_bytes > max_buffer_size
+        || usize::try_from(transfer_bytes).is_err()
+    {
+        return None;
+    }
+    let required_workgroups = word_count.div_ceil(64);
+    let groups_x = required_workgroups.min(u64::from(max_workgroups_per_dimension));
+    let groups_y = required_workgroups.div_ceil(groups_x);
+    if groups_y > u64::from(max_workgroups_per_dimension) {
+        return None;
+    }
+    Some(NativeByteFlipDispatch {
+        row_bytes,
+        words_per_row,
+        word_count: u32::try_from(word_count).ok()?,
+        transfer_bytes,
+        groups_x: u32::try_from(groups_x).ok()?,
+        groups_y: u32::try_from(groups_y).ok()?,
+    })
+}
+
+#[cfg(target_endian = "little")]
 enum NativeTransposeInput<'a> {
     Rgb(&'a RgbImage, &'a PackedRgbTransposeLayout),
     Rgba(&'a RgbaImage),
@@ -9513,6 +9627,195 @@ impl GpuInner {
     }
 
     #[cfg(target_endian = "little")]
+    fn execute_native_byte_flip(
+        &self,
+        image: &DynamicImage,
+        format: NativeFlipFormat,
+        dispatch: NativeByteFlipDispatch,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let width = image.width();
+        let height = image.height();
+        let channels = format.channels();
+        let dimensions = CheckedDims::new(width, height, channels)?;
+        let raw = image.as_bytes();
+        let padded_row_bytes = usize::try_from(dispatch.words_per_row)
+            .ok()
+            .and_then(|words| words.checked_mul(std::mem::size_of::<u32>()))
+            .ok_or_else(|| PilError::ValueError("GPU native Flip row is too large".into()))?;
+        let expected_transfer_bytes = u64::try_from(padded_row_bytes)
+            .ok()
+            .and_then(|row| row.checked_mul(u64::from(height)))
+            .ok_or_else(|| PilError::ValueError("GPU native Flip transfer is too large".into()))?;
+        let buffer_capacity = u64::from(buffers.capacity) * 4;
+        let limits = self.device.limits();
+        if raw.len() != dimensions.total_bytes()
+            || dispatch.row_bytes.checked_mul(height as usize) != Some(raw.len())
+            || dispatch.transfer_bytes != expected_transfer_bytes
+            || dispatch.word_count as u64 * 4 != dispatch.transfer_bytes
+            || dispatch.groups_x > limits.max_compute_workgroups_per_dimension
+            || dispatch.groups_y > limits.max_compute_workgroups_per_dimension
+            || dispatch.transfer_bytes > buffer_capacity
+            || dispatch.transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || dispatch.transfer_bytes > limits.max_buffer_size
+        {
+            return Err(PilError::InternalError(
+                "GPU native Flip does not match its checked row layout".into(),
+            ));
+        }
+
+        buffers.params_arena.ensure_capacity(
+            &self.device,
+            "gpu_native_flip_params",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            16,
+            limits.min_uniform_buffer_offset_alignment as usize,
+        );
+        let upload_size = NonZeroU64::new(dispatch.transfer_bytes)
+            .ok_or_else(|| PilError::ValueError("GPU native Flip input is empty".into()))?;
+        let mut upload = self
+            .queue
+            .write_buffer_with(&buffers.buf_a, 0, upload_size)
+            .ok_or_else(|| {
+                PilError::InternalError("GPU native Flip staging allocation failed".into())
+            })?;
+        upload.fill(0);
+        if padded_row_bytes == dispatch.row_bytes {
+            upload[..raw.len()].copy_from_slice(raw);
+        } else {
+            for row in 0..height as usize {
+                let source_start = row * dispatch.row_bytes;
+                let target_start = row * padded_row_bytes;
+                upload[target_start..target_start + dispatch.row_bytes]
+                    .copy_from_slice(&raw[source_start..source_start + dispatch.row_bytes]);
+            }
+        }
+        drop(upload);
+
+        let parameters = [
+            height,
+            dispatch.words_per_row,
+            dispatch.word_count,
+            dispatch.groups_x,
+        ];
+        self.queue.write_buffer(
+            &buffers.params_arena.buffer,
+            0,
+            bytemuck::cast_slice(&parameters),
+        );
+        let cached = self.resolve_pipeline(
+            "__internal_flip_native_byte_rows",
+            "flip_native_byte_rows.wgsl",
+            include_str!("shaders/flip_native_byte_rows.wgsl"),
+        )?;
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_native_byte_flip"),
+            layout: &cached.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ranged_binding(
+                        &buffers.buf_a,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: ranged_binding(
+                        &buffers.buf_b,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: ranged_binding(
+                        &buffers.params_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: 16,
+                        }),
+                    )?,
+                },
+            ],
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_native_byte_flip"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_native_byte_flip"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&cached.pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            crate::compute::record_gpu_shader_dispatch(
+                cached.variant_name,
+                cached.shader_file,
+                u64::from(dispatch.groups_x) * u64::from(dispatch.groups_y),
+            );
+            pass.dispatch_workgroups(dispatch.groups_x, dispatch.groups_y, 1);
+        }
+        let readback = self.prepare_readback(&buffers.buf_b, dispatch.transfer_bytes)?;
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                dispatch.transfer_bytes,
+            );
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device("GPU native Flip submission")?;
+        let result = self.readback_with(
+            dispatch.transfer_bytes,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != dispatch.transfer_bytes as usize {
+                    return Err(PilError::InternalError(
+                        "GPU native Flip readback length mismatch".into(),
+                    ));
+                }
+                let mut bytes = Vec::with_capacity(dimensions.total_bytes());
+                for row in mapped.chunks_exact(padded_row_bytes).take(height as usize) {
+                    bytes.extend_from_slice(&row[..dispatch.row_bytes]);
+                }
+                if bytes.len() != dimensions.total_bytes() {
+                    return Err(PilError::InternalError(
+                        "GPU native Flip omitted a source row".into(),
+                    ));
+                }
+                crate::compute::record_pipeline_allocation(bytes.len());
+                crate::image_utils::raw_bytes_to_image(width, height, bytes, usize::from(channels))
+            },
+        )?;
+        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+            upload_bytes: dispatch.transfer_bytes,
+            readback_bytes: dispatch.transfer_bytes,
+            parameter_bytes: 16,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: 1
+                + u64::from(!self.direct_primary_readback)
+                + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            mode_conversion_count: 0,
+            ..PipelineResourceTelemetry::default()
+        });
+        crate::compute::record_pipeline_dispatch_count(1);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        Ok(crate::image::preserve_mode(image, result))
+    }
+
+    #[cfg(target_endian = "little")]
     fn execute_native_transpose_with_upload(
         &self,
         op: &PipelineOp,
@@ -9585,6 +9888,21 @@ impl GpuInner {
         if groups_x > limit || groups_y > limit {
             return Err(PilError::ValueError(
                 "GPU native transpose exceeds adapter workgroup limit".into(),
+            ));
+        }
+        let limits = self.device.limits();
+        let buffer_capacity = u64::from(buffers.capacity)
+            .checked_mul(4)
+            .ok_or_else(|| PilError::ValueError("GPU native transpose is too large".into()))?;
+        let native_bytes = u64::try_from(dimensions.total_bytes())
+            .map_err(|_| PilError::ValueError("GPU native transpose is too large".into()))?;
+        if transfer_bytes < native_bytes
+            || transfer_bytes > buffer_capacity
+            || transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || transfer_bytes > limits.max_buffer_size
+        {
+            return Err(PilError::ValueError(
+                "GPU native transpose exceeds adapter buffer limits".into(),
             ));
         }
         let operation_params = registry::extract_params(op);
@@ -20044,6 +20362,9 @@ impl GpuPool {
         // byte transport, including the logical modes below.
         let logical_mode_supported = mode.is_none_or(|logical_mode| {
             matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+                || (logical_mode == "1"
+                    && matches!(img, DynamicImage::ImageLuma8(_))
+                    && matches!(ops, [PipelineOp::Flip]))
                 // YCbCr shares RGB8 transport but grayscale reads only its Y
                 // sample; admit exactly the singleton kernel that carries
                 // this native-mode interpretation in its fourth uniform.
@@ -21147,6 +21468,215 @@ impl GpuPool {
         }
 
         #[cfg(target_endian = "little")]
+        if let Some(format) = gpu_native_flip_format(ops, img, mode) {
+            match format {
+                NativeFlipFormat::Mode1 => {
+                    let Some(dispatch) = plan_native_byte_flip_dispatch(
+                        img.width(),
+                        img.height(),
+                        1,
+                        limits.max_compute_workgroups_per_dimension,
+                        limits.max_storage_buffer_binding_size,
+                        limits.max_buffer_size,
+                        GPU_BUFFER_CAPACITY,
+                    ) else {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native byte Flip exceeds adapter or shader limits",
+                        );
+                    };
+                    let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
+                    let result =
+                        gpu.execute_native_byte_flip(img, format, dispatch, &mut buffers)?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+                NativeFlipFormat::L => {
+                    let Some(dispatch) = plan_native_byte_flip_dispatch(
+                        img.width(),
+                        img.height(),
+                        1,
+                        limits.max_compute_workgroups_per_dimension,
+                        limits.max_storage_buffer_binding_size,
+                        limits.max_buffer_size,
+                        GPU_BUFFER_CAPACITY,
+                    ) else {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native L Flip exceeds adapter or shader limits",
+                        );
+                    };
+                    let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
+                    let result =
+                        gpu.execute_native_byte_flip(img, format, dispatch, &mut buffers)?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+                NativeFlipFormat::Palette => {
+                    let Some(dispatch) = plan_native_byte_flip_dispatch(
+                        img.width(),
+                        img.height(),
+                        1,
+                        limits.max_compute_workgroups_per_dimension,
+                        limits.max_storage_buffer_binding_size,
+                        limits.max_buffer_size,
+                        GPU_BUFFER_CAPACITY,
+                    ) else {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native palette-index Flip exceeds adapter or shader limits",
+                        );
+                    };
+                    let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
+                    let result =
+                        gpu.execute_native_byte_flip(img, format, dispatch, &mut buffers)?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+                NativeFlipFormat::LA => {
+                    let Some(dispatch) = plan_native_byte_flip_dispatch(
+                        img.width(),
+                        img.height(),
+                        2,
+                        limits.max_compute_workgroups_per_dimension,
+                        limits.max_storage_buffer_binding_size,
+                        limits.max_buffer_size,
+                        GPU_BUFFER_CAPACITY,
+                    ) else {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native LA Flip exceeds adapter or shader limits",
+                        );
+                    };
+                    let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
+                    let result =
+                        gpu.execute_native_byte_flip(img, format, dispatch, &mut buffers)?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+                NativeFlipFormat::PA => {
+                    let Some(dispatch) = plan_native_byte_flip_dispatch(
+                        img.width(),
+                        img.height(),
+                        2,
+                        limits.max_compute_workgroups_per_dimension,
+                        limits.max_storage_buffer_binding_size,
+                        limits.max_buffer_size,
+                        GPU_BUFFER_CAPACITY,
+                    ) else {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native PA Flip exceeds adapter or shader limits",
+                        );
+                    };
+                    let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
+                    let result =
+                        gpu.execute_native_byte_flip(img, format, dispatch, &mut buffers)?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+                NativeFlipFormat::RGB => {
+                    let DynamicImage::ImageRgb8(rgb) = img else {
+                        return Err(PilError::InternalError(
+                            "native RGB Flip admission did not match RGB storage".into(),
+                        ));
+                    };
+                    let Some(layout) = packed_rgb_transpose_layout(
+                        rgb.width(),
+                        rgb.height(),
+                        limits.max_compute_workgroups_per_dimension,
+                    ) else {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native RGB Flip exceeds adapter or shader limits",
+                        );
+                    };
+                    let words = u32::try_from(layout.transfer_bytes / 4).map_err(|_| {
+                        PilError::ValueError("GPU packed RGB Flip is too large".into())
+                    })?;
+                    let mut buffers = gpu.acquire_buffers(words)?;
+                    let geometry_as_transpose = PipelineOp::Transpose {
+                        method: TransposeMethod::FlipTopBottom,
+                    };
+                    let result = gpu.execute_packed_rgb_transpose(
+                        &geometry_as_transpose,
+                        rgb,
+                        &layout,
+                        &mut buffers,
+                    )?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+                NativeFlipFormat::RGBA => {
+                    let DynamicImage::ImageRgba8(rgba) = img else {
+                        return Err(PilError::InternalError(
+                            "native RGBA Flip admission did not match RGBA storage".into(),
+                        ));
+                    };
+                    let dimensions = CheckedDims::new(img.width(), img.height(), 4)?;
+                    let transfer_bytes = u64::try_from(dimensions.total_bytes()).map_err(|_| {
+                        PilError::ValueError("GPU native RGBA Flip is too large".into())
+                    })?;
+                    let workgroup_count = u64::try_from(capacity)
+                        .ok()
+                        .and_then(|words| words.checked_mul(4))
+                        .ok_or_else(|| {
+                            PilError::ValueError("GPU native RGBA Flip is too large".into())
+                        })?;
+                    let groups_x = img.width().div_ceil(16);
+                    let groups_y = img.height().div_ceil(16);
+                    if transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+                        || transfer_bytes > limits.max_buffer_size
+                        || transfer_bytes > workgroup_count
+                        || groups_x > limits.max_compute_workgroups_per_dimension
+                        || groups_y > limits.max_compute_workgroups_per_dimension
+                    {
+                        return self.preflight_failure(
+                            ops,
+                            img,
+                            mode,
+                            allow_cpu_fallback,
+                            "native RGBA Flip exceeds adapter or shader limits",
+                        );
+                    }
+                    let capacity_words = u32::try_from(capacity).map_err(|_| {
+                        PilError::ValueError("GPU native RGBA Flip is too large".into())
+                    })?;
+                    let mut buffers = gpu.acquire_buffers(capacity_words)?;
+                    let geometry_as_transpose = PipelineOp::Transpose {
+                        method: TransposeMethod::FlipTopBottom,
+                    };
+                    let result = gpu.execute_rgba_transpose_with_upload(
+                        &geometry_as_transpose,
+                        rgba,
+                        &mut buffers,
+                        gpu.direct_primary_readback,
+                    )?;
+                    gpu.recycle_buffers(buffers);
+                    return Ok(result);
+                }
+            }
+        }
+
+        #[cfg(target_endian = "little")]
         if matches!(mode, None | Some("RGB"))
             && matches!(ops, [PipelineOp::Mirror])
             && let DynamicImage::ImageRgb8(rgb) = img
@@ -21156,17 +21686,20 @@ impl GpuPool {
                 limits.max_compute_workgroups_per_dimension,
             )
         {
-            // The packed RGB transpose shader's FlipLeftRight method has the
-            // same pixel mapping as Mirror. Reuse its native three-byte input
-            // and output to avoid expanding RGB to RGBA around this operation.
-            let mirror_as_transpose = PipelineOp::Transpose {
+            // Mirror is the horizontal RGB transpose method. Keep its packed
+            // three-byte input and output instead of expanding RGB to RGBA.
+            let geometry_as_transpose = PipelineOp::Transpose {
                 method: TransposeMethod::FlipLeftRight,
             };
             let words = u32::try_from(layout.transfer_bytes / 4)
                 .map_err(|_| PilError::ValueError("GPU packed RGB mirror is too large".into()))?;
             let mut buffers = gpu.acquire_buffers(words)?;
-            let result =
-                gpu.execute_packed_rgb_transpose(&mirror_as_transpose, rgb, &layout, &mut buffers)?;
+            let result = gpu.execute_packed_rgb_transpose(
+                &geometry_as_transpose,
+                rgb,
+                &layout,
+                &mut buffers,
+            )?;
             gpu.recycle_buffers(buffers);
             return Ok(result);
         }
@@ -22551,6 +23084,277 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
+    fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {
+        let luma = super::plan_native_byte_flip_dispatch(
+            5,
+            3,
+            1,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            super::GPU_BUFFER_CAPACITY,
+        )
+        .unwrap();
+        assert_eq!(luma.row_bytes, 5);
+        assert_eq!(luma.words_per_row, 2);
+        assert_eq!(luma.word_count, 6);
+        assert_eq!(luma.transfer_bytes, 24);
+        assert_eq!((luma.groups_x, luma.groups_y), (1, 1));
+
+        let alpha = super::plan_native_byte_flip_dispatch(
+            5,
+            3,
+            2,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            super::GPU_BUFFER_CAPACITY,
+        )
+        .unwrap();
+        assert_eq!(alpha.row_bytes, 10);
+        assert_eq!(alpha.words_per_row, 3);
+        assert_eq!(alpha.word_count, 9);
+        assert_eq!(alpha.transfer_bytes, 36);
+
+        let exact_axis = super::plan_native_byte_flip_dispatch(
+            256,
+            1,
+            1,
+            1,
+            u32::MAX,
+            u64::MAX,
+            super::GPU_BUFFER_CAPACITY,
+        )
+        .unwrap();
+        assert_eq!((exact_axis.groups_x, exact_axis.groups_y), (1, 1));
+        assert!(
+            super::plan_native_byte_flip_dispatch(
+                257,
+                1,
+                1,
+                1,
+                u32::MAX,
+                u64::MAX,
+                super::GPU_BUFFER_CAPACITY,
+            )
+            .is_none()
+        );
+
+        let below_default_axis = super::plan_native_byte_flip_dispatch(
+            4092,
+            4096,
+            1,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            super::GPU_BUFFER_CAPACITY,
+        )
+        .unwrap();
+        assert_eq!(below_default_axis.groups_y, 1);
+        let over_flat_axis = super::plan_native_byte_flip_dispatch(
+            4096,
+            4096,
+            1,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            super::GPU_BUFFER_CAPACITY,
+        )
+        .unwrap();
+        assert_eq!(
+            (over_flat_axis.groups_x, over_flat_axis.groups_y),
+            (65_535, 2)
+        );
+        let two_dimensional_grid = super::plan_native_byte_flip_dispatch(
+            4097,
+            4096,
+            1,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            super::GPU_BUFFER_CAPACITY,
+        )
+        .unwrap();
+        assert_eq!(two_dimensional_grid.groups_y, 2);
+
+        assert!(
+            super::plan_native_byte_flip_dispatch(
+                1,
+                1,
+                3,
+                65_535,
+                u32::MAX,
+                u64::MAX,
+                super::GPU_BUFFER_CAPACITY,
+            )
+            .is_none()
+        );
+        assert!(
+            super::plan_native_byte_flip_dispatch(
+                1,
+                1,
+                1,
+                65_535,
+                3,
+                u64::MAX,
+                super::GPU_BUFFER_CAPACITY,
+            )
+            .is_none()
+        );
+        assert!(
+            super::plan_native_byte_flip_dispatch(
+                1,
+                1,
+                1,
+                65_535,
+                u32::MAX,
+                3,
+                super::GPU_BUFFER_CAPACITY,
+            )
+            .is_none()
+        );
+        assert!(
+            super::plan_native_byte_flip_dispatch(1, 1, 1, 65_535, u32::MAX, u64::MAX, 0,)
+                .is_none()
+        );
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_flip_keeps_mode_specific_storage_and_pixels() {
+        use crate::compute::{execute_prepared, prepare_execution, registry};
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error) if error.to_string().contains("GPU adapter not available") => return,
+            Err(error) => panic!("native Flip GPU initialization failed: {error}"),
+        }
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+        let _telemetry = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
+        let cases = [
+            (
+                "1",
+                DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(
+                        5,
+                        3,
+                        vec![0, 255, 0, 255, 255, 255, 0, 0, 255, 0, 0, 0, 255, 255, 0],
+                    )
+                    .unwrap(),
+                ),
+                24,
+            ),
+            (
+                "L",
+                DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(5, 3, (0..15).map(|value| value * 17).collect()).unwrap(),
+                ),
+                24,
+            ),
+            (
+                "P",
+                DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(5, 3, (0..15).map(|value| value * 13).collect()).unwrap(),
+                ),
+                24,
+            ),
+            (
+                "LA",
+                DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(
+                        5,
+                        3,
+                        (0..30).map(|value: u8| value.wrapping_mul(7)).collect(),
+                    )
+                    .unwrap(),
+                ),
+                36,
+            ),
+            (
+                "PA",
+                DynamicImage::ImageLumaA8(
+                    GrayAlphaImage::from_raw(
+                        5,
+                        3,
+                        (0..30).map(|value: u8| value.wrapping_mul(9)).collect(),
+                    )
+                    .unwrap(),
+                ),
+                36,
+            ),
+            (
+                "RGB",
+                DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(
+                        5,
+                        3,
+                        (0usize..45)
+                            .map(|index| index.wrapping_mul(47).wrapping_add(index / 5) as u8)
+                            .collect(),
+                    )
+                    .unwrap(),
+                ),
+                48,
+            ),
+            (
+                "RGBA",
+                DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(
+                        5,
+                        3,
+                        (0usize..60)
+                            .map(|index| index.wrapping_mul(31).wrapping_add(index / 7) as u8)
+                            .collect(),
+                    )
+                    .unwrap(),
+                ),
+                60,
+            ),
+        ];
+        let op = PipelineOp::Flip;
+        let ops = [op.clone()];
+        let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
+        for (mode, source, expected_transfer_bytes) in cases {
+            let expected = registry::execute_cpu(&op, &source, Some(mode)).unwrap();
+            let actual = execute_prepared(&prepared, &ops, &source, Some(mode)).unwrap();
+            assert_eq!(actual.dimensions(), expected.dimensions(), "mode {mode}");
+            assert_eq!(actual.color(), expected.color(), "mode {mode}");
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "mode {mode}");
+            let receipt = Backend::take_pipeline_telemetry()
+                .unwrap_or_else(|| panic!("native GPU Flip receipt missing for mode {mode}"));
+            assert_eq!(receipt.0, Some(Backend::Gpu), "mode {mode}");
+            assert_eq!(receipt.1, Backend::Gpu, "mode {mode}");
+            assert_eq!(receipt.2, 1, "mode {mode}");
+            assert_eq!(receipt.6, Some(1), "mode {mode}");
+            assert_eq!(receipt.7, None, "mode {mode}");
+            let resources = receipt.8.unwrap_or_else(|| {
+                panic!("native GPU Flip transfer counters missing for mode {mode}")
+            });
+            assert_eq!(
+                resources.upload_bytes, expected_transfer_bytes,
+                "mode {mode}"
+            );
+            assert_eq!(
+                resources.readback_bytes, expected_transfer_bytes,
+                "mode {mode}"
+            );
+            assert_eq!(resources.host_allocation_count, 1, "mode {mode}");
+            assert_eq!(
+                resources.host_allocated_bytes,
+                u64::try_from(source.as_bytes().len()).unwrap(),
+                "mode {mode}"
+            );
+            assert_eq!(resources.mode_conversion_count, 0, "mode {mode}");
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
     fn gpu_packed_rgb_transpose_tiled_requires_aligned_swapped_rows() {
         use crate::pipeline::TransposeMethod;
 
@@ -23273,6 +24077,28 @@ mod tests {
             assert_eq!(receipt.6, Some(1));
             assert_eq!(receipt.7, None);
             let resources = receipt.8.expect("fused RGB transfer counters");
+            assert_eq!(resources.upload_bytes, 48);
+            assert_eq!(resources.readback_bytes, 48);
+            assert_eq!(resources.host_allocation_count, 1);
+            assert_eq!(resources.host_allocated_bytes, 45);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
+
+        let flip_ops = [PipelineOp::Flip];
+        for mode in [None, Some("RGB")] {
+            let expected = registry::execute_cpu(&PipelineOp::Flip, &source, mode).unwrap();
+            let prepared = prepare_execution(&flip_ops, Some(Backend::Gpu)).unwrap();
+            let actual = execute_prepared(&prepared, &flip_ops, &source, mode).unwrap();
+            assert_eq!(actual.dimensions(), expected.dimensions());
+            assert_eq!(actual.color(), expected.color());
+            assert_eq!(actual.as_bytes(), expected.as_bytes());
+            let receipt = Backend::take_pipeline_telemetry().expect("native RGB Flip receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.2, 1);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native RGB Flip transfer counters");
             assert_eq!(resources.upload_bytes, 48);
             assert_eq!(resources.readback_bytes, 48);
             assert_eq!(resources.host_allocation_count, 1);

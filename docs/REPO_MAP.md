@@ -115,6 +115,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- cover.wgsl
 |   |   |   |       |-- crop.wgsl
 |   |   |   |       |-- crop_border.wgsl
+|   |   |   |       |-- crop_native_rgb.wgsl
 |   |   |   |       |-- darker.wgsl
 |   |   |   |       |-- difference.wgsl
 |   |   |   |       |-- draw.wgsl
@@ -132,6 +133,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- filter_5x5.wgsl
 |   |   |   |       |-- fit.wgsl
 |   |   |   |       |-- flip.wgsl
+|   |   |   |       |-- flip_native_byte_rows.wgsl
 |   |   |   |       |-- gaussian_blur.wgsl
 |   |   |   |       |-- grayscale.wgsl
 |   |   |   |       |-- hard_light.wgsl

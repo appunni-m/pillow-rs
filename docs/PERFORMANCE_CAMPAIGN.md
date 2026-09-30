@@ -10713,3 +10713,69 @@ workload; SIMD's 5× goal and GPU's match-SIMD goal remain blockers. Revisit GPU
 completion/readback and larger-image throughput before further shader arithmetic;
 inspect SIMD code generation and memory throughput before another blend rewrite.
 No coverage collection was run.
+
+### `ImageOps.flip` native-mode checkpoint — 2026-09-30
+
+This visit made the mode branches explicit from logical mode through CPU,
+SIMD, and GPU admission. Mode 1, L, and P calculate one-byte rows; LA and PA
+calculate two-byte rows with the index/luma and alpha samples kept together;
+RGB and RGBA have their own three- and four-byte paths. No route converts the
+image to RGBA. The one/two-byte GPU shader copies aligned padded words, RGB uses
+the packed RGB transpose path, and RGBA uses its own native path. The SIMD
+adapter now reserves output once and appends whole source rows. A Flip has no
+per-pixel arithmetic to vectorize, so the previous zero-filled destination and
+16-byte lane construction were wasted work for this memory movement.
+
+The final correctness-gated 1024 × 768 receipt is
+`migration-benchmark-c6647f59846645788381f22a5ff974fe`; it used 100 samples
+per subject, passed its parity gate, and identified implementation commit
+`f0cfa973dd51cc01829e6c1daeccbaf23d069d6b`. Median milliseconds for
+Pillow/CPU/SIMD/GPU were:
+
+| Mode | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB | 0.813 | 0.226 | 0.294 | 0.728 |
+| Mode 1 | 0.229 | 0.083 | 0.088 | 0.499 |
+| L | 0.111 | 0.064 | 0.074 | 0.481 |
+| PA | 0.399 | 0.158 | 0.165 | 0.748 |
+| RGBA | 0.680 | 0.346 | 0.408 | 0.741 |
+
+CPU met the Pillow latency target on these five workloads, ranging from 1.7×
+to 3.6× faster. SIMD ranged from 1.5× to 2.8× faster than Pillow, below 5×;
+the bulk-copy path brought SIMD close to CPU but cannot vectorize a row-order
+permutation as arithmetic. GPU was 1.8× to 6.5× slower than SIMD and had lower
+measured throughput in all five rows. It did run on GPU for all 100 samples,
+with one dispatch, no fallback, and zero mode conversions. The 1024 × 768 RGB
+path transfers 2,359,296 native bytes in each direction; mandatory upload,
+completion, and host readback dominate this synchronous one-operation API.
+
+The complete 43-case Flip cohort passed on CPU, strict SIMD, and strict GPU
+(129/129 total; no failures or skipped cases) on commit
+`f0cfa973dd51cc01829e6c1daeccbaf23d069d6b`. Receipts are
+`migration-parity-b65ae468057f4cee8749600ad9f15a2e` (CPU),
+`migration-parity-38368acdc5984bf387be2ff944c13bfd` (SIMD), and
+`migration-parity-6e9fd356f06a4d908ccb1dc665e50ca2` (GPU). The result metadata
+reports a dirty checkout because the pre-existing `CLAUDE.md` edit and
+`docs/PERFORMANCE_SIZE_CUTOFF_AUDIT.md` remain outside the commit; all Flip
+implementation and fixture files match the tested commit. The focused Rust
+filter passed both dispatch-boundary and native-storage tests. `make fmt
+clippy repo-map-check` passed with the repository's existing Clippy warnings.
+No coverage collection ran.
+
+Checkpoint Flip after the native-mode split and bulk-row-copy experiment.
+Retain the CPU path; it meets its sampled target. Record the SIMD 5× goal and
+GPU latency/throughput gap as blockers. Revisit SIMD only with a larger
+parallel-copy or ownership design that beats tuned bulk copying end to end;
+revisit GPU when the operation can stay device-resident across a fused chain
+or a larger workload amortizes transfers. Continue with the next operation in
+the current goal ranking instead of further shader tuning for this one-shot
+copy.
+
+The final benchmark command was:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.flip.materialized-rgb-noise-1024x768 --workload-id pil-imageops.flip.native-mode1-1024x768 --workload-id pil-imageops.flip.native-l-1024x768 --workload-id pil-imageops.flip.native-pa-1024x768 --workload-id pil-imageops.flip.native-rgba-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/flip-commit-5formats.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/flip-commit-5formats-parity.json \
+make migration-parity-benchmark

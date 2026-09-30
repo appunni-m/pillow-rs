@@ -11354,32 +11354,125 @@ fn mirror_native_row(
     Some((vector_blocks, scalar_tail))
 }
 
-/// Flip rows vertically in the source's native byte layout.
+/// Move complete rows in reverse order through the native byte-copy path.
+/// Callers calculate each mode's own row width and storage width first. A
+/// vertical flip has no per-sample arithmetic to vectorize, so bulk row copies
+/// avoid paying SIMD lane construction and zero-fill costs. Samples remain
+/// opaque and are never expanded to another mode.
+fn native_flip_rows(
+    img: &DynamicImage,
+    width: u32,
+    height: u32,
+    row_len: usize,
+    stored_bytes_per_pixel: usize,
+) -> Option<(DynamicImage, u64, u64)> {
+    let total_len = row_len.checked_mul(height as usize)?;
+    let source = img.as_bytes().get(..total_len)?;
+    if source.len() != img.as_bytes().len()
+        || row_len != (width as usize).checked_mul(stored_bytes_per_pixel)?
+    {
+        return None;
+    }
+    let mut output = Vec::with_capacity(total_len);
+    for output_row in 0..height as usize {
+        let source_row = height as usize - 1 - output_row;
+        let source_start = source_row.checked_mul(row_len)?;
+        output.extend_from_slice(source.get(source_start..source_start + row_len)?);
+    }
+    let result =
+        crate::image_utils::raw_bytes_to_image(width, height, output, stored_bytes_per_pixel)
+            .ok()?;
+    Some((preserve_mode(img, result), 0, 0))
+}
+
+fn native_flip_mode1(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageLuma8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let mode1_row_bytes = usize::try_from(width).ok()?;
+    native_flip_rows(img, width, height, mode1_row_bytes, 1)
+}
+
+fn native_flip_l(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageLuma8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let l_row_bytes = usize::try_from(width).ok()?;
+    native_flip_rows(img, width, height, l_row_bytes, 1)
+}
+
+fn native_flip_palette(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageLuma8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let palette_index_row_bytes = usize::try_from(width).ok()?;
+    native_flip_rows(img, width, height, palette_index_row_bytes, 1)
+}
+
+fn native_flip_la(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageLumaA8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let la_row_bytes = usize::try_from(width).ok()?.checked_mul(2)?;
+    native_flip_rows(img, width, height, la_row_bytes, 2)
+}
+
+fn native_flip_pa(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageLumaA8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let palette_alpha_row_bytes = usize::try_from(width).ok()?.checked_mul(2)?;
+    native_flip_rows(img, width, height, palette_alpha_row_bytes, 2)
+}
+
+fn native_flip_rgb(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageRgb8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let rgb_row_bytes = usize::try_from(width).ok()?.checked_mul(3)?;
+    native_flip_rows(img, width, height, rgb_row_bytes, 3)
+}
+
+fn native_flip_rgba(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageRgba8(image) = img else {
+        return None;
+    };
+    let (width, height) = image.dimensions();
+    let rgba_row_bytes = usize::try_from(width).ok()?.checked_mul(4)?;
+    native_flip_rows(img, width, height, rgba_row_bytes, 4)
+}
+
+/// Choose a direct kernel from the logical mode and concrete native buffer.
+/// Modes sharing a raster type still have separate row calculations so an
+/// indexed or alpha-bearing mode cannot silently inherit RGBA semantics.
 fn native_flip_vertical(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Option<(DynamicImage, u64, u64)> {
-    let channels = native_copy_layout(img, mode)?;
-    let (width, height) = img.dimensions();
-    let row_len = (width as usize).checked_mul(channels)?;
-    let total_len = row_len.checked_mul(height as usize)?;
-    let source = img.as_bytes().get(..total_len)?;
-    let mut output = vec![0u8; total_len];
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
-    for output_row in 0..height as usize {
-        let source_row = height as usize - 1 - output_row;
-        let source_start = source_row.checked_mul(row_len)?;
-        let output_start = output_row.checked_mul(row_len)?;
-        let (blocks, tail) = copy_native_bytes(
-            source.get(source_start..source_start + row_len)?,
-            output.get_mut(output_start..output_start + row_len)?,
-        )?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
+    match (mode, img) {
+        (Some("1"), DynamicImage::ImageLuma8(_)) => native_flip_mode1(img),
+        (Some("L"), DynamicImage::ImageLuma8(_)) => native_flip_l(img),
+        (Some("P"), DynamicImage::ImageLuma8(_)) => native_flip_palette(img),
+        (Some("LA"), DynamicImage::ImageLumaA8(_)) => native_flip_la(img),
+        (Some("PA"), DynamicImage::ImageLumaA8(_)) => native_flip_pa(img),
+        (Some("RGB"), DynamicImage::ImageRgb8(_)) => native_flip_rgb(img),
+        (Some("HSV" | "YCbCr"), DynamicImage::ImageRgb8(_)) => native_flip_rgb(img),
+        (Some("RGBA"), DynamicImage::ImageRgba8(_)) => native_flip_rgba(img),
+        (Some("CMYK" | "RGBa" | "RGBX" | "I" | "F"), DynamicImage::ImageRgba8(_)) => {
+            native_flip_rgba(img)
+        }
+        (None, DynamicImage::ImageLuma8(_)) => native_flip_l(img),
+        (None, DynamicImage::ImageLumaA8(_)) => native_flip_la(img),
+        (None, DynamicImage::ImageRgb8(_)) => native_flip_rgb(img),
+        (None, DynamicImage::ImageRgba8(_)) => native_flip_rgba(img),
+        _ => None,
     }
-    let result = crate::image_utils::raw_bytes_to_image(width, height, output, channels).ok()?;
-    Some((preserve_mode(img, result), vector_blocks, scalar_tail))
 }
 
 fn native_luma16_image_from_bytes(width: u32, height: u32, bytes: Vec<u8>) -> Option<DynamicImage> {

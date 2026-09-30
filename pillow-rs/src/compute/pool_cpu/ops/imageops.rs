@@ -3,7 +3,7 @@
 //! invert, flip, mirror, posterize, solarize, grayscale, colorize,
 //! contain, cover, fit, pad, scale, expand, and crop border.
 
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
 use crate::color::pil_grayscale;
 
@@ -496,9 +496,111 @@ pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     Ok(result)
 }
 
-/// Flip vertically.
-pub fn op_flip(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    Ok(img.flipv())
+/// Copy complete native rows in reverse order. The caller selects a
+/// mode-specific pixel width and reconstructs that same storage type; this
+/// helper never expands samples to RGBA or interprets their color values.
+fn flip_native_rows<const BYTES_PER_PIXEL: usize>(
+    source: &[u8],
+    width: u32,
+    height: u32,
+) -> Option<Vec<u8>> {
+    let row_bytes = usize::try_from(width).ok()?.checked_mul(BYTES_PER_PIXEL)?;
+    let total_bytes = row_bytes.checked_mul(usize::try_from(height).ok()?)?;
+    if source.len() != total_bytes {
+        return None;
+    }
+    if height == 0 || row_bytes == 0 {
+        return Some(source.to_vec());
+    }
+
+    let mut output = Vec::with_capacity(total_bytes);
+    for output_y in 0..height as usize {
+        let source_y = height as usize - 1 - output_y;
+        let start = source_y.checked_mul(row_bytes)?;
+        output.extend_from_slice(source.get(start..start.checked_add(row_bytes)?)?);
+    }
+    Some(output)
+}
+
+fn flip_mode1(image: &GrayImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let pixels = flip_native_rows::<1>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageLuma8(GrayImage::from_raw(
+        width, height, pixels,
+    )?))
+}
+
+fn flip_l(image: &GrayImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let samples = flip_native_rows::<1>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageLuma8(GrayImage::from_raw(
+        width, height, samples,
+    )?))
+}
+
+fn flip_palette(image: &GrayImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let indices = flip_native_rows::<1>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageLuma8(GrayImage::from_raw(
+        width, height, indices,
+    )?))
+}
+
+fn flip_la(image: &GrayAlphaImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let luma_alpha = flip_native_rows::<2>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
+        width, height, luma_alpha,
+    )?))
+}
+
+fn flip_pa(image: &GrayAlphaImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let palette_alpha = flip_native_rows::<2>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
+        width,
+        height,
+        palette_alpha,
+    )?))
+}
+
+fn flip_rgb(image: &RgbImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let rgb_samples = flip_native_rows::<3>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageRgb8(RgbImage::from_raw(
+        width,
+        height,
+        rgb_samples,
+    )?))
+}
+
+fn flip_rgba(image: &RgbaImage) -> Option<DynamicImage> {
+    let (width, height) = image.dimensions();
+    let rgba_samples = flip_native_rows::<4>(image.as_raw(), width, height)?;
+    Some(DynamicImage::ImageRgba8(RgbaImage::from_raw(
+        width,
+        height,
+        rgba_samples,
+    )?))
+}
+
+/// Flip vertically while retaining the source mode's native sample layout.
+pub fn op_flip(img: &DynamicImage, mode: Option<&str>) -> Result<DynamicImage, PilError> {
+    let result = match (mode, img) {
+        (Some("1"), DynamicImage::ImageLuma8(image)) => flip_mode1(image),
+        (Some("L"), DynamicImage::ImageLuma8(image)) => flip_l(image),
+        (Some("P"), DynamicImage::ImageLuma8(image)) => flip_palette(image),
+        (Some("LA"), DynamicImage::ImageLumaA8(image)) => flip_la(image),
+        (Some("PA"), DynamicImage::ImageLumaA8(image)) => flip_pa(image),
+        (Some("RGB"), DynamicImage::ImageRgb8(image)) => flip_rgb(image),
+        (Some("RGBA"), DynamicImage::ImageRgba8(image)) => flip_rgba(image),
+        (None, DynamicImage::ImageLuma8(image)) => flip_l(image),
+        (None, DynamicImage::ImageLumaA8(image)) => flip_la(image),
+        (None, DynamicImage::ImageRgb8(image)) => flip_rgb(image),
+        (None, DynamicImage::ImageRgba8(image)) => flip_rgba(image),
+        _ => None,
+    };
+    Ok(result.unwrap_or_else(|| img.flipv()))
 }
 
 /// Mirror horizontally.
