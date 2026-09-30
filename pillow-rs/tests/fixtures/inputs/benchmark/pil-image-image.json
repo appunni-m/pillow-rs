@@ -4112,6 +4112,62 @@
       }
     },
     {
+      "workload_id": "pil-image-image.paste.masked.materialized.masked-pa-noise-1024x768",
+      "covers": [
+        "PIL.Image.Image.paste.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.Image.paste.nuanced.performance-masked-pa-noise-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-receiver"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "PA",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pil-image-image.paste.masked.materialized.masked-rgb-noise-1024x768",
       "covers": [
         "PIL.Image.Image.paste.performance.standard"
@@ -4921,6 +4977,10 @@
         },
         {
           "workload_id": "pil-image-image.paste.masked.materialized.masked-la-noise-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-image-image.paste.masked.materialized.masked-pa-noise-1024x768",
           "weight": 1
         },
         {

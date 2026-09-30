@@ -9292,6 +9292,8 @@
           "PIL.Image.Image.paste.nuanced.native-rgb-masked-negative-offset-byte-tail",
           "PIL.Image.Image.paste.nuanced.native-rgb-masked-positive-offset-byte-tail",
           "PIL.Image.Image.paste.nuanced.native-la-masked-negative-offset-word-tail",
+          "PIL.Image.Image.paste.nuanced.native-pa-masked-negative-offset-word-tail",
+          "PIL.Image.Image.paste.nuanced.native-pa-masked-positive-offset-word-tail",
           "PIL.Image.Image.paste.nuanced.native-la-even-negative-offset-source-tail",
           "pipeline-case.resize.materialized-smoke",
           "pipeline-case.resizeboxed.materialized-smoke",

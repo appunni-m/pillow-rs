@@ -10954,14 +10954,15 @@ impl GpuInner {
         destination: &DynamicImage,
         source: &DynamicImage,
         mask: &DynamicImage,
+        logical_mode: &str,
         offset: (i32, i32),
         dispatch: NativeMaskedBytePasteDispatch,
         buffers: &mut BufferPool,
     ) -> Result<DynamicImage, PilError> {
         let (width, height) = destination.dimensions();
         let (source_width, source_height) = source.dimensions();
-        let storage_matches = match dispatch.bytes_per_pixel {
-            1 => matches!(
+        let storage_matches = match (logical_mode, dispatch.bytes_per_pixel) {
+            ("L", 1) => matches!(
                 (destination, source, mask),
                 (
                     DynamicImage::ImageLuma8(_),
@@ -10969,7 +10970,7 @@ impl GpuInner {
                     DynamicImage::ImageLuma8(_)
                 )
             ),
-            2 => matches!(
+            ("LA", 2) => matches!(
                 (destination, source, mask),
                 (
                     DynamicImage::ImageLumaA8(_),
@@ -10977,7 +10978,15 @@ impl GpuInner {
                     DynamicImage::ImageLuma8(_)
                 )
             ),
-            3 => matches!(
+            ("PA", 2) => matches!(
+                (destination, source, mask),
+                (
+                    DynamicImage::ImageLumaA8(_),
+                    DynamicImage::ImageLumaA8(_),
+                    DynamicImage::ImageLuma8(_)
+                )
+            ),
+            ("RGB", 3) => matches!(
                 (destination, source, mask),
                 (
                     DynamicImage::ImageRgb8(_),
@@ -11127,33 +11136,19 @@ impl GpuInner {
             0,
             bytemuck::cast_slice(&parameters),
         );
-        let (pipeline_variant, shader_file, shader_source) = match dispatch.bytes_per_pixel {
-            1 => (
-                "__internal_paste_native_masked_l",
-                "paste_native_masked_l.wgsl",
-                include_str!("shaders/paste_native_masked_l.wgsl"),
-            ),
-            2 => (
-                "__internal_paste_native_masked_la",
-                "paste_native_masked_la.wgsl",
-                include_str!("shaders/paste_native_masked_la.wgsl"),
-            ),
-            3 => (
-                "__internal_paste_native_masked_rgb",
-                "paste_native_masked_rgb.wgsl",
-                include_str!("shaders/paste_native_masked_rgb.wgsl"),
-            ),
-            _ => {
-                return Err(PilError::InternalError(
-                    "GPU native masked Paste has an unsupported pixel layout".into(),
-                ));
-            }
-        };
+        let (pipeline_variant, shader_file, shader_source) =
+            gpu_native_masked_byte_paste_shader(logical_mode, dispatch.bytes_per_pixel)
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU native masked Paste has an unsupported logical mode".into(),
+                    )
+                })?;
         let cached = self.resolve_pipeline(pipeline_variant, shader_file, shader_source)?;
-        let label = match dispatch.bytes_per_pixel {
-            1 => "gpu_native_masked_l_paste",
-            2 => "gpu_native_masked_la_paste",
-            3 => "gpu_native_masked_rgb_paste",
+        let label = match logical_mode {
+            "L" => "gpu_native_masked_l_paste",
+            "LA" => "gpu_native_masked_la_paste",
+            "PA" => "gpu_native_masked_pa_paste",
+            "RGB" => "gpu_native_masked_rgb_paste",
             _ => unreachable!("storage variant validated above"),
         };
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -15645,6 +15640,38 @@ struct NativeMaskedBytePasteDispatch {
     workgroups: u32,
 }
 
+/// Select a shader by both logical mode and packed byte width. LA and PA use
+/// the same two-byte carrier but retain separate pipelines so palette indices
+/// are never admitted through an alpha-image mode branch.
+fn gpu_native_masked_byte_paste_shader(
+    logical_mode: &str,
+    bytes_per_pixel: u8,
+) -> Option<(&'static str, &'static str, &'static str)> {
+    match (logical_mode, bytes_per_pixel) {
+        ("L", 1) => Some((
+            "__internal_paste_native_masked_l",
+            "paste_native_masked_l.wgsl",
+            include_str!("shaders/paste_native_masked_l.wgsl"),
+        )),
+        ("LA", 2) => Some((
+            "__internal_paste_native_masked_la",
+            "paste_native_masked_la.wgsl",
+            include_str!("shaders/paste_native_masked_la.wgsl"),
+        )),
+        ("PA", 2) => Some((
+            "__internal_paste_native_masked_pa",
+            "paste_native_masked_pa.wgsl",
+            include_str!("shaders/paste_native_masked_pa.wgsl"),
+        )),
+        ("RGB", 3) => Some((
+            "__internal_paste_native_masked_rgb",
+            "paste_native_masked_rgb.wgsl",
+            include_str!("shaders/paste_native_masked_rgb.wgsl"),
+        )),
+        _ => None,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct NativeRgbCropDispatch {
     source_bytes: usize,
@@ -16074,7 +16101,7 @@ fn gpu_native_masked_byte_paste_layout(
     source: &DynamicImage,
     mask: &DynamicImage,
     mode: Option<&str>,
-) -> Option<((i32, i32), u8)> {
+) -> Option<((i32, i32), u8, &'static str)> {
     let PipelineOp::Paste {
         source: source_image,
         x,
@@ -16092,30 +16119,38 @@ fn gpu_native_masked_byte_paste_layout(
     if mask_image.mode().ok()?.as_str() != "L" {
         return None;
     }
-    let bytes_per_pixel = match (mode, source_mode.as_str(), destination, source, mask) {
-        (
-            Some("L"),
-            "L",
-            DynamicImage::ImageLuma8(_),
-            DynamicImage::ImageLuma8(_),
-            DynamicImage::ImageLuma8(_),
-        ) => 1,
-        (
-            Some("LA"),
-            "LA",
-            DynamicImage::ImageLumaA8(_),
-            DynamicImage::ImageLumaA8(_),
-            DynamicImage::ImageLuma8(_),
-        ) => 2,
-        (
-            Some("RGB"),
-            "RGB",
-            DynamicImage::ImageRgb8(_),
-            DynamicImage::ImageRgb8(_),
-            DynamicImage::ImageLuma8(_),
-        ) => 3,
-        _ => return None,
-    };
+    let (bytes_per_pixel, logical_mode) =
+        match (mode, source_mode.as_str(), destination, source, mask) {
+            (
+                Some("L"),
+                "L",
+                DynamicImage::ImageLuma8(_),
+                DynamicImage::ImageLuma8(_),
+                DynamicImage::ImageLuma8(_),
+            ) => (1, "L"),
+            (
+                Some("LA"),
+                "LA",
+                DynamicImage::ImageLumaA8(_),
+                DynamicImage::ImageLumaA8(_),
+                DynamicImage::ImageLuma8(_),
+            ) => (2, "LA"),
+            (
+                Some("PA"),
+                "PA",
+                DynamicImage::ImageLumaA8(_),
+                DynamicImage::ImageLumaA8(_),
+                DynamicImage::ImageLuma8(_),
+            ) => (2, "PA"),
+            (
+                Some("RGB"),
+                "RGB",
+                DynamicImage::ImageRgb8(_),
+                DynamicImage::ImageRgb8(_),
+                DynamicImage::ImageLuma8(_),
+            ) => (3, "RGB"),
+            _ => return None,
+        };
     let (source_width, source_height) = source.dimensions();
     if *w <= 0
         || *h <= 0
@@ -16134,7 +16169,7 @@ fn gpu_native_masked_byte_paste_layout(
     {
         return None;
     }
-    Some(((*x, *y), bytes_per_pixel))
+    Some(((*x, *y), bytes_per_pixel, logical_mode))
 }
 
 /// `F` stores one little-endian `f32` sample in each four-byte word. The
@@ -21169,7 +21204,7 @@ impl GpuPool {
             else {
                 return None;
             };
-            let (offset, bytes_per_pixel) =
+            let (offset, bytes_per_pixel, logical_mode) =
                 gpu_native_masked_byte_paste_layout(op, img, source_pixels, mask_pixels, mode)?;
             let dispatch = plan_gpu_native_masked_byte_paste(
                 img.width(),
@@ -21183,13 +21218,14 @@ impl GpuPool {
                 limits.max_storage_buffer_binding_size,
                 limits.max_buffer_size,
             )?;
-            Some((source_pixels, mask_pixels, offset, dispatch))
+            Some((source_pixels, mask_pixels, offset, logical_mode, dispatch))
         })();
         #[cfg(not(target_endian = "little"))]
         let native_masked_byte_paste: Option<(
             &DynamicImage,
             &DynamicImage,
             (i32, i32),
+            &'static str,
             NativeMaskedBytePasteDispatch,
         )> = None;
 
@@ -21212,12 +21248,15 @@ impl GpuPool {
                 "adapter workgroup limit",
             );
         }
-        if let Some((source_pixels, mask_pixels, offset, dispatch)) = native_masked_byte_paste {
+        if let Some((source_pixels, mask_pixels, offset, logical_mode, dispatch)) =
+            native_masked_byte_paste
+        {
             let mut buffers = gpu.acquire_buffers(dispatch.word_count)?;
             let result = gpu.execute_native_masked_byte_paste(
                 img,
                 source_pixels,
                 mask_pixels,
+                logical_mode,
                 offset,
                 dispatch,
                 &mut buffers,
@@ -22185,6 +22224,7 @@ mod tests {
         gpu_f64_ordered_round, gpu_f64_ordered_state_to_f32, gpu_float_filter_is_supported,
         gpu_i_resize_f64_is_exact, gpu_i_resize_identity_is_exact,
         gpu_int_filter_resize_chain_is_supported, gpu_luma16_resize_f64_is_exact,
+        gpu_native_masked_byte_paste_layout, gpu_native_masked_byte_paste_shader,
         gpu_nearest_affine_is_exact, gpu_operation_requires_image_context, gpu_pad_fill,
         gpu_pad_geometry, gpu_pad_rgbx_fused_vertical_geometry,
         gpu_palette_alpha_projective_relocation_is_admitted,
@@ -22834,6 +22874,46 @@ mod tests {
     }
 
     #[test]
+    fn native_masked_pa_paste_uses_a_distinct_logical_mode_shader() {
+        let pa = gpu_native_masked_byte_paste_shader("PA", 2)
+            .expect("PA selects its native two-byte pipeline");
+        let la = gpu_native_masked_byte_paste_shader("LA", 2)
+            .expect("LA selects its own native two-byte pipeline");
+        assert_eq!(pa.0, "__internal_paste_native_masked_pa");
+        assert_eq!(pa.1, "paste_native_masked_pa.wgsl");
+        assert!(pa.2.contains("PA index and alpha are blended independently"));
+        assert_eq!(la.0, "__internal_paste_native_masked_la");
+        assert_ne!(pa.0, la.0);
+        assert!(gpu_native_masked_byte_paste_shader("PA", 3).is_none());
+    }
+
+    #[test]
+    fn native_masked_pa_layout_keeps_the_palette_alpha_mode_tag() {
+        let bytes = [1, 2, 3, 4, 5, 6];
+        let source_image = Arc::new(Image::frombytes("PA", (3, 1), &bytes).unwrap());
+        let mask_image = Arc::new(Image::frombytes("L", (3, 1), &[0, 127, 255]).unwrap());
+        let destination =
+            DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(3, 1, bytes.to_vec()).unwrap());
+        let source =
+            DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(3, 1, bytes.to_vec()).unwrap());
+        let mask = DynamicImage::ImageLuma8(GrayImage::from_raw(3, 1, vec![0, 127, 255]).unwrap());
+        let op = PipelineOp::Paste {
+            source: source_image,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            mask: Some(mask_image),
+            mask_alpha: false,
+        };
+
+        assert_eq!(
+            gpu_native_masked_byte_paste_layout(&op, &destination, &source, &mask, Some("PA")),
+            Some(((0, 0), 2, "PA"))
+        );
+    }
+
+    #[test]
     #[cfg(target_endian = "little")]
     fn native_masked_rgb_paste_uses_its_shader_and_preserves_byte_tails() {
         use crate::ops::paste::PasteSource;
@@ -22939,6 +23019,76 @@ mod tests {
             assert_eq!(shader_dispatches[0].dispatches, 1);
             assert_eq!(shader_dispatches[0].workgroups, 1);
         }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn native_masked_pa_paste_executes_the_pa_shader_without_color_conversion() {
+        use crate::ops::paste::PasteSource;
+
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("native masked PA GPU initialization failed: {error}"),
+        }
+
+        let palette = [10, 20, 30, 40, 50, 60];
+        let source_bytes = (0usize..5 * 3 * 2)
+            .map(|index| index.wrapping_mul(37).wrapping_add(index / 2 + 13) as u8)
+            .collect::<Vec<_>>();
+        let destination_bytes = (0usize..5 * 3 * 2)
+            .map(|index| index.wrapping_mul(53).wrapping_add(index / 3 + 7) as u8)
+            .collect::<Vec<_>>();
+        let mask_bytes = vec![
+            0, 1, 127, 128, 254, 255, 127, 128, 1, 254, 0, 255, 128, 1, 254,
+        ];
+        let mut source = Image::frombytes("PA", (5, 3), &source_bytes).expect("PA source");
+        source
+            .putpalette(&palette, "RGB")
+            .expect("PA source palette");
+        let mut expected_image =
+            Image::frombytes("PA", (5, 3), &destination_bytes).expect("PA destination reference");
+        expected_image
+            .putpalette(&palette, "RGB")
+            .expect("PA destination palette");
+        let mask = Image::frombytes("L", (5, 3), &mask_bytes).expect("L mask");
+        let position = (-1, -1);
+        expected_image
+            .paste_at(
+                PasteSource::Image(Box::new(source.clone())),
+                Some(position),
+                Some(&mask),
+            )
+            .expect("CPU PA Paste reference");
+        let expected = expected_image
+            .use_backend(Backend::Cpu)
+            .tobytes()
+            .expect("CPU masked PA Paste");
+
+        let mut actual_image =
+            Image::frombytes("PA", (5, 3), &destination_bytes).expect("PA GPU destination");
+        actual_image
+            .putpalette(&palette, "RGB")
+            .expect("PA GPU destination palette");
+        actual_image
+            .paste_at(
+                PasteSource::Image(Box::new(source)),
+                Some(position),
+                Some(&mask),
+            )
+            .expect("queue PA GPU Paste");
+        let gpu_image = actual_image.use_backend(Backend::Gpu);
+        assert_eq!(gpu_image.mode().expect("PA output mode"), "PA");
+        assert_eq!(gpu_image.palette(), Some(palette.to_vec()));
+        let actual = gpu_image.tobytes().expect("native GPU masked PA Paste");
+        assert_eq!(actual, expected, "masked PA Paste output");
     }
 
     #[test]
