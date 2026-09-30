@@ -519,6 +519,7 @@ impl Image {
                 ("I", "F") => color::i_to_f(&img),
                 ("I", "RGB") => color::i_to_rgb(&img),
                 ("F", "I") => color::f_to_i(&img),
+                ("F", "RGB") => color::f_to_rgb(&img),
                 _ => {
                     let luma = if effective_src_mode_name == "I" {
                         color::i_to_l(&img)
@@ -1317,6 +1318,34 @@ mod tests {
             [
                 0, 0, 0, 0, 0, 0, 1, 1, 1, 127, 127, 127, 255, 255, 255, 255, 255, 255, 0, 0, 0,
                 255, 255, 255,
+            ]
+        );
+    }
+
+    #[test]
+    fn float_to_rgb_clamps_and_truncates_native_f_samples() {
+        let samples = [-1.5_f32, 0.0, 0.9, 1.9, 127.9, 255.9, 256.5];
+        let source_bytes: Vec<u8> = samples
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let source = Image::from_dynamic(
+            crate::raster::DynamicImage::ImageRgba8(
+                crate::raster::RgbaImage::from_raw(samples.len() as u32, 1, source_bytes)
+                    .expect("valid F-mode carrier"),
+            ),
+            Some("F".to_owned()),
+        );
+
+        let converted = source
+            .convert("RGB", None, None, None, None)
+            .expect("F to RGB conversion");
+
+        assert_eq!(converted.mode().expect("converted mode"), "RGB");
+        assert_eq!(
+            converted.tobytes().expect("converted bytes"),
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 127, 127, 127, 255, 255, 255, 255, 255, 255,
             ]
         );
     }
