@@ -1,7 +1,7 @@
 # Installation
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.2](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.2).**
+**Latest release: [12.2.0-alpha.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.3).**
 <!-- /release:summary -->
 
 Install **pillow-rs** from PyPI, npm, or crates.io. Python imports `PIL`,
@@ -15,7 +15,7 @@ installing both in one environment can overwrite each other's files.
 <!-- release:python -->
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==12.2.0-alpha.2
+.venv/bin/python -m pip install pillow-rs==12.2.0-alpha.3
 ```
 <!-- /release:python -->
 
@@ -39,7 +39,7 @@ and a native linker. See [contributor setup](../CONTRIBUTING.md) for source deve
 
 <!-- release:npm -->
 ```sh
-npm install pillow-rs@12.2.0-alpha.2
+npm install pillow-rs@12.2.0-alpha.3
 ```
 <!-- /release:npm -->
 
@@ -55,7 +55,7 @@ Add this dependency to your application's `Cargo.toml`:
 <!-- release:cargo -->
 ```toml
 [dependencies]
-pillow-rs = "=12.2.0-alpha.2"
+pillow-rs = "=12.2.0-alpha.3"
 ```
 <!-- /release:cargo -->
 

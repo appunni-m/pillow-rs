@@ -1,14 +1,14 @@
 # pillow-rs for Node.js and browsers
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.2](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.2).**
+**Latest release: [12.2.0-alpha.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.3).**
 <!-- /release:summary -->
 
 Install the single npm package for both environments:
 
 <!-- release:npm -->
 ```sh
-npm install pillow-rs@12.2.0-alpha.2
+npm install pillow-rs@12.2.0-alpha.3
 ```
 <!-- /release:npm -->
 
