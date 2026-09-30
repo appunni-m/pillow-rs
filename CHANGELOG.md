@@ -4,6 +4,15 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
+## Unreleased
+
+## 12.2.0-alpha.3 - 2026-10-01
+
+- Preserve native fill-channel order in `ImageOps.expand` for formats such as
+  CMYK and RGBX across the Python and Node/browser WASM parity adapters.
+- Add native-mode expand parity cases and fix the mismatches that blocked the
+  post-alpha.2 main CI run.
+
 ## 12.2.0-alpha.2 - 2026-09-30
 
 - Add mode-specific CPU, SIMD, and GPU paths across image operations, keeping
@@ -20,8 +29,6 @@ backend limitations in the documentation remain part of its contract.
   parallel-enabled builds.
 - Add exact integer SIMD filtering for native Sharpness modes and a contiguous
   shuffled lane load for L images, preserving CPU parity across modes and tails.
-
-## Unreleased
 
 ## 12.2.0-alpha.1 - 2026-09-16
 
