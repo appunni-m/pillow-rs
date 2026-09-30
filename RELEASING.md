@@ -20,7 +20,7 @@ has no Python or npm distribution.
 
 ## Version policy
 
-Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.0-alpha.1**. The base version follows the targeted Pillow
+Use one declared version in Cargo, npm, Python, the Python runtime, and the documentation source-version field: **12.2.0-alpha.2**. The base version follows the targeted Pillow
 version; increment the `alpha.N` suffix for subsequent candidates. Use
 `beta.N`, `rc.N`, or a stable version only when the corresponding maturity is
 justified. A matching Pillow version is a compatibility target, not a claim
