@@ -1684,19 +1684,23 @@ fn native_paste_blend_vector16(
     destination: [u8; 16],
     mask: [u8; 16],
 ) -> [u8; 16] {
+    const MAX: u16x16 = u16x16::splat(255);
+    const ROUND_BIAS: u16x16 = u16x16::splat(127);
     let source = u16x16::from(u8x16::new(source));
     let destination = u16x16::from(u8x16::new(destination));
     let mask = u16x16::from(u8x16::new(mask));
-    let weighted = source * mask + destination * (u16x16::splat(255) - mask) + u16x16::splat(127);
+    let weighted = source * mask + destination * (MAX - mask) + ROUND_BIAS;
     simd_pack_u16x16(simd_div255(weighted)).to_array()
 }
 
 #[inline]
 fn native_paste_blend_vector8(source: [u8; 8], destination: [u8; 8], mask: [u8; 8]) -> [u8; 8] {
+    const MAX: u16x8 = u16x8::splat(255);
+    const ROUND_BIAS: u16x8 = u16x8::splat(127);
     let source = u16x8::new(source.map(u16::from));
     let destination = u16x8::new(destination.map(u16::from));
     let mask = u16x8::new(mask.map(u16::from));
-    let weighted = source * mask + destination * (u16x8::splat(255) - mask) + u16x8::splat(127);
+    let weighted = source * mask + destination * (MAX - mask) + ROUND_BIAS;
     simd_div255_u16x8(weighted)
         .to_array()
         .map(|value| value as u8)
@@ -1708,10 +1712,12 @@ fn native_paste_preblend_vector16(
     destination: [u8; 16],
     mask: [u8; 16],
 ) -> [u8; 16] {
+    const MAX: u16x16 = u16x16::splat(255);
+    const ROUND_BIAS: u16x16 = u16x16::splat(128);
     let source = u16x16::from(u8x16::new(source));
     let destination = u16x16::from(u8x16::new(destination));
     let mask = u16x16::from(u8x16::new(mask));
-    let scaled = destination * (u16x16::splat(255) - mask) + u16x16::splat(128);
+    let scaled = destination * (MAX - mask) + ROUND_BIAS;
     (simd_div255(scaled) + source)
         .to_array()
         .map(|value| value as u8)
@@ -1719,14 +1725,95 @@ fn native_paste_preblend_vector16(
 
 #[inline]
 fn native_paste_preblend_vector8(source: [u8; 8], destination: [u8; 8], mask: [u8; 8]) -> [u8; 8] {
+    const MAX: u16x8 = u16x8::splat(255);
+    const ROUND_BIAS: u16x8 = u16x8::splat(128);
     let source = u16x8::new(source.map(u16::from));
     let destination = u16x8::new(destination.map(u16::from));
     let mask = u16x8::new(mask.map(u16::from));
-    let scaled = destination * (u16x8::splat(255) - mask) + u16x8::splat(128);
+    let scaled = destination * (MAX - mask) + ROUND_BIAS;
     (simd_div255_u16x8(scaled) + source)
         .to_array()
         .map(|value| value as u8)
 }
+
+/// Blend a clipped native-L row with the same-width L mask. This single-byte
+/// kernel avoids rebuilding per-lane mask addresses in the generic channel
+/// adapter and is independent across destination rows.
+#[inline]
+fn native_paste_l_masked_row(
+    source: &[u8],
+    destination: &mut [u8],
+    mask: &[u8],
+    allow_short_masked_tail: bool,
+) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len(), mask.len());
+
+    let vector_len16 = source.len() / 16 * 16;
+    for start in (0..vector_len16).step_by(16) {
+        let source_block = <[u8; 16]>::try_from(&source[start..start + 16])
+            .expect("validated L Paste row has a complete 16-byte block");
+        let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
+            .expect("validated L Paste row has a complete 16-byte destination block");
+        let mask_block = <[u8; 16]>::try_from(&mask[start..start + 16])
+            .expect("validated L Paste mask row has a complete 16-byte block");
+        let blended = native_paste_blend_vector16(source_block, destination_block, mask_block);
+        destination[start..start + 16].copy_from_slice(&blended);
+    }
+
+    let vector_len8 = source.len() / 8 * 8;
+    for start in (vector_len16..vector_len8).step_by(8) {
+        let source_block = <[u8; 8]>::try_from(&source[start..start + 8])
+            .expect("validated L Paste row has a complete 8-byte block");
+        let destination_block = <[u8; 8]>::try_from(&destination[start..start + 8])
+            .expect("validated L Paste row has a complete 8-byte destination block");
+        let mask_block = <[u8; 8]>::try_from(&mask[start..start + 8])
+            .expect("validated L Paste mask row has a complete 8-byte block");
+        let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+        destination[start..start + 8].copy_from_slice(&blended);
+    }
+
+    if allow_short_masked_tail {
+        let tail = source.len() - vector_len8;
+        if tail != 0 {
+            // Zero inactive lanes so the padded vector cannot read beyond any
+            // clipped source, destination, or mask row.
+            let mut source_block = [0u8; 8];
+            let mut destination_block = [0u8; 8];
+            let mut mask_block = [0u8; 8];
+            source_block[..tail].copy_from_slice(&source[vector_len8..]);
+            destination_block[..tail].copy_from_slice(&destination[vector_len8..]);
+            mask_block[..tail].copy_from_slice(&mask[vector_len8..]);
+            let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
+            destination[vector_len8..].copy_from_slice(&blended[..tail]);
+        }
+    } else {
+        for index in vector_len8..source.len() {
+            let mask_value = u16::from(mask[index]);
+            let source_value = u16::from(source[index]);
+            let destination_value = u16::from(destination[index]);
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+            )]
+            let inverse = 255 - mask_value;
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+            )]
+            let weighted = source_value * mask_value + destination_value * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            destination[index] = blended;
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+const SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
 fn native_paste_apply(
     destination: &mut [u8],
@@ -1780,6 +1867,102 @@ fn native_paste_apply(
         || region.destination_top.saturating_add(region.height) > destination_height
     {
         return false;
+    }
+
+    if plan.layout.mode == "L"
+        && plan.layout.channels == 1
+        && region.width != 0
+        && region.height != 0
+        && let Some((mask_layout, mask_row_stride)) = mask_layout
+        && mask_layout.channels == 1
+        && mask_layout.value_index == 0
+        && !mask_layout.premultiplied
+        && !mask_layout.binary
+    {
+        let Some(destination_region_start) =
+            region.destination_top.checked_mul(destination_row_stride)
+        else {
+            return false;
+        };
+        let Some(destination_region_len) = region.height.checked_mul(destination_row_stride) else {
+            return false;
+        };
+        let Some(destination_region_end) =
+            destination_region_start.checked_add(destination_region_len)
+        else {
+            return false;
+        };
+        let Some(destination_rows) =
+            destination.get_mut(destination_region_start..destination_region_end)
+        else {
+            return false;
+        };
+        let mask = mask.expect("a validated L mask layout always has mask bytes");
+        let destination_left = region.destination_left;
+        let Some(destination_right) = destination_left.checked_add(region.width) else {
+            return false;
+        };
+        let apply_luma_row = |row_index: usize, destination_row: &mut [u8]| {
+            let source_y = region.source_top + row_index;
+            let source_row_start = source_y * source_row_stride + region.source_left;
+            let source_row = &source[source_row_start..source_row_start + region.width];
+            let mask_row_start = source_y * mask_row_stride + region.source_left;
+            let mask_row = &mask[mask_row_start..mask_row_start + region.width];
+            native_paste_l_masked_row(
+                source_row,
+                &mut destination_row[destination_left..destination_right],
+                mask_row,
+                allow_short_masked_tail,
+            );
+        };
+
+        #[cfg(feature = "parallel")]
+        if region.height > 1
+            && region.width.saturating_mul(region.height) >= SIMD_PASTE_PARALLEL_PIXEL_THRESHOLD
+        {
+            crate::par_rows_mut!(
+                destination_rows,
+                destination_row_stride,
+                region.height,
+                |_row_start, _row_end, row, destination_row| {
+                    apply_luma_row(row as usize, destination_row);
+                }
+            );
+        } else {
+            for (row_index, destination_row) in destination_rows
+                .chunks_exact_mut(destination_row_stride)
+                .enumerate()
+            {
+                apply_luma_row(row_index, destination_row);
+            }
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        for (row_index, destination_row) in destination_rows
+            .chunks_exact_mut(destination_row_stride)
+            .enumerate()
+        {
+            apply_luma_row(row_index, destination_row);
+        }
+
+        let vector_len16 = region.width / 16 * 16;
+        let vector_len8 = region.width / 8 * 8;
+        let vector_blocks_per_row = (vector_len16 / 16 + (vector_len8 - vector_len16) / 8)
+            + usize::from(allow_short_masked_tail && vector_len8 < region.width);
+        let vector_blocks = vector_blocks_per_row.saturating_mul(region.height) as u64;
+        let scalar_tail = if allow_short_masked_tail {
+            0
+        } else {
+            (region.width - vector_len8).saturating_mul(region.height) as u64
+        };
+        if vector_blocks != 0 {
+            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        }
+        if scalar_tail != 0 {
+            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        }
+        crate::compute::record_pipeline_operation_path("vector");
+        return true;
     }
 
     let mut vector_blocks = 0u64;
@@ -10034,7 +10217,8 @@ fn simd_div255(value: u16x16) -> u16x16 {
 
 #[inline]
 fn simd_div255_u16x8(value: u16x8) -> u16x8 {
-    let incremented = value + u16x8::splat(1);
+    const ONE: u16x8 = u16x8::splat(1);
+    let incremented = value + ONE;
     (incremented + (incremented >> 8u32)) >> 8u32
 }
 
@@ -26980,6 +27164,56 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_l_masked_paste_rows_keep_positive_clipped_short_tail_exact() {
+        let destination = vec![11, 22, 33, 44, 55, 66];
+        let source = (101..116).collect::<Vec<u8>>();
+        let mask = vec![
+            0, 128, 255, 254, 1, 127, 128, 254, 255, 0, 1, 127, 128, 254, 255,
+        ];
+        let region = super::native_paste_region(3, 2, 5, 3, 1, 1)
+            .expect("positive offset should leave a clipped two-pixel row");
+        assert_eq!((region.width, region.height), (2, 1));
+        let plan = super::NativePastePlan {
+            layout: super::NativePasteLayout {
+                channels: 1,
+                mode: "L",
+            },
+            mask: Some(super::NativePasteMaskLayout {
+                channels: 1,
+                value_index: 0,
+                premultiplied: false,
+                binary: false,
+            }),
+            region,
+            source_width: 5,
+            source_height: 3,
+            luma16_mask_byte_shift: 0,
+        };
+
+        let mut actual = destination.clone();
+        assert!(super::native_paste_apply(
+            &mut actual,
+            &source,
+            Some(&mask),
+            3,
+            2,
+            plan,
+            true,
+        ));
+
+        let mut expected = destination;
+        for index in 0..2 {
+            let source_value = u32::from(source[index]);
+            let destination_value = u32::from(expected[4 + index]);
+            let mask_value = u32::from(mask[index]);
+            expected[4 + index] =
+                ((source_value * mask_value + destination_value * (255 - mask_value) + 127) / 255)
+                    as u8;
+        }
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn native_rgb_to_rgba_paste_returns_unchanged_destination_for_empty_or_disjoint_regions() {
         use crate::raster::{DynamicImage, RgbImage, RgbaImage};
