@@ -34,7 +34,7 @@ pub enum ImageOpsMask {
     Invalid(String),
 }
 
-/// Host-neutral color input for `ImageOps.pad`.
+/// Host-neutral color input for `ImageOps.pad` and `ImageOps.expand`.
 #[derive(Debug, Clone)]
 pub enum ImageOpsColor {
     /// No explicit color was supplied; use the operation default.
@@ -771,6 +771,21 @@ pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Imag
     Ok(Image::push_op(image, PipelineOp::Expand { border, fill }))
 }
 
+/// Expands an image after resolving the fill against its native Pillow mode.
+///
+/// Keeping the host value intact until the mode is known preserves native
+/// component counts and meanings: CMYK's fourth component is K, RGBX's is X,
+/// and a three-component color receives Pillow's opaque fourth byte for both.
+pub fn expand_with_input(
+    image: &Image,
+    border: u32,
+    fill: ImageOpsColor,
+) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    let fill = resolve_imageops_color(fill, &mode)?.unwrap_or((0, 0, 0, 0));
+    expand(image, border, fill)
+}
+
 /// Resizes an image to fit within `(w, h)` while preserving aspect ratio.
 ///
 /// # Errors
@@ -1470,8 +1485,8 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, fit, fit_with_input,
-        pad, pad_with_input, resolve_imageops_color, scale_with_input,
+        CenteringInput, ImageOpsColor, contain_with_input, cover_with_input, expand_with_input,
+        fit, fit_with_input, pad, pad_with_input, resolve_imageops_color, scale_with_input,
     };
     use crate::error::PilError;
     use crate::image::Image;
@@ -1594,6 +1609,38 @@ mod tests {
                 .expect("default RGBX fill is valid"),
             None
         );
+    }
+
+    #[test]
+    fn expand_rgbx_and_cmyk_resolve_three_components_in_native_order() {
+        let fill = [17, 83, 149, u8::MAX];
+        for mode in ["CMYK", "RGBX"] {
+            let source = Image::new(1, 1, mode, (23, 47, 89, 131))
+                .expect("native four-byte source is valid");
+            let expanded =
+                expand_with_input(&source, 1, ImageOpsColor::Components(vec![17, 83, 149]))
+                    .expect("three-component native fill is valid");
+            assert_eq!(expanded.mode().expect("mode is preserved"), mode);
+
+            let mut expected = fill.repeat(9);
+            expected[16..20].copy_from_slice(&[23, 47, 89, 131]);
+            assert_eq!(expanded.tobytes().expect("expanded bytes"), expected);
+        }
+    }
+
+    #[test]
+    fn expand_rejects_two_component_fill_for_cmyk_and_rgbx() {
+        for mode in ["CMYK", "RGBX"] {
+            let source = Image::new(1, 1, mode, (23, 47, 89, 131))
+                .expect("native four-byte source is valid");
+            let error = expand_with_input(&source, 1, ImageOpsColor::Components(vec![17, 83]))
+                .expect_err("CMYK and RGBX reject two-component colors");
+            assert!(matches!(
+                error,
+                PilError::TypeError(message)
+                    if message == "color must be int, or tuple of one, three or four elements"
+            ));
+        }
     }
 
     #[test]
