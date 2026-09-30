@@ -502,7 +502,11 @@ impl BackendImpl for SimdPool {
         let result = if ops.iter().any(|op| matches!(op, PipelineOp::Merge { .. })) {
             Ok(current)
         } else {
-            normalize_palette_result(current, mode)
+            // Palette normalization follows the pipeline's final logical
+            // mode. The source mode can differ after ExtractBand: PA produces
+            // one-band L bytes, which must not be widened back into [index,
+            // 255] pairs at this boundary.
+            normalize_palette_result(current, current_mode.as_deref())
         }?;
         crate::compute::record_pipeline_resource_telemetry(resources);
         Ok(result)
@@ -810,7 +814,9 @@ mod transpose_tests {
 
 #[cfg(test)]
 mod palette_normalization_tests {
-    use crate::raster::{DynamicImage, GrayImage};
+    use crate::compute::BackendImpl;
+    use crate::pipeline::PipelineOp;
+    use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage};
 
     #[test]
     fn palette_indices_keep_tightly_packed_luma_storage() {
@@ -835,5 +841,26 @@ mod palette_normalization_tests {
         };
         assert_eq!(result.dimensions(), (2, 1));
         assert_eq!(result.as_raw(), &[7, 129]);
+    }
+
+    #[test]
+    fn pa_extract_band_returns_l_samples_without_reapplying_pa_layout() {
+        let source_bytes: Vec<u8> = (0..16 * 16).flat_map(|pixel| [pixel as u8, 192]).collect();
+        let source = DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(16, 16, source_bytes).expect("PA source dimensions"),
+        );
+
+        for (index, expected) in [
+            (0, (0..256).map(|pixel| pixel as u8).collect::<Vec<_>>()),
+            (1, vec![192; 256]),
+        ] {
+            let actual = super::SimdPool
+                .execute_batch(&[PipelineOp::ExtractBand { index }], &source, Some("PA"))
+                .expect("SIMD PA channel extraction");
+            let DynamicImage::ImageLuma8(actual) = actual else {
+                panic!("ExtractBand must return one-band L storage");
+            };
+            assert_eq!(actual.as_raw(), &expected, "PA channel {index}");
+        }
     }
 }

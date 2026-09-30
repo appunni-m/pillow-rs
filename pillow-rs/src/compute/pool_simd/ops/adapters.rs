@@ -10607,19 +10607,25 @@ fn simd_pack_u16x16(value: u16x16) -> u8x16 {
 /// conversion or shuffle.
 pub(crate) fn simd_unsharp_blend_rgb_150(
     original: &[u8],
-    blurred: &[u8],
-    threshold: u8,
-) -> Option<Vec<u8>> {
-    if original.len() != blurred.len() {
-        return None;
+    blurred_output: &mut [u8],
+    threshold: i32,
+) -> bool {
+    if original.len() != blurred_output.len() {
+        return false;
     }
 
-    let mut output = Vec::with_capacity(original.len());
     let mut original_chunks = original.chunks_exact(16);
-    let mut blurred_chunks = blurred.chunks_exact(16);
-    for (original_chunk, blurred_chunk) in original_chunks.by_ref().zip(blurred_chunks.by_ref()) {
-        let original_lanes = <[u8; 16]>::try_from(original_chunk).ok()?;
-        let blurred_lanes = <[u8; 16]>::try_from(blurred_chunk).ok()?;
+    let mut output_chunks = blurred_output.chunks_exact_mut(16);
+    for output_chunk in output_chunks.by_ref() {
+        let Some(original_chunk) = original_chunks.next() else {
+            return false;
+        };
+        let Ok(original_lanes) = <[u8; 16]>::try_from(original_chunk) else {
+            return false;
+        };
+        let Ok(blurred_lanes) = <[u8; 16]>::try_from(&*output_chunk) else {
+            return false;
+        };
         let original_lanes = u16x16::from(u8x16::new(original_lanes));
         let blurred_lanes = u16x16::from(u8x16::new(blurred_lanes));
         let original_is_greater = original_lanes.simd_ge(blurred_lanes);
@@ -10634,27 +10640,33 @@ pub(crate) fn simd_unsharp_blend_rgb_150(
         // wrapped negative lanes remain within i16's signed range.
         let sharpened =
             original_is_greater.select(original_lanes + adjustment, original_lanes - adjustment);
-        let apply = distance.simd_gt(u16x16::splat(u16::from(threshold)));
-        let result = apply.select(sharpened, original_lanes);
-        output.extend_from_slice(&simd_pack_u16x16(result).to_array());
+        let result = if threshold < 0 {
+            sharpened
+        } else {
+            distance
+                .simd_gt(u16x16::splat(threshold.min(255) as u16))
+                .select(sharpened, original_lanes)
+        };
+        output_chunk.copy_from_slice(&simd_pack_u16x16(result).to_array());
     }
 
-    for (&original, &blurred) in original_chunks
+    for (original, output) in original_chunks
         .remainder()
         .iter()
-        .zip(blurred_chunks.remainder())
+        .zip(output_chunks.into_remainder())
     {
-        let difference = i32::from(original) - i32::from(blurred);
-        let sharpened = if difference.unsigned_abs() > u32::from(threshold) {
+        let blurred = *output;
+        let difference = i32::from(*original) - i32::from(blurred);
+        let sharpened = if difference.abs() > threshold {
             let adjustment = difference * 150 / 100;
-            (i32::from(original) + adjustment).clamp(0, 255) as u8
+            (i32::from(*original) + adjustment).clamp(0, 255) as u8
         } else {
-            original
+            *original
         };
-        output.push(sharpened);
+        *output = sharpened;
     }
 
-    Some(output)
+    true
 }
 
 #[inline]
@@ -11373,15 +11385,10 @@ fn native_flip_rows(
     {
         return None;
     }
-    let mut output = Vec::with_capacity(total_len);
-    for output_row in 0..height as usize {
-        let source_row = height as usize - 1 - output_row;
-        let source_start = source_row.checked_mul(row_len)?;
-        output.extend_from_slice(source.get(source_start..source_start + row_len)?);
-    }
-    let result =
-        crate::image_utils::raw_bytes_to_image(width, height, output, stored_bytes_per_pixel)
-            .ok()?;
+    // The native DynamicImage flip already reserves exact capacity and copies
+    // complete typed rows. Reuse that implementation after this mode/storage
+    // proof rather than maintaining a second row-reversal kernel here.
+    let result = img.flipv();
     Some((preserve_mode(img, result), 0, 0))
 }
 
@@ -14913,6 +14920,126 @@ fn native_filter_3x3_rows(
     );
 }
 
+/// Load a bounded RGB byte-stream block through SIMD widening. The final
+/// partial block is zero-padded; only its active lanes are stored.
+#[inline]
+fn native_filter_load_rgb_byte_stream_block(
+    raw: &[u8],
+    start: usize,
+    active_bytes: usize,
+) -> f32x8 {
+    debug_assert!(active_bytes <= 8);
+    let mut padded = [0u8; 16];
+    padded[..active_bytes].copy_from_slice(&raw[start..start + active_bytes]);
+    let widened = u16x16::from(u8x16::new(padded));
+    let [low, _high]: [u16x8; 2] = bytemuck::cast(widened);
+    f32x8::from_i32x8(i32x8::from_u16x8(low))
+}
+
+/// Evaluate eight consecutive RGB channel bytes with the ordinary 3x3 math.
+///
+/// RGB uses one kernel for all three channels, so an eight-byte vector may
+/// start or end within a pixel. A horizontal neighbor is exactly three bytes
+/// away, which keeps each lane on the same channel without deinterleaving.
+#[inline]
+fn native_filter_3x3_rgb_byte_stream_vector(
+    raw: &[u8],
+    row_stride: usize,
+    y: usize,
+    output_byte_start: usize,
+    active_bytes: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> [u8; 8] {
+    debug_assert!(active_bytes <= 8);
+    debug_assert!(output_byte_start >= 3);
+    debug_assert!(output_byte_start + active_bytes <= row_stride - 3);
+
+    let row = |dy: isize, kernel_start: usize| -> f32x8 {
+        let source_start = (y as isize + dy) as usize * row_stride + output_byte_start;
+        let left = native_filter_load_rgb_byte_stream_block(raw, source_start - 3, active_bytes);
+        let middle = native_filter_load_rgb_byte_stream_block(raw, source_start, active_bytes);
+        let right = native_filter_load_rgb_byte_stream_block(raw, source_start + 3, active_bytes);
+        let sum = middle * f32x8::splat(kernel[kernel_start + 1]);
+        let sum = left.mul_add(f32x8::splat(kernel[kernel_start]), sum);
+        right.mul_add(f32x8::splat(kernel[kernel_start + 2]), sum)
+    };
+
+    let mut total = f32x8::splat(rounding_bias);
+    total += row(1, 0);
+    total += row(0, 3);
+    total += row(-1, 6);
+    let values = total.to_array();
+    std::array::from_fn(|lane| {
+        let value = values[lane];
+        if value <= 0.0 {
+            0
+        } else if value >= 255.0 {
+            255
+        } else {
+            value as u8
+        }
+    })
+}
+
+/// Apply a native RGB 3x3 kernel as one contiguous stream of channel bytes.
+///
+/// The stream covers only the interior pixels: three border bytes remain at
+/// each end of every row. Every lane reads its horizontal neighbors at -3/+3
+/// bytes, preserving channel identity while removing per-channel gathers and
+/// strided output scatters from the generic row loop.
+fn native_filter_3x3_rgb_byte_stream(
+    raw: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> Option<u64> {
+    let row_stride = width.checked_mul(3)?;
+    let expected_len = row_stride.checked_mul(height)?;
+    if width < 3 || height < 3 || raw.len() != expected_len || out.len() != expected_len {
+        return None;
+    }
+    let interior_bytes = row_stride - 6;
+    let blocks_per_row = interior_bytes.div_ceil(8);
+    let interior_height = height - 2;
+    let apply_row = |y: usize, output_row: &mut [u8]| {
+        let mut output_byte = 3usize;
+        let interior_end = row_stride - 3;
+        while output_byte < interior_end {
+            let active_bytes = (interior_end - output_byte).min(8);
+            let values = native_filter_3x3_rgb_byte_stream_vector(
+                raw,
+                row_stride,
+                y,
+                output_byte,
+                active_bytes,
+                kernel,
+                rounding_bias,
+            );
+            output_row[output_byte..output_byte + active_bytes]
+                .copy_from_slice(&values[..active_bytes]);
+            output_byte += active_bytes;
+        }
+    };
+
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+        let y = y as usize;
+        if (1..height - 1).contains(&y) {
+            apply_row(y, row);
+        }
+    });
+    #[cfg(not(feature = "parallel"))]
+    for y in 1..height - 1 {
+        let row_start = y * row_stride;
+        apply_row(y, &mut out[row_start..row_start + row_stride]);
+    }
+
+    Some((blocks_per_row * interior_height) as u64)
+}
+
 /// Apply a native-byte 3x3 convolution to only the active channels.
 ///
 /// LA/RGBA Sharpness uses this form because Pillow smooths the RGB samples
@@ -15500,26 +15627,56 @@ pub fn simd_filter_3x3(
     let channels =
         native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter3x3"))?;
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
-    if native_small_uniform_convolution_identity(
-        img,
-        channels,
-        &normalized_kernel,
-        3,
-        *offset + 0.5,
-    ) {
-        return simd_filter_identity(img, mode, "Filter3x3");
+    if let Some(filtered) =
+        native_small_uniform_3x3_convolution(img, channels, &normalized_kernel, *offset + 0.5)
+    {
+        let raw = img.as_bytes();
+        if raw[..channels] == filtered[..channels] {
+            return simd_filter_identity(img, mode, "Filter3x3");
+        }
+        let mut output = raw.to_vec();
+        let width = img.width() as usize;
+        let height = img.height() as usize;
+        let row_stride = width * channels;
+        for y in 1..height - 1 {
+            for x in 1..width - 1 {
+                let start = y * row_stride + x * channels;
+                output[start..start + channels].copy_from_slice(&filtered[..channels]);
+            }
+        }
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        let result =
+            crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
+        return Ok(preserve_mode(img, result));
     }
     let mut output = img.as_bytes().to_vec();
-    crate::compute::record_pipeline_operation_path("vector");
-    native_filter_3x3_rows(
-        img.as_bytes(),
-        &mut output,
-        img.width() as usize,
-        img.height() as usize,
-        channels,
-        &normalized_kernel,
-        *offset + 0.5,
-    );
+    let rgb_byte_stream_blocks = if channels == 3 {
+        native_filter_3x3_rgb_byte_stream(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+            &normalized_kernel,
+            *offset + 0.5,
+        )
+    } else {
+        None
+    };
+    if let Some(vector_blocks) = rgb_byte_stream_blocks {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+    } else {
+        crate::compute::record_pipeline_operation_path("vector");
+        native_filter_3x3_rows(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+            channels,
+            &normalized_kernel,
+            *offset + 0.5,
+        );
+    }
     let result =
         crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)?;
     Ok(preserve_mode(img, result))
@@ -15684,6 +15841,45 @@ fn native_small_uniform_convolution_identity(
         }
     }
     true
+}
+
+/// Return the filtered pixel tuple for a constant image, if the image is
+/// small enough to prove uniformity cheaply. A 3x3 convolution then needs one
+/// exact evaluation per channel; borders still copy the source tuple.
+fn native_small_uniform_3x3_convolution(
+    img: &DynamicImage,
+    channels: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> Option<[u8; 4]> {
+    if !(1..=4).contains(&channels)
+        || !native_small_uniform_byte_image(img, channels)
+        || img.width() < 3
+        || img.height() < 3
+    {
+        return None;
+    }
+    let first_pixel = img.as_bytes().get(..channels)?;
+    let mut filtered = [0u8; 4];
+    for channel in 0..channels {
+        let sample = f32::from(first_pixel[channel]);
+        let mut total = rounding_bias;
+        for row in 0..3 {
+            let kernel_start = row * 3;
+            let mut row_sum = sample * kernel[kernel_start + 1];
+            row_sum = sample.mul_add(kernel[kernel_start], row_sum);
+            row_sum = sample.mul_add(kernel[kernel_start + 2], row_sum);
+            total += row_sum;
+        }
+        filtered[channel] = if total <= 0.0 {
+            0
+        } else if total >= 255.0 {
+            255
+        } else {
+            total as u8
+        };
+    }
+    Some(filtered)
 }
 
 fn native_float_rank_supported_for_image(
@@ -16481,6 +16677,8 @@ fn simd_order_statistic_filter(
 
 const SIMD_FLOAT_ORDER_STATISTIC_MAX_AREA: usize = 81;
 const SIMD_FLOAT_ORDER_STATISTIC_LANES: usize = 8;
+#[cfg(feature = "parallel")]
+const SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
 // The byte-domain selector switches away from the fixed network above 5x5,
 // but the existing F-mode vector sorter is independently bounded by its
 // 9x9/81-value storage. Keep that exact F-mode contract available.
@@ -16668,16 +16866,34 @@ fn simd_float_order_statistic_filter(
     let raw = img.as_bytes();
     let mut output = raw.to_vec();
     #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        &mut output,
-        width * 4,
-        height,
-        |_row_start, _row_end, y, row| {
+    if width.saturating_mul(height) >= SIMD_FLOAT_ORDER_STATISTIC_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            width * 4,
+            height,
+            |_row_start, _row_end, y, row| {
+                rank_filter_float_order_statistic_row(
+                    raw, row, width, height, size, half, area, rank, y as usize,
+                );
+            }
+        );
+    } else {
+        for y in 0..height {
+            let row_start = y * width * 4;
+            let row_end = row_start + width * 4;
             rank_filter_float_order_statistic_row(
-                raw, row, width, height, size, half, area, rank, y as usize,
+                raw,
+                &mut output[row_start..row_end],
+                width,
+                height,
+                size,
+                half,
+                area,
+                rank,
+                y,
             );
         }
-    );
+    }
     #[cfg(not(feature = "parallel"))]
     for y in 0..height {
         let row_start = y * width * 4;
@@ -18404,6 +18620,10 @@ fn native_cover_dimensions(
     }
 }
 
+// Aspect-resize operations are often used on thumbnail-sized images. Rayon
+// row dispatch can cost more than the SIMD work for fewer than 32 × 32 pixels.
+const SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD: usize = 32 * 32;
+
 /// Compute the source box used by `ImageOps.fit` without touching pixels.
 ///
 /// Pillow keeps this calculation in the ImageOps layer and passes the four
@@ -19774,6 +19994,8 @@ fn native_pad_bytes(
             channels,
             false,
             false,
+            0,
+            false,
             &mut output[window_start..window_end],
         )?;
         let result =
@@ -19785,23 +20007,27 @@ fn native_pad_bytes(
     // copies the source directly. Resampling an equal-sized image changes
     // edge pixels for convolution filters, which caused the large RGBA pad
     // cases to diverge even though no resize was required.
-    let mut resize_vector_blocks = 0u64;
-    let mut resize_scalar_tail = 0u64;
-    let resized = if (img.width(), img.height()) == (contained_width, contained_height) {
-        let mut copied = vec![0u8; img.as_bytes().len()];
-        let (blocks, tail) = copy_native_bytes(img.as_bytes(), &mut copied)
-            .ok_or_else(|| PilError::InternalError("SIMD pad source copy shape mismatch".into()))?;
-        resize_vector_blocks = resize_vector_blocks.saturating_add(blocks);
-        resize_scalar_tail = resize_scalar_tail.saturating_add(tail);
-        let result =
-            crate::image_utils::raw_bytes_to_image(img.width(), img.height(), copied, channels)?;
-        preserve_mode(img, result)
+    let resize_vector_blocks = 0u64;
+    let resize_scalar_tail = 0u64;
+    let identity_contain = (img.width(), img.height()) == (contained_width, contained_height);
+    let resized = if identity_contain {
+        None
     } else if mode == Some("F") {
-        simd_resize_f(img, contained_width, contained_height, &filter)?
+        Some(simd_resize_f(
+            img,
+            contained_width,
+            contained_height,
+            &filter,
+        )?)
     } else if mode == Some("I") {
-        simd_resize_i32(img, contained_width, contained_height, &filter)?
+        Some(simd_resize_i32(
+            img,
+            contained_width,
+            contained_height,
+            &filter,
+        )?)
     } else {
-        match filter {
+        Some(match filter {
             ResampleFilter::Nearest => {
                 simd_resize_nearest(img, contained_width, contained_height, channels)?
             }
@@ -19818,11 +20044,14 @@ fn native_pad_bytes(
                 },
                 false,
             )?,
-        }
+        })
     };
     let target_width = target_width_usize;
     let target_height = target_height_usize;
-    if resized.as_bytes().len() != source_stride.saturating_mul(source_height)
+    let source = resized
+        .as_ref()
+        .map_or_else(|| img.as_bytes(), DynamicImage::as_bytes);
+    if source.len() != source_stride.saturating_mul(source_height)
         || offset_x.saturating_add(source_width) > target_width
         || offset_y.saturating_add(source_height) > target_height
     {
@@ -19832,28 +20061,49 @@ fn native_pad_bytes(
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = resize_vector_blocks;
     let mut scalar_tail = resize_scalar_tail;
-    for row in output.chunks_exact_mut(target_stride) {
-        let (blocks, tail) = native_fill_row(row, fill, channels)
-            .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
-        vector_blocks = vector_blocks.saturating_add(blocks);
-        scalar_tail = scalar_tail.saturating_add(tail);
-    }
-    let source = resized.as_bytes();
-    for source_y in 0..source_height {
+    let fill_is_zero =
+        (0..channels).all(|sample| native_expand_fill_sample(fill, channels, sample) == 0);
+    let content_start = offset_x
+        .checked_mul(channels)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    let content_end = content_start
+        .checked_add(source_stride)
+        .ok_or_else(|| simd_unsupported("Pad"))?;
+    for (output_y, row) in output.chunks_exact_mut(target_stride).enumerate() {
+        if output_y < offset_y || output_y - offset_y >= source_height {
+            if !fill_is_zero {
+                let (blocks, tail) = native_fill_row(row, fill, channels).ok_or_else(|| {
+                    PilError::InternalError("SIMD pad fill shape mismatch".into())
+                })?;
+                vector_blocks = vector_blocks.saturating_add(blocks);
+                scalar_tail = scalar_tail.saturating_add(tail);
+            }
+            continue;
+        }
+
+        let source_y = output_y - offset_y;
+        if !fill_is_zero {
+            let (blocks, tail) = native_fill_row(&mut row[..content_start], fill, channels)
+                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        }
         let source_start = source_y
             .checked_mul(source_stride)
             .ok_or_else(|| simd_unsupported("Pad"))?;
-        let output_start = (offset_y + source_y)
-            .checked_mul(target_stride)
-            .and_then(|row| row.checked_add(offset_x.checked_mul(channels)?))
-            .ok_or_else(|| simd_unsupported("Pad"))?;
         let (blocks, tail) = copy_native_bytes(
             &source[source_start..source_start + source_stride],
-            &mut output[output_start..output_start + source_stride],
+            &mut row[content_start..content_end],
         )
         .ok_or_else(|| PilError::InternalError("SIMD pad copy shape mismatch".into()))?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
+        if !fill_is_zero {
+            let (blocks, tail) = native_fill_row(&mut row[content_end..], fill, channels)
+                .ok_or_else(|| PilError::InternalError("SIMD pad fill shape mismatch".into()))?;
+            vector_blocks = vector_blocks.saturating_add(blocks);
+            scalar_tail = scalar_tail.saturating_add(tail);
+        }
     }
     let result = crate::image_utils::raw_bytes_to_image(
         target_width as u32,
@@ -20087,7 +20337,6 @@ fn resize_u8_coefficients_fit_i32(coeffs: &FilterCoeffs) -> bool {
 struct ResizeHorizontalTapPlan {
     source_bases: [usize; SIMD_RESIZE_LANES],
     weights: [i32; SIMD_RESIZE_LANES],
-    active: [bool; SIMD_RESIZE_LANES],
 }
 
 struct ResizeHorizontalBlockPlan {
@@ -20107,9 +20356,14 @@ fn build_resize_horizontal_plan(
     coeffs: &FilterCoeffs,
     output_width: usize,
     channels: usize,
+    vectorize_tail: bool,
 ) -> Option<ResizeHorizontalPlan> {
     let vector_width = if output_width < SIMD_RESIZE_LANES {
         SIMD_RESIZE_LANES
+    } else if vectorize_tail {
+        output_width
+            .div_ceil(SIMD_RESIZE_LANES)
+            .checked_mul(SIMD_RESIZE_LANES)?
     } else {
         output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
     };
@@ -20124,7 +20378,6 @@ fn build_resize_horizontal_plan(
         for tap in 0..max_count {
             let mut source_bases = [0usize; SIMD_RESIZE_LANES];
             let mut weights = [0i32; SIMD_RESIZE_LANES];
-            let mut active = [false; SIMD_RESIZE_LANES];
             for lane in 0..SIMD_RESIZE_LANES {
                 let index = output_x + lane;
                 if let (Some(&count), Some(&xmin), Some(&offset)) = (
@@ -20138,13 +20391,11 @@ fn build_resize_horizontal_plan(
                     let weight_index = offset.checked_add(tap)?;
                     source_bases[lane] = source_base;
                     weights[lane] = *coeffs.weights.get(weight_index)? as i32;
-                    active[lane] = true;
                 }
             }
             taps.push(ResizeHorizontalTapPlan {
                 source_bases,
                 weights,
-                active,
             });
         }
         blocks.push(ResizeHorizontalBlockPlan { taps });
@@ -20205,6 +20456,19 @@ fn resize_horizontal_vector_row(
     output_row: &mut [u8],
     premultiplied_alpha: bool,
 ) -> Option<(u64, u64)> {
+    if source_row.is_empty() {
+        // Empty source rows contribute only zero-weight padding lanes. Keep
+        // their established zero result without entering the gather loop.
+        output_row.fill(0);
+        let vector_blocks = u64::try_from(plan.blocks.len()).ok()?;
+        let scalar_start = if output_width < SIMD_RESIZE_LANES {
+            output_width
+        } else {
+            plan.vector_width
+        };
+        let scalar_tail = u64::try_from(output_width.saturating_sub(scalar_start)).ok()?;
+        return Some((vector_blocks, scalar_tail));
+    }
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
     let alpha_channel = channels - 1;
@@ -20220,17 +20484,14 @@ fn resize_horizontal_vector_row(
             for channel in 0..channels {
                 let mut samples = [0u8; SIMD_RESIZE_LANES];
                 for lane in 0..SIMD_RESIZE_LANES {
-                    if tap.active[lane] {
-                        samples[lane] = *source_row.get(tap.source_bases[lane] + channel)?;
-                    }
+                    // Missing lanes have weight zero and base zero. Reading
+                    // one valid source sample avoids a branch per lane/tap.
+                    samples[lane] = *source_row.get(tap.source_bases[lane] + channel)?;
                 }
                 let samples = if premultiplied_alpha && channel != alpha_channel {
                     let mut alphas = [0u8; SIMD_RESIZE_LANES];
                     for lane in 0..SIMD_RESIZE_LANES {
-                        if tap.active[lane] {
-                            alphas[lane] =
-                                *source_row.get(tap.source_bases[lane] + alpha_channel)?;
-                        }
+                        alphas[lane] = *source_row.get(tap.source_bases[lane] + alpha_channel)?;
                     }
                     let values = u16x8::new(samples.map(u16::from))
                         * u16x8::new(alphas.map(u16::from))
@@ -20287,6 +20548,7 @@ fn resize_vertical_vector_row(
     output_y: usize,
     output_row: &mut [u8],
     premultiplied_alpha: bool,
+    vectorize_tail: bool,
 ) -> Option<(u64, u64)> {
     let weights = resize_coeff_slice(coeffs, output_y)?;
     let y0 = usize::try_from(*coeffs.xmin.get(output_y)?).ok()?;
@@ -20294,6 +20556,10 @@ fn resize_vertical_vector_row(
     // lanes are zero-filled and skipped when the valid prefix is stored.
     let vector_width = if output_width < SIMD_RESIZE_LANES {
         SIMD_RESIZE_LANES
+    } else if vectorize_tail {
+        output_width
+            .div_ceil(SIMD_RESIZE_LANES)
+            .checked_mul(SIMD_RESIZE_LANES)?
     } else {
         output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
     };
@@ -20414,7 +20680,9 @@ fn resize_horizontal_luma_i32_vector_row(
         for tap in &block.taps {
             let mut samples = [0u8; SIMD_RESIZE_LANES];
             for lane in 0..SIMD_RESIZE_LANES {
-                if tap.active[lane] {
+                // A padded lane has a zero weight. Avoid reading its default
+                // base while keeping the compact plan free of a second mask.
+                if tap.weights[lane] != 0 {
                     samples[lane] = *source_row.get(tap.source_bases[lane])?;
                 }
             }
@@ -21152,6 +21420,30 @@ fn simd_resize_convolution(
     premultiplied_alpha: bool,
     cover_luma_i32: bool,
 ) -> Result<DynamicImage, PilError> {
+    simd_resize_convolution_with_parallel_threshold(
+        img,
+        output_width,
+        output_height,
+        filter,
+        channels,
+        premultiplied_alpha,
+        cover_luma_i32,
+        0,
+        false,
+    )
+}
+
+fn simd_resize_convolution_with_parallel_threshold(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    channels: usize,
+    premultiplied_alpha: bool,
+    cover_luma_i32: bool,
+    parallel_pixel_threshold: usize,
+    vectorize_tail: bool,
+) -> Result<DynamicImage, PilError> {
     let output_dims = CheckedDims::new_allow_empty(output_width, output_height, channels as u8)?;
     let mut output = output_dims.alloc_buffer();
     simd_resize_convolution_into(
@@ -21162,6 +21454,8 @@ fn simd_resize_convolution(
         channels,
         premultiplied_alpha,
         cover_luma_i32,
+        parallel_pixel_threshold,
+        vectorize_tail,
         &mut output,
     )?;
     let result =
@@ -21181,6 +21475,8 @@ fn simd_resize_convolution_into(
     channels: usize,
     premultiplied_alpha: bool,
     cover_luma_i32: bool,
+    parallel_pixel_threshold: usize,
+    vectorize_tail: bool,
     output: &mut [u8],
 ) -> Result<(), PilError> {
     let source_width = usize::try_from(img.width()).map_err(|_| simd_unsupported("Resize"))?;
@@ -21217,8 +21513,9 @@ fn simd_resize_convolution_into(
         && matches!(filter, ResampleFilter::Bicubic)
         && resize_u8_coefficients_fit_i32(&horizontal)
         && resize_u8_coefficients_fit_i32(&vertical);
-    let horizontal_plan = build_resize_horizontal_plan(&horizontal, output_width, channels)
-        .ok_or_else(|| simd_unsupported("Resize"))?;
+    let horizontal_plan =
+        build_resize_horizontal_plan(&horizontal, output_width, channels, vectorize_tail)
+            .ok_or_else(|| simd_unsupported("Resize"))?;
     let mut intermediate = vec![0u8; intermediate_len];
     #[cfg(feature = "parallel")]
     let vector_blocks;
@@ -21228,6 +21525,8 @@ fn simd_resize_convolution_into(
     let mut vector_blocks = 0u64;
     #[cfg(not(feature = "parallel"))]
     let mut scalar_tail = 0u64;
+    #[cfg(not(feature = "parallel"))]
+    let _ = parallel_pixel_threshold;
     let source_stride = source_width
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Resize"))?;
@@ -21236,7 +21535,32 @@ fn simd_resize_convolution_into(
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let source = img.as_bytes();
     #[cfg(feature = "parallel")]
-    {
+    if source_height.saturating_mul(output_width) < parallel_pixel_threshold {
+        for source_y in 0..source_height {
+            let source_start = source_y
+                .checked_mul(source_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let intermediate_start = source_y
+                .checked_mul(intermediate_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let source_row = source
+                .get(source_start..source_start + source_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let intermediate_row = intermediate
+                .get_mut(intermediate_start..intermediate_start + intermediate_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            resize_horizontal_vector_row(
+                source_row,
+                channels,
+                &horizontal,
+                &horizontal_plan,
+                output_width,
+                intermediate_row,
+                premultiplied_alpha,
+            )
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+        }
+    } else {
         // Horizontal rows are independent once the coefficient table is
         // built.  Keep the same per-row tap order, but let Rayon schedule
         // rows across cores; this is the same ownership proof used by the
@@ -21325,7 +21649,28 @@ fn simd_resize_convolution_into(
     }
     let output_stride = intermediate_stride;
     #[cfg(feature = "parallel")]
-    {
+    if output_width.saturating_mul(output_height) < parallel_pixel_threshold {
+        for output_y in 0..output_height {
+            let output_start = output_y
+                .checked_mul(output_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            let output_row = output
+                .get_mut(output_start..output_start + output_stride)
+                .ok_or_else(|| simd_unsupported("Resize"))?;
+            resize_vertical_vector_row(
+                &intermediate,
+                output_width,
+                source_height,
+                channels,
+                &vertical,
+                output_y,
+                output_row,
+                premultiplied_alpha,
+                vectorize_tail,
+            )
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+        }
+    } else {
         let failed = AtomicBool::new(false);
         crate::par_rows_mut!(
             output,
@@ -21352,6 +21697,7 @@ fn simd_resize_convolution_into(
                         output_y as usize,
                         output_row,
                         premultiplied_alpha,
+                        vectorize_tail,
                     )
                 };
                 if row_result.is_none() {
@@ -21363,6 +21709,8 @@ fn simd_resize_convolution_into(
             return Err(simd_unsupported("Resize"));
         }
     }
+    #[cfg(not(feature = "parallel"))]
+    let _ = parallel_pixel_threshold;
     #[cfg(not(feature = "parallel"))]
     for output_y in 0..output_height {
         let output_start = output_y
@@ -21390,6 +21738,7 @@ fn simd_resize_convolution_into(
                 output_y,
                 output_row,
                 premultiplied_alpha,
+                vectorize_tail,
             )
         };
         row_result
@@ -21404,24 +21753,24 @@ fn simd_resize_convolution_into(
         // The vector/tail counters are deterministic functions of the output
         // width and row count.  Compute them after parallel writes rather
         // than contending on shared counters inside the hot loops.
-        let horizontal_blocks = if output_width < SIMD_RESIZE_LANES {
+        let blocks_per_row = if output_width < SIMD_RESIZE_LANES {
             1
+        } else if vectorize_tail {
+            output_width.div_ceil(SIMD_RESIZE_LANES)
         } else {
             output_width / SIMD_RESIZE_LANES
         } as u64;
-        let horizontal_tail = if output_width < SIMD_RESIZE_LANES {
+        let scalar_tail_per_row = if output_width < SIMD_RESIZE_LANES || vectorize_tail {
             0
         } else {
             output_width % SIMD_RESIZE_LANES
         } as u64;
-        let vertical_blocks = horizontal_blocks;
-        let vertical_tail = horizontal_tail;
-        let computed_vector_blocks = horizontal_blocks
+        let computed_vector_blocks = blocks_per_row
             .saturating_mul(source_height as u64)
-            .saturating_add(vertical_blocks.saturating_mul(output_height as u64));
-        let computed_scalar_tail = horizontal_tail
+            .saturating_add(blocks_per_row.saturating_mul(output_height as u64));
+        let computed_scalar_tail = scalar_tail_per_row
             .saturating_mul(source_height as u64)
-            .saturating_add(vertical_tail.saturating_mul(output_height as u64));
+            .saturating_add(scalar_tail_per_row.saturating_mul(output_height as u64));
         vector_blocks = computed_vector_blocks;
         scalar_tail = computed_scalar_tail;
     }
@@ -21507,7 +21856,7 @@ fn simd_resize_convolution_boxed(
         .ok_or_else(|| simd_unsupported("Fit"))?;
     let horizontal_plan = if need_horizontal {
         Some(
-            build_resize_horizontal_plan(&horizontal, output_width, channels)
+            build_resize_horizontal_plan(&horizontal, output_width, channels, false)
                 .ok_or_else(|| simd_unsupported("Fit"))?,
         )
     } else {
@@ -21682,6 +22031,7 @@ fn simd_resize_convolution_boxed(
                     output_y,
                     output_row,
                     premultiplied_alpha,
+                    false,
                 )
                 .ok_or_else(|| simd_unsupported("Fit"))?;
             }
@@ -21704,6 +22054,7 @@ fn simd_resize_convolution_boxed(
                             output_y as usize,
                             output_row,
                             premultiplied_alpha,
+                            false,
                         )
                         .is_none()
                         {
@@ -21733,6 +22084,7 @@ fn simd_resize_convolution_boxed(
                 output_y,
                 output_row,
                 premultiplied_alpha,
+                false,
             )
             .ok_or_else(|| simd_unsupported("Fit"))?;
             vector_blocks = vector_blocks.saturating_add(blocks);
@@ -21797,6 +22149,8 @@ fn native_aspect_resize_bytes(
     filter: ResampleFilter,
     mode: Option<&str>,
     dimensions: fn(u32, u32, u32, u32) -> Option<(u32, u32)>,
+    parallel_pixel_threshold: usize,
+    vectorize_tail: bool,
     operation: &str,
     allow_cover_luma_i32: bool,
 ) -> Result<Option<DynamicImage>, PilError> {
@@ -21821,9 +22175,23 @@ fn native_aspect_resize_bytes(
         && matches!(mode, None | Some("L"))
         && matches!(img, DynamicImage::ImageLuma8(_));
     let result = if use_cover_luma_i32 {
-        simd_resize_impl(img, &resize, mode, true)?
+        simd_resize_impl(
+            img,
+            &resize,
+            mode,
+            true,
+            parallel_pixel_threshold,
+            vectorize_tail,
+        )?
     } else {
-        simd_resize(img, &resize, mode)?
+        simd_resize_impl(
+            img,
+            &resize,
+            mode,
+            false,
+            parallel_pixel_threshold,
+            vectorize_tail,
+        )?
     };
     if result.width() != output_width || result.height() != output_height {
         return Err(PilError::InternalError(format!(
@@ -23886,7 +24254,7 @@ pub fn simd_resize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    simd_resize_impl(img, op, mode, false)
+    simd_resize_impl(img, op, mode, false, 0, false)
 }
 
 fn simd_resize_impl(
@@ -23894,6 +24262,8 @@ fn simd_resize_impl(
     op: &PipelineOp,
     mode: Option<&str>,
     cover_luma_i32: bool,
+    parallel_pixel_threshold: usize,
+    vectorize_tail: bool,
 ) -> Result<DynamicImage, PilError> {
     let (w, h, filter) = match op {
         PipelineOp::Resize { w, h, filter } => (w, h, filter),
@@ -23970,7 +24340,7 @@ fn simd_resize_impl(
     }
     match filter {
         ResampleFilter::Nearest => simd_resize_nearest(img, *w, *h, channels),
-        _ => simd_resize_convolution(
+        _ => simd_resize_convolution_with_parallel_threshold(
             img,
             *w,
             *h,
@@ -23978,6 +24348,8 @@ fn simd_resize_impl(
             channels,
             premultiplied_alpha,
             cover_luma_i32,
+            parallel_pixel_threshold,
+            vectorize_tail,
         ),
     }
 }
@@ -24168,6 +24540,8 @@ pub fn simd_contain(
         *filter,
         mode,
         native_pad_contained_dimensions,
+        SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD,
+        true,
         "Contain",
         false,
     )?
@@ -24192,6 +24566,8 @@ pub fn simd_cover(
         *filter,
         mode,
         native_cover_dimensions,
+        SIMD_ASPECT_RESIZE_PARALLEL_PIXEL_THRESHOLD,
+        true,
         "Cover",
         true,
     )?
@@ -27666,7 +28042,7 @@ mod tests {
                 ((source_value * mask_value + destination_value * (255 - mask_value) + 127) / 255)
                     as u8;
         }
-        assert_eq!(actual, expected);
+        assert_eq!(actual.as_slice(), expected.as_slice());
     }
 
     #[test]
@@ -28127,6 +28503,8 @@ mod tests {
                 1,
                 false,
                 false,
+                0,
+                false,
                 &mut widened,
             )
             .expect("widened Cover resize must succeed");
@@ -28138,6 +28516,8 @@ mod tests {
                 1,
                 false,
                 true,
+                0,
+                false,
                 &mut narrow,
             )
             .expect("bounded i32 Cover resize must succeed");
@@ -29592,13 +29972,13 @@ mod tests {
             }
         }
 
-        for threshold in [0, 3, u8::MAX] {
+        for threshold in [-1, 0, 3, i32::from(u8::MAX), 256] {
             let expected: Vec<u8> = original
                 .iter()
                 .zip(&blurred)
                 .map(|(&source, &smooth)| {
                     let difference = i32::from(source) - i32::from(smooth);
-                    if difference.unsigned_abs() > u32::from(threshold) {
+                    if difference.abs() > threshold {
                         (i32::from(source) + difference * 150 / 100).clamp(0, 255) as u8
                     } else {
                         source
@@ -29606,12 +29986,13 @@ mod tests {
                 })
                 .collect();
 
+            let mut actual = blurred.clone();
             assert_eq!(
-                simd_unsharp_blend_rgb_150(&original, &blurred, threshold)
-                    .expect("matching byte buffers use the exact SIMD blend"),
-                expected,
-                "threshold={threshold}"
+                simd_unsharp_blend_rgb_150(&original, &mut actual, threshold),
+                true,
+                "matching byte buffers use the exact SIMD blend"
             );
+            assert_eq!(actual, expected, "threshold={threshold}");
         }
     }
 
@@ -29630,17 +30011,17 @@ mod tests {
             .zip(blurred)
             .map(|(&source, smooth)| {
                 let difference = i32::from(source) - i32::from(smooth);
-                if difference.unsigned_abs() > 3 {
+                if difference.abs() > 3 {
                     (i32::from(source) + difference * 150 / 100).clamp(0, 255) as u8
                 } else {
                     source
                 }
             })
             .collect();
-        assert_eq!(
-            simd_unsharp_blend_rgb_150(&original, &blurred, 3),
-            Some(expected)
-        );
-        assert!(simd_unsharp_blend_rgb_150(&original, &blurred[..16], 3).is_none());
+        let mut actual = blurred;
+        assert!(simd_unsharp_blend_rgb_150(&original, &mut actual, 3));
+        assert_eq!(actual.as_slice(), expected.as_slice());
+        let mut mismatched = [0; 16];
+        assert!(!simd_unsharp_blend_rgb_150(&original, &mut mismatched, 3));
     }
 }

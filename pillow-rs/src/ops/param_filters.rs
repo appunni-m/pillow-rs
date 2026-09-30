@@ -403,9 +403,10 @@ impl Image {
         &self,
         radius: f32,
         percent: i32,
-        threshold: u8,
+        threshold: i32,
     ) -> Result<Image, PilError> {
         self.validate_filter("UnsharpMask")?;
+        let mode = self.mode()?;
         let simd_blend_selected = match self.backend() {
             Some(backend) => backend == crate::compute::Backend::Simd,
             None => {
@@ -413,57 +414,29 @@ impl Image {
                     == Some(crate::compute::Backend::Simd)
             }
         };
-        // The blend reads both images without mutating them. Keep their
-        // materialized pixel buffers shared instead of cloning two complete
-        // frames before allocating the output.
+        // The source remains shared; the blurred result is the output buffer,
+        // so reuse its uniquely owned allocation for the blend.
         let img = self.materialized_shared_for_ops()?;
-        // Use PIL-style GaussianBlur via the pipeline (sigma→box radius conversion)
-        let blurred = Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius });
-        let blurred = blurred.materialized_shared_for_ops()?;
+        let mut blurred =
+            Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius }).materialize_owned()?;
 
         let (w, h) = (img.width(), img.height());
         let channels = img.color().channel_count() as usize;
-
         let raw = img.as_bytes();
-        let blur_raw = blurred.as_bytes();
+        let blur_bytes = blurred.as_bytes();
         let expected_bytes = CheckedDims::new(w, h, channels as u8)?.total_bytes();
-        let native_rgb = self.mode()? == "RGB"
-            && matches!(img.as_ref(), DynamicImage::ImageRgb8(_))
-            && matches!(blurred.as_ref(), DynamicImage::ImageRgb8(_))
-            && raw.len() == expected_bytes
-            && blur_raw.len() == expected_bytes;
-        let simd_output = (simd_blend_selected && native_rgb && percent == 150)
-            .then(|| crate::compute::simd_unsharp_blend_rgb_150(raw, blur_raw, threshold))
-            .flatten();
-        let out = if let Some(out) = simd_output {
-            out
-        } else if percent == 150 && raw.len() == expected_bytes && blur_raw.len() == expected_bytes
-        {
-            // Every stored byte is an independent UnsharpMask sample in the
-            // existing byte path. Flattening the common 150% case removes
-            // nested pixel/channel indexing and replaces multiply/divide by
-            // 100 with Pillow-exact truncating half of `diff * 3`.
-            let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
-            for ((output, &p), &b) in out.iter_mut().zip(raw).zip(blur_raw) {
-                let diff = i32::from(p) - i32::from(b);
-                *output = if diff.unsigned_abs() > u32::from(threshold) {
-                    Self::pil_clip8(i32::from(p) + Self::pil_unsharp_adjustment_150(diff))
-                } else {
-                    p
-                };
-            }
-            out
-        } else {
+
+        // Keep the established typed-storage fallback for any representation
+        // whose byte count does not match its logical band count.
+        if raw.len() != expected_bytes || blur_bytes.len() != expected_bytes {
             let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
             for y in 0..h {
                 for x in 0..w {
                     let base = (y * w + x) as usize * channels;
                     for c in 0..channels {
-                        let p = raw[base + c] as i32;
-                        let b = blur_raw[base + c] as i32;
-                        let diff = p - b;
-                        // PIL uses integer arithmetic: diff * percent / 100 (truncating)
-                        out[base + c] = if diff.unsigned_abs() > threshold as u32 {
+                        let p = i32::from(raw[base + c]);
+                        let diff = p - i32::from(blur_bytes[base + c]);
+                        out[base + c] = if diff.abs() > threshold {
                             Self::pil_clip8(p + diff * percent / 100)
                         } else {
                             p as u8
@@ -471,11 +444,51 @@ impl Image {
                     }
                 }
             }
-            out
-        };
+            let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;
+            return Ok(Image::from_dynamic(result, None));
+        }
 
-        let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;
-        Ok(Image::from_dynamic(result, None))
+        let native_rgb = mode == "RGB"
+            && matches!(img.as_ref(), DynamicImage::ImageRgb8(_))
+            && matches!(&blurred, DynamicImage::ImageRgb8(_));
+        let Some(blur_bytes) = blurred.as_bytes_mut() else {
+            return Err(PilError::InternalError(
+                "byte-mode UnsharpMask blur has no mutable byte storage".into(),
+            ));
+        };
+        let simd_blended = simd_blend_selected
+            && native_rgb
+            && percent == 150
+            && crate::compute::simd_unsharp_blend_rgb_150(raw, blur_bytes, threshold);
+        if simd_blended {
+            // The SIMD kernel updated the blur allocation in place.
+        } else if percent == 150 {
+            // Every stored byte is an independent UnsharpMask sample in the
+            // existing byte path. Flattening the common 150% case removes
+            // nested pixel/channel indexing and replaces multiply/divide by
+            // 100 with Pillow-exact truncating half of `diff * 3`.
+            for (output, &p) in blur_bytes.iter_mut().zip(raw) {
+                let diff = i32::from(p) - i32::from(*output);
+                *output = if diff.abs() > threshold {
+                    Self::pil_clip8(i32::from(p) + Self::pil_unsharp_adjustment_150(diff))
+                } else {
+                    p
+                };
+            }
+        } else {
+            for (output, &original) in blur_bytes.iter_mut().zip(raw) {
+                let original = i32::from(original);
+                let diff = original - i32::from(*output);
+                // PIL uses integer arithmetic: diff * percent / 100 (truncating).
+                *output = if diff.abs() > threshold {
+                    Self::pil_clip8(original + diff * percent / 100)
+                } else {
+                    original as u8
+                };
+            }
+        }
+
+        Ok(Image::from_dynamic(blurred, Some(mode)))
     }
 
     /// Applies a maximum filter over an odd neighborhood.
