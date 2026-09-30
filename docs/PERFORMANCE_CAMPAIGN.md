@@ -10327,14 +10327,106 @@ each pass independently. A larger GPU follow-up would keep the original RGB
 image resident and fuse the final threshold/blend into the sixth blur pass, but
 that is broader than this checkpoint. No coverage collection ran.
 
-Continue with the largest evidenced native-format gap: GPU `ImageOps.pad` on
-native `L`, workload
-`pil-imageops.pad.materialized.native-l-noise-1024x768-square`, parity case
-`PIL.ImageOps.pad.nuanced.performance-native-l-noise-1024x768-square`. Existing
-parity-gated evidence (`build/migration-parity/perf-all-after-gaussianblur-20260930.json`)
-measures Pillow at 0.280 ms, CPU at 0.087 ms, SIMD at 0.065 ms, and GPU at
-2.353 ms. GPU upload/readback are 3,145,728/4,194,304 bytes for a native-L
-786,432/1,048,576-byte input/output, with one mode conversion and one dispatch.
-The next experiment should keep this singleton L path packed through upload,
-placement, and readback; preserve exact fill bytes and add an odd-width tail
-parity case. CPU/SIMD Pad paths are already native and should remain untouched.
+### Native-L identity-contain Pad: packed transport and row emission — 2026-09-30
+
+The selected workload was
+`pil-imageops.pad.materialized.native-l-noise-1024x768-square`, with parity case
+`PIL.ImageOps.pad.nuanced.performance-native-l-noise-1024x768-square`. The
+previous parity-gated receipt (`perf-all-after-gaussianblur-20260930.json`)
+measured Pillow at 0.280 ms, CPU at 0.087 ms, SIMD at 0.065 ms, and GPU at
+2.353 ms. GPU widened the 786,432-byte L input and 1,048,576-byte L result to
+3,145,728 and 4,194,304 bytes respectively, performed one mode conversion,
+and dispatched once.
+
+The GPU path now admits only a singleton Pad whose concrete input is
+`ImageLuma8`, whose logical mode is absent or `L`, whose dimensions are
+valid, and whose contain geometry leaves the source dimensions unchanged. Its
+packed shader copies/fills four L samples per storage word, including words
+crossing odd-width row boundaries, and zeroes unused tail lanes. Compact L
+upload and readback remove both RGBA widening and the L reconstruction
+conversion. It does not cover resizes, mode mismatches, different storage
+variants, or multi-operation batches; those retain the generic route.
+
+The adapter-limit review found that this admitted path passed its 1D packed
+grid check and was then rejected by the old 16×16 Pad grid check. Preflight now
+uses the packed planner for the already-admitted singleton path and retains the
+old grid for every other Pad. The boundary test uses a 1,048,576×2 input
+padded to 1,048,576×3: the legacy grid needs 65,536 groups in one dimension,
+while the packed grid needs 3,072 and fits a 65,535-group limit. It also checks
+that a 3,071-group adapter limit still rejects the packed dispatch.
+
+For CPU and SIMD, full-width native-L identity-contain output is assembled as
+fill rows, source bytes, and fill rows. This avoids first filling the 768 KiB
+source region and then overwriting it. Other geometries and native modes keep
+their existing paths. The added
+`PIL.ImageOps.pad.nuanced.native-l-packed-tail-3x2-to-3x5-identity-contain`
+case checks odd-width packed tails, cross-row words, fill value 173, and the
+ties-to-even vertical offset.
+
+The SIMD receipt reports zero vector blocks for this L case: its hot work is
+native byte fill/copy, not a vector arithmetic kernel. Do not replace optimized
+`copy_from_slice` with hand-written SIMD without evidence that the memory copy
+is the bottleneck. At the public boundary, native `tobytes()` already shares
+the materialized Rust image and performs one required copy into Python's
+independent immutable `bytes`; removing that copy would change ownership or
+return semantics.
+
+The first packed-L benchmark receipt,
+`migration-benchmark-1f28415e37304c88840bcc7c5df6d3bd`, measured medians of
+0.193396 ms for Pillow, 0.071354 ms for CPU, 0.038729 ms for SIMD, and
+0.811875 ms for GPU. CPU and SIMD ran on their requested backend for all 100
+samples without fallback; GPU did the same. The GPU transferred 786,432 bytes
+up and 1,048,576 bytes back, reported zero mode conversions and one dispatch.
+Compared with the prior receipt, GPU transfer volume fell by 4× in each
+direction, its mode conversion disappeared, and median latency fell by about
+2.9×. CPU measured about 2.71× faster than Pillow. SIMD was 4.9936× faster by
+these medians, missing 5× by about 50 ns. That difference is far below the
+measured SIMD standard deviation (about 31 µs), so it does not establish either
+a real miss or a robust 5× pass.
+
+One bounded follow-up replaced the temporary fill row and 256 row appends with
+two single-byte `Vec::resize` fills around the source copy. It was reverted:
+release receipts `migration-benchmark-6a60bd9d47d24c14a5f90de6c0668c19` and
+`migration-benchmark-c06d7a5ec63f44b1ae0b940943ca2089` varied sharply, and
+did not show a stable SIMD improvement over the 0.038729 ms baseline. During
+those runs unrelated system and desktop processes consumed substantial CPU;
+the second receipt had a 1.17 ms GPU standard deviation and a 5.28 ms maximum.
+The candidate therefore failed the evidence bar and is not retained.
+
+The final retained tree's correctness-gated receipt,
+`migration-benchmark-9b430af744384784ab33cb684ddb557f`, passed its parity gate.
+Its medians were Pillow 0.2423955 ms, CPU 0.039167 ms, SIMD 0.047479 ms, and
+GPU 0.92975 ms, but its standard deviations were 87, 20, 33, and 793 µs
+respectively. These timings are not stable enough to revise the earlier
+comparison. The GPU still takes roughly 20× the SIMD median for this
+single-operation materialized result. Telemetry shows 0.8–0.9 ms in the
+terminal/backend path; the output must be mapped and copied into owned host
+bytes, and this machine already reads the primary mapped buffer without an
+extra staging copy. The receipt does not split submission, device completion,
+map wait, and decoding, so attributing that cost to any one of them would be
+speculation. A synchronous single Pad cannot avoid returning its 1 MiB output
+to the host; meaningful GPU/SIMD parity is a better fit for fused chains that
+keep intermediate images resident on the device.
+
+Final targeted parity on the retained tree passed both the 1024×768 workload
+and the 3×2→3×5 odd-tail case on CPU, strict SIMD, and strict GPU (2/2 per
+backend). The receipts are `migration-parity-e0b040b79ca440f986e502991f2560ad`
+(CPU), `migration-parity-668604fd6ccf4a64bb53c1abbbea908f` (SIMD), and
+`migration-parity-c4cb85315bd54d3187444d150f22d065` (GPU). The focused Rust Pad
+test filter passed 18 tests; no coverage was collected. The final benchmark
+command was:
+
+```sh
+make migration-parity-benchmark \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.pad.materialized.native-l-noise-1024x768-square' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/pad-l-final-benchmark.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/pad-l-final-benchmark-parity.json
+```
+
+Pad is checkpointed after the packed GPU path, CPU/SIMD source-row append, one
+reverted fill-construction experiment, and the dispatch preflight correction.
+Remaining blockers are a stable SIMD result proving ≥5× and the structural
+one-shot GPU readback gap. Do not spend more attempts on this Pad case until a
+cleaner benchmark window or a fused device-resident workload becomes
+available; continue the campaign with the next measured operation.

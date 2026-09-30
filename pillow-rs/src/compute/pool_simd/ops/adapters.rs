@@ -19049,10 +19049,6 @@ fn native_pad_bytes(
         let fill_pixel = (0..channels)
             .map(|channel| native_expand_fill_sample(fill, channels, channel))
             .collect::<Vec<_>>();
-        let fill_row = fill_pixel.repeat(target_width_usize);
-        if fill_row.len() != target_stride {
-            return Ok(None);
-        }
         let source = img.as_bytes();
         let expected_source = source_stride
             .checked_mul(source_height)
@@ -19060,16 +19056,20 @@ fn native_pad_bytes(
         if source.len() != expected_source {
             return Ok(None);
         }
-        let append_vertical_rows = matches!(mode, Some("CMYK" | "RGBX"));
+        let fill_row = fill_pixel.repeat(target_width_usize);
+        if fill_row.len() != target_stride {
+            return Ok(None);
+        }
+        let append_vertical_rows = matches!(mode, Some("CMYK" | "RGBX"))
+            || (channels == 1 && matches!(mode, None | Some("L")));
         let mut output = if append_vertical_rows {
             Vec::with_capacity(output_len)
         } else {
             fill_row.repeat(target_height_usize)
         };
         if append_vertical_rows {
-            // Avoid initializing full-width packed four-byte source rows and
-            // overwriting them: append the native source bytes between the
-            // top and bottom fill rows.
+            // Avoid initializing source rows and overwriting them: append
+            // native source bytes between the top and bottom fill rows.
             let source_end = offset_y
                 .checked_add(source_height)
                 .filter(|end| *end <= target_height_usize)

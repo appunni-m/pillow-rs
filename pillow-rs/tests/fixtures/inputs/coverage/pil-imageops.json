@@ -1481,6 +1481,7 @@
           "PIL.ImageOps.cover.nuanced.nearest-native-l-noise",
           "PIL.ImageOps.pad.nuanced.rgbx-default-fill-x-3x2",
           "PIL.ImageOps.pad.nuanced.rgbx-scalar-fill-x-3x2",
+          "PIL.ImageOps.pad.nuanced.native-l-packed-tail-3x2-to-3x5-identity-contain",
           "PIL.ImageOps.pad.nuanced.rgbx-round-even-resize-fill-x-6x3-to-5x5",
           "pipeline-composition.point-solarize-posterize",
           "pipeline-composition.crop-expand-mirror",
