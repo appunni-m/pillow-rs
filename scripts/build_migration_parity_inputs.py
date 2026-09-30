@@ -41251,15 +41251,19 @@ def build_nuanced_cases(
             },)
 
     if surface_id == "PIL.ImageFilter":
-        specs += ({
-            "surface": "PIL.ImageFilter", "operation": "BoxBlur",
-            "requirement_suffix": "performance.standard",
-            "name": "backend-noise-rgb-65x47-radius-1",
-            "mode": "RGB", "size": [65, 47], "edge": "noise-fill",
-            "seed": 20261002, "observe_result": "tobytes",
-            "values": {"radius": literal(1.0)},
-            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
-        },)
+        for name, mode, seed in (
+            ("backend-noise-l-65x47-radius-1", "L", 20261109),
+            ("backend-noise-rgb-65x47-radius-1", "RGB", 20261002),
+        ):
+            specs += ({
+                "surface": "PIL.ImageFilter", "operation": "BoxBlur",
+                "requirement_suffix": "performance.standard",
+                "name": name,
+                "mode": mode, "size": [65, 47], "edge": "noise-fill",
+                "seed": seed, "observe_result": "tobytes",
+                "values": {"radius": literal(1.0)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            },)
 
         specs += ({
             "surface": "PIL.ImageFilter", "operation": "GaussianBlur",
@@ -41281,6 +41285,20 @@ def build_nuanced_cases(
             "mode": "L", "size": [1024, 768], "edge": "noise-fill",
             "seed": 20260930, "observe_result": "tobytes",
             "values": {"radius": literal(2.0)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
+        # BoxBlur's default benchmark image is constant, allowing the blur
+        # implementation to return without exercising its horizontal and
+        # vertical passes. Keep a varied native-L workload so byte-layout and
+        # GPU transfer costs are measured on real filter work.
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "BoxBlur",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-l-noise-1024x768-radius-1",
+            "mode": "L", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20261108, "observe_result": "tobytes",
+            "values": {"radius": literal(1.0)},
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
@@ -50408,6 +50426,40 @@ def build_inputs(
                     surface=surface_id,
                     operation=operation["id"],
                 )
+                workloads.append(l_workload)
+                members.append(
+                    {
+                        "workload_id": l_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
+            if workload_id == "pil-imagefilter.boxblur.standard":
+                l_case_id = (
+                    "PIL.ImageFilter.BoxBlur.nuanced."
+                    "performance-material-l-noise-1024x768-radius-1"
+                )
+                l_case = all_cases_by_id[l_case_id]
+                l_workload = copy.deepcopy(workloads[-1])
+                l_workload["workload_id"] = (
+                    "pipeline-op.boxblur.material-l-noise-1024x768-radius-1"
+                )
+                l_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": l_case_id,
+                }
+                l_workload["measurement"]["boundary"] = "observed_steps"
+                l_workload["measurement"]["step_ids"] = [
+                    "apply-filter",
+                    "observe-filter-result",
+                ]
+                l_workload["measurement"]["correctness_gate"] = "parity_pass"
+                l_workload["context"] = _workflow_benchmark_context(
+                    l_case,
+                    variant="material-l-noise-1024x768-radius-1",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                l_workload["context"]["operation_class"] = "neighborhood"
                 workloads.append(l_workload)
                 members.append(
                     {
