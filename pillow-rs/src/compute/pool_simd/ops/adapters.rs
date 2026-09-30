@@ -12970,6 +12970,7 @@ fn cmyk_grayscale_block(source: &[u8]) -> [u8; 16] {
     simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
+#[cfg(feature = "parallel")]
 #[inline]
 fn cmyk_grayscale_row(source: &[u8], output: &mut [u8]) {
     let mut input_blocks = source.chunks_exact(64);
