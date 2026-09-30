@@ -1,7 +1,7 @@
 # Releasing pillow-rs
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.1](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.1).**
+**Latest release: [12.2.0-alpha.2](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.2).**
 <!-- /release:summary -->
 
 Packages publish through this repository's `release.yml` workflow using GitHub OIDC.
