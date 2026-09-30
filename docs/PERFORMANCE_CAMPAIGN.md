@@ -10641,14 +10641,21 @@ rounding-boundary samples. A GPU execution test asserts those bytes against CPU,
 one dispatch of `__internal_paste_native_masked_rgb`, no fallback, and zero mode
 conversion.
 
-Final focused parity artifacts passed all three cases on each target backend:
-CPU `migration-parity-4c6cbe7a1b9e4019ab993222b83e23bf`, strict SIMD
-`migration-parity-b6e14d64e85d4e4792a2a3abfcac0892`, and strict GPU
-`migration-parity-ff2f345ba61f453f9d77ce29404a0f19`. The correctness-gated
-native GPU benchmark receipt is `migration-benchmark-bd6ed89b106a4e3e9485e323dd46b91e`,
-with gate `migration-parity-benchmark-gate-ab8ceea8d76c4098bced7f2be52bb38f`.
-Those were dirty-tree diagnostics; rerun the chosen 64-thread shader on its
-clean checkpoint commit before using the benchmark as final evidence.
+On clean commit `c7f00548efa21f527783fbb69ec3d4cb8c27fd5c`, focused parity
+passed all three cases on each target backend with no dirty-tree changes:
+CPU `migration-parity-f5593ff7280348589100a28ad5c3fc5f`, strict SIMD
+`migration-parity-3f7ff942ad0441e2bf18a33c85f1a73a`, and strict GPU
+`migration-parity-72342949954a450181b881c213fc35b9` (3/3 each).
+The clean, correctness-gated benchmark receipt is
+`migration-benchmark-35589139458c4aa492161c52f485b8e0`, gate
+`migration-parity-benchmark-gate-2f44f464c6a94ab8bd4f94200a6f9815`; all
+three backend executions were on that same clean revision. Median observed
+latencies were 1.003 ms Pillow, 0.560 ms CPU, 0.468 ms SIMD, and 1.812 ms GPU.
+CPU was 1.79× and SIMD 2.14× faster than Pillow, while GPU remained 3.87× slower
+than SIMD. The GPU route ran 100/100 samples with one dispatch, no fallback, and
+zero mode conversions. Its upload/readback figures were 5,505,024/2,359,296 B;
+auxiliary telemetry was 3,145,728 B and overlaps the upload accounting here.
+The GPU/SIMD target and SIMD 5× target remain unmet.
 
 A 128-thread RGB shader variant did not demonstrate a relative win: GPU/SIMD
 remained about 3.5× apart while all backend medians shifted similarly, so the
