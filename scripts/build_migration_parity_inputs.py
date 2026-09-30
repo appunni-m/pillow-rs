@@ -231,9 +231,16 @@ EXPAND_PERFORMANCE_CASES = (
     ("rgbx-noise-1024x768", "RGBX", [1024, 768], 20261030, [37, 113, 211, 79]),
 )
 PASTE_PERFORMANCE_CASES = (
-    ("l-noise-1024x768", "L", [1024, 768], 20261008),
-    ("la-noise-1024x768", "LA", [1024, 768], 20261009),
-    ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002),
+    ("l-noise-1024x768", "L", [1024, 768], 20261008, None),
+    ("la-noise-1024x768", "LA", [1024, 768], 20261009, None),
+    ("rgb-noise-1024x768", "RGB", [1024, 768], 20261002, None),
+    (
+        "rgba-dest-rgb-source-noise-1024x768",
+        "RGBA",
+        [1024, 768],
+        20261031,
+        "RGB",
+    ),
 )
 PASTE_MASKED_PERFORMANCE_CASES = (
     ("masked-l-noise-1024x768", "L", [1024, 768], 20261013),
@@ -22747,11 +22754,12 @@ def build_nuanced_cases(
                 "size": size,
                 "edge": "paste-noise-fill",
                 "seed": seed,
+                **({"im_mode": im_mode} if im_mode is not None else {}),
                 "values": {"box": literal([2, 2])},
                 "observe_receiver": True,
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             }
-            for name, mode, size, seed in PASTE_PERFORMANCE_CASES
+            for name, mode, size, seed, im_mode in PASTE_PERFORMANCE_CASES
         ),
         *(
             {
@@ -22794,6 +22802,20 @@ def build_nuanced_cases(
             "edge": "paste-noise-fill",
             "seed": 20261003,
             "values": {"box": literal([-2, -1])},
+            "observe_receiver": True,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-dest-rgb-source-odd-negative-clip",
+            "mode": "RGBA",
+            "size": [5, 3],
+            "edge": "paste-noise-fill",
+            "seed": 20261032,
+            "im_mode": "RGB",
+            "values": {"box": literal([-1, -1])},
             "observe_receiver": True,
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
@@ -51309,7 +51331,7 @@ def build_inputs(
             )
             if paste_benchmark is not None:
                 operation, requirement = paste_benchmark
-                for name, _mode, _size, _seed in PASTE_PERFORMANCE_CASES:
+                for name, _mode, _size, _seed, _im_mode in PASTE_PERFORMANCE_CASES:
                     workload_id = (
                         f"{storage_slug}.paste.materialized.{slug(name)}"
                     )

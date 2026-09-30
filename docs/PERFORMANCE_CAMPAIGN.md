@@ -10135,3 +10135,79 @@ stencil could remove the parallel transpose pair, but must demonstrate a
 complete-call gain because non-contiguous source traffic can erase the saved
 copies. Checkpoint this visit after four attempts and rank the next operation
 from a fresh single-workload benchmark. No coverage collection ran.
+
+### RGB source into RGBA `Image.paste` — checkpoint 2026-09-30
+
+The case is an unmasked RGB source pasted into an explicit RGBA destination,
+then materialized by reading the destination bytes. Core paste normalization
+previously expanded the source to RGBA before backend execution. The retained
+route keeps the source as RGB and writes opaque alpha in the CPU, SIMD, or GPU
+executor. The explicit destination mode and absent mask are required; masked
+paste and other mode combinations keep their established behavior.
+
+The first direct implementation exposed two issues. The GPU executor's generic
+color-mismatch preflight rejected this valid auxiliary source layout, so the
+specialized executor did not run until preflight was narrowed to this exact
+RGBA/RGB/unmasked combination. The SIMD route also needed an early empty-clip
+return: zero-width inputs otherwise make row chunk strides zero. A focused unit
+test now covers zero-width and zero-height input, zero-width destination, and a
+fully off-canvas paste. The route writes alpha 255 for copied pixels, retains
+destination bytes outside clipped regions, uses a bounded 2D GPU dispatch, and
+does not build an RGBA source buffer.
+
+This work was bounded to four implementation attempts: add the native-format
+paths and parity cases; correct GPU preflight so the requested shader actually
+runs; parallelize only sufficiently large clipped CPU/SIMD row ranges after
+the first end-to-end result missed the target; and cover the empty-region SIMD
+failure. A static route review found no shader indexing, clipping, binding, or
+alpha issue. It also identified that CPU's direct per-pixel interleave may be
+slower than the prior convert-then-bulk-copy sequence even though it removes
+the temporary conversion. The GPU's explicit `poll_device` immediately before
+`readback_with` is a plausible next bounded experiment because mapping already
+waits for completion; it was not attempted in this checkpoint.
+
+The correctness input has two cases: the material 1024×768 noise workload at
+offset (2, 2), and a small odd-sized negative-offset clip. Each strict backend
+run selected and passed both cases with zero failures or infrastructure
+errors: CPU run `migration-parity-9be8feac61984af484dcd15518a0261c`, SIMD run
+`migration-parity-6d7135777a3b4cbbbde9aa8104492f2f`, and GPU run
+`migration-parity-dd460d0380744fa69b1445b855ca5310`. The GPU receipt reports
+the actual GPU backend for both cases, not a CPU fallback.
+
+The final exact-source benchmark used
+`make migration-parity-benchmark` with the standard warm-cache policy (five
+warmups, 20 iterations × five samples, 100 calls, concurrency one), selecting
+only `pil-image-image.paste.materialized.rgba-dest-rgb-source-noise-1024x768`.
+Its run is `migration-benchmark-808d94756b9c4709b1fcdf1a0b5a3b68`; the strict
+integrated parity gate is
+`migration-parity-benchmark-gate-23b8a95a95194ba88f2d46857cee578c` (3/3
+requested backend executions passed).
+
+| Final median latency | Pillow | CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| RGB→RGBA paste, 1024×768 | 0.863 ms | 0.678 ms | 0.634 ms | 2.047 ms |
+
+At concurrency one, medians correspond to 1,159 Pillow ops/s, 1,476 CPU
+ops/s, 1,577 SIMD ops/s, and 489 GPU ops/s. CPU is 1.27× faster and SIMD
+1.36× faster than Pillow on this case; the GPU is 3.23× slower than SIMD and
+does not meet the higher-throughput goal. The earlier baseline measured CPU at
+0.626 ms, SIMD at 0.754 ms, and GPU at 5.255 ms against Pillow at 0.887 ms.
+Thus the current direct path improves SIMD and GPU materially, but CPU latency
+is about 8% worse than that baseline while still beating Pillow. Do not claim
+that avoiding conversion alone guarantees a faster CPU path: the earlier
+conversion enabled a bulk RGBA copy, while direct RGB→RGBA writing interleaves
+each pixel on CPU.
+
+The final GPU receipt records 100 actual GPU executions, one dispatch per
+paste, 5,505,024 uploaded bytes (RGBA destination plus raw RGB source),
+3,145,728 readback bytes, 2,359,296 auxiliary source bytes, and zero reported
+mode conversions. The new admission and shader handle the 1024×768 case; an
+earlier generic grid preflight remains conservative for unusually wide,
+short shapes even when the specialized 2D planner could represent them. No
+4096×4096 paste parity run was part of this operation.
+
+Checkpoint after these four attempts and move on. Revisit Paste only with a
+bounded, measured question: remove the redundant pre-readback GPU poll and
+measure GPU latency, or improve the CPU RGB-to-RGBA interleave without restoring
+a full RGBA source allocation. Neither experiment is needed to interpret this
+checkpoint. No coverage collection ran.

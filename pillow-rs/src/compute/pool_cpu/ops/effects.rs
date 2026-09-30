@@ -370,6 +370,116 @@ fn paste_native_rows(
     Some(output)
 }
 
+/// Copy native RGB rows into an RGBA destination, supplying Pillow's opaque
+/// alpha for each converted source pixel without building an RGBA source.
+fn paste_rgb_into_rgba_rows(
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    x: i64,
+    y: i64,
+) -> Option<DynamicImage> {
+    let (DynamicImage::ImageRgba8(destination), DynamicImage::ImageRgb8(source)) =
+        (destination, source)
+    else {
+        return None;
+    };
+    let (source_width, source_height) = source.dimensions();
+    let (destination_width, destination_height) = destination.dimensions();
+    let source_stride = usize::try_from(source_width).ok()?.checked_mul(3)?;
+    let destination_stride = usize::try_from(destination_width).ok()?.checked_mul(4)?;
+    let source_len = source_stride.checked_mul(usize::try_from(source_height).ok()?)?;
+    let destination_len =
+        destination_stride.checked_mul(usize::try_from(destination_height).ok()?)?;
+    let source_bytes = source.as_raw();
+    if source_bytes.len() != source_len || destination.as_raw().len() != destination_len {
+        return None;
+    }
+
+    let source_left = u32::try_from(x.saturating_neg().max(0).min(i64::from(source_width))).ok()?;
+    let source_top = u32::try_from(y.saturating_neg().max(0).min(i64::from(source_height))).ok()?;
+    let destination_left = u32::try_from(x.max(0).min(i64::from(destination_width))).ok()?;
+    let destination_top = u32::try_from(y.max(0).min(i64::from(destination_height))).ok()?;
+    let copy_width = source_width
+        .saturating_sub(source_left)
+        .min(destination_width.saturating_sub(destination_left));
+    let copy_height = source_height
+        .saturating_sub(source_top)
+        .min(destination_height.saturating_sub(destination_top));
+    if copy_width == 0 || copy_height == 0 {
+        return Some(DynamicImage::ImageRgba8(destination.clone()));
+    }
+
+    let source_x_bytes = usize::try_from(source_left).ok()?.checked_mul(3)?;
+    let destination_x_bytes = usize::try_from(destination_left).ok()?.checked_mul(4)?;
+    let source_rows_start = usize::try_from(source_top)
+        .ok()?
+        .checked_mul(source_stride)?;
+    let destination_rows_start = usize::try_from(destination_top)
+        .ok()?
+        .checked_mul(destination_stride)?;
+    let source_rows_bytes = source_stride.checked_mul(usize::try_from(copy_height).ok()?)?;
+    let destination_rows_bytes =
+        destination_stride.checked_mul(usize::try_from(copy_height).ok()?)?;
+    let source_rows =
+        source_bytes.get(source_rows_start..source_rows_start.checked_add(source_rows_bytes)?)?;
+    let mut output = destination.as_raw().clone();
+    let destination_rows = output.get_mut(
+        destination_rows_start..destination_rows_start.checked_add(destination_rows_bytes)?,
+    )?;
+    let source_row_bytes = usize::try_from(copy_width).ok()?.checked_mul(3)?;
+    let destination_row_bytes = usize::try_from(copy_width).ok()?.checked_mul(4)?;
+    let source_x_end = source_x_bytes.checked_add(source_row_bytes)?;
+    let destination_x_end = destination_x_bytes.checked_add(destination_row_bytes)?;
+    let copy_row = |source_row: &[u8], destination_row: &mut [u8]| {
+        let source_pixels = &source_row[source_x_bytes..source_x_end];
+        let destination_pixels = &mut destination_row[destination_x_bytes..destination_x_end];
+        for (rgb, rgba) in source_pixels
+            .chunks_exact(3)
+            .zip(destination_pixels.chunks_exact_mut(4))
+        {
+            rgba[..3].copy_from_slice(rgb);
+            rgba[3] = 255;
+        }
+    };
+    #[cfg(feature = "parallel")]
+    if usize::try_from(copy_width)
+        .ok()?
+        .checked_mul(usize::try_from(copy_height).ok()?)?
+        >= EFFECT_PARALLEL_PIXEL_THRESHOLD
+        && copy_height > 1
+    {
+        crate::par_rows_mut!(
+            destination_rows,
+            destination_stride,
+            usize::try_from(copy_height).ok()?,
+            |_row_start, _row_end, row_index, destination_row| {
+                let source_start = row_index as usize * source_stride;
+                copy_row(
+                    &source_rows[source_start..source_start + source_stride],
+                    destination_row,
+                );
+            }
+        );
+    } else {
+        for (source_row, destination_row) in source_rows
+            .chunks_exact(source_stride)
+            .zip(destination_rows.chunks_exact_mut(destination_stride))
+        {
+            copy_row(source_row, destination_row);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (source_row, destination_row) in source_rows
+        .chunks_exact(source_stride)
+        .zip(destination_rows.chunks_exact_mut(destination_stride))
+    {
+        copy_row(source_row, destination_row);
+    }
+    Some(DynamicImage::ImageRgba8(
+        crate::raster::RgbaImage::from_raw(destination_width, destination_height, output)?,
+    ))
+}
+
 #[derive(Clone, Copy)]
 struct PasteMaskLayout {
     channels: usize,
@@ -843,6 +953,14 @@ pub fn op_paste(
         }
 
         return Ok(DynamicImage::ImageLuma16(destination));
+    }
+
+    if mask.is_none()
+        && mode == Some("RGBA")
+        && let Some(output) = paste_rgb_into_rgba_rows(img, &src_img, x, y)
+    {
+        crate::compute::record_pipeline_operation_path("native-rgb-to-rgba-copy");
+        return Ok(output);
     }
 
     let source_rgba = src_img.to_rgba8();
