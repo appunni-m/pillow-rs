@@ -643,13 +643,20 @@ function exifRecord(value) {
     return record;
 }
 
-function colorChannels(value, mode) {
+function colorChannels(value, mode, preserveNativeFourChannels = false) {
     const values = Array.isArray(value) ? value : [value ?? 0];
     const byte = (item, fallback = 0) => {
         const number = Number(item ?? fallback);
         if (!Number.isFinite(number)) throw new TypeError('color must contain finite numbers');
         return Math.max(0, Math.min(255, Math.trunc(number)));
     };
+    if (preserveNativeFourChannels
+        && (mode === 'CMYK' || mode === 'RGBX')
+        && values.length === 4) {
+        // ImageOps.expand accepts these four samples in native mode order:
+        // CMYK's fourth channel is K and RGBX's is X, not RGBA alpha.
+        return values.map((item) => byte(item));
+    }
     if (mode === 'RGBA') {
         return [byte(values[0]), byte(values[1]), byte(values[2]), byte(values[3], 255)];
     }
@@ -693,6 +700,12 @@ function imageColor(value, mode) {
     if (value == null) return undefined;
     const values = Array.isArray(value) ? value : [value];
     return colorChannels(values, mode);
+}
+
+function imageExpandColor(value, mode) {
+    if (value == null) return undefined;
+    const values = Array.isArray(value) ? value : [value];
+    return colorChannels(values, mode, true);
 }
 
 function channelIndex(value, mode) {
@@ -2054,7 +2067,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
         }
         if (operation === 'crop') return wasm.ImageOps[name](image, args.border);
         if (operation === 'expand') {
-            const color = imageColor(args.fill, image.mode)
+            const color = imageExpandColor(args.fill, image.mode)
                 ?? (image.mode === 'PA' ? [0, 0, 0, 0] : [0, 0, 0, 255]);
             return wasm.ImageOps[name](image, args.border, ...color);
         }
