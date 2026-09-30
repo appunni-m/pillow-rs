@@ -4,11 +4,19 @@ All notable user-facing changes are recorded here. The first package release
 is intentionally a compatibility-development release; the parity status and
 backend limitations in the documentation remain part of its contract.
 
-## Unreleased
+## 12.2.0-alpha.2 - 2026-09-30
 
-- Refine transpose, flips, and right-angle rotations across CPU, SIMD, and GPU
-  paths while preserving parity on the selected regression cases; the wider
-  latency and throughput goals remain in progress.
+- Add mode-specific CPU, SIMD, and GPU paths across image operations, keeping
+  native samples for formats such as L, LA, RGB, CMYK, RGBX, and RGBA instead
+  of routing those operations through RGBA intermediates.
+- Optimize paste, crop, expand, pad, filters, effects, and channel operations;
+  refine transpose, flips, and right-angle rotations while retaining Pillow
+  parity on the covered workloads.
+- Pin fontdone 2.14.3-alpha.12 to include reused-face charmap metadata fixes.
+- Preserve native CMYK and RGBX fill bytes in the Node/browser WASM parity
+  adapter for `ImageOps.expand`.
+
+## Unreleased
 
 ## 12.2.0-alpha.1 - 2026-09-16
 
