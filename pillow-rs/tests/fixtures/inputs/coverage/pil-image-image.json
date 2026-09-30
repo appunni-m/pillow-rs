@@ -1620,6 +1620,7 @@
           "PIL.Image.Image.paste.nuanced.color-l",
           "PIL.Image.Image.paste.nuanced.rgba-rgba-mask-alpha-band",
           "PIL.Image.Image.paste.nuanced.native-rgb-negative-offset-clips-source",
+          "PIL.Image.Image.paste.nuanced.rgba-dest-rgb-source-odd-negative-clip",
           "PIL.Image.Image.paste.nuanced.l-negative-scalar-clamps",
           "PIL.Image.Image.paste.nuanced.l-overflow-scalar-clamps",
           "PIL.Image.Image.paste.nuanced.rgb-negative-scalar-packs",

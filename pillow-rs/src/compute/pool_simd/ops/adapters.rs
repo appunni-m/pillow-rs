@@ -1419,6 +1419,51 @@ fn native_paste_rgba_to_rgb_supported_for_shape(
         && source.size().ok() == Some((source_width, source_height))
 }
 
+/// Unmasked RGB-to-RGBA paste writes opaque alpha while copying directly from
+/// the three-byte source layout. The destination mode must be explicit because
+/// several logical modes share the RGBA storage carrier.
+fn native_paste_rgb_to_rgba_supported(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+    width: i32,
+    height: i32,
+    mask: Option<&Arc<Image>>,
+    mode: Option<&str>,
+) -> bool {
+    let Some(source_width) = u32::try_from(width).ok() else {
+        return false;
+    };
+    let Some(source_height) = u32::try_from(height).ok() else {
+        return false;
+    };
+    matches!(img, DynamicImage::ImageRgba8(_))
+        && mode == Some("RGBA")
+        && mask.is_none()
+        && source.mode().ok().as_deref() == Some("RGB")
+        && source.size().ok() == Some((source_width, source_height))
+}
+
+fn native_paste_rgb_to_rgba_supported_for_shape(
+    shape: SimdImageShape,
+    source: &Arc<Image>,
+    width: i32,
+    height: i32,
+    mask: Option<&Arc<Image>>,
+    mode: Option<&str>,
+) -> bool {
+    let Some(source_width) = u32::try_from(width).ok() else {
+        return false;
+    };
+    let Some(source_height) = u32::try_from(height).ok() else {
+        return false;
+    };
+    shape.layout == SimdLayout::Rgba8
+        && mode == Some("RGBA")
+        && mask.is_none()
+        && source.mode().ok().as_deref() == Some("RGB")
+        && source.size().ok() == Some((source_width, source_height))
+}
+
 /// Build the native byte contract for `Image.composite` and
 /// `ImageChops.composite`.
 ///
@@ -2185,6 +2230,168 @@ fn simd_paste_rgba_to_rgb(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(result)))
 }
 
+/// Copy RGB pixels into an RGBA paste region and insert opaque alpha in the
+/// same four-pixel shuffle that writes each destination block.
+fn simd_paste_rgb_to_rgba(
+    img: &DynamicImage,
+    source: &DynamicImage,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<DynamicImage, PilError> {
+    let (destination, source) = match (img, source) {
+        (DynamicImage::ImageRgba8(destination), DynamicImage::ImageRgb8(source)) => {
+            (destination, source)
+        }
+        _ => return Err(simd_unsupported("Paste")),
+    };
+    let source_width = u32::try_from(width).map_err(|_| simd_unsupported("Paste"))?;
+    let source_height = u32::try_from(height).map_err(|_| simd_unsupported("Paste"))?;
+    if source.dimensions() != (source_width, source_height) {
+        return Err(simd_unsupported("Paste"));
+    }
+    let expected_destination = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let expected_source = (source_width as usize)
+        .checked_mul(source_height as usize)
+        .and_then(|pixels| pixels.checked_mul(3))
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    if destination.as_raw().len() != expected_destination
+        || source.as_raw().len() != expected_source
+    {
+        return Err(simd_unsupported("Paste"));
+    }
+
+    let region = native_paste_region(img.width(), img.height(), source_width, source_height, x, y)
+        .unwrap_or(NativePasteRegion {
+            source_left: 0,
+            source_top: 0,
+            destination_left: 0,
+            destination_top: 0,
+            width: 0,
+            height: 0,
+        });
+    if region.width == 0 || region.height == 0 {
+        crate::compute::record_pipeline_operation_path("vector-rgb-to-rgba-copy");
+        return Ok(preserve_mode(
+            img,
+            DynamicImage::ImageRgba8(destination.clone()),
+        ));
+    }
+    let source_stride = (source_width as usize)
+        .checked_mul(3)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_stride = (img.width() as usize)
+        .checked_mul(4)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_x_bytes = region
+        .source_left
+        .checked_mul(3)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_row_bytes = region
+        .width
+        .checked_mul(3)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_x_end = source_x_bytes
+        .checked_add(source_row_bytes)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_x_bytes = region
+        .destination_left
+        .checked_mul(4)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_row_bytes = region
+        .width
+        .checked_mul(4)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_x_end = destination_x_bytes
+        .checked_add(destination_row_bytes)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_rows_start = region
+        .source_top
+        .checked_mul(source_stride)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_rows_len = region
+        .height
+        .checked_mul(source_stride)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_rows_end = source_rows_start
+        .checked_add(source_rows_len)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_rows_start = region
+        .destination_top
+        .checked_mul(destination_stride)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_rows_len = region
+        .height
+        .checked_mul(destination_stride)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let destination_rows_end = destination_rows_start
+        .checked_add(destination_rows_len)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let source_rows = source
+        .as_raw()
+        .get(source_rows_start..source_rows_end)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let mut output = destination.as_raw().clone();
+    let destination_rows = output
+        .get_mut(destination_rows_start..destination_rows_end)
+        .ok_or_else(|| simd_unsupported("Paste"))?;
+    let copy_row = |source_row: &[u8], destination_row: &mut [u8]| {
+        simd_put_alpha_rgb_row(
+            &source_row[source_x_bytes..source_x_end],
+            &mut destination_row[destination_x_bytes..destination_x_end],
+            region.width,
+            255,
+        );
+    };
+    #[cfg(feature = "parallel")]
+    if region.height > 1
+        && region.width.saturating_mul(region.height) >= SIMD_RGB_TO_RGBA_PARALLEL_PIXEL_THRESHOLD
+    {
+        crate::par_rows_mut!(
+            destination_rows,
+            destination_stride,
+            region.height,
+            |_row_start, _row_end, row_index, destination_row| {
+                let source_start = row_index as usize * source_stride;
+                copy_row(
+                    &source_rows[source_start..source_start + source_stride],
+                    destination_row,
+                );
+            }
+        );
+    } else {
+        for (source_row, destination_row) in source_rows
+            .chunks_exact(source_stride)
+            .zip(destination_rows.chunks_exact_mut(destination_stride))
+        {
+            copy_row(source_row, destination_row);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (source_row, destination_row) in source_rows
+        .chunks_exact(source_stride)
+        .zip(destination_rows.chunks_exact_mut(destination_stride))
+    {
+        copy_row(source_row, destination_row);
+    }
+    let vector_blocks = (region.width / 4).saturating_mul(region.height) as u64;
+    let scalar_tail = (region.width % 4).saturating_mul(region.height) as u64;
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    if scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    }
+    crate::compute::record_pipeline_operation_path("vector-rgb-to-rgba-copy");
+    let result = RgbaImage::from_raw(img.width(), img.height(), output)
+        .ok_or_else(|| PilError::InternalError("SIMD Paste RGBA buffer shape mismatch".into()))?;
+    Ok(preserve_mode(img, DynamicImage::ImageRgba8(result)))
+}
+
 pub fn simd_paste(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -2205,6 +2412,10 @@ pub fn simd_paste(
     if native_paste_rgba_to_rgb_supported(img, source, *w, *h, mask.as_ref(), mode) {
         let source_image = source.materialized_shared()?;
         return simd_paste_rgba_to_rgb(img, source_image.as_ref(), *x, *y, *w, *h);
+    }
+    if native_paste_rgb_to_rgba_supported(img, source, *w, *h, mask.as_ref(), mode) {
+        let source_image = source.materialized_shared()?;
+        return simd_paste_rgb_to_rgba(img, source_image.as_ref(), *x, *y, *w, *h);
     }
     let plan = native_paste_plan_for_image(
         img,
@@ -5037,6 +5248,7 @@ pub(crate) fn simd_supports_for_image(
             )
             .is_some()
                 || native_paste_rgba_to_rgb_supported(img, source, *w, *h, mask.as_ref(), mode)
+                || native_paste_rgb_to_rgba_supported(img, source, *w, *h, mask.as_ref(), mode)
         }
         PipelineOp::Merge {
             mode: target_mode,
@@ -6583,6 +6795,14 @@ fn simd_supports_for_shape(shape: SimdImageShape, op: &PipelineOp, mode: Option<
             )
             .is_some()
                 || native_paste_rgba_to_rgb_supported_for_shape(
+                    shape,
+                    source,
+                    *w,
+                    *h,
+                    mask.as_ref(),
+                    mode,
+                )
+                || native_paste_rgb_to_rgba_supported_for_shape(
                     shape,
                     source,
                     *w,
@@ -25922,7 +26142,6 @@ fn simd_put_alpha_data_bytes(
 /// Interleave native RGB bytes with one constant alpha while building the
 /// required RGBA result. A four-pixel vector exactly fills one `u8x16`; the
 /// output grows into reserved storage so it is not zero-filled first.
-#[cfg(feature = "parallel")]
 fn simd_put_alpha_rgb_row(source: &[u8], output: &mut [u8], width: usize, alpha: u8) {
     debug_assert_eq!(source.len(), width * 3);
     debug_assert_eq!(output.len(), width * 4);
@@ -25944,6 +26163,7 @@ fn simd_put_alpha_rgb_row(source: &[u8], output: &mut [u8], width: usize, alpha:
         let output_start = pixel * 4;
         output[output_start..output_start + 3]
             .copy_from_slice(&source[source_start..source_start + 3]);
+        output[output_start + 3] = alpha;
     }
 }
 
@@ -26662,6 +26882,36 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_rgb_to_rgba_paste_returns_unchanged_destination_for_empty_or_disjoint_regions() {
+        use crate::raster::{DynamicImage, RgbImage, RgbaImage};
+
+        let destination_bytes = vec![17, 31, 47, 83, 19, 37, 53, 97];
+        let destination = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, destination_bytes.clone())
+                .expect("test destination shape must be valid"),
+        );
+        let cases = [
+            (RgbImage::new(0, 1), 0, 0, 0, 1),
+            (RgbImage::new(1, 0), 0, 0, 1, 0),
+            (RgbImage::new(1, 1), i32::MAX, 0, 1, 1),
+        ];
+        for (source, x, y, width, height) in cases {
+            let source = DynamicImage::ImageRgb8(source);
+            let actual = super::simd_paste_rgb_to_rgba(&destination, &source, x, y, width, height)
+                .expect("empty and disjoint SIMD paste must preserve the receiver");
+            assert_eq!(actual.as_bytes(), destination_bytes);
+        }
+
+        let empty_destination = DynamicImage::ImageRgba8(RgbaImage::new(0, 1));
+        let source = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(1, 1, vec![101, 127, 149]).expect("test source shape must be valid"),
+        );
+        let actual = super::simd_paste_rgb_to_rgba(&empty_destination, &source, 0, 0, 1, 1)
+            .expect("zero-width destination paste must preserve the receiver");
+        assert!(actual.as_bytes().is_empty());
+    }
+
     #[test]
     fn pad_rgbx_preserves_x_samples_and_fills_new_pixels_from_fill_x() {
         let image = DynamicImage::ImageRgba8(

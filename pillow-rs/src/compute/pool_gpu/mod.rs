@@ -10165,6 +10165,238 @@ impl GpuInner {
         Ok(result)
     }
 
+    /// Paste native packed RGB bytes into an RGBA destination without
+    /// allocating or uploading an expanded RGBA source image.
+    #[cfg(target_endian = "little")]
+    fn execute_native_rgb_to_rgba_paste(
+        &self,
+        destination: &DynamicImage,
+        source: &DynamicImage,
+        offset: (i32, i32),
+        dispatch: NativeRgbRgbaPasteDispatch,
+        buffers: &mut BufferPool,
+    ) -> Result<DynamicImage, PilError> {
+        let (DynamicImage::ImageRgba8(destination), DynamicImage::ImageRgb8(source)) =
+            (destination, source)
+        else {
+            return Err(PilError::InternalError(
+                "GPU native RGB-to-RGBA Paste storage variant mismatch".into(),
+            ));
+        };
+        let (width, height) = destination.dimensions();
+        let (source_width, source_height) = source.dimensions();
+        let destination_dims = CheckedDims::new(width, height, 4)?;
+        let source_dims = CheckedDims::new(source_width, source_height, 3)?;
+        if destination_dims.total_bytes() != dispatch.destination_bytes
+            || source_dims.total_bytes() != dispatch.source_bytes
+            || destination.as_raw().len() != dispatch.destination_bytes
+            || source.as_raw().len() != dispatch.source_bytes
+        {
+            return Err(PilError::InternalError(
+                "GPU native RGB-to-RGBA Paste layout mismatch".into(),
+            ));
+        }
+        let buffer_capacity = u64::from(buffers.capacity)
+            .checked_mul(4)
+            .ok_or_else(|| PilError::ValueError("GPU native Paste is too large".into()))?;
+        let limits = self.device.limits();
+        if dispatch.destination_transfer_bytes > buffer_capacity
+            || dispatch.destination_transfer_bytes
+                > u64::from(limits.max_storage_buffer_binding_size)
+            || dispatch.source_transfer_bytes > u64::from(limits.max_storage_buffer_binding_size)
+            || dispatch.destination_transfer_bytes > limits.max_buffer_size
+            || dispatch.source_transfer_bytes > limits.max_buffer_size
+        {
+            return Err(PilError::ValueError(
+                "GPU native RGB-to-RGBA Paste exceeds adapter buffer limits".into(),
+            ));
+        }
+
+        buffers.img2_arena.ensure_capacity(
+            &self.device,
+            "gpu_paste_native_rgb_to_rgba_source",
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            dispatch.source_transfer_bytes as usize,
+            4,
+        );
+        buffers.params_arena.ensure_capacity(
+            &self.device,
+            "gpu_paste_native_rgb_to_rgba_params",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            48,
+            limits.min_uniform_buffer_offset_alignment as usize,
+        );
+
+        let write_padded = |buffer: &wgpu::Buffer, bytes: &[u8], transfer_bytes: u64| {
+            let size = NonZeroU64::new(transfer_bytes).ok_or_else(|| {
+                PilError::InternalError("GPU native Paste upload is empty".into())
+            })?;
+            let mut view = self
+                .queue
+                .write_buffer_with(buffer, 0, size)
+                .ok_or_else(|| {
+                    PilError::InternalError("GPU native Paste staging allocation failed".into())
+                })?;
+            let mapped = view.as_mut();
+            if mapped.len() != transfer_bytes as usize || bytes.len() > mapped.len() {
+                return Err(PilError::InternalError(
+                    "GPU native Paste upload length mismatch".into(),
+                ));
+            }
+            mapped[..bytes.len()].copy_from_slice(bytes);
+            mapped[bytes.len()..].fill(0);
+            Ok::<(), PilError>(())
+        };
+        write_padded(
+            &buffers.buf_a,
+            destination.as_raw(),
+            dispatch.destination_transfer_bytes,
+        )?;
+        write_padded(
+            &buffers.img2_arena.buffer,
+            source.as_raw(),
+            dispatch.source_transfer_bytes,
+        )?;
+
+        let parameters = [
+            width,
+            height,
+            source_width,
+            source_height,
+            dispatch.destination_pixels,
+            dispatch.workgroups_x,
+            offset.0 as u32,
+            offset.1 as u32,
+            0,
+            0,
+            0,
+            0,
+        ];
+        self.queue.write_buffer(
+            &buffers.params_arena.buffer,
+            0,
+            bytemuck::cast_slice(&parameters),
+        );
+        let cached = self.resolve_pipeline(
+            "__internal_paste_native_rgb_to_rgba",
+            "paste_native_rgb_to_rgba.wgsl",
+            include_str!("shaders/paste_native_rgb_to_rgba.wgsl"),
+        )?;
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_native_rgb_to_rgba_paste"),
+            layout: &cached.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ranged_binding(
+                        &buffers.buf_a,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.destination_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: ranged_binding(
+                        &buffers.img2_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.source_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: ranged_binding(
+                        &buffers.buf_b,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: dispatch.destination_transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: ranged_binding(
+                        &buffers.params_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: 48,
+                        }),
+                    )?,
+                },
+            ],
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_native_rgb_to_rgba_paste"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_native_rgb_to_rgba_paste"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&cached.pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            crate::compute::record_gpu_shader_dispatch(
+                cached.variant_name,
+                cached.shader_file,
+                u64::from(dispatch.workgroups_x) * u64::from(dispatch.workgroups_y),
+            );
+            pass.dispatch_workgroups(dispatch.workgroups_x, dispatch.workgroups_y, 1);
+        }
+        let readback =
+            self.prepare_readback(&buffers.buf_b, dispatch.destination_transfer_bytes)?;
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                dispatch.destination_transfer_bytes,
+            );
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device("GPU native RGB-to-RGBA Paste submission")?;
+        let result = self.readback_with(
+            dispatch.destination_transfer_bytes,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != dispatch.destination_transfer_bytes as usize {
+                    return Err(PilError::InternalError(
+                        "GPU native RGB-to-RGBA Paste readback length mismatch".into(),
+                    ));
+                }
+                let bytes = mapped[..dispatch.destination_bytes].to_vec();
+                crate::compute::record_pipeline_allocation(bytes.len());
+                crate::raster::RgbaImage::from_raw(width, height, bytes)
+                    .map(DynamicImage::ImageRgba8)
+                    .ok_or_else(|| {
+                        PilError::InternalError(
+                            "GPU native RGB-to-RGBA Paste output shape mismatch".into(),
+                        )
+                    })
+            },
+        )?;
+        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+            upload_bytes: dispatch.input_transfer_bytes,
+            auxiliary_bytes: dispatch.source_transfer_bytes,
+            readback_bytes: dispatch.destination_transfer_bytes,
+            parameter_bytes: 48,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            mode_conversion_count: 0,
+            ..PipelineResourceTelemetry::default()
+        });
+        crate::compute::record_pipeline_dispatch_count(1);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        Ok(result)
+    }
+
     /// Execute masked L-to-L Paste without expanding destination, source, and
     /// mask bytes into the generic four-channel GPU transport.
     #[cfg(target_endian = "little")]
@@ -14722,6 +14954,18 @@ struct NativeBytePasteDispatch {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct NativeRgbRgbaPasteDispatch {
+    destination_bytes: usize,
+    source_bytes: usize,
+    destination_transfer_bytes: u64,
+    source_transfer_bytes: u64,
+    input_transfer_bytes: u64,
+    destination_pixels: u32,
+    workgroups_x: u32,
+    workgroups_y: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct NativeMaskedLPasteDispatch {
     destination_bytes: usize,
     source_bytes: usize,
@@ -14873,6 +15117,71 @@ fn plan_gpu_native_byte_paste(
     })
 }
 
+/// Plan an unmasked native RGB-source to RGBA-destination paste. Output
+/// invocations own aligned destination pixels; the packed RGB source may
+/// cross u32 boundaries and is indexed as a flat three-byte pixel stream.
+fn plan_gpu_native_rgb_to_rgba_paste(
+    destination_width: u32,
+    destination_height: u32,
+    source_width: u32,
+    source_height: u32,
+    max_workgroups_per_dimension: u32,
+    max_storage_binding_bytes: u32,
+    max_buffer_bytes: u64,
+) -> Option<NativeRgbRgbaPasteDispatch> {
+    if max_workgroups_per_dimension == 0 {
+        return None;
+    }
+    let destination = CheckedDims::new(destination_width, destination_height, 4).ok()?;
+    let source = CheckedDims::new(source_width, source_height, 3).ok()?;
+    if destination_width == 0 || destination_height == 0 || source_width == 0 || source_height == 0
+    {
+        return None;
+    }
+    let destination_bytes = destination.total_bytes();
+    let source_bytes = source.total_bytes();
+    let destination_pixels = u32::try_from(destination.total_pixels()).ok()?;
+    // Shader byte/pixel indexing is u32. Restrict the complete buffers, not
+    // just their dimensions, so every multiplication and final byte offset
+    // stays representable without wraparound.
+    u32::try_from(destination_bytes).ok()?;
+    u32::try_from(source_bytes).ok()?;
+    let transfer_bytes = |bytes: usize| {
+        u64::try_from(bytes)
+            .ok()?
+            .checked_add(3)
+            .map(|aligned| aligned & !3)
+    };
+    let destination_transfer_bytes = transfer_bytes(destination_bytes)?;
+    let source_transfer_bytes = transfer_bytes(source_bytes)?;
+    let input_transfer_bytes = destination_transfer_bytes.checked_add(source_transfer_bytes)?;
+    let binding_limit = u64::from(max_storage_binding_bytes);
+    if destination_transfer_bytes > binding_limit
+        || source_transfer_bytes > binding_limit
+        || destination_transfer_bytes > max_buffer_bytes
+        || source_transfer_bytes > max_buffer_bytes
+    {
+        return None;
+    }
+
+    let output_groups = destination_pixels.div_ceil(64);
+    let workgroups_x = output_groups.min(max_workgroups_per_dimension);
+    let workgroups_y = output_groups.div_ceil(workgroups_x);
+    if workgroups_y > max_workgroups_per_dimension {
+        return None;
+    }
+    Some(NativeRgbRgbaPasteDispatch {
+        destination_bytes,
+        source_bytes,
+        destination_transfer_bytes,
+        source_transfer_bytes,
+        input_transfer_bytes,
+        destination_pixels,
+        workgroups_x,
+        workgroups_y,
+    })
+}
+
 /// Admit only exact unmasked L-to-L, LA-to-LA, or RGB-to-RGB Paste layouts.
 /// Palette indices, premultiplied LA, and other storage variants keep their
 /// semantic path.
@@ -14916,6 +15225,50 @@ fn gpu_native_byte_paste_layout(
         return None;
     }
     Some(((*x, *y), bytes_per_pixel))
+}
+
+/// Admit only explicit unmasked RGB-to-RGBA Paste. Other logical modes must
+/// retain their established conversion and paste semantics.
+fn gpu_native_rgb_to_rgba_paste_layout(
+    op: &PipelineOp,
+    destination: &DynamicImage,
+    source: &DynamicImage,
+    mode: Option<&str>,
+) -> Option<(i32, i32)> {
+    let PipelineOp::Paste {
+        source: source_image,
+        x,
+        y,
+        w,
+        h,
+        mask: None,
+        ..
+    } = op
+    else {
+        return None;
+    };
+    if mode != Some("RGBA")
+        || source_image.mode().ok()?.as_str() != "RGB"
+        || !matches!(destination, DynamicImage::ImageRgba8(_))
+        || !matches!(source, DynamicImage::ImageRgb8(_))
+        || *w <= 0
+        || *h <= 0
+        || (u32::try_from(*w).ok()?, u32::try_from(*h).ok()?) != source.dimensions()
+    {
+        return None;
+    }
+    if CheckedDims::new(destination.width(), destination.height(), 4)
+        .ok()?
+        .total_bytes()
+        != destination.as_bytes().len()
+        || CheckedDims::new(source.width(), source.height(), 3)
+            .ok()?
+            .total_bytes()
+            != source.as_bytes().len()
+    {
+        return None;
+    }
+    Some((*x, *y))
 }
 
 /// Admit only an exact L-to-L paste with an L mask. Other logical modes and
@@ -15921,7 +16274,7 @@ fn gpu_pipeline_requires_cpu(
         if !gpu_auxiliary_shapes_are_safe(op, auxiliary, cur_w, cur_h) {
             return true;
         }
-        if !gpu_auxiliary_modes_are_safe_for_color(op, current_color, auxiliary) {
+        if !gpu_auxiliary_modes_are_safe_for_color(op, current_color, auxiliary, logical_mode) {
             return true;
         }
         if let Some(next) = op_output_dims(op, cur_w, cur_h) {
@@ -15970,13 +16323,14 @@ fn gpu_auxiliary_modes_are_safe(
     image: &DynamicImage,
     auxiliary: &AuxiliaryImages,
 ) -> bool {
-    gpu_auxiliary_modes_are_safe_for_color(op, image.color(), auxiliary)
+    gpu_auxiliary_modes_are_safe_for_color(op, image.color(), auxiliary, None)
 }
 
 fn gpu_auxiliary_modes_are_safe_for_color(
     op: &PipelineOp,
     current_color: crate::raster::ColorType,
     auxiliary: &AuxiliaryImages,
+    logical_mode: Option<&str>,
 ) -> bool {
     if matches!(
         op,
@@ -16053,7 +16407,18 @@ fn gpu_auxiliary_modes_are_safe_for_color(
             .as_ref()
             .is_some_and(|second| second.color() != current_color)
     {
-        return false;
+        let native_rgb_to_rgba_paste = matches!(
+            (op, logical_mode, current_color, auxiliary.second.as_deref()),
+            (
+                PipelineOp::Paste { mask: None, .. },
+                Some("RGBA"),
+                crate::raster::ColorType::Rgba8,
+                Some(DynamicImage::ImageRgb8(_))
+            )
+        );
+        if !native_rgb_to_rgba_paste {
+            return false;
+        }
     }
     if let PipelineOp::Paste {
         mask_alpha: false, ..
@@ -19993,6 +20358,32 @@ impl GpuPool {
         #[cfg(target_endian = "little")]
         if let ([op], [auxiliary]) = (ops, auxiliary_images.as_slice())
             && let Some(source_pixels) = auxiliary.second.as_deref()
+            && let Some(offset) = gpu_native_rgb_to_rgba_paste_layout(op, img, source_pixels, mode)
+            && let Some(dispatch) = plan_gpu_native_rgb_to_rgba_paste(
+                img.width(),
+                img.height(),
+                source_pixels.width(),
+                source_pixels.height(),
+                limits.max_compute_workgroups_per_dimension,
+                limits.max_storage_buffer_binding_size,
+                limits.max_buffer_size,
+            )
+        {
+            let mut buffers = gpu.acquire_buffers(dispatch.destination_pixels)?;
+            let result = gpu.execute_native_rgb_to_rgba_paste(
+                img,
+                source_pixels,
+                offset,
+                dispatch,
+                &mut buffers,
+            )?;
+            gpu.recycle_buffers(buffers);
+            return Ok(result);
+        }
+
+        #[cfg(target_endian = "little")]
+        if let ([op], [auxiliary]) = (ops, auxiliary_images.as_slice())
+            && let Some(source_pixels) = auxiliary.second.as_deref()
             && let Some((offset, bytes_per_pixel)) =
                 gpu_native_byte_paste_layout(op, img, source_pixels, mode)
             && let Some(dispatch) = plan_gpu_native_byte_paste(
@@ -20667,10 +21058,11 @@ mod tests {
         gpu_shader_work_requires_cpu, gpu_transform_all_fill_is_exact, gpu_transform_fill,
         gpu_transform_should_premultiply, luma16_resample_big_endian, plan_blur_dispatch,
         plan_extract_band_dispatch, plan_gpu_native_byte_paste, plan_gpu_native_masked_l_paste,
-        plan_native_expand_output_dispatch, plan_native_rgb_put_alpha_data_dispatch,
-        plan_native_rgb_put_alpha_dispatch, plan_native_rgba_put_alpha_data_dispatch,
-        plan_packed_luma_dispatch, plan_packed_point_luma_dispatch, plan_sharpness_l_dispatch,
-        putdata_auxiliary_words, readback_poll_backoff,
+        plan_gpu_native_rgb_to_rgba_paste, plan_native_expand_output_dispatch,
+        plan_native_rgb_put_alpha_data_dispatch, plan_native_rgb_put_alpha_dispatch,
+        plan_native_rgba_put_alpha_data_dispatch, plan_packed_luma_dispatch,
+        plan_packed_point_luma_dispatch, plan_sharpness_l_dispatch, putdata_auxiliary_words,
+        readback_poll_backoff,
     };
     use crate::ops::imageops::ImageOpsColor;
     use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
@@ -20832,6 +21224,76 @@ mod tests {
         );
         assert!(
             plan_gpu_native_byte_paste(0, 1, 1, 1, 1, max_workgroups, u32::MAX, u64::MAX,)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn native_rgb_to_rgba_paste_planner_bounds_mixed_layout_and_2d_dispatch() {
+        let max_workgroups = 65_535;
+        let at_boundary_pixels = u64::from(max_workgroups) * 64;
+        let boundary_width = u32::try_from(at_boundary_pixels).unwrap();
+        let at_boundary = plan_gpu_native_rgb_to_rgba_paste(
+            boundary_width,
+            1,
+            1,
+            1,
+            max_workgroups,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("the last one-dimensional dispatch group is representable");
+        assert_eq!(at_boundary.workgroups_x, max_workgroups);
+        assert_eq!(at_boundary.workgroups_y, 1);
+        assert_eq!(at_boundary.destination_bytes as u64, at_boundary_pixels * 4);
+        assert_eq!(at_boundary.source_bytes, 3);
+        assert_eq!(at_boundary.source_transfer_bytes, 4);
+        assert_eq!(
+            at_boundary.input_transfer_bytes,
+            at_boundary.destination_transfer_bytes + at_boundary.source_transfer_bytes
+        );
+
+        let just_over = plan_gpu_native_rgb_to_rgba_paste(
+            boundary_width + 1,
+            1,
+            1,
+            1,
+            max_workgroups,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("one extra output group is represented on a second dispatch row");
+        assert_eq!(just_over.workgroups_x, max_workgroups);
+        assert_eq!(just_over.workgroups_y, 2);
+
+        let image_4096 = plan_gpu_native_rgb_to_rgba_paste(
+            4096,
+            4096,
+            4096,
+            4096,
+            max_workgroups,
+            u32::MAX,
+            u64::MAX,
+        )
+        .expect("a 4096-square output uses a bounded 2D dispatch");
+        assert_eq!(image_4096.destination_pixels, 4096 * 4096);
+        assert_eq!(image_4096.workgroups_x, max_workgroups);
+        assert_eq!(image_4096.workgroups_y, 5);
+        assert_eq!(image_4096.destination_transfer_bytes, 4096 * 4096 * 4);
+        assert_eq!(image_4096.source_transfer_bytes, 4096 * 4096 * 3);
+
+        assert!(
+            plan_gpu_native_rgb_to_rgba_paste(boundary_width, 1, 1, 1, 1, u32::MAX, u64::MAX,)
+                .is_none()
+        );
+        assert!(
+            plan_gpu_native_rgb_to_rgba_paste(8, 1, 1, 1, max_workgroups, 31, u64::MAX,).is_none()
+        );
+        assert!(
+            plan_gpu_native_rgb_to_rgba_paste(8, 1, 1, 1, max_workgroups, u32::MAX, 31,).is_none()
+        );
+        assert!(
+            plan_gpu_native_rgb_to_rgba_paste(0, 1, 1, 1, max_workgroups, u32::MAX, u64::MAX,)
                 .is_none()
         );
     }

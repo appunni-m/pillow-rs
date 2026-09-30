@@ -587,6 +587,12 @@ impl Image {
                         && matches!(source_mode.as_str(), "LA" | "RGBA" | "RGBa"))
                 {
                     *image
+                } else if destination_mode == "RGBA" && source_mode == "RGB" && mask.is_none() {
+                    // Preserve native RGB bytes for the unmasked RGBA paste.
+                    // Each backend can copy RGB and supply opaque alpha in its
+                    // destination writer instead of materializing an RGBA
+                    // source image first.
+                    *image
                 } else if destination_mode == "PA" && source_mode == "P" {
                     // Pillow promotes a P source to opaque PA samples before
                     // pasting, retaining the source index byte verbatim.
