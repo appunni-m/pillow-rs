@@ -1167,13 +1167,15 @@ fn pad_native_rows(
     };
     let output_dims = CheckedDims::new(w, h, channels as u8)?;
     let fill_pixel = &fill_pixel[..channels];
+    let full_width_rows =
+        output_x_bytes == 0 && copy_width == width && source_stride == output_stride;
     let fill_row = fill_pixel.repeat(width);
     if fill_row.len() != output_stride {
         return Ok(None);
     }
-    let full_width_rows =
-        output_x_bytes == 0 && copy_width == width && source_stride == output_stride;
-    let append_vertical_rows = matches!(explicit_mode, Some("CMYK" | "RGBX")) && full_width_rows;
+    let append_vertical_rows = full_width_rows
+        && (matches!(explicit_mode, Some("CMYK" | "RGBX"))
+            || (channels == 1 && matches!(explicit_mode, None | Some("L"))));
     let mut output = if append_vertical_rows {
         Vec::with_capacity(output_dims.total_bytes())
     } else {
@@ -1199,9 +1201,9 @@ fn pad_native_rows(
             return Ok(None);
         };
         if append_vertical_rows {
-            // Common packed four-byte Pad shapes have full-width source rows
-            // and only vertical borders. Append fill, source, and fill
-            // segments so source bytes are not initialized and overwritten.
+            // Full-width native Pad shapes with only vertical borders can
+            // append fill, source, and fill segments without initializing
+            // source bytes and overwriting them.
             for _ in 0..offset_y {
                 output.extend_from_slice(&fill_row);
             }

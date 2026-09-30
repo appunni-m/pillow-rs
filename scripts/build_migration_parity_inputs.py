@@ -41137,6 +41137,24 @@ def build_nuanced_cases(
             "values": {"size": literal([3, 3]), "color": literal(17)},
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
+        # Native-L packed Pad keeps the source dimensions unchanged while
+        # filling an odd-width canvas. Six source bytes and fifteen output
+        # bytes exercise padded upload/readback words and words that cross
+        # row boundaries; the 1.5-pixel vertical centering offset also
+        # preserves Pillow's ties-to-even placement rule.
+        specs += ({
+            "surface": "PIL.ImageOps", "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "native-l-packed-tail-3x2-to-3x5-identity-contain",
+            "mode": "L", "size": [3, 2], "edge": "noise-fill",
+            "seed": 20261037, "observe_result": "tobytes",
+            "values": {
+                "size": literal([3, 5]),
+                "color": literal(173),
+                "centering": literal([0.5, 0.5]),
+            },
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
         # This filtered case forces Pillow's ties-to-even contain height
         # (3 * 5 / 6 = 2.5 -> 2) and paste offset ((5 - 2) / 2 = 1.5 -> 2).
         # It also exercises partial GPU workgroups and preserves the varying
