@@ -11722,3 +11722,81 @@ PYTHON=build/parity-venv/bin/python \
 ```
 
 No coverage, GitHub CI, or release action was run.
+
+## HSV ImageOps.cover CPU/SIMD checkpoint — 2026-10-01
+
+Workload `pil-imageops.cover.materialized.hsv-noise-1024x768` resizes a native
+HSV 1024 × 768 byte-triple image to 1365 × 1024 with BICUBIC and materializes
+the output. The image stays in its native three-byte storage throughout; no
+RGBA conversion is needed because Pillow resamples the three byte channels
+independently. The clean `main` baseline (`a0c8cdfab`) measured Pillow / CPU /
+SIMD / GPU medians of 9.741 / 18.301 / 17.675 / 5.327 ms. Its parity gate
+`migration-parity-benchmark-gate-ebfa8019e59d4971ab34b9551001a8e6` passed all
+three backends, each executing 100/100 times with no fallback. The CPU profile
+showed the resize kernel, rather than route, validation, copies, or conversion,
+dominating the call.
+
+Attempt 1 added an HSV-only SIMD path that first proves
+`sum(abs(weights)) * 255 + rounding_bias <= i32::MAX` for every output sample,
+then accumulates the three channel vectors in i32 instead of widening to i64.
+Unsafe coefficient tables continue through the wide path. Its benchmark
+`migration-benchmark-a520916eb5a14914b2a933bff842389f` measured Pillow / CPU /
+SIMD / GPU at 9.389 / 17.615 / 11.003 / 5.167 ms. Only SIMD code changed in
+this attempt; its 11.003 ms median is a 1.61× speedup over baseline. The six
+RGB and HSV CPU/SIMD/GPU parity comparisons passed under
+`migration-parity-benchmark-gate-1dc2b39aaad148f3b12f1edb4fc1555f`, with each
+requested backend selected 100/100 times and no fallback. The RGB case was
+included to verify this mode-gated optimization leaves the earlier RGB cover
+path unchanged.
+
+Attempt 2 applied narrow i32 accumulators to serial CPU using a generic weight
+loop. Its run `migration-benchmark-698f334d15bb4e339b311ec7528c430d` measured
+Pillow / CPU / SIMD / GPU at 9.819 / 19.132 / 11.614 / 5.487 ms; the CPU
+samples were noisy (1.465 ms standard deviation) and did not support retaining
+that loop. I removed it. Attempt 3 kept the checked accumulator bound but
+unrolled the common four-tap BICUBIC case for HSV horizontal and vertical
+passes, retaining the general tap loop for other support widths. Byte-for-byte
+tests against the wide three-channel kernels passed at tiny and odd dimensions,
+vector tails, and all-zero, all-255, checkerboard, and varied samples. Its
+initial run `migration-benchmark-2bb0b1d0bd64459db449325cf5a24f76` had large
+SIMD/GPU timing variance; parity gate
+`migration-parity-benchmark-gate-57e41a64c2a447d1b7f9c7f9b393494a` passed all
+six CPU/SIMD/GPU RGB and HSV comparisons.
+
+A repeat of the retained tree
+(`migration-benchmark-5895137a94054156a65241b2e16baaf3`) measured Pillow /
+CPU / SIMD / GPU at 9.516 / 16.999 / 11.127 / 5.350 ms, or 105.1 / 58.8 /
+89.9 / 186.9 operations/s. The repeat parity gate
+`migration-parity-benchmark-gate-567e4564804244d2b1cdadaf46fa1242` passed all
+three backends, each executing 100/100 times without fallback. Relative to the
+clean baseline, serial CPU latency fell about 7% and SIMD latency about 37%
+(1.59×); CPU is still 1.79× slower than Pillow and SIMD 1.17× slower. GPU is
+1.78× faster than Pillow and has about 2.08× SIMD throughput. Keep the narrow
+HSV path as a measured checkpoint, not a closed performance target.
+
+The final exact-tree run
+(`migration-benchmark-4f978d8a180a494ebee916a1ef7cbed9`) measured HSV Pillow /
+CPU / SIMD / GPU at 9.186 / 16.336 / 10.782 / 1.948 ms. Its combined RGB and
+HSV parity gate `migration-parity-benchmark-gate-cc8df00785914f148aafb11e33aa3a67`
+passed all 6 comparisons, with 100/100 actual executions per backend and no
+fallback. The corresponding throughput was 108.9 / 61.2 / 92.8 / 513.5
+operations/s. CPU and SIMD remained around 1.8× and 1.17× Pillow latency. The
+GPU median varied from 5.350 ms in the preceding repeat to 1.948 ms here even
+though this change did not touch GPU code; record both runs, and do not attribute
+that GPU difference to this optimization until it repeats consistently.
+
+Reproduce the retained unit checks and isolated Pillow comparison with:
+
+```sh
+cargo test -p pillow-rs --lib cover_hsv_i32_two_pass_matches_widened_at_edges_and_tails
+cargo test -p pillow-rs --lib hsv_narrow_cpu_resize_matches_wide_three_channel_resize
+cargo test -p pillow-rs --lib hsv_i32_accumulator_guard_fails_closed_at_the_overflow_boundary
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.hsv-noise-1024x768 --workload-id pil-imageops.cover.materialized.rgb-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-hsv-final-20261001.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-hsv-final-20261001-parity.json \
+  make migration-parity-benchmark
+```
+
+No coverage, GitHub CI, or release action was run.
