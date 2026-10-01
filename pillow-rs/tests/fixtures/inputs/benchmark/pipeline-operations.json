@@ -12418,6 +12418,434 @@
       }
     },
     {
+      "workload_id": "pipeline-op.convert-mode-i-to-l-1024x768",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "I"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 127
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "L"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 1,
+        "samples": 100,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.convert-mode-i-to-f-1024x768",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "I"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 127
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "F"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 1,
+        "samples": 100,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.convert-mode-f-to-l-1024x768",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "F"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 127.5
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "L"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 1,
+        "samples": 100,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-op.convert-mode-f-to-i-1024x768",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "F"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 127.5
+              }
+            }
+          },
+          {
+            "step_id": "call",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "I"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "call",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 1,
+        "samples": 100,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "F",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.thumbnail.material-rgb-1024x768",
       "covers": [
         "PIL.Image.Image.thumbnail.performance.standard"

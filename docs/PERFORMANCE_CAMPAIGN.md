@@ -7614,6 +7614,69 @@ uses the same eager host implementation under these profiles. Receipts are
 `migration-benchmark-e7c9b9ac2863457190271e926158cd82` and
 `migration-benchmark-0afdfc54e29246e59132fb707e127ff3`. No coverage was run.
 
+### I/F scalar `Image.convert`: borrow source storage — 2026-10-01
+
+I and F images already store each scalar as one little-endian word in their
+`ImageRgba8` carrier. `i_to_l`, `f_to_l`, `i_to_f`, and `f_to_i` called
+`to_rgba8()` and cloned the complete carrier before converting it. These four
+helpers now borrow `as_raw()` when the physical carrier matches and keep the
+old conversion fallback for other `DynamicImage` variants. Little-endian
+interpretation, signed I/F casts, L clamping, and float truncation are
+unchanged. The L-producing helpers collect one output byte per source word
+directly into a `Vec<u8>` and construct the image with `GrayImage::from_raw`,
+so the destination is not zero-filled before every byte is overwritten.
+`i_to_rgb` and `f_to_rgb` already used borrowed carrier bytes and did not need
+changes.
+
+Focused Rust tests cover I/F clamping, truncation, infinities, NaN, and
+little-endian output, including the I/F `ImageOps.grayscale` route. The
+isolated Pillow conversion parity lane passed **4/4** cases for I→L, I→F,
+F→L, and F→I. Its four 1024 × 768 workloads have five warmups and 100 samples
+per subject; each measures `Image.new`, `convert`, and `tobytes`, while also
+recording the `convert` phase:
+
+| Conversion | CPU convert phase before → after | CPU whole workflow before → after | Ordinary Pillow whole workflow | Candidate CPU vs Pillow |
+| --- | ---: | ---: | ---: | ---: |
+| I→L | 0.569 → 0.393 ms | 0.764 → 0.579 ms | 0.454 ms | 1.28× slower |
+| I→F | 0.535 → 0.371 ms | 0.865 → 0.709 ms | 1.053 ms | 1.49× faster |
+| F→L | 0.468 → 0.262 ms | 0.674 → 0.441 ms | 0.760 ms | 1.73× faster |
+| F→I | 0.538 → 0.371 ms | 0.868 → 0.711 ms | 1.061 ms | 1.49× faster |
+
+Parallel CPU is measured and reported separately against the same ordinary
+Pillow results; no extra Pillow baseline is run:
+
+| Conversion | Parallel CPU whole workflow | Ordinary Pillow | Parallel CPU vs Pillow |
+| --- | ---: | ---: | ---: |
+| I→L | 0.565 ms | 0.454 ms | 1.24× slower |
+| I→F | 0.720 ms | 1.053 ms | 1.46× faster |
+| F→L | 0.450 ms | 0.760 ms | 1.69× faster |
+| F→I | 0.705 ms | 1.061 ms | 1.50× faster |
+
+The safe output-allocation change helps the one-byte L results. A candidate
+that appended four RGBA bytes separately through `Vec::extend_from_slice`
+regressed I→F and F→I, so those helpers retain their existing
+`ImageBuffer::new` writer. A portable `i32x8` I→L candidate also passed the
+same parity lane but increased its conversion-phase median from 0.393 ms to
+0.484 ms; it was removed rather than retaining slower architecture-specific
+code.
+
+The serial I→L result remains slower than Pillow and is the next blocker for
+this family. These helpers run eagerly on the host outside backend dispatch;
+their CPU, SIMD, GPU, and feature-enabled Parallel CPU timing records have no
+actual backend attribution (`actual_backend: null`, `not_proven`). The
+Parallel CPU build includes `pillow-rs/parallel`, but these conversions do not
+schedule Rayon work. Do not count these profile timings as SIMD, GPU, or Rayon
+execution. Baseline, final serial, final Parallel CPU, rejected RGBA-writer,
+and rejected vector receipts are respectively
+`migration-benchmark-b5cabacb2a8d431695869228da92042a`,
+`migration-benchmark-e956b39c24ed4ed48d78ec0c341346c4`,
+`migration-benchmark-469545f6f2b541d8bd5bd25ee89dff63`,
+`migration-benchmark-549e8f34e8634a0287b46797742f6e4e`, and
+`migration-benchmark-45fa00eac4bc40f0ba73b9052befae1d`. The results are
+100-sample, single-run medians rather than repeated independent runs; the
+cross-subject I→L shifts show enough run-to-run noise that its blocker stays
+open. No coverage was run.
+
 ### RGBA FASTOCTREE: read the four-byte carrier directly — 2026-09-28
 
 The RGBA FASTOCTREE path used `to_rgba8().into_raw()` before a read-only octree
