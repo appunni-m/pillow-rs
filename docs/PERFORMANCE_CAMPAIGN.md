@@ -11187,3 +11187,43 @@ the receipts are `build/migration-parity/fresize-i16-cpu-parity.json`,
 `fresize-i16-simd-parity.json`, and `fresize-i16-gpu-parity.json`. The public
 case does not replace the three excluded tap-count tests or establish a
 performance result.
+
+## PIL.Image.Image.getdata iteration checkpoint — 2026-10-01
+
+The first P5 optimization idea was wrong for Pillow's public contract:
+`getdata()[slice]` is not supported by Pillow 12.2. It raises
+`TypeError: sequence index must be integer, not 'slice'`. pillow-rs accepted
+the slice and fetched every pixel over FFI, so the audit had identified a real
+parity defect while misclassifying the behavior as an optimization opportunity.
+The wrapper now returns Pillow's error for slices, unsupported index types,
+and positive indexes past the end. Ordinary indexing and retained live views
+are unchanged. The regression compares target behavior with live Pillow in
+isolated subprocesses.
+
+For valid full iteration, `_CompactImageDataSequence.__iter__` used to allocate
+a `bytes` slice for every multiband pixel. It now returns the tuple iterator
+from `struct.iter_unpack`, operating directly on the native compact buffer. A
+small fallback keeps the prior behavior for malformed internal data with a
+trailing partial pixel. No RGBA widening was added.
+
+The source and target were measured separately with CPython 3.12.13 and Pillow
+12.2 on macOS arm64. Each pair used `tuple(Image.new(mode, (256, 256), color).getdata())`
+for L, LA, RGB, and RGBA, with two warmups and seven timed samples per process;
+three independent process pairs were collected. Every full tuple digest matched
+Pillow. Median latencies across the three paired runs were:
+
+| Mode | Pillow | CPU | CPU / Pillow |
+| --- | ---: | ---: | ---: |
+| L | 344.3 µs | 150.1 µs | 0.44× |
+| LA | 2723.0 µs | 2517.7 µs | 0.92× |
+| RGB | 3101.7 µs | 2653.6 µs | 0.86× |
+| RGBA | 3536.7 µs | 3191.0 µs | 0.90× |
+
+The RGB target baseline before `iter_unpack` was 6931.8 µs against Pillow at
+2993.7 µs. The new median is about 2.61× faster than that target baseline and
+about 1.17× faster than Pillow. These are wrapper/materialization timings;
+SIMD, GPU, and Parallel CPU are not applicable because no image kernel or Rayon
+work runs while Python turns the sequence into tuples. `getdata` passes its
+focused Pillow parity cases for default RGB, L, LA, RGBA, band access, RGB/LA/
+RGBA/PA/CMYK byte layouts, and a retained view across mutation and thumbnail.
+No coverage collection ran.
