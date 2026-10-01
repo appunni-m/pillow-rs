@@ -2309,10 +2309,31 @@ impl Image {
             (idx, pal_bytes, None)
         } else {
             // MEDIANCUT (method 0) for RGB with Pillow's k-means refinement.
-            let rgb = img.to_rgb8();
-            let pixel_list: Vec<[u8; 3]> = rgb.pixels().map(|p| [p[0], p[1], p[2]]).collect();
-            let rgb_raw: Vec<u8> = pixel_list.iter().flatten().copied().collect();
-            let (idx, pal) = median_cut_quantize_rgb(&rgb_raw, n_colors);
+            // Borrow native RGB storage when the logical mode agrees. Other
+            // modes retain Pillow's RGB conversion, but median-cut consumes
+            // its bytes directly instead of flattening a second full image.
+            let native_rgb = matches!(&img, DynamicImage::ImageRgb8(_))
+                && matches!(self.explicit_mode(), None | Some("RGB"));
+            let converted_rgb = if native_rgb {
+                None
+            } else {
+                Some(img.to_rgb8())
+            };
+            let rgb_raw: &[u8] = match converted_rgb.as_ref() {
+                Some(rgb) => rgb.as_raw().as_slice(),
+                None => img.as_bytes(),
+            };
+            // Median-cut only needs the interleaved bytes. Keep the tuple
+            // buffer used by k-means out of the common kmeans=0 path.
+            let pixel_list: Vec<[u8; 3]> = if kmeans > 0 {
+                rgb_raw
+                    .chunks_exact(3)
+                    .map(|pixel| [pixel[0], pixel[1], pixel[2]])
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let (idx, pal) = median_cut_quantize_rgb(rgb_raw, n_colors);
             let mut idx = idx;
             let mut pal = pal;
             if kmeans > 0 {
