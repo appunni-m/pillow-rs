@@ -12,8 +12,8 @@
 //   When row-level parallelism could cause artifacts (e.g., filters with
 //   boundary conditions), use par_tiles! instead.
 //
-//   CI enforces: all trivially-parallel operations marked in
-//   scripts/check_parallelism.sh should use these macros.
+//   These helpers are opt-in with the `parallel` Cargo feature. Keep policy
+//   checks aligned with the scripts and CI jobs that actually exist.
 // ============================================================================
 
 /// Parallelize pixel iteration over image rows.

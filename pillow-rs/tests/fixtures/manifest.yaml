@@ -43,17 +43,28 @@ target_profiles:
   target_id: pillow-rs-python
   backend: cpu
   features:
-  - default
+  - pillow-rs-py/default
+  - pillow-rs/default
 - id: python-simd
   target_id: pillow-rs-python
   backend: simd
   features:
-  - default
+  - pillow-rs-py/default
+  - pillow-rs/default
 - id: python-gpu
   target_id: pillow-rs-python
   backend: gpu
   features:
-  - default
+  - pillow-rs-py/default
+  - pillow-rs/default
+- id: python-parallel-cpu
+  target_id: pillow-rs-python
+  backend: cpu
+  features:
+  - pillow-rs-py/default
+  - pillow-rs/default
+  - pillow-rs-py/parallel
+  - pillow-rs/parallel
 commands:
 - id: inventory
   argv:

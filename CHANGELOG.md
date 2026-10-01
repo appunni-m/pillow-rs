@@ -6,6 +6,14 @@ backend limitations in the documentation remain part of its contract.
 
 ## Unreleased
 
+## 12.2.0-alpha.5 - 2026-10-01
+
+- Preserve zero-valued fourth samples for omitted and scalar CMYK/RGBX
+  `ImageOps.expand` fills in the Node and browser WASM parity adapter.
+- Add native CPU and SIMD CMYK masked-paste paths and regression coverage.
+- Keep Rayon opt-in and report its correctness-gated benchmarks in a distinct
+  Parallel CPU profile.
+
 ## 12.2.0-alpha.4 - 2026-10-01
 
 - Avoid intermediate copies in native `I`/`F` to `RGB` conversion and reuse

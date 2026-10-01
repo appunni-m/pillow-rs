@@ -26,6 +26,22 @@ cache state, and repeat policy. The reference standard policy is:
 | correctness gate | `parity_pass` for parity-backed inputs; `successful_execution` for benchmark-only workflows |
 | target subjects | Pillow oracle, `python-cpu`, `python-simd`, `python-gpu` |
 
+The CPU, SIMD, and GPU subjects use the Python and core default Cargo features;
+the core default excludes Rayon `parallel`. These profiles differ by the
+runtime backend request, not by a separately compiled feature set. Rayon work
+is measured separately as Parallel CPU:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark-parallel-cpu
+```
+
+That target rebuilds the facade with the explicit `parallel` feature, requests
+only the CPU executor, verifies the built feature at runtime, parity-gates the
+same CPU-applicable workloads, and writes separate `python-parallel-cpu`
+receipts under `build/migration-parity/`. Its runtime backend is `cpu`; its
+profile identity records both opt-in feature flags. Do not compare those
+receipts as serial CPU or SIMD results.
+
 Each workload keeps its own declared policy in the generated input. The fixed
 11-workload release-acceptance cohort intentionally uses one warmup, three
 measurement iterations, and two samples (six timed executions per subject),

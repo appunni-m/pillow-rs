@@ -32,6 +32,7 @@ try:
         ORACLE_ID,
         ORACLE_VERSION,
         TARGET_ID,
+        TARGET_FEATURES,
         git_dirty,
         git_revision,
         process_group_options,
@@ -43,6 +44,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` i
         ORACLE_ID,
         ORACLE_VERSION,
         TARGET_ID,
+        TARGET_FEATURES,
         git_dirty,
         git_revision,
         process_group_options,
@@ -55,8 +57,11 @@ FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_RESULT = ROOT / "build" / "migration-parity" / "benchmark-result.json"
 DEFAULT_PARITY_RESULT = ROOT / "build" / "migration-parity" / "parity-result.json"
-TARGET_BACKENDS = ("cpu", "simd", "gpu")
-TARGET_PROFILES = tuple(f"python-{backend}" for backend in TARGET_BACKENDS)
+PARALLEL_CPU_PROFILE = (
+    os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
+    == "parallel-cpu"
+)
+TARGET_BACKENDS = ("cpu",) if PARALLEL_CPU_PROFILE else ("cpu", "simd", "gpu")
 DEFAULT_GPU_BENCHMARK_TIMEOUT_SECONDS = 900
 MAX_GPU_BENCHMARK_TIMEOUT_SECONDS = 1800
 # A suite aggregate is a statistical claim, not merely a record that one
@@ -66,9 +71,22 @@ MIN_COMPARABLE_SUITE_MEMBERS = 2
 
 
 def target_profile_for_backend(backend: str) -> str:
-    if backend not in TARGET_BACKENDS:
+    if backend not in {"cpu", "simd", "gpu"}:
         raise ValueError(f"unsupported benchmark backend: {backend}")
+    if PARALLEL_CPU_PROFILE:
+        if backend != "cpu":
+            raise ValueError("Parallel CPU benchmarks only run the CPU executor")
+        return "python-parallel-cpu"
     return f"python-{backend}"
+
+
+TARGET_PROFILES = tuple(target_profile_for_backend(backend) for backend in TARGET_BACKENDS)
+
+
+def runtime_backend_for_profile(profile: str) -> str:
+    """Return the executor name recorded by pipeline telemetry."""
+
+    return "cpu" if profile == "python-parallel-cpu" else profile.removeprefix("python-")
 
 
 def benchmark_subjects() -> list[tuple[str, str]]:
@@ -115,7 +133,7 @@ def suite_subject_is_comparable(
         return False
 
     expected_backend = (
-        "pillow" if subject_id == "pillow" else subject_id.removeprefix("python-")
+        "pillow" if subject_id == "pillow" else runtime_backend_for_profile(subject_id)
     )
     if subject_id == "pillow":
         return (
@@ -342,7 +360,7 @@ def run_parity(
             backend_cases = [
                 case
                 for case in cases
-                if target_profile in case.get("target_profiles", [])
+                if profile_applies_to_case(target_profile, case)
             ]
             if not backend_cases:
                 continue
@@ -709,7 +727,7 @@ def execution_result(
         if isinstance(reason, str) and reason:
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
     actual_backends = sorted(actual_counts)
-    requested_backend = subject_id.removeprefix("python-")
+    requested_backend = runtime_backend_for_profile(subject_id)
     complete = (
         len(completed_candidates) + len(cached_candidates)
         == len(measured)
@@ -908,7 +926,7 @@ def execution_identity() -> dict[str, Any]:
                 "dirty": git_dirty(),
                 "runtime": platform.python_version(),
                 "backend": backend,
-                "features": ["default"],
+                "features": TARGET_FEATURES.copy(),
             }
             for backend in TARGET_BACKENDS
         ],
@@ -918,13 +936,13 @@ def execution_identity() -> dict[str, Any]:
 def benchmark_target_identities(
     parity_identity: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Return identities for every backend timed by this benchmark.
+    """Return identities for every target profile timed by this benchmark.
 
     A parity preflight is allowed to cover a subset of target profiles.  The
-    benchmark adapter nevertheless invokes CPU, SIMD, and GPU independently,
-    so its envelope must name each of those subjects.  Preserve any matching
-    preflight record (which carries the exact child identity) and fill missing
-    profiles from the local execution identity.
+    benchmark adapter invokes each profile selected for the active run, so its
+    envelope must name every timed subject. Preserve any matching preflight
+    record (which carries the exact child identity) and fill missing profiles
+    from the local execution identity.
     """
 
     records = {
@@ -957,6 +975,17 @@ def benchmark_workflow_case(
         # benchmark result artifact.
         "_benchmark_cache_state": workload["context"]["cache_state"],
     }
+
+
+def profile_applies_to_case(profile: str, case: dict[str, Any]) -> bool:
+    """Treat Parallel CPU as the CPU capability set in declared inputs."""
+
+    declared = set(case.get("target_profiles", []))
+    if not declared:
+        return True
+    if profile == "python-parallel-cpu":
+        return "python-cpu" in declared
+    return profile in declared
 
 
 def select_workloads(
@@ -1008,6 +1037,53 @@ def select_workloads(
     return selected
 
 
+def workload_subjects_for_profile(
+    subjects: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Select the declared benchmark subjects for the active backend profile.
+
+    The manifest's standard cohort contains Pillow, serial CPU, SIMD, and GPU.
+    Parallel CPU reuses the same inputs but compares Pillow with its own
+    feature-identified CPU profile, without relabeling it as SIMD or replacing
+    the standard manifest contract.
+    """
+
+    if not PARALLEL_CPU_PROFILE:
+        return subjects
+
+    default_subjects = [
+        {"kind": "oracle", "id": "pillow"},
+        {"kind": "target_profile", "id": "python-cpu"},
+        {"kind": "target_profile", "id": "python-simd"},
+        {"kind": "target_profile", "id": "python-gpu"},
+    ]
+    if subjects != default_subjects:
+        raise ValueError(
+            "Parallel CPU benchmark input must start from the standard Pillow/"
+            "CPU/SIMD/GPU subject contract"
+        )
+    return [
+        {"kind": "oracle", "id": "pillow"},
+        {"kind": "target_profile", "id": "python-parallel-cpu"},
+    ]
+
+
+def apply_profile_to_workloads(
+    selected_workloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build per-run subjects while preserving the frozen input documents."""
+
+    if not PARALLEL_CPU_PROFILE:
+        return selected_workloads
+
+    profiled: list[dict[str, Any]] = []
+    for workload in selected_workloads:
+        selected = dict(workload)
+        selected["subjects"] = workload_subjects_for_profile(workload["subjects"])
+        profiled.append(selected)
+    return profiled
+
+
 def validate_selected_workloads(
     selected_workloads: list[dict[str, Any]],
 ) -> None:
@@ -1021,7 +1097,7 @@ def validate_selected_workloads(
         if workload["subjects"] != expected_subjects:
             raise ValueError(
                 f"{workload['workload_id']}: benchmark subjects do not match "
-                "the Pillow/CPU/SIMD/GPU contract"
+                "the active target profile contract"
             )
     for workload in selected_workloads:
         policy = workload["measurement"]
@@ -1046,6 +1122,7 @@ def run(args: argparse.Namespace) -> int:
         workload_ids=args.workload_id,
         limit=args.limit,
     )
+    selected_workloads = apply_profile_to_workloads(selected_workloads)
     validate_selected_workloads(selected_workloads)
 
     workload_cases: dict[str, dict[str, Any]] = {}
@@ -1124,7 +1201,7 @@ def run(args: argparse.Namespace) -> int:
         return [
             profile
             for profile in TARGET_PROFILES
-            if not declared or profile in declared
+            if not declared or profile_applies_to_case(profile, case)
         ]
 
     pass_cases = {

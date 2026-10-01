@@ -56,6 +56,10 @@ TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
 ORACLE_VERSION = "12.2.0"
 TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
+TARGET_PROFILE_OVERRIDE = os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
+TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
+if TARGET_PROFILE_OVERRIDE == "parallel-cpu":
+    TARGET_FEATURES.extend(["pillow-rs-py/parallel", "pillow-rs/parallel"])
 STRICT_TARGET_BACKEND = os.environ.get(
     "MIGRATION_STRICT_TARGET_BACKEND", "0"
 ).strip().lower() in {"1", "true", "yes"}
@@ -95,6 +99,12 @@ def target_profile_for_backend(backend: str) -> str:
 
     if backend not in {"cpu", "simd", "gpu"}:
         raise ValueError(f"unsupported target backend: {backend}")
+    if TARGET_PROFILE_OVERRIDE:
+        if TARGET_PROFILE_OVERRIDE != "parallel-cpu" or backend != "cpu":
+            raise ValueError(
+                "MIGRATION_TARGET_PROFILE=parallel-cpu only supports the CPU backend"
+            )
+        return "python-parallel-cpu"
     return f"python-{backend}"
 
 
@@ -2596,6 +2606,14 @@ def configure_target_backend() -> dict[str, Any]:
     """
 
     target = importlib.import_module("pillow_rs")
+    parallel_enabled = bool(target.parallel_feature_enabled())
+    wants_parallel_cpu = TARGET_PROFILE_OVERRIDE == "parallel-cpu"
+    if parallel_enabled != wants_parallel_cpu:
+        expected = "parallel-cpu" if parallel_enabled else "default serial CPU"
+        raise RuntimeError(
+            f"target feature profile mismatch: expected {expected}; "
+            "build with the matching Make target and MIGRATION_TARGET_PROFILE"
+        )
     available = {str(name).lower() for name in target.available_backends()}
     if TARGET_BACKEND not in available:
         raise RuntimeError(
@@ -3161,7 +3179,7 @@ def build_identity(
         ],
         "assets": assets,
         "oracles": [{"oracle_id": ORACLE_ID, "name": "Pillow", "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
-        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": ["default"]}],
+        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": TARGET_FEATURES.copy()}],
         "command": command,
     }
 

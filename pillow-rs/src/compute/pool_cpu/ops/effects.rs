@@ -648,6 +648,55 @@ fn paste_native_masked_pa_row(
     }
 }
 
+/// Blend native CMYK samples with an L mask. CMYK's fourth stored byte is K,
+/// so this path applies the same independent byte formula to all four samples
+/// without treating K as alpha or converting the image to RGBA colors.
+#[inline]
+fn paste_native_masked_cmyk_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 4, 0);
+    debug_assert_eq!(source.len() / 4, mask.len());
+
+    for ((source_pixel, destination_pixel), mask_value) in source
+        .chunks_exact(4)
+        .zip(destination.chunks_exact_mut(4))
+        .zip(mask.iter().copied())
+    {
+        if mask_value == 0 {
+            continue;
+        }
+        if mask_value == 255 {
+            destination_pixel.copy_from_slice(source_pixel);
+            continue;
+        }
+
+        let weight = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - weight;
+        let blend = |source_value: u8, destination_value: u8| {
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "byte products sum to at most 255*255 before the rounding bias"
+            )]
+            let weighted =
+                u16::from(source_value) * weight + u16::from(destination_value) * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            blended
+        };
+        destination_pixel[0] = blend(source_pixel[0], destination_pixel[0]);
+        destination_pixel[1] = blend(source_pixel[1], destination_pixel[1]);
+        destination_pixel[2] = blend(source_pixel[2], destination_pixel[2]);
+        destination_pixel[3] = blend(source_pixel[3], destination_pixel[3]);
+    }
+}
+
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
 /// cases retain the established conversion path until their contracts have
@@ -678,8 +727,6 @@ fn paste_native_masked(
     let destination_stride = usize::try_from(destination_width)
         .ok()?
         .checked_mul(channels)?;
-    #[cfg(feature = "parallel")]
-    let destination_height_usize = usize::try_from(destination_height).ok()?;
     let source_len = source_stride.checked_mul(usize::try_from(source_height).ok()?)?;
     let destination_len =
         destination_stride.checked_mul(usize::try_from(destination_height).ok()?)?;
@@ -738,11 +785,7 @@ fn paste_native_masked(
     let output_bytes = output.as_bytes_mut()?;
     let source_top = usize::try_from(source_top).ok()?;
     let destination_top = usize::try_from(destination_top).ok()?;
-    let destination_bottom = destination_top.checked_add(copy_height)?;
     let transform_row = |destination_y: usize, row: &mut [u8]| {
-        if !(destination_top..destination_bottom).contains(&destination_y) {
-            return;
-        }
         let source_y = source_top.saturating_add(destination_y.saturating_sub(destination_top));
         let source_start = source_y
             .saturating_mul(source_stride)
@@ -753,6 +796,12 @@ fn paste_native_masked(
         let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
         if mode == "PA" {
             paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_pixels.layout);
+        } else if mode == "CMYK"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_cmyk_row(source_row, destination_row, mask_row);
         } else {
             for ((source_pixel, destination_pixel), mask_pixel) in source_row
                 .chunks_exact(channels)
@@ -818,13 +867,20 @@ fn paste_native_masked(
 
     #[cfg(feature = "parallel")]
     if copy_width.saturating_mul(copy_height) >= EFFECT_PARALLEL_PIXEL_THRESHOLD {
-        use rayon::iter::{IndexedParallelIterator, ParallelIterator};
-        use rayon::slice::ParallelSliceMut;
-        output_bytes
-            .par_chunks_mut(destination_stride)
-            .take(destination_height_usize)
-            .enumerate()
-            .for_each(|(y, row)| transform_row(y, row));
+        let output_row_start = destination_top.checked_mul(destination_stride)?;
+        let output_row_end = destination_top
+            .checked_add(copy_height)?
+            .checked_mul(destination_stride)?;
+        let output_rows = output_bytes.get_mut(output_row_start..output_row_end)?;
+        crate::par_rows_mut!(
+            output_rows,
+            destination_stride,
+            copy_height,
+            |_row_start, _row_end, row_index, row| {
+                let destination_y = destination_top.saturating_add(row_index as usize);
+                transform_row(destination_y, row);
+            }
+        );
     } else {
         for row_index in 0..copy_height {
             let destination_y = destination_top.saturating_add(row_index);
@@ -4331,6 +4387,95 @@ mod tests {
             }
             assert_eq!(result.as_bytes(), expected, "native masked {mode} bytes");
         }
+    }
+
+    #[test]
+    fn native_cmyk_masked_paste_blends_all_four_stored_samples() {
+        let masks = [0u8, 1, 127, 128, 254, 255];
+        let source = (0..masks.len() * 4)
+            .map(|index| (index * 37 + 11) as u8)
+            .collect::<Vec<_>>();
+        let destination = (0..masks.len() * 4)
+            .map(|index| (index * 53 + 7) as u8)
+            .collect::<Vec<_>>();
+        let mut actual = destination.clone();
+        let mut expected = destination;
+
+        for (pixel, mask) in masks.iter().copied().enumerate() {
+            for channel in 0..4 {
+                let byte = pixel * 4 + channel;
+                let source_value = u32::from(source[byte]);
+                let destination_value = u32::from(expected[byte]);
+                let mask_value = u32::from(mask);
+                expected[byte] =
+                    ((source_value * mask_value + destination_value * (255 - mask_value) + 127)
+                        / 255) as u8;
+            }
+        }
+
+        super::paste_native_masked_cmyk_row(&source, &mut actual, &masks);
+
+        assert_eq!(actual, expected, "CMYK K is blended as its fourth sample");
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn native_masked_paste_parallel_clipping_touches_only_the_intersection() {
+        let width = 1024u32;
+        let destination_height = 1024u32;
+        let source_height = 612u32;
+        let source_stride = width as usize * 4;
+        let destination_stride = width as usize * 4;
+        let mut destination_bytes = vec![0u8; destination_stride * destination_height as usize];
+        for pixel in destination_bytes.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[9, 19, 29, 39]);
+        }
+        let mut source_bytes = vec![0u8; source_stride * source_height as usize];
+        for (y, row) in source_bytes.chunks_exact_mut(source_stride).enumerate() {
+            for pixel in row.chunks_exact_mut(4) {
+                pixel.copy_from_slice(&[y as u8, 70, 130, 210]);
+            }
+        }
+        let mask_bytes = vec![255u8; width as usize * source_height as usize];
+        let destination =
+            native_byte_image("RGBA", width, destination_height, destination_bytes.clone());
+        let source = Arc::new(crate::Image::from_dynamic(
+            native_byte_image("RGBA", width, source_height, source_bytes.clone()),
+            Some("RGBA".to_owned()),
+        ));
+        let mask = Arc::new(crate::Image::from_dynamic(
+            native_byte_image("L", width, source_height, mask_bytes),
+            Some("L".to_owned()),
+        ));
+
+        // The clipped intersection is 924×512 pixels, above the Rayon
+        // threshold. It begins at source (100,100), destination (0,0), and
+        // leaves destination rows below the intersection untouched.
+        let result = op_paste(
+            &destination,
+            &source,
+            -100,
+            -100,
+            &Some(mask),
+            false,
+            Some("RGBA"),
+        )
+        .expect("parallel clipped native masked paste");
+        for destination_y in 0..512usize {
+            let source_y = destination_y + 100;
+            let destination_row = &mut destination_bytes
+                [destination_y * destination_stride..(destination_y + 1) * destination_stride];
+            let source_row =
+                &source_bytes[source_y * source_stride..(source_y + 1) * source_stride];
+            for destination_x in 0..924usize {
+                let source_x = destination_x + 100;
+                let destination_pixel =
+                    &mut destination_row[destination_x * 4..destination_x * 4 + 4];
+                let source_pixel = &source_row[source_x * 4..source_x * 4 + 4];
+                destination_pixel.copy_from_slice(source_pixel);
+            }
+        }
+        assert_eq!(result.as_bytes(), destination_bytes);
     }
 
     #[test]

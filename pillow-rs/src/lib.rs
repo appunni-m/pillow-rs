@@ -30,7 +30,8 @@
 //! # Feature Flags
 //!
 //! - `gpu` enables the wgpu/WebGPU backend where an operation has a shader.
-//! - `parallel` enables approved row and pixel parallelism.
+//! - `parallel` opt-in enables Rayon-backed Parallel CPU row and pixel paths;
+//!   SIMD adapters and GPU execution stay thread-scheduler independent.
 //! - `image-codecs-all` enables all codec features exposed through
 //!   `image-slash-star`; individual codec features can be selected instead.
 //!
@@ -95,7 +96,7 @@ use std::collections::BTreeMap;
 //   by CI and creates entire classes of bugs.
 //
 //   - checked_dims:  Only way to allocate image buffers (no overflow, no DoS)
-//   - par:           Approved parallelization macros (no raw rayon; native default)
+//   - par:           Approved Rayon row helpers (opt-in through `parallel`)
 //   - image_utils:   Canonical buffer conversion (no duplicate copies)
 // ============================================================================
 

@@ -2077,7 +2077,9 @@ function staticMethod(wasm, surface, operation, args, receiver = null) {
         if (operation === 'crop') return wasm.ImageOps[name](image, args.border);
         if (operation === 'expand') {
             const color = expandColor(args.fill, image.mode, wasm)
-                ?? (image.mode === 'PA' ? [0, 0, 0, 0] : [0, 0, 0, 255]);
+                ?? (image.mode === 'PA' || image.mode === 'CMYK' || image.mode === 'RGBX'
+                    ? [0, 0, 0, 0]
+                    : [0, 0, 0, 255]);
             return wasm.ImageOps[name](image, args.border, ...color);
         }
         if (operation === 'pad') {

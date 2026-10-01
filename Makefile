@@ -199,6 +199,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark$(NC) Run the representative four-workload smoke benchmark\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark$(NC) Run the fixed 11-workload release acceptance cohort\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=pipeline make migration-parity-benchmark$(NC) Run every PipelineOp and public composition workload\n"
+	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark-parallel-cpu$(NC) Measure opt-in Rayon as Parallel CPU\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
@@ -331,13 +332,16 @@ setup-ci: ## Install dev deps for CI
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-parity build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
+.PHONY: build build-parity build-parity-parallel-cpu build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
 
 build: ## Build Python package (release)
 	$(MATURIN) develop $(MATURIN_DEVELOP_FLAGS) --manifest-path $(PY_SRC)/Cargo.toml --release --locked
 
 build-parity: MATURIN_DEVELOP_FLAGS=--skip-install
 build-parity: build ## Build the checkout facade without installing the PIL namespace
+
+build-parity-parallel-cpu: MATURIN_DEVELOP_FLAGS=--skip-install --features parallel
+build-parity-parallel-cpu: build ## Build with opt-in Rayon without replacing the Pillow oracle
 
 build-dev: ## Build Python package (debug, faster compile)
 	$(MATURIN) develop --manifest-path $(PY_SRC)/Cargo.toml --locked $(MATURIN_DEVELOP_FLAGS)
@@ -450,7 +454,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -667,6 +671,26 @@ migration-parity-benchmark: build-parity ## Build the checkout facade without re
 	}
 	set +e; \
 	$(PYTHON) scripts/run_migration_benchmark.py \
+		--output $(MIGRATION_BENCHMARK_OUTPUT) \
+		--parity-output $(MIGRATION_BENCHMARK_PARITY_OUTPUT) \
+		$(MIGRATION_BENCHMARK_PROFILE_ARGS) \
+		$(MIGRATION_BENCHMARK_ARGS); \
+	status=$$?; \
+	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT); \
+	validator=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	exit $$validator
+
+migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result-parallel-cpu.json
+migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/benchmark-parity-result-parallel-cpu.json
+migration-parity-benchmark-parallel-cpu: build-parity-parallel-cpu ## Benchmark opt-in Rayon separately as Parallel CPU
+	MIGRATION_TARGET_PROFILE=parallel-cpu $(PYTHON) -m unittest discover -s scripts -p 'test_migration_benchmark_selection.py' -v
+	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
+		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
+		exit 2; \
+	}
+	set +e; \
+	MIGRATION_TARGET_PROFILE=parallel-cpu $(PYTHON) scripts/run_migration_benchmark.py \
 		--output $(MIGRATION_BENCHMARK_OUTPUT) \
 		--parity-output $(MIGRATION_BENCHMARK_PARITY_OUTPUT) \
 		$(MIGRATION_BENCHMARK_PROFILE_ARGS) \
