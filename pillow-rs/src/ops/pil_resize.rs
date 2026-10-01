@@ -1350,6 +1350,34 @@ fn horizontal_pass_row(
         return;
     }
 
+    if channels == 4 {
+        for ox in 0..out_w as usize {
+            let x0 = coeffs.xmin[ox];
+            let cnt = coeffs.count[ox];
+            if cnt == 0 {
+                continue;
+            }
+            let weights = coeffs.weights_for(ox);
+            let mut red_acc = 0i64;
+            let mut green_acc = 0i64;
+            let mut blue_acc = 0i64;
+            let mut alpha_acc = 0i64;
+            for (tap, &weight) in weights.iter().enumerate() {
+                let source_start = (x0 + tap as i64) as usize * 4;
+                red_acc += i64::from(src_row[source_start]) * weight;
+                green_acc += i64::from(src_row[source_start + 1]) * weight;
+                blue_acc += i64::from(src_row[source_start + 2]) * weight;
+                alpha_acc += i64::from(src_row[source_start + 3]) * weight;
+            }
+            let destination_start = ox * 4;
+            intermediate_row[destination_start] = fixed_point_to_u8(red_acc);
+            intermediate_row[destination_start + 1] = fixed_point_to_u8(green_acc);
+            intermediate_row[destination_start + 2] = fixed_point_to_u8(blue_acc);
+            intermediate_row[destination_start + 3] = fixed_point_to_u8(alpha_acc);
+        }
+        return;
+    }
+
     for ox in 0..out_w as usize {
         let x0 = coeffs.xmin[ox];
         let cnt = coeffs.count[ox];
@@ -1373,9 +1401,25 @@ fn premultiply_channel(value: u8, alpha: u8) -> u8 {
     ((value as u16 * alpha as u16 + 127) / 255) as u8
 }
 
-/// Resample an alpha-bearing row while premultiplying color samples as they
-/// enter the fixed-point accumulator.  This preserves the old
-/// `premultiply_alpha` rounding contract without materializing a second image.
+fn premultiply_alpha_row(source: &[u8], channels: usize, output: &mut [u8]) {
+    debug_assert!(matches!(channels, 2 | 4));
+    debug_assert_eq!(source.len(), output.len());
+    let alpha_channel = channels - 1;
+    for (source_pixel, output_pixel) in source
+        .chunks_exact(channels)
+        .zip(output.chunks_exact_mut(channels))
+    {
+        let alpha = source_pixel[alpha_channel];
+        for channel in 0..alpha_channel {
+            output_pixel[channel] = premultiply_channel(source_pixel[channel], alpha);
+        }
+        output_pixel[alpha_channel] = alpha;
+    }
+}
+
+/// Reference alpha-row kernel retained for the Parallel CPU path and focused
+/// equivalence tests. The serial CPU path premultiplies each source row once
+/// before convolution so every horizontal tap does not repeat that work.
 fn horizontal_pass_row_alpha(
     src_row: &[u8],
     channels: usize,
@@ -1471,6 +1515,27 @@ fn vertical_pass_col(
         result[0] = fixed_point_to_u8(red_acc);
         result[1] = fixed_point_to_u8(green_acc);
         result[2] = fixed_point_to_u8(blue_acc);
+        return result;
+    }
+
+    if channels == 4 {
+        let x_index = out_x as usize * 4;
+        let row_stride = out_w as usize * 4;
+        let mut red_acc = 0i64;
+        let mut green_acc = 0i64;
+        let mut blue_acc = 0i64;
+        let mut alpha_acc = 0i64;
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_index = (y0 as usize + tap) * row_stride + x_index;
+            red_acc += i64::from(intermediate[source_index]) * weight;
+            green_acc += i64::from(intermediate[source_index + 1]) * weight;
+            blue_acc += i64::from(intermediate[source_index + 2]) * weight;
+            alpha_acc += i64::from(intermediate[source_index + 3]) * weight;
+        }
+        result[0] = fixed_point_to_u8(red_acc);
+        result[1] = fixed_point_to_u8(green_acc);
+        result[2] = fixed_point_to_u8(blue_acc);
+        result[3] = fixed_point_to_u8(alpha_acc);
         return result;
     }
 
@@ -1601,6 +1666,26 @@ fn vertical_pass_col_transposed(
         result[0] = fixed_point_to_u8(red_acc);
         result[1] = fixed_point_to_u8(green_acc);
         result[2] = fixed_point_to_u8(blue_acc);
+        return result;
+    }
+
+    if channels == 4 {
+        let mut red_acc = 0i64;
+        let mut green_acc = 0i64;
+        let mut blue_acc = 0i64;
+        let mut alpha_acc = 0i64;
+        let mut source_index = column_start + y0 as usize * 4;
+        for &weight in weights {
+            red_acc += i64::from(intermediate[source_index]) * weight;
+            green_acc += i64::from(intermediate[source_index + 1]) * weight;
+            blue_acc += i64::from(intermediate[source_index + 2]) * weight;
+            alpha_acc += i64::from(intermediate[source_index + 3]) * weight;
+            source_index += 4;
+        }
+        result[0] = fixed_point_to_u8(red_acc);
+        result[1] = fixed_point_to_u8(green_acc);
+        result[2] = fixed_point_to_u8(blue_acc);
+        result[3] = fixed_point_to_u8(alpha_acc);
         return result;
     }
 
@@ -1866,11 +1951,20 @@ fn horizontal_pass_rows_alpha(
     );
 
     #[cfg(not(feature = "parallel"))]
+    let mut premultiplied_row = vec![0u8; source_stride];
+
+    #[cfg(not(feature = "parallel"))]
     for y in 0..source_height as usize {
         let source_start = y * source_stride;
         let output_start = y * output_stride;
-        horizontal_pass_row_alpha(
+        premultiply_alpha_row(
             &source[source_start..source_start + source_stride],
+            channels,
+            &mut premultiplied_row,
+        );
+        horizontal_pass_row(
+            &premultiplied_row,
+            source_width,
             channels,
             coeffs,
             output_width,
@@ -2118,13 +2212,14 @@ fn vertical_pass_rows_transposed(
 }
 
 #[inline]
-fn unpremultiply_channel(value: u8, alpha: u8) -> u8 {
-    if alpha > 0 {
-        // Preserve Pillow's truncating unpremultiply operation.
-        (value as f64 * 255.0 / alpha as f64) as u8
-    } else {
-        value
+pub(crate) fn unpremultiply_channel(value: u8, alpha: u8) -> u8 {
+    if alpha == 0 {
+        return value;
     }
+    // Both inputs are bytes, so Pillow's f64 expression has an exact
+    // integer numerator. Integer division preserves its truncation; clamp
+    // because Rust's float-to-u8 cast in the reference path saturates.
+    (u16::from(value) * 255 / u16::from(alpha)).min(255) as u8
 }
 
 fn vertical_pass_rows_alpha(
@@ -3167,6 +3262,91 @@ fn raw_to_dynamic_owned(bytes: Vec<u8>, w: u32, h: u32, channels: usize) -> Dyna
             crate::raster::RgbaImage::from_raw(w, h, bytes)
                 .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
         ),
+    }
+}
+
+#[cfg(test)]
+mod alpha_row_precompute_tests {
+    use super::{
+        horizontal_pass_row, horizontal_pass_row_alpha, precompute_coeffs, premultiply_alpha_row,
+        unpremultiply_channel,
+    };
+    use crate::pipeline::ResampleFilter;
+
+    #[test]
+    fn premultiplying_each_source_pixel_once_matches_each_alpha_tap() {
+        for channels in [2usize, 4] {
+            for source_width in [1u32, 7, 16, 33] {
+                let source = (0..source_width as usize * channels)
+                    .map(|index| {
+                        let pixel = index / channels;
+                        let channel = index % channels;
+                        if channel == channels - 1 {
+                            match pixel % 4 {
+                                0 => 0,
+                                1 => 255,
+                                _ => (pixel * 47 + 13) as u8,
+                            }
+                        } else {
+                            (pixel * 83 + channel * 61 + 19) as u8
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                for output_width in [1u32, 3, 9, 17, 45] {
+                    for filter in [
+                        ResampleFilter::Bilinear,
+                        ResampleFilter::Bicubic,
+                        ResampleFilter::Lanczos,
+                    ] {
+                        let coeffs = precompute_coeffs(output_width, source_width, filter);
+                        let output_len = output_width as usize * channels;
+                        let mut expected = vec![0; output_len];
+                        horizontal_pass_row_alpha(
+                            &source,
+                            channels,
+                            &coeffs,
+                            output_width,
+                            &mut expected,
+                        );
+
+                        let mut premultiplied = vec![0; source.len()];
+                        premultiply_alpha_row(&source, channels, &mut premultiplied);
+                        let mut actual = vec![0; output_len];
+                        horizontal_pass_row(
+                            &premultiplied,
+                            source_width,
+                            channels,
+                            &coeffs,
+                            output_width,
+                            &mut actual,
+                        );
+                        assert_eq!(
+                            actual, expected,
+                            "channels={channels}, {source_width}x1 -> {output_width}x1, {filter:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn integer_unpremultiplication_matches_pillow_float_for_every_byte_pair() {
+        for alpha in 0..=u8::MAX {
+            for value in 0..=u8::MAX {
+                let expected = if alpha == 0 {
+                    value
+                } else {
+                    (f64::from(value) * 255.0 / f64::from(alpha)) as u8
+                };
+                assert_eq!(
+                    unpremultiply_channel(value, alpha),
+                    expected,
+                    "value={value}, alpha={alpha}"
+                );
+            }
+        }
     }
 }
 

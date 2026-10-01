@@ -21051,13 +21051,27 @@ fn resize_premultiply_u8(value: u8, alpha: u8) -> u8 {
     ((u16::from(value) * u16::from(alpha) + 127) / 255) as u8
 }
 
+fn resize_premultiply_alpha_row(source: &[u8], channels: usize, output: &mut [u8]) -> Option<()> {
+    if !matches!(channels, 2 | 4) || source.len() != output.len() {
+        return None;
+    }
+    let alpha_channel = channels - 1;
+    for (source_pixel, output_pixel) in source
+        .chunks_exact(channels)
+        .zip(output.chunks_exact_mut(channels))
+    {
+        let alpha = source_pixel[alpha_channel];
+        for channel in 0..alpha_channel {
+            output_pixel[channel] = resize_premultiply_u8(source_pixel[channel], alpha);
+        }
+        output_pixel[alpha_channel] = alpha;
+    }
+    Some(())
+}
+
 #[inline]
 fn resize_unpremultiply_u8(value: u8, alpha: u8) -> u8 {
-    if alpha == 0 {
-        value
-    } else {
-        (f64::from(value) * 255.0 / f64::from(alpha)) as u8
-    }
+    crate::ops::pil_resize::unpremultiply_channel(value, alpha)
 }
 
 #[inline]
@@ -21179,6 +21193,51 @@ fn resize_horizontal_vector_row(
     Some((vector_blocks, scalar_tail))
 }
 
+/// Dispatch one horizontal row. For alpha-bearing native byte modes, premultiply
+/// each source pixel once into a reusable row buffer, then let the convolution
+/// taps consume those native interleaved samples without repeating the alpha
+/// multiply for every destination pixel and filter tap.
+fn resize_horizontal_convolution_row(
+    source_row: &[u8],
+    channels: usize,
+    coeffs: &FilterCoeffs,
+    plan: &ResizeHorizontalPlan,
+    output_width: usize,
+    output_row: &mut [u8],
+    premultiplied_alpha: bool,
+    cover_byte_i32: bool,
+    premultiplied_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    let (source_row, premultiply_in_kernel) = if premultiplied_alpha && !cover_byte_i32 {
+        resize_premultiply_alpha_row(source_row, channels, premultiplied_row)?;
+        (&*premultiplied_row, false)
+    } else {
+        (source_row, premultiplied_alpha)
+    };
+
+    if cover_byte_i32 {
+        resize_horizontal_cover_i32_vector_row(
+            source_row,
+            channels,
+            coeffs,
+            plan,
+            output_width,
+            output_row,
+            premultiply_in_kernel,
+        )
+    } else {
+        resize_horizontal_vector_row(
+            source_row,
+            channels,
+            coeffs,
+            plan,
+            output_width,
+            output_row,
+            premultiply_in_kernel,
+        )
+    }
+}
+
 fn resize_vertical_vector_row(
     intermediate: &[u8],
     output_width: usize,
@@ -21241,13 +21300,9 @@ fn resize_vertical_vector_row(
         if premultiplied_alpha {
             let alpha = result[alpha_channel];
             for channel in 0..alpha_channel {
-                let restored = (f64x8::new(result[channel].map(f64::from)) * f64x8::splat(255.0)
-                    / f64x8::new(alpha.map(f64::from)).max(f64x8::splat(1.0)))
-                .to_array();
                 for lane in 0..SIMD_RESIZE_LANES {
-                    if alpha[lane] != 0 {
-                        result[channel][lane] = restored[lane] as u8;
-                    }
+                    result[channel][lane] =
+                        resize_unpremultiply_u8(result[channel][lane], alpha[lane]);
                 }
             }
         }
@@ -21286,9 +21341,7 @@ fn resize_vertical_vector_row(
         if premultiplied_alpha {
             let alpha = result[alpha_channel];
             for channel in 0..alpha_channel {
-                if alpha != 0 {
-                    result[channel] = (f64::from(result[channel]) * 255.0 / f64::from(alpha)) as u8;
-                }
+                result[channel] = resize_unpremultiply_u8(result[channel], alpha);
             }
         }
         for channel in 0..channels {
@@ -22589,6 +22642,11 @@ fn simd_resize_convolution_into(
         .checked_mul(channels)
         .ok_or_else(|| simd_unsupported("Resize"))?;
     let source = img.as_bytes();
+    let mut premultiplied_source_row = if premultiplied_alpha && !cover_byte_i32 {
+        vec![0u8; source_stride]
+    } else {
+        Vec::new()
+    };
     #[cfg(feature = "parallel")]
     if source_height.saturating_mul(output_width) < parallel_pixel_threshold {
         for source_y in 0..source_height {
@@ -22604,7 +22662,7 @@ fn simd_resize_convolution_into(
             let intermediate_row = intermediate
                 .get_mut(intermediate_start..intermediate_start + intermediate_stride)
                 .ok_or_else(|| simd_unsupported("Resize"))?;
-            resize_horizontal_vector_row(
+            resize_horizontal_convolution_row(
                 source_row,
                 channels,
                 &horizontal,
@@ -22612,6 +22670,8 @@ fn simd_resize_convolution_into(
                 output_width,
                 intermediate_row,
                 premultiplied_alpha,
+                cover_byte_i32,
+                &mut premultiplied_source_row,
             )
             .ok_or_else(|| simd_unsupported("Resize"))?;
         }
@@ -22634,27 +22694,17 @@ fn simd_resize_convolution_into(
                     failed.store(true, Ordering::Relaxed);
                     return;
                 };
-                let row_result = if cover_byte_i32 {
-                    resize_horizontal_cover_i32_vector_row(
-                        source_row,
-                        channels,
-                        &horizontal,
-                        &horizontal_plan,
-                        output_width,
-                        intermediate_row,
-                        premultiplied_alpha,
-                    )
-                } else {
-                    resize_horizontal_vector_row(
-                        source_row,
-                        channels,
-                        &horizontal,
-                        &horizontal_plan,
-                        output_width,
-                        intermediate_row,
-                        premultiplied_alpha,
-                    )
-                };
+                let row_result = resize_horizontal_convolution_row(
+                    source_row,
+                    channels,
+                    &horizontal,
+                    &horizontal_plan,
+                    output_width,
+                    intermediate_row,
+                    premultiplied_alpha,
+                    cover_byte_i32,
+                    &mut premultiplied_source_row,
+                );
                 if row_result.is_none() {
                     failed.store(true, Ordering::Relaxed);
                 }
@@ -22678,27 +22728,17 @@ fn simd_resize_convolution_into(
         let intermediate_row = intermediate
             .get_mut(intermediate_start..intermediate_start + intermediate_stride)
             .ok_or_else(|| simd_unsupported("Resize"))?;
-        let row_result = if cover_byte_i32 {
-            resize_horizontal_cover_i32_vector_row(
-                source_row,
-                channels,
-                &horizontal,
-                &horizontal_plan,
-                output_width,
-                intermediate_row,
-                premultiplied_alpha,
-            )
-        } else {
-            resize_horizontal_vector_row(
-                source_row,
-                channels,
-                &horizontal,
-                &horizontal_plan,
-                output_width,
-                intermediate_row,
-                premultiplied_alpha,
-            )
-        };
+        let row_result = resize_horizontal_convolution_row(
+            source_row,
+            channels,
+            &horizontal,
+            &horizontal_plan,
+            output_width,
+            intermediate_row,
+            premultiplied_alpha,
+            cover_byte_i32,
+            &mut premultiplied_source_row,
+        );
         row_result
             .map(|(blocks, tail)| {
                 vector_blocks = vector_blocks.saturating_add(blocks);
@@ -29743,6 +29783,63 @@ mod tests {
             weights: vec![i64::MAX],
         };
         assert!(!super::resize_u8_coefficients_fit_i32(&outside_i32));
+    }
+
+    #[test]
+    fn alpha_source_row_precompute_matches_per_tap_simd_premultiplication() {
+        for channels in [2usize, 4] {
+            let source_width = 37usize;
+            let output_width = 53usize;
+            let source = (0..source_width * channels)
+                .map(|index| {
+                    let pixel = index / channels;
+                    let channel = index % channels;
+                    if channel == channels - 1 {
+                        match pixel % 4 {
+                            0 => 0,
+                            1 => 255,
+                            _ => (pixel * 47 + 13) as u8,
+                        }
+                    } else {
+                        (pixel * 83 + channel * 61 + 19) as u8
+                    }
+                })
+                .collect::<Vec<_>>();
+            let coeffs = super::precompute_coeffs(
+                output_width as u32,
+                source_width as u32,
+                ResampleFilter::Bicubic,
+            );
+            let plan = super::build_resize_horizontal_plan(&coeffs, output_width, channels, true)
+                .expect("horizontal plan");
+            let mut expected = vec![0; output_width * channels];
+            super::resize_horizontal_vector_row(
+                &source,
+                channels,
+                &coeffs,
+                &plan,
+                output_width,
+                &mut expected,
+                true,
+            )
+            .expect("reference alpha row");
+
+            let mut scratch = vec![0; source.len()];
+            let mut actual = vec![0; output_width * channels];
+            super::resize_horizontal_convolution_row(
+                &source,
+                channels,
+                &coeffs,
+                &plan,
+                output_width,
+                &mut actual,
+                true,
+                false,
+                &mut scratch,
+            )
+            .expect("precomputed alpha row");
+            assert_eq!(actual, expected, "channels={channels}");
+        }
     }
 
     #[test]
