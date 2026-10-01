@@ -79,6 +79,68 @@ def project_pillow(document: dict) -> dict:
     }
 
 
+def normalize_parallel_cpu_snapshot(snapshot: dict) -> dict:
+    """Drop a legacy second Pillow timing and use the ordinary Pillow row.
+
+    A previously published snapshot may still contain the old ``parallel-cpu``
+    comparison cohort. Normalize it at the docs boundary so an in-flight or
+    latest-successful artifact remains renderable during benchmark workflow
+    upgrades. New benchmark exports already contain target-only Parallel CPU
+    rows in the default comparison group.
+    """
+
+    rows = snapshot.get("rows", [])
+    if not any(
+        row.get("comparison_group", "default") == "parallel-cpu"
+        or row.get("subject") == "pillow-parallel-cpu"
+        for row in rows
+    ):
+        return snapshot
+
+    default_rows: list[dict] = []
+    parallel_by_workload: dict[str, dict[str, dict]] = {}
+    for row in rows:
+        cohort = row.get("comparison_group", "default")
+        if cohort == "parallel-cpu":
+            if row["subject"] not in {"pillow-parallel-cpu", "python-parallel-cpu"}:
+                raise ValueError("legacy Parallel CPU snapshot contains an unrelated subject")
+            subjects = parallel_by_workload.setdefault(row["workload"], {})
+            if row["subject"] in subjects:
+                raise ValueError(f"duplicate legacy Parallel CPU subject for {row['workload']}")
+            subjects[row["subject"]] = row
+        elif row["subject"] == "pillow-parallel-cpu":
+            raise ValueError("legacy Parallel CPU Pillow row has no Parallel CPU cohort")
+        else:
+            default_rows.append(row)
+
+    ordinary_by_workload: dict[str, dict[str, dict]] = {}
+    for row in default_rows:
+        ordinary_by_workload.setdefault(row["workload"], {})[row["subject"]] = row
+
+    targets = []
+    for workload, subjects in parallel_by_workload.items():
+        if set(subjects) != {"pillow-parallel-cpu", "python-parallel-cpu"}:
+            raise ValueError(f"legacy Parallel CPU workload lacks its paired baseline: {workload}")
+        ordinary_pillow = ordinary_by_workload.get(workload, {}).get("pillow")
+        if ordinary_pillow is None:
+            raise ValueError(f"legacy Parallel CPU workload lacks ordinary Pillow timing: {workload}")
+        target = subjects["python-parallel-cpu"]
+        for field in ("policy", "context", "sample_unit", "sample_count"):
+            if ordinary_pillow[field] != target[field]:
+                raise ValueError(
+                    f"legacy Parallel CPU and ordinary Pillow conditions differ for {workload}: {field}"
+                )
+        targets.append(dict(target, comparison_group="default"))
+
+    normalized = dict(snapshot)
+    normalized["rows"] = [*default_rows, *targets]
+    normalized["notes"] = [
+        *snapshot.get("notes", []),
+        "Legacy snapshot normalized: Parallel CPU is compared with ordinary Pillow; the duplicate Parallel CPU Pillow timing is omitted.",
+    ]
+    return normalized
+
+
 def merge_parallel_cpu(snapshot: dict, parallel: dict, source_hash: str, parallel_hash: str) -> dict:
     """Join target-only Rayon timings to the ordinary Pillow measurements."""
     if snapshot["revision"] != parallel["revision"]:
@@ -295,6 +357,7 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
                 "This is **unmeasured**, not a zero-duration result or a performance claim.\n\n"
                 "See the [measurement protocol](benchmarking.md) for the maintained command and CI artifact.\n")
     snapshot = json.loads(source.read_text())
+    snapshot = normalize_parallel_cpu_snapshot(snapshot)
     validate(snapshot, config["repository"])
     (output / "assets" / "benchmark.json").write_text(json.dumps(snapshot, indent=2) + "\n")
     historical = snapshot["revision"] != config["release_revision"]
