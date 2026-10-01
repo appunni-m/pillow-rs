@@ -12017,3 +12017,77 @@ i32_uniform_filter_ownership_tests`, `make migration-parity-test` with
 `make migration-parity-benchmark` filtered to the uniform and varied I-mode
 workload IDs. Full CI and coverage were not run. The release build was only for
 measurement; no package release or push was made.
+
+## RGBA `ImageFilter.GaussianBlur` checkpoint — 2026-10-02
+
+The focused operation is radius-2 GaussianBlur on native RGBA8 images. Pillow
+expands it into three horizontal and three vertical fractional box passes. The
+existing generic SIMD route transposed the interleaved frame to make vertical
+channels contiguous, adding full-frame traffic to a small-radius stencil.
+The new specialized path processes four RGBA pixels per 16-byte vector in the
+horizontal pass and keeps row-major storage in the vertical pass. It is
+selected only for physical `ImageRgba8` data, native/`RGBA` mode, and radius-one
+box passes; other modes and radii retain the existing implementation. Pillow's
+fixed-point weights, edge clamping, and byte rounding are unchanged. No CPU or
+GPU implementation changed.
+
+The baseline was measured after temporarily restoring the committed SIMD
+implementation, then the candidate was rebuilt from the same main revision.
+The exact varied-noise case passed 1/1 on each strict CPU, SIMD, and GPU lane;
+the benchmark workloads themselves use a constant RGBA fill, so they establish
+the materialization cost for those sizes but do not represent varied-image
+throughput. Release medians were:
+
+| RGBA radius-2 GaussianBlur | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 256 × 256 baseline, ms | 0.468 | 0.582 | 2.733 | 0.474 |
+| 256 × 256 candidate, ms | 0.489 | 0.850 | 0.632 | 0.493 |
+| 1024 × 768 baseline, ms | 6.188 | 11.424 | 32.423 | 3.143 |
+| 1024 × 768 candidate, ms | 6.031 | 11.396 | 30.629 | 3.011 |
+
+The direct SIMD path cuts 256 × 256 latency about 4.3× from its own baseline,
+but it is still 1.29× slower than Pillow. At 1024 × 768 it improves SIMD by
+only about 5.5%; SIMD is still 5.1× slower than Pillow, and serial CPU is 1.9×
+slower. GPU remains around 2× faster than Pillow on the larger workload and
+10× faster than SIMD, so GPU/SIMD parity is not reached. Each timed target
+recorded six actual executions on its requested backend with no fallback.
+
+Four bounded SIMD experiments were used. A direct vertical pass avoided the
+frame transpose but was still dominated by lane conversion and arithmetic. A
+direct horizontal pass removed rolling-window setup and materially helped the
+small workload. Safe packed narrowing reduced per-byte stores and produced the
+largest measured step. A single-pass safe widening experiment did not move the
+1024 × 768 median and was discarded. `wide`'s chained byte-to-word widening
+still scalarizes on this AArch64 target; resolving that without unsafe code or
+adding a safe architecture-specific SIMD abstraction is the next SIMD
+investigation. The constant-color benchmark also needs a varied RGBA workload
+before judging large-image stencil throughput.
+
+The focused equivalence test checks the direct horizontal and vertical kernels
+against the generic SIMD passes for radii 1.0, 1.25, and 1.9, including narrow,
+odd, and edge-overlap dimensions. Exact Pillow parity uses
+`PIL.ImageFilter.GaussianBlur.nuanced.backend-noise-rgba-65x47-radius-2`; the
+receipts `gaussian-rgba-noise-{cpu,simd,gpu}-checkpoint.json` all passed. The
+release baseline and candidate receipts are
+`gaussianblur-rgba-base-20261002.json` and
+`gaussianblur-rgba-final-checkpoint-20261002.json`.
+
+Reproduce the focused checks with:
+
+```sh
+cargo test --locked -p pillow-rs --lib rgba_radius_one_direct_passes_match_generic_simd
+cargo test --locked -p pillow-rs --lib rgba_blur_vector_pack_preserves_byte_lanes
+make PYTHON=build/parity-venv/bin/python build-parity
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.blur-material.gaussian-rgba-256x256-radius-2 --workload-id pipeline-chain.blur-material.gaussian-rgba-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-rgba-final-checkpoint-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-rgba-final-checkpoint-parity-20261002.json \
+  make migration-parity-benchmark
+```
+
+For Pillow parity, run `make migration-parity-case` with
+`CASE_ID=PIL.ImageFilter.GaussianBlur.nuanced.backend-noise-rgba-65x47-radius-2`,
+`MIGRATION_TARGET_BACKEND=cpu|simd|gpu`, and
+`MIGRATION_STRICT_TARGET_BACKEND=1`, writing a separate output receipt for each
+backend. Four attempts are checkpointed; the per-operation CPU and SIMD goals
+remain open. No full CI, coverage, release, or push was run.

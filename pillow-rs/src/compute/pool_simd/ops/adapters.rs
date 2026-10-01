@@ -18163,6 +18163,182 @@ fn simd_luma_vertical_radius_one_rows(
     }
 }
 
+/// Apply one RGBA vertical radius-one box pass directly in row-major storage.
+///
+/// GaussianBlur's three box passes use the same vertical sample on each of
+/// the four native RGBA bytes. Process complete packed pixels in 16-byte
+/// vectors and retain Pillow's fixed-point weights and byte rounding. This
+/// avoids transposing the full RGBA frame just to make columns contiguous.
+#[inline(always)]
+fn simd_rgba_blur_scalar_pixel(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    x: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let left = x.saturating_sub(1);
+    let right = x.saturating_add(1).min(width - 1);
+    let far_left = x.saturating_sub(2);
+    let far_right = x.saturating_add(2).min(width - 1);
+    for channel in 0..4 {
+        let sum = u32::from(source[left * 4 + channel])
+            + u32::from(source[x * 4 + channel])
+            + u32::from(source[right * 4 + channel]);
+        let edge =
+            u32::from(source[far_left * 4 + channel]) + u32::from(source[far_right * 4 + channel]);
+        let weighted = sum
+            .wrapping_mul(whole_weight)
+            .wrapping_add(edge.wrapping_mul(fractional_weight))
+            .wrapping_add(SIMD_BOX_BLUR_BIAS);
+        destination[x * 4 + channel] = (weighted >> 24) as u8;
+    }
+}
+
+#[inline(always)]
+fn simd_blur_load_u8x16(bytes: &[u8], start: usize) -> u8x16 {
+    bytemuck::pod_read_unaligned(&bytes[start..start + 16])
+}
+
+#[inline(always)]
+fn simd_blur_pack_u32x16_to_bytes(values: u32x16) -> [u8; 16] {
+    // The rounded blur lanes are in 0..=255, so signed saturating packs are
+    // exact and avoid extracting and narrowing every lane in scalar code.
+    let [low, high]: [i32x8; 2] = bytemuck::cast(values);
+    let low = i16x8::from_i32x8_saturate(low);
+    let high = i16x8::from_i32x8_saturate(high);
+    bytemuck::cast(u8x16::narrow_i16x8(low, high))
+}
+
+/// Apply one RGBA horizontal radius-one box pass with direct vector loads.
+///
+/// Four neighboring pixels occupy one 16-byte vector. The interior therefore
+/// uses aligned channel correspondence for all four RGBA bytes, while the
+/// two-pixel borders and the final incomplete group use the exact clamped
+/// scalar formula. This removes the per-pixel rolling-recurrence setup from
+/// the three horizontal Gaussian box passes.
+fn simd_rgba_horizontal_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(4)
+        .expect("validated RGBA dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+
+    let interior_end = width.saturating_sub(2);
+    let vector_blocks_per_row = interior_end.saturating_sub(2) / 4;
+    let vector_blocks = vector_blocks_per_row.saturating_mul(height) as u64;
+    let scalar_tail =
+        (width.saturating_sub(vector_blocks_per_row * 4)).saturating_mul(height) as u64;
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    if scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    }
+
+    for y in 0..height {
+        let row_start = y * row_stride;
+        let input = &source[row_start..row_start + row_stride];
+        let output = &mut destination[row_start..row_start + row_stride];
+        let prefix_end = width.min(2);
+        for x in 0..prefix_end {
+            simd_rgba_blur_scalar_pixel(input, output, width, x, whole_weight, fractional_weight);
+        }
+
+        let mut x = 2usize;
+        while x + 4 <= interior_end {
+            let byte_start = x * 4;
+            let load = |pixel: usize| {
+                let start = pixel * 4;
+                u32x16::from(u16x16::from(simd_blur_load_u8x16(input, start)))
+            };
+            let sum = load(x - 1) + load(x) + load(x + 1);
+            let edge = if fractional_weight == 0 {
+                u32x16::splat(0)
+            } else {
+                load(x - 2) + load(x + 2)
+            };
+            let weighted = sum * u32x16::splat(whole_weight)
+                + edge * u32x16::splat(fractional_weight)
+                + u32x16::splat(SIMD_BOX_BLUR_BIAS);
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            output[byte_start..byte_start + 16].copy_from_slice(&packed);
+            x += 4;
+        }
+
+        for x in x..interior_end {
+            simd_rgba_blur_scalar_pixel(input, output, width, x, whole_weight, fractional_weight);
+        }
+        for x in interior_end.max(prefix_end)..width {
+            simd_rgba_blur_scalar_pixel(input, output, width, x, whole_weight, fractional_weight);
+        }
+    }
+}
+
+fn simd_rgba_vertical_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(4)
+        .expect("validated RGBA dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+
+    let last_y = height - 1;
+    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height) as u64;
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+
+    for y in 0..height {
+        let sum_top_base = y.saturating_sub(1) * row_stride;
+        let sum_middle_base = y * row_stride;
+        let sum_bottom_base = y.saturating_add(1).min(last_y) * row_stride;
+        let edge_top_base = y.saturating_sub(2) * row_stride;
+        let edge_bottom_base = y.saturating_add(2).min(last_y) * row_stride;
+        let output_row = y * row_stride;
+
+        for x in (0..row_stride).step_by(16) {
+            let count = (row_stride - x).min(16);
+            let load = |base: usize| {
+                if count == 16 {
+                    u32x16::from(u16x16::from(simd_blur_load_u8x16(source, base + x)))
+                } else {
+                    let mut padded = [0u8; 16];
+                    padded[..count].copy_from_slice(&source[base + x..base + x + count]);
+                    u32x16::from(u16x16::from(u8x16::new(padded)))
+                }
+            };
+            let sum = load(sum_top_base) + load(sum_middle_base) + load(sum_bottom_base);
+            let edge = if fractional_weight == 0 {
+                u32x16::splat(0)
+            } else {
+                load(edge_top_base) + load(edge_bottom_base)
+            };
+            let weighted = sum * u32x16::splat(whole_weight)
+                + edge * u32x16::splat(fractional_weight)
+                + u32x16::splat(SIMD_BOX_BLUR_BIAS);
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            destination[output_row + x..output_row + x + count].copy_from_slice(&packed[..count]);
+        }
+    }
+}
+
 fn simd_pil_gaussian_blur_l_radius_one(
     img: &DynamicImage,
     radius: f32,
@@ -18268,6 +18444,43 @@ fn simd_pil_box_blur_xy(
 
     let mut work = img.as_bytes().to_vec();
     let mut scratch = dimensions.alloc_buffer();
+    if channels == 4
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && matches!(mode, None | Some("RGBA"))
+        && horizontal_radius == 1
+        && vertical_radius == 1
+    {
+        for _ in 0..passes {
+            simd_rgba_horizontal_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                horizontal_weight,
+                horizontal_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+        for _ in 0..passes {
+            simd_rgba_vertical_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                vertical_weight,
+                vertical_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+        let result = crate::image_utils::raw_bytes_to_image(
+            dimensions.width,
+            dimensions.height,
+            work,
+            channels,
+        )?;
+        return Ok(preserve_mode(img, result));
+    }
+
     if channels == 1
         && matches!(img, DynamicImage::ImageLuma8(_))
         && matches!(mode, None | Some("L"))
@@ -18318,6 +18531,31 @@ fn simd_pil_box_blur_xy(
             horizontal_fractional_weight,
         );
         std::mem::swap(&mut work, &mut scratch);
+    }
+
+    if channels == 4
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && matches!(mode, None | Some("RGBA"))
+        && vertical_radius == 1
+    {
+        for _ in 0..passes {
+            simd_rgba_vertical_radius_one_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                vertical_weight,
+                vertical_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
+        let result = crate::image_utils::raw_bytes_to_image(
+            dimensions.width,
+            dimensions.height,
+            work,
+            channels,
+        )?;
+        return Ok(preserve_mode(img, result));
     }
 
     // Pillow performs all horizontal passes before transposing for the
@@ -29191,6 +29429,112 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rgba_blur_vector_pack_preserves_byte_lanes() {
+        let values = super::u32x16::new([
+            0, 255, 1, 254, 127, 128, 17, 239, 33, 222, 64, 191, 85, 170, 100, 200,
+        ]);
+        assert_eq!(
+            super::simd_blur_pack_u32x16_to_bytes(values),
+            [
+                0, 255, 1, 254, 127, 128, 17, 239, 33, 222, 64, 191, 85, 170, 100, 200
+            ]
+        );
+    }
+
+    #[test]
+    fn rgba_radius_one_direct_passes_match_generic_simd() {
+        for radius in [1.0f32, 1.25, 1.9] {
+            let whole_weight = (super::SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+            let fractional_weight = super::SIMD_BOX_BLUR_SCALE.wrapping_sub(3 * whole_weight) / 2;
+
+            for (width, height) in [
+                (1, 1),
+                (2, 3),
+                (3, 2),
+                (4, 5),
+                (5, 9),
+                (8, 3),
+                (9, 4),
+                (19, 7),
+                (256, 3),
+            ] {
+                let dimensions = crate::checked_dims::CheckedDims::new(width, height, 4)
+                    .expect("test RGBA dimensions fit");
+                let source: Vec<u8> = (0..dimensions.total_bytes())
+                    .map(|index| (index.wrapping_mul(73).wrapping_add(29) % 256) as u8)
+                    .collect();
+
+                let mut horizontal_expected = dimensions.alloc_buffer();
+                super::simd_blur_rows(
+                    &source,
+                    &mut horizontal_expected,
+                    width as usize,
+                    height as usize,
+                    4,
+                    1,
+                    whole_weight,
+                    fractional_weight,
+                );
+                let mut horizontal_actual = dimensions.alloc_buffer();
+                super::simd_rgba_horizontal_radius_one_rows(
+                    &source,
+                    &mut horizontal_actual,
+                    width as usize,
+                    height as usize,
+                    whole_weight,
+                    fractional_weight,
+                );
+                assert_eq!(
+                    horizontal_actual, horizontal_expected,
+                    "horizontal dimensions={width}x{height} radius={radius}"
+                );
+
+                let mut transposed = dimensions.alloc_buffer();
+                super::simd_transpose_interleaved_rows(
+                    &source,
+                    &mut transposed,
+                    width as usize,
+                    height as usize,
+                    4,
+                );
+                let mut transposed_blurred = dimensions.alloc_buffer();
+                super::simd_blur_rows(
+                    &transposed,
+                    &mut transposed_blurred,
+                    height as usize,
+                    width as usize,
+                    4,
+                    1,
+                    whole_weight,
+                    fractional_weight,
+                );
+                let mut vertical_expected = dimensions.alloc_buffer();
+                super::simd_transpose_interleaved_rows(
+                    &transposed_blurred,
+                    &mut vertical_expected,
+                    height as usize,
+                    width as usize,
+                    4,
+                );
+
+                let mut vertical_actual = dimensions.alloc_buffer();
+                super::simd_rgba_vertical_radius_one_rows(
+                    &source,
+                    &mut vertical_actual,
+                    width as usize,
+                    height as usize,
+                    whole_weight,
+                    fractional_weight,
+                );
+                assert_eq!(
+                    vertical_actual, vertical_expected,
+                    "vertical dimensions={width}x{height} radius={radius}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn hsv_masked_paste_uses_native_three_channel_simd_path() {
         use crate::pipeline::PipelineOp;
