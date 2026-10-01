@@ -12458,3 +12458,60 @@ Keep the native input path as a transport improvement with exact parity, but
 move to the next measured operation rather than iterating further on this
 shader now. RGB Transform still needs compact output or resident batching to
 approach SIMD throughput.
+
+## RGB `Image.transform` direct CPU and compact GPU output checkpoint — 2026-10-02
+
+This checkpoint continued the 1024 × 768 RGB affine-nearest Transform, where
+the q1 baseline exposed no native RGB CPU specialization and the GPU still
+returned four-byte pixels. Serial CPU now walks Pillow-compatible fixed
+16.16 affine coordinates directly over RGB triplets and copies three bytes per
+sample. The regression checks exact agreement with the generic implementation
+and verifies selection for the RGB-family logical modes.
+
+The GPU now packs four RGB output pixels into three storage words, so its
+readback shrinks from 3,145,728 to 2,359,296 bytes and no host RGBA-to-RGB
+narrowing is needed. The planner uses a row-tiled grid for aligned widths when
+that layout fits the adapter and does not increase the workgroup count; its
+flattened, limit-checked layout remains the fallback, including a 4096 × 4096
+image on a 128-workgroup-per-axis adapter. Both layouts preserve exact pixels.
+Focused coverage exercises odd-width flat dispatch, aligned row tiling, and
+the packed RGB GPU route.
+
+The isolated q1 throughput runs use the median of five measured samples, with
+normal Pillow as the baseline. Every backend completed 4,800 measured outputs
+plus warmups with byte-exact parity to live Pillow; source and runtime files
+were unchanged. Host speed varied across runs, so the table reports the
+observed medians without claiming a row-tiling speedup:
+
+| RGB Transform at 1024 × 768 | Run | Pillow | Serial CPU | SIMD | GPU | GPU/SIMD |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Flattened compact-output baseline | q1 | 620.0 img/s | 1,164.4 img/s | 1,157.7 img/s | 985.3 img/s | 0.85× |
+| Row-tiled candidate | q1 | 572.0 img/s | 1,092.8 img/s | 1,084.9 img/s | 993.2 img/s | 0.92× |
+| Row-tiled repeat | q1 | 667.5 img/s | 1,186.3 img/s | 1,178.9 img/s | 1,049.7 img/s | 0.89× |
+
+Across the two row-tiled runs, serial CPU and SIMD are about 1.8–1.9× normal
+Pillow, while GPU throughput is about 1.6–1.7× Pillow and 8–11% below SIMD.
+This closes the CPU-vs-Pillow gap for the sampled workload, but does not meet
+the 5× SIMD goal or the GPU-throughput target. Keep the direct RGB CPU path,
+packed output, and bounded row-tile planner; checkpoint Transform after three
+bounded attempts and move to the next ranked operation.
+
+Focused checks and measurements:
+
+```sh
+cargo test --locked -p pillow-rs --lib affine_rgb_nearest_direct_path_matches_generic_and_is_selected
+cargo test --locked -p pillow-rs --lib native_rgb_transform_output_plans_compact_words_with_checked_limits
+cargo test --locked -p pillow-rs --lib gpu_native_rgb_affine_nearest_transform_reads_and_writes_packed_bytes -- --nocapture
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/transform-rgb-p1-after-row-tiled-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation transform --mode RGB --size 1024 768' \
+  migration-parity-transpose-throughput
+build/parity-venv/bin/python scripts/run_transpose_throughput.py \
+  --output build/migration-parity/transform-rgb-p1-after-row-tiled-repeat-20261002.json \
+  --operation transform --mode RGB --size 1024 768
+```
+
+The comparison receipts are `transform-rgb-p1-after-packed-output-20261002.json`,
+`transform-rgb-p1-after-row-tiled-20261002.json`, and
+`transform-rgb-p1-after-row-tiled-repeat-20261002.json`. CI, coverage, release,
+and push remain deferred.

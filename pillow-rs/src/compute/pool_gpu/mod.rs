@@ -4853,6 +4853,15 @@ struct NativeExpandOutputDispatch {
     transfer_bytes: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NativeRgbTransformOutputDispatch {
+    groups_x: u32,
+    groups_y: u32,
+    row_tiled: bool,
+    output_word_count: u32,
+    transfer_bytes: u64,
+}
+
 /// Plan one output invocation per packed word. Each 16×16 workgroup owns 256
 /// distinct words; the flattened 2D grid never assigns two invocations to the
 /// same word, including when the adapter's X limit requires a second row.
@@ -4947,6 +4956,108 @@ fn plan_native_luma_transform_output(
         && dispatch.transfer_bytes <= u64::from(max_storage_buffer_binding_size)
         && dispatch.transfer_bytes <= max_buffer_size)
         .then_some(dispatch)
+}
+
+/// Plan an RGB affine-nearest transform that writes three native bytes per
+/// output pixel. One shader invocation samples four pixels and emits their
+/// three packed storage words, avoiding RGBA-sized readback.
+fn plan_native_rgb_transform_output(
+    ops: &[PipelineOp],
+    max_workgroups_per_dimension: u32,
+    max_storage_buffer_binding_size: u32,
+    max_buffer_size: u64,
+    capacity_words: u32,
+) -> Option<NativeRgbTransformOutputDispatch> {
+    let [
+        PipelineOp::Transform {
+            w,
+            h,
+            method: TransformMethod::Affine,
+            data,
+            filter: ResampleFilter::Nearest,
+            ..
+        },
+    ] = ops
+    else {
+        return None;
+    };
+    if *w == 0 || *h == 0 || *w > i32::MAX as u32 || *h > i32::MAX as u32 {
+        return None;
+    }
+    let affine: [f64; 6] = data.get(..6)?.try_into().ok()?;
+    let [step_x, step_y, origin_x, step_x_y, step_y_y, origin_y] =
+        crate::compute::pool_cpu::ops::effects::affine_nearest_fixed(affine, *w, *h)?;
+    let max_x = i128::from(*w - 1);
+    let max_y = i128::from(*h - 1);
+    let coords_fit = |step_x: i64, step_y: i64, origin: i64| {
+        let step_x = i128::from(step_x);
+        let step_y = i128::from(step_y);
+        let origin = i128::from(origin);
+        [
+            origin,
+            origin + max_x * step_x,
+            origin + max_y * step_y,
+            origin + max_x * step_x + max_y * step_y,
+        ]
+        .into_iter()
+        .all(|value| i32::try_from(value).is_ok())
+            && max_x * step_x <= i128::from(i32::MAX)
+            && max_x * step_x >= i128::from(i32::MIN)
+            && max_y * step_y <= i128::from(i32::MAX)
+            && max_y * step_y >= i128::from(i32::MIN)
+    };
+    if !coords_fit(step_x, step_y, origin_x) || !coords_fit(step_x_y, step_y_y, origin_y) {
+        return None;
+    }
+
+    let pixels = u64::try_from(CheckedDims::new(*w, *h, 1).ok()?.total_pixels()).ok()?;
+    let output_bytes = u64::try_from(CheckedDims::new(*w, *h, 3).ok()?.total_bytes()).ok()?;
+    if pixels > u64::from(u32::MAX) || output_bytes > u64::from(u32::MAX) {
+        return None;
+    }
+    let transfer_bytes = output_bytes
+        .checked_add(3)?
+        .checked_div(4)?
+        .checked_mul(4)?;
+    let output_word_count = u32::try_from(transfer_bytes / 4).ok()?;
+    let output_group_count = pixels.div_ceil(4);
+    let workgroup_items =
+        NATIVE_EXPAND_WORKGROUP_WIDTH.checked_mul(NATIVE_EXPAND_WORKGROUP_HEIGHT)?;
+    let required_workgroups = output_group_count.div_ceil(workgroup_items);
+    let max_groups = u64::from(max_workgroups_per_dimension);
+    if max_groups == 0 {
+        return None;
+    }
+    let row_groups_x =
+        (*w % 4 == 0).then(|| u64::from(*w / 4).div_ceil(NATIVE_EXPAND_WORKGROUP_WIDTH));
+    let row_groups_y = u64::from(*h).div_ceil(NATIVE_EXPAND_WORKGROUP_HEIGHT);
+    let row_tiled_workgroups = row_groups_x.and_then(|groups_x| groups_x.checked_mul(row_groups_y));
+    let row_tiled = row_groups_x.is_some_and(|groups_x| {
+        groups_x <= max_groups
+            && row_groups_y <= max_groups
+            && row_tiled_workgroups.is_some_and(|count| count <= required_workgroups)
+    });
+    let (groups_x, groups_y) = if row_tiled {
+        (row_groups_x?, row_groups_y)
+    } else {
+        let groups_x = required_workgroups.min(max_groups);
+        let groups_y = required_workgroups.div_ceil(groups_x);
+        if groups_y > max_groups {
+            return None;
+        }
+        (groups_x, groups_y)
+    };
+    let capacity_bytes = u64::from(capacity_words).checked_mul(4)?;
+    (transfer_bytes <= capacity_bytes
+        && transfer_bytes <= u64::from(max_storage_buffer_binding_size)
+        && transfer_bytes <= max_buffer_size)
+        .then_some(NativeRgbTransformOutputDispatch {
+            groups_x: u32::try_from(groups_x).ok()?,
+            groups_y: u32::try_from(groups_y).ok()?,
+            row_tiled,
+            output_word_count,
+            transfer_bytes,
+        })
 }
 
 #[cfg(target_endian = "little")]
@@ -6114,6 +6225,7 @@ struct GpuBatchResources<'a> {
     lut_ranges: Vec<Option<BufferRange>>,
     native_expand_output: Option<NativeExpandOutputDispatch>,
     native_luma_transform_output: Option<NativeExpandOutputDispatch>,
+    native_rgb_transform_output: Option<NativeRgbTransformOutputDispatch>,
     native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
 }
 
@@ -6571,6 +6683,7 @@ impl GpuInner {
         native_sharpness_rgb_input: bool,
         native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
         native_luma_transform_output: bool,
+        native_rgb_transform_output: bool,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
         let mut resolved = Vec::with_capacity(ops.len());
         let mut index = 0usize;
@@ -6887,6 +7000,12 @@ impl GpuInner {
                     horizontal,
                     vertical,
                 });
+            } else if native_rgb_transform_output && matches!(op, PipelineOp::Transform { .. }) {
+                resolved.push(ResolvedPipeline::Single(self.resolve_pipeline(
+                    "__internal_transform_rgb_nearest_packed",
+                    "transform_rgb_nearest_packed.wgsl",
+                    include_str!("shaders/transform_rgb_nearest_packed.wgsl"),
+                )?));
             } else if native_luma_transform_output && matches!(op, PipelineOp::Transform { .. }) {
                 resolved.push(ResolvedPipeline::Single(self.resolve_pipeline(
                     "__internal_transform_l_nearest_packed",
@@ -7892,6 +8011,7 @@ impl GpuInner {
         packed_luma_transform_input: bool,
         packed_luma_transform_output: bool,
         native_rgb_compact_input: bool,
+        native_rgb_transform_output: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
@@ -7935,6 +8055,24 @@ impl GpuInner {
         let mut pad_resize_dims = Vec::with_capacity(ops.len());
         let mut native_expand_output = None;
         let mut native_luma_transform_output = None;
+        let native_rgb_transform_output = if native_rgb_transform_output {
+            Some(
+                plan_native_rgb_transform_output(
+                    ops,
+                    limits.max_compute_workgroups_per_dimension,
+                    limits.max_storage_buffer_binding_size,
+                    limits.max_buffer_size,
+                    buffers.capacity,
+                )
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "GPU packed-RGB transform lost its checked output plan".into(),
+                    )
+                })?,
+            )
+        } else {
+            None
+        };
         let mut cur_w = w;
         let mut cur_h = h;
         let mut current_mode = mode;
@@ -8014,6 +8152,14 @@ impl GpuInner {
                     "__internal_resize_h",
                     "resize_convolution_h.wgsl",
                     include_str!("shaders/resize_convolution_h.wgsl"),
+                )?
+            } else if native_rgb_transform_output.is_some()
+                && matches!(op, PipelineOp::Transform { .. })
+            {
+                self.resolve_pipeline(
+                    "__internal_transform_rgb_nearest_packed",
+                    "transform_rgb_nearest_packed.wgsl",
+                    include_str!("shaders/transform_rgb_nearest_packed.wgsl"),
                 )?
             } else if packed_luma_transform_output && matches!(op, PipelineOp::Transform { .. }) {
                 self.resolve_pipeline(
@@ -8499,6 +8645,11 @@ impl GpuInner {
                     // The dedicated affine-nearest L shader packs four
                     // logical output samples into each storage word.
                     params[3] |= 8;
+                }
+                if native_rgb_transform_output.is_some_and(|plan| plan.row_tiled) {
+                    // The compact RGB shader maps workgroup rows directly to
+                    // image rows, avoiding a flat group-to-row division.
+                    params[3] |= 16;
                 }
                 // Pillow's affine nearest kernel quantizes its coefficients
                 // to signed 16.16 once, then advances integer coordinates
@@ -9073,6 +9224,7 @@ impl GpuInner {
                 lut_ranges,
                 native_expand_output,
                 native_luma_transform_output,
+                native_rgb_transform_output,
                 native_cover_packed_output,
             },
             input_dims,
@@ -9163,6 +9315,14 @@ impl GpuInner {
                 let plan = resources.native_luma_transform_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed-L Transform shader has no checked output plan".into(),
+                    )
+                })?;
+                (plan.groups_x, plan.groups_y)
+            }
+            "__internal_transform_rgb_nearest_packed" => {
+                let plan = resources.native_rgb_transform_output.ok_or_else(|| {
+                    PilError::InternalError(
+                        "packed-RGB Transform shader has no checked output plan".into(),
                     )
                 })?;
                 (plan.groups_x, plan.groups_y)
@@ -9265,6 +9425,7 @@ impl GpuInner {
             native_sharpness_rgb_input,
             prepared.resources.native_cover_packed_output,
             packed_luma_transform_output,
+            prepared.resources.native_rgb_transform_output.is_some(),
         )?;
         let mut current_is_a = start_is_a;
         for (index, pipeline) in resolved.iter().enumerate() {
@@ -12933,6 +13094,7 @@ impl GpuInner {
         packed_luma_transform_input: bool,
         packed_luma_transform_output: bool,
         native_rgb_compact_input: bool,
+        native_rgb_transform_output: bool,
         packed_luma_point: bool,
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
@@ -13167,6 +13329,7 @@ impl GpuInner {
                 packed_luma_transform_input,
                 packed_luma_transform_output,
                 native_rgb_compact_input,
+                native_rgb_transform_output,
                 packed_luma_point,
                 packed_luma_putdata,
                 packed_luma_order_statistic,
@@ -13217,6 +13380,8 @@ impl GpuInner {
                 let size = if let Some(dispatch) = prepared.resources.native_cover_packed_output {
                     dispatch.transfer_bytes
                 } else if let Some(dispatch) = prepared.resources.native_expand_output {
+                    dispatch.transfer_bytes
+                } else if let Some(dispatch) = prepared.resources.native_rgb_transform_output {
                     dispatch.transfer_bytes
                 } else if packed_luma_transform_output {
                     compact_luma8_transfer_bytes(final_dims.0, final_dims.1)?
@@ -21493,6 +21658,15 @@ impl GpuPool {
                 capacity,
             )
             .is_some();
+        let native_rgb_transform_output = native_rgb_compact_input
+            && plan_native_rgb_transform_output(
+                ops,
+                limits.max_compute_workgroups_per_dimension,
+                limits.max_storage_buffer_binding_size,
+                limits.max_buffer_size,
+                capacity,
+            )
+            .is_some();
         let native_cover_packed_output = gpu_native_cover_packed_output_dispatch(
             ops,
             native_cover_input_channels,
@@ -22124,6 +22298,7 @@ impl GpuPool {
             packed_luma_transform_input,
             packed_luma_transform_output,
             native_rgb_compact_input,
+            native_rgb_transform_output,
             packed_luma_point,
             packed_luma_putdata,
             packed_luma_order_statistic,
@@ -22219,6 +22394,8 @@ impl GpuPool {
         let readback_buffer = readback.buffer(&buffers, final_is_a);
         let result = if let Some(dispatch) = native_cover_packed_output {
             gpu.readback_to_cover_native_bytes(final_w, final_h, dispatch, readback_buffer)?
+        } else if native_rgb_transform_output {
+            gpu.readback_to_native_channels(final_w, final_h, 3, readback_buffer)?
         } else if native_luma16 {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
@@ -22326,6 +22503,14 @@ impl GpuPool {
         };
         resource_telemetry.readback_bytes = if let Some(dispatch) = native_cover_packed_output {
             dispatch.transfer_bytes
+        } else if native_rgb_transform_output {
+            u64::try_from(CheckedDims::new(final_w, final_h, 3)?.total_bytes())
+                .map_err(|_| PilError::ValueError("GPU native RGB readback is too large".into()))?
+                .div_ceil(4)
+                .checked_mul(4)
+                .ok_or_else(|| {
+                    PilError::ValueError("GPU native RGB readback size overflow".into())
+                })?
         } else if native_expand_output {
             let channels = native_expand_channels.ok_or_else(|| {
                 PilError::InternalError("GPU native Expand output is missing its channels".into())
@@ -24655,6 +24840,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -30681,6 +30867,77 @@ mod tests {
     }
 
     #[test]
+    fn native_rgb_transform_output_plans_compact_words_with_checked_limits() {
+        let transform = |w, h, matrix: [f64; 6]| PipelineOp::Transform {
+            w,
+            h,
+            method: TransformMethod::Affine,
+            data: Arc::from(matrix.to_vec()),
+            filter: ResampleFilter::Nearest,
+            fill: None,
+            fill_is_none: true,
+            palette_fill: None,
+        };
+        let odd = [transform(5, 3, [0.87, 0.21, -1.25, -0.16, 1.13, 0.5])];
+        let odd_plan = super::plan_native_rgb_transform_output(&odd, 1, 48, 48, 15)
+            .expect("odd RGB output fits packed byte storage");
+        assert_eq!((odd_plan.groups_x, odd_plan.groups_y), (1, 1));
+        assert_eq!(odd_plan.output_word_count, 12);
+        assert_eq!(odd_plan.transfer_bytes, 48);
+
+        let aligned = [transform(1024, 768, [0.87, 0.21, -1.25, -0.16, 1.13, 0.5])];
+        let aligned_plan =
+            super::plan_native_rgb_transform_output(&aligned, 128, u32::MAX, u64::MAX, 1024 * 768)
+                .expect("aligned RGB output fits the bounded dispatch grid");
+        assert_eq!((aligned_plan.groups_x, aligned_plan.groups_y), (16, 48));
+        assert!(aligned_plan.row_tiled);
+        assert_eq!(aligned_plan.transfer_bytes, 1024 * 768 * 3);
+
+        let image_4k = [transform(4096, 4096, [0.87, 0.21, -1.25, -0.16, 1.13, 0.5])];
+        let large = super::plan_native_rgb_transform_output(
+            &image_4k,
+            128,
+            u32::MAX,
+            u64::MAX,
+            4096 * 4096,
+        )
+        .expect("4096-square RGB output fits a two-dimensional dispatch");
+        assert_eq!((large.groups_x, large.groups_y), (128, 128));
+        assert!(!large.row_tiled);
+        assert_eq!(large.transfer_bytes, 4096 * 4096 * 3);
+
+        let large_row_tiled = super::plan_native_rgb_transform_output(
+            &image_4k,
+            256,
+            u32::MAX,
+            u64::MAX,
+            4096 * 4096,
+        )
+        .expect("4096-square RGB row-tiled output fits when the adapter allows it");
+        assert_eq!(
+            (large_row_tiled.groups_x, large_row_tiled.groups_y),
+            (64, 256)
+        );
+        assert!(large_row_tiled.row_tiled);
+
+        assert!(super::plan_native_rgb_transform_output(&odd, 0, 48, 48, 15).is_none());
+        assert!(super::plan_native_rgb_transform_output(&odd, 1, 47, 48, 15).is_none());
+        assert!(super::plan_native_rgb_transform_output(&odd, 1, 48, 47, 15).is_none());
+        assert!(super::plan_native_rgb_transform_output(&odd, 1, 48, 48, 11).is_none());
+        let oversized = [transform(65_536, 65_536, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])];
+        assert!(
+            super::plan_native_rgb_transform_output(
+                &oversized,
+                65_535,
+                u32::MAX,
+                u64::MAX,
+                u32::MAX,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
     #[cfg(target_endian = "little")]
     fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {
         struct RestoreDiagnostics {
@@ -30799,6 +31056,94 @@ mod tests {
         assert_eq!(aligned_resources.upload_bytes, 32);
         assert_eq!(aligned_resources.readback_bytes, 32);
         assert_eq!(aligned_resources.mode_conversion_count, 0);
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_native_rgb_affine_nearest_transform_reads_and_writes_packed_bytes() {
+        match super::GpuPool::ensure_init() {
+            Ok(_) => {}
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                return;
+            }
+            Err(error) => panic!("native GPU RGB Transform initialization failed: {error}"),
+        }
+
+        struct RestoreDiagnostics {
+            telemetry: bool,
+            shader_coverage: bool,
+        }
+        impl Drop for RestoreDiagnostics {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.telemetry);
+                Backend::set_gpu_shader_coverage_enabled(self.shader_coverage);
+            }
+        }
+        let _restore = RestoreDiagnostics {
+            telemetry: Backend::set_pipeline_telemetry_enabled(true),
+            shader_coverage: Backend::set_gpu_shader_coverage_enabled(true),
+        };
+        let _ = Backend::take_gpu_shader_coverage();
+
+        for (width, height) in [(5u32, 3u32), (8u32, 4u32)] {
+            let source_bytes = (0..(width * height * 3) as usize)
+                .map(|index| (index * 29 + 7) as u8)
+                .collect::<Vec<_>>();
+            let source =
+                Image::frombytes("RGB", (width, height), &source_bytes).expect("native RGB source");
+            let transformed = source
+                .transform_public(
+                    (width, height),
+                    0,
+                    Some(TransformData::Affine(vec![
+                        0.87, 0.21, -1.25, -0.16, 1.13, 0.5,
+                    ])),
+                    0,
+                    0,
+                    Some(TransformFill::Components(vec![199, 71, 17])),
+                )
+                .expect("native affine nearest RGB transform");
+            let expected = transformed
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU native RGB Transform");
+            let _ = Backend::take_pipeline_telemetry();
+            let _ = Backend::take_gpu_shader_coverage();
+            let actual = transformed
+                .use_backend(Backend::Gpu)
+                .tobytes()
+                .expect("GPU native RGB Transform");
+            assert_eq!(actual, expected, "native RGB {width}x{height} parity");
+
+            let receipt = Backend::take_pipeline_telemetry()
+                .expect("native RGB Transform must publish telemetry");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native RGB Transform resources");
+            let transfer_bytes = ((width * height * 3 + 3) / 4 * 4) as u64;
+            assert_eq!(resources.upload_bytes, transfer_bytes);
+            assert_eq!(resources.readback_bytes, transfer_bytes);
+            assert_eq!(resources.mode_conversion_count, 0);
+
+            let shader_coverage = Backend::take_gpu_shader_coverage();
+            assert_eq!(shader_coverage.len(), 1);
+            assert_eq!(
+                shader_coverage[0].variant_name,
+                "__internal_transform_rgb_nearest_packed"
+            );
+            assert_eq!(
+                shader_coverage[0].shader_file,
+                "transform_rgb_nearest_packed.wgsl"
+            );
+        }
     }
 
     #[cfg(target_endian = "little")]
