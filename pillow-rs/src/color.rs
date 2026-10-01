@@ -1077,10 +1077,13 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
     let cr_g = CR_G.get_or_init(|| make_table(-0.41869));
     let cr_b = CR_B.get_or_init(|| make_table(-0.08131));
 
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    let mut out = crate::raster::RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+    let rgb = match img {
+        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgb8().into_raw()),
+    };
+    let (w, h) = (img.width(), img.height());
+    let mut out = Vec::with_capacity(rgb.len());
+    for ip in rgb.chunks_exact(3) {
         let r = ip[0] as usize;
         let g = ip[1] as usize;
         let b = ip[2] as usize;
@@ -1089,9 +1092,12 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
         let cb = (((cb_r[r] + cb_g[g] + cb_b[b]) >> 6) + 128) as u8;
         let cr = (((cb_b[r] + cr_g[g] + cr_b[b]) >> 6) + 128) as u8; // Cr_R = Cb_B
 
-        *op = crate::raster::Rgb([y, cb, cr]);
+        out.extend_from_slice(&[y, cb, cr]);
     }
-    DynamicImage::ImageRgb8(out)
+    DynamicImage::ImageRgb8(
+        crate::raster::RgbImage::from_raw(w, h, out)
+            .expect("YCbCr output preserves the source's RGB dimensions"),
+    )
 }
 
 /// Converts YCbCr storage to RGB using Pillow's lookup-table BT.601 conversion.
