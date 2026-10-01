@@ -12593,3 +12593,62 @@ benchmark-script hashes match the measured `after-native-gpu` receipt. This
 closes the high-return native-format staging issue for LA Transform, not the
 per-operation SIMD or GPU targets. Continue to the next ranked operation;
 keep full CI, coverage, release, and push deferred.
+
+## RGB `ImageOps.autocontrast` CPU checkpoint — 2026-10-02
+
+The P1 follow-up selected material 1024 × 768 RGB AutoContrast. Its unmasked
+control plane already builds Pillow's per-channel LUT from a banked native RGB
+histogram; the serial apply pass cloned the entire source, then rescanned it
+and used byte-index modulo three to select a channel table. The CPU change
+allocates one output and maps each native RGB triplet with its R, G, and B LUT
+offsets directly. The fast path is gated on `ImageRgb8` storage and three
+channels; typed three-channel layouts keep the previous path. The destination
+still pays for safe zero initialization, but removing the source clone and
+generic per-byte channel selection produced a large whole-call gain.
+
+The isolated q1 benchmark uses 1,600 changing inputs per backend and checks
+every result against live Pillow. Baseline and final receipts are
+`autocontrast-rgb-p1-before-20261002.json` and
+`autocontrast-rgb-p1-after-native-rgb-cpu-map-attempt4-20261002.json`:
+
+| RGB AutoContrast at 1024 × 768 | Baseline | CPU checkpoint | Result |
+| --- | ---: | ---: | ---: |
+| Pillow throughput | 434.0 img/s | 443.3 img/s | reference varied 2% |
+| Serial CPU throughput | 354.2 img/s | 774.3 img/s | 2.19× faster than prior CPU |
+| Serial CPU backend median | 2.549 ms | 1.071 ms | 2.38× lower latency |
+| CPU / Pillow throughput | 0.82× | 1.75× | CPU is now faster |
+| SIMD throughput | 558.7 img/s | 595.8 img/s | source unchanged; 1.34× Pillow |
+| GPU throughput | 440.5 img/s | 488.8 img/s | source unchanged; 1.10× Pillow |
+| GPU / SIMD throughput | 0.79× | 0.82× | GPU remains 18% slower |
+
+All 1,600 outputs from CPU, SIMD, and GPU matched Pillow exactly in the final
+run. Telemetry confirms the target backends executed without fallback. The
+GPU still uploads and reads back 3,145,728 bytes each and records one mode
+conversion for the 2,359,296-byte RGB image. The existing AutoContrast lowering
+computes the LUT on the host and maps it in one GPU dispatch, so the GPU
+checkpoint needs a compact native-RGB Eval route: packed triplet upload,
+channel-specific LUT selection, exclusive writers for packed output words,
+and a checked workgroup/buffer planner. That route was not implemented in
+this four-attempt visit; do not count the unchanged GPU timing as a gain.
+
+Two SIMD candidates were tried and removed. Reusing the balanced-tree
+out-of-place LUT mapper dropped the observed SIMD rate to 284 img/s. A second
+RGB-specific mapper retained the existing LUT kernel, but its normalized rate
+was effectively unchanged from the in-place path. Keep the in-place SIMD
+kernel until another vector kernel demonstrates a repeatable full-call gain;
+the 1.34× Pillow result remains far short of the 5× target. The serial CPU
+target is met for this workload, while SIMD and GPU remain explicit blockers.
+
+Reproduce the baseline and final comparison with:
+
+```sh
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/autocontrast-rgb-p1-after-native-rgb-cpu-map-attempt4-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation autocontrast --mode RGB --size 1024 768' \
+  migration-parity-transpose-throughput
+```
+
+The CPU and SIMD source hashes in the final receipt match the checkpointed
+source; neither rejected SIMD candidate remains in the tree. Move to the next
+ranked operation and revisit RGB AutoContrast's compact GPU route later. CI,
+coverage, release, and push remain deferred.

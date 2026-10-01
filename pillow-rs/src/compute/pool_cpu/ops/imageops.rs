@@ -437,21 +437,28 @@ pub(crate) fn equalize_lut(
 
 #[inline]
 fn apply_autocontrast_row(
-    raw: &[u8],
-    raw_start: usize,
+    source: &[u8],
     row: &mut [u8],
     channels: usize,
+    native_rgb_bytes: bool,
     lut: &[u8],
     luma_lut_tables: Option<&[u8x16; 16]>,
 ) {
     if let Some(tables) = luma_lut_tables {
-        let source_end = raw_start + row.len();
-        apply_native_luma_lut_row(&raw[raw_start..source_end], row, tables);
+        apply_native_luma_lut_row(source, row, tables);
         return;
     }
-    for (index, output) in row.iter_mut().enumerate() {
+    if native_rgb_bytes {
+        for (source, output) in source.chunks_exact(3).zip(row.chunks_exact_mut(3)) {
+            output[0] = lut[usize::from(source[0])];
+            output[1] = lut[256 + usize::from(source[1])];
+            output[2] = lut[512 + usize::from(source[2])];
+        }
+        return;
+    }
+    for (index, (input, output)) in source.iter().zip(row).enumerate() {
         let channel = index % channels;
-        *output = lut[channel * 256 + usize::from(raw[raw_start + index])];
+        *output = lut[channel * 256 + usize::from(*input)];
     }
 }
 
@@ -531,7 +538,15 @@ pub fn op_autocontrast(
     let image_pixels = CheckedDims::new(w, h, 1)?.total_pixels();
     let lut = autocontrast_lut(img, cutoff, mask)?;
     let raw = img.as_bytes();
-    let mut out = raw.to_vec();
+    let native_rgb_bytes = channels == 3 && matches!(img, DynamicImage::ImageRgb8(_));
+    // RGB has a separate LUT per interleaved byte band. Map it from immutable
+    // source bytes into one output allocation instead of cloning and then
+    // reading the source again in the per-byte pass.
+    let mut out = if native_rgb_bytes {
+        vec![0; raw.len()]
+    } else {
+        raw.to_vec()
+    };
     let stride = w as usize * channels;
     let luma_lut_tables = if channels == 1 {
         native_luma_lut_tables(&lut)
@@ -547,10 +562,10 @@ pub fn op_autocontrast(
             h as usize,
             |row_start, _row_end, _y, row| {
                 apply_autocontrast_row(
-                    raw,
-                    row_start,
+                    &raw[row_start..row_start + row.len()],
                     row,
                     channels,
+                    native_rgb_bytes,
                     &lut,
                     luma_lut_tables.as_ref(),
                 );
@@ -560,10 +575,10 @@ pub fn op_autocontrast(
         for y in 0..h as usize {
             let row_start = y * stride;
             apply_autocontrast_row(
-                raw,
-                row_start,
+                &raw[row_start..row_start + stride],
                 &mut out[row_start..row_start + stride],
                 channels,
+                native_rgb_bytes,
                 &lut,
                 luma_lut_tables.as_ref(),
             );
@@ -573,10 +588,10 @@ pub fn op_autocontrast(
     for y in 0..h as usize {
         let row_start = y * stride;
         apply_autocontrast_row(
-            raw,
-            row_start,
+            &raw[row_start..row_start + stride],
             &mut out[row_start..row_start + stride],
             channels,
+            native_rgb_bytes,
             &lut,
             luma_lut_tables.as_ref(),
         );
