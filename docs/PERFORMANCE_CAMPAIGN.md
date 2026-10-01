@@ -12253,3 +12253,80 @@ The three receipts are `autocontrast-l-after-1024x768.json`,
 `autocontrast-l-after-attempt3-1024x768.json`. This closes only the measured
 L AutoContrast staging case, not P1's general operation/mode inventory. Full
 CI, coverage, release, and push were not run.
+
+## L `ImageOps.invert` checkpoint — 2026-10-02
+
+The full-call workload is `ImageOps.invert` on changing, materialized 1024 ×
+768 L frames. The CPU implementation already maps `255 - sample` into one
+output `Vec`; the SIMD adapter used the same 16-byte XOR vector as before but
+called `Vec::extend_from_slice` once per vector block. The output is independent
+of the input, so source mutation is not allowed. GPU already has a native-byte
+invert shader for L: it transfers 786,432 bytes each way, records no mode
+conversion, and issues one dispatch. The GPU gap here is dispatch, synchronization,
+and round-trip cost rather than RGBA expansion.
+
+Attempt 1 kept the safe `wide::u8x16` vector math and allocated the destination
+at its final size, then wrote each transformed vector directly into its final
+16-byte slice. This removes repeated vector-length updates from appending small
+blocks. The incomplete tail remains a scalar complement. The existing native
+invert regression covers widths around vector boundaries and verifies input
+immutability; the focused Pillow case and full changing-input diagnostic verify
+the L route.
+
+| 1024 × 768, attempt 1 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Queue depth 1 latency | 0.3350 ms | 0.0605 ms | 0.0638 ms | 0.2631 ms |
+| Queue depth 1 throughput | 2,965.8 req/s | 14,992.4 req/s | 14,638.9 req/s | 3,656.9 req/s |
+| Queue depth 2 latency | 0.4439 ms | 0.1065 ms | 0.1111 ms | 0.2857 ms |
+| Queue depth 2 throughput | 4,297.4 req/s | 17,211.6 req/s | 16,661.3 req/s | 6,364.0 req/s |
+| Queue depth 4 latency | 0.6550 ms | 0.1916 ms | 0.1939 ms | 0.4703 ms |
+| Queue depth 4 throughput | 5,609.1 req/s | 17,751.1 req/s | 17,642.6 req/s | 7,556.8 req/s |
+
+SIMD full-call latency improves about 2.05× over its baseline at queue depth
+1, and the backend portion falls from 82.4 µs to 18.3 µs. At depth 1 its
+latency is 5.25× faster than Pillow, while completed-request throughput is
+4.94×. At depths 2 and 4, throughput ratios are 3.88× and 3.15×; host
+concurrency saturation erases much of the single-request gain. Serial CPU
+beats Pillow at every tested depth. SIMD is still slightly behind CPU at all
+three depths. GPU remains well behind SIMD despite using the correct native-L
+transport: depth-1 GPU latency is about 4.1× SIMD latency, with 1.5 MiB total
+host/device transfer and one dispatch per request. This is a structural
+single-operation GPU completion blocker unless work can stay resident or be
+batched with adjacent operations.
+
+Attempt 2 manually unrolled four vector lanes per loop. It did not improve the
+complete-call medians or the CPU-relative SIMD gap across queue depths, so that
+change was discarded. Attempt 3 tried direct AArch64 NEON loads, complements,
+and stores to remove safe-vector adapter overhead, but the crate's enforced
+`-D unsafe-code` lint rejects the required intrinsic pointer block. The lint
+was left intact; no result from that experiment is counted. Further speedup
+would need a safe vector API that lowers better than `wide` here or a broader
+measurement-boundary improvement; the retained path is already close to the
+serial CPU implementation.
+
+The baseline and attempt-1/attempt-2 diagnostic receipts are
+`invert-l-before-20261002.json`, `invert-l-after-attempt1-20261002.json`, and
+`invert-l-after-attempt2-20261002.json`. The exact SIMD parity receipts are
+`invert-l-attempt1-simd-parity-20261002.json` and
+`invert-l-attempt2-simd-parity-20261002.json`. Each diagnostic performed 1,600
+measured requests per subject across queue depths 1, 2, and 4; each output was
+compared byte-for-byte with live Pillow, all runtime files stayed unchanged,
+and CPU/SIMD/GPU receipts reported their actual backend. Reproduce with:
+
+```sh
+cargo test --locked -p pillow-rs --lib native_invert_writes_owned_p_indices_in_one_vector_pass
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TARGET_BACKEND=simd MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_OUTPUT=build/migration-parity/invert-l-attempt1-simd-parity-20261002.json \
+  migration-parity-case CASE_ID=PIL.ImageOps.invert.mode.l
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/invert-l-after-attempt1-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation invert --mode L --size 1024 768' \
+  migration-parity-transpose-throughput
+```
+
+After three bounded attempts, retain attempt 1 and move to another operation.
+L invert's CPU latency target is met; the SIMD latency target is met only at
+queue depth 1, its concurrent throughput target remains open, and GPU does not
+match SIMD. No Parallel CPU measurements, CI, coverage, release, or push were
+run.
