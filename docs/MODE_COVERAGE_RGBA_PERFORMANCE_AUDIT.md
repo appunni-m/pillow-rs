@@ -193,12 +193,36 @@ contract for these synthetic layouts. Close M1 for the current public surface.
 If a supported decoder begins returning one of these variants, add a
 native-sample resize implementation and mode-specific parity cases first.
 
+## Follow-up status — 2026-10-01
+
+P1 remains open across the general GPU operation set. The Cover path is a
+verified partial reduction: LA source upload stays native at two bytes per
+pixel, and its vertical resize result now reads back packed LA instead of
+four-byte RGBA. On the maintained material LA Cover workload, strict CPU,
+SIMD, and GPU parity passed 3/3; GPU used two dispatches, had no fallback, and
+reduced readback from 5,591,040 to 2,797,568 bytes. This does not remove the
+generic RGBA transport from other operations or modes. CPU and SIMD latency
+targets for Cover LA also remain open; see the measured checkpoint in
+`PERFORMANCE_CAMPAIGN.md`.
+
+P3 also remains open. The RGB median-cut tree-search optimization on main
+(`6659b734`) changes palette-bin lookup from scanning every box to walking the
+split tree, but it does not remove `to_rgb8()` or the separate
+`Vec<[u8; 3]>` materialization in the non-kmeans path. It therefore does not
+close the allocation/copy finding in this audit. Preserve exact palette
+ordering and k-means inputs when tackling that work.
+
+M1 and M2 are closed for the current public surface by the follow-up checks
+above. The split fix has mode and byte parity; the typed filtered-resize
+variants are unreachable through current public constructors and decoders.
+P2 and P4–P10 remain audit candidates without measured follow-up in this
+checkpoint.
+
 ## Suggested order for follow-up
 
-1. Measure P1 GPU transport by operation and native mode; specialize only a
-   demonstrated bandwidth or staging bottleneck while keeping each kernel's
-   current mode contract.
-2. Measure P3 median-cut allocation and copy cost, then remove duplicate RGB
-   materialization while preserving the k-means input and exact palette parity.
+1. Continue P1 by selecting the next operation/mode with measured RGBA staging
+   cost; keep every native kernel's current rounding and channel contract.
+2. Address P3's duplicate RGB buffers with borrowed native RGB bytes, creating
+   pixel tuples only for k-means, and preserve exact palette parity.
 3. Continue with P4 scalar conversions, P7 color transforms, and the host
    access findings using full-call benchmarks and exact parity cases.
