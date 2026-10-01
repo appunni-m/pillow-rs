@@ -237,6 +237,9 @@ def result_mode(plan: dict[str, Any]) -> str:
 def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             frame_id: int, request_id: int) -> dict[str, Any]:
     if core is not None:
+        # Pipeline telemetry is thread-local. Arm it on the executor worker
+        # before timing so each request reports the backend and GPU transfers.
+        core.set_pipeline_telemetry(True)
         core.take_pipeline_telemetry()  # drain this worker's previous receipt
     started = time.perf_counter_ns()
     try:
@@ -464,8 +467,6 @@ def child(args: argparse.Namespace) -> int:
     if plan.get("operation") in ("contrast", "color"):
         plan["imageenhance_api"] = importlib.import_module("PIL.ImageEnhance")
     core = None if subject == "Pillow" else importlib.import_module("pillow_rs._core")
-    if core is not None:
-        core.set_pipeline_telemetry(True)  # once per process, never toggled by workers
     binaries = runtime_files(subject)
     inputs = [Path(frame["path"]).read_bytes() for frame in plan["frames"]]
     if plan.get("operation") in ("composite", "blend", "image-blend", "add", "subtract", "multiply", "screen", "overlay", "hard-light", "soft-light", "difference", "darker", "lighter", "add-modulo", "subtract-modulo", "logical-and", "logical-or", "logical-xor", "alpha-composite"):

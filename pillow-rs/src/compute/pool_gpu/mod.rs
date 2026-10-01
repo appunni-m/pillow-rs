@@ -13263,6 +13263,32 @@ fn gpu_packed_luma_convert_input(
         && image.height() != 0
 }
 
+/// Keep a singleton L byte-LUT remap in packed one-byte storage. In addition
+/// to ordinary Eval runs, the unmasked native-L AutoContrast lowering supplies
+/// an exact Eval LUT and can use the same packed shader without RGBA staging.
+fn gpu_packed_luma_point_input(
+    source_is_luma_point_run: bool,
+    host_autocontrast_luma_lut: bool,
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !(source_is_luma_point_run || host_autocontrast_luma_lut)
+        || !matches!(ops, [PipelineOp::Eval { .. }])
+        || !matches!(logical_mode, None | Some("L"))
+    {
+        return false;
+    }
+    let DynamicImage::ImageLuma8(luma) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 1) else {
+        return false;
+    };
+    let pixels = layout.total_pixels();
+    pixels != 0 && pixels <= u32::MAX as usize && luma.as_raw().len() == pixels
+}
+
 /// Admit native-L order-statistic specializations. Their shaders operate on
 /// four adjacent samples packed into one word; keep prefixes, palette modes,
 /// empty images, unsupported filter sizes, and malformed backing lengths on
@@ -20173,6 +20199,9 @@ impl GpuPool {
         } else {
             None
         };
+        let host_autocontrast_luma_lut = host_autocontrast_lut.is_some()
+            && matches!(img, DynamicImage::ImageLuma8(_))
+            && matches!(mode, None | Some("L"));
         let mut dispatch_ops: Vec<PipelineOp> = if let Some(op) = host_autocontrast_lut {
             vec![op]
         } else {
@@ -20248,10 +20277,13 @@ impl GpuPool {
         // the existing standard RGBA transport and shader contract.
         let packed_luma_convert = gpu_packed_luma_convert_input(ops, img, mode);
         let native_rgb_to_rgba_input = gpu_native_rgb_to_rgba_input(ops, img, mode);
-        let packed_luma_point = source_is_luma_point_run
-            && matches!(ops, [PipelineOp::Eval { .. }])
-            && img.width() != 0
-            && img.height() != 0;
+        let packed_luma_point = gpu_packed_luma_point_input(
+            source_is_luma_point_run,
+            host_autocontrast_luma_lut,
+            ops,
+            img,
+            mode,
+        );
         // Native L PutData can keep source and replacement bytes compact.
         // P/1 and mode-converted images retain their separate semantics.
         let packed_luma_putdata = cfg!(target_endian = "little")
@@ -29009,6 +29041,57 @@ mod tests {
         let empty = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
         assert!(!super::gpu_packed_luma_convert_input(
             std::slice::from_ref(&convert_rgba),
+            &empty,
+            Some("L")
+        ));
+    }
+
+    #[test]
+    fn gpu_packed_luma_point_admits_lut_and_lowered_l_autocontrast() {
+        let eval = PipelineOp::Eval {
+            lut: vec![0; 256].into(),
+        };
+        let luma = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![31, 207]).unwrap());
+        assert!(super::gpu_packed_luma_point_input(
+            true,
+            false,
+            std::slice::from_ref(&eval),
+            &luma,
+            None
+        ));
+        assert!(super::gpu_packed_luma_point_input(
+            false,
+            true,
+            std::slice::from_ref(&eval),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_point_input(
+            false,
+            false,
+            std::slice::from_ref(&eval),
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_point_input(
+            false,
+            true,
+            std::slice::from_ref(&eval),
+            &luma,
+            Some("P")
+        ));
+        assert!(!super::gpu_packed_luma_point_input(
+            false,
+            true,
+            &[eval.clone(), PipelineOp::Duplicate],
+            &luma,
+            Some("L")
+        ));
+        let empty = DynamicImage::ImageLuma8(GrayImage::new(0, 1));
+        assert!(!super::gpu_packed_luma_point_input(
+            false,
+            true,
+            std::slice::from_ref(&eval),
             &empty,
             Some("L")
         ));

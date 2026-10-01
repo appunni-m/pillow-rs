@@ -12153,3 +12153,103 @@ PYTHON=build/parity-venv/bin/python \
 P4's I→L serial CPU blocker is closed after two attempts. The next audit target
 is P1: select the next operation/mode with measured RGBA staging cost. Full CI,
 coverage, and release were not run.
+
+## L `ImageOps.autocontrast` checkpoint — 2026-10-02
+
+The workload is `ImageOps.autocontrast` on a materialized 1024 × 768 native-L
+image with the default zero cutoff. The first measurement exposed the main GPU
+cost: AutoContrast lowered to a singleton 256-entry LUT, but its source and
+result went through the generic four-byte RGBA transport. The benchmark receipt
+confirmed 3,145,728 bytes uploaded and read back per image, one mode conversion,
+and one dispatch. CPU and SIMD also paid for a histogram pass even though a
+zero-cutoff native-L result depends only on the actual minimum and maximum
+samples.
+
+Three attempts are checkpointed. Attempt 1 admitted the already-lowered LUT to
+the packed native-L pointwise shader only for nonempty physical L storage and a
+single LUT operation. It reduced each transfer from 3 MiB to 768 KiB and removed
+the mode conversion; the GPU median fell from 2.109 ms to 0.599 ms at queue
+depth 1. Attempt 2 recognized exact zero-cutoff native-L AutoContrast before
+histogram construction and used a vector min/max reduction, retaining Pillow's
+histogram-derived bounds and LUT mapping for every other cutoff, mask, storage,
+or mode. Attempt 3 applied the resulting L LUT through 16-byte vector chunks
+and a nibble lookup table, with an exact scalar tail. A separate scalar-table
+equivalence test covers every possible input byte and the tail.
+
+The depth-1 complete-call medians show which attempt paid off at each layer:
+
+| Checkpoint, ms | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.614 | 0.837 | 0.603 | 2.109 |
+| Attempt 1: native-L GPU transport | 0.615 | 0.933 | 0.623 | 0.599 |
+| Attempt 2: zero-cutoff extrema | 0.605 | 0.756 | 0.501 | 0.498 |
+| Attempt 3: vector L LUT | 0.631 | 0.394 | 0.490 | 0.476 |
+
+The first attempt specifically removes GPU conversion/transfer overhead; it
+does not improve the CPU LUT application and those CPU/SIMD samples regressed
+slightly versus the baseline. Attempt 2 removes histogram construction for the
+zero-cutoff case and makes SIMD faster than Pillow, while serial CPU remained
+slower at that checkpoint. Attempt 3 is a large serial-CPU improvement and a
+smaller SIMD improvement. Pillow's measured time shifts between paired runs,
+so judge final parity of speed against the final paired run rather than
+subtracting values from different checkpoints.
+
+The final release diagnostic reports these complete-call latencies. Queue depth
+is host request concurrency in the maintained throughput harness; these rows
+are not single-kernel timings.
+
+| 1024 × 768 L AutoContrast | Queue depth 1 | Queue depth 2 | Queue depth 4 |
+| --- | ---: | ---: | ---: |
+| Pillow latency | 0.631 ms | 0.740 ms | 0.966 ms |
+| Serial CPU latency | 0.394 ms | 0.449 ms | 0.512 ms |
+| SIMD latency | 0.490 ms | 0.547 ms | 0.610 ms |
+| GPU latency | 0.476 ms | 0.554 ms | 0.764 ms |
+| Pillow throughput | 1,544.7 req/s | 2,599.1 req/s | 3,765.7 req/s |
+| Serial CPU throughput | 2,471.4 req/s | 4,360.3 req/s | 7,172.1 req/s |
+| SIMD throughput | 1,977.1 req/s | 3,591.6 req/s | 6,082.4 req/s |
+| GPU throughput | 2,046.1 req/s | 3,404.7 req/s | 4,660.0 req/s |
+
+CPU now beats Pillow at every tested depth, by 1.60×, 1.68×, and 1.90× in
+throughput. SIMD is about 1.28× Pillow at depth 1 and 1.39× at depth 4, still
+well below the 5× goal. GPU beats Pillow at every depth and uses native-L
+transfers, but its throughput is only 1.03× SIMD at depth 1, 0.95× at depth 2,
+and 0.77× at depth 4. Therefore the GPU transport issue is fixed for this
+specific path, while GPU/SIMD parity at higher concurrency and the overall
+SIMD target remain open. The harness does not schedule Rayon for this operation;
+Parallel CPU was not measured and is not implied by the SIMD row.
+
+Strict live-Pillow parity passed for materialized L and cutoff-clamped L on
+CPU, SIMD, and GPU after the final implementation. The benchmark also compared
+all 16 changing L frames byte-for-byte with Pillow and verified the actual
+backend, transfer accounting, and one-dispatch route. Focused Rust tests verify
+that the GPU admission predicate rejects empty, non-L, and non-singleton cases,
+that zero-cutoff extrema match the LUT endpoints including constant images,
+and that vector LUT application matches all 256 scalar table entries plus an
+odd tail.
+
+Reproduce the Rust and parity checks with:
+
+```sh
+cargo test --locked -p pillow-rs --lib autocontrast_luma_tests
+cargo test --locked -p pillow-rs --lib gpu_packed_luma_point_admits_lut_and_lowered_l_autocontrast
+make PYTHON=build/parity-venv/bin/python build-parity
+```
+
+For the strict Pillow parity cases, run `make migration-parity-case` for
+`PIL.ImageOps.autocontrast.nuanced.materialized-l` and
+`PIL.ImageOps.autocontrast.nuanced.cutoff-clamped-range` with each of
+`MIGRATION_TARGET_BACKEND=cpu|simd|gpu` and
+`MIGRATION_STRICT_TARGET_BACKEND=1`. The full call-boundary measurement used:
+
+```sh
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/autocontrast-l-after-attempt3-1024x768.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation autocontrast --mode L --size 1024 768' \
+  migration-parity-transpose-throughput
+```
+
+The three receipts are `autocontrast-l-after-1024x768.json`,
+`autocontrast-l-after-attempt2-1024x768.json`, and
+`autocontrast-l-after-attempt3-1024x768.json`. This closes only the measured
+L AutoContrast staging case, not P1's general operation/mode inventory. Full
+CI, coverage, release, and push were not run.
