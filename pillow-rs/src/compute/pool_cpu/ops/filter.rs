@@ -916,17 +916,26 @@ fn blur_line_step(
     let far_left_base = line_start + far_left * element_width;
     let far_right_base = line_start + far_right * element_width;
 
-    for component in 0..element_width {
-        accumulator[component] = accumulator[component]
-            .wrapping_sub(source[subtract_base + component] as u32)
-            .wrapping_add(source[add_base + component] as u32);
-        let far = (source[far_left_base + component] as u32
-            + source[far_right_base + component] as u32)
-            .wrapping_mul(fractional_weight);
-        let bulk = accumulator[component]
-            .wrapping_mul(whole_weight)
-            .wrapping_add(far);
-        destination[output_base + component] = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    let output = &mut destination[output_base..output_base + element_width];
+    let subtract = &source[subtract_base..subtract_base + element_width];
+    let add = &source[add_base..add_base + element_width];
+    let far_left = &source[far_left_base..far_left_base + element_width];
+    let far_right = &source[far_right_base..far_right_base + element_width];
+    for (((((accumulator, output), &subtract), &add), &far_left), &far_right) in accumulator
+        [..element_width]
+        .iter_mut()
+        .zip(output)
+        .zip(subtract)
+        .zip(add)
+        .zip(far_left)
+        .zip(far_right)
+    {
+        *accumulator = accumulator
+            .wrapping_sub(u32::from(subtract))
+            .wrapping_add(u32::from(add));
+        let far = (u32::from(far_left) + u32::from(far_right)).wrapping_mul(fractional_weight);
+        let bulk = accumulator.wrapping_mul(whole_weight).wrapping_add(far);
+        *output = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
     }
 }
 
@@ -1186,6 +1195,67 @@ fn blur_rows(
     }
 }
 
+/// Run the three horizontal Gaussian box passes one RGB row at a time.
+///
+/// Horizontal filtering never reads another image row, so the intermediate
+/// byte rounding can stay in two reusable row buffers instead of two extra
+/// full-frame buffers. The same per-pass `blur_line` operation preserves the
+/// order and byte result of three image-wide horizontal passes.
+#[cfg(not(feature = "parallel"))]
+fn blur_rgb_rows_three_passes(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_length = width * 3;
+    let mut first_intermediate = vec![0u8; row_length];
+    let mut second_intermediate = vec![0u8; row_length];
+    let mut accumulator = [0u32; 4];
+
+    for row in 0..height {
+        let start = row * row_length;
+        let source_row = &source[start..start + row_length];
+        let destination_row = &mut destination[start..start + row_length];
+        blur_line(
+            source_row,
+            &mut first_intermediate,
+            0,
+            width,
+            3,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        blur_line(
+            &first_intermediate,
+            &mut second_intermediate,
+            0,
+            width,
+            3,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+        blur_line(
+            &second_intermediate,
+            destination_row,
+            0,
+            width,
+            3,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+    }
+}
+
 #[cfg(feature = "parallel")]
 const VERTICAL_BLUR_TRANSPOSE_THRESHOLD: usize = 512 * 512;
 
@@ -1244,6 +1314,21 @@ fn blur_columns(
     );
 }
 
+#[inline]
+fn blur_parameters(radius: f32) -> (usize, u32, u32) {
+    // Integer part of radius (PIL: (int)floatRadius).
+    let integer_radius = radius as i32 as usize;
+    // Number of pixels in the integer window.
+    let window_pixels = (2 * integer_radius + 1) as u32;
+    // Fixed-point weight: PIL uses f32 precision for ww computation
+    // (UINT32)((1 << 24) / (floatRadius * 2 + 1)) — all in f32.
+    let whole_weight = (BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+    // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2).
+    let fractional_weight =
+        BOX_BLUR_SCALE.wrapping_sub(window_pixels.wrapping_mul(whole_weight)) / 2;
+    (integer_radius, whole_weight, fractional_weight)
+}
+
 /// PIL-style box blur with fractional radius support.
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
 /// Matches PIL order: ALL horizontal passes first, then ALL vertical passes.
@@ -1298,39 +1383,52 @@ fn pil_box_blur_xy_impl(
         }
     }
 
-    let blur_parameters = |radius: f32| {
-        // Integer part of radius (PIL: (int)floatRadius).
-        let integer_radius = radius as i32 as usize;
-        // Number of pixels in the integer window.
-        let window_pixels = (2 * integer_radius + 1) as u32;
-        // Fixed-point weight: PIL uses f32 precision for ww computation
-        // (UINT32)((1 << 24) / (floatRadius * 2 + 1)) — all in f32.
-        let whole_weight = (BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
-        // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2).
-        let fractional_weight =
-            BOX_BLUR_SCALE.wrapping_sub(window_pixels.wrapping_mul(whole_weight)) / 2;
-        (integer_radius, whole_weight, fractional_weight)
-    };
+    if passes == 0 {
+        return Ok(img.clone());
+    }
+
     let (horizontal_radius, horizontal_weight, horizontal_fractional_weight) =
         blur_parameters(radius_x);
     let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
 
-    let mut work = img.as_bytes().to_vec();
+    #[cfg(not(feature = "parallel"))]
+    let rgb_gaussian_row_fusion = passes == 3 && matches!(img, DynamicImage::ImageRgb8(_));
+    #[cfg(feature = "parallel")]
+    let rgb_gaussian_row_fusion = false;
+
+    let mut work = if rgb_gaussian_row_fusion {
+        CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer()
+    } else {
+        img.as_bytes().to_vec()
+    };
     let mut scratch = CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer();
 
     // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
-    for _ in 0..passes {
-        blur_rows(
-            &work,
-            &mut scratch,
+    if rgb_gaussian_row_fusion {
+        #[cfg(not(feature = "parallel"))]
+        blur_rgb_rows_three_passes(
+            img.as_bytes(),
+            &mut work,
             width,
             height,
-            channels,
             horizontal_radius,
             horizontal_weight,
             horizontal_fractional_weight,
         );
-        std::mem::swap(&mut work, &mut scratch);
+    } else {
+        for _ in 0..passes {
+            blur_rows(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                horizontal_radius,
+                horizontal_weight,
+                horizontal_fractional_weight,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
     }
 
     // Pillow transposes before its vertical passes. For large parallel jobs,
@@ -2118,4 +2216,50 @@ pub fn execute_rank_filter_with_mode(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     rank_filter_impl(img, size, rank, mode)
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod gaussian_blur_row_fusion_tests {
+    use super::{blur_parameters, blur_rgb_rows_three_passes, blur_rows};
+
+    #[test]
+    fn rgb_gaussian_horizontal_row_fusion_matches_three_full_frame_passes() {
+        for (width, height, radius) in
+            [(1, 1, 1.375), (2, 3, 1.375), (7, 5, 1.375), (65, 47, 1.375)]
+        {
+            let pixel_count = width * height;
+            let source = (0..pixel_count * 3)
+                .map(|index| ((index * 73 + index / 7 * 19 + 31) % 256) as u8)
+                .collect::<Vec<_>>();
+            let (integer_radius, whole_weight, fractional_weight) = blur_parameters(radius);
+            let mut fused = vec![0; source.len()];
+            blur_rgb_rows_three_passes(
+                &source,
+                &mut fused,
+                width,
+                height,
+                integer_radius,
+                whole_weight,
+                fractional_weight,
+            );
+
+            let mut work = source.clone();
+            let mut scratch = vec![0; source.len()];
+            for _ in 0..3 {
+                blur_rows(
+                    &work,
+                    &mut scratch,
+                    width,
+                    height,
+                    3,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                );
+                std::mem::swap(&mut work, &mut scratch);
+            }
+
+            assert_eq!(fused, work, "fused RGB passes differ at {width}×{height}");
+        }
+    }
 }
