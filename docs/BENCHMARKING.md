@@ -88,20 +88,19 @@ must not stand in for this material workload.
 
 The public benchmark page presents two tables: individual operation workloads
 and composed pipeline workloads. The published 2026-10-01 snapshot (source
-revision `4b08d9d6`; [download its JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json))
-displays 639 workload rows: 183 individual-operation workloads and 456
-composed, matrix, lifecycle, and quick pipeline workloads. Its JSON contains
+revision `8f40b3e6`; [benchmark run and artifact](https://github.com/appunni-m/pillow-rs/actions/runs/36873206491))
+contains 639 workload rows: 183 individual-operation workloads and 456
+composed, matrix, lifecycle, and quick pipeline workloads. Its artifact records
 3,195 measurements across five subjects: ordinary Pillow, CPU, SIMD, GPU, and
-Parallel CPU. The checked-in `pipeline-operations.json` catalog on this
-revision has 636 active workload specifications: 180 individual operations and
-456 pipelines. The published snapshot retains three material blur workloads
-that are no longer in that active catalog: BoxBlur on L, GaussianBlur on L,
-and UnsharpMask on RGB. Treat those three published rows as historical evidence,
-not as current active-workload coverage. The recorded contexts include 12 mode
-labels, including mixed-mode `I+F`. Each row carries its own mode, operation
-type, dimensions, boundary, and repeat policy; the page can filter by type,
-mode, implementation, or workload text, and sort by type, mode, workload name,
-or backend latency. These counts do not claim that every operation/mode
+Parallel CPU. The 636 entries in `pipeline-operations.json` comprise 180
+individual operations and 456 pipelines. Three more material filter workloads
+are declared in `pil-imagefilter.json`: BoxBlur on L, GaussianBlur on L, and
+UnsharpMask on RGB. They are active rows in the full benchmark profile, not
+historical-only evidence. The recorded contexts include 12 mode labels,
+including mixed-mode `I+F`. Each row carries its own mode, operation type,
+dimensions, boundary, and repeat policy; the page can filter by type, mode,
+implementation, or workload text, and sort by type, mode, workload name, or
+backend latency. These counts do not claim that every operation/mode
 combination is supported or measured by every backend. The benchmark
 completeness check verifies that every active `PipelineOp` and maintained
 eager operation has a workload specification.
