@@ -1128,6 +1128,7 @@ fn gpu_f_resize_f64_sample_bits(
     let mut positive_infinity = false;
     let mut negative_infinity = false;
     let mut has_special = false;
+    let mut minimum_exponent = None;
     for (tap, &weight) in weights.iter().enumerate() {
         let coeff = gpu_f64_integer_parts(weight)?;
         let bits = sample_bits_at(tap)?;
@@ -1142,6 +1143,18 @@ fn gpu_f_resize_f64_sample_bits(
         );
         let exponent_bits = (bits >> 23) & 0xff;
         if exponent_bits != 0xff {
+            if weights.len() <= GPU_F_RESIZE_MARKER9_MAX_TAPS && coeff.mantissa != 0 {
+                let sample = gpu_f32_f64_integer_parts(bits)?;
+                if sample.mantissa != 0 {
+                    let exponent = sample
+                        .exponent
+                        .checked_sub(23)?
+                        .checked_add(coeff.exponent)?;
+                    minimum_exponent = Some(
+                        minimum_exponent.map_or(exponent, |minimum: i32| minimum.min(exponent)),
+                    );
+                }
+            }
             continue;
         }
         has_special = true;
@@ -1190,24 +1203,6 @@ fn gpu_f_resize_f64_sample_bits(
     if weights.len() > GPU_F_RESIZE_MARKER9_MAX_TAPS {
         return None;
     }
-
-    let mut minimum_exponent = None;
-    for (tap, &weight) in weights.iter().enumerate() {
-        let coeff = gpu_f64_integer_parts(weight)?;
-        if coeff.mantissa == 0 {
-            continue;
-        }
-        let (_, sample) = sample_at(tap)?;
-        if sample.mantissa == 0 {
-            continue;
-        }
-        let exponent = sample
-            .exponent
-            .checked_sub(23)?
-            .checked_add(coeff.exponent)?;
-        minimum_exponent =
-            Some(minimum_exponent.map_or(exponent, |minimum: i32| minimum.min(exponent)));
-    }
     let Some(minimum_exponent) = minimum_exponent else {
         return Some(0);
     };
@@ -1220,19 +1215,9 @@ fn gpu_f_resize_f64_sample_bits(
         magnitude: 0,
         negative: false,
     };
-    let mut f64_accumulator = 0.0f64;
     for (tap, &weight) in weights.iter().enumerate() {
         let coeff = gpu_f64_integer_parts(weight)?;
-        let (bits, sample) = sample_at(tap)?;
-        let sample_value = f32::from_bits(bits);
-        let separate_product_add =
-            gpu_f_resize_uses_separate_horizontal_product_add(horizontal, weights.len(), tap);
-        gpu_f_resize_accumulate_f64(
-            &mut f64_accumulator,
-            weight,
-            sample_value,
-            separate_product_add,
-        );
+        let (_, sample) = sample_at(tap)?;
         if coeff.mantissa == 0 || sample.mantissa == 0 {
             continue;
         }
@@ -1252,10 +1237,10 @@ fn gpu_f_resize_f64_sample_bits(
         sum = gpu_f64_signed_u128_add(sum, term, sample.negative != coeff.negative)?;
     }
 
-    let expected = (f64_accumulator as f32).to_bits();
+    let expected = (ordered_accumulator as f32).to_bits();
     let expected_exponent = expected & 0x7f80_0000;
     if (expected_exponent == 0x7f80_0000 && (expected & 0x007f_ffff) != 0)
-        || (expected_exponent != 0x7f80_0000 && !f64_accumulator.is_finite())
+        || (expected_exponent != 0x7f80_0000 && !ordered_accumulator.is_finite())
     {
         return None;
     }
@@ -20323,12 +20308,16 @@ impl GpuPool {
             gpu_f_resize_box_average_is_exact(&dispatch_ops, img, mode);
         let f_resize_dyadic_is_exact = gpu_f_resize_dyadic_is_exact(&dispatch_ops, img, mode);
         let f_pad_f64_is_exact = gpu_f_pad_f64_is_exact(&dispatch_ops, img, mode);
-        let f_resize_f64_ordered_proof =
-            gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode);
         let f_resize_f64_is_exact = gpu_f_resize_f64_is_exact(&dispatch_ops, img, mode)
             || f_pad_f64_is_exact
             || gpu_luma16_resize_f64_is_exact(&dispatch_ops, img, mode)
             || gpu_i_resize_f64_is_exact(&dispatch_ops, img, mode);
+        // The ordered-f64 marker performs a full host simulation to prove its
+        // result. Run it only after marker 9 and the other exact typed proofs
+        // fail; when one of those proofs succeeds, marker 12 cannot be
+        // selected and its simulation cannot change the dispatch.
+        let f_resize_f64_ordered_proof =
+            !f_resize_f64_is_exact && gpu_f_resize_f64_ordered_is_exact(&dispatch_ops, img, mode);
         // Marker 12 is selected only when none of the earlier F proofs owns
         // the operation.  In particular, Box-average/dyadic markers consume
         // the fixed-point coefficient table, whereas marker 12 requires the
