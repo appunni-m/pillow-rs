@@ -2,7 +2,7 @@
 import copy
 import unittest
 
-from docs_benchmark_view import compare, describe, duration, render_dashboard, speed_label
+from docs_benchmark_view import compare, describe, duration, facets, render_dashboard, speed_label
 
 
 def row(subject="fontdone", median=10, **changes):
@@ -61,6 +61,49 @@ class BenchmarkViewTests(unittest.TestCase):
                               dict(project='pillow-rs',benchmark={'kind':'pillow'}))
         self.assertIn('Actual: cpu',text)
         self.assertIn('actual: cpu',text)
+
+    def test_parallel_cpu_uses_its_own_paired_pillow_baseline(self):
+        baseline = row("pillow-parallel-cpu", 20, workload="pipeline-op.resize", comparison_group="parallel-cpu")
+        target = row("python-parallel-cpu", 10, workload="pipeline-op.resize", comparison_group="parallel-cpu")
+        default_pillow = row("pillow", 40, workload="pipeline-op.resize")
+        self.assertEqual(compare(target, baseline)[0], 2)
+        self.assertIsNone(compare(target, default_pillow)[0])
+        snapshot = dict(rows=[default_pillow, baseline, target], environment={"os": "Test"}, measured_at="2026-09-16")
+        text = render_dashboard(snapshot, dict(project="pillow-rs", benchmark={"kind": "pillow"}))
+        self.assertIn("Pillow · Parallel CPU baseline", text)
+        self.assertIn("pillow-rs · Parallel CPU", text)
+        self.assertIn('data-ratio="2.0"', text)
+
+    def test_dashboard_renders_separate_pipeline_and_operation_tables_with_mode_and_type(self):
+        rows = [
+            row("pillow", 20, workload="pipeline-chain.gray", context={"mode": "L", "size": [8, 8], "operation_class": "point"}),
+            row("python-cpu", 10, workload="pipeline-chain.gray", context={"mode": "L", "size": [8, 8], "operation_class": "point"}),
+            row("pillow", 30, workload="pipeline-op.resize.material", context={"mode": "RGB", "size": [8, 8], "operation_class": "geometry"}),
+            row("python-cpu", 15, workload="pipeline-op.resize.material", context={"mode": "RGB", "size": [8, 8], "operation_class": "geometry"}),
+        ]
+        text = render_dashboard(dict(rows=rows, environment={"os": "Test"}, measured_at="2026-09-16"),
+                                dict(project="pillow-rs", benchmark={"kind": "pillow"}))
+        self.assertIn("Pipeline benchmarks", text)
+        self.assertIn("Individual operation benchmarks", text)
+        self.assertIn('data-kind="pipelines"', text)
+        self.assertIn('data-kind="operations"', text)
+        self.assertIn('id="bench-mode"', text)
+        self.assertIn('data-sort="type"', text)
+        self.assertIn('data-sort="mode"', text)
+        self.assertIn('data-group="geometry"', text)
+        self.assertIn('data-mode="RGB"', text)
+
+    def test_current_workload_catalog_maps_all_entries_to_one_of_two_tables(self):
+        import json
+        from pathlib import Path
+
+        source = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/inputs/benchmark/pipeline-operations.json"
+        workloads = json.loads(source.read_text())["workloads"]
+        categories = [facets(row(workload=workload["workload_id"], context=workload.get("context", {})), "pillow")[0]
+                     for workload in workloads]
+        self.assertEqual(len(workloads), 632)
+        self.assertEqual(categories.count("operations"), 176)
+        self.assertEqual(categories.count("pipelines"), 456)
 
     def test_all_observations_retained_without_mutating_snapshot(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('unknown',None)],environment={'os':'Test'},measured_at='2026-09-16')

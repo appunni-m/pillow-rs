@@ -38,6 +38,9 @@ body:has(.benchmark-dashboard) .md-sidebar--secondary { display: none; }
 .bench-toolbar input, .bench-toolbar select { min-height: 2.2rem; border: 1px solid var(--md-default-fg-color--light); border-radius: .3rem; padding: .45rem .55rem; background: var(--md-default-bg-color); color: var(--md-default-fg-color); font: inherit; font-size: .72rem; }
 .bench-toolbar button { font-size: .7rem; padding: .6rem; cursor: pointer; color: var(--md-primary-fg-color); }
 .bench-toolbar output { flex-basis: 100%; font-size: .65rem; color: var(--bench-muted); }
+.bench-section { margin: 1.6rem 0; }
+.bench-section h2 { margin-bottom: .25rem; }
+.bench-section > p { margin: .25rem 0 .7rem; font-size: .72rem; color: var(--bench-muted); }
 .bench-table-scroll { overflow: auto; contain: paint; max-height: 72vh; border: 1px solid var(--md-default-fg-color--lightest); border-radius: .5rem; }
 .md-typeset .bench-comparison { width: 100%; border-spacing: 0; border-collapse: separate; font-size: .72rem; line-height: 1.4; text-align: left; }
 .bench-comparison caption { text-align: left; padding: .65rem .85rem; color: var(--bench-muted); font-size: .65rem; }

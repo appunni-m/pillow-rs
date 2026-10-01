@@ -6,6 +6,7 @@ DOCS_PORT ?= 8000
 
 DOCS_BENCHMARK_KIND ?= pillow
 DOCS_BENCHMARK_SOURCE ?= build/migration-parity/benchmark-result.json
+DOCS_BENCHMARK_PARALLEL_SOURCE ?=
 DOCS_BENCHMARK_OUTPUT ?= docs/evidence/benchmark.json
 DOCS_REPOSITORY ?= appunni-m/pillow-rs
 
@@ -40,7 +41,8 @@ docs-examples: ## Compile and run the Rust quickstart directly from Markdown
 
 docs-benchmark: ## Export a public view of a recorded benchmark; never runs or changes measurements
 	$(PYTHON) scripts/docs_evidence.py "$(DOCS_BENCHMARK_KIND)" "$(DOCS_BENCHMARK_SOURCE)" \
-		"$(DOCS_BENCHMARK_OUTPUT)" --repository "$(DOCS_REPOSITORY)"
+		"$(DOCS_BENCHMARK_OUTPUT)" --repository "$(DOCS_REPOSITORY)" \
+		$(if $(DOCS_BENCHMARK_PARALLEL_SOURCE),--parallel-source "$(DOCS_BENCHMARK_PARALLEL_SOURCE)",)
 
 .PHONY: docs-benchmark-select
 docs-benchmark-select: ## Select trusted hosted benchmark data for a Pages build

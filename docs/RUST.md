@@ -1,7 +1,7 @@
 # Rust integration
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.4](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.4).**
+**Latest release: [12.2.0-alpha.5](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.5).**
 <!-- /release:summary -->
 
 Install the core image-processing crate from crates.io. Requires Rust 1.96.1
@@ -10,7 +10,7 @@ or newer. Public methods use Rust values and `Result`.
 <!-- release:cargo -->
 ```toml
 [dependencies]
-pillow-rs = "=12.2.0-alpha.4"
+pillow-rs = "=12.2.0-alpha.5"
 ```
 <!-- /release:cargo -->
 
@@ -32,7 +32,7 @@ The constructor takes width, height, mode, and an RGBA color tuple. The image
 retains its selected mode.
 
 <!-- release:rust-api -->
-[Rust API reference](https://docs.rs/pillow-rs/12.2.0-alpha.4/pillow_rs/).
+[Rust API reference](https://docs.rs/pillow-rs/12.2.0-alpha.5/pillow_rs/).
 <!-- /release:rust-api -->
 
 The reference describes arguments, return values, and errors.
@@ -67,17 +67,9 @@ Run your corpus with the features and target you will ship. The published
 Python and WASM evidence does not establish every Rust feature/target
 combination. Report regressions with the smallest input and public call sequence.
 
-## Upgrading to 12.2.0-alpha.1
+## New integrations
 
-Version 12.2.0-alpha.1 removes deprecated Rust interfaces and is a breaking
-upgrade from 0.1.x.
-
-| Removed interface | Maintained replacement |
-| --- | --- |
-| `Pixel::channels4` | `channels()` or `channels_mut()` |
-| `Pixel::from_channels` | Native pixel constructors or `Pixel::from_slice` |
-| `GenericImage::get_pixel_mut` | `get_pixel` then `put_pixel`; concrete `ImageBuffer::get_pixel_mut` remains available |
-| `GenericImage::blend_pixel` | Blend native pixels directly with `Pixel::blend` and write them back |
-| `Image::transform_affine` | `Image::transform_public` with method `0` and `TransformData::Affine` |
-| `PipelineOp::PointOp` | `PipelineOp::Eval` |
-| Deferred quantization and generator variants | `Image::quantize` and the public `linear_gradient`, `radial_gradient`, and `effect_mandelbrot` constructors |
+Treat each alpha as a greenfield integration. Pin an exact version, use the
+current API reference, and validate the modes, arguments, outputs, and errors
+your application needs before adopting another alpha. No alpha-to-alpha
+migration path or compatibility guarantee is provided.

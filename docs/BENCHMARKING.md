@@ -86,13 +86,30 @@ make migration-parity-benchmark
 The small thumbnail row remains useful for dispatch and adapter overhead, but
 must not stand in for this material workload.
 
-The maintained operation matrix currently contains 88 canonical workloads:
-the active `PipelineOp` variants (with `BoxBlurXY` sharing `BoxBlur`) plus five
-public operations that execute eagerly. `EqualizeMasked` and `ResizeBoxed` were
-added after the former 85-workload count was asserted. `ConvertLab` adds a
-separate workload for RGB-to-LAB conversion, and `ResizeBoxed` exercises the
-public `resize(box=...)` path. The benchmark completeness check fails when a
-pipeline variant has no spec or materialized workload.
+The public benchmark page presents two tables: individual operation workloads
+and composed pipeline workloads. The maintained input currently contains 632
+workload cases: 176 individual-operation cases spanning 90 operation names,
+plus 456 composed, matrix, lifecycle, and quick pipeline cases. Their recorded
+contexts include 12 mode labels, including the mixed-mode `I+F` case. Each row
+carries its own mode, operation type, dimensions, boundary, and repeat policy;
+the page can filter and sort by type, mode, workload name, or backend latency.
+These are workload counts, not a claim that every combination of operation and
+mode is supported or measured by every backend. The benchmark completeness
+check still verifies that every active `PipelineOp` and maintained eager
+operation has a workload specification.
+
+The published page uses the full pipeline profile, not the four-workload quick
+smoke profile. The workflow also runs the opt-in Rayon feature as a separate
+Parallel CPU cohort. That cohort includes a Pillow baseline measured in the
+same run; its ratios must not reuse the default CPU run's Pillow timing. The
+pipeline and operation tables share filters, and the implementation selector
+shows Parallel CPU alongside (but separate from) serial CPU, architecture
+specific SIMD, and GPU. Quick results remain useful during local development:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark
+MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark-parallel-cpu
+```
 
 `ImageOps.posterize` also has parity-gated material workloads at
 `pipeline-op.posterize.material-l-noise-1024x768` and
