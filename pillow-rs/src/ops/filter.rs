@@ -285,3 +285,30 @@ impl Image {
         }
     }
 }
+
+#[cfg(test)]
+mod i32_uniform_filter_ownership_tests {
+    use crate::image::Image;
+
+    #[test]
+    fn identity_filter_result_remains_independent_when_mutated() {
+        let image = Image::new(32, 24, "I", (37, 0, 0, 0)).unwrap();
+        let source = image.tobytes().unwrap();
+        let mut filtered = image
+            .kernel_filter(
+                Some(vec![0.0, 1.0, 0.0, 1.0, 4.0, 1.0, 0.0, 1.0, 0.0]),
+                Some(8.0),
+                0.0,
+                (3, 3),
+            )
+            .unwrap();
+
+        assert_eq!(filtered.tobytes().unwrap(), source);
+        filtered.putpixel_mode_scalar(0, 0, 99.0, "I").unwrap();
+
+        let mut expected = source.clone();
+        expected[..4].copy_from_slice(&99i32.to_le_bytes());
+        assert_eq!(filtered.tobytes().unwrap(), expected);
+        assert_eq!(image.tobytes().unwrap(), source);
+    }
+}

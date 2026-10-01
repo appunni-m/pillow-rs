@@ -777,6 +777,20 @@ PIPELINE_I_CONVOLUTION_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
         "offset": 0,
     },
     {
+        "name": "3x3-varied-1024x768",
+        "size": [1024, 768],
+        "color": 37,
+        "pixel_updates": [
+            {"xy": [0, 0], "value": -11},
+            {"xy": [511, 383], "value": 91},
+            {"xy": [1023, 767], "value": 204},
+        ],
+        "kernel_size": [3, 3],
+        "kernel": [0.0, 1.0, 0.0, 1.0, 4.0, 1.0, 0.0, 1.0, 0.0],
+        "scale": 8.0,
+        "offset": 0,
+    },
+    {
         "name": "5x5-1024x768",
         "size": [1024, 768],
         "color": 37,
@@ -6285,6 +6299,50 @@ class WorkflowBuilder:
                     receiver=None,
                     arguments={},
                     step_id="setup-filter-smooth-more-uniform",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-i-cross-smooth-uniform":
+                image_step = self.ensure_image()
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "Kernel",
+                    receiver=None,
+                    arguments={
+                        "size": literal([3, 3]),
+                        "kernel": literal([0, 1, 0, 1, 4, 1, 0, 1, 0]),
+                        "scale": literal(8.0),
+                        "offset": literal(0),
+                    },
+                    step_id="setup-filter-i-cross-smooth-uniform",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-i-cross-smooth-varied":
+                image_step = self.ensure_image()
+                for step_id, xy, value in (
+                    ("setup-i-varied-top-left", [0, 0], -11),
+                    ("setup-i-varied-center", [16, 12], 91),
+                    ("setup-i-varied-bottom-right", [31, 23], 204),
+                ):
+                    self.add_step(
+                        "PIL.Image.Image",
+                        "putpixel",
+                        receiver=binding(image_step),
+                        arguments={"xy": literal(xy), "value": literal(value)},
+                        step_id=step_id,
+                    )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "Kernel",
+                    receiver=None,
+                    arguments={
+                        "size": literal([3, 3]),
+                        "kernel": literal([0, 1, 0, 1, 4, 1, 0, 1, 0]),
+                        "scale": literal(8.0),
+                        "offset": literal(0),
+                    },
+                    step_id="setup-filter-i-cross-smooth-varied",
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
@@ -31652,6 +31710,30 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "requirement_suffix": "behavior.default",
+            "name": "i-mode-cross-smooth-uniform-identity",
+            "mode": "I",
+            "size": [32, 24],
+            "edge": "uniform-fill",
+            "pixel": 37,
+            "chain": "filter-i-cross-smooth-uniform",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-cross-smooth-varied",
+            "mode": "I",
+            "size": [32, 24],
+            "edge": "uniform-fill",
+            "pixel": 37,
+            "chain": "filter-i-cross-smooth-varied",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
             "name": "l-mode-detail-fused-row",
             "mode": "L",
             "size": [3, 3],
@@ -47318,20 +47400,34 @@ def _blur_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
 def _i_convolution_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
     """Build one public I-mode Kernel -> filter -> tobytes workflow."""
 
-    return {
-        "assets": [],
-        "steps": [
-            {
-                "step_id": "setup-image",
-                "surface": "PIL.Image",
-                "operation": "new",
-                "receiver": None,
-                "arguments": {
-                    "mode": literal("I"),
-                    "size": literal(spec["size"]),
-                    "color": literal(spec["color"]),
-                },
+    steps = [
+        {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("I"),
+                "size": literal(spec["size"]),
+                "color": literal(spec["color"]),
             },
+        },
+    ]
+    for index, update in enumerate(spec.get("pixel_updates", [])):
+        steps.append(
+            {
+                "step_id": f"setup-pixel-{index}",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "receiver": binding("setup-image"),
+                "arguments": {
+                    "xy": literal(update["xy"]),
+                    "value": literal(update["value"]),
+                },
+            }
+        )
+    steps.extend(
+        [
             {
                 "step_id": "setup-filter",
                 "surface": "PIL.ImageFilter",
@@ -47358,7 +47454,11 @@ def _i_convolution_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
                 "receiver": binding("filtered"),
                 "arguments": {},
             },
-        ],
+        ]
+    )
+    return {
+        "assets": [],
+        "steps": steps,
         "observations": ["filtered", "materialize"],
     }
 

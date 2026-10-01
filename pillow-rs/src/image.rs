@@ -2600,6 +2600,7 @@ impl Image {
                     Self::evaluate_pipeline_with_image(
                         source,
                         source_image.as_ref(),
+                        &source_image,
                         prefix_ops,
                         explicit_mode,
                         &prepared,
@@ -2610,19 +2611,19 @@ impl Image {
                 .clone()?;
             let suffix_ops = &ops[prefix_cache.ops_len..];
             let prepared = crate::compute::prepare_execution(suffix_ops, backend)?;
-            let result = crate::compute::execute_prepared(
+            return crate::compute::execute_prepared_shared(
                 &prepared,
                 suffix_ops,
-                prefix_image.as_ref(),
+                &prefix_image,
                 explicit_mode.as_deref(),
-            )?;
-            return Ok(Arc::new(result));
+            );
         }
         let prepared = crate::compute::prepare_execution(ops, backend)?;
         let source_image = source.materialized_shared()?;
         Self::evaluate_pipeline_with_image(
             source,
             source_image.as_ref(),
+            &source_image,
             ops,
             explicit_mode,
             &prepared,
@@ -2640,9 +2641,10 @@ impl Image {
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
         let prepared = crate::compute::prepare_execution(ops, backend)?;
-        let source_image = source.materialize_uncached()?;
+        let source_image = Arc::new(source.materialize_uncached()?);
         Self::evaluate_pipeline_with_image(
             source,
+            source_image.as_ref(),
             &source_image,
             ops,
             explicit_mode,
@@ -2655,6 +2657,7 @@ impl Image {
     fn evaluate_pipeline_with_image(
         source: &Image,
         img: &DynamicImage,
+        shared_img: &Arc<DynamicImage>,
         ops: &[PipelineOp],
         explicit_mode: &Option<String>,
         prepared: &crate::compute::PreparedExecution,
@@ -2782,8 +2785,7 @@ impl Image {
         // sample. The native SIMD Convert kernel carries that logical source
         // tag and supplies opaque alpha while gathering; do not normalize the
         // whole frame here just to rewrite the padding byte.
-        let result = crate::compute::execute_prepared(prepared, ops, img, execution_mode)?;
-        Ok(Arc::new(result))
+        crate::compute::execute_prepared_shared(prepared, ops, shared_img, execution_mode)
     }
 
     fn materialize_uncached(&self) -> Result<DynamicImage, PilError> {

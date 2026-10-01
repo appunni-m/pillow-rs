@@ -315,34 +315,54 @@ fn filter_3x3_i32_row(
     if y < 1 || y >= height - 1 || width < 3 {
         return;
     }
+    let width = width as usize;
+    let y = y as usize;
+    let read_pixel = |row_start: usize, x: usize| -> i32 {
+        let index = row_start + x * 4;
+        i32::from_le_bytes([raw[index], raw[index + 1], raw[index + 2], raw[index + 3]])
+    };
+    let row_stride = width * 4;
+    let top_start = (y - 1) * row_stride;
+    let middle_start = y * row_stride;
+    let bottom_start = (y + 1) * row_stride;
+
+    // Slide three source-row windows across x. Each sample is decoded once as
+    // it enters a window instead of decoding all nine neighbors per output.
+    let (mut top_left, mut top_middle, mut top_right) = (
+        read_pixel(top_start, 0),
+        read_pixel(top_start, 1),
+        read_pixel(top_start, 2),
+    );
+    let (mut middle_left, mut middle_center, mut middle_right) = (
+        read_pixel(middle_start, 0),
+        read_pixel(middle_start, 1),
+        read_pixel(middle_start, 2),
+    );
+    let (mut bottom_left, mut bottom_middle, mut bottom_right) = (
+        read_pixel(bottom_start, 0),
+        read_pixel(bottom_start, 1),
+        read_pixel(bottom_start, 2),
+    );
+
     for x in 1..width - 1 {
-        let base = |dx: i32, dy: i32| -> usize { ((y + dy) * width + (x + dx)) as usize * 4 };
-        let read_pixel = |dx: i32, dy: i32| -> i32 {
-            let index = base(dx, dy);
-            i32::from_le_bytes([raw[index], raw[index + 1], raw[index + 2], raw[index + 3]])
-        };
         let bottom = pillow_kernel_row_3(
             [
-                read_pixel(-1, 1) as f32,
-                read_pixel(0, 1) as f32,
-                read_pixel(1, 1) as f32,
+                bottom_left as f32,
+                bottom_middle as f32,
+                bottom_right as f32,
             ],
             &kernel[0..3],
         );
         let middle = pillow_kernel_row_3(
             [
-                read_pixel(-1, 0) as f32,
-                read_pixel(0, 0) as f32,
-                read_pixel(1, 0) as f32,
+                middle_left as f32,
+                middle_center as f32,
+                middle_right as f32,
             ],
             &kernel[3..6],
         );
         let top = pillow_kernel_row_3(
-            [
-                read_pixel(-1, -1) as f32,
-                read_pixel(0, -1) as f32,
-                read_pixel(1, -1) as f32,
-            ],
+            [top_left as f32, top_middle as f32, top_right as f32],
             &kernel[6..9],
         );
         let mut value = offset + 0.5;
@@ -350,9 +370,79 @@ fn filter_3x3_i32_row(
         value += middle;
         value += top;
         let result = if value >= 0.0 { value as i32 } else { 0 };
-        let output = x as usize * 4;
+        let output = x * 4;
         row[output..output + 4].copy_from_slice(&result.to_le_bytes());
+
+        if x + 1 < width - 1 {
+            let next = x + 2;
+            top_left = top_middle;
+            top_middle = top_right;
+            top_right = read_pixel(top_start, next);
+            middle_left = middle_center;
+            middle_center = middle_right;
+            middle_right = read_pixel(middle_start, next);
+            bottom_left = bottom_middle;
+            bottom_middle = bottom_right;
+            bottom_right = read_pixel(bottom_start, next);
+        }
     }
+}
+
+// The 3x3 I-mode filter can cheaply skip its per-pixel convolution when a
+// bounded native image is uniform and the exact Pillow f32 result equals its
+// source sample. Keep this limit aligned with the 5x5 proof below.
+pub(crate) const I32_UNIFORM_FILTER3X3_MAX_PIXELS: usize = 1024 * 1024;
+
+/// Compare one uniform sample's exact normalized 3x3 result with its source.
+pub(crate) fn uniform_i32_filter3x3_sample_is_identity(
+    sample_i32: i32,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> bool {
+    let sample = sample_i32 as f32;
+    let bottom = pillow_kernel_row_3([sample; 3], &kernel[0..3]);
+    let middle = pillow_kernel_row_3([sample; 3], &kernel[3..6]);
+    let top = pillow_kernel_row_3([sample; 3], &kernel[6..9]);
+    let mut value = rounding_bias;
+    value += bottom;
+    value += middle;
+    value += top;
+    let filtered = if value >= 0.0 { value as i32 } else { 0 };
+    filtered == sample_i32
+}
+
+/// Prove a uniform I image is unchanged by this normalized 3x3 convolution.
+/// Use the same fused row expressions, vertical accumulation order, rounding
+/// bias, and truncation as [`filter_3x3_i32_row`].
+pub(crate) fn uniform_i32_filter3x3_is_identity(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> bool {
+    if width < 3 || height < 3 {
+        return false;
+    }
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if pixel_count == 0 || pixel_count > I32_UNIFORM_FILTER3X3_MAX_PIXELS {
+        return false;
+    }
+    let Some(expected_len) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if raw.len() != expected_len {
+        return false;
+    }
+    let first = &raw[..4];
+    if !raw.chunks_exact(4).skip(1).all(|pixel| pixel == first) {
+        return false;
+    }
+
+    let sample_i32 = i32::from_le_bytes([first[0], first[1], first[2], first[3]]);
+    uniform_i32_filter3x3_sample_is_identity(sample_i32, kernel, rounding_bias)
 }
 
 fn filter_3x3_i32(
@@ -2387,6 +2477,77 @@ mod i32_filter5x5_uniform_tests {
             &varied,
             width,
             height,
+            &identity_kernel,
+            0.5,
+        ));
+    }
+}
+
+#[cfg(test)]
+mod i32_filter3x3_uniform_tests {
+    use super::{
+        I32_UNIFORM_FILTER3X3_MAX_PIXELS, execute_filter3x3, uniform_i32_filter3x3_is_identity,
+    };
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    #[test]
+    fn uniform_cross_smoothing_filter_returns_the_exact_input() {
+        let (width, height, sample) = (32, 24, 37i32);
+        let raw = sample.to_le_bytes().repeat(width * height);
+        let kernel = [0.0, 1.0, 0.0, 1.0, 4.0, 1.0, 0.0, 1.0, 0.0];
+        let normalized = std::array::from_fn(|index| kernel[index] / 8.0);
+        assert!(uniform_i32_filter3x3_is_identity(
+            &raw,
+            width,
+            height,
+            &normalized,
+            0.5,
+        ));
+
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width as u32, height as u32, raw.clone()).unwrap(),
+        );
+        let result = execute_filter3x3(&image, &kernel, 8.0, 0.0, Some("I")).unwrap();
+        assert_eq!(result.as_bytes(), raw);
+    }
+
+    #[test]
+    fn uniformity_proof_rejects_nonidentity_nonuniform_and_oversized_inputs() {
+        let (width, height, sample) = (7, 6, 11i32);
+        let raw = sample.to_le_bytes().repeat(width * height);
+        let mut identity_kernel = [0.0; 9];
+        identity_kernel[4] = 1.0;
+        assert!(uniform_i32_filter3x3_is_identity(
+            &raw,
+            width,
+            height,
+            &identity_kernel,
+            0.5,
+        ));
+
+        let mut nonidentity_kernel = identity_kernel;
+        nonidentity_kernel[4] = 2.0;
+        assert!(!uniform_i32_filter3x3_is_identity(
+            &raw,
+            width,
+            height,
+            &nonidentity_kernel,
+            0.5,
+        ));
+
+        let mut varied = raw.clone();
+        varied[4 * (width + 3)..4 * (width + 3) + 4].copy_from_slice(&12i32.to_le_bytes());
+        assert!(!uniform_i32_filter3x3_is_identity(
+            &varied,
+            width,
+            height,
+            &identity_kernel,
+            0.5,
+        ));
+        assert!(!uniform_i32_filter3x3_is_identity(
+            &raw,
+            I32_UNIFORM_FILTER3X3_MAX_PIXELS + 1,
+            3,
             &identity_kernel,
             0.5,
         ));

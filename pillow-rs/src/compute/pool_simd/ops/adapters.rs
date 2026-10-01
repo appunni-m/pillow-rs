@@ -30,7 +30,9 @@ use crate::raster::{
 #[cfg(feature = "parallel")]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
-use wide::{f32x4, f32x8, f64x8, i16x8, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8, u32x16};
+use wide::{
+    f32x4, f32x8, f64x8, i16x8, i32x4, i32x8, i64x8, u8x16, u16x8, u16x16, u32x4, u32x8, u32x16,
+};
 
 // `parallel` may be enabled to select Parallel CPU kernels, but it must not
 // silently add Rayon scheduling to the SIMD backend. Keep feature-gated SIMD
@@ -15975,53 +15977,130 @@ fn native_filter_5x5_rows(
     }
 }
 
-/// Evaluate eight I-mode samples of a 3x3 kernel in parallel.
-///
-/// I-mode stores one signed little-endian i32 per pixel in the four-byte
-/// native buffer. Address calculation and byte decoding stay scalar because
-/// the portable `wide` API has no gather instruction; accumulation, FMA
-/// ordering, clamping, and conversion are performed by the vector lanes.
+/// Load four adjacent signed I-mode samples and convert them to float lanes.
 #[inline]
-fn native_filter_3x3_i32_vector(
+fn native_filter_3x3_i32_load4(raw: &[u8], width: usize, y: usize, x: usize) -> f32x4 {
+    let base = (y * width + x) * 4;
+    let samples: [i32; 4] = bytemuck::pod_read_unaligned(&raw[base..base + 16]);
+    i32x4::new(samples.map(i32::from_le)).round_float()
+}
+
+/// Evaluate four I-mode samples with overlapping contiguous loads and SIMD lanes.
+#[inline]
+fn native_filter_3x3_i32_vector4(
     raw: &[u8],
     width: usize,
     y: usize,
     x_start: usize,
     kernel: &[f32; 9],
     rounding_bias: f32,
-) -> [i32; 8] {
-    let row = |dy: isize, kernel_start: usize| -> f32x8 {
-        let mut left = [0.0f32; 8];
-        let mut middle = [0.0f32; 8];
-        let mut right = [0.0f32; 8];
+) -> [i32; 4] {
+    let row = |dy: isize, kernel_start: usize| -> f32x4 {
         let source_y = (y as isize + dy) as usize;
-        for lane in 0..8 {
-            let x = (x_start + lane).min(width - 2);
-            let read = |source_x: usize| -> f32 {
-                let base = (source_y * width + source_x) * 4;
-                i32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]]) as f32
-            };
-            left[lane] = read(x - 1);
-            middle[lane] = read(x);
-            right[lane] = read(x + 1);
-        }
-        let sum = f32x8::from(middle) * f32x8::splat(kernel[kernel_start + 1]);
-        let sum = f32x8::from(left).mul_add(f32x8::splat(kernel[kernel_start]), sum);
-        f32x8::from(right).mul_add(f32x8::splat(kernel[kernel_start + 2]), sum)
+        let left = native_filter_3x3_i32_load4(raw, width, source_y, x_start - 1);
+        let middle = native_filter_3x3_i32_load4(raw, width, source_y, x_start);
+        let right = native_filter_3x3_i32_load4(raw, width, source_y, x_start + 1);
+        let sum = middle * f32x4::splat(kernel[kernel_start + 1]);
+        let sum = left.mul_add(f32x4::splat(kernel[kernel_start]), sum);
+        right.mul_add(f32x4::splat(kernel[kernel_start + 2]), sum)
     };
 
-    let mut total = f32x8::splat(rounding_bias);
+    let mut total = f32x4::splat(rounding_bias);
     total += row(1, 0);
     total += row(0, 3);
     total += row(-1, 6);
-    let values = total.to_array();
-    std::array::from_fn(|lane| {
-        if values[lane] >= 0.0 {
-            values[lane] as i32
-        } else {
-            0
+    total
+        .simd_ge(f32x4::ZERO)
+        .select(total, f32x4::ZERO)
+        .trunc_int()
+        .to_array()
+}
+
+#[inline]
+fn native_filter_3x3_i32_scalar(
+    raw: &[u8],
+    width: usize,
+    y: usize,
+    x: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> i32 {
+    let row = |dy: isize, kernel_start: usize| {
+        let source_y = (y as isize + dy) as usize;
+        let read = |source_x: usize| -> f32 {
+            let base = (source_y * width + source_x) * 4;
+            i32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]]) as f32
+        };
+        let sum = read(x) * kernel[kernel_start + 1];
+        let sum = read(x - 1).mul_add(kernel[kernel_start], sum);
+        read(x + 1).mul_add(kernel[kernel_start + 2], sum)
+    };
+    let mut value = rounding_bias;
+    value += row(1, 0);
+    value += row(0, 3);
+    value += row(-1, 6);
+    if value >= 0.0 { value as i32 } else { 0 }
+}
+
+/// SIMD scan for a uniform I-mode buffer before the exact identity proof.
+/// Compare four packed I samples per vector; leave only the final partial
+/// vector to scalar byte checks, then share the CPU's Pillow-order f32 proof.
+pub(crate) fn uniform_i32_filter3x3_is_identity_simd(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) -> bool {
+    if width < 3 || height < 3 {
+        return false;
+    }
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if pixel_count == 0
+        || pixel_count > crate::compute::pool_cpu::ops::filter::I32_UNIFORM_FILTER3X3_MAX_PIXELS
+    {
+        return false;
+    }
+    let Some(expected_len) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if raw.len() != expected_len {
+        return false;
+    }
+
+    let sample_bytes = &raw[..4];
+    let pattern = std::array::from_fn(|index| sample_bytes[index % 4]);
+    let pattern = u8x16::new(pattern);
+    let vector_len = raw.len() / 16 * 16;
+    for block in raw[..vector_len].chunks_exact(16) {
+        let Ok(bytes) = <[u8; 16]>::try_from(block) else {
+            return false;
+        };
+        if !u8x16::new(bytes).simd_eq(pattern).all() {
+            return false;
         }
-    })
+    }
+    if !raw[vector_len..]
+        .iter()
+        .enumerate()
+        .all(|(index, &byte)| byte == sample_bytes[index % 4])
+    {
+        return false;
+    }
+
+    let sample_i32 = i32::from_le_bytes([
+        sample_bytes[0],
+        sample_bytes[1],
+        sample_bytes[2],
+        sample_bytes[3],
+    ]);
+    crate::compute::pool_cpu::ops::filter::uniform_i32_filter3x3_sample_is_identity(
+        sample_i32,
+        kernel,
+        rounding_bias,
+    )
 }
 
 fn native_filter_3x3_i32_rows(
@@ -16037,18 +16116,24 @@ fn native_filter_3x3_i32_rows(
     }
     let interior_width = width - 2;
     let interior_height = height - 2;
-    let vector_blocks = interior_width.div_ceil(8).saturating_mul(interior_height);
+    let vector_blocks = interior_width / 4 * interior_height;
+    let scalar_tail = interior_width % 4 * interior_height;
     let row_stride = width * 4;
     let apply_row = |y: usize, destination: &mut [u8]| {
         let mut x = 1usize;
-        while x < width - 1 {
-            let active = (width - 1 - x).min(8);
-            let values = native_filter_3x3_i32_vector(raw, width, y, x, kernel, rounding_bias);
-            for (lane, value) in values.into_iter().enumerate().take(active) {
+        while x + 3 < width - 1 {
+            let values = native_filter_3x3_i32_vector4(raw, width, y, x, kernel, rounding_bias);
+            for (lane, value) in values.into_iter().enumerate() {
                 let base = (x + lane) * 4;
                 destination[base..base + 4].copy_from_slice(&value.to_le_bytes());
             }
-            x += active;
+            x += 4;
+        }
+        while x < width - 1 {
+            let value = native_filter_3x3_i32_scalar(raw, width, y, x, kernel, rounding_bias);
+            let base = x * 4;
+            destination[base..base + 4].copy_from_slice(&value.to_le_bytes());
+            x += 1;
         }
     };
 
@@ -16064,7 +16149,7 @@ fn native_filter_3x3_i32_rows(
         let row_start = y * row_stride;
         apply_row(y, &mut out[row_start..row_start + row_stride]);
     }
-    (vector_blocks as u64, 0)
+    (vector_blocks as u64, scalar_tail as u64)
 }
 
 /// Evaluate eight I-mode samples of a 5x5 kernel in parallel, preserving the

@@ -29,7 +29,7 @@ use crate::raster::DynamicImage;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
 // ── Backend ─────────────────────────────────────────────────────────────────
@@ -1524,6 +1524,99 @@ pub(crate) fn execute_prepared(
         "Backend {:?} not available",
         prepared.selected_backend
     )))
+}
+
+/// Executes a prepared pipeline while retaining an immutable source buffer
+/// when a proven I-mode 3x3 identity filter can share it safely.
+///
+/// The source and result images remain independent at the public API: image
+/// mutation uses `Arc::make_mut`, so sharing here only avoids copying when the
+/// filtered result remains read-only.
+pub(crate) fn execute_prepared_shared(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    img: &Arc<DynamicImage>,
+    mode: Option<&str>,
+) -> Result<Arc<DynamicImage>, PilError> {
+    if matches!(prepared.selected_backend, Backend::Cpu | Backend::Simd)
+        && mode == Some("I")
+        && ops.len() == 1
+    {
+        if let PipelineOp::Filter3x3 {
+            kernel,
+            scale,
+            offset,
+        } = &ops[0]
+        {
+            if matches!(img.as_ref(), DynamicImage::ImageRgba8(_)) {
+                let normalized_kernel = std::array::from_fn(|index| kernel[index] / scale);
+                let timed = pipeline_telemetry_enabled();
+                let backend_start = timed.then(pipeline_timestamp).flatten();
+                let identity = match prepared.selected_backend {
+                    Backend::Cpu => {
+                        crate::compute::pool_cpu::ops::filter::uniform_i32_filter3x3_is_identity(
+                            img.as_bytes(),
+                            img.width() as usize,
+                            img.height() as usize,
+                            &normalized_kernel,
+                            offset + 0.5,
+                        )
+                    }
+                    Backend::Simd => {
+                        crate::compute::pool_simd::ops::adapters::uniform_i32_filter3x3_is_identity_simd(
+                            img.as_bytes(),
+                            img.width() as usize,
+                            img.height() as usize,
+                            &normalized_kernel,
+                            offset + 0.5,
+                        )
+                    }
+                    Backend::Gpu => false,
+                };
+                if identity {
+                    if timed {
+                        reset_pipeline_allocation_telemetry();
+                        reset_pipeline_operation_telemetry();
+                        let _ = take_pipeline_resource_telemetry();
+                        let _ = take_pipeline_backend_override();
+                        let _ = take_pipeline_dispatch_count();
+                        let _ = take_pipeline_resize_coeff_cache_stats();
+                        begin_pipeline_operation_telemetry(registry::variant_key(&ops[0]));
+                        record_pipeline_operation_path(
+                            if prepared.selected_backend == Backend::Cpu {
+                                "cpu"
+                            } else {
+                                "scalar-control"
+                            },
+                        );
+                        if prepared.selected_backend == Backend::Simd {
+                            let bytes = img.as_bytes().len();
+                            record_pipeline_operation_vector_blocks((bytes / 16) as u64);
+                            record_pipeline_operation_scalar_tail((bytes % 16) as u64);
+                        }
+                        finish_pipeline_operation_telemetry();
+                        let _ = take_pipeline_allocation_telemetry();
+                        record_pipeline_telemetry(PipelineTelemetry {
+                            requested_backend: prepared.requested_backend,
+                            actual_backend: prepared.selected_backend,
+                            operation_count: ops.len(),
+                            route_ns: prepared.route_ns,
+                            validation_ns: prepared.validation_ns,
+                            backend_ns: elapsed_ns(backend_start),
+                            dispatch_count: None,
+                            fallback_reason: prepared.fallback_reason.clone(),
+                            resource: Some(PipelineResourceTelemetry::default()),
+                            resize_coeff_cache_hits: 0,
+                            resize_coeff_cache_misses: 0,
+                        });
+                    }
+                    return Ok(Arc::clone(img));
+                }
+            }
+        }
+    }
+
+    execute_prepared(prepared, ops, img, mode).map(Arc::new)
 }
 
 #[cfg(test)]
