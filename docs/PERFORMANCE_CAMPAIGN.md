@@ -11882,3 +11882,82 @@ Checkpoint after one optimization attempt: the uniform-I case now beats
 Pillow on serial CPU and exceeds 5× on SIMD, while GPU transfer/completion is
 the remaining backend gap. The generic nonuniform I-mode convolution path is
 unchanged. No coverage, GitHub CI, or release action was run.
+
+## RGBA `ImageOps.cover` resize checkpoint — 2026-10-01
+
+The next mode-specific gap was
+`pil-imageops.cover.materialized.rgba-noise-1024x768`: a varied native RGBA
+1024 × 768 image passed to `ImageOps.cover((768, 1024))`, then materialized
+with `tobytes`. Cover returns the covering 1365 × 1024 resize; it does not crop
+to the requested box. The measurement includes the call and complete output
+materialization. Its warm-cache policy is five warmups, 20 iterations across
+five samples, and 100 completed calls per subject.
+
+On clean local `main` revision `4d533d39d`, the isolated baseline
+`cover-rgba-baseline-20261001.json` measured Pillow / serial CPU / SIMD / GPU
+medians of 16.552 / 45.582 / 37.422 / 5.045 ms. The output matched Pillow on
+all three Rust profiles. Telemetry proved 100 actual CPU, SIMD, and GPU
+executions without fallback. The GPU completed two dispatches, uploaded
+3,145,728 input bytes and read back the full 5,591,040-byte RGBA output, with
+no mode conversion and one full-frame copy. Its latency and reciprocal
+single-request throughput already beat both CPU profiles and SIMD.
+
+Three bounded changes attacked the profiled RGBA resize work:
+
+1. Both CPU and SIMD horizontal passes used to premultiply every source
+   channel again for each destination tap. They now premultiply one native
+   LA/RGBA source row into a reusable row buffer and feed that same
+   interleaved layout to the existing convolution. The exact byte rounding
+   happens at the same point before convolution; the vertical pass still
+   unpremultiplies after its existing fixed-point rounding. The
+   `parallel`-feature CPU implementation retains its distinct original row
+   strategy. The first candidate reduced CPU latency 13.4% and SIMD latency
+   25.8%.
+2. Pillow-compatible unpremultiplication was expressed as the exact integer
+   quotient `min(value * 255 / alpha, 255)` for byte inputs, retaining the
+   existing `alpha == 0` result. An exhaustive test compares all 65,536 byte
+   pairs against the previous f64 expression. This had negligible CPU impact
+   and a further 3.2% SIMD reduction in this run; treat that incremental SIMD
+   difference as small and potentially within run variation.
+3. The serial four-byte convolution path now accumulates all four adjacent
+   channel samples during one coefficient walk for horizontal, vertical, and
+   transposed-vertical layouts. This avoids repeating coefficient and index
+   loop bookkeeping for each channel. It reduced CPU another 24.4%; SIMD
+   changed by only 1.7% from the previous candidate.
+
+The final correctness-gated candidate receipt is
+`cover-rgba-four-channel-candidate-20261001.json`; its gate
+`cover-rgba-four-channel-candidate-parity-20261001.json` passed 3/3 exact
+comparisons, one each on CPU, strict SIMD, and strict GPU. Final medians were:
+
+| RGBA Cover, 1365 × 1024 result | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Latency (ms) | 16.621 | 29.731 | 26.443 | 5.111 |
+| Reciprocal latency (ops/s) | 60.2 | 33.6 | 37.8 | 195.7 |
+
+Against the original clean-main baseline, serial CPU latency fell 34.8% and
+SIMD fell 29.3%. This still misses the CPU and SIMD goals: CPU is 1.79× slower
+than Pillow, and SIMD is 1.59× slower. GPU latency is 5.17× lower than SIMD
+for this input and its reciprocal single-request throughput is correspondingly
+higher. No saturated concurrent-throughput test was run. This operation is
+checkpointed after three attempts; the remaining CPU/SIMD resize gap is the
+blocker for its performance target. The GPU path is already ahead of the
+current SIMD path on this case.
+
+The focused exact-output tests are
+`cargo test --locked -p pillow-rs --lib alpha_row_precompute_tests` and
+`cargo test --locked -p pillow-rs --lib alpha_source_row_precompute`.
+Reproduce the material measurement with:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.rgba-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-rgba-four-channel-candidate-20261001.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-rgba-four-channel-candidate-parity-20261001.json \
+  make migration-parity-benchmark
+```
+
+The default `.venv` in this worktree has no `maturin`; setting `PYTHON` to the
+existing `build/parity-venv/bin/python` let the documented `build-parity`
+prerequisite run without replacing Pillow. No coverage, full CI, or release
+action was run.
