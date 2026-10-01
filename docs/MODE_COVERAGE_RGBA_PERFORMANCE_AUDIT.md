@@ -22,7 +22,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P2 | Medium | GPU operands | Secondary GPU images also get RGBA8 conversion and storage. |
 | P3 | Medium | Quantization | Median-cut builds two full RGB views, including an unused one when kmeans is off. |
 | P4 | Medium | Scalar conversions | Source-carrier clones are removed; serial CPU I→L still trails Pillow. |
-| P5 | Medium | Python data access | getdata slices cross the Python/Rust boundary once per pixel; iteration also slices bytes per pixel. |
+| P5 | Medium | Python data access | Multiband getdata iteration slices the compact byte buffer per pixel; target slicing also diverged from Pillow. |
 | P6 | Medium | Array input | Common fromarray input is copied through Python bytes, Rust Vec, and raster storage. |
 | P7 | Low–Medium | Color transforms | HSV and YCbCr transforms clone an already-RGB-shaped input before writing output. |
 | P8 | Conditional | CPU Paste | Masked same-mode Paste outside the native allowlist converts source and destination to RGBA. |
@@ -96,13 +96,29 @@ discarded. Keep P4 open for I→L latency; the host-side path is outside backend
 dispatch, so its requested SIMD/GPU/Parallel CPU profiles do not prove those
 executors. Details and receipts are in `PERFORMANCE_CAMPAIGN.md`.
 
-### P5. Python getdata access does per-pixel work for slices and multiband iteration
+### P5. Python getdata access — corrected parity and bulk iteration
 
-For _ImageDataSequence, a slice is expanded through self[i] for every pixel (pillow-rs-py/python/pillow_rs/image.py:85–105); each indexed access calls getpixel_formatted separately. The iterator already obtains all formatted values in one getdata_formatted call at :76–83. A large slice therefore crosses the Python/Rust boundary once per pixel.
+The initial audit treated slicing as supported because `_ImageDataSequence`
+implemented it by calling `getpixel_formatted` for every index. A direct probe
+against the pinned Pillow 12.2 oracle showed that `Image.getdata()[slice]`
+raises `TypeError: sequence index must be integer, not 'slice'`. Returning a
+list was therefore both slower and a parity bug. The wrapper now matches
+Pillow's slice, invalid-index-type, and positive out-of-range errors; it keeps
+ordinary integer access and live-view behavior.
 
-For multiband bytes, _CompactImageDataSequence.__iter__ creates a bytes slice for each pixel before constructing the required tuple (:25–40). get_flattened_data already uses struct.iter_unpack on the full buffer (:523–538), demonstrating a bulk path without the intermediate byte slices.
+The valid full-iteration path for multiband bytes previously sliced a new
+`bytes` object for every pixel before building a tuple. It now uses
+`struct.iter_unpack` over the original buffer. A fallback retains the previous
+trailing-byte behavior for malformed internal buffers. This path operates on
+native L/LA/RGB/RGBA bytes and performs no mode conversion.
 
-**Assessment:** high confidence in the per-pixel call/allocation pattern; medium priority for large images. Preserve the current live sequence and return-list behavior if consolidating the slice path.
+**Assessment:** the unsupported-slice mismatch is fixed, and supported
+multiband iteration no longer allocates one byte slice per pixel. In paired
+256 × 256 full-materialization probes, all measured L, LA, RGB, and RGBA outputs
+matched Pillow and CPU medians were faster; RGB improved from 6.93 ms to about
+2.65 ms after the iterator change. These host-side timings do not prove SIMD,
+GPU, or Parallel CPU execution. Full evidence is in
+`PERFORMANCE_CAMPAIGN.md`.
 
 ### P6. fromarray copies common byte layouts through three buffers
 

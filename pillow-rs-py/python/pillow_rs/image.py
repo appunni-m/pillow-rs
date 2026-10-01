@@ -34,27 +34,31 @@ class _CompactImageDataSequence:
         return len(self._data) // self._bands
 
     def __iter__(self):
-        return (
-            tuple(self._data[offset : offset + self._bands])
-            for offset in range(0, len(self._data), self._bands)
-        )
+        if len(self._data) % self._bands:
+            # Preserve the previous behavior for malformed internal buffers:
+            # keep the trailing partial tuple rather than letting
+            # struct.iter_unpack raise.
+            return (
+                tuple(self._data[offset : offset + self._bands])
+                for offset in range(0, len(self._data), self._bands)
+            )
+        return _iter_unpack(f"{self._bands}B", self._data)
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            return [self[i] for i in range(*index.indices(len(self)))]
+            raise TypeError("sequence index must be integer, not 'slice'")
         try:
             index = _index(index)
         except TypeError:
             raise TypeError(
-                "list indices must be integers or slices, not "
-                f"{type(index).__name__}"
+                f"sequence index must be integer, not '{type(index).__name__}'"
             ) from None
         if index > _MAX_INDEX or index < -_MAX_INDEX - 1:
             raise IndexError("cannot fit 'int' into an index-sized integer")
         if index < 0:
             index += len(self)
         if index < 0 or index >= len(self):
-            raise IndexError("list index out of range")
+            raise IndexError("image index out of range")
         offset = index * self._bands
         return tuple(self._data[offset : offset + self._bands])
 
@@ -84,20 +88,19 @@ class _ImageDataSequence:
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            return [self[i] for i in range(*index.indices(len(self)))]
+            raise TypeError("sequence index must be integer, not 'slice'")
         try:
             index = _index(index)
         except TypeError:
             raise TypeError(
-                "list indices must be integers or slices, not "
-                f"{type(index).__name__}"
+                f"sequence index must be integer, not '{type(index).__name__}'"
             ) from None
         if index > _MAX_INDEX or index < -_MAX_INDEX - 1:
             raise IndexError("cannot fit 'int' into an index-sized integer")
         if index < 0:
             index += len(self)
         if index < 0 or index >= len(self):
-            raise IndexError("list index out of range")
+            raise IndexError("image index out of range")
         x = index % self._size[0]
         y = index // self._size[0]
         value = self._image.getpixel_formatted((x, y))
