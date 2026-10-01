@@ -11258,3 +11258,36 @@ correct fix requires safe shared-buffer ownership across the Python binding and
 core raster storage, including stable exporter lifetime and detach-on-write.
 This visit is checkpointed with no runtime change; do not report the mode's
 current behavior as parity. No coverage collection ran.
+
+## RGB→YCbCr direct-buffer checkpoint — 2026-10-01
+
+`rgb_to_ycbcr` previously copied an `ImageRgb8` source through `to_rgb8()` and
+created a zero-filled `RgbImage` before replacing every pixel. The retained
+change borrows the native RGB bytes with `Cow::Borrowed`, keeps the existing
+`to_rgb8()` conversion for other input modes, reserves one output `Vec` at the
+exact RGB byte count, appends the existing Pillow-rounded Y/Cb/Cr triples, and
+wraps the completed bytes with `RgbImage::from_raw`. The fixed-point lookup
+tables, arithmetic shifts, and channel order are unchanged. This removes the
+native-source clone and redundant destination initialization without an RGBA
+conversion.
+
+An interleaved comparison ran the exact pre-change and candidate release
+extensions in separate package copies, alongside the isolated Pillow 12.2
+oracle. The input was deterministic nonuniform RGB bytes at 1024×768. Each
+process used three warmups and nine samples of five complete
+`convert("YCbCr").tobytes()` calls; all seven process triplets produced the same
+full output digest.
+
+| Profile | Median latency | Relative to Pillow |
+| --- | ---: | ---: |
+| Pillow | 2.516 ms | 1.00× |
+| Pre-change CPU | 2.247 ms | 1.12× faster |
+| Candidate CPU | 2.190 ms | 1.15× faster |
+
+The median paired candidate/pre-change ratio is 0.975, a 2.5% reduction. This
+is a modest single-caller latency gain; no SIMD or GPU implementation changed,
+and no concurrent-throughput claim is made. RGB→YCbCr, nonzero RGB→YCbCr, and
+RGB→HSV control parity each pass on CPU, strict SIMD, and strict GPU (3/3 per
+backend). The audit inventory was corrected: `rgb_to_hsv` already borrowed
+RGB; `hsv_to_rgb` and `ycbcr_to_rgb` remain independent follow-up candidates.
+No coverage collection ran.

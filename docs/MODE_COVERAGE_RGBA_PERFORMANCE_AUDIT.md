@@ -24,7 +24,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P4 | Medium | Scalar conversions | Source-carrier clones are removed; serial CPU I→L still trails Pillow. |
 | P5 | Medium | Python data access | Multiband getdata iteration slices the compact byte buffer per pixel; target slicing also diverged from Pillow. |
 | P6 | High | Array input | Contiguous L/RGBA fromarray inputs are copied instead of sharing Pillow's read-only buffer view. |
-| P7 | Low–Medium | Color transforms | HSV and YCbCr transforms clone an already-RGB-shaped input before writing output. |
+| P7 | Low–Medium | Color transforms | HSV→RGB and YCbCr→RGB still clone RGB-shaped input; RGB→HSV already borrows, and RGB→YCbCr now borrows. |
 | P8 | Conditional | CPU Paste | Masked same-mode Paste outside the native allowlist converts source and destination to RGBA. |
 | P9 | Medium | GPU shaders | Several mode-aware L/LA kernels express four-channel arithmetic or sorting before selecting the channels they use. |
 | P10 | Low–Medium | JavaScript data access | Formatted multiband getdata builds a nested JavaScript array and a per-pixel array. |
@@ -148,9 +148,30 @@ until that ownership contract is designed and parity-tested.
 
 ### P7. HSV/YCbCr transforms clone RGB-shaped input
 
-hsv_to_rgb, rgb_to_hsv, rgb_to_ycbcr, and ycbcr_to_rgb call to_rgb8() before writing their output (pillow-rs/src/color.rs:941–945, 991–995, 1075–1078, 1188–1192). Their mode representation is already an RGB8 buffer holding the source channels; DynamicImage::to_rgb8 clones that buffer in the native RGB case (raster/dynamic.rs:321–339).
+The initial inventory overstated the affected functions: `rgb_to_hsv` already
+borrows native RGB storage, while `hsv_to_rgb` and `ycbcr_to_rgb` still call
+`to_rgb8()` and clone an RGB-shaped source before writing their output. This
+checkpoint fixes `rgb_to_ycbcr`: for `ImageRgb8`, it now borrows the source
+bytes and writes output triples into one reserved `Vec`, avoiding both the
+source clone and the zero-filled `RgbImage::new` destination. Other input modes
+retain the existing `to_rgb8()` conversion. HSV→RGB and YCbCr→RGB remain open
+items; do not count P7 as complete.
 
-**Assessment:** high confidence in one avoidable full-frame copy per conversion. The output buffer is required; the source copy is not.
+The focused public RGB→YCbCr and nonzero-pixel parity cases, plus RGB→HSV as a
+control, passed on CPU, strict SIMD, and strict GPU (3/3 on each backend). An
+interleaved seven-process-pair comparison of the exact pre-change and candidate
+CPU extensions used 1024×768 deterministic RGB input, three warmups, nine
+samples of five full `convert("YCbCr").tobytes()` calls, and compared complete
+output digests. All Pillow, baseline, and candidate digests agreed. Median
+latency was 2246.7 μs for the pre-change CPU implementation and 2189.7 μs for
+the candidate, a 2.5% paired reduction. Candidate CPU measured 0.87× Pillow
+latency (about 1.15× faster). This is a modest single-caller latency result;
+there is no SIMD/GPU speed claim or concurrent-throughput measurement.
+
+**Assessment:** a small, measured CPU improvement removes a full-frame source
+copy and destination zero-fill from RGB→YCbCr. Reuse the borrow-plus-reserved-
+output pattern only where exact parity holds; assess the two remaining
+transform functions separately.
 
 ### P8. CPU masked Paste has more same-mode RGBA fallback cases
 
