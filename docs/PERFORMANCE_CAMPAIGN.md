@@ -11344,3 +11344,45 @@ image construction is outside the timed interval.
 Small-input warm samples batch multiple conversions per sample to reduce timer
 noise (1000 calls at 1×1, 200 at 16×16, 20 at 64×64, five at 256×256, and two
 at 1024×768). No coverage collection ran.
+
+## YCbCr→RGB source-copy removal checkpoint — 2026-10-01
+
+The YCbCr converter receives its three-byte Y/Cb/Cr samples in the same typed
+`ImageRgb8` carrier used for RGB. The existing path calls `to_rgb8()`, cloning
+that full carrier, then zero-initializes `RgbImage::new` before overwriting all
+pixels. I tested three format-preserving source-borrow variants while leaving
+the fixed-point tables, shifts, rounding, clipping, and channel order intact:
+
+1. Borrow raw bytes, reserve one output `Vec`, and append output triplets.
+2. Borrow raw bytes but keep `RgbImage::new` and its existing pixel writes.
+3. Borrow the typed `RgbImage` through `Cow` and keep the original typed pixel
+   loop.
+
+Each run used deterministic nonuniform 1024×768 YCbCr input. Image creation
+was outside the timed interval; each process ran three warmups and nine samples
+of five complete `convert("RGB").tobytes()` calls. Seven interleaved
+Pillow/target process pairs were collected per implementation, and all output
+SHA-256 digests matched.
+
+| Implementation | CPU median | Pillow median | CPU / Pillow |
+| --- | ---: | ---: | ---: |
+| Existing clone + zero-filled output | 1.410 ms | 1.485 ms | 0.95× |
+| Borrowed bytes + reserved output vector | 1.566 ms | 1.521 ms | 1.03× |
+| Borrowed bytes + existing image output | 1.455 ms | 1.463 ms | 0.99× |
+| Borrowed typed image + existing pixel loop | 1.467 ms | 1.476 ms | 0.99× |
+
+The source-copy reduction did not produce a stable whole-call improvement:
+the vector-writing variant lost to Pillow, while both variants retaining the
+existing output image were effectively tied with Pillow and did not beat the
+pre-change median. I reverted all three and kept the original implementation.
+The original route passed the focused CPU, strict-SIMD, and strict-GPU parity
+selection; the byte-vector candidate also passed those three focused parity
+cases in each selected profile. This transform has no separately measured
+SIMD/GPU kernel here, so profile-specific parity is not evidence of accelerator
+execution. No coverage collection ran.
+
+Decision for the next optimization: do not equate eliminated copies with lower
+latency. `ImageBuffer`'s typed `pixels()`/`pixels_mut()` loop was faster than
+byte-slice iteration in this case, and `Vec::extend_from_slice` per three-byte
+pixel erased the expected allocation win. A borrowed typed input still did not
+show a repeatable gain; move on after this bounded three-variant checkpoint.
