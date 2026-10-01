@@ -8,7 +8,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from docs_evidence import SCHEMA, cell, contract_code, merge_parallel_cpu, number, project_jpeg, project_pillow, validate
+from docs_evidence import (
+    SCHEMA, cell, contract_code, merge_parallel_cpu, normalize_parallel_cpu_snapshot,
+    number, project_jpeg, project_pillow, validate,
+)
 from docs_site import HtmlContracts, anchors, check_api_contracts, prepare_output, read_config, rewrite_links
 from report_pipeline_roadmap_status import ROADMAP, build_report
 from report_pipeline_benchmark_coverage import DEFAULT_INPUT, report as pipeline_report
@@ -175,6 +178,27 @@ class BenchmarkTests(unittest.TestCase):
         self.assertNotIn(("pipeline-op.resize", "pillow-parallel-cpu"), subjects)
         self.assertEqual(snapshot["cohorts"][1]["run_id"], "parallel-run")
         self.assertIn("no second Pillow timing is collected", snapshot["notes"][-1])
+
+        legacy = copy.deepcopy(snapshot)
+        legacy["rows"] = [row for row in legacy["rows"] if row["subject"] != "python-parallel-cpu"]
+        ordinary_pillow = next(row for row in legacy["rows"] if row["subject"] == "pillow")
+        parallel_target = next(row for row in snapshot["rows"] if row["subject"] == "python-parallel-cpu")
+        legacy["rows"].extend([
+            dict(ordinary_pillow, subject="pillow-parallel-cpu", comparison_group="parallel-cpu"),
+            dict(parallel_target, comparison_group="parallel-cpu"),
+        ])
+        with self.assertRaisesRegex(ValueError, "unknown benchmark comparison cohort"):
+            validate(legacy, "owner/repo")
+        normalized = normalize_parallel_cpu_snapshot(legacy)
+        validate(normalized, "owner/repo")
+        legacy_subjects = {row["subject"] for row in normalized["rows"]}
+        self.assertIn("python-parallel-cpu", legacy_subjects)
+        self.assertIn("pillow", legacy_subjects)
+        self.assertNotIn("pillow-parallel-cpu", legacy_subjects)
+        normalized_parallel = next(row for row in normalized["rows"] if row["subject"] == "python-parallel-cpu")
+        self.assertEqual(normalized_parallel["comparison_group"], "default")
+        self.assertEqual(normalized_parallel["median_us"], parallel_target["median_us"])
+        self.assertEqual(legacy["rows"][-1]["comparison_group"], "parallel-cpu")
 
         duplicate_baseline = project_pillow(
             result("parallel-run", [("pillow", 40), ("python-parallel-cpu", 15)], True)

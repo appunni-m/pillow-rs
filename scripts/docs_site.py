@@ -29,9 +29,10 @@ def read_config(root: Path) -> dict:
     config = json.loads((root / "documentation.json").read_text())
     snapshot = os.environ.get("DOCS_BENCHMARK_SNAPSHOT")
     if snapshot:
-        from docs_evidence import validate
+        from docs_evidence import normalize_parallel_cpu_snapshot, validate
         path = source_path(root, snapshot)
         data = json.loads(path.read_text())
+        data = normalize_parallel_cpu_snapshot(data)
         validate(data, config["repository"])
         revision = os.environ.get("DOCS_BENCHMARK_REVISION")
         if not revision or data["revision"] != revision:
