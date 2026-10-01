@@ -4498,13 +4498,14 @@ fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError
         .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
 }
 
-fn unpack_native_cover_luma_rows(
+fn unpack_native_cover_packed_rows(
     width: u32,
     height: u32,
-    dispatch: NativeCoverLumaOutputDispatch,
+    channels: u8,
+    dispatch: NativeCoverPackedOutputDispatch,
     packed: &[u8],
 ) -> Result<Vec<u8>, PilError> {
-    let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
+    let pixel_count = CheckedDims::new(width, height, channels)?.total_bytes();
     let row_words = usize::try_from(dispatch.words_per_row)
         .map_err(|_| PilError::ValueError("GPU Cover output row is too large".into()))?;
     let row_bytes = row_words
@@ -4519,10 +4520,15 @@ fn unpack_native_cover_luma_rows(
     let expected_transfer = expected_words
         .checked_mul(std::mem::size_of::<u32>())
         .ok_or_else(|| PilError::ValueError("GPU Cover output is too large".into()))?;
-    if expected_words != dispatch.word_count as usize
+    let native_row_bytes = usize::try_from(width)
+        .ok()
+        .and_then(|width| width.checked_mul(usize::from(channels)))
+        .ok_or_else(|| PilError::ValueError("GPU Cover output row is too large".into()))?;
+    if dispatch.channels != channels
+        || expected_words != dispatch.word_count as usize
         || expected_transfer as u64 != dispatch.transfer_bytes
         || packed.len() != expected_transfer
-        || row_bytes < width as usize
+        || row_bytes < native_row_bytes
     {
         return Err(PilError::InternalError(
             "GPU packed Cover readback does not match its row layout".into(),
@@ -4534,7 +4540,7 @@ fn unpack_native_cover_luma_rows(
             .checked_mul(row_bytes)
             .ok_or_else(|| PilError::ValueError("GPU Cover output offset overflow".into()))?;
         let row_end = row_start
-            .checked_add(width as usize)
+            .checked_add(native_row_bytes)
             .ok_or_else(|| PilError::ValueError("GPU Cover output offset overflow".into()))?;
         let row_pixels = packed.get(row_start..row_end).ok_or_else(|| {
             PilError::InternalError("GPU packed Cover readback ended mid-row".into())
@@ -4745,10 +4751,11 @@ fn plan_sharpness_l_dispatch(
 
 const NATIVE_EXPAND_WORKGROUP_WIDTH: u64 = 16;
 const NATIVE_EXPAND_WORKGROUP_HEIGHT: u64 = 16;
-const NATIVE_COVER_LUMA_PACKED_OUTPUT_MARKER: u32 = u32::MAX - 1;
+const NATIVE_COVER_PACKED_OUTPUT_MARKER: u32 = u32::MAX - 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct NativeCoverLumaOutputDispatch {
+struct NativeCoverPackedOutputDispatch {
+    channels: u8,
     groups_x: u32,
     groups_y: u32,
     words_per_row: u32,
@@ -4761,26 +4768,34 @@ struct NativeCoverLumaOutputDispatch {
     horizontal_transfer_bytes: u64,
 }
 
-/// Plan one vertical-resize invocation per row-packed group of four L pixels.
-/// Every row has its own four-byte alignment, so width-tail bytes are padding
-/// in the readback buffer and are removed when the mapped rows are decoded.
-fn plan_native_cover_luma_output_dispatch(
+/// Plan one vertical-resize invocation per row-packed group of four native
+/// bytes. L stores four pixels per word; LA stores two pixels per word. Every
+/// row has its own four-byte alignment, so the final partial word is stripped
+/// when the mapped rows are decoded.
+fn plan_native_cover_packed_output_dispatch(
     width: u32,
     height: u32,
     source_height: u32,
+    channels: u8,
     max_workgroups_per_dimension: u32,
     max_storage_buffer_binding_size: u32,
     max_buffer_size: u64,
     output_buffer_bytes: u64,
-) -> Option<NativeCoverLumaOutputDispatch> {
-    if width == 0 || height == 0 || source_height == 0 || max_workgroups_per_dimension == 0 {
+) -> Option<NativeCoverPackedOutputDispatch> {
+    if width == 0
+        || height == 0
+        || source_height == 0
+        || !matches!(channels, 1 | 2)
+        || max_workgroups_per_dimension == 0
+    {
         return None;
     }
     let pixels = u64::from(width).checked_mul(u64::from(height))?;
     if pixels > u64::from(u32::MAX) {
         return None;
     }
-    let words_per_row = width / 4 + u32::from(width % 4 != 0);
+    let pixels_per_word = 4 / u32::from(channels);
+    let words_per_row = width.div_ceil(pixels_per_word);
     let word_count = u64::from(words_per_row).checked_mul(u64::from(height))?;
     if word_count == 0 || word_count > u64::from(u32::MAX) {
         return None;
@@ -4814,7 +4829,8 @@ fn plan_native_cover_luma_output_dispatch(
     {
         return None;
     }
-    Some(NativeCoverLumaOutputDispatch {
+    Some(NativeCoverPackedOutputDispatch {
+        channels,
         groups_x,
         groups_y,
         words_per_row,
@@ -6032,7 +6048,7 @@ struct GpuBatchResources<'a> {
     lut: Option<&'a wgpu::Buffer>,
     lut_ranges: Vec<Option<BufferRange>>,
     native_expand_output: Option<NativeExpandOutputDispatch>,
-    native_cover_luma_output: Option<NativeCoverLumaOutputDispatch>,
+    native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
 }
 
 struct PreparedGpuBatch<'a> {
@@ -6487,7 +6503,7 @@ impl GpuInner {
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
-        native_cover_luma_output: Option<NativeCoverLumaOutputDispatch>,
+        native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
     ) -> Result<Vec<ResolvedPipeline>, PilError> {
         let mut resolved = Vec::with_capacity(ops.len());
         let mut index = 0usize;
@@ -6779,17 +6795,17 @@ impl GpuInner {
                 );
             } else if matches!(op, PipelineOp::Resize { .. }) {
                 let horizontal = self.resolve_pipeline(
-                    if native_cover_luma_output.is_some() {
-                        "__internal_resize_h_cover_luma_packed"
+                    if native_cover_packed_output.is_some() {
+                        "__internal_resize_h_cover_native_packed"
                     } else {
                         "__internal_resize_h"
                     },
                     "resize_convolution_h.wgsl",
                     include_str!("shaders/resize_convolution_h.wgsl"),
                 )?;
-                let vertical = if native_cover_luma_output.is_some() {
+                let vertical = if native_cover_packed_output.is_some() {
                     self.resolve_pipeline(
-                        "__internal_resize_v_cover_luma_packed",
+                        "__internal_resize_v_cover_native_packed",
                         "resize_convolution_v.wgsl",
                         include_str!("shaders/resize_convolution_v.wgsl"),
                     )?
@@ -7237,9 +7253,9 @@ impl GpuInner {
         } else if matches!(
             cached.variant_name,
             "__internal_resize_h"
-                | "__internal_resize_h_cover_luma_packed"
+                | "__internal_resize_h_cover_native_packed"
                 | "__internal_resize_v"
-                | "__internal_resize_v_cover_luma_packed"
+                | "__internal_resize_v_cover_native_packed"
                 | "__internal_resize_v_pad_rgbx"
         ) {
             let (horizontal, vertical) = resources
@@ -7253,7 +7269,7 @@ impl GpuInner {
                 })?;
             let range = if matches!(
                 cached.variant_name,
-                "__internal_resize_h" | "__internal_resize_h_cover_luma_packed"
+                "__internal_resize_h" | "__internal_resize_h_cover_native_packed"
             ) {
                 *horizontal
             } else {
@@ -7813,7 +7829,7 @@ impl GpuInner {
         native_reduce_rgb_input: bool,
         native_expand_channels: Option<u8>,
         native_cover_input_channels: Option<u8>,
-        native_cover_luma_output: Option<NativeCoverLumaOutputDispatch>,
+        native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
@@ -8137,8 +8153,8 @@ impl GpuInner {
                 // Resize node. Its source-row word is otherwise unused for
                 // ordinary Resize; reserve the sentinel for compact native
                 // input byte addressing in the horizontal shader.
-                params[3] = if native_cover_luma_output.is_some() {
-                    NATIVE_COVER_LUMA_PACKED_OUTPUT_MARKER
+                params[3] = if native_cover_packed_output.is_some() {
+                    NATIVE_COVER_PACKED_OUTPUT_MARKER
                 } else {
                     u32::MAX
                 };
@@ -8932,7 +8948,7 @@ impl GpuInner {
                 lut,
                 lut_ranges,
                 native_expand_output,
-                native_cover_luma_output,
+                native_cover_packed_output,
             },
             input_dims,
             output_dims,
@@ -9024,8 +9040,8 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_resize_h" => (output_dims.0.div_ceil(16), input_dims.1.div_ceil(16)),
-            "__internal_resize_h_cover_luma_packed" => {
-                let plan = resources.native_cover_luma_output.ok_or_else(|| {
+            "__internal_resize_h_cover_native_packed" => {
+                let plan = resources.native_cover_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed native-L Cover intermediate has no dispatch plan".into(),
                     )
@@ -9033,8 +9049,8 @@ impl GpuInner {
                 (plan.horizontal_groups_x, plan.horizontal_groups_y)
             }
             "__internal_resize_v" => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
-            "__internal_resize_v_cover_luma_packed" => {
-                let plan = resources.native_cover_luma_output.ok_or_else(|| {
+            "__internal_resize_v_cover_native_packed" => {
+                let plan = resources.native_cover_packed_output.ok_or_else(|| {
                     PilError::InternalError(
                         "packed native-L Cover output has no dispatch plan".into(),
                     )
@@ -9113,7 +9129,7 @@ impl GpuInner {
             native_sharpness_l_input,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
-            prepared.resources.native_cover_luma_output,
+            prepared.resources.native_cover_packed_output,
         )?;
         let mut current_is_a = start_is_a;
         for (index, pipeline) in resolved.iter().enumerate() {
@@ -12393,11 +12409,11 @@ impl GpuInner {
         })
     }
 
-    fn readback_to_cover_luma8(
+    fn readback_to_cover_native_bytes(
         &self,
         w: u32,
         h: u32,
-        dispatch: NativeCoverLumaOutputDispatch,
+        dispatch: NativeCoverPackedOutputDispatch,
         staging: &wgpu::Buffer,
     ) -> Result<DynamicImage, PilError> {
         let transfer_len = usize::try_from(dispatch.transfer_bytes)
@@ -12408,11 +12424,10 @@ impl GpuInner {
                     "GPU Cover packed readback length mismatch".into(),
                 ));
             }
-            let samples = unpack_native_cover_luma_rows(w, h, dispatch, bytes)?;
+            let samples =
+                unpack_native_cover_packed_rows(w, h, dispatch.channels, dispatch, bytes)?;
             crate::compute::record_pipeline_allocation(samples.len());
-            crate::raster::GrayImage::from_raw(w, h, samples)
-                .map(DynamicImage::ImageLuma8)
-                .ok_or_else(|| PilError::ValueError("bad packed Cover readback buffer".into()))
+            crate::image_utils::raw_bytes_to_image(w, h, samples, usize::from(dispatch.channels))
         })
     }
 
@@ -12794,7 +12809,7 @@ impl GpuInner {
         native_reduce_rgb_input: bool,
         native_expand_channels: Option<u8>,
         native_cover_input_channels: Option<u8>,
-        native_cover_luma_output: Option<NativeCoverLumaOutputDispatch>,
+        native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
         logical_mode: Option<&str>,
         contrast_mean: Option<u8>,
         f_resize_constant_bits: Option<u32>,
@@ -13025,7 +13040,7 @@ impl GpuInner {
                 native_reduce_rgb_input,
                 native_expand_channels,
                 native_cover_input_channels,
-                native_cover_luma_output,
+                native_cover_packed_output,
                 buffers,
                 &auxiliary_cache,
             )?;
@@ -13059,7 +13074,7 @@ impl GpuInner {
 
             let final_dims = prepared.final_dims;
             if chunk_end == ops.len() {
-                let size = if let Some(dispatch) = prepared.resources.native_cover_luma_output {
+                let size = if let Some(dispatch) = prepared.resources.native_cover_packed_output {
                     dispatch.transfer_bytes
                 } else if let Some(dispatch) = prepared.resources.native_expand_output {
                     dispatch.transfer_bytes
@@ -13630,7 +13645,7 @@ fn gpu_native_cover_input_channels(
     .then_some(channels)
 }
 
-fn gpu_native_cover_luma_output_dispatch(
+fn gpu_native_cover_packed_output_dispatch(
     ops: &[PipelineOp],
     native_cover_input_channels: Option<u8>,
     logical_mode: Option<&str>,
@@ -13639,22 +13654,27 @@ fn gpu_native_cover_luma_output_dispatch(
     max_storage_buffer_binding_size: u32,
     max_buffer_size: u64,
     buffer_capacity_pixels: u32,
-) -> Option<NativeCoverLumaOutputDispatch> {
+) -> Option<NativeCoverPackedOutputDispatch> {
     let [PipelineOp::Resize { w, h, filter }] = ops else {
         return None;
     };
-    if native_cover_input_channels != Some(1)
-        || !matches!(logical_mode, None | Some("L"))
-        || (matches!(filter, ResampleFilter::Nearest)
-            && !gpu_resize_nearest_uses_coefficients(logical_mode))
+    let Some(channels @ (1 | 2)) = native_cover_input_channels else {
+        return None;
+    };
+    if !matches!(
+        (channels, logical_mode),
+        (1, None | Some("L")) | (2, None | Some("LA"))
+    ) || (matches!(filter, ResampleFilter::Nearest)
+        && !gpu_resize_nearest_uses_coefficients(logical_mode))
     {
         return None;
     }
     let buffer_capacity_bytes = u64::from(buffer_capacity_pixels).checked_mul(4)?;
-    plan_native_cover_luma_output_dispatch(
+    plan_native_cover_packed_output_dispatch(
         *w,
         *h,
         source_height,
+        channels,
         max_workgroups_per_dimension,
         max_storage_buffer_binding_size,
         max_buffer_size,
@@ -21245,7 +21265,7 @@ impl GpuPool {
         }
 
         let capacity = gpu_batch_capacity(ops, img, &auxiliary_images, mode)?;
-        let native_cover_luma_output = gpu_native_cover_luma_output_dispatch(
+        let native_cover_packed_output = gpu_native_cover_packed_output_dispatch(
             ops,
             native_cover_input_channels,
             mode,
@@ -21886,7 +21906,7 @@ impl GpuPool {
             native_reduce_rgb_input,
             native_expand_channels,
             native_cover_input_channels,
-            native_cover_luma_output,
+            native_cover_packed_output,
             mode,
             contrast_mean,
             f_resize_constant_bits,
@@ -21966,8 +21986,8 @@ impl GpuPool {
         // selected primary or staging buffer has been unmapped.
         gpu_log!("[GPU] step=readback start");
         let readback_buffer = readback.buffer(&buffers, final_is_a);
-        let result = if let Some(dispatch) = native_cover_luma_output {
-            gpu.readback_to_cover_luma8(final_w, final_h, dispatch, readback_buffer)?
+        let result = if let Some(dispatch) = native_cover_packed_output {
+            gpu.readback_to_cover_native_bytes(final_w, final_h, dispatch, readback_buffer)?
         } else if native_luma16 {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
         } else if native_luma16_paste {
@@ -22071,7 +22091,7 @@ impl GpuPool {
         } else {
             CheckedDims::new(w, h, 4)?.total_bytes() as u64
         };
-        resource_telemetry.readback_bytes = if let Some(dispatch) = native_cover_luma_output {
+        resource_telemetry.readback_bytes = if let Some(dispatch) = native_cover_packed_output {
             dispatch.transfer_bytes
         } else if native_expand_output {
             let channels = native_expand_channels.ok_or_else(|| {
@@ -22153,7 +22173,7 @@ impl GpuPool {
         if native_rgb
             || native_sharpness_l_input
             || native_sharpness_la_input
-            || native_cover_luma_output.is_some()
+            || native_cover_packed_output.is_some()
             || packed_luma_pad
         {
             // The final native layout was decoded directly from the mapping;
@@ -29624,89 +29644,99 @@ mod tests {
     }
 
     #[test]
-    fn native_cover_luma_output_dispatch_covers_row_tails_and_checks_limits() {
-        for width in [1u32, 3, 4, 5, 63, 64, 65] {
-            for height in [1u32, 15, 16, 17] {
-                let source_height = height;
-                let plan = super::plan_native_cover_luma_output_dispatch(
-                    width,
-                    height,
-                    source_height,
-                    65_535,
+    fn native_cover_packed_output_dispatch_covers_row_tails_and_checks_limits() {
+        for channels in [1u8, 2] {
+            for width in [1u32, 2, 3, 4, 5, 63, 64, 65] {
+                for height in [1u32, 15, 16, 17] {
+                    let source_height = height;
+                    let plan = super::plan_native_cover_packed_output_dispatch(
+                        width,
+                        height,
+                        source_height,
+                        channels,
+                        65_535,
+                        u32::MAX,
+                        u64::MAX,
+                        u64::MAX,
+                    )
+                    .expect("bounded native L/LA Cover output should be planned");
+                    let pixels_per_word = 4 / u32::from(channels);
+                    let words_per_row = width.div_ceil(pixels_per_word);
+                    let expected_words = words_per_row * height;
+                    assert_eq!(plan.channels, channels);
+                    assert_eq!(plan.words_per_row, words_per_row);
+                    assert_eq!(plan.word_count, expected_words);
+                    assert_eq!(plan.transfer_bytes, u64::from(expected_words) * 4);
+                    assert_eq!(plan.groups_x, words_per_row.div_ceil(16));
+                    assert_eq!(plan.groups_y, height.div_ceil(16));
+                    assert_eq!(plan.horizontal_words_per_row, words_per_row);
+                    assert_eq!(plan.horizontal_word_count, words_per_row * source_height);
+                    assert_eq!(
+                        plan.horizontal_transfer_bytes,
+                        u64::from(plan.horizontal_word_count) * 4
+                    );
+                    assert_eq!(plan.horizontal_groups_x, words_per_row.div_ceil(16));
+                    assert_eq!(plan.horizontal_groups_y, source_height.div_ceil(16));
+
+                    let mut word_seen = vec![false; expected_words as usize];
+                    let mut pixel_writes = vec![0u8; (width * height) as usize];
+                    for y in 0..plan.groups_y * 16 {
+                        for x in 0..plan.groups_x * 16 {
+                            if x >= words_per_row || y >= height {
+                                continue;
+                            }
+                            let word_index = y * words_per_row + x;
+                            assert!(!word_seen[word_index as usize]);
+                            word_seen[word_index as usize] = true;
+                            for lane in 0..pixels_per_word {
+                                let output_x = x * pixels_per_word + lane;
+                                if output_x < width {
+                                    let pixel_index = y * width + output_x;
+                                    pixel_writes[pixel_index as usize] += 1;
+                                }
+                            }
+                        }
+                    }
+                    assert!(word_seen.into_iter().all(|seen| seen));
+                    assert!(pixel_writes.into_iter().all(|writes| writes == 1));
+                }
+            }
+        }
+
+        for (channels, one_group_width) in [(1, 64), (2, 32)] {
+            let exact = super::plan_native_cover_packed_output_dispatch(
+                one_group_width,
+                16,
+                16,
+                channels,
+                1,
+                u32::MAX,
+                u64::MAX,
+                u64::MAX,
+            )
+            .expect("one workgroup per axis should fit the boundary");
+            assert_eq!((exact.groups_x, exact.groups_y), (1, 1));
+            assert!(
+                super::plan_native_cover_packed_output_dispatch(
+                    one_group_width + 1,
+                    16,
+                    16,
+                    channels,
+                    1,
                     u32::MAX,
                     u64::MAX,
                     u64::MAX,
                 )
-                .expect("bounded native-L Cover output should be planned");
-                let words_per_row = width.div_ceil(4);
-                let expected_words = words_per_row * height;
-                assert_eq!(plan.words_per_row, words_per_row);
-                assert_eq!(plan.word_count, expected_words);
-                assert_eq!(plan.transfer_bytes, u64::from(expected_words) * 4);
-                assert_eq!(plan.groups_x, words_per_row.div_ceil(16));
-                assert_eq!(plan.groups_y, height.div_ceil(16));
-                assert_eq!(plan.horizontal_words_per_row, words_per_row);
-                assert_eq!(plan.horizontal_word_count, words_per_row * source_height);
-                assert_eq!(
-                    plan.horizontal_transfer_bytes,
-                    u64::from(plan.horizontal_word_count) * 4
-                );
-                assert_eq!(plan.horizontal_groups_x, words_per_row.div_ceil(16));
-                assert_eq!(plan.horizontal_groups_y, source_height.div_ceil(16));
-
-                let mut word_seen = vec![false; expected_words as usize];
-                let mut pixel_writes = vec![0u8; (width * height) as usize];
-                for y in 0..plan.groups_y * 16 {
-                    for x in 0..plan.groups_x * 16 {
-                        if x >= words_per_row || y >= height {
-                            continue;
-                        }
-                        let word_index = y * words_per_row + x;
-                        assert!(!word_seen[word_index as usize]);
-                        word_seen[word_index as usize] = true;
-                        for lane in 0..4 {
-                            let output_x = x * 4 + lane;
-                            if output_x < width {
-                                let pixel_index = y * width + output_x;
-                                pixel_writes[pixel_index as usize] += 1;
-                            }
-                        }
-                    }
-                }
-                assert!(word_seen.into_iter().all(|seen| seen));
-                assert!(pixel_writes.into_iter().all(|writes| writes == 1));
-            }
+                .is_none()
+            );
         }
-
-        let exact = super::plan_native_cover_luma_output_dispatch(
-            64,
-            16,
-            16,
-            1,
-            u32::MAX,
-            u64::MAX,
-            u64::MAX,
-        )
-        .expect("one workgroup per axis should fit the boundary");
-        assert_eq!((exact.groups_x, exact.groups_y), (1, 1));
         assert!(
-            super::plan_native_cover_luma_output_dispatch(
-                65,
-                16,
-                16,
-                1,
-                u32::MAX,
-                u64::MAX,
-                u64::MAX,
-            )
-            .is_none()
-        );
-        assert!(
-            super::plan_native_cover_luma_output_dispatch(
+            super::plan_native_cover_packed_output_dispatch(
                 64,
                 17,
                 16,
                 1,
+                1,
                 u32::MAX,
                 u64::MAX,
                 u64::MAX,
@@ -29714,22 +29744,23 @@ mod tests {
             .is_none()
         );
         assert!(
-            super::plan_native_cover_luma_output_dispatch(1, 1, 1, 1, 3, u64::MAX, u64::MAX,)
+            super::plan_native_cover_packed_output_dispatch(1, 1, 1, 1, 1, 3, u64::MAX, u64::MAX,)
                 .is_none()
         );
         assert!(
-            super::plan_native_cover_luma_output_dispatch(1, 1, 1, 1, u32::MAX, 3, u64::MAX,)
+            super::plan_native_cover_packed_output_dispatch(1, 1, 1, 1, 1, u32::MAX, 3, u64::MAX,)
                 .is_none()
         );
         assert!(
-            super::plan_native_cover_luma_output_dispatch(1, 1, 1, 1, u32::MAX, u64::MAX, 3,)
+            super::plan_native_cover_packed_output_dispatch(1, 1, 1, 1, 1, u32::MAX, u64::MAX, 3,)
                 .is_none()
         );
         assert!(
-            super::plan_native_cover_luma_output_dispatch(
+            super::plan_native_cover_packed_output_dispatch(
                 u32::MAX,
                 2,
                 2,
+                1,
                 65_535,
                 u32::MAX,
                 u64::MAX,
@@ -29738,17 +29769,48 @@ mod tests {
             .is_none()
         );
         assert!(
-            super::plan_native_cover_luma_output_dispatch(1, 1, 1, 0, u32::MAX, u64::MAX, u64::MAX,)
-                .is_none()
+            super::plan_native_cover_packed_output_dispatch(
+                1,
+                1,
+                1,
+                3,
+                65_535,
+                u32::MAX,
+                u64::MAX,
+                u64::MAX,
+            )
+            .is_none()
         );
         assert!(
-            super::plan_native_cover_luma_output_dispatch(1, 1, 0, 1, u32::MAX, u64::MAX, u64::MAX,)
-                .is_none()
+            super::plan_native_cover_packed_output_dispatch(
+                1,
+                1,
+                1,
+                1,
+                0,
+                u32::MAX,
+                u64::MAX,
+                u64::MAX,
+            )
+            .is_none()
+        );
+        assert!(
+            super::plan_native_cover_packed_output_dispatch(
+                1,
+                1,
+                0,
+                1,
+                1,
+                u32::MAX,
+                u64::MAX,
+                u64::MAX,
+            )
+            .is_none()
         );
     }
 
     #[test]
-    fn native_cover_luma_output_admits_only_singleton_l_resize() {
+    fn native_cover_packed_output_admits_singleton_l_and_la_resize() {
         let bicubic = PipelineOp::Resize {
             w: 21,
             h: 13,
@@ -29761,7 +29823,7 @@ mod tests {
         };
         let limits = (65_535, u32::MAX, u64::MAX, 1024);
         assert!(
-            super::gpu_native_cover_luma_output_dispatch(
+            super::gpu_native_cover_packed_output_dispatch(
                 std::slice::from_ref(&bicubic),
                 Some(1),
                 Some("L"),
@@ -29774,7 +29836,7 @@ mod tests {
             .is_some()
         );
         assert!(
-            super::gpu_native_cover_luma_output_dispatch(
+            super::gpu_native_cover_packed_output_dispatch(
                 std::slice::from_ref(&nearest),
                 Some(1),
                 Some("L"),
@@ -29787,7 +29849,7 @@ mod tests {
             .is_some()
         );
         assert!(
-            super::gpu_native_cover_luma_output_dispatch(
+            super::gpu_native_cover_packed_output_dispatch(
                 std::slice::from_ref(&bicubic),
                 Some(2),
                 Some("LA"),
@@ -29797,10 +29859,10 @@ mod tests {
                 limits.2,
                 limits.3,
             )
-            .is_none()
+            .is_some()
         );
         assert!(
-            super::gpu_native_cover_luma_output_dispatch(
+            super::gpu_native_cover_packed_output_dispatch(
                 std::slice::from_ref(&bicubic),
                 Some(1),
                 Some("RGB"),
@@ -29813,7 +29875,7 @@ mod tests {
             .is_none()
         );
         assert!(
-            super::gpu_native_cover_luma_output_dispatch(
+            super::gpu_native_cover_packed_output_dispatch(
                 &[bicubic, PipelineOp::Duplicate],
                 Some(1),
                 Some("L"),
@@ -29828,11 +29890,12 @@ mod tests {
     }
 
     #[test]
-    fn native_cover_luma_readback_removes_each_rows_padding() {
-        let dispatch = super::plan_native_cover_luma_output_dispatch(
+    fn native_cover_packed_readback_removes_each_rows_padding() {
+        let dispatch = super::plan_native_cover_packed_output_dispatch(
             5,
             3,
             3,
+            1,
             65_535,
             u32::MAX,
             u64::MAX,
@@ -29843,10 +29906,34 @@ mod tests {
             1, 2, 3, 4, 5, 0, 0, 0, 6, 7, 8, 9, 10, 0, 0, 0, 11, 12, 13, 14, 15, 0, 0, 0,
         ];
         assert_eq!(
-            super::unpack_native_cover_luma_rows(5, 3, dispatch, &packed).unwrap(),
+            super::unpack_native_cover_packed_rows(5, 3, 1, dispatch, &packed).unwrap(),
             [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
         );
-        assert!(super::unpack_native_cover_luma_rows(5, 3, dispatch, &packed[..20]).is_err());
+        assert!(super::unpack_native_cover_packed_rows(5, 3, 1, dispatch, &packed[..20]).is_err());
+
+        let la_dispatch = super::plan_native_cover_packed_output_dispatch(
+            5,
+            3,
+            3,
+            2,
+            65_535,
+            u32::MAX,
+            u64::MAX,
+            u64::MAX,
+        )
+        .unwrap();
+        let la_packed = [
+            1, 101, 2, 102, 3, 103, 4, 104, 5, 105, 0, 0, 6, 106, 7, 107, 8, 108, 9, 109, 10, 110,
+            0, 0, 11, 111, 12, 112, 13, 113, 14, 114, 15, 115, 0, 0,
+        ];
+        assert_eq!(
+            super::unpack_native_cover_packed_rows(5, 3, 2, la_dispatch, &la_packed).unwrap(),
+            [
+                1, 101, 2, 102, 3, 103, 4, 104, 5, 105, 6, 106, 7, 107, 8, 108, 9, 109, 10, 110,
+                11, 111, 12, 112, 13, 113, 14, 114, 15, 115,
+            ]
+        );
+        assert!(super::unpack_native_cover_packed_rows(5, 3, 1, la_dispatch, &la_packed).is_err());
     }
 
     #[test]

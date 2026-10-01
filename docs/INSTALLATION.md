@@ -84,10 +84,8 @@ Requires Rust 1.96.1 or newer. Continue with the [Rust quickstart](RUST.md).
 
 ## Greenfield integration
 
-Treat an alpha installation as a new integration: pin an exact package version
-and validate your application's images, modes, fonts, and errors before
-adopting another alpha. There is no previous-alpha migration guide or
-compatibility guarantee.
+Treat pillow-rs as a new integration. Pin an exact package version and validate
+your application's images, modes, fonts, and errors before adopting it.
 
 To compare with Pillow, create another environment and install Pillow there.
 Run the two implementations in separate processes so their shared `PIL` name

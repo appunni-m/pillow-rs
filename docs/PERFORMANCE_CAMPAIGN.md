@@ -8734,9 +8734,17 @@ Readback remains 5,591,040 bytes for every mode, so the input change improves
 GPU latency for L, LA, and RGB but leaves GPU slower than SIMD for L and LA.
 HSV and CMYK are also timing-noisy; RGB/RGBA/HSV/CMYK GPU medians are below
 SIMD on this run. CPU beats Pillow for all six modes, while SIMD reaches only
-about 3.0–3.7× Pillow speed, below the 5× campaign goal. The unchanged large
-readback and synchronous completion are the next Cover bottleneck; this
-checkpoint does not claim the GPU/SIMD throughput goal. The first corrected
+about 3.0–3.7× Pillow speed, below the 5× campaign goal. **Profile correction
+(2026-10-01):** these receipts were collected from source revision
+`f31b5a083`, whose default Cargo features still enabled `parallel`; the SIMD
+resize row scheduler also used Rayon at that revision. Commit `90165587c`
+removed `parallel` from defaults and made the SIMD scheduler serial. Therefore
+the table is evidence for the historical parallel-enabled build, not for
+today's serial CPU and SIMD profiles. Treat those old CPU/SIMD medians as
+parallel-configured results; do not compare them directly with serial rows or
+present them as a separate Parallel CPU profile. The unchanged large readback
+and synchronous completion are the next Cover bottleneck; this checkpoint does
+not claim the GPU/SIMD throughput goal. The first corrected
 strict parity sweep passed 6/6 each on CPU, strict SIMD, and strict GPU
 (`migration-parity-5a3e104b48a6449fb3290e15a591a2d0`,
 `migration-parity-27f34ea648e04a27b310da1623870f34`, and
@@ -8744,6 +8752,47 @@ strict parity sweep passed 6/6 each on CPU, strict SIMD, and strict GPU
 routes logical modes through the central typed resize dispatcher: bytes-per-
 pixel alone cannot decide whether the fourth byte is alpha, CMYK K, or scalar
 data. No coverage was run.
+
+### ImageOps.cover LA: compact GPU output and bounded SIMD accumulation — 2026-10-01
+
+The previous native-input optimization uploaded LA in two bytes per pixel but
+still read the resized surface back as four-byte RGBA. This follow-up packs the
+GPU vertical result as native LA bytes, including row padding only at the
+u32-aligned transport boundary, then removes that padding before constructing
+the image. It halves LA readback from 5,591,040 to 2,797,568 bytes. The SIMD
+Cover route also gained an LA-specific checked-i32 Bicubic path: horizontal
+filtering premultiplies luma and filters alpha separately, and the vertical
+pass restores luma after filtering both channels. A coefficient-bound proof
+guards every i32 partial sum; tests compare its output exactly with the
+existing widened path for transparent, opaque, alternating, and varying alpha.
+
+Both runs used
+`pil-imageops.cover.materialized.la-noise-1024x768`, Pillow 12.2.0, a seeded
+1024 × 768 LA image, `ImageOps.cover(..., (768, 1024))`, and `.tobytes()` as the
+materialization boundary. They used five warmups, 20 iterations × five samples,
+and concurrency one. The standard CPU/SIMD/GPU parity gate passed 3/3, with
+100/100 executions on each requested backend and no fallback. The separate
+Parallel CPU parity gate passed 1/1 and also recorded 100/100 CPU executions.
+The dirty-worktree benchmark receipts are
+`migration-benchmark-44424a99da594abb9059dc91000fc142` and
+`migration-benchmark-2067c456bc874111a6b4cfcd4ae19683`:
+
+| Profile | Median latency | Pillow-relative result | Actual backend |
+| --- | ---: | ---: | --- |
+| Pillow | 9.0183 ms | baseline | Pillow |
+| CPU | 18.4302 ms | 2.04× slower | CPU (100/100) |
+| SIMD | 10.3929 ms | 1.15× slower | SIMD (100/100) |
+| Parallel CPU | 3.5801 ms | 2.52× faster | CPU (100/100) |
+| GPU | 1.2405 ms | 7.27× lower latency | GPU (100/100) |
+
+GPU used two resize dispatches, uploaded 1,572,864 bytes, and read back
+2,797,568 bytes. Its latency is below SIMD for this single-request workload;
+the concurrency-one reciprocal latency is not sustained-throughput evidence.
+The default serial CPU still misses Pillow, and SIMD remains far from the 5×
+target despite improving from 17.84 to 10.39 ms. Parallel CPU is reported
+separately and is not folded into either profile. Keep Cover LA open for the
+serial CPU/SIMD goals; this checkpoint makes no operation-wide performance
+claim. No coverage was run.
 
 ### CMYK→RGB revisit: row-parallel exact byte conversion — 2026-09-29
 

@@ -17,7 +17,7 @@ struct Params {
 }
 
 const FIXED_BIAS: i32 = 2097152;
-const NATIVE_COVER_LUMA_PACKED_OUTPUT: u32 = 0xfffffffeu;
+const NATIVE_COVER_PACKED_OUTPUT: u32 = 0xfffffffeu;
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -64,11 +64,13 @@ fn filtered_channel(output_x: u32, output_y: u32, channel: u32) -> u32 {
     var sum: i32 = 0;
     for (var tap = 0u; tap < count; tap = tap + 1u) {
         var sample: u32;
-        if params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
-            let words_per_row =
-                params.dst_w / 4u + select(0u, 1u, params.dst_w % 4u != 0u);
-            let word = input[(source_y + tap) * words_per_row + output_x / 4u];
-            sample = (word >> ((output_x % 4u) * 8u)) & 255u;
+        if params._pad == NATIVE_COVER_PACKED_OUTPUT {
+            let pixels_per_word = 4u / params.channels;
+            let words_per_row = params.dst_w / pixels_per_word
+                + select(0u, 1u, params.dst_w % pixels_per_word != 0u);
+            let byte_index = output_x * params.channels + channel;
+            let word = input[(source_y + tap) * words_per_row + byte_index / 4u];
+            sample = (word >> ((byte_index % 4u) * 8u)) & 255u;
         } else {
             let pixel = input[(source_y + tap) * params.dst_w + output_x];
             sample = pixel_channel(pixel, channel);
@@ -113,6 +115,48 @@ fn filtered_luma_quartet(word_x: u32, output_y: u32) -> u32 {
     }
     if first_x + 3u < params.dst_w {
         result = result | (fixed_to_byte(sum3) << 24u);
+    }
+    return result;
+}
+
+fn filtered_la_pair(word_x: u32, output_y: u32) -> u32 {
+    // Two adjacent LA pixels fill one word as [L0, A0, L1, A1]. Loading each
+    // intermediate word and coefficient once keeps both channels in native
+    // order while preserving the independent vertical sums and byte rounding.
+    let metadata = output_y * 3u;
+    let source_y = u32(coefficients[metadata]);
+    let count = u32(coefficients[metadata + 1u]);
+    let weight_base = 3u * params.dst_h + u32(coefficients[metadata + 2u]);
+    let words_per_row = params.dst_w / 2u + select(0u, 1u, params.dst_w % 2u != 0u);
+    var sum_l0: i32 = 0;
+    var sum_a0: i32 = 0;
+    var sum_l1: i32 = 0;
+    var sum_a1: i32 = 0;
+    for (var tap = 0u; tap < count; tap = tap + 1u) {
+        let samples = input[(source_y + tap) * words_per_row + word_x];
+        let weight = coefficients[weight_base + tap];
+        sum_l0 = sum_l0 + i32(samples & 255u) * weight;
+        sum_a0 = sum_a0 + i32((samples >> 8u) & 255u) * weight;
+        sum_l1 = sum_l1 + i32((samples >> 16u) & 255u) * weight;
+        sum_a1 = sum_a1 + i32((samples >> 24u) & 255u) * weight;
+    }
+    let first_x = word_x * 2u;
+    var result = 0u;
+    if first_x < params.dst_w {
+        let alpha = fixed_to_byte(sum_a0);
+        var luma = fixed_to_byte(sum_l0);
+        if params.premultiply != 0u {
+            luma = unpremultiply(luma, alpha);
+        }
+        result = luma | (alpha << 8u);
+    }
+    if first_x + 1u < params.dst_w {
+        let alpha = fixed_to_byte(sum_a1);
+        var luma = fixed_to_byte(sum_l1);
+        if params.premultiply != 0u {
+            luma = unpremultiply(luma, alpha);
+        }
+        result = result | (luma << 16u) | (alpha << 24u);
     }
     return result;
 }
@@ -1285,12 +1329,20 @@ fn pack_filtered(output_x: u32, output_y: u32) -> u32 {
 
 @compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if params._pad == NATIVE_COVER_LUMA_PACKED_OUTPUT {
-        let words_per_row = params.dst_w / 4u + select(0u, 1u, params.dst_w % 4u != 0u);
+    if params._pad == NATIVE_COVER_PACKED_OUTPUT {
+        let pixels_per_word = 4u / params.channels;
+        let words_per_row = params.dst_w / pixels_per_word
+            + select(0u, 1u, params.dst_w % pixels_per_word != 0u);
         if gid.x >= words_per_row || gid.y >= params.dst_h {
             return;
         }
-        output[gid.y * words_per_row + gid.x] = filtered_luma_quartet(gid.x, gid.y);
+        var word = 0u;
+        if params.channels == 1u {
+            word = filtered_luma_quartet(gid.x, gid.y);
+        } else {
+            word = filtered_la_pair(gid.x, gid.y);
+        }
+        output[gid.y * words_per_row + gid.x] = word;
         return;
     }
     if gid.x >= params.dst_w || gid.y >= params.dst_h {
