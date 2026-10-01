@@ -737,6 +737,46 @@ fn paste_native_masked_hsv_l_row(source: &[u8], destination: &mut [u8], mask: &[
     }
 }
 
+/// Blend native RGB samples with an L mask. The mask endpoints are already
+/// exact under the byte formula, so this avoids the generic path's per-pixel
+/// endpoint branches and per-channel premultiplication branch.
+#[inline]
+fn paste_native_masked_rgb_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 3, 0);
+    debug_assert_eq!(source.len() / 3, mask.len());
+
+    for ((source_pixel, destination_pixel), mask_value) in source
+        .chunks_exact(3)
+        .zip(destination.chunks_exact_mut(3))
+        .zip(mask.iter().copied())
+    {
+        let weight = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - weight;
+        let blend = |source_value: u8, destination_value: u8| {
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+            )]
+            let weighted =
+                u16::from(source_value) * weight + u16::from(destination_value) * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            blended
+        };
+        destination_pixel[0] = blend(source_pixel[0], destination_pixel[0]);
+        destination_pixel[1] = blend(source_pixel[1], destination_pixel[1]);
+        destination_pixel[2] = blend(source_pixel[2], destination_pixel[2]);
+    }
+}
+
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
 /// cases retain the established conversion path until their contracts have
@@ -834,7 +874,13 @@ fn paste_native_masked(
         let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
         let destination_row = &mut row[destination_x..destination_x_end];
         let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
-        if mode == "HSV"
+        if mode == "RGB"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_rgb_l_row(source_row, destination_row, mask_row);
+        } else if mode == "HSV"
             && mask_channels == 1
             && mask_pixels.layout.value_index == 0
             && !mask_pixels.layout.premultiplied
@@ -4434,6 +4480,35 @@ mod tests {
             }
             assert_eq!(result.as_bytes(), expected, "native masked {mode} bytes");
         }
+    }
+
+    #[test]
+    fn native_rgb_l_masked_paste_row_matches_div255_endpoints_and_rounding() {
+        let masks = [0u8, 1, 127, 128, 254, 255];
+        let source = [
+            0, 255, 123, 255, 0, 128, 11, 245, 65, 201, 54, 150, 31, 99, 254, 255, 1, 0,
+        ];
+        let destination = [
+            255, 0, 122, 0, 255, 127, 245, 11, 66, 53, 200, 149, 98, 32, 1, 0, 254, 255,
+        ];
+        let mut actual = destination;
+        let mut expected = destination;
+
+        for (pixel, mask) in masks.iter().copied().enumerate() {
+            for channel in 0..3 {
+                let byte = pixel * 3 + channel;
+                let source_value = u32::from(source[byte]);
+                let destination_value = u32::from(expected[byte]);
+                let mask_value = u32::from(mask);
+                expected[byte] =
+                    ((source_value * mask_value + destination_value * (255 - mask_value) + 127)
+                        / 255) as u8;
+            }
+        }
+
+        super::paste_native_masked_rgb_l_row(&source, &mut actual, &masks);
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
