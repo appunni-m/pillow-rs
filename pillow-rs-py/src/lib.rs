@@ -2189,6 +2189,12 @@ fn available_backends() -> Vec<String> {
         .collect()
 }
 
+/// Report whether this extension was compiled with the opt-in Rayon feature.
+#[pyfunction]
+fn parallel_feature_enabled() -> bool {
+    cfg!(feature = "parallel")
+}
+
 /// List currently active backends (priority order).
 #[pyfunction]
 fn active_backends() -> PyResult<Vec<String>> {
@@ -2548,6 +2554,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(enable_backend, m)?)?;
     m.add_function(wrap_pyfunction!(disable_backend, m)?)?;
     m.add_function(wrap_pyfunction!(available_backends, m)?)?;
+    m.add_function(wrap_pyfunction!(parallel_feature_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(active_backends, m)?)?;
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;

@@ -3,7 +3,18 @@ from __future__ import annotations
 
 import unittest
 
-from run_migration_benchmark import select_workloads
+import os
+
+from run_migration_benchmark import (
+    PARALLEL_CPU_PROFILE,
+    TARGET_BACKENDS,
+    TARGET_PROFILES,
+    apply_profile_to_workloads,
+    profile_applies_to_case,
+    runtime_backend_for_profile,
+    select_workloads,
+)
+from run_migration_parity import TARGET_FEATURES, target_profile_for_backend
 
 
 class BenchmarkWorkloadSelectionTests(unittest.TestCase):
@@ -47,6 +58,51 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
                 workload_ids=["missing.workload"],
                 limit=None,
             )
+
+    def test_parallel_cpu_uses_cpu_applicability_without_becoming_simd(self) -> None:
+        cpu_case = {"target_profiles": ["python-cpu"]}
+        simd_only_case = {"target_profiles": ["python-simd"]}
+
+        self.assertTrue(profile_applies_to_case("python-parallel-cpu", cpu_case))
+        self.assertFalse(profile_applies_to_case("python-parallel-cpu", simd_only_case))
+        self.assertEqual(runtime_backend_for_profile("python-parallel-cpu"), "cpu")
+
+    def test_selected_profile_has_matching_backend_and_feature_identity(self) -> None:
+        selected_parallel = os.environ.get("MIGRATION_TARGET_PROFILE") == "parallel-cpu"
+        self.assertEqual(PARALLEL_CPU_PROFILE, selected_parallel)
+        if selected_parallel:
+            self.assertEqual(TARGET_BACKENDS, ("cpu",))
+            self.assertEqual(TARGET_PROFILES, ("python-parallel-cpu",))
+            self.assertEqual(target_profile_for_backend("cpu"), "python-parallel-cpu")
+            self.assertEqual(
+                TARGET_FEATURES[-2:], ["pillow-rs-py/parallel", "pillow-rs/parallel"]
+            )
+        else:
+            self.assertEqual(TARGET_BACKENDS, ("cpu", "simd", "gpu"))
+            self.assertEqual(TARGET_PROFILES, ("python-cpu", "python-simd", "python-gpu"))
+
+    def test_parallel_cpu_compares_only_pillow_and_its_named_profile(self) -> None:
+        standard_subjects = [
+            {"kind": "oracle", "id": "pillow"},
+            {"kind": "target_profile", "id": "python-cpu"},
+            {"kind": "target_profile", "id": "python-simd"},
+            {"kind": "target_profile", "id": "python-gpu"},
+        ]
+        workload = {"workload_id": "fixture", "subjects": standard_subjects}
+
+        profiled = apply_profile_to_workloads([workload])
+
+        if PARALLEL_CPU_PROFILE:
+            self.assertEqual(
+                profiled[0]["subjects"],
+                [
+                    {"kind": "oracle", "id": "pillow"},
+                    {"kind": "target_profile", "id": "python-parallel-cpu"},
+                ],
+            )
+        else:
+            self.assertEqual(profiled[0]["subjects"], standard_subjects)
+        self.assertEqual(workload["subjects"], standard_subjects)
 
 
 if __name__ == "__main__":

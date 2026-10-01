@@ -30444,8 +30444,39 @@ def build_nuanced_cases(
             for mode in ("CMYK", "RGBX")
             for fill_kind, fill in (
                 ("three-component", [17, 83, 149]),
+                ("four-component", [17, 83, 149, 211]),
                 ("invalid-two-component", [17, 83]),
             )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower()}-scalar-fill-keeps-native-fourth-zero",
+                "mode": mode,
+                "size": [3, 2],
+                "edge": "noise-fill",
+                "seed": seed,
+                "values": {"border": literal(1), "fill": literal(37)},
+                "observe_result": "tobytes",
+            }
+            for mode, seed in (("CMYK", 20261105), ("RGBX", 20261106))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower()}-omitted-fill-keeps-native-fourth-zero",
+                "mode": mode,
+                "size": [3, 2],
+                "edge": "noise-fill",
+                "seed": seed,
+                "values": {"border": literal(1)},
+                "observe_result": "tobytes",
+            }
+            for mode, seed in (("CMYK", 20261107), ("RGBX", 20261108))
         ),
         *(
             {

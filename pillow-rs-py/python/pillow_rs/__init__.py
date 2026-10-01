@@ -14,6 +14,7 @@ from . import imageops as ImageOps
 from . import imagepalette as ImagePalette
 from . import imagestat as ImageStat
 from . import imagesequence as ImageSequence
+from . import _core
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
 from ._core import DecompressionBombError
 from .image import Image
@@ -22,7 +23,7 @@ from .operations import (
     linear_gradient, merge, new, open, radial_gradient, resize, rotate, save,
 )
 
-__version__ = "12.2.0-alpha.4"
+__version__ = "12.2.0-alpha.5"
 
 __all__ = [
     "Image", "ImageMode", "ImageFormat",
@@ -58,6 +59,10 @@ def available_backends():
         List of backend name strings (e.g. ``["gpu", "cpu"]``)
     """
     return _core.available_backends()
+
+def parallel_feature_enabled():
+    """Return whether this extension was built with opt-in Rayon execution."""
+    return _core.parallel_feature_enabled()
 
 def active_backends():
     """List currently active backends in priority order.

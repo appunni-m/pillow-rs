@@ -42,6 +42,7 @@ DEFAULT_OUTPUT = (
 PYTHON_FACADE_ROOT = WORKSPACE_ROOT / "pillow-rs-py" / "python"
 TARGET_PROFILE = "python-cpu"
 BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
+DEFAULT_TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
 # ImageOps.mirror has an explicit three-backend benchmark lane in the fixed
@@ -1264,9 +1265,18 @@ def build_manifest() -> dict[str, Any]:
                 "id": f"python-{backend}",
                 "target_id": TARGET_ID,
                 "backend": backend,
-                "features": ["default"],
+                "features": DEFAULT_TARGET_FEATURES.copy(),
             }
             for backend in BENCHMARK_BACKENDS
+        ]
+        + [
+            {
+                "id": "python-parallel-cpu",
+                "target_id": TARGET_ID,
+                "backend": "cpu",
+                "features": DEFAULT_TARGET_FEATURES.copy()
+                + ["pillow-rs-py/parallel", "pillow-rs/parallel"],
+            }
         ],
         "commands": [
             command("inventory", "migration-parity-inventory", 60),
