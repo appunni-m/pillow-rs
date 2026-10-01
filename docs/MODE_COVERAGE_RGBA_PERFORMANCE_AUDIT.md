@@ -24,7 +24,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P4 | Medium | Scalar conversions | Source-carrier clones are removed; serial CPU I→L still trails Pillow. |
 | P5 | Medium | Python data access | Multiband getdata iteration slices the compact byte buffer per pixel; target slicing also diverged from Pillow. |
 | P6 | High | Array input | Contiguous L/RGBA fromarray inputs are copied instead of sharing Pillow's read-only buffer view. |
-| P7 | Low–Medium | Color transforms | YCbCr→RGB still clones RGB-shaped input; RGB→HSV, RGB→YCbCr, and HSV→RGB now borrow. |
+| P7 | Low–Medium | Color transforms | RGB→HSV, RGB→YCbCr, and HSV→RGB now borrow; YCbCr→RGB copy-removal is checkpointed after three variants showed no repeatable whole-call gain. |
 | P8 | Conditional | CPU Paste | Masked same-mode Paste outside the native allowlist converts source and destination to RGBA. |
 | P9 | Medium | GPU shaders | Several mode-aware L/LA kernels express four-channel arithmetic or sorting before selecting the channels they use. |
 | P10 | Low–Medium | JavaScript data access | Formatted multiband getdata builds a nested JavaScript array and a per-pixel array. |
@@ -146,7 +146,7 @@ stable lifetime, reads external writes, and detaches on image mutation without
 creating unsynchronized access. No code change was retained. Keep P6 blocked
 until that ownership contract is designed and parity-tested.
 
-### P7. YCbCr→RGB still clones RGB-shaped input
+### P7. YCbCr→RGB copy-removal attempt checkpointed
 
 The initial inventory overstated the affected functions: `rgb_to_hsv` already
 borrowed native RGB storage. `rgb_to_ycbcr` now borrows `ImageRgb8`, reserves
@@ -157,8 +157,9 @@ the per-pixel loop no longer divides, computes the hue sector, branches, or
 selects a sector. The table stores the same `f32` factors and preserves the
 final multiply, round, clamp, and channel order. Both functions retain the
 existing `to_rgb8()` conversion for other physical input variants.
-`ycbcr_to_rgb` still clones and zero-fills; P7 remains open until it is checked
-separately.
+`ycbcr_to_rgb` also reads YCbCr triplets from `ImageRgb8`; its current path
+still clones them through `to_rgb8()` and zero-fills `RgbImage::new` before
+overwriting every output pixel.
 
 RGB→YCbCr, nonzero RGB→YCbCr, and the RGB→HSV control pass on CPU, strict SIMD,
 and strict GPU (3/3 per backend). For RGB→YCbCr, an interleaved seven-pair
@@ -181,11 +182,30 @@ faster than Pillow from 1×1 through 1024×768, both for the cold first call and
 warm repeated calls. These are single-caller CPU latency results; neither
 operation changed SIMD/GPU code, and no concurrent-throughput claim is made.
 
+YCbCr→RGB was benchmarked separately at 1024×768 using deterministic,
+nonuniform YCbCr bytes. Input construction was outside the timer; each process
+used three warmups and nine samples of five materialized
+`convert("RGB").tobytes()` calls. Seven interleaved Pillow/target process pairs
+used identical inputs, and all output SHA-256 digests matched. The pre-change
+median was 1.410 ms versus Pillow at 1.485 ms (0.95× Pillow latency). Three
+native-source borrow variants measured 1.566 ms (byte-slice input plus reserved
+output vector), 1.455 ms (byte-slice input with the existing image output),
+and 1.467 ms (typed-image borrow with the existing pixel loop), against paired
+Pillow medians of 1.521, 1.463, and 1.476 ms respectively. The vector-output
+variant regressed; the other two were effectively at Pillow latency and did
+not establish a repeatable gain over the old implementation. All three
+variants were discarded. Keep YCbCr→RGB checkpointed; do not retain a copy
+reduction based on allocation counts alone.
+
 **Assessment:** RGB→YCbCr removes two full-frame memory passes and measured a
 small CPU gain. HSV→RGB replaces repeated per-pixel hue/saturation arithmetic
 with a compact factor lookup and roughly halves latency versus its direct-float
-baseline while preserving every possible byte input. Continue with
-YCbCr→RGB as its own operation; do not infer its result from these paths.
+baseline while preserving every possible byte input. For YCbCr→RGB, the typed
+source borrow did not pay off reliably at the full-call boundary; the existing
+serial CPU path remained at or faster than Pillow in the recorded runs. No
+SIMD- or GPU-specific conversion kernel was changed or measured, and no
+concurrent-throughput claim is made. Move on after this bounded three-variant
+checkpoint rather than spending more time on an unproven copy-removal tweak.
 
 ### P8. CPU masked Paste has more same-mode RGBA fallback cases
 
