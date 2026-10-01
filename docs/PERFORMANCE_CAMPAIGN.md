@@ -11511,3 +11511,42 @@ visit should use a fresh correctness-gated baseline for the largest remaining
 individual serial-CPU regression. Keep SIMD and GPU as separate backend work;
 do not route either through Rayon or report the CPU speedup as an accelerator
 result. No coverage, GitHub CI, or release action was run.
+
+## Masked L Paste serial-CPU checkpoint — 2026-10-01
+
+The next individual CPU regression in the clean operation snapshot was
+materialized L/L-mask Paste at 1024 × 768. A fresh run on clean `main`,
+`migration-benchmark-c76706275fd744f0a17140594985a34d`, measured medians of
+0.187 ms for Pillow, 0.877 ms for serial CPU, 0.162 ms for SIMD, and 0.771 ms
+for GPU. CPU, SIMD, and GPU parity all passed; each backend was selected for
+100/100 timed observations with no fallback.
+
+L/L Paste also reached the generic mask loop, which checked zero and full
+opacity for every sample and checked premultiplication inside the channel
+loop. Its dedicated one-byte row path applies Pillow's same rounded DIV255
+formula directly, so mask endpoints remain exact without those branches. The
+focused row test covers endpoint weights and rounding values.
+
+The correctness-gated after-run
+`migration-benchmark-e355273039794d25815b165e5be45c59` measured Pillow at
+0.227 ms, serial CPU at 0.161 ms, SIMD at 0.157 ms, and GPU at 0.775 ms. Serial
+CPU improved 5.45× against its same-session baseline and now beats Pillow by
+1.41×. The parity gate
+`migration-parity-benchmark-gate-e0d68caf603c4f9b915c064d4a703cb5` passed all
+three profiles (3/3), with requested backends selected 100/100 times. SIMD is
+about 1.44× faster than Pillow, still below its 5× goal; GPU is about 4.94×
+slower than SIMD. No SIMD or GPU implementation was changed in this visit.
+
+Reproduce with:
+
+```sh
+cargo test -p pillow-rs --lib native_l_masked_paste_row_matches_div255_endpoints_and_rounding
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-l-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/masked-l-cpu-after-attempt1.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/masked-l-cpu-after-attempt1-parity.json \
+  make migration-parity-benchmark
+```
+
+No coverage, GitHub CI, or release action was run.
