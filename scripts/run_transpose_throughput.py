@@ -55,7 +55,8 @@ exports the complete result. Construction, mutation and export remain timed.
 
 ``--operation transform`` uses one nearest affine transform with fractional
 coefficients and explicit fill, retaining the input size. It exercises fresh
-source selection across the full image and requires one native GPU dispatch.
+source selection across the full image for L, LA, and RGB, and requires one
+native GPU dispatch.
 
 ``--operation add`` and ``--operation subtract`` use the same two-image policy
 with default scale/offset. ``--operation multiply`` uses the same fresh pair
@@ -264,7 +265,8 @@ def request(image_api: Any, core: Any, plan: dict[str, Any], data: bytes,
             enhancer = plan["imageenhance_api"].Contrast if plan["operation"] == "contrast" else plan["imageenhance_api"].Color
             image = enhancer(image).enhance(0.3)
         elif plan.get("operation") == "transform":
-            fill = 173 if plan["mode"] == "L" else (17, 83, 149)
+            fill = (173 if plan["mode"] == "L" else
+                    (173, 127) if plan["mode"] == "LA" else (17, 83, 149))
             image = image.transform(tuple(plan["size"]), 0, TRANSFORM_DATA,
                                     resample=0, fillcolor=fill)
         elif plan.get("operation") == "composite":
@@ -586,8 +588,10 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError(f"{operation} throughput requires mode 1")
     if operation not in ("logical-and", "logical-or", "logical-xor") and "1" in modes:
         raise ValueError("mode 1 throughput currently requires logical-and, logical-or, or logical-xor")
-    if operation in ("equalize", "autocontrast", "invert", "grayscale", "convert", "transform") and any(mode not in ("L", "RGB") for mode in modes):
+    if operation in ("equalize", "autocontrast", "invert", "grayscale", "convert") and any(mode not in ("L", "RGB") for mode in modes):
         raise ValueError(f"{operation} throughput supports L/RGB input")
+    if operation == "transform" and any(mode not in ("L", "LA", "RGB") for mode in modes):
+        raise ValueError("transform throughput supports L/LA/RGB input")
     if operation == "alpha-composite" and any(mode not in ("LA", "RGBA") for mode in modes):
         raise ValueError("alpha-composite throughput supports LA/RGBA input")
     if operation == "composite" and any(mode not in ("L", "RGB", "RGBA") for mode in modes):

@@ -2871,6 +2871,62 @@ fn transform_affine_luma_nearest(
     Ok(Some(DynamicImage::ImageLuma8(image)))
 }
 
+fn transform_affine_luma_alpha_nearest(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    affine: [f64; 6],
+    fill: Option<(u8, u8, u8, u8)>,
+) -> Result<Option<DynamicImage>, PilError> {
+    let DynamicImage::ImageLumaA8(source) = img else {
+        return Ok(None);
+    };
+    let Some([step_x, step_y, origin_x, step_x_y, step_y_y, origin_y]) =
+        affine_nearest_fixed(affine, dst_w, dst_h)
+    else {
+        return Ok(None);
+    };
+    let width = usize::try_from(dst_w)
+        .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
+    let height = usize::try_from(dst_h)
+        .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
+    if width == 0 || height == 0 {
+        return Ok(None);
+    }
+    let output_len = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(2))
+        .ok_or_else(|| PilError::ValueError("transform output is too large".into()))?;
+    let source_width = usize::try_from(source.width())
+        .map_err(|_| PilError::ValueError("transform source is too large".into()))?;
+    let source_height = i64::from(source.height());
+    let fill = fill.map_or([0, 0], |color| [color.0, color.1]);
+    let raw = source.as_raw();
+    let mut output = vec![0; output_len];
+
+    for (y, row) in output.chunks_exact_mut(width * 2).enumerate() {
+        let mut sx = origin_x + y as i64 * step_y;
+        let mut sy = origin_y + y as i64 * step_y_y;
+        for pixel in row.chunks_exact_mut(2) {
+            let ix = sx >> 16;
+            let iy = sy >> 16;
+            if ix >= 0 && ix < source_width as i64 && iy >= 0 && iy < source_height {
+                let source_start = (iy as usize * source_width + ix as usize) * 2;
+                pixel.copy_from_slice(&raw[source_start..source_start + 2]);
+            } else {
+                pixel.copy_from_slice(&fill);
+            }
+            sx += step_x;
+            sy += step_x_y;
+        }
+    }
+
+    let image = GrayAlphaImage::from_raw(dst_w, dst_h, output).ok_or_else(|| {
+        PilError::InternalError("transform affine LA buffer shape mismatch".into())
+    })?;
+    Ok(Some(DynamicImage::ImageLumaA8(image)))
+}
+
 fn transform_affine_rgb_nearest(
     img: &DynamicImage,
     dst_w: u32,
@@ -3537,6 +3593,17 @@ pub fn op_transform(
 
             if matches!(explicit_mode, None | Some("L")) && use_nearest {
                 if let Some(result) = transform_affine_luma_nearest(
+                    work,
+                    w,
+                    h,
+                    [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f],
+                    transform_fill,
+                )? {
+                    return Ok(preserve_mode(img, result));
+                }
+            }
+            if matches!(explicit_mode, None | Some("LA")) && use_nearest {
+                if let Some(result) = transform_affine_luma_alpha_nearest(
                     work,
                     w,
                     h,
@@ -4418,6 +4485,18 @@ mod tests {
         DynamicImage::ImageLuma8(GrayImage::from_raw(5, 4, raw).expect("luma source"))
     }
 
+    fn varied_luma_alpha_source() -> DynamicImage {
+        let raw: Vec<u8> = (0..4)
+            .flat_map(|y| {
+                (0..5).flat_map(move |x| {
+                    let luma = (x * 37 + y * 11 + 3) as u8;
+                    [luma, luma.wrapping_add(83)]
+                })
+            })
+            .collect();
+        DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(5, 4, raw).expect("LA source"))
+    }
+
     #[test]
     fn affine_l_nearest_direct_path_matches_generic_and_is_selected() {
         let source = varied_luma_source();
@@ -4446,6 +4525,38 @@ mod tests {
                 explicit_mode,
             )
             .expect("public L affine nearest transform");
+            assert_eq!(actual, generic, "mode {explicit_mode:?}");
+        }
+    }
+
+    #[test]
+    fn affine_la_nearest_direct_path_matches_generic_and_is_selected() {
+        let source = varied_luma_alpha_source();
+        let affine = [0.87, 0.21, -1.25, -0.16, 1.13, 0.5];
+        let fill = Some((173, 127, 0, 0));
+        let specialized = super::transform_affine_luma_alpha_nearest(&source, 7, 5, affine, fill)
+            .expect("LA nearest specialization")
+            .expect("LA storage and fixed affine plan should use the direct path");
+        let generic = super::transform_affine_generic(
+            &source, 7, 5, affine[0], affine[1], affine[2], affine[3], affine[4], affine[5], fill,
+            true, false,
+        )
+        .expect("generic LA nearest transform");
+
+        assert_eq!(specialized, generic);
+        for explicit_mode in [None, Some("LA")] {
+            let actual = op_transform(
+                &source,
+                7,
+                5,
+                &TransformMethod::Affine,
+                &affine,
+                &ResampleFilter::Nearest,
+                fill,
+                false,
+                explicit_mode,
+            )
+            .expect("public LA affine nearest transform");
             assert_eq!(actual, generic, "mode {explicit_mode:?}");
         }
     }
