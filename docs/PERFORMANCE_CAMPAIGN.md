@@ -11551,6 +11551,70 @@ PYTHON=build/parity-venv/bin/python \
 
 No coverage, GitHub CI, or release action was run.
 
+## RGB ImageFilter.GaussianBlur serial-CPU checkpoint — 2026-10-01
+
+The selected workload is `pil-imagefilter.gaussianblur.standard`: varied RGB
+noise at 1024 × 768, `GaussianBlur(radius=2)`, Pillow's three horizontal then
+three vertical fractional box passes, followed by byte materialization. Two
+clean runs on current `main` (`12cc4c32b`) measured CPU medians of 13.962 ms
+and 13.958 ms against Pillow at 5.581 ms and 5.716 ms. Baseline receipts are
+`migration-benchmark-ea2c7e0678d746f5a7ed4d8c999d2822` and
+`migration-benchmark-35097ee711c94f8d96023485fb0344f8`; each parity gate passed
+CPU, SIMD, and GPU (3/3), with 100 actual backend executions per target and no
+fallback. An older checkpoint at `b38c616` reported a much faster CPU result,
+but that revision is not an ancestor of this main checkout; it was not used as
+the serial-CPU baseline.
+
+Attempt 1 changed the sliding-window byte update from repeated indexed loads
+to contiguous slices. The isolated run
+`migration-benchmark-4ab08c68cf6947da92cb2ee9338bf62a` measured CPU at 8.657
+ms, a 1.61× latency improvement over the repeated clean baseline; its parity
+gate `migration-parity-benchmark-gate-3fefd6313e3c43c095a26738edc7efff` passed
+all three backends. Since the low-level helper is shared with BoxBlur, the
+native RGB BoxBlur regression case
+`PIL.ImageFilter.BoxBlur.nuanced.backend-noise-rgb-65x47-radius-1` also passed
+1/1 on CPU (`migration-parity-8b012076f45b44d8aa62ad0c7c43e7b6`).
+
+Attempt 2 kept the same per-pass recurrence and ran all three horizontal passes
+for each RGB row through two reusable row buffers, storing only the final
+horizontal row to the frame. A byte-for-byte unit test compares this with
+three full-frame passes at tiny, edge-overlap, and odd dimensions. Its
+benchmark `migration-benchmark-8c3574cb8ee241d19772170689407f87` measured CPU
+at 8.573 ms (1.63× faster than baseline), with parity gate
+`migration-parity-benchmark-gate-095311f114974f3cb2ebf3c5bdd2bd10` passing
+CPU/SIMD/GPU. The extra gain over attempt 1 was small, indicating that the
+vertical passes dominate after the horizontal intermediate traffic is reduced.
+
+Attempt 3 tiled all three vertical passes into two reusable full-height RGB
+tiles. Its equivalence test passed, and the strict parity gate
+`migration-parity-benchmark-gate-56f45cc2ed084301b3dd12d8054592ae` passed, but
+CPU regressed to 9.845 ms. That vertical-tile path was removed. The retained
+code is attempt 2. A fresh run after reverting attempt 3
+(`migration-benchmark-3cf1994281cc4222b4dc6bab34a19136`) measured Pillow / CPU
+/ SIMD / GPU at 5.859 / 9.147 / 26.294 / 3.235 ms. Its gate
+`migration-parity-benchmark-gate-57a18a086c3c4edaab1bd87af6cdbcf6` passed all
+three backends, each selected for 100/100 executions with no fallback. Run
+variation puts the retained CPU path around 8.6–9.1 ms, roughly 1.5–1.6× below
+the current serial baseline, but still 1.56× slower than Pillow. SIMD remains
+about 4.5× slower than Pillow; GPU is about 1.8× faster than Pillow and has
+higher single-request reciprocal throughput than SIMD. GaussianBlur remains a
+performance blocker after three bounded attempts, so continue with another
+operation.
+
+Reproduce the retained variant with:
+
+```sh
+cargo test -p pillow-rs --lib rgb_gaussian_horizontal_row_fusion_matches_three_full_frame_passes
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imagefilter.gaussianblur.standard' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/gaussianblur-rgb-best-after-revert-20261001.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/gaussianblur-rgb-best-after-revert-20261001-parity.json \
+  make migration-parity-benchmark
+```
+
+No coverage, GitHub CI, or release action was run.
+
 ## RGB Image.reduce serial-CPU checkpoint — 2026-10-01
 
 The clean operation snapshot ranked the 1024 × 768 RGB `Image.reduce` workload
