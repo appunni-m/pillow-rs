@@ -6,6 +6,11 @@ backend limitations in the documentation remain part of its contract.
 
 ## Unreleased
 
+## 12.2.0-alpha.4 - 2026-10-01
+
+- Avoid intermediate copies in native `I`/`F` to `RGB` conversion and reuse
+  native RGB samples for HSV conversion while preserving Pillow output bytes.
+
 ## 12.2.0-alpha.3 - 2026-10-01
 
 - Preserve native fill-channel order in `ImageOps.expand` for formats such as
