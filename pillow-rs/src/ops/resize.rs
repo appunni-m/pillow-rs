@@ -243,8 +243,9 @@ impl Image {
         let source_size = source.size()?;
         let bounds = validate_resize_box(bounds, source_size)?;
         let full_source = (0.0, 0.0, f64::from(source_size.0), f64::from(source_size.1));
-        let vertical_first =
-            u64::from(source_size.1) > u64::from(source_size.0) * 100 && h < source_size.1;
+        let vertical_first = u64::from(source_size.1) > u64::from(source_size.0) * 100
+            && h < source_size.1
+            && w != source_size.0;
         if bounds == full_source && !vertical_first {
             return source.resize_with_filter((w, h), filter);
         }

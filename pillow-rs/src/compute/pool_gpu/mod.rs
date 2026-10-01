@@ -18012,7 +18012,7 @@ fn gpu_nearest_affine_is_exact(
         || (palette_alpha_mode && !matches!(image, DynamicImage::ImageLumaA8(_)))
         || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))
         || !matches!(method, TransformMethod::Affine)
-        || (!gpu_transform_uses_nearest(mode, *filter))
+        || (!gpu_transform_uses_nearest(mode, *filter) && !luma16_mode)
         || source_dimensions.0 == 0
         || source_dimensions.1 == 0
         || source_dimensions.0 > i32::MAX as u32
@@ -19843,9 +19843,13 @@ fn gpu_geometry_host_control_reason(
             if !gpu_resize_boxed_coefficients_are_safe(dimensions, (*w, *h), *box_coords, *filter) {
                 return Some("ResizeBoxed coefficient tables exceed the GPU contract");
             }
+            let horizontal_identity = *w == dimensions.0
+                && box_coords.0 == 0.0
+                && box_coords.2 == f64::from(dimensions.0);
             if !matches!(filter, ResampleFilter::Nearest)
                 && u64::from(dimensions.1) > u64::from(dimensions.0) * 100
                 && *h < dimensions.1
+                && !horizontal_identity
             {
                 return Some("ResizeBoxed requires Pillow vertical-first pass order");
             }
@@ -33632,7 +33636,12 @@ mod tests {
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("wide special F resize must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(
+                telemetry.1,
+                Backend::Gpu,
+                "{filter_name}; fallback reason: {:?}",
+                telemetry.7
+            );
             assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
@@ -34462,7 +34471,12 @@ mod tests {
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("compact special F resize must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(
+                telemetry.1,
+                Backend::Gpu,
+                "{label}; fallback reason: {:?}",
+                telemetry.7
+            );
             assert_eq!(telemetry.7, None);
         }
         Backend::set_pipeline_telemetry_enabled(previous);
@@ -34725,7 +34739,12 @@ mod tests {
             let telemetry = Backend::take_pipeline_telemetry()
                 .expect("vertical F resize must publish telemetry");
             assert_eq!(telemetry.0, Some(Backend::Gpu));
-            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(
+                telemetry.1,
+                Backend::Gpu,
+                "vertical {filter_name}; fallback reason: {:?}",
+                telemetry.7
+            );
             assert_eq!(telemetry.7, None);
             Backend::set_pipeline_telemetry_enabled(previous);
         }
