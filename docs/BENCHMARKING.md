@@ -87,27 +87,35 @@ The small thumbnail row remains useful for dispatch and adapter overhead, but
 must not stand in for this material workload.
 
 The public benchmark page presents two tables: individual operation workloads
-and composed pipeline workloads. The 2026-10-01 published snapshot displays 635
-distinct workload rows: 179 individual-operation workloads spanning 91
-operation names, plus 456 composed, matrix, lifecycle, and quick pipeline
-workloads. The downloadable data contains 3,175 subject measurements—Pillow,
-CPU, SIMD, GPU, and Parallel CPU for each workload. Their recorded contexts
-include 12 mode labels, including the mixed-mode `I+F` case. Each row carries
-its own mode, operation type, dimensions, boundary, and repeat policy; the page
-can filter and sort by type, mode, workload name, or backend latency. These are
-workload counts, not a claim that every combination of operation and mode is
-supported or measured by every backend. The benchmark completeness check still
-verifies that every active `PipelineOp` and maintained eager operation has a
-workload specification.
+and composed pipeline workloads. The published 2026-10-01 snapshot (source
+revision `4b08d9d6`; [download its JSON](https://appunni-m.github.io/pillow-rs/assets/benchmark.json))
+displays 639 workload rows: 183 individual-operation workloads and 456
+composed, matrix, lifecycle, and quick pipeline workloads. Its JSON contains
+3,195 measurements across five subjects: ordinary Pillow, CPU, SIMD, GPU, and
+Parallel CPU. The checked-in `pipeline-operations.json` catalog on this
+revision has 636 active workload specifications: 180 individual operations and
+456 pipelines. The published snapshot retains three material blur workloads
+that are no longer in that active catalog: BoxBlur on L, GaussianBlur on L,
+and UnsharpMask on RGB. Treat those three published rows as historical evidence,
+not as current active-workload coverage. The recorded contexts include 12 mode
+labels, including mixed-mode `I+F`. Each row carries its own mode, operation
+type, dimensions, boundary, and repeat policy; the page can filter by type,
+mode, implementation, or workload text, and sort by type, mode, workload name,
+or backend latency. These counts do not claim that every operation/mode
+combination is supported or measured by every backend. The benchmark
+completeness check verifies that every active `PipelineOp` and maintained
+eager operation has a workload specification.
 
 The published page uses the full pipeline profile, not the four-workload quick
 smoke profile. The workflow also runs the opt-in Rayon feature as a separate
 Parallel CPU build and times only `python-parallel-cpu`; its parity preflight
 still compares outputs with Pillow. The public tables reuse the ordinary
 Pillow timing from the standard run, after matching source revision, host,
-workload, input mode, and measurement policy. This avoids timing Pillow twice
-and keeps Parallel CPU distinct from the default serial CPU, architecture
-specific SIMD, and GPU. Quick results remain useful during local development:
+workload, input mode, and measurement policy. That single ordinary Pillow
+measurement is the baseline for Parallel CPU too; there is no threaded Pillow
+run or separate `pillow-parallel-cpu` baseline. This avoids timing Pillow twice
+and keeps Parallel CPU distinct from default serial CPU, architecture-specific
+SIMD, and GPU. Quick results remain useful during local development:
 
 ```sh
 MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark
