@@ -61,11 +61,21 @@ This adds a full-frame converted buffer and four-byte-per-pixel auxiliary storag
 
 **Assessment:** high confidence in the staging cost; medium priority, depending on image size and reuse. A compact operand layout is operation-specific because masks, alpha, and scalar samples have different contracts.
 
-### P3. Median-cut quantization duplicates native RGB data
+### P3. Median-cut quantization duplicates native RGB data — partially addressed
 
-pillow-rs/src/ops/quantize.rs:2334–2346 calls to_rgb8(), constructs a Vec<[u8; 3]>, then flattens that into another RGB byte Vec for median_cut_quantize_rgb. The pixel list is only consumed by k-means refinement at :2349–2353, so it is unused when kmeans is zero. On an already RGB8 image, to_rgb8() itself clones the source. Method 1 also owns the to_rgb8() buffer before read-only quantization at :2334–2339.
+The median-cut route in `pillow-rs/src/ops/quantize.rs` now borrows the byte
+slice for concrete RGB8 storage when the logical mode is unspecified or RGB.
+It passes those bytes directly to `median_cut_quantize_rgb`, avoiding both the
+same-format `to_rgb8()` clone and the flattened byte vector. It creates the
+`Vec<[u8; 3]>` only when `kmeans > 0`, where refinement actually consumes it.
+Other modes retain the reference-compatible RGB conversion. The separate
+MAXCOVERAGE method still materializes its converted RGB buffer.
 
-**Assessment:** high-confidence extra allocation/copy. The median-cut input can use borrowed RGB bytes for native RGB and create the pixel list only when refinement needs it.
+**Assessment:** the redundant full-frame buffers are removed from native RGB
+median-cut with `kmeans=0`; the benchmark evidence does not establish a
+repeatable latency win. See the 2026-10-01 checkpoint in
+`PERFORMANCE_CAMPAIGN.md`. Keep P3 open for measured impact and remaining
+quantization paths rather than treating fewer allocations as proof of speed.
 
 ### P4. I/F color conversions clone the source carrier
 
@@ -205,12 +215,15 @@ generic RGBA transport from other operations or modes. CPU and SIMD latency
 targets for Cover LA also remain open; see the measured checkpoint in
 `PERFORMANCE_CAMPAIGN.md`.
 
-P3 also remains open. The RGB median-cut tree-search optimization on main
-(`6659b734`) changes palette-bin lookup from scanning every box to walking the
-split tree, but it does not remove `to_rgb8()` or the separate
-`Vec<[u8; 3]>` materialization in the non-kmeans path. It therefore does not
-close the allocation/copy finding in this audit. Preserve exact palette
-ordering and k-means inputs when tackling that work.
+P3 is partially addressed on main. The median-cut path borrows bytes for native
+RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
+non-RGB modes retain conversion. Focused parity passed for default median-cut,
+k-means refinement, and L-mode input. Six-sample whole-call measurements do not
+demonstrate a reliable latency improvement, and the requested SIMD/GPU
+profiles did not prove backend execution for this eager quantizer. Preserve
+this allocation reduction, but leave the finding open until a repeatable
+latency or throughput gain is measured. See `PERFORMANCE_CAMPAIGN.md` for the
+receipts and limits.
 
 M1 and M2 are closed for the current public surface by the follow-up checks
 above. The split fix has mode and byte parity; the typed filtered-resize

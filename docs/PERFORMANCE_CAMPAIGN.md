@@ -7573,6 +7573,47 @@ three `python-*` benchmark profiles share this eager CPU implementation;
 receipts contain no actual backend dispatch counts, so these are not SIMD or
 GPU measurements. No coverage was run.
 
+### RGB MEDIANCUT: remove redundant full-frame buffers — 2026-10-01
+
+The RGB median-cut branch previously cloned a matching RGB8 image through
+`to_rgb8()`, built a `Vec<[u8; 3]>`, then flattened that tuple vector into a
+second RGB byte buffer. Median-cut reads interleaved bytes directly, so the
+native RGB/default-mode route now borrows `img.as_bytes()`. The tuple vector is
+created only when `kmeans > 0` needs it for refinement. Other image modes keep
+the established RGB conversion, and palette construction, tree traversal, and
+refinement arithmetic are unchanged.
+
+Focused CPU parity passed **3/3** cases: default RGB median-cut, RGB median-cut
+with `kmeans=2`, and L-mode input. The focused target was:
+
+```sh
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.quantize.nuanced.mediancut-default PIL.Image.Image.quantize.nuanced.mediancut-kmeans-2 PIL.Image.Image.quantize.mode.l' \
+  MIGRATION_PARITY_OUTPUT=build/migration-parity/quantize-p3-focused-parity.json \
+  migration-parity-test
+```
+
+The isolated single-workload benchmark used a 256 × 256 RGB image and six
+samples per subject. The baseline was clean at `2c84b698`; the candidate run
+used the same source revision with the quantize change present in the dirty
+worktree. Both were gated on successful execution, with parity verified by the
+separate 3/3 run above.
+
+| Subject/profile | Baseline median ms | Candidate median ms | Samples each |
+| --- | ---: | ---: | ---: |
+| Pillow | 51.808 | 53.078 | 6 |
+| CPU | 13.964 | 14.202 | 6 |
+| SIMD requested | 13.959 | 14.290 | 6 |
+| GPU requested | 14.299 | 14.252 | 6 |
+
+The CPU delta is within observed sample variation, and Pillow shifted by a
+similar amount between runs. No latency win is claimed. CPU remains roughly
+3.7× faster than Pillow on this workload. SIMD and GPU report no actual backend
+execution, so their timings are not hardware-backend results; quantization
+uses the same eager host implementation under these profiles. Receipts are
+`migration-benchmark-e7c9b9ac2863457190271e926158cd82` and
+`migration-benchmark-0afdfc54e29246e59132fb707e127ff3`. No coverage was run.
+
 ### RGBA FASTOCTREE: read the four-byte carrier directly — 2026-09-28
 
 The RGBA FASTOCTREE path used `to_rgba8().into_raw()` before a read-only octree
