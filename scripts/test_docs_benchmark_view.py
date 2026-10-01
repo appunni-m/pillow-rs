@@ -62,17 +62,17 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertIn('Actual: cpu',text)
         self.assertIn('actual: cpu',text)
 
-    def test_parallel_cpu_uses_its_own_paired_pillow_baseline(self):
-        baseline = row("pillow-parallel-cpu", 20, workload="pipeline-op.resize", comparison_group="parallel-cpu")
-        target = row("python-parallel-cpu", 10, workload="pipeline-op.resize", comparison_group="parallel-cpu")
+    def test_parallel_cpu_uses_ordinary_pillow_baseline(self):
+        target = row("python-parallel-cpu", 10, workload="pipeline-op.resize")
         default_pillow = row("pillow", 40, workload="pipeline-op.resize")
-        self.assertEqual(compare(target, baseline)[0], 2)
-        self.assertIsNone(compare(target, default_pillow)[0])
-        snapshot = dict(rows=[default_pillow, baseline, target], environment={"os": "Test"}, measured_at="2026-09-16")
+        self.assertEqual(compare(target, default_pillow)[0], 4)
+        snapshot = dict(rows=[default_pillow, target], environment={"os": "Test"}, measured_at="2026-09-16")
         text = render_dashboard(snapshot, dict(project="pillow-rs", benchmark={"kind": "pillow"}))
-        self.assertIn("Pillow · Parallel CPU baseline", text)
         self.assertIn("pillow-rs · Parallel CPU", text)
-        self.assertIn('data-ratio="2.0"', text)
+        self.assertIn('data-ratio="4.0"', text)
+        self.assertIn('data-baseline-for="pillow"', text)
+        self.assertNotIn('data-subject="pillow-parallel-cpu"', text)
+        self.assertIn("Parallel CPU is measured separately with the opt-in Rayon feature", text)
 
     def test_dashboard_renders_separate_pipeline_and_operation_tables_with_mode_and_type(self):
         rows = [

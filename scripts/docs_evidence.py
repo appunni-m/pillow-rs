@@ -80,13 +80,13 @@ def project_pillow(document: dict) -> dict:
 
 
 def merge_parallel_cpu(snapshot: dict, parallel: dict, source_hash: str, parallel_hash: str) -> dict:
-    """Add Rayon measurements with their own same-run Pillow baseline."""
+    """Join target-only Rayon timings to the ordinary Pillow measurements."""
     if snapshot["revision"] != parallel["revision"]:
         raise ValueError("default and Parallel CPU benchmarks use different source revisions")
     if snapshot["environment"] != parallel["environment"]:
         raise ValueError("default and Parallel CPU benchmarks use different environments")
 
-    expected_subjects = {"pillow", "python-parallel-cpu"}
+    expected_subjects = {"python-parallel-cpu"}
     by_workload: dict[str, dict[str, dict]] = {}
     for row in parallel["rows"]:
         if row["subject"] not in expected_subjects:
@@ -102,22 +102,25 @@ def merge_parallel_cpu(snapshot: dict, parallel: dict, source_hash: str, paralle
     merged = []
     for workload, subjects in by_workload.items():
         if set(subjects) != expected_subjects:
-            raise ValueError(f"Parallel CPU workload lacks its paired Pillow baseline: {workload}")
+            raise ValueError(f"Parallel CPU workload must contain only its target timing: {workload}")
         if workload not in default_by_workload:
             raise ValueError(f"Parallel CPU workload is absent from the default benchmark: {workload}")
-        pillow = subjects["pillow"]
+        default_subjects = default_by_workload[workload]
+        pillow = default_subjects.get("pillow")
+        if pillow is None:
+            raise ValueError(f"Parallel CPU workload lacks ordinary Pillow timing: {workload}")
+        default_cpu = default_subjects.get("python-cpu")
+        if default_cpu is None:
+            raise ValueError(f"Parallel CPU workload has no matching default CPU lane: {workload}")
         parallel_cpu = subjects["python-parallel-cpu"]
         for field in ("policy", "context", "sample_unit", "sample_count"):
             if pillow[field] != parallel_cpu[field]:
                 raise ValueError(f"Parallel CPU and Pillow conditions differ for {workload}: {field}")
-        if not any(row["subject"] == "python-cpu" for row in default_by_workload[workload].values()):
-            raise ValueError(f"Parallel CPU workload has no matching default CPU lane: {workload}")
-        if any(default_by_workload[workload]["python-cpu"][field] != pillow[field]
+        if any(default_cpu[field] != pillow[field]
                for field in ("policy", "context", "sample_unit", "sample_count")):
             raise ValueError(f"Parallel CPU and default CPU conditions differ for {workload}")
-        baseline = dict(pillow, subject="pillow-parallel-cpu", comparison_group="parallel-cpu")
-        target = dict(parallel_cpu, comparison_group="parallel-cpu")
-        merged.extend((baseline, target))
+        target = dict(parallel_cpu, comparison_group="default")
+        merged.append(target)
 
     for row in snapshot["rows"]:
         row.setdefault("comparison_group", "default")
@@ -129,7 +132,7 @@ def merge_parallel_cpu(snapshot: dict, parallel: dict, source_hash: str, paralle
          "source_sha256": parallel_hash},
     ]
     snapshot["notes"].append(
-        "Parallel CPU is an opt-in Rayon build measured separately. Its speed ratios use the Pillow baseline from that same run."
+        "Parallel CPU is an opt-in Rayon build measured separately. Its parity preflight uses Pillow, while its speed ratios reuse ordinary Pillow timings from the default run; no second Pillow timing is collected."
     )
     return snapshot
 
@@ -232,15 +235,12 @@ def validate(snapshot: dict, repository: str) -> None:
     if not re.fullmatch(r"[0-9a-f]{64}", snapshot.get("source_sha256", "")):
         raise ValueError("benchmark source hash is missing")
     keys = set()
-    parallel_subjects: dict[str, set[str]] = {}
+    rows_by_workload: dict[str, dict[str, dict]] = {}
     for row in snapshot["rows"]:
         cohort = row.get("comparison_group", "default")
-        if cohort not in {"default", "parallel-cpu"}:
+        if cohort != "default":
             raise ValueError("unknown benchmark comparison cohort")
-        if cohort == "parallel-cpu":
-            if row["subject"] not in {"pillow-parallel-cpu", "python-parallel-cpu"}:
-                raise ValueError("Parallel CPU cohort contains an unrelated subject")
-            parallel_subjects.setdefault(row["workload"], set()).add(row["subject"])
+        rows_by_workload.setdefault(row["workload"], {})[row["subject"]] = row
         key = (row["workload"], row["subject"])
         if key in keys:
             raise ValueError(f"duplicate benchmark subject: {key}")
@@ -254,9 +254,16 @@ def validate(snapshot: dict, repository: str) -> None:
             raise ValueError("benchmark row omitted its result or measurement boundary")
     if not keys:
         raise ValueError("an empty result is not a measured benchmark")
-    for workload, subjects in parallel_subjects.items():
-        if subjects != {"pillow-parallel-cpu", "python-parallel-cpu"}:
-            raise ValueError(f"Parallel CPU row lacks its same-run Pillow baseline: {workload}")
+    for workload, subjects in rows_by_workload.items():
+        parallel = subjects.get("python-parallel-cpu")
+        if parallel is None:
+            continue
+        pillow = subjects.get("pillow")
+        if pillow is None:
+            raise ValueError(f"Parallel CPU row lacks ordinary Pillow baseline: {workload}")
+        for field in ("policy", "context", "sample_unit", "sample_count"):
+            if pillow[field] != parallel[field]:
+                raise ValueError(f"Parallel CPU and Pillow conditions differ for {workload}: {field}")
 
 
 def cell(value: object) -> str:
@@ -375,7 +382,7 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--parallel-source", type=Path,
-                        help="optional separate Parallel CPU benchmark result with its paired Pillow baseline")
+                        help="optional target-only Parallel CPU result to compare with ordinary Pillow")
     args = parser.parse_args()
     if args.kind == "jpeg":
         snapshot = project_jpeg(args.source)

@@ -17,15 +17,13 @@ BASELINE_FOR = {
     "python-cpu": "pillow",
     "python-simd": "pillow",
     "python-gpu": "pillow",
-    "pillow-parallel-cpu": "pillow-parallel-cpu",
-    "python-parallel-cpu": "pillow-parallel-cpu",
+    "python-parallel-cpu": "pillow",
 }
 NAMES = {
     "pillow": "Pillow",
     "python-cpu": "pillow-rs · CPU",
     "python-simd": "pillow-rs · SIMD",
     "python-gpu": "pillow-rs · GPU",
-    "pillow-parallel-cpu": "Pillow · Parallel CPU baseline",
     "python-parallel-cpu": "pillow-rs · Parallel CPU",
 }
 
@@ -201,7 +199,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     if kind == "pillow":
         targets = [subject for subject in ("python-cpu", "python-simd", "python-gpu", "python-parallel-cpu")
                    if subject in all_subjects or subject.startswith("python-")]
-        baseline_ids = ["pillow", "pillow-parallel-cpu"]
+        baseline_ids = ["pillow"]
     else:
         targets = list(dict.fromkeys(row["subject"] for row in snapshot["rows"] if row["subject"] != primary_baseline))
         baseline_ids = [primary_baseline]
@@ -213,7 +211,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     if "python-gpu" in targets:
         subjects.append("python-gpu")
     if kind == "pillow":
-        subjects.extend(["pillow-parallel-cpu", "python-parallel-cpu"])
+        subjects.append("python-parallel-cpu")
     subjects.extend(subject for subject in targets if subject not in subjects)
     counts = {subject: Counter() for subject in targets}
     table_rows = {"pipelines": [], "operations": []}
@@ -298,7 +296,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
     pipeline_count = sum(1 for rows in grouped.values() if facets(rows[0], kind)[0] == "pipelines")
     operation_count = len(grouped) - pipeline_count
     return (f'<div class="benchmark-dashboard" data-baseline="{escape(primary_baseline)}">'
-            f'<p class="bench-intro">Compare like-for-like workload results with the recorded Pillow baseline. Default CPU, SIMD, and GPU use <strong>Pillow</strong>; Parallel CPU uses <strong>Pillow measured in its separate feature-enabled run</strong>. '
+            f'<p class="bench-intro">Compare like-for-like workload results with the recorded Pillow baseline. CPU, SIMD, GPU, and Parallel CPU all use <strong>ordinary Pillow</strong>; Parallel CPU is measured separately with the opt-in Rayon feature. '
             '<strong>Lower time is better.</strong></p>'
             f'<div class="bench-summary">{"".join(summary)}</div>'
             '<p class="bench-summary-note">Observed median comparisons, not an overall score. Timing-only rows do not establish equal output; small differences may be noise.</p>'
@@ -311,7 +309,7 @@ def render_dashboard(snapshot: dict, config: dict) -> str:
             '<p class="bench-chart-key">Shorter bars = less time within a row. Sort by type, mode, operation or pipeline, or backend latency. Scroll each table horizontally on small screens.</p>'
             '<section class="bench-section" data-table-kind="pipelines"><h2>Pipeline benchmarks</h2><p>Composed, matrix, lifecycle and quick workloads. Current snapshot: ' + str(pipeline_count) + ' pipelines.</p>'
             '<div class="bench-table-scroll" role="region" aria-label="Pipeline benchmark comparisons" tabindex="0">'
-            '<table class="bench-comparison"><caption>Median time per pipeline workload; each backend is compared with its same-run baseline.</caption>'
+            '<table class="bench-comparison"><caption>Median time per pipeline workload; each backend is compared with its workload-matched Pillow timing.</caption>'
             + table_head + '<tbody>' + "".join(table_rows["pipelines"]) + '</tbody></table></div></section>'
             '<section class="bench-section" data-table-kind="operations"><h2>Individual operation benchmarks</h2><p>Single-operation workloads; each row retains its declared timing boundary. Current snapshot: ' + str(operation_count) + ' operation workloads.</p>'
             '<div class="bench-table-scroll" role="region" aria-label="Individual operation benchmark comparisons" tabindex="0">'

@@ -10,6 +10,7 @@ from run_migration_benchmark import (
     TARGET_BACKENDS,
     TARGET_PROFILES,
     apply_profile_to_workloads,
+    benchmark_subjects,
     profile_applies_to_case,
     runtime_backend_for_profile,
     select_workloads,
@@ -81,7 +82,7 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
             self.assertEqual(TARGET_BACKENDS, ("cpu", "simd", "gpu"))
             self.assertEqual(TARGET_PROFILES, ("python-cpu", "python-simd", "python-gpu"))
 
-    def test_parallel_cpu_compares_only_pillow_and_its_named_profile(self) -> None:
+    def test_parallel_cpu_times_only_its_named_profile_after_pillow_parity(self) -> None:
         standard_subjects = [
             {"kind": "oracle", "id": "pillow"},
             {"kind": "target_profile", "id": "python-cpu"},
@@ -95,13 +96,23 @@ class BenchmarkWorkloadSelectionTests(unittest.TestCase):
         if PARALLEL_CPU_PROFILE:
             self.assertEqual(
                 profiled[0]["subjects"],
-                [
-                    {"kind": "oracle", "id": "pillow"},
-                    {"kind": "target_profile", "id": "python-parallel-cpu"},
-                ],
+                [{"kind": "target_profile", "id": "python-parallel-cpu"}],
+            )
+            self.assertEqual(
+                benchmark_subjects(),
+                [("target_profile", "python-parallel-cpu")],
             )
         else:
             self.assertEqual(profiled[0]["subjects"], standard_subjects)
+            self.assertEqual(
+                benchmark_subjects(),
+                [
+                    ("oracle", "pillow"),
+                    ("target_profile", "python-cpu"),
+                    ("target_profile", "python-simd"),
+                    ("target_profile", "python-gpu"),
+                ],
+            )
         self.assertEqual(workload["subjects"], standard_subjects)
 
 

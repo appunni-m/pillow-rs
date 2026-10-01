@@ -100,10 +100,11 @@ operation has a workload specification.
 
 The published page uses the full pipeline profile, not the four-workload quick
 smoke profile. The workflow also runs the opt-in Rayon feature as a separate
-Parallel CPU cohort. That cohort includes a Pillow baseline measured in the
-same run; its ratios must not reuse the default CPU run's Pillow timing. The
-pipeline and operation tables share filters, and the implementation selector
-shows Parallel CPU alongside (but separate from) serial CPU, architecture
+Parallel CPU build and times only `python-parallel-cpu`; its parity preflight
+still compares outputs with Pillow. The public tables reuse the ordinary
+Pillow timing from the standard run, after matching source revision, host,
+workload, input mode, and measurement policy. This avoids timing Pillow twice
+and keeps Parallel CPU distinct from the default serial CPU, architecture
 specific SIMD, and GPU. Quick results remain useful during local development:
 
 ```sh
