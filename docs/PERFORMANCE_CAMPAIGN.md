@@ -10996,8 +10996,41 @@ run passes the CMYK arbitrary, expanded, right-angle, and custom Rotate cases
 (4/4; zero skips or infrastructure errors). This corrects the test contract
 without weakening output parity or backend evidence.
 
-Four failures remain open: three specialized F Resize checks observe CPU where
-they expect GPU, and `typed_luma16_nearest_affine_transform_uses_native_word_path`
-does not satisfy its affine exactness proof. They remain investigation items;
-neither output equality alone nor a requested GPU backend counts as native
-acceleration.
+## F Resize correctness checkpoint — 2026-10-01
+
+The remaining F Resize receipt failures had two causes. First, the telemetry
+enable switch was process-global while every receipt and counter was
+thread-local. Parallel unit tests could disable telemetry for a different test
+mid-dispatch, producing missing or unrelated receipts. The switch is now
+thread-local too, matching the retained sample and making each worker opt in
+explicitly. The thread-isolation regression passes, and the bounded F Resize
+lane passes 43/43 tests; three very-large tap-count cases were skipped in that
+lane and are listed below.
+
+The three genuine F Resize fallbacks shared one geometry edge case. Pillow's
+tall-image optimization requires vertical-first order only when both axes need
+resampling. A vertical-only resize was unnecessarily wrapped as `ResizeBoxed`
+and then rejected by the GPU typed-arithmetic guard. The public resize planner
+now selects that special path only when width also changes, and the GPU order
+guard treats a full-source, unchanged-width box as an identity horizontal pass.
+The compact over-binding special-value, wide special-value, and vertical
+subnormal tests now match CPU bytes and report native GPU execution.
+
+`typed_luma16_nearest_affine_transform_uses_native_word_path` exposed a
+separate proof gap: I;16's sampler is nearest even when the caller supplies a
+filtered token, but the affine proof checked only the token. The proof now
+applies the already documented I;16 coordinate rule independently of that
+token. I;16, I;16L, I;16B, and I;16N each pass exact-byte and native-GPU receipt
+checks.
+
+The bounded F Resize command was
+`cargo test --locked -p pillow-rs --lib f_resize_ -- --skip f_resize_ordered_f64_through_8388607_taps_native_matches_cpu --skip f_resize_ordered_f64_2097152_two_axis_native_matches_cpu --skip f_resize_ordered_f64_over_8388607_taps_streams_natively`.
+The three excluded tap-count tests were not represented as passing. No
+benchmark or coverage run was part of this correctness checkpoint. A
+deterministic public Pillow case now covers the exact full-source, tall,
+vertical-only F resize that exercises the changed route. That case and the
+I;16 nearest-affine transform case pass 2/2 each on CPU, SIMD, and strict GPU;
+the receipts are `build/migration-parity/fresize-i16-cpu-parity.json`,
+`fresize-i16-simd-parity.json`, and `fresize-i16-gpu-parity.json`. The public
+case does not replace the three excluded tap-count tests or establish a
+performance result.

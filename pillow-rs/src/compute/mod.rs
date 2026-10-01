@@ -26,7 +26,7 @@
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -62,11 +62,12 @@ impl Backend {
         }
     }
 
-    /// Enables or disables bounded pipeline execution telemetry.
+    /// Enables or disables bounded pipeline execution telemetry on this thread.
     ///
     /// Telemetry is disabled by default. The return value is the previous
-    /// setting. When enabled, one completed sample is retained per thread;
-    /// recording a new sample replaces that thread's previous sample.
+    /// setting. When enabled, one completed sample is retained on this thread;
+    /// recording a new sample replaces this thread's previous sample. Worker
+    /// threads collect telemetry only when they enable it themselves.
     pub fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
         set_pipeline_telemetry_enabled(enabled)
     }
@@ -302,13 +303,13 @@ struct PipelineTelemetry {
     resize_coeff_cache_misses: u64,
 }
 
-static PIPELINE_TELEMETRY_ENABLED: AtomicBool = AtomicBool::new(false);
 static GPU_SHADER_COVERAGE_ENABLED: AtomicBool = AtomicBool::new(false);
 static GPU_SHADER_COVERAGE: OnceLock<
     Mutex<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>>,
 > = OnceLock::new();
 
 thread_local! {
+    static PIPELINE_TELEMETRY_ENABLED: Cell<bool> = const { Cell::new(false) };
     static LAST_PIPELINE_TELEMETRY: RefCell<Option<PipelineTelemetry>> = const { RefCell::new(None) };
     static LAST_PIPELINE_RESOURCE_TELEMETRY: RefCell<Option<PipelineResourceTelemetry>> = const { RefCell::new(None) };
     static LAST_PIPELINE_BACKEND_OVERRIDE: RefCell<Option<(Backend, String)>> = const { RefCell::new(None) };
@@ -321,7 +322,7 @@ thread_local! {
 }
 
 fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
-    let previous = PIPELINE_TELEMETRY_ENABLED.swap(enabled, Ordering::Relaxed);
+    let previous = PIPELINE_TELEMETRY_ENABLED.with(|setting| setting.replace(enabled));
     if !enabled {
         LAST_PIPELINE_TELEMETRY.with(|last| {
             *last.borrow_mut() = None;
@@ -596,7 +597,7 @@ pub(crate) fn record_pipeline_allocation(bytes: usize) {
 }
 
 fn pipeline_telemetry_enabled() -> bool {
-    PIPELINE_TELEMETRY_ENABLED.load(Ordering::Relaxed)
+    PIPELINE_TELEMETRY_ENABLED.with(Cell::get)
 }
 
 fn take_pipeline_telemetry() -> Option<(
@@ -1530,6 +1531,20 @@ mod tests {
     use super::{Backend, execute_automatic_simd_segments};
     use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
     use crate::raster::{DynamicImage, Rgb, RgbImage};
+
+    #[test]
+    fn pipeline_telemetry_switch_is_thread_local() {
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+
+        assert!(Backend::pipeline_telemetry_enabled());
+        let worker_enabled = std::thread::spawn(Backend::pipeline_telemetry_enabled)
+            .join()
+            .expect("telemetry state query thread");
+        assert!(!worker_enabled);
+        assert!(Backend::pipeline_telemetry_enabled());
+
+        Backend::set_pipeline_telemetry_enabled(previous);
+    }
 
     #[test]
     fn automatic_simd_receipt_uses_final_cpu_segment() {

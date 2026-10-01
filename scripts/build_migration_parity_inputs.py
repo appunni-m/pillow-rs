@@ -43232,7 +43232,7 @@ def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
 
 def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Measure boxed F resize with enough scalar samples to expose copies."""
+    """Cover boxed F resize, including tall vertical-only full-source resize."""
     if surface_id != "PIL.Image.Image":
         return []
 
@@ -43241,6 +43241,12 @@ def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, 
     raw = b"".join(
         struct.pack("<f", rng.uniform(-1000.0, 1000.0))
         for _ in range(width * height)
+    )
+    vertical_width, vertical_height = 2, 203
+    vertical_rng = random.Random(240931)
+    vertical_raw = b"".join(
+        struct.pack("<f", vertical_rng.uniform(-1000.0, 1000.0))
+        for _ in range(vertical_width * vertical_height)
     )
     case_id = (
         f"{surface_id}.resize.nuanced.f-boxed-nearest-noise-"
@@ -43284,6 +43290,65 @@ def f_boxed_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, 
                         "size": literal([width, height]),
                         "resample": literal(0),
                         "box": literal([0.25, 0.5, width - 0.25, height - 0.5]),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        },
+        {
+            "case_id": (
+                f"{surface_id}.resize.nuanced."
+                "f-boxed-vertical-only-tall-full-source-2x203"
+            ),
+            "surface": surface_id,
+            "operation": "resize",
+            "covers": [f"{surface_id}.resize.parameter.box"],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(vertical_raw).decode("ascii"),
+                    "sha256": hashlib.sha256(vertical_raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("F"),
+                        "size": literal([vertical_width, vertical_height]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "resize",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([vertical_width, 101]),
+                        "resample": literal(3),
+                        "box": literal(
+                            [
+                                0.0,
+                                0.0,
+                                float(vertical_width),
+                                float(vertical_height),
+                            ]
+                        ),
                     },
                 },
                 {
