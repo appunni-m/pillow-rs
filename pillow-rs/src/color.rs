@@ -1264,14 +1264,24 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// become zero, values at or above 255 become 255, and interior values are
 /// truncated rather than rounded.
 pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut out = crate::raster::GrayImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
-        let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
-        op[0] = value.clamp(0, 255) as u8;
-    }
-    DynamicImage::ImageLuma8(out)
+    let (w, h) = (img.width(), img.height());
+    let rgba = match img {
+        // I mode is already stored as four little-endian bytes per sample.
+        // Borrow that scalar carrier rather than cloning the whole frame.
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
+    let output = rgba
+        .chunks_exact(4)
+        .map(|ip| {
+            let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
+            value.clamp(0, 255) as u8
+        })
+        .collect();
+    DynamicImage::ImageLuma8(
+        crate::raster::GrayImage::from_raw(w, h, output)
+            .expect("I to L output matches the source dimensions"),
+    )
 }
 
 /// Converts Pillow `F` storage to the intermediate `L` image used by
@@ -1280,22 +1290,37 @@ pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
 /// This is the `f2l` path in Pillow's `Convert.c`, including truncation of
 /// interior floating-point samples.
 pub fn f_to_l(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut out = crate::raster::GrayImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
-        let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
-        op[0] = value.clamp(0.0, 255.0) as u8;
-    }
-    DynamicImage::ImageLuma8(out)
+    let (w, h) = (img.width(), img.height());
+    let rgba = match img {
+        // F mode is already stored as four little-endian bytes per sample.
+        // Borrow that scalar carrier rather than cloning the whole frame.
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
+    let output = rgba
+        .chunks_exact(4)
+        .map(|ip| {
+            let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
+            value.clamp(0.0, 255.0) as u8
+        })
+        .collect();
+    DynamicImage::ImageLuma8(
+        crate::raster::GrayImage::from_raw(w, h, output)
+            .expect("F to L output matches the source dimensions"),
+    )
 }
 
 /// Converts Pillow `I` storage to `F` storage using the direct `i2f` path.
 pub fn i_to_f(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let rgba = match img {
+        // I mode is already stored as four little-endian bytes per sample.
+        // Borrow that scalar carrier rather than cloning the whole frame.
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     let mut out = crate::raster::RgbaImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+    for (op, ip) in out.pixels_mut().zip(rgba.chunks_exact(4)) {
         let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]) as f32;
         *op = crate::raster::Rgba(value.to_le_bytes());
     }
@@ -1304,10 +1329,15 @@ pub fn i_to_f(img: &DynamicImage) -> DynamicImage {
 
 /// Converts Pillow `F` storage to `I` storage using the direct `f2i` path.
 pub fn f_to_i(img: &DynamicImage) -> DynamicImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = (img.width(), img.height());
+    let rgba = match img {
+        // F mode is already stored as four little-endian bytes per sample.
+        // Borrow that scalar carrier rather than cloning the whole frame.
+        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    };
     let mut out = crate::raster::RgbaImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+    for (op, ip) in out.pixels_mut().zip(rgba.chunks_exact(4)) {
         let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]) as i32;
         *op = crate::raster::Rgba(value.to_le_bytes());
     }
@@ -1495,8 +1525,9 @@ pub fn palette_getcolor_validate_input(
 
 #[cfg(test)]
 mod tests {
-    use super::{ColorValue, getcolor, muldiv255, rgb_to_hsv};
+    use super::{ColorValue, f_to_i, f_to_l, getcolor, i_to_f, i_to_l, muldiv255, rgb_to_hsv};
     use crate::error::PilError;
+    use crate::raster::{DynamicImage, RgbaImage};
 
     #[test]
     fn getcolor_accepts_pillow_mapping_and_lowercase_alpha_modes() {
@@ -1553,5 +1584,66 @@ mod tests {
                 241, 249,
             ]
         );
+    }
+
+    #[test]
+    fn scalar_color_conversions_preserve_clamping_truncation_and_le_bytes() {
+        let integers = [i32::MIN, -1, 0, 1, 254, 255, 256, i32::MAX];
+        let integer_bytes: Vec<u8> = integers
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let integer_image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(integers.len() as u32, 1, integer_bytes).expect("packed I samples"),
+        );
+
+        let DynamicImage::ImageLuma8(integer_luma) = i_to_l(&integer_image) else {
+            panic!("I to L must return L storage");
+        };
+        assert_eq!(integer_luma.as_raw(), &[0, 0, 0, 1, 254, 255, 255, 255]);
+
+        let DynamicImage::ImageRgba8(integer_float) = i_to_f(&integer_image) else {
+            panic!("I to F must return the scalar RGBA carrier");
+        };
+        let actual: Vec<f32> = integer_float
+            .as_raw()
+            .chunks_exact(4)
+            .map(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+            .collect();
+        assert_eq!(actual, integers.map(|value| value as f32));
+
+        let floats = [
+            f32::NEG_INFINITY,
+            -1.5,
+            0.0,
+            1.9,
+            254.9,
+            255.0,
+            256.0,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        let float_bytes: Vec<u8> = floats
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let float_image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(floats.len() as u32, 1, float_bytes).expect("packed F samples"),
+        );
+
+        let DynamicImage::ImageLuma8(float_luma) = f_to_l(&float_image) else {
+            panic!("F to L must return L storage");
+        };
+        assert_eq!(float_luma.as_raw(), &[0, 0, 0, 1, 254, 255, 255, 255, 0]);
+
+        let DynamicImage::ImageRgba8(float_integer) = f_to_i(&float_image) else {
+            panic!("F to I must return the scalar RGBA carrier");
+        };
+        let actual: Vec<i32> = float_integer
+            .as_raw()
+            .chunks_exact(4)
+            .map(|bytes| i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+            .collect();
+        assert_eq!(actual, [i32::MIN, -1, 0, 1, 254, 255, 256, i32::MAX, 0,]);
     }
 }

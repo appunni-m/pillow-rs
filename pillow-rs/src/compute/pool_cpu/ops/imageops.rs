@@ -878,7 +878,40 @@ pub(crate) fn gather_native_channel<const CHANNELS: usize, const CHANNEL: usize>
 #[cfg(test)]
 mod grayscale_native_tests {
     use super::op_grayscale;
-    use crate::raster::{DynamicImage, RgbImage};
+    use crate::raster::{DynamicImage, RgbImage, RgbaImage};
+
+    #[test]
+    fn grayscale_keeps_integer_and_float_scalar_conversion_semantics() {
+        let integers = [-1i32, 0, 1, 254, 255, 256];
+        let integer_bytes: Vec<u8> = integers
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let integer_image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(integers.len() as u32, 1, integer_bytes).expect("packed I samples"),
+        );
+        let DynamicImage::ImageLuma8(integer_luma) =
+            op_grayscale(&integer_image, Some("I")).expect("I grayscale")
+        else {
+            panic!("I grayscale must return L storage");
+        };
+        assert_eq!(integer_luma.as_raw(), &[0, 0, 1, 254, 255, 255]);
+
+        let floats = [-1.5f32, 0.0, 1.9, 254.9, 255.0, 256.0];
+        let float_bytes: Vec<u8> = floats
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let float_image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(floats.len() as u32, 1, float_bytes).expect("packed F samples"),
+        );
+        let DynamicImage::ImageLuma8(float_luma) =
+            op_grayscale(&float_image, Some("F")).expect("F grayscale")
+        else {
+            panic!("F grayscale must return L storage");
+        };
+        assert_eq!(float_luma.as_raw(), &[0, 0, 1, 254, 255, 255]);
+    }
 
     #[test]
     fn ycbcr_grayscale_copies_y_from_exact_native_triples() {

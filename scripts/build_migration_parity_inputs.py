@@ -46829,6 +46829,84 @@ def build_pipeline_workflow(
     return workflow
 
 
+def _scalar_convert_benchmark_workloads(
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Measure material-sized public conversions for Pillow I/F scalar modes."""
+
+    measurement = {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": ["latency", "throughput"],
+        "warmup_iterations": 5,
+        "measurement_iterations": 1,
+        "samples": 100,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution",
+    }
+    workloads = []
+    for source_mode, destination_mode, fill in (
+        ("I", "L", 127),
+        ("I", "F", 127),
+        ("F", "L", 127.5),
+        ("F", "I", 127.5),
+    ):
+        workflow = {
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "setup-image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(source_mode),
+                        "size": literal([1024, 768]),
+                        "color": literal(fill),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": "PIL.Image.Image",
+                    "operation": "convert",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"mode": literal(destination_mode)},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+        variant = (
+            f"convert-mode-{source_mode.lower()}-to-"
+            f"{destination_mode.lower()}-1024x768"
+        )
+        workloads.append(
+            {
+                "workload_id": f"pipeline-op.{variant}",
+                "covers": [
+                    _performance_requirement(operations, "PIL.Image.Image", "convert")
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(measurement),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant=variant,
+                    surface="PIL.Image.Image",
+                    operation="convert",
+                ),
+            }
+        )
+    return workloads
+
+
 def build_pipeline_parity_case(
     variant: str,
     spec: PipelineBenchmarkSpec,
@@ -47587,6 +47665,7 @@ def build_pipeline_benchmark_document(
                 ),
             }
         )
+    scalar_conversion_workloads = _scalar_convert_benchmark_workloads(operations)
 
     thumbnail_material_workload = {
         "workload_id": "pipeline-op.thumbnail.material-rgb-1024x768",
@@ -50162,6 +50241,7 @@ def build_pipeline_benchmark_document(
         "schema": "migration-parity/benchmark-input@1",
         "workloads": [
             *operation_workloads,
+            *scalar_conversion_workloads,
             thumbnail_material_workload,
             *posterize_material_workloads,
             median_l_material_workload,

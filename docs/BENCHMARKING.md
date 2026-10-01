@@ -87,16 +87,18 @@ The small thumbnail row remains useful for dispatch and adapter overhead, but
 must not stand in for this material workload.
 
 The public benchmark page presents two tables: individual operation workloads
-and composed pipeline workloads. The 2026-10-01 published snapshot contains 635
-rows: 179 individual-operation workloads spanning 91 operation names, plus 456
-composed, matrix, lifecycle, and quick pipeline workloads. Their recorded
-contexts include 12 mode labels, including the mixed-mode `I+F` case. Each row
-carries its own mode, operation type, dimensions, boundary, and repeat policy;
-the page can filter and sort by type, mode, workload name, or backend latency.
-These are workload counts, not a claim that every combination of operation and
-mode is supported or measured by every backend. The benchmark completeness
-check still verifies that every active `PipelineOp` and maintained eager
-operation has a workload specification.
+and composed pipeline workloads. The 2026-10-01 published snapshot displays 635
+distinct workload rows: 179 individual-operation workloads spanning 91
+operation names, plus 456 composed, matrix, lifecycle, and quick pipeline
+workloads. The downloadable data contains 3,175 subject measurements—Pillow,
+CPU, SIMD, GPU, and Parallel CPU for each workload. Their recorded contexts
+include 12 mode labels, including the mixed-mode `I+F` case. Each row carries
+its own mode, operation type, dimensions, boundary, and repeat policy; the page
+can filter and sort by type, mode, workload name, or backend latency. These are
+workload counts, not a claim that every combination of operation and mode is
+supported or measured by every backend. The benchmark completeness check still
+verifies that every active `PipelineOp` and maintained eager operation has a
+workload specification.
 
 The published page uses the full pipeline profile, not the four-workload quick
 smoke profile. The workflow also runs the opt-in Rayon feature as a separate

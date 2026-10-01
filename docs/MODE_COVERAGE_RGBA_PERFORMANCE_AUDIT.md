@@ -21,7 +21,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P1 | High | GPU transport | General GPU batches widen many source modes and read back as RGBA8. |
 | P2 | Medium | GPU operands | Secondary GPU images also get RGBA8 conversion and storage. |
 | P3 | Medium | Quantization | Median-cut builds two full RGB views, including an unused one when kmeans is off. |
-| P4 | Medium | Scalar conversions | I/F conversion helpers clone their four-byte source carrier before reading it. |
+| P4 | Medium | Scalar conversions | Source-carrier clones are removed; serial CPU I→L still trails Pillow. |
 | P5 | Medium | Python data access | getdata slices cross the Python/Rust boundary once per pixel; iteration also slices bytes per pixel. |
 | P6 | Medium | Array input | Common fromarray input is copied through Python bytes, Rust Vec, and raster storage. |
 | P7 | Low–Medium | Color transforms | HSV and YCbCr transforms clone an already-RGB-shaped input before writing output. |
@@ -77,11 +77,24 @@ repeatable latency win. See the 2026-10-01 checkpoint in
 `PERFORMANCE_CAMPAIGN.md`. Keep P3 open for measured impact and remaining
 quantization paths rather than treating fewer allocations as proof of speed.
 
-### P4. I/F color conversions clone the source carrier
+### P4. I/F color conversions clone the source carrier — partially addressed
 
-The scalar conversion helpers i_to_rgb, f_to_rgb, i_to_l, f_to_l, i_to_f, and f_to_i call to_rgba8() (pillow-rs/src/color.rs:1214–1298). Public I/F images already use ImageRgba8 as their four-byte scalar carrier. DynamicImage::to_rgba8 clones ImageRgba8 at pillow-rs/src/raster/dynamic.rs:341–353, after which each helper separately allocates its output.
+Public I/F images already use `ImageRgba8` as their four-byte scalar carrier.
+`i_to_rgb` and `f_to_rgb` already borrow that carrier. The remaining helpers
+`i_to_l`, `f_to_l`, `i_to_f`, and `f_to_i` now borrow `as_raw()` for matching
+`ImageRgba8` inputs while retaining the previous conversion fallback for
+other physical variants. The L outputs also avoid zero-filling an image that
+is immediately overwritten. The numeric conversion and little-endian byte
+contracts are unchanged.
 
-**Assessment:** high-confidence avoidable full-frame source copy. Read the existing carrier bytes directly while keeping the current numeric conversion and byte order.
+**Assessment:** the avoidable source copies are removed from the four remaining
+helpers. Strict parity passed for all four public conversions. On the 1024 ×
+768 workload, CPU latency improved materially for every conversion, but I→L
+still measures about 1.28× slower than Pillow end to end. A portable SIMD I→L
+attempt passed parity but measured slower than the scalar path and was
+discarded. Keep P4 open for I→L latency; the host-side path is outside backend
+dispatch, so its requested SIMD/GPU/Parallel CPU profiles do not prove those
+executors. Details and receipts are in `PERFORMANCE_CAMPAIGN.md`.
 
 ### P5. Python getdata access does per-pixel work for slices and multiband iteration
 
@@ -225,17 +238,25 @@ this allocation reduction, but leave the finding open until a repeatable
 latency or throughput gain is measured. See `PERFORMANCE_CAMPAIGN.md` for the
 receipts and limits.
 
+P4 has removed the redundant source-carrier clones in the remaining I/F
+conversion helpers and measured faster whole calls for I→F, F→L, and F→I than
+Pillow. I→L remains slower and is the next focused performance blocker. The
+conversion family is eager host-side work, so backend-labeled timings are not
+SIMD, GPU, or Rayon execution evidence.
+
 M1 and M2 are closed for the current public surface by the follow-up checks
 above. The split fix has mode and byte parity; the typed filtered-resize
 variants are unreachable through current public constructors and decoders.
-P2 and P4–P10 remain audit candidates without measured follow-up in this
-checkpoint.
+P2 and P5–P10 remain audit candidates without measured follow-up in this
+checkpoint. P4 has measured follow-up but remains open for the I→L latency gap.
 
 ## Suggested order for follow-up
 
-1. Continue P1 by selecting the next operation/mode with measured RGBA staging
+1. Try one bounded I→L CPU improvement against its measured Pillow gap while
+   preserving the scalar parity suite and reporting its host execution
+   separately from backend telemetry.
+2. Continue P1 by selecting the next operation/mode with measured RGBA staging
    cost; keep every native kernel's current rounding and channel contract.
-2. Address P3's duplicate RGB buffers with borrowed native RGB bytes, creating
-   pixel tuples only for k-means, and preserve exact palette parity.
-3. Continue with P4 scalar conversions, P7 color transforms, and the host
-   access findings using full-call benchmarks and exact parity cases.
+3. Continue with P7 color transforms and the host access findings using
+   full-call benchmarks and exact parity cases. P3 remains open for evidence
+   beyond its allocation reduction.
