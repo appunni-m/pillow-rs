@@ -12091,3 +12091,65 @@ For Pillow parity, run `make migration-parity-case` with
 `MIGRATION_STRICT_TARGET_BACKEND=1`, writing a separate output receipt for each
 backend. Four attempts are checkpointed; the per-operation CPU and SIMD goals
 remain open. No full CI, coverage, release, or push was run.
+
+## I→L `Image.convert` checkpoint — 2026-10-02
+
+The operation is `Image.new("I", (1024, 768), 127).convert("L").tobytes()`.
+On main `3cae2f662`, its `Image.convert` branch called `materialize()`, which
+cloned the full four-byte-per-pixel I carrier before `i_to_l` read it. The
+conversion was eager host-side work: the benchmark's SIMD and GPU requests did
+not execute those backends, and this helper does not use Rayon.
+
+Attempt 1 changed only the I→L route to call `materialized_shared_for_ops()`
+and pass the shared validated image to `i_to_l`. It returns the produced L
+image directly, avoiding the recursive same-mode conversion wrapper as well.
+The code still applies Pillow's signed little-endian clamp exactly. Attempt 2
+uses `bytemuck::try_cast_slice` to read aligned little-endian i32 words and
+falls back to the original byte decoder for unaligned or malformed buffers;
+`i32::from_le` preserves behavior on big-endian hosts. This removes per-sample
+four-byte reconstruction from the hot path without unsafe code or scheduling
+Rayon in the operation.
+
+The 1024 × 768 standard workload uses five warmups and 100 single-call samples.
+The timing separates the conversion pipeline phase from image setup and final
+byte export:
+
+| Variant | Pillow convert phase | Host CPU convert phase | Pillow whole call | Host CPU whole call |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.091 ms | 0.424 ms | 0.467 ms | 0.618 ms |
+| Attempt 1: shared source | 0.096–0.098 ms | 0.218–0.220 ms | 0.490–0.499 ms | 0.391–0.403 ms |
+| Attempt 2: typed word view | 0.089–0.097 ms | 0.041–0.043 ms | 0.456–0.507 ms | 0.217–0.218 ms |
+
+Attempt 2 is repeatable across three release runs: host CPU is about 2.2×
+faster than Pillow for the conversion phase and 2.1–2.3× faster for the whole
+workflow. It closes the I→L CPU gap. The exact case
+`PIL.Image.Image.convert.nuanced.mode-audit-I-to-L-17x3` passed 1/1 on CPU,
+including signed/clamped boundary samples; the Rust clamping, truncation, and
+little-endian unit test passed. The benchmark outputs also include requested
+SIMD and GPU rows, but their `actual_backend` is null because this conversion
+does not dispatch to those backends. Parallel CPU is not applicable: this
+function does not schedule Rayon, so a feature-enabled build would run the same
+serial host code.
+
+Receipts are `i-to-l-before-attempt1-20261002.json`,
+`i-to-l-after-attempt1-20261002.json` and its two repeats, and
+`i-to-l-after-attempt2-20261002.json` and its two repeats. Reproduce the focused
+checks with:
+
+```sh
+cargo test --locked -p pillow-rs --lib scalar_color_conversions_preserve_clamping_truncation_and_le_bytes
+make PYTHON=build/parity-venv/bin/python build-parity
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TARGET_BACKEND=cpu MIGRATION_STRICT_TARGET_BACKEND=1 \
+  MIGRATION_PARITY_CASE_OUTPUT=build/migration-parity/i-to-l-attempt2-parity-20261002.json \
+  make migration-parity-case CASE_ID=PIL.Image.Image.convert.nuanced.mode-audit-I-to-L-17x3
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.convert-mode-i-to-l-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/i-to-l-after-attempt2-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/i-to-l-after-attempt2-parity-20261002.json \
+  make migration-parity-benchmark
+```
+
+P4's I→L serial CPU blocker is closed after two attempts. The next audit target
+is P1: select the next operation/mode with measured RGBA staging cost. Full CI,
+coverage, and release were not run.

@@ -1285,13 +1285,23 @@ pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
         DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
         _ => Cow::Owned(img.to_rgba8().into_raw()),
     };
-    let output = rgba
-        .chunks_exact(4)
-        .map(|ip| {
-            let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
-            value.clamp(0, 255) as u8
-        })
-        .collect();
+    // I storage is a packed little-endian i32 stream. When its byte buffer is
+    // naturally aligned, view it as words so the hot loop avoids rebuilding
+    // each value from four indexed bytes. Preserve the byte-wise path for
+    // unusual alignment or malformed internal buffers.
+    let output = match bytemuck::try_cast_slice::<u8, i32>(rgba.as_ref()) {
+        Ok(values) => values
+            .iter()
+            .map(|&value| i32::from_le(value).clamp(0, 255) as u8)
+            .collect(),
+        Err(_) => rgba
+            .chunks_exact(4)
+            .map(|ip| {
+                let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
+                value.clamp(0, 255) as u8
+            })
+            .collect(),
+    };
     DynamicImage::ImageLuma8(
         crate::raster::GrayImage::from_raw(w, h, output)
             .expect("I to L output matches the source dimensions"),

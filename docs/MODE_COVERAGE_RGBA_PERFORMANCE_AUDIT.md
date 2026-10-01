@@ -77,7 +77,7 @@ repeatable latency win. See the 2026-10-01 checkpoint in
 `PERFORMANCE_CAMPAIGN.md`. Keep P3 open for measured impact and remaining
 quantization paths rather than treating fewer allocations as proof of speed.
 
-### P4. I/F color conversions clone the source carrier — partially addressed
+### P4. I/F color conversions clone the source carrier — CPU path addressed
 
 Public I/F images already use `ImageRgba8` as their four-byte scalar carrier.
 `i_to_rgb` and `f_to_rgb` already borrow that carrier. The remaining helpers
@@ -88,13 +88,14 @@ is immediately overwritten. The numeric conversion and little-endian byte
 contracts are unchanged.
 
 **Assessment:** the avoidable source copies are removed from the four remaining
-helpers. Strict parity passed for all four public conversions. On the 1024 ×
-768 workload, CPU latency improved materially for every conversion, but I→L
-still measures about 1.28× slower than Pillow end to end. A portable SIMD I→L
-attempt passed parity but measured slower than the scalar path and was
-discarded. Keep P4 open for I→L latency; the host-side path is outside backend
-dispatch, so its requested SIMD/GPU/Parallel CPU profiles do not prove those
-executors. Details and receipts are in `PERFORMANCE_CAMPAIGN.md`.
+helpers. Strict parity passed for all four public conversions. I→L now shares
+the validated I carrier instead of cloning it, then reads aligned little-endian
+words directly when possible. On 1024 × 768, the conversion phase measures
+0.041–0.043 ms against Pillow at 0.089–0.097 ms; the full workflow measures
+0.217–0.218 ms against Pillow at 0.456–0.507 ms. The CPU latency gap is closed.
+The eager color helpers run outside backend dispatch and schedule no Rayon, so
+SIMD, GPU, and Parallel CPU profiles do not represent those executors. Details
+and receipts are in `PERFORMANCE_CAMPAIGN.md`.
 
 ### P5. Python getdata access — corrected parity and bulk iteration
 
@@ -305,7 +306,7 @@ contract for these synthetic layouts. Close M1 for the current public surface.
 If a supported decoder begins returning one of these variants, add a
 native-sample resize implementation and mode-specific parity cases first.
 
-## Follow-up status — 2026-10-01
+## Follow-up status — 2026-10-02
 
 P1 remains open across the general GPU operation set. The Cover path is a
 verified partial reduction: LA source upload stays native at two bytes per
@@ -327,25 +328,23 @@ this allocation reduction, but leave the finding open until a repeatable
 latency or throughput gain is measured. See `PERFORMANCE_CAMPAIGN.md` for the
 receipts and limits.
 
-P4 has removed the redundant source-carrier clones in the remaining I/F
-conversion helpers and measured faster whole calls for I→F, F→L, and F→I than
-Pillow. I→L remains slower and is the next focused performance blocker. The
+P4's I/F source-carrier copies are removed, and all four conversion paths now
+beat Pillow on the measured 1024 × 768 CPU whole-call workloads. I→L's focused
+parity and repeat benchmark are recorded in `PERFORMANCE_CAMPAIGN.md`. The
 conversion family is eager host-side work, so backend-labeled timings are not
-SIMD, GPU, or Rayon execution evidence.
+SIMD, GPU, or Rayon execution evidence. P4 is closed for the CPU target.
 
 M1 and M2 are closed for the current public surface by the follow-up checks
 above. The split fix has mode and byte parity; the typed filtered-resize
 variants are unreachable through current public constructors and decoders.
 P2 and P5–P10 remain audit candidates without measured follow-up in this
-checkpoint. P4 has measured follow-up but remains open for the I→L latency gap.
+checkpoint. P4's serial CPU target is closed; it has no applicable SIMD, GPU,
+or Parallel CPU route.
 
 ## Suggested order for follow-up
 
-1. Try one bounded I→L CPU improvement against its measured Pillow gap while
-   preserving the scalar parity suite and reporting its host execution
-   separately from backend telemetry.
-2. Continue P1 by selecting the next operation/mode with measured RGBA staging
+1. Continue P1 by selecting the next operation/mode with measured RGBA staging
    cost; keep every native kernel's current rounding and channel contract.
-3. Continue with P7 color transforms and the host access findings using
+2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
