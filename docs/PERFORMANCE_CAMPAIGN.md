@@ -12515,3 +12515,81 @@ The comparison receipts are `transform-rgb-p1-after-packed-output-20261002.json`
 `transform-rgb-p1-after-row-tiled-20261002.json`, and
 `transform-rgb-p1-after-row-tiled-repeat-20261002.json`. CI, coverage, release,
 and push remain deferred.
+
+## LA `Image.transform` direct CPU and compact GPU output checkpoint — 2026-10-02
+
+The 1024 × 768 LA affine-nearest case started on the generic CPU path and the
+four-byte GPU transport path. The direct CPU specialization keeps each sample
+as its native `[L, A]` pair: it quantizes the affine row origin and steps once
+to Pillow-compatible signed 16.16 coordinates, advances those coordinates
+across the destination row, then copies two bytes or the two-byte fill pair.
+This removes per-sample generic pixel conversion and address recomputation
+without changing nearest-neighbor rounding or LA alpha.
+
+The GPU specialization removes both LA-to-RGBA widening and RGBA-to-LA
+narrowing. Its checked planner budgets two output bytes per pixel and padded
+32-bit transfer words, validates signed coordinate extrema, storage binding
+size, buffer capacity, and workgroup limits before dispatch. A shader
+invocation owns four consecutive LA pixels and their two output words. For
+widths divisible by four, it shares an affine base and increments fixed
+coordinates across the four samples; odd widths use a flat pixel stream so a
+four-pixel group may cross a row without changing the image order. Partial
+tail groups guard both source reads and output writes. Dispatch is row-tiled
+only when aligned rows fit the device and reduce the grid; otherwise the
+planner uses its bounded flattened grid. Fill packing takes luma from the low
+byte and alpha from byte three of the existing normalized fill carrier, which
+preserves the LA tuple order.
+
+The compact path halves upload and readback traffic from 3,145,728 to
+1,572,864 bytes each at this size and reports zero mode conversions. Its
+focused GPU test verifies actual GPU selection, one dispatch, the compact
+transfer receipt, odd and aligned widths, and exact 4096 × 4096 output against
+the CPU result. The CPU unit test compares the specialized result with the
+generic implementation and verifies public dispatch for inferred and explicit
+LA modes.
+
+The q1 throughput receipts use five measured samples of 320 requests each per
+backend, with changing inputs and live Pillow as the oracle. All 1,600 measured
+outputs per backend match Pillow byte-for-byte. The baseline and retained
+candidate files are `transform-la-p1-before-native-20261002.json` and
+`transform-la-p1-after-native-gpu-20261002.json`:
+
+| LA Transform at 1024 × 768 | Baseline | CPU + native GPU | Change |
+| --- | ---: | ---: | ---: |
+| Pillow throughput | 686.7 img/s | 706.7 img/s | reference run variation |
+| Serial CPU throughput | 523.9 img/s | 1,435.6 img/s | 2.74× baseline |
+| Serial CPU backend median | 1.772 ms | 0.590 ms | 3.00× lower latency |
+| SIMD throughput | 1,540.8 img/s | 1,528.5 img/s | effectively unchanged |
+| SIMD backend median | 0.550 ms | 0.552 ms | effectively unchanged |
+| GPU throughput | 447.6 img/s | 1,305.5 img/s | 2.92× baseline |
+| GPU backend median | 2.157 ms | 0.617 ms | 3.50× lower latency |
+| GPU / SIMD throughput | 0.29× | 0.85× | still below SIMD |
+
+The CPU result is about 2.03× Pillow throughput; SIMD is 2.16×, below the 5×
+target. GPU is about 1.85× Pillow but still 14.6% below SIMD throughput, so
+the GPU latency/throughput target remains open. Pillow's throughput varied by
+about 3% between the paired runs; the CPU and GPU gains are large enough to be
+clear, while the small SIMD shift is noise. One attempted SIMD 32-bit lane
+specialization lowered the observed q1 SIMD rate from 1,528.5 to 1,386.7
+img/s and raised backend median latency from 0.643 to 0.689 ms; it was
+reverted. Keep the i64 implementation until a vectorization change reduces
+lane setup, gathers, or coordinate work enough to show a repeatable end-to-end
+gain.
+
+Focused checks and reproduction:
+
+```sh
+cargo test --locked -p pillow-rs --lib affine_la_nearest_direct_path_matches_generic_and_is_selected
+cargo test --locked -p pillow-rs --lib native_la_transform_output_plans_compact_pairs_with_checked_limits
+cargo test --locked -p pillow-rs --lib gpu_native_la_affine_nearest_transform_keeps_two_channel_bytes -- --nocapture
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/transform-la-p1-after-native-gpu-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation transform --mode LA --size 1024 768' \
+  migration-parity-transpose-throughput
+```
+
+The adapter SIMD candidate was removed and the retained CPU, GPU, shader, and
+benchmark-script hashes match the measured `after-native-gpu` receipt. This
+closes the high-return native-format staging issue for LA Transform, not the
+per-operation SIMD or GPU targets. Continue to the next ranked operation;
+keep full CI, coverage, release, and push deferred.
