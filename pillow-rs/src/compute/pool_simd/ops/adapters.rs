@@ -21573,6 +21573,179 @@ fn resize_vertical_la_i32_vector_row(
     Some((vector_blocks, scalar_tail))
 }
 
+/// HSV is stored as three independent native bytes per pixel. When the
+/// coefficient bound proves every ordered byte-sample sum fits in i32, use
+/// native 32-bit SIMD accumulators instead of widening each channel multiply
+/// to i64. This path is selected only for ImageOps.cover's HSV layout; unsafe
+/// coefficient tables retain the general wide accumulator.
+fn resize_horizontal_hsv_i32_vector_row(
+    source_row: &[u8],
+    coeffs: &FilterCoeffs,
+    plan: &ResizeHorizontalPlan,
+    output_width: usize,
+    output_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    if source_row.is_empty() {
+        output_row.fill(0);
+        let vector_blocks = u64::try_from(plan.blocks.len()).ok()?;
+        let scalar_start = if output_width < SIMD_RESIZE_LANES {
+            output_width
+        } else {
+            plan.vector_width
+        };
+        return Some((
+            vector_blocks,
+            u64::try_from(output_width.saturating_sub(scalar_start)).ok()?,
+        ));
+    }
+
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for (block_index, output_x) in (0..plan.vector_width)
+        .step_by(SIMD_RESIZE_LANES)
+        .enumerate()
+    {
+        let block = plan.blocks.get(block_index)?;
+        let mut red_sum = i32x8::splat(0);
+        let mut green_sum = i32x8::splat(0);
+        let mut blue_sum = i32x8::splat(0);
+        for tap in &block.taps {
+            let mut red_samples = [0i32; SIMD_RESIZE_LANES];
+            let mut green_samples = [0i32; SIMD_RESIZE_LANES];
+            let mut blue_samples = [0i32; SIMD_RESIZE_LANES];
+            for lane in 0..SIMD_RESIZE_LANES {
+                if tap.weights[lane] != 0 {
+                    let source_base = tap.source_bases[lane];
+                    red_samples[lane] = i32::from(*source_row.get(source_base)?);
+                    green_samples[lane] = i32::from(*source_row.get(source_base.checked_add(1)?)?);
+                    blue_samples[lane] = i32::from(*source_row.get(source_base.checked_add(2)?)?);
+                }
+            }
+            let weights = i32x8::new(tap.weights);
+            red_sum += i32x8::new(red_samples) * weights;
+            green_sum += i32x8::new(green_samples) * weights;
+            blue_sum += i32x8::new(blue_samples) * weights;
+        }
+        let red = red_sum.to_array().map(resize_fixed_point_i32_to_u8);
+        let green = green_sum.to_array().map(resize_fixed_point_i32_to_u8);
+        let blue = blue_sum.to_array().map(resize_fixed_point_i32_to_u8);
+        for lane in 0..SIMD_RESIZE_LANES {
+            let output_x = output_x + lane;
+            if output_x < output_width {
+                let output_start = output_x.checked_mul(3)?;
+                *output_row.get_mut(output_start)? = red[lane];
+                *output_row.get_mut(output_start.checked_add(1)?)? = green[lane];
+                *output_row.get_mut(output_start.checked_add(2)?)? = blue[lane];
+            }
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let scalar_start = if output_width < SIMD_RESIZE_LANES {
+        output_width
+    } else {
+        plan.vector_width
+    };
+    for output_x in scalar_start..output_width {
+        let output_start = output_x.checked_mul(3)?;
+        for channel in 0..3 {
+            *output_row.get_mut(output_start.checked_add(channel)?)? =
+                resize_horizontal_scalar(source_row, 3, coeffs, output_x, channel, false)?;
+        }
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
+/// HSV vertical convolution paired with the checked 32-bit horizontal path.
+/// The samples are read from contiguous triples without a mode conversion.
+fn resize_vertical_hsv_i32_vector_row(
+    intermediate: &[u8],
+    output_width: usize,
+    source_height: usize,
+    coeffs: &FilterCoeffs,
+    output_y: usize,
+    output_row: &mut [u8],
+) -> Option<(u64, u64)> {
+    let weights = resize_coeff_slice(coeffs, output_y)?;
+    let y0 = usize::try_from(*coeffs.xmin.get(output_y)?).ok()?;
+    let vector_width = if output_width < SIMD_RESIZE_LANES {
+        SIMD_RESIZE_LANES
+    } else {
+        output_width / SIMD_RESIZE_LANES * SIMD_RESIZE_LANES
+    };
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+    for output_x in (0..vector_width).step_by(SIMD_RESIZE_LANES) {
+        let count = output_width.saturating_sub(output_x).min(SIMD_RESIZE_LANES);
+        let mut red_sum = i32x8::splat(0);
+        let mut green_sum = i32x8::splat(0);
+        let mut blue_sum = i32x8::splat(0);
+        for (tap, &weight) in weights.iter().enumerate() {
+            let source_y = y0.checked_add(tap)?;
+            if source_y >= source_height {
+                return None;
+            }
+            let source_start = source_y
+                .checked_mul(output_width)?
+                .checked_add(output_x)?
+                .checked_mul(3)?;
+            let source_end = source_start.checked_add(count.checked_mul(3)?)?;
+            let source_pixels = intermediate.get(source_start..source_end)?;
+            let mut red_samples = [0i32; SIMD_RESIZE_LANES];
+            let mut green_samples = [0i32; SIMD_RESIZE_LANES];
+            let mut blue_samples = [0i32; SIMD_RESIZE_LANES];
+            for (lane, pixel) in source_pixels.chunks_exact(3).enumerate() {
+                red_samples[lane] = i32::from(pixel[0]);
+                green_samples[lane] = i32::from(pixel[1]);
+                blue_samples[lane] = i32::from(pixel[2]);
+            }
+            let weight = i32x8::splat(i32::try_from(weight).ok()?);
+            red_sum += i32x8::new(red_samples) * weight;
+            green_sum += i32x8::new(green_samples) * weight;
+            blue_sum += i32x8::new(blue_samples) * weight;
+        }
+        let red = red_sum.to_array().map(resize_fixed_point_i32_to_u8);
+        let green = green_sum.to_array().map(resize_fixed_point_i32_to_u8);
+        let blue = blue_sum.to_array().map(resize_fixed_point_i32_to_u8);
+        for lane in 0..count {
+            let output_start = (output_x + lane).checked_mul(3)?;
+            *output_row.get_mut(output_start)? = red[lane];
+            *output_row.get_mut(output_start.checked_add(1)?)? = green[lane];
+            *output_row.get_mut(output_start.checked_add(2)?)? = blue[lane];
+        }
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let scalar_start = if output_width < SIMD_RESIZE_LANES {
+        output_width
+    } else {
+        vector_width
+    };
+    for output_x in scalar_start..output_width {
+        let output_start = output_x.checked_mul(3)?;
+        for channel in 0..3 {
+            let mut sum = 0i32;
+            for (tap, &weight) in weights.iter().enumerate() {
+                let source_y = y0.checked_add(tap)?;
+                if source_y >= source_height {
+                    return None;
+                }
+                let source_index = source_y
+                    .checked_mul(output_width)?
+                    .checked_add(output_x)?
+                    .checked_mul(3)?
+                    .checked_add(channel)?;
+                sum += i32::from(*intermediate.get(source_index)?) * i32::try_from(weight).ok()?;
+            }
+            *output_row.get_mut(output_start.checked_add(channel)?)? =
+                resize_fixed_point_i32_to_u8(sum);
+        }
+        scalar_tail = scalar_tail.saturating_add(1);
+    }
+    Some((vector_blocks, scalar_tail))
+}
+
 fn resize_horizontal_cover_i32_vector_row(
     source_row: &[u8],
     channels: usize,
@@ -21592,6 +21765,9 @@ fn resize_horizontal_cover_i32_vector_row(
         ),
         (2, true) => {
             resize_horizontal_la_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
+        }
+        (3, false) => {
+            resize_horizontal_hsv_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
         }
         _ => None,
     }
@@ -21617,6 +21793,14 @@ fn resize_vertical_cover_i32_vector_row(
             output_row,
         ),
         (2, true) => resize_vertical_la_i32_vector_row(
+            intermediate,
+            output_width,
+            source_height,
+            coeffs,
+            output_y,
+            output_row,
+        ),
+        (3, false) => resize_vertical_hsv_i32_vector_row(
             intermediate,
             output_width,
             source_height,
@@ -22366,7 +22550,10 @@ fn simd_resize_convolution_into(
     let vertical = precompute_coeffs(output_height as u32, source_height as u32, filter);
     let cover_byte_i32 = cover_byte_i32
         && matches!(filter, ResampleFilter::Bicubic)
-        && matches!((channels, premultiplied_alpha), (1, false) | (2, true))
+        && matches!(
+            (channels, premultiplied_alpha),
+            (1, false) | (2, true) | (3, false)
+        )
         && resize_u8_coefficients_fit_i32(&horizontal)
         && resize_u8_coefficients_fit_i32(&vertical);
     let horizontal_plan =
@@ -23036,11 +23223,16 @@ fn native_aspect_resize_bytes(
     };
     let use_cover_byte_i32 = allow_cover_byte_i32
         && matches!(filter, ResampleFilter::Bicubic)
-        && matches!(mode, None | Some("L" | "LA"))
-        && matches!(
-            img,
-            DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
-        );
+        && match mode {
+            Some("HSV") => matches!(img, DynamicImage::ImageRgb8(_)),
+            None | Some("L" | "LA") => {
+                matches!(
+                    img,
+                    DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
+                )
+            }
+            _ => false,
+        };
     let result = if use_cover_byte_i32 {
         simd_resize_impl(
             img,
@@ -29654,6 +29846,95 @@ mod tests {
             )
             .expect("bounded i32 LA Cover resize must succeed");
             assert_eq!(narrow, widened, "alpha pattern {pattern}");
+        }
+    }
+
+    #[test]
+    fn cover_hsv_i32_two_pass_matches_widened_at_edges_and_tails() {
+        for (width, height, output_width, output_height) in
+            [(5, 3, 7, 5), (37, 17, 53, 23), (67, 29, 31, 41)]
+        {
+            let horizontal = super::precompute_coeffs(output_width, width, ResampleFilter::Bicubic);
+            let vertical = super::precompute_coeffs(output_height, height, ResampleFilter::Bicubic);
+            assert!(super::resize_u8_coefficients_fit_i32(&horizontal));
+            assert!(super::resize_u8_coefficients_fit_i32(&vertical));
+            let plan =
+                super::build_resize_horizontal_plan(&horizontal, output_width as usize, 3, false)
+                    .expect("HSV horizontal plan");
+
+            for pattern in 0..4u32 {
+                let source = (0..width * height * 3)
+                    .map(|index| match pattern {
+                        0 => 0,
+                        1 => 255,
+                        2 if (index + index / (width * 3)) % 2 == 0 => 0,
+                        2 => 255,
+                        _ => index
+                            .wrapping_mul(97)
+                            .wrapping_add(index / (width * 3) * 53)
+                            as u8,
+                    })
+                    .collect::<Vec<_>>();
+                let mut widened_intermediate =
+                    vec![0u8; height as usize * output_width as usize * 3];
+                let mut narrow_intermediate = widened_intermediate.clone();
+                for y in 0..height as usize {
+                    let source_row = &source[y * width as usize * 3..(y + 1) * width as usize * 3];
+                    let row_start = y * output_width as usize * 3;
+                    let row_end = row_start + output_width as usize * 3;
+                    super::resize_horizontal_vector_row(
+                        source_row,
+                        3,
+                        &horizontal,
+                        &plan,
+                        output_width as usize,
+                        &mut widened_intermediate[row_start..row_end],
+                        false,
+                    )
+                    .expect("wide HSV horizontal pass");
+                    super::resize_horizontal_hsv_i32_vector_row(
+                        source_row,
+                        &horizontal,
+                        &plan,
+                        output_width as usize,
+                        &mut narrow_intermediate[row_start..row_end],
+                    )
+                    .expect("bounded HSV horizontal pass");
+                }
+                assert_eq!(
+                    narrow_intermediate, widened_intermediate,
+                    "horizontal {pattern}"
+                );
+
+                let mut widened = vec![0u8; output_width as usize * output_height as usize * 3];
+                let mut narrow = widened.clone();
+                for y in 0..output_height as usize {
+                    let row_start = y * output_width as usize * 3;
+                    let row_end = row_start + output_width as usize * 3;
+                    super::resize_vertical_vector_row(
+                        &widened_intermediate,
+                        output_width as usize,
+                        height as usize,
+                        3,
+                        &vertical,
+                        y,
+                        &mut widened[row_start..row_end],
+                        false,
+                        false,
+                    )
+                    .expect("wide HSV vertical pass");
+                    super::resize_vertical_hsv_i32_vector_row(
+                        &narrow_intermediate,
+                        output_width as usize,
+                        height as usize,
+                        &vertical,
+                        y,
+                        &mut narrow[row_start..row_end],
+                    )
+                    .expect("bounded HSV vertical pass");
+                }
+                assert_eq!(narrow, widened, "vertical {pattern}");
+            }
         }
     }
 
