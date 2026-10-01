@@ -556,6 +556,19 @@ fn channel_sample(word: u32, channel: u32) -> F64OrderedState {
     }
     return number(bitcast<u32>(f32(value)));
 }
+fn read_pixel(index: u32) -> u32 {
+    if params.mode != 2u || (params._pad & 2u) == 0u {
+        return input[index];
+    }
+    let byte_offset = index * 3u;
+    let word_index = byte_offset >> 2u;
+    let shift = (byte_offset & 3u) * 8u;
+    var packed = input[word_index] >> shift;
+    if shift > 8u {
+        packed = packed | (input[word_index + 1u] << (32u - shift));
+    }
+    return (packed & 0x00ffffffu) | 0xff000000u;
+}
 fn sample(base: u32, x: u32, y: u32, channel: u32) -> F64OrderedState {
     if params.mode == 5u {
         // Geometry.c's SPECIAL filter8 reads the first width bytes of each
@@ -566,7 +579,7 @@ fn sample(base: u32, x: u32, y: u32, channel: u32) -> F64OrderedState {
         let shift = ((byte_x & 1u) ^ (params._pad & 1u)) * 8u;
         return number(bitcast<u32>(f32((word >> shift) & 255u)));
     }
-    return channel_sample(input[geometry[base + 1u + x] + geometry[base + 5u + y]], channel);
+    return channel_sample(read_pixel(geometry[base + 1u + x] + geometry[base + 5u + y]), channel);
 }
 fn interpolate(base: u32, channel: u32, dx: F64OrderedState, dy: F64OrderedState) -> F64OrderedState {
     let typed = params.mode == 8u;
@@ -602,7 +615,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let base = index * 13u;
     if geometry[base] == 0u { output[index] = get_fill_pixel(); return; }
     if geometry[base] == 2u { output[index] = 0u; return; }
-    if params.filter_code == 0u { output[index] = input[geometry[base + 1u]]; return; }
+    if params.filter_code == 0u { output[index] = read_pixel(geometry[base + 1u]); return; }
     let dx = fraction(geometry[base + 9u], geometry[base + 10u]);
     let dy = fraction(geometry[base + 11u], geometry[base + 12u]);
     if params.mode == 5u {
