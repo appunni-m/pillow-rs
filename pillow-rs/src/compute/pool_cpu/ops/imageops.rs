@@ -50,6 +50,71 @@ fn histogram_value_at(histogram: &[usize; 256], index: usize, fallback: u8) -> u
     fallback
 }
 
+/// Reduce a native L byte slice to its extrema using portable vector lanes.
+/// AutoContrast at cutoff zero needs only these two bins, not a full histogram.
+fn native_luma_minmax(raw: &[u8]) -> Option<(u8, u8)> {
+    if raw.is_empty() {
+        return None;
+    }
+    let mut minima = u8x16::splat(u8::MAX);
+    let mut maxima = u8x16::splat(0);
+    let mut chunks = raw.chunks_exact(16);
+    for chunk in &mut chunks {
+        let values = u8x16::new(chunk.try_into().ok()?);
+        minima = minima.min(values);
+        maxima = maxima.max(values);
+    }
+    let mut minimum = *minima.to_array().iter().min()?;
+    let mut maximum = *maxima.to_array().iter().max()?;
+    for &value in chunks.remainder() {
+        minimum = minimum.min(value);
+        maximum = maximum.max(value);
+    }
+    Some((minimum, maximum))
+}
+
+fn native_luma_lut_tables(lut: &[u8]) -> Option<[u8x16; 16]> {
+    if lut.len() != 256 {
+        return None;
+    }
+    Some(std::array::from_fn(|index| {
+        let start = index * 16;
+        u8x16::new(
+            lut[start..start + 16]
+                .try_into()
+                .expect("each byte LUT table has sixteen entries"),
+        )
+    }))
+}
+
+#[inline]
+fn native_luma_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
+    let low = input & u8x16::splat(0x0f);
+    let high: u8x16 = input >> 4u32;
+    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
+    let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
+    let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
+    let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));
+    let bit3 = (high & u8x16::splat(8)).simd_eq(u8x16::splat(0));
+    let level1: [u8x16; 8] =
+        std::array::from_fn(|index| bit0.select(lookups[index * 2], lookups[index * 2 + 1]));
+    let level2: [u8x16; 4] =
+        std::array::from_fn(|index| bit1.select(level1[index * 2], level1[index * 2 + 1]));
+    let level3: [u8x16; 2] =
+        std::array::from_fn(|index| bit2.select(level2[index * 2], level2[index * 2 + 1]));
+    bit3.select(level3[0], level3[1])
+}
+
+fn apply_native_luma_lut_row(source: &[u8], destination: &mut [u8], tables: &[u8x16; 16]) {
+    for (source, destination) in source.chunks(16).zip(destination.chunks_mut(16)) {
+        let active = source.len();
+        let mut padded = [0u8; 16];
+        padded[..active].copy_from_slice(source);
+        let mapped = native_luma_lut_chunk(u8x16::new(padded), tables).to_array();
+        destination.copy_from_slice(&mapped[..active]);
+    }
+}
+
 /// Build Pillow's per-channel autocontrast lookup table.
 ///
 /// Histogram construction and percentile selection are scalar control work;
@@ -73,17 +138,30 @@ pub(crate) fn autocontrast_lut(
     let stride = w as usize * channels;
     let mut histograms = [[0usize; 256]; 4];
 
+    let expected_len = image_pixels.checked_mul(channels);
+    let zero_cutoff_luma_bounds = if cutoff == 0.0
+        && mask.is_none()
+        && matches!((img, channels), (DynamicImage::ImageLuma8(_), 1))
+        && expected_len == Some(raw.len())
+    {
+        native_luma_minmax(raw)
+    } else {
+        None
+    };
+
     // The SIMD adapter shares this scalar control plane, so keep its hot
     // unmasked L/RGB case on the existing banked native-byte histogram. The
     // independent counters reduce the dependency chain for repeated samples;
     // the mask and other native layouts retain the general semantic loop.
-    let expected_len = image_pixels.checked_mul(channels);
-    let native_histogram = if mask.is_none()
+    let native_histogram = if zero_cutoff_luma_bounds.is_some() {
+        true
+    } else if mask.is_none()
         && expected_len == Some(raw.len())
         && matches!(
             (img, channels),
             (DynamicImage::ImageLuma8(_), 1) | (DynamicImage::ImageRgb8(_), 3)
-        ) {
+        )
+    {
         let counts = if image_pixels < 16_384 {
             equalize_histogram::<1>(raw, channels)
         } else {
@@ -133,12 +211,18 @@ pub(crate) fn autocontrast_lut(
     for channel in 0..channels {
         let low_thresh = (total * cutoff / 100.0) as usize;
         let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
-        let lo = histogram_value_at(&histograms[channel], low_thresh, 0) as f64;
-        let hi = histogram_value_at(
-            &histograms[channel],
-            high_thresh.min(selected_pixels - 1),
-            255,
-        ) as f64;
+        let (lo, hi) = if let Some((lo, hi)) = zero_cutoff_luma_bounds {
+            (f64::from(lo), f64::from(hi))
+        } else {
+            (
+                histogram_value_at(&histograms[channel], low_thresh, 0) as f64,
+                histogram_value_at(
+                    &histograms[channel],
+                    high_thresh.min(selected_pixels - 1),
+                    255,
+                ) as f64,
+            )
+        };
         let start = channel * 256;
         if hi <= lo {
             for value in 0..=u8::MAX {
@@ -162,6 +246,53 @@ pub(crate) fn autocontrast_lut(
         }
     }
     Ok(lut)
+}
+
+#[cfg(test)]
+mod autocontrast_luma_tests {
+    use super::{apply_native_luma_lut_row, autocontrast_lut, native_luma_lut_tables};
+    use crate::raster::{DynamicImage, GrayImage};
+
+    #[test]
+    fn native_luma_lut_vector_path_matches_every_scalar_table_entry_and_tail() {
+        let lut: Vec<u8> = (0..=u8::MAX)
+            .map(|value| value.wrapping_mul(73).wrapping_add(19))
+            .collect();
+        let tables = native_luma_lut_tables(&lut).expect("256-entry L LUT");
+        let source: Vec<u8> = (0..=u8::MAX).chain([19, 73, 211]).collect();
+        let mut destination = vec![0; source.len()];
+        apply_native_luma_lut_row(&source, &mut destination, &tables);
+        assert_eq!(
+            destination,
+            source
+                .iter()
+                .map(|&value| lut[usize::from(value)])
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn zero_cutoff_luma_lut_uses_native_extrema_exactly() {
+        let pixels = [
+            23, 50, 127, 196, 80, 112, 151, 172, 24, 195, 120, 90, 67, 88, 99, 150, 77, 188, 23,
+        ];
+        let image = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(pixels.len() as u32, 1, pixels.to_vec()).expect("valid L image"),
+        );
+        let lut = autocontrast_lut(&image, 0.0, None).expect("cutoff-zero LUT");
+        assert_eq!(lut[22], 0);
+        assert_eq!(lut[23], 0);
+        assert_eq!(lut[50], 39);
+        assert_eq!(lut[127], 153);
+        assert_eq!(lut[196], 255);
+        assert_eq!(lut[197], 255);
+
+        let constant = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(19, 1, vec![77; 19]).expect("valid constant L image"),
+        );
+        let constant_lut = autocontrast_lut(&constant, 0.0, None).expect("constant LUT");
+        assert!(constant_lut.iter().copied().eq(0..=u8::MAX));
+    }
 }
 
 /// Accumulate native byte bands while shortening repeated-counter dependencies.
@@ -311,7 +442,13 @@ fn apply_autocontrast_row(
     row: &mut [u8],
     channels: usize,
     lut: &[u8],
+    luma_lut_tables: Option<&[u8x16; 16]>,
 ) {
+    if let Some(tables) = luma_lut_tables {
+        let source_end = raw_start + row.len();
+        apply_native_luma_lut_row(&raw[raw_start..source_end], row, tables);
+        return;
+    }
     for (index, output) in row.iter_mut().enumerate() {
         let channel = index % channels;
         *output = lut[channel * 256 + usize::from(raw[raw_start + index])];
@@ -396,6 +533,11 @@ pub fn op_autocontrast(
     let raw = img.as_bytes();
     let mut out = raw.to_vec();
     let stride = w as usize * channels;
+    let luma_lut_tables = if channels == 1 {
+        native_luma_lut_tables(&lut)
+    } else {
+        None
+    };
 
     #[cfg(feature = "parallel")]
     if image_pixels >= POINT_PARALLEL_PIXEL_THRESHOLD {
@@ -404,7 +546,14 @@ pub fn op_autocontrast(
             stride,
             h as usize,
             |row_start, _row_end, _y, row| {
-                apply_autocontrast_row(raw, row_start, row, channels, &lut);
+                apply_autocontrast_row(
+                    raw,
+                    row_start,
+                    row,
+                    channels,
+                    &lut,
+                    luma_lut_tables.as_ref(),
+                );
             }
         );
     } else {
@@ -416,6 +565,7 @@ pub fn op_autocontrast(
                 &mut out[row_start..row_start + stride],
                 channels,
                 &lut,
+                luma_lut_tables.as_ref(),
             );
         }
     }
@@ -428,6 +578,7 @@ pub fn op_autocontrast(
             &mut out[row_start..row_start + stride],
             channels,
             &lut,
+            luma_lut_tables.as_ref(),
         );
     }
     let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;

@@ -318,6 +318,15 @@ generic RGBA transport from other operations or modes. CPU and SIMD latency
 targets for Cover LA also remain open; see the measured checkpoint in
 `PERFORMANCE_CAMPAIGN.md`.
 
+L AutoContrast is another operation-specific P1 reduction: its lowered
+single-LUT route now uploads and reads back native one-byte L instead of RGBA,
+removing 3/4 of the transfer bytes and the mode conversion. Strict CPU, SIMD,
+and GPU parity passed for materialized L and cutoff-clamped L. At queue depth 1,
+the measured GPU latency improved from 2.109 ms to 0.476 ms; its throughput is
+still behind SIMD at queue depths 2 and 4, and the generic RGBA transport
+remains for other operations and modes. See `PERFORMANCE_CAMPAIGN.md` for the
+three-attempt measurements and exact commands.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
