@@ -520,6 +520,61 @@ fn filter_5x5_i32_row(
     }
 }
 
+// A native I-mode convolution can amortize a uniformity proof over a larger
+// image than the byte filters: each interior output otherwise reads and
+// converts 25 four-byte samples. Keep the proof bounded so a nearly-uniform
+// large image cannot add an unbounded extra full-frame scan.
+const I32_UNIFORM_FILTER5X5_MAX_PIXELS: usize = 1024 * 1024;
+
+/// Prove that a uniform I image is unchanged by this exact normalized 5x5
+/// convolution. The sample and the five row sums use the same f32 conversion,
+/// FMA order, vertical accumulation, bias, and truncation as
+/// [`filter_5x5_i32_row`]; only a proved byte-identical result may skip the
+/// per-pixel kernel.
+pub(crate) fn uniform_i32_filter5x5_is_identity(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+) -> bool {
+    if width < 5 || height < 5 {
+        return false;
+    }
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if pixel_count == 0 || pixel_count > I32_UNIFORM_FILTER5X5_MAX_PIXELS {
+        return false;
+    }
+    let Some(expected_len) = pixel_count.checked_mul(4) else {
+        return false;
+    };
+    if raw.len() != expected_len {
+        return false;
+    }
+    let first = &raw[..4];
+    if !raw.chunks_exact(4).skip(1).all(|pixel| pixel == first) {
+        return false;
+    }
+
+    let sample_i32 = i32::from_le_bytes([first[0], first[1], first[2], first[3]]);
+    let sample = sample_i32 as f32;
+    let row0 = pillow_kernel_row_5([sample; 5], &kernel[0..5]);
+    let row1 = pillow_kernel_row_5([sample; 5], &kernel[5..10]);
+    let row2 = pillow_kernel_row_5([sample; 5], &kernel[10..15]);
+    let row3 = pillow_kernel_row_5([sample; 5], &kernel[15..20]);
+    let row4 = pillow_kernel_row_5([sample; 5], &kernel[20..25]);
+    let mut value = rounding_bias;
+    value += row0;
+    value += row1;
+    value += row2;
+    value += row3;
+    value += row4;
+    let filtered = if value >= 0.0 { value as i32 } else { 0 };
+    filtered == sample_i32
+}
+
 fn filter_5x5_i32(
     img: &DynamicImage,
     kernel: &[f32; 25],
@@ -542,6 +597,13 @@ fn filter_5x5_i32(
     let s = scale;
     // Pre-compute normalized kernel coefficients using f32 (matching PIL C construction)
     let kd: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
+
+    if uniform_i32_filter5x5_is_identity(raw, w_u32 as usize, h_u32 as usize, &kd, offset + 0.5) {
+        return Ok(DynamicImage::ImageRgba8(
+            crate::raster::RgbaImage::from_raw(w_u32, h_u32, raw.to_vec())
+                .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
+        ));
+    }
 
     let mut out = raw.to_vec();
 
@@ -2261,5 +2323,72 @@ mod gaussian_blur_row_fusion_tests {
 
             assert_eq!(fused, work, "fused RGB passes differ at {width}×{height}");
         }
+    }
+}
+
+#[cfg(test)]
+mod i32_filter5x5_uniform_tests {
+    use super::{execute_filter5x5, uniform_i32_filter5x5_is_identity};
+    use crate::raster::{DynamicImage, RgbaImage};
+
+    #[test]
+    fn uniform_binomial_filter_returns_the_exact_input() {
+        let (width, height, sample) = (32, 24, 37i32);
+        let pixel = sample.to_le_bytes();
+        let raw = pixel.repeat(width * height);
+        let kernel = [
+            1.0, 4.0, 6.0, 4.0, 1.0, 4.0, 16.0, 24.0, 16.0, 4.0, 6.0, 24.0, 36.0, 24.0, 6.0, 4.0,
+            16.0, 24.0, 16.0, 4.0, 1.0, 4.0, 6.0, 4.0, 1.0,
+        ];
+        let normalized = std::array::from_fn(|index| kernel[index] / 256.0);
+        assert!(uniform_i32_filter5x5_is_identity(
+            &raw,
+            width,
+            height,
+            &normalized,
+            0.5,
+        ));
+
+        let image = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width as u32, height as u32, raw.clone()).unwrap(),
+        );
+        let result = execute_filter5x5(&image, &kernel, 256.0, 0.0, Some("I")).unwrap();
+        assert_eq!(result.as_bytes(), raw);
+    }
+
+    #[test]
+    fn uniformity_proof_rejects_nonidentity_and_nonuniform_inputs() {
+        let (width, height, sample) = (7, 6, 11i32);
+        let pixel = sample.to_le_bytes();
+        let raw = pixel.repeat(width * height);
+        let mut identity_kernel = [0.0; 25];
+        identity_kernel[12] = 1.0;
+        assert!(uniform_i32_filter5x5_is_identity(
+            &raw,
+            width,
+            height,
+            &identity_kernel,
+            0.5,
+        ));
+
+        let mut nonidentity_kernel = identity_kernel;
+        nonidentity_kernel[12] = 2.0;
+        assert!(!uniform_i32_filter5x5_is_identity(
+            &raw,
+            width,
+            height,
+            &nonidentity_kernel,
+            0.5,
+        ));
+
+        let mut varied = raw;
+        varied[4 * (width + 3)..4 * (width + 3) + 4].copy_from_slice(&12i32.to_le_bytes());
+        assert!(!uniform_i32_filter5x5_is_identity(
+            &varied,
+            width,
+            height,
+            &identity_kernel,
+            0.5,
+        ));
     }
 }

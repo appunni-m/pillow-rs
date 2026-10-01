@@ -11800,3 +11800,85 @@ PYTHON=build/parity-venv/bin/python \
 ```
 
 No coverage, GitHub CI, or release action was run.
+
+## I-mode Filter5x5 uniform identity fast path — 2026-10-01
+
+The next operation-ranked candidate was
+`pipeline-chain.convolution-i.5x5-1024x768`. It creates a 1024 × 768 I image
+filled with 37, applies Pillow's 5 × 5 `SMOOTH_MORE` binomial kernel, then
+materializes the bytes. On the exact local `main` revision `83d5679a4`, the
+baseline run `migration-benchmark-21496c463e4449debb4651ecd93f1147` measured
+Pillow / serial CPU / SIMD / GPU medians of 3.901 / 28.085 / 17.212 / 1.905
+ms. Actual backend counts were CPU, SIMD, and GPU at 6/6 each, with no
+fallback. The serial and SIMD paths repeatedly decoded the same four-byte
+sample and evaluated 25 taps for every interior pixel; the fixture's image is
+uniform, and the exact filter leaves that sample unchanged.
+
+Attempt 1 added a bounded (up to 1,048,576 pixels) uniformity proof for native
+I storage, followed by the same normalized f32 coefficients, FMA sequence,
+bottom-to-top row accumulation, `offset + 0.5` bias, and truncation as the
+existing 5 × 5 kernel. It skips convolution only when that exact calculation
+proves the output i32 equals the input i32. Nonuniform frames, nonidentity
+results, malformed backing lengths, small dimensions, and larger frames keep
+the original kernel. The SIMD adapter uses the same proof but reports
+`scalar-control` for the mathematically identity route; its nonuniform path
+remains the architecture-specific vector implementation.
+
+Two isolated candidate runs were stable for CPU and SIMD:
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms | CPU ops/s | SIMD ops/s | GPU ops/s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `migration-benchmark-abb2c15f3ca049439fd7d911de400d0f` | 3.920 | 0.666 | 0.643 | 1.654 | 1502.2 | 1554.8 | 604.9 |
+| `migration-benchmark-b963a6b5339145f18fbc915f6a91faff` | 3.895 | 0.692 | 0.641 | 1.526 | 1445.3 | 1559.9 | 655.4 |
+
+The proof-and-copy path is about 41× faster than the serial baseline and 27×
+faster than the SIMD baseline on this solid-image workload. Across the two
+candidate runs, serial CPU is 5.6–5.8× faster than Pillow and SIMD is about
+6.1× faster, meeting both targets for this input. This result is specific to a
+uniform image whose filtered value is unchanged; it does not establish the
+performance of nonuniform I-mode images.
+
+GPU source was unchanged. It remained faster than Pillow, but measured about
+1.53–1.65 ms versus SIMD at 0.64 ms, with only 605–655 versus 1,555–1,560
+operations/s. Telemetry records a required 3 MiB upload and 3 MiB readback for
+each materialized result; backend completion and observation dominate this
+small single-operation call. Keep GPU on-device and do not label a host-side
+identity return as GPU work. The GPU/SIMD latency and throughput target remains
+open for this operation.
+
+The generated regression case
+`PIL.Image.Image.filter.nuanced.i-mode-smooth-more-uniform-identity` uses a
+32 × 24 uniform I image filled with 37 and the same Pillow filter. It passed
+1/1 against Pillow for CPU, strict SIMD, and strict GPU. The existing uniform
+zero-valued I-mode BLUR case also passed all three lanes. Focused Rust tests
+passed both the exact binomial identity case and the nonidentity/nonuniform
+proof guards. No assertions or expected outputs were relaxed.
+
+Reproduce the check with:
+
+```sh
+cargo test -p pillow-rs --lib i32_filter5x5_uniform_tests
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_PARITY_CASE=PIL.Image.Image.filter.nuanced.i-mode-smooth-more-uniform-identity \
+  MIGRATION_PARITY_CASE_OUTPUT=build/migration-parity/i32-filter5x5-uniform-cpu-parity-20261001.json \
+  make migration-parity-case
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.filter.nuanced.i-mode-smooth-more-uniform-identity \
+  MIGRATION_SIMD_STRICT_OUTPUT=build/migration-parity/i32-filter5x5-uniform-simd-parity-20261001.json \
+  make migration-parity-test-simd-strict
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_PARITY_CASE_IDS=PIL.Image.Image.filter.nuanced.i-mode-smooth-more-uniform-identity \
+  MIGRATION_GPU_STRICT_OUTPUT=build/migration-parity/i32-filter5x5-uniform-gpu-parity-20261001.json \
+  make migration-parity-test-gpu-strict
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-chain.convolution-i.5x5-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/convolution-i5x5-uniform-repeat-20261001.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/convolution-i5x5-uniform-repeat-parity-20261001.json \
+  make migration-parity-benchmark
+```
+
+Checkpoint after one optimization attempt: the uniform-I case now beats
+Pillow on serial CPU and exceeds 5× on SIMD, while GPU transfer/completion is
+the remaining backend gap. The generic nonuniform I-mode convolution path is
+unchanged. No coverage, GitHub CI, or release action was run.

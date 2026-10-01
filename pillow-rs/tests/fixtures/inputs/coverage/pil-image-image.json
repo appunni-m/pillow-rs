@@ -4565,6 +4565,7 @@
           "PIL.Image.Image.filter.nuanced.i-mode-detail-width-small-simd-guard",
           "PIL.Image.Image.filter.nuanced.i-mode-detail-height-small-simd-guard",
           "PIL.Image.Image.filter.nuanced.i-mode-smooth-more-fused-row",
+          "PIL.Image.Image.filter.nuanced.i-mode-smooth-more-uniform-identity",
           "PIL.Image.Image.filter.nuanced.l-mode-detail-fused-row",
           "PIL.Image.Image.filter.nuanced.l-mode-smooth-more-fused-row",
           "PIL.Image.Image.filter.nuanced.l-mode-find-edges-negative",
