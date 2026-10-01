@@ -31468,7 +31468,7 @@ mod tests {
     }
 
     #[test]
-    fn cmyk_filtered_rotate_stays_on_exact_host_control() {
+    fn cmyk_filtered_rotate_uses_native_gpu_with_exact_parity() {
         let source = Image::frombytes(
             "CMYK",
             (3, 2),
@@ -31512,11 +31512,9 @@ mod tests {
         let telemetry = Backend::take_pipeline_telemetry()
             .expect("CMYK filtered rotate must publish a receipt");
         assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Cpu);
-        assert_eq!(
-            telemetry.7.as_deref(),
-            Some("exact host semantic control: Rotate typed-sample arithmetic is not proven")
-        );
+        assert_eq!(telemetry.1, Backend::Gpu);
+        assert_eq!(telemetry.6, Some(1));
+        assert_eq!(telemetry.7, None);
         Backend::set_pipeline_telemetry_enabled(previous);
     }
 

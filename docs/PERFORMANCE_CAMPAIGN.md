@@ -10985,11 +10985,19 @@ RGB readback unit tests passed. `make fmt clippy`, docs lint/tests/site build,
 fixture validation, and release-tool tests passed. No coverage collection ran.
 
 A full feature-enabled library unit sweep reported five GPU admission or
-backend-selection assertion failures: `cmyk_filtered_rotate_stays_on_exact_host_control`,
-three specialized F resize checks, and
-`typed_luma16_nearest_affine_transform_uses_native_word_path`. The CMYK
-assertion also fails with default features, so it is not caused by the SIMD
-Rayon removal. The four backend receipt assertions compare equal output bytes
-but observe CPU where the test expects GPU; the I;16 case rejects the affine
-exactness proof. They remain investigation items and are not represented as
-passing unit coverage or Pillow parity.
+backend-selection assertion failures. Follow-up established that
+`cmyk_filtered_rotate_stays_on_exact_host_control` was stale: it was written
+before commit `6ae6d7fdb`, which lowered filtered Rotate through the exact
+binary64 projective sampler for raw-byte modes including CMYK. The test's CPU
+and GPU bytes already matched; only its expectation of a CPU fallback was
+obsolete. It now requires matching output, an actual GPU backend, one dispatch,
+and no fallback. The focused unit passes, and a fresh strict-GPU Pillow parity
+run passes the CMYK arbitrary, expanded, right-angle, and custom Rotate cases
+(4/4; zero skips or infrastructure errors). This corrects the test contract
+without weakening output parity or backend evidence.
+
+Four failures remain open: three specialized F Resize checks observe CPU where
+they expect GPU, and `typed_luma16_nearest_affine_transform_uses_native_word_path`
+does not satisfy its affine exactness proof. They remain investigation items;
+neither output equality alone nor a requested GPU backend counts as native
+acceleration.
