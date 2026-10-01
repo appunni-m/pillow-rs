@@ -45,6 +45,7 @@ INCLUDED_PREFIXES = (
     "pillow-rs-js/src/",
     "pillow-rs-py/python/",
     "pillow-rs-py/src/",
+    "pillow-rs-parallel/",
     "scripts/",
     "tests/",
 )

@@ -18,10 +18,13 @@
   in both `pillow-rs` and its bindings. A normal Python build must not silently
   enable Rayon.
 - A PyPI extra only selects optional distribution dependencies; it does not
-  change the Cargo features compiled into a wheel. Do not advertise
-  `pillow-rs[parallel]` as a Rayon build until packaging provides a distinct
-  parallel extension artifact with an unambiguous import path. Source builds
-  may opt in explicitly through Maturin's Cargo feature configuration.
+  change Cargo features in an existing wheel. `pillow-rs[parallel]` therefore
+  depends on the separately built `pillow-rs-parallel` companion wheel, whose
+  `_core_parallel` extension is selected by the Python loader when installed.
+  Keep that wheel's version pin, release artifacts, import route, and
+  `parallel-wheel` build feature synchronized. Source builds and Parallel CPU
+  benchmarks continue using the canonical `_core` module with Cargo's opt-in
+  `parallel` feature.
 - Rayon is a CPU execution strategy. Rayon-backed work belongs to the separately
   named and benchmarked **Parallel CPU** profile, not SIMD. Reserve SIMD for
   operations with actual architecture-specific vector code; do not create a

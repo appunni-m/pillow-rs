@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin==1.14.1"]
+build-backend = "maturin"
+
+[project]
+name = "pillow-rs-parallel"
+dynamic = ["version"]
+description = "Optional Rayon extension for pillow-rs"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["pillow-rs==12.2.0a5"]
+license = "MIT-CMU"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/appunni-m/pillow-rs"
+Repository = "https://github.com/appunni-m/pillow-rs"
+Documentation = "https://github.com/appunni-m/pillow-rs#readme"
+
+[tool.maturin]
+manifest-path = "../pillow-rs-py/Cargo.toml"
+python-source = "../pillow-rs-py/python"
+python-packages = []
+module-name = "pillow_rs._core_parallel"
+features = ["parallel-wheel"]

@@ -16,6 +16,9 @@ crate-type = ["cdylib"]
 [features]
 default = []
 parallel = ["pillow-rs/parallel"]
+# Maturin-only entry point used by the optional PyPI companion wheel. Ordinary
+# source builds and Parallel CPU benchmarks keep the canonical `_core` name.
+parallel-wheel = ["parallel"]
 
 [dependencies]
 pillow-rs = { path = "../pillow-rs" }

@@ -4,6 +4,22 @@ Applications should import ``Image`` from ``PIL``.  The ``pillow_rs`` module
 remains an implementation namespace for the binding and parity harness.
 """
 
+# The optional PyPI extra installs a companion wheel with a distinct native
+# module, so it cannot overwrite the standard serial extension. Source builds
+# still opt in through Cargo's `parallel` feature and use the normal `_core`
+# module name.
+import sys as _sys
+from importlib import import_module as _import_module
+
+try:
+    _core = _import_module("._core_parallel", __name__)
+except ModuleNotFoundError as _error:
+    if _error.name != f"{__name__}._core_parallel":
+        raise
+    _core = _import_module("._core", __name__)
+else:
+    _sys.modules[f"{__name__}._core"] = _core
+
 from . import imagechops as ImageChops
 from . import imagecolor as ImageColor
 from . import imagedraw as ImageDraw
@@ -14,7 +30,6 @@ from . import imageops as ImageOps
 from . import imagepalette as ImagePalette
 from . import imagestat as ImageStat
 from . import imagesequence as ImageSequence
-from . import _core
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
 from ._core import DecompressionBombError
 from .image import Image

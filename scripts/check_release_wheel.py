@@ -25,9 +25,9 @@ def main() -> None:
         if not package.is_file() or not package.name.endswith(".tar.gz"):
             raise SystemExit("expected the source distribution archive")
     else:
-        wheels = sorted(args.wheel_dir.resolve().glob("*.whl"))
+        wheels = sorted(args.wheel_dir.resolve().glob("pillow_rs-*.whl"))
         if len(wheels) != 1:
-            raise SystemExit(f"expected exactly one wheel for this host, got {wheels}")
+            raise SystemExit(f"expected exactly one standard pillow-rs wheel for this host, got {wheels}")
         package = wheels[0]
         if "-linux_" in package.name:
             raise SystemExit("generic Linux wheels are not accepted for PyPI; build a manylinux wheel")

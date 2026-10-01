@@ -12,9 +12,9 @@ import unittest
 import zipfile
 import yaml
 from check_release_recovery import REQUIRED_JOBS, validate
-from prepare_pypi_release import missing_files, validate_archive_versions
+from prepare_pypi_release import distribution_for_archive, missing_files, validate_archive_versions
 from check_release_licenses import verify_archive_license
-from release_versions import check_versions, python_version
+from release_versions import check_versions, python_version, validate_parallel_projects
 
 
 class ReleaseVersionTests(unittest.TestCase):
@@ -26,8 +26,11 @@ class ReleaseVersionTests(unittest.TestCase):
             with self.subTest(version=declared):
                 self.assertEqual(python_version(declared), normalized)
                 archives = [Path(f"pillow_rs-{normalized}-cp38-abi3-macosx_11_0_arm64.whl"),
+                            Path(f"pillow_rs_parallel-{normalized}-cp38-abi3-macosx_11_0_arm64.whl"),
                             Path(f"pillow_rs-{normalized}.tar.gz")]
                 self.assertEqual(validate_archive_versions(archives, declared), normalized)
+                self.assertEqual(distribution_for_archive(archives[0]), "pillow-rs")
+                self.assertEqual(distribution_for_archive(archives[1]), "pillow-rs-parallel")
 
     def test_bad_tags_and_mixed_prerelease_counters_are_rejected(self) -> None:
         for version in ("", "12.2", "12.2.0a1", "v12.2.0", "12.2.0-alpha",
@@ -47,6 +50,32 @@ class ReleaseVersionTests(unittest.TestCase):
                          "other-12.2.0a1.tar.gz"):
             with self.subTest(filename=filename), self.assertRaises(ValueError):
                 validate_archive_versions([Path(filename)], "12.2.0-alpha.1")
+
+    def test_parallel_extra_and_companion_are_version_locked(self) -> None:
+        base = {"optional-dependencies": {"parallel": ["pillow-rs-parallel==12.2.0a5"]}}
+        companion = {
+            "project": {
+                "name": "pillow-rs-parallel",
+                "dynamic": ["version"],
+                "readme": "README.md",
+                "dependencies": ["pillow-rs==12.2.0a5"],
+            },
+            "tool": {"maturin": {
+                "manifest-path": "../pillow-rs-py/Cargo.toml",
+                "module-name": "pillow_rs._core_parallel",
+                "features": ["parallel-wheel"],
+            }},
+        }
+        validate_parallel_projects("12.2.0-alpha.5", base, companion)
+
+        stale_base = {"optional-dependencies": {"parallel": ["pillow-rs-parallel==12.2.0a4"]}}
+        with self.assertRaises(ValueError):
+            validate_parallel_projects("12.2.0-alpha.5", stale_base, companion)
+
+        stale_companion = copy.deepcopy(companion)
+        stale_companion["project"]["dependencies"] = ["pillow-rs==12.2.0a4"]
+        with self.assertRaises(ValueError):
+            validate_parallel_projects("12.2.0-alpha.5", base, stale_companion)
 
     def test_github_creation_and_recovery_mark_only_prereleases(self) -> None:
         workflows = Path(__file__).resolve().parent.parent / ".github/workflows"

@@ -23,11 +23,32 @@ On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
 Save the [first-image example](../README.md#make-your-first-image) as `first_image.py`
 and run it with that environment's Python.
 
+The normal wheel uses serial CPU execution. The next alpha will provide a
+separately built Rayon-backed **Parallel CPU** extension through this optional
+extra (the currently published alpha predates it):
+
+```sh
+.venv/bin/python -m pip install 'pillow-rs[parallel]'
+```
+
+The extra installs `pillow-rs-parallel`, which contains the distinct native
+extension selected by the Python package. It does not change the normal wheel,
+and it does not route work to SIMD or GPU. Source builds can continue to opt in
+with Maturin's `parallel` Cargo feature.
+
 | Platform with a prebuilt wheel | Requirement |
 | --- | --- |
 | Linux x86-64 | glibc 2.28 or newer |
 | macOS ARM64 | macOS 11 or newer |
 | Windows x86-64 | 64-bit Python |
+
+The Parallel CPU companion wheel uses the same prebuilt-platform matrix. For a
+source checkout on another target, build the binding directly with the opt-in
+Cargo feature:
+
+```sh
+python -m maturin develop --manifest-path pillow-rs-py/Cargo.toml --features parallel
+```
 
 The package accepts Python 3.8 or newer. Python 3.10 and 3.12 are covered by
 full comparison runs; the release wheels are installed and exercised on Python 3.12.

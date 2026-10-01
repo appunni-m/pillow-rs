@@ -147,6 +147,7 @@ jobs:
           test -s SHA256SUMS
           test -s "crate/pillow-rs-${VERSION}.crate"
           test "$(find python -maxdepth 1 -type f -name 'pillow_rs-*.whl' | wc -l | tr -d ' ')" -ge 1
+          test "$(find python -maxdepth 1 -type f -name 'pillow_rs_parallel-*.whl' | wc -l | tr -d ' ')" -ge 1
           test -s "npm/pillow-rs-${VERSION}.tgz"
           sha256sum --check SHA256SUMS
       - name: Attest recovered release artifacts
