@@ -11550,3 +11550,58 @@ PYTHON=build/parity-venv/bin/python \
 ```
 
 No coverage, GitHub CI, or release action was run.
+
+## RGB Image.reduce serial-CPU checkpoint — 2026-10-01
+
+The clean operation snapshot ranked the 1024 × 768 RGB `Image.reduce` workload
+among the largest individual CPU regressions. Its current-main baseline,
+`migration-benchmark-ba030c5f37ee4c5b882826e5206d4fd5`, measured Pillow at
+0.405 ms, CPU at 1.430 ms, SIMD at 1.155 ms, and GPU at 1.881 ms. The measured
+input reduces by factor 3 × 5 and materializes the output bytes. All three
+target parity lanes passed, with each requested backend selected for 100/100
+timed observations and no fallback.
+
+Attempt 1 added a native RGB path: it processes the three stored channels
+directly, separates the interior blocks from the partial right/bottom edges,
+and preserves Pillow's 24-bit reciprocal-and-amend rounding. CPU fell to
+0.689 ms, but was still 1.54× slower than Pillow. Attempt 2 kept the same
+semantics and reduced accumulator width to u32 under a checked factor-area
+bound, summing each row before combining it into the block. It measured CPU at
+0.665 ms versus Pillow at 0.407 ms, a 2.15× improvement over its baseline but
+still 1.63× slower than Pillow. The attempt-2 benchmark
+`migration-benchmark-d75b058b366247e59b5db9090f050c9f` passed parity on CPU,
+SIMD, and GPU (3/3) with each actual backend selected for 100/100 observations.
+
+Attempt 3 changed the traversal to stream source rows through a scratch row.
+It regressed CPU to 0.723 ms; its parity gate still passed 3/3. That traversal
+was reverted, retaining attempt 2 as the best verified implementation. The
+generic-reference regression test compares RGB results for full blocks and
+partial right, bottom, and corner blocks with independent horizontal and
+vertical factors. Serial CPU remains a blocker at 1.63× Pillow latency; SIMD
+was 2.62× slower than Pillow and GPU 1.55× slower on the best-attempt run.
+These backend gaps remain separate work.
+
+Reproduce the retained implementation with:
+
+```sh
+cargo test -p pillow-rs --lib rgb_reduce_specialized_rows_match_generic_reference_at_edges
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.reduce.standard' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/reduce-rgb-after-attempt2.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/reduce-rgb-after-attempt2-parity.json \
+  make migration-parity-benchmark
+```
+
+This visit is checkpointed after three bounded attempts. No coverage, GitHub
+CI, or release action was run.
+
+The retained tree was rechecked after reverting attempt 3. Focused test passed;
+the fresh isolated run `migration-benchmark-cf36f6f59f584b9a99f3f88e3772210b`
+reported Pillow / CPU / SIMD / GPU median latency of 0.421 / 0.679 / 1.063 /
+0.585 ms respectively. Its parity evidence
+`migration-parity-benchmark-gate-83c018a736314902b438ce79faa70102` passed all
+3 requested backends, each selected for 100/100 samples with no fallback. On
+this rerun CPU is 1.61× slower than Pillow; SIMD is 2.52× slower, while GPU
+latency is 1.82× faster than SIMD. This confirms the CPU blocker and keeps
+backend follow-up separate.

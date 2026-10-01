@@ -2345,6 +2345,210 @@ fn reduce_i_thumbnail(
     raw_bytes_to_image(dst_w, dst_h, out, 4)
 }
 
+/// Reduce native RGB blocks without the generic per-channel mode checks.
+///
+/// Keep Pillow's 24-bit reciprocal-and-amend rounding unchanged. Interior,
+/// right-edge, bottom-edge, and corner blocks each retain their own divisor.
+fn execute_reduce_rgb(
+    img: &DynamicImage,
+    x_factor: u32,
+    y_factor: u32,
+    explicit_mode: Option<&str>,
+) -> Result<Option<DynamicImage>, PilError> {
+    if explicit_mode != Some("RGB") || !matches!(img, DynamicImage::ImageRgb8(_)) {
+        return Ok(None);
+    }
+
+    let fx = x_factor.max(1);
+    let fy = y_factor.max(1);
+    let Some(full_divider) = fx.checked_mul(fy) else {
+        return Ok(None);
+    };
+    // Keep both the channel sums plus amend and their fixed-point multiply
+    // within u32 for the hot path. Larger factors retain the generic u64 code.
+    if full_divider > u32::MAX / 256 {
+        return Ok(None);
+    }
+    let (width, height) = img.dimensions();
+    let new_width = width.div_ceil(fx);
+    let new_height = height.div_ceil(fy);
+    let source_stride = (width as usize).checked_mul(3);
+    let expected_source_len = source_stride.and_then(|stride| stride.checked_mul(height as usize));
+    let source = img.as_bytes();
+    if expected_source_len != Some(source.len()) {
+        return Ok(None);
+    }
+
+    let mut output = CheckedDims::new(new_width, new_height, 3)?.alloc_buffer();
+    if new_width == 0 || new_height == 0 {
+        return raw_bytes_to_image(new_width, new_height, output, 3).map(Some);
+    }
+
+    let division_multiplier = |divider: u32| -> u32 {
+        // Pillow's division_UINT32 reciprocal: 2^32 / (256 * divider).
+        ((1u128 << 32) / (u128::from(divider) * 256)) as u32
+    };
+    let main_width = width / fx;
+    let main_height = height / fy;
+    let right_width = width % fx;
+    let bottom_height = height % fy;
+    let full_multiplier = division_multiplier(full_divider);
+    let full_amend = full_divider / 2;
+    let right_divider = right_width * fy;
+    let right_multiplier = division_multiplier(right_divider.max(1));
+    let right_amend = right_divider / 2;
+    let bottom_divider = fx * bottom_height;
+    let bottom_multiplier = division_multiplier(bottom_divider.max(1));
+    let bottom_amend = bottom_divider / 2;
+    let corner_divider = right_width * bottom_height;
+    let corner_multiplier = division_multiplier(corner_divider.max(1));
+    let corner_amend = corner_divider / 2;
+    let source_stride = source_stride.expect("RGB source stride was checked");
+
+    let write_rgb_block = |row: &mut [u8],
+                           output_x: usize,
+                           source_x: usize,
+                           source_y: usize,
+                           block_width: usize,
+                           block_height: usize,
+                           multiplier: u32,
+                           amend: u32| {
+        let mut red_sum = 0u32;
+        let mut green_sum = 0u32;
+        let mut blue_sum = 0u32;
+        let mut source_row_start = source_y * source_stride + source_x * 3;
+        for _ in 0..block_height {
+            let mut red_row_sum = 0u32;
+            let mut green_row_sum = 0u32;
+            let mut blue_row_sum = 0u32;
+            let mut source_index = source_row_start;
+            for _ in 0..block_width {
+                red_row_sum += u32::from(source[source_index]);
+                green_row_sum += u32::from(source[source_index + 1]);
+                blue_row_sum += u32::from(source[source_index + 2]);
+                source_index += 3;
+            }
+            red_sum += red_row_sum;
+            green_sum += green_row_sum;
+            blue_sum += blue_row_sum;
+            source_row_start += source_stride;
+        }
+
+        let destination_index = output_x * 3;
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
+        )]
+        let red = ((red_sum + amend) * multiplier) >> 24;
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
+        )]
+        let green = ((green_sum + amend) * multiplier) >> 24;
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "the factor-area guard proves sums plus amend and the 24-bit reciprocal multiply fit u32"
+        )]
+        let blue = ((blue_sum + amend) * multiplier) >> 24;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "Pillow's RGB box average is an 8-bit result"
+        )]
+        let red = red as u8;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "Pillow's RGB box average is an 8-bit result"
+        )]
+        let green = green as u8;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "Pillow's RGB box average is an 8-bit result"
+        )]
+        let blue = blue as u8;
+        row[destination_index] = red;
+        row[destination_index + 1] = green;
+        row[destination_index + 2] = blue;
+    };
+
+    let process_row = |y: u32, row: &mut [u8]| {
+        let full_y = y < main_height;
+        let source_y = if full_y {
+            (y * fy) as usize
+        } else {
+            (main_height * fy) as usize
+        };
+        let block_height = if full_y {
+            fy as usize
+        } else {
+            bottom_height as usize
+        };
+        let (interior_multiplier, interior_amend) = if full_y {
+            (full_multiplier, full_amend)
+        } else {
+            (bottom_multiplier, bottom_amend)
+        };
+        for x in 0..main_width {
+            write_rgb_block(
+                row,
+                x as usize,
+                (x * fx) as usize,
+                source_y,
+                fx as usize,
+                block_height,
+                interior_multiplier,
+                interior_amend,
+            );
+        }
+        if right_width != 0 {
+            let (edge_multiplier, edge_amend) = if full_y {
+                (right_multiplier, right_amend)
+            } else {
+                (corner_multiplier, corner_amend)
+            };
+            write_rgb_block(
+                row,
+                main_width as usize,
+                (main_width * fx) as usize,
+                source_y,
+                right_width as usize,
+                block_height,
+                edge_multiplier,
+                edge_amend,
+            );
+        }
+    };
+
+    let output_stride = (new_width as usize) * 3;
+    #[cfg(feature = "parallel")]
+    {
+        const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+        let input_pixels = (width as usize).saturating_mul(height as usize);
+        if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
+            crate::par_rows_mut!(
+                &mut output,
+                output_stride,
+                new_height as usize,
+                |_row_start, _row_end, y, row| {
+                    process_row(y, row);
+                }
+            );
+        } else {
+            for y in 0..new_height {
+                let start = y as usize * output_stride;
+                process_row(y, &mut output[start..start + output_stride]);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..new_height {
+        let start = y as usize * output_stride;
+        process_row(y, &mut output[start..start + output_stride]);
+    }
+
+    raw_bytes_to_image(new_width, new_height, output, 3).map(Some)
+}
+
 /// Execute a Reduce operation matching Pillow's `Reduce.c`.
 ///
 /// Pillow computes ceil(w/xscale) x ceil(h/yscale) output pixels, averages
@@ -2368,6 +2572,9 @@ pub fn execute_reduce(
     }
     if matches!(img, DynamicImage::ImageRgba8(_)) && explicit_mode == Some("F") {
         return reduce_f_thumbnail(img, w.div_ceil(fx), h.div_ceil(fy), fx, fy);
+    }
+    if let Some(output) = execute_reduce_rgb(img, fx, fy, explicit_mode)? {
+        return Ok(output);
     }
     let channels = img.color().channel_count() as usize;
     let new_w = w.div_ceil(fx);
@@ -2495,7 +2702,7 @@ pub fn execute_reduce(
 
 #[cfg(test)]
 mod tests {
-    use super::{reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
+    use super::{execute_reduce, reduce_f_thumbnail, reduce_i_thumbnail, resize_f};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
@@ -2951,6 +3158,34 @@ mod tests {
             .flat_map(u32::to_le_bytes)
             .collect();
         assert_eq!(output.as_raw(), &expected_bytes);
+    }
+
+    #[test]
+    fn rgb_reduce_specialized_rows_match_generic_reference_at_edges() {
+        for (width, height, x_factor, y_factor) in [
+            (5, 4, 3, 2),
+            (7, 11, 3, 5),
+            (4, 7, 1, 3),
+            (13, 8, 4, 1),
+            (9, 5, 2, 2),
+        ] {
+            let source = (0..width as usize * height as usize * 3)
+                .map(|index| ((index * 37 + index / 11 * 17 + 29) % 256) as u8)
+                .collect();
+            let image = DynamicImage::ImageRgb8(
+                RgbImage::from_raw(width, height, source).expect("RGB source shape must be valid"),
+            );
+            let optimized = execute_reduce(&image, x_factor, y_factor, Some("RGB"))
+                .expect("specialized RGB Reduce must succeed");
+            let reference = execute_reduce(&image, x_factor, y_factor, None)
+                .expect("generic RGB Reduce reference must succeed");
+
+            assert_eq!(
+                optimized.as_bytes(),
+                reference.as_bytes(),
+                "RGB Reduce mismatch for {width}×{height} by {x_factor}×{y_factor}"
+            );
+        }
     }
 
     #[cfg(target_endian = "little")]
