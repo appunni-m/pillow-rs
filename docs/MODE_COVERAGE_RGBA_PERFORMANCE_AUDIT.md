@@ -23,7 +23,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P3 | Medium | Quantization | Median-cut builds two full RGB views, including an unused one when kmeans is off. |
 | P4 | Medium | Scalar conversions | Source-carrier clones are removed; serial CPU I→L still trails Pillow. |
 | P5 | Medium | Python data access | Multiband getdata iteration slices the compact byte buffer per pixel; target slicing also diverged from Pillow. |
-| P6 | Medium | Array input | Common fromarray input is copied through Python bytes, Rust Vec, and raster storage. |
+| P6 | High | Array input | Contiguous L/RGBA fromarray inputs are copied instead of sharing Pillow's read-only buffer view. |
 | P7 | Low–Medium | Color transforms | HSV and YCbCr transforms clone an already-RGB-shaped input before writing output. |
 | P8 | Conditional | CPU Paste | Masked same-mode Paste outside the native allowlist converts source and destination to RGBA. |
 | P9 | Medium | GPU shaders | Several mode-aware L/LA kernels express four-channel arithmetic or sorting before selecting the channels they use. |
@@ -120,13 +120,31 @@ matched Pillow and CPU medians were faster; RGB improved from 6.93 ms to about
 GPU, or Parallel CPU execution. Full evidence is in
 `PERFORMANCE_CAMPAIGN.md`.
 
-### P6. fromarray copies common byte layouts through three buffers
+### P6. `fromarray` misses Pillow's shared-buffer path — parity blocker
 
-The Python binding calls memoryview(...).tobytes() and extracts the resulting Python bytes into Vec<u8> (pillow-rs-py/src/lib.rs:2342–2349, 2382–2390). Core from_resolved_array_interface then calls Image::frombytes with borrowed data (pillow-rs/src/ops/array.rs:267–275), whose ordinary frombytes path copies into owned raster storage (pillow-rs/src/image.rs:2059–2072, 2090–2096).
+The binding calls `memoryview(...).tobytes()`, extracts a Python-bytes copy into
+`Vec<u8>`, then core `Image::frombytes` copies borrowed bytes into owned raster
+storage. An owned-vector constructor exists, but it is not used here. That
+three-buffer path is visible in `pillow-rs-py/src/lib.rs` and
+`pillow-rs/src/ops/array.rs` / `pillow-rs/src/image.rs`.
 
-For contiguous byte arrays with an already-supported layout, this produces a Python bytes copy, a Rust Vec copy, and the final owned image copy. Non-contiguous arrays and dtype normalization still need a normalization step, so a borrowed or owned fast path should be limited to compatible layouts.
+The performance gap is larger than those copies explain. Pillow's contiguous
+array route delegates to `frombuffer`; for supported modes such as L and RGBA,
+Pillow holds a read-only image view over the exporter. A 1024 × 768 NumPy
+array probe confirmed `readonly == 1` and that changing the source array is
+visible through the image until the image itself is mutated. pillow-rs eagerly
+copies the array, reports no read-only view, and does not observe later source
+array writes. Matching initial pixels is not complete parity.
 
-**Assessment:** high confidence in the copies on this route; medium priority. A buffer-protocol borrow or owned-data constructor could remove intermediate copies for compatible input.
+Three candidate shortcuts do not solve this safely: moving the extracted
+`Vec<u8>` into core removes one copy but still detaches from the source array;
+retaining the Python owner in `PyImage` leaves the core raster stale; rebuilding
+the raster before each API call preserves some reads but copies repeatedly and
+complicates Pillow's detach-on-image-write behavior. A viable fast path needs a
+core storage representation that retains the exported buffer's owner and
+stable lifetime, reads external writes, and detaches on image mutation without
+creating unsynchronized access. No code change was retained. Keep P6 blocked
+until that ownership contract is designed and parity-tested.
 
 ### P7. HSV/YCbCr transforms clone RGB-shaped input
 
