@@ -68,11 +68,3 @@ results need their own cleanup. Byte conversion can allocate or copy.
 Operations can throw for invalid modes, unsupported operations, or invalid
 inputs. Report the smallest call sequence, browser/Node version, dimensions,
 mode, and package version when opening an issue.
-
-## Upgrading
-
-Version 12.2.0-alpha.1 keeps the same package name and environment
-selection. Its `transform(size, matrix)` helper now uses the same affine input
-path as `transformWithInput`. A size must have exactly two entries. Omitting
-fill uses Pillow's zeroed-pixel default; specify a fill with `transformWithInput`
-when opaque border pixels are required.
