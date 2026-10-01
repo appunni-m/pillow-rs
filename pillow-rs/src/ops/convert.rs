@@ -513,6 +513,13 @@ impl Image {
         // PA is a dedicated indexed-plus-alpha destination; route I/F through
         // convert_to_palette_alpha below so scalar samples use its direct
         // clamped-index conversion instead of the generic L fallback.
+        if effective_src_mode_name == "I" && mode == "L" {
+            // i_to_l only reads the packed scalar carrier. Share the already
+            // materialized source instead of materialize() cloning its full
+            // four-byte-per-pixel buffer before the conversion.
+            let img = self.materialized_shared_for_ops()?;
+            return Ok(Image::from_dynamic(color::i_to_l(img.as_ref()), None));
+        }
         if matches!(effective_src_mode_name, "I" | "F") && mode != "PA" {
             let img = self.materialize()?;
             let result = match (effective_src_mode_name, mode) {
