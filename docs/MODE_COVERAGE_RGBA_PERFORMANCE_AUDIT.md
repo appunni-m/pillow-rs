@@ -337,6 +337,15 @@ GPU remained slower than SIMD. Keep this as a partial P1 transport win and move
 on; P1 remains open for other operations and modes. See
 `PERFORMANCE_CAMPAIGN.md` for timings and receipts.
 
+RGB `ImageOps.autocontrast` now maps each native RGB triplet directly into its
+output on serial CPU instead of cloning then rescanning bytes with per-byte
+channel selection. On the 1024 × 768 material case, CPU throughput increased
+from 354.2 to 774.3 images/s and every measured CPU/SIMD/GPU output matched
+live Pillow. SIMD remains about 1.34× Pillow. GPU still stages four bytes per
+pixel in each direction and records one mode conversion; a packed RGB Eval
+shader route is the remaining P1 task for this operation. See
+`PERFORMANCE_CAMPAIGN.md` for the four-attempt checkpoint and receipts.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
@@ -362,9 +371,10 @@ or Parallel CPU route.
 
 ## Suggested order for follow-up
 
-1. Continue P1 after the measured RGB Transform input reduction by selecting
-   the next operation/mode with RGBA staging cost; preserve each kernel's
-   current rounding and channel contract.
+1. Continue P1 after the RGB Transform and RGB AutoContrast checkpoints by
+   selecting the next operation/mode with RGBA staging cost; preserve each
+   kernel's current rounding and channel contract. RGB AutoContrast still
+   needs packed GPU input/output, while SIMD remains below its 5× target.
 2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
