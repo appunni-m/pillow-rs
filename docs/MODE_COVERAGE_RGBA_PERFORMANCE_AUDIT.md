@@ -165,9 +165,40 @@ buffer in constant time, so SIMD arithmetic and GPU dispatch cannot improve
 this operation without adding work. This mode-specific result meets the CPU
 and SIMD latency goals; GPU acceleration is not applicable to the path.
 
+## Follow-up result: typed filtered resize reachability
+
+The M1 layout mismatch is real inside `pil_resize()` if it receives a synthetic
+`DynamicImage::ImageLumaA16`, `ImageRgb16`, `ImageRgba16`, `ImageRgb32F`, or
+`ImageRgba32F`. Those representations are not currently reachable through the
+public Pillow-style resize API, however:
+
+- The pinned Pillow 12.2.0 oracle rejects `LA;16`, `RGB;16`, `RGBA;16`,
+  `RGB32F`, and `RGBA32F` in `Image.frombytes()` as unrecognized modes. It
+  accepts `I;16` and `F`, which use pillow-rs's existing scalar-specific paths.
+- The pinned `image-slash-star` decoder emits `L16`, `I32`, and `F32` for the
+  corresponding high-depth scalar TIFF layouts, but does not emit `La16`,
+  `Rgb16`, `Rgba16`, `Rgb32F`, or `Rgba32F`. Its 16-bit multi-channel PNG
+  inputs normalize to the same 8-bit public modes as Pillow, including
+  grayscale-alpha PNG loading as RGBA.
+- `DynamicImage::from_decoded()` can construct the typed variants from a
+  synthetic `DecodedImage`, but `pil_resize()` and the `ops` module are private.
+  Public `Image` constructors and current decoders do not provide a route to
+  pass those variants into filtered resize.
+
+The reachability check used the isolated Pillow 12.2.0 environment and
+`make build-parity`. Pillow and pillow-rs loaded the same 16-bit LA, RGB, and
+RGBA PNG samples; decoded modes and filtered resize bytes agreed. No parity
+fixture or implementation change was added because Pillow has no public mode
+contract for these synthetic layouts. Close M1 for the current public surface.
+If a supported decoder begins returning one of these variants, add a
+native-sample resize implementation and mode-specific parity cases first.
+
 ## Suggested order for follow-up
 
-1. Verify M1 filtered typed resize against Pillow, beginning with focused parity for `LA16`, `RGB16`, `RGBA16`, `RGB32F`, and `RGBA32F`. Fix any mode/storage mismatch before benchmarking those paths.
-2. Measure P1 GPU transport by operation and native mode; specialize only a demonstrated bandwidth or staging bottleneck while keeping each kernel's current mode contract.
-3. Measure P3 median-cut allocation and copy cost, then remove duplicate RGB materialization while preserving the k-means input and exact palette parity.
-4. Continue with P4 scalar conversions, P7 color transforms, and the host access findings using full-call benchmarks and exact parity cases.
+1. Measure P1 GPU transport by operation and native mode; specialize only a
+   demonstrated bandwidth or staging bottleneck while keeping each kernel's
+   current mode contract.
+2. Measure P3 median-cut allocation and copy cost, then remove duplicate RGB
+   materialization while preserving the k-means input and exact palette parity.
+3. Continue with P4 scalar conversions, P7 color transforms, and the host
+   access findings using full-call benchmarks and exact parity cases.
