@@ -6277,6 +6277,17 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
+            elif chain == "filter-smooth-more-uniform":
+                image_step = self.ensure_image()
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "SMOOTH_MORE",
+                    receiver=None,
+                    arguments={},
+                    step_id="setup-filter-smooth-more-uniform",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
             elif chain == "filter-find-edges-negative":
                 image_step = self.ensure_image()
                 self.add_step(
@@ -31623,6 +31634,18 @@ def build_nuanced_cases(
             "mode": "I",
             "size": [5, 5],
             "chain": "filter-smooth-more-fused-row",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-smooth-more-uniform-identity",
+            "mode": "I",
+            "size": [32, 24],
+            "edge": "uniform-fill",
+            "pixel": 37,
+            "chain": "filter-smooth-more-uniform",
             "observe_result": "tobytes",
         },
         {

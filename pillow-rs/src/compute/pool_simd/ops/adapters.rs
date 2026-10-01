@@ -16195,6 +16195,18 @@ fn simd_filter_5x5_i32(
         return Err(simd_unsupported("Filter5x5"));
     }
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / scale);
+    if crate::compute::pool_cpu::ops::filter::uniform_i32_filter5x5_is_identity(
+        img.as_bytes(),
+        img.width() as usize,
+        img.height() as usize,
+        &normalized_kernel,
+        offset + 0.5,
+    ) {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        let output = img.as_bytes().to_vec();
+        let result = crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 4)?;
+        return Ok(preserve_mode(img, result));
+    }
     let mut output = img.as_bytes().to_vec();
     let (vector_blocks, scalar_tail) = native_filter_5x5_i32_rows(
         img.as_bytes(),
