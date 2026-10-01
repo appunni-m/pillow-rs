@@ -11605,3 +11605,56 @@ reported Pillow / CPU / SIMD / GPU median latency of 0.421 / 0.679 / 1.063 /
 this rerun CPU is 1.61× slower than Pillow; SIMD is 2.52× slower, while GPU
 latency is 1.82× faster than SIMD. This confirms the CPU blocker and keeps
 backend follow-up separate.
+
+## RGB ImageOps.cover serial-CPU checkpoint — 2026-10-01
+
+The fresh workload
+`pil-imageops.cover.materialized.rgb-noise-1024x768` covers a native RGB
+1024 × 768 image to 768 × 1024 using Pillow's default BICUBIC filter; the
+materialized result is 1365 × 1024. Baseline run
+`migration-benchmark-00a82c5e83664002856e5ca83ce6df68` measured median
+latencies of 9.833 ms for Pillow, 25.242 ms for CPU, 17.796 ms for SIMD, and
+5.339 ms for GPU. The parity gate passed for CPU, SIMD, and GPU (3/3), with
+100/100 target observations per selected backend and no fallback; its evidence
+ID was `migration-parity-benchmark-gate-12afa330f8294588afd967566be7a94f`.
+
+Attempt 1 (`migration-benchmark-402b5a933c404e3586ad01fc32901d29`) accumulated
+native RGB channels together during each filter tap, avoiding three repeated
+coefficient walks. CPU fell to 18.595 ms (1.36× faster than baseline) while
+parity passed all three backends under
+`migration-parity-benchmark-gate-9edbf35ac71e467392ca29423668e128`. Attempt 2
+(`migration-benchmark-c932e0bded3440209f623ccfc48dce3e`) unrolled the common
+four-tap BICUBIC interior and retained the generic tap loop at clamped edges.
+CPU improved to 17.534 ms, a 1.44× gain against baseline, with all three
+backend parity lanes passing under
+`migration-parity-benchmark-gate-9969954b56384bca8ceb0366c73533b4`. Attempt 3
+(`migration-benchmark-b4b6c616363f4917a53a32c1a7730e75`) inlined fixed-point
+conversion and used `clamp`; CPU measured 18.288 ms and regressed versus
+attempt 2, so the conversion change was reverted; its parity gate
+`migration-parity-benchmark-gate-3d7b326fdf5b408faf49956bab86a1bb` also passed.
+The retained implementation is attempt 2.
+
+On the best run, Pillow / CPU / SIMD / GPU median latency was 9.364 / 17.534 /
+17.214 / 5.163 ms. CPU remains 1.87× slower than Pillow and SIMD 1.84× slower;
+GPU is 3.40× faster than CPU and 3.33× faster than SIMD. CPU backend timing
+accounts for 18.41 ms of the 18.96 ms observed call, while execution telemetry
+reports zero full-frame copies and zero mode conversions. This points to the
+resampling arithmetic as the remaining CPU cost rather than Python routing or
+format conversion. After three bounded attempts, RGB cover remains a blocker
+and work moves to a different operation.
+
+The retained code was built and checked with `cargo check -p pillow-rs --lib`;
+the relevant benchmark gate
+`migration-parity-benchmark-gate-9969954b56384bca8ceb0366c73533b4` passed all
+three target profiles. Reproduce it with:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.rgb-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-rgb-attempt2-20261001.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-rgb-attempt2-20261001-parity.json \
+  make migration-parity-benchmark
+```
+
+No coverage, GitHub CI, or release action was run.
