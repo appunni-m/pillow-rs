@@ -11386,3 +11386,80 @@ latency. `ImageBuffer`'s typed `pixels()`/`pixels_mut()` loop was faster than
 byte-slice iteration in this case, and `Vec::extend_from_slice` per three-byte
 pixel erased the expected allocation win. A borrowed typed input still did not
 show a repeatable gain; move on after this bounded three-variant checkpoint.
+
+## Masked HSV Paste native-channel checkpoint — 2026-10-01
+
+HSV Paste was represented by `ImageRgb8` with three stored bytes per pixel,
+and `paste_native_channels` already recognized that layout. Masked Paste's CPU
+allowlist and strict-SIMD planner nevertheless excluded HSV, so CPU reached the
+general four-byte path and strict SIMD rejected the request as unsupported.
+GPU's exact masked Paste planner admitted RGB only; its HSV run was parity-safe
+but used the generic converted path and reported one mode conversion. This was
+an admission gap, not a color conversion required by Pillow: masked HSV Paste
+blends each stored byte with the mask using the exact `BLEND/DIV255` rule used
+for RGB.
+
+The retained CPU route admits HSV and, for an L mask, processes each HSV row in
+three-byte pixels. It computes the mask and inverse once per pixel, blends the
+three channels explicitly, and removes the per-pixel endpoint branches for
+mask values 0 and 255; the integer blend still produces those endpoints
+exactly. Other mask layouts keep their established alpha and premultiplied
+behavior. The SIMD planner now admits HSV to its existing three-byte vector
+kernel. Its L-mask expansion groups each 16-byte vector by byte offset modulo
+three and builds the repeated lanes from six mask samples, avoiding one
+indexed mask lookup per channel byte. The 8-byte tail uses the matching
+three-phase pattern. This helper is shared with RGB, so the final parity run
+also includes RGB. GPU's native planner admits HSV stored in `ImageRgb8` with
+an L mask and reuses the exact three-byte RGB shader; a focused GPU test checks
+clipped placements, Pillow output, and zero mode conversions.
+
+The generator now maintains deterministic 1024×768 HSV destination/source and
+L-mask inputs as
+`pil-image-image.paste.masked.materialized.masked-hsv-noise-1024x768`. The
+focused Rust suite passed 11 masked-paste tests, and the direct RGB/HSV GPU
+shader test passed. The final official benchmark selected both HSV and RGB
+workloads through `migration-parity-benchmark`; its Pillow differential gate
+passed all six backend comparisons (CPU, strict SIMD, and GPU for both modes).
+There were no coverage runs.
+
+The final two-workload run used the release extension, 100 timed executions per
+subject, and 1024×768 images. Median end-to-end latency and reciprocal
+operations per second were:
+
+| Mode | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| HSV latency | 0.957 ms | 0.383 ms | 0.666 ms | 1.891 ms |
+| HSV throughput | 1,045 ops/s | 2,609 ops/s | 1,501 ops/s | 529 ops/s |
+| RGB latency | 0.945 ms | 1.695 ms | 0.667 ms | 1.615 ms |
+
+The HSV CPU path is 2.50× faster than Pillow, and HSV SIMD is 1.44× faster.
+The SIMD goal of 5× remains open. The shared SIMD route also reduced RGB
+latency below Pillow, while the existing RGB serial-CPU route remains 1.79×
+slower than Pillow and needs its own mode-specific visit. GPU HSV no longer
+converts modes and uses native three-byte transfers, but still uploads 5.25 MiB
+and reads back 2.25 MiB per call. Its median latency is 2.84× SIMD and its
+reciprocal throughput is 0.35× SIMD, so the GPU target remains open; transfer
+and readback costs dominate this single-operation boundary. Reciprocal
+throughput here is not a sustained-concurrency measurement.
+
+Reproduce the focused test and final two-mode run with:
+
+```sh
+cargo test -p pillow-rs --lib masked_paste
+cargo test -p pillow-rs --lib native_masked_rgb_and_hsv_paste_use_the_three_byte_shader
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-hsv-noise-1024x768 --workload-id pil-image-image.paste.masked.materialized.masked-rgb-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/masked-hsv-rgb-final.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/masked-hsv-rgb-final-parity.json \
+  migration-parity-benchmark
+```
+
+The Make target uses the isolated `build-parity` workflow before building the
+release extension and running the parity gate and timings.
+
+The bounded four-attempt visit is checkpointed. The next HSV investigation is
+generated AArch64 code for mask expansion and the destination-copy path; the
+GPU investigation is retaining image data across operations or submissions to
+amortize host transfers. Do not claim SIMD or GPU targets from the CPU result,
+and prioritize the recorded RGB CPU regression in the next Paste mode visit.

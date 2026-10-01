@@ -25,7 +25,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P5 | Medium | Python data access | Multiband getdata iteration slices the compact byte buffer per pixel; target slicing also diverged from Pillow. |
 | P6 | High | Array input | Contiguous L/RGBA fromarray inputs are copied instead of sharing Pillow's read-only buffer view. |
 | P7 | Low–Medium | Color transforms | RGB→HSV, RGB→YCbCr, and HSV→RGB now borrow; YCbCr→RGB copy-removal is checkpointed after three variants showed no repeatable whole-call gain. |
-| P8 | Conditional | CPU Paste | Masked same-mode Paste outside the native allowlist converts source and destination to RGBA. |
+| P8 | Conditional | Masked Paste | Several same-mode byte formats missed native masked paths; HSV is now native on CPU, SIMD, and GPU. Other candidates remain. |
 | P9 | Medium | GPU shaders | Several mode-aware L/LA kernels express four-channel arithmetic or sorting before selecting the channels they use. |
 | P10 | Low–Medium | JavaScript data access | Formatted multiband getdata builds a nested JavaScript array and a per-pixel array. |
 
@@ -207,11 +207,11 @@ SIMD- or GPU-specific conversion kernel was changed or measured, and no
 concurrent-throughput claim is made. Move on after this bounded three-variant
 checkpoint rather than spending more time on an unproven copy-removal tweak.
 
-### P8. CPU masked Paste has more same-mode RGBA fallback cases
+### P8. Masked Paste had same-mode byte formats outside native paths
 
-The native masked-paste allowlist is L, LA, PA, RGB, RGBA, and CMYK (pillow-rs/src/compute/pool_cpu/ops/effects.rs:651–668). Other same-mode combinations that reach the generic path convert both source and destination with to_rgba8() at :966–967, then blend four channels. Candidate 8-bit modes include RGBa, RGBX, HSV, YCbCr, and LAB; indexed and premultiplied modes need separate contract checks before adding a raw-channel kernel. I/F and I;16 should not be treated as byte-channel candidates.
+The initial audit found same-mode images that missed native masked Paste. HSV is stored in the same three-byte `ImageRgb8` carrier as RGB, but CPU and strict-SIMD admission excluded HSV. The GPU native planner admitted RGB only, so HSV reached the generic converted path. The RGB and HSV contracts blend their stored channels independently with an L mask; they do not require RGBA staging or color-space conversion. HSV now uses native three-byte paths on CPU, SIMD, and GPU, including zero GPU mode conversions. Same-mode `RGBa`, `RGBX`, `YCbCr`, and `LAB` remain candidates for separate contract checks. Indexed and premultiplied modes need their own semantics; I/F and I;16 are typed-sample cases rather than byte-channel candidates.
 
-**Assessment:** high confidence that the fallback conversion occurs; low-to-medium confidence that omitted formats are safe for a shared native blend. Current uncommitted changes already add PA to this allowlist in CPU, SIMD, and GPU code.
+**Assessment:** the HSV storage and fallback gap was confirmed and fixed without changing its logical mode. The focused HSV and shared RGB parity workloads pass on CPU, strict SIMD, and GPU. Other omitted formats remain unverified and should not be admitted by analogy alone.
 
 ### P9. Some mode-aware GPU shaders still express work on unused channels
 

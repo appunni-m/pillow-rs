@@ -10934,7 +10934,7 @@ impl GpuInner {
         Ok(result)
     }
 
-    /// Execute exact masked L/LA/RGB Paste with compact native-band GPU buffers.
+    /// Execute exact masked L/LA/PA/RGB/HSV Paste with compact native-band GPU buffers.
     #[cfg(target_endian = "little")]
     fn execute_native_masked_byte_paste(
         &self,
@@ -10973,7 +10973,7 @@ impl GpuInner {
                     DynamicImage::ImageLuma8(_)
                 )
             ),
-            ("RGB", 3) => matches!(
+            ("RGB" | "HSV", 3) => matches!(
                 (destination, source, mask),
                 (
                     DynamicImage::ImageRgb8(_),
@@ -11135,7 +11135,7 @@ impl GpuInner {
             "L" => "gpu_native_masked_l_paste",
             "LA" => "gpu_native_masked_la_paste",
             "PA" => "gpu_native_masked_pa_paste",
-            "RGB" => "gpu_native_masked_rgb_paste",
+            "RGB" | "HSV" => "gpu_native_masked_rgb_paste",
             _ => unreachable!("storage variant validated above"),
         };
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -15654,7 +15654,7 @@ fn gpu_native_masked_byte_paste_shader(
             "paste_native_masked_pa.wgsl",
             include_str!("shaders/paste_native_masked_pa.wgsl"),
         )),
-        ("RGB", 3) => Some((
+        ("RGB" | "HSV", 3) => Some((
             "__internal_paste_native_masked_rgb",
             "paste_native_masked_rgb.wgsl",
             include_str!("shaders/paste_native_masked_rgb.wgsl"),
@@ -15752,9 +15752,9 @@ fn plan_gpu_native_rgb_crop(
     })
 }
 
-/// Plan compact native-byte transport for exact L-, LA-, or RGB-to-same-mode
-/// masked Paste with an L mask. RGB invocations own four pixels and emit three
-/// aligned output words, avoiding three separate shader invocations per pixel.
+/// Plan compact native-byte transport for exact L-, LA-, PA-, RGB-, or HSV-to-
+/// same-mode masked Paste with an L mask. RGB/HSV invocations own four pixels
+/// and emit three aligned output words, avoiding three invocations per pixel.
 #[cfg(test)]
 fn plan_gpu_native_masked_l_paste(
     destination_width: u32,
@@ -16084,8 +16084,8 @@ fn gpu_native_rgb_to_rgba_paste_layout(
     Some((*x, *y))
 }
 
-/// Admit exact same-mode L, LA, or RGB Paste with a native L mask. Other logical
-/// modes and mask semantics retain the established generic GPU implementation.
+/// Admit exact same-mode L, LA, PA, RGB, or HSV Paste with a native L mask.
+/// Other logical modes and mask semantics retain the established generic path.
 fn gpu_native_masked_byte_paste_layout(
     op: &PipelineOp,
     destination: &DynamicImage,
@@ -16140,6 +16140,13 @@ fn gpu_native_masked_byte_paste_layout(
                 DynamicImage::ImageRgb8(_),
                 DynamicImage::ImageLuma8(_),
             ) => (3, "RGB"),
+            (
+                Some("HSV"),
+                "HSV",
+                DynamicImage::ImageRgb8(_),
+                DynamicImage::ImageRgb8(_),
+                DynamicImage::ImageLuma8(_),
+            ) => (3, "HSV"),
             _ => return None,
         };
     let (source_width, source_height) = source.dimensions();
@@ -22914,7 +22921,7 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn native_masked_rgb_paste_uses_its_shader_and_preserves_byte_tails() {
+    fn native_masked_rgb_and_hsv_paste_use_the_three_byte_shader() {
         use crate::ops::paste::PasteSource;
 
         match super::GpuPool::ensure_init() {
@@ -22963,60 +22970,63 @@ mod tests {
         ];
         mask_bytes[0..2].copy_from_slice(&[127, 128]);
         let positions = [(-1, -1), (2, 1)];
-        for position in positions {
-            let source = Image::frombytes("RGB", (5, 3), &source_bytes).unwrap();
-            let mask = Image::frombytes("L", (5, 3), &mask_bytes).unwrap();
-            let mut expected_image = Image::frombytes("RGB", (5, 3), &destination_bytes).unwrap();
-            expected_image
-                .paste_at(
-                    PasteSource::Image(Box::new(source.clone())),
-                    Some(position),
-                    Some(&mask),
-                )
-                .unwrap();
-            let expected = expected_image
-                .use_backend(Backend::Cpu)
-                .tobytes()
-                .expect("CPU masked RGB Paste reference");
+        for mode in ["RGB", "HSV"] {
+            for position in positions {
+                let source = Image::frombytes(mode, (5, 3), &source_bytes).unwrap();
+                let mask = Image::frombytes("L", (5, 3), &mask_bytes).unwrap();
+                let mut expected_image =
+                    Image::frombytes(mode, (5, 3), &destination_bytes).unwrap();
+                expected_image
+                    .paste_at(
+                        PasteSource::Image(Box::new(source.clone())),
+                        Some(position),
+                        Some(&mask),
+                    )
+                    .unwrap();
+                let expected = expected_image
+                    .use_backend(Backend::Cpu)
+                    .tobytes()
+                    .expect("CPU masked Paste reference");
 
-            let mut actual_image = Image::frombytes("RGB", (5, 3), &destination_bytes).unwrap();
-            actual_image
-                .paste_at(
-                    PasteSource::Image(Box::new(source)),
-                    Some(position),
-                    Some(&mask),
-                )
-                .unwrap();
-            let actual = actual_image
-                .use_backend(Backend::Gpu)
-                .tobytes()
-                .expect("native GPU masked RGB Paste");
-            assert_eq!(actual, expected, "masked RGB Paste at {position:?}");
+                let mut actual_image = Image::frombytes(mode, (5, 3), &destination_bytes).unwrap();
+                actual_image
+                    .paste_at(
+                        PasteSource::Image(Box::new(source)),
+                        Some(position),
+                        Some(&mask),
+                    )
+                    .unwrap();
+                let actual = actual_image
+                    .use_backend(Backend::Gpu)
+                    .tobytes()
+                    .expect("native GPU masked Paste");
+                assert_eq!(actual, expected, "masked {mode} Paste at {position:?}");
 
-            let receipt = Backend::take_pipeline_telemetry()
-                .expect("native masked RGB Paste must publish a telemetry receipt");
-            assert_eq!(receipt.0, Some(Backend::Gpu));
-            assert_eq!(receipt.1, Backend::Gpu);
-            assert_eq!(receipt.6, Some(1));
-            assert_eq!(receipt.7, None);
-            let resources = receipt.8.expect("native masked RGB GPU resources");
-            assert_eq!(resources.mode_conversion_count, 0);
-            assert_eq!(resources.upload_bytes, 48 + 48 + 16);
-            assert_eq!(resources.auxiliary_bytes, 48 + 16);
-            assert_eq!(resources.readback_bytes, 48);
+                let receipt = Backend::take_pipeline_telemetry()
+                    .expect("native masked Paste must publish a telemetry receipt");
+                assert_eq!(receipt.0, Some(Backend::Gpu));
+                assert_eq!(receipt.1, Backend::Gpu);
+                assert_eq!(receipt.6, Some(1));
+                assert_eq!(receipt.7, None);
+                let resources = receipt.8.expect("native masked GPU resources");
+                assert_eq!(resources.mode_conversion_count, 0);
+                assert_eq!(resources.upload_bytes, 48 + 48 + 16);
+                assert_eq!(resources.auxiliary_bytes, 48 + 16);
+                assert_eq!(resources.readback_bytes, 48);
 
-            let shader_dispatches = Backend::take_gpu_shader_coverage();
-            assert_eq!(shader_dispatches.len(), 1);
-            assert_eq!(
-                shader_dispatches[0].variant_name,
-                "__internal_paste_native_masked_rgb"
-            );
-            assert_eq!(
-                shader_dispatches[0].shader_file,
-                "paste_native_masked_rgb.wgsl"
-            );
-            assert_eq!(shader_dispatches[0].dispatches, 1);
-            assert_eq!(shader_dispatches[0].workgroups, 1);
+                let shader_dispatches = Backend::take_gpu_shader_coverage();
+                assert_eq!(shader_dispatches.len(), 1);
+                assert_eq!(
+                    shader_dispatches[0].variant_name,
+                    "__internal_paste_native_masked_rgb"
+                );
+                assert_eq!(
+                    shader_dispatches[0].shader_file,
+                    "paste_native_masked_rgb.wgsl"
+                );
+                assert_eq!(shader_dispatches[0].dispatches, 1);
+                assert_eq!(shader_dispatches[0].workgroups, 1);
+            }
         }
     }
 

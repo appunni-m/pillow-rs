@@ -1317,7 +1317,7 @@ fn native_paste_plan_from_layout(
             // RGBA-shaped alpha formula to indexed, typed, or tagged data.
             if !matches!(
                 layout.mode,
-                "L" | "LA" | "PA" | "RGB" | "RGBA" | "CMYK" | "I;16"
+                "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK" | "I;16"
             ) {
                 return None;
             }
@@ -1779,6 +1779,45 @@ fn native_paste_preblend_vector8(source: [u8; 8], destination: [u8; 8], mask: [u
         .map(|value| value as u8)
 }
 
+#[inline]
+fn native_paste_rgb_l_mask_block16(mask: &[u8], byte_start: usize) -> [u8; 16] {
+    let pixel_start = byte_start / 3;
+    let m0 = mask[pixel_start];
+    let m1 = mask[pixel_start + 1];
+    let m2 = mask[pixel_start + 2];
+    let m3 = mask[pixel_start + 3];
+    let m4 = mask[pixel_start + 4];
+    let m5 = mask[pixel_start + 5];
+    match byte_start % 3 {
+        0 => [
+            m0, m0, m0, m1, m1, m1, m2, m2, m2, m3, m3, m3, m4, m4, m4, m5,
+        ],
+        1 => [
+            m0, m0, m1, m1, m1, m2, m2, m2, m3, m3, m3, m4, m4, m4, m5, m5,
+        ],
+        2 => [
+            m0, m1, m1, m1, m2, m2, m2, m3, m3, m3, m4, m4, m4, m5, m5, m5,
+        ],
+        _ => unreachable!("byte phase modulo three is in 0..3"),
+    }
+}
+
+#[inline]
+fn native_paste_rgb_l_mask_block8(mask: &[u8], byte_start: usize) -> [u8; 8] {
+    let pixel_start = byte_start / 3;
+    let phase = byte_start % 3;
+    let m0 = mask[pixel_start];
+    let m1 = mask[pixel_start + 1];
+    let m2 = mask[pixel_start + 2];
+    let m3 = if phase == 2 { mask[pixel_start + 3] } else { 0 };
+    match phase {
+        0 => [m0, m0, m0, m1, m1, m1, m2, m2],
+        1 => [m0, m0, m1, m1, m1, m2, m2, m2],
+        2 => [m0, m1, m1, m1, m2, m2, m2, m3],
+        _ => unreachable!("byte phase modulo three is in 0..3"),
+    }
+}
+
 /// Blend a clipped native-L row with the same-width L mask. This single-byte
 /// kernel avoids rebuilding per-lane mask addresses in the generic channel
 /// adapter and is independent across destination rows.
@@ -2033,7 +2072,7 @@ fn native_paste_rgb_l_masked_row(
             .expect("validated RGB Paste row has a complete 16-byte block");
         let destination_block = <[u8; 16]>::try_from(&destination[start..start + 16])
             .expect("validated RGB Paste destination row has a complete 16-byte block");
-        let mask_block = std::array::from_fn(|lane| mask[(start + lane) / 3]);
+        let mask_block = native_paste_rgb_l_mask_block16(mask, start);
         let blended = native_paste_blend_vector16(source_block, destination_block, mask_block);
         destination[start..start + 16].copy_from_slice(&blended);
     }
@@ -2044,7 +2083,7 @@ fn native_paste_rgb_l_masked_row(
             .expect("validated RGB Paste row has a complete 8-byte block");
         let destination_block = <[u8; 8]>::try_from(&destination[start..start + 8])
             .expect("validated RGB Paste destination row has a complete 8-byte block");
-        let mask_block = std::array::from_fn(|lane| mask[(start + lane) / 3]);
+        let mask_block = native_paste_rgb_l_mask_block8(mask, start);
         let blended = native_paste_blend_vector8(source_block, destination_block, mask_block);
         destination[start..start + 8].copy_from_slice(&blended);
     }
@@ -2572,7 +2611,7 @@ fn native_paste_apply(
         return true;
     }
 
-    if plan.layout.mode == "RGB"
+    if matches!(plan.layout.mode, "RGB" | "HSV")
         && plan.layout.channels == 3
         && region.width != 0
         && region.height != 0
@@ -28823,6 +28862,40 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hsv_masked_paste_uses_native_three_channel_simd_path() {
+        use crate::pipeline::PipelineOp;
+        use crate::raster::{DynamicImage, GrayImage, RgbImage};
+        use std::sync::Arc;
+
+        let destination = DynamicImage::ImageRgb8(
+            RgbImage::from_raw(1, 1, vec![10, 80, 190]).expect("HSV destination bytes"),
+        );
+        let source = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageRgb8(
+                RgbImage::from_raw(1, 1, vec![200, 60, 10]).expect("HSV source bytes"),
+            ),
+            Some("HSV".to_owned()),
+        ));
+        let mask = Arc::new(crate::Image::from_dynamic(
+            DynamicImage::ImageLuma8(GrayImage::from_raw(1, 1, vec![127]).expect("L mask bytes")),
+            Some("L".to_owned()),
+        ));
+        let op = PipelineOp::Paste {
+            source,
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            mask: Some(mask),
+            mask_alpha: false,
+        };
+
+        let result = super::simd_paste(&destination, &op, Some("HSV"))
+            .expect("HSV masked Paste must use the native SIMD byte path");
+        assert_eq!(result.as_bytes(), [105, 70, 100]);
+    }
+
     #[test]
     fn native_pa_masked_paste_plan_uses_packed_pa_bytes_and_clipped_mask() {
         let source_bytes = vec![17, 201, 83, 149, 26, 222, 91, 163, 240, 7];
