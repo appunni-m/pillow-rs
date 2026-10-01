@@ -70,6 +70,11 @@ fn mode_has_a(m: u32) -> bool {
 // Reassemble one sample only for the singleton RGB Transform layout; every
 // other operation retains its existing packed-word contract.
 fn read_pixel(index: u32) -> u32 {
+    if params.mode == 0u && (params._pad & 4u) != 0u {
+        let packed = input[index >> 2u];
+        let luma = (packed >> ((index & 3u) * 8u)) & 0xffu;
+        return luma | 0xff000000u;
+    }
     if params.mode != 2u || (params._pad & 2u) == 0u {
         return input[index];
     }
