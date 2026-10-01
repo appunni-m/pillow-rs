@@ -579,6 +579,40 @@ fn paste_mask_pixels(mask: &Image, mask_alpha: bool) -> Result<Option<PasteMaskP
     }))
 }
 
+/// Blend native L samples with an L mask. Endpoint weights are exact under
+/// the byte formula, so the hot loop needs no per-pixel branches.
+#[inline]
+fn paste_native_masked_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len(), mask.len());
+
+    for ((source_value, destination_value), mask_value) in source
+        .iter()
+        .copied()
+        .zip(destination.iter_mut())
+        .zip(mask.iter().copied())
+    {
+        let weight = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - weight;
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+        )]
+        let weighted =
+            u16::from(source_value) * weight + u16::from(*destination_value) * inverse + 127;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "DIV255 yields an 8-bit convex blend of byte channels"
+        )]
+        let blended = (weighted / 255) as u8;
+        *destination_value = blended;
+    }
+}
+
 /// Blend PA's palette-index/alpha pairs in their native two-byte layout.
 /// The palette index is a stored sample here, not a request to expand colors.
 fn paste_native_masked_pa_row(
@@ -874,7 +908,13 @@ fn paste_native_masked(
         let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
         let destination_row = &mut row[destination_x..destination_x_end];
         let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
-        if mode == "RGB"
+        if mode == "L"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_l_row(source_row, destination_row, mask_row);
+        } else if mode == "RGB"
             && mask_channels == 1
             && mask_pixels.layout.value_index == 0
             && !mask_pixels.layout.premultiplied
@@ -4480,6 +4520,27 @@ mod tests {
             }
             assert_eq!(result.as_bytes(), expected, "native masked {mode} bytes");
         }
+    }
+
+    #[test]
+    fn native_l_masked_paste_row_matches_div255_endpoints_and_rounding() {
+        let masks = [0u8, 1, 127, 128, 254, 255];
+        let source = [0u8, 255, 11, 201, 31, 255];
+        let mut actual = [255u8, 0, 245, 53, 98, 0];
+        let mut expected = actual;
+
+        for (index, mask) in masks.iter().copied().enumerate() {
+            let source_value = u32::from(source[index]);
+            let destination_value = u32::from(expected[index]);
+            let mask_value = u32::from(mask);
+            expected[index] =
+                ((source_value * mask_value + destination_value * (255 - mask_value) + 127) / 255)
+                    as u8;
+        }
+
+        super::paste_native_masked_l_row(&source, &mut actual, &masks);
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
