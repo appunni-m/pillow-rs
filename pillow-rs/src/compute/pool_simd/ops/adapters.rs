@@ -8222,6 +8222,31 @@ fn native_invert_copy(
         return None;
     }
 
+    // The bytewise L/P case has no inactive lanes or channel mask. Write each
+    // vector directly into its final destination slice instead of extending
+    // the Vec by sixteen bytes per block; bounded Vec growth bookkeeping was
+    // material in the single-channel full-frame benchmark.
+    if channels == 1 && active_mask.iter().all(|&mask| mask == u8::MAX) {
+        let mut output = vec![0u8; source.len()];
+        let full_len = source.len() / 16 * 16;
+        let active_vector = u8x16::splat(u8::MAX);
+        for (input, destination) in source[..full_len]
+            .chunks_exact(16)
+            .zip(output[..full_len].chunks_exact_mut(16))
+        {
+            let input = u8x16::new(<[u8; 16]>::try_from(input).ok()?);
+            destination.copy_from_slice(&(input ^ active_vector).to_array());
+        }
+        for (destination, &input) in output[full_len..].iter_mut().zip(&source[full_len..]) {
+            *destination = !input;
+        }
+
+        crate::compute::record_pipeline_operation_vector_blocks((full_len / 16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail((source.len() - full_len) as u64);
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels)
+            .ok();
+    }
+
     let active_vector = u8x16::new(*active_mask);
     let mut output = Vec::with_capacity(source.len());
     let mut chunks = source.chunks_exact(16);
