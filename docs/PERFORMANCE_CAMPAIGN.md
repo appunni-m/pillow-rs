@@ -11463,3 +11463,51 @@ generated AArch64 code for mask expansion and the destination-copy path; the
 GPU investigation is retaining image data across operations or submissions to
 amortize host transfers. Do not claim SIMD or GPU targets from the CPU result,
 and prioritize the recorded RGB CPU regression in the next Paste mode visit.
+
+## Masked RGB Paste serial-CPU checkpoint — 2026-10-01
+
+The RGB/L-mask Paste regression was reproduced on clean `main` with the
+1024 × 768 materialized-noise workload. The baseline benchmark
+`migration-benchmark-4e905d43dab543d9aa4f907c71004329` measured medians of
+1.023 ms for Pillow, 1.758 ms for serial CPU, 0.703 ms for SIMD, and 1.840 ms
+for GPU. Each Rust backend was selected for all 100 timed observations with no
+fallback. The correctness gate passed all three target profiles.
+
+The CPU path used the generic native-byte loop even for RGB plus a simple L
+mask. That loop checked mask endpoints for every pixel and checked the mask's
+premultiplication state for every channel, although this layout cannot be
+premultiplied. A native three-byte RGB/L row kernel now computes the same
+`(source * mask + destination * (255 - mask) + 127) / 255` result directly for
+each channel. This removes those redundant branches; the arithmetic itself
+preserves both mask endpoints and Pillow's rounding. The focused row test
+covers masks 0, 1, 127, 128, 254, and 255 and varied channel values.
+
+The correctness-gated after-run
+`migration-benchmark-2f82bcd4bd894befb26f1596c8b8cc4b` measured Pillow at
+1.049 ms, serial CPU at 0.446 ms, SIMD at 0.727 ms, and GPU at 1.914 ms. CPU
+backend time was 0.320 ms; observed-call latency, including output
+materialization, is the comparison used here. Serial CPU is now 2.35× faster
+than Pillow and about 3.94× faster than its same-session baseline. The parity
+gate `migration-parity-benchmark-gate-e3472ca3b58648568cfacec962f0a6eb` passed
+CPU, SIMD, and GPU (3/3); each executed its requested backend 100/100 times.
+This change optimizes serial CPU only: the SIMD 5× target and GPU/SIMD target
+remain open, and the small shifts in their medians are timing variation rather
+than a claimed speedup or regression.
+
+Reproduce with the isolated Pillow comparison environment:
+
+```sh
+cargo test -p pillow-rs --lib native_rgb_l_masked_paste_row_matches_div255_endpoints_and_rounding
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-rgb-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/masked-rgb-cpu-after-attempt1.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/masked-rgb-cpu-after-attempt1-parity.json \
+  make migration-parity-benchmark
+```
+
+This completes the bounded serial-CPU visit for RGB masked Paste. The next
+visit should use a fresh correctness-gated baseline for the largest remaining
+individual serial-CPU regression. Keep SIMD and GPU as separate backend work;
+do not route either through Rayon or report the CPU speedup as an accelerator
+result. No coverage, GitHub CI, or release action was run.
