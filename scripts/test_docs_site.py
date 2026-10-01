@@ -137,7 +137,7 @@ class DocumentationTests(unittest.TestCase):
 
 
 class BenchmarkTests(unittest.TestCase):
-    def test_parallel_cpu_snapshot_keeps_its_own_pillow_cohort(self) -> None:
+    def test_parallel_cpu_snapshot_uses_ordinary_pillow_without_duplicate_baseline(self) -> None:
         def result(run_id: str, subjects: list[tuple[str, float]], parallel: bool = False) -> dict:
             entries = []
             for subject_id, median in subjects:
@@ -165,14 +165,27 @@ class BenchmarkTests(unittest.TestCase):
 
         default = project_pillow(result("default-run", [("pillow", 30), ("python-cpu", 20),
                                                           ("python-simd", 10), ("python-gpu", 5)]))
-        parallel = project_pillow(result("parallel-run", [("pillow", 40), ("python-parallel-cpu", 15)], True))
+        parallel = project_pillow(result("parallel-run", [("python-parallel-cpu", 15)], True))
         snapshot = merge_parallel_cpu(default, parallel, "b" * 64, "c" * 64)
         snapshot.update(schema=SCHEMA, repository="owner/repo", source_sha256="d" * 64)
         validate(snapshot, "owner/repo")
         subjects = {(row["workload"], row["subject"]): row for row in snapshot["rows"]}
-        self.assertEqual(subjects[("pipeline-op.resize", "python-parallel-cpu")]["comparison_group"], "parallel-cpu")
-        self.assertEqual(subjects[("pipeline-op.resize", "pillow-parallel-cpu")]["median_us"], 40000)
+        self.assertEqual(subjects[("pipeline-op.resize", "python-parallel-cpu")]["comparison_group"], "default")
+        self.assertEqual(subjects[("pipeline-op.resize", "pillow")]["median_us"], 30000)
+        self.assertNotIn(("pipeline-op.resize", "pillow-parallel-cpu"), subjects)
         self.assertEqual(snapshot["cohorts"][1]["run_id"], "parallel-run")
+        self.assertIn("no second Pillow timing is collected", snapshot["notes"][-1])
+
+        duplicate_baseline = project_pillow(
+            result("parallel-run", [("pillow", 40), ("python-parallel-cpu", 15)], True)
+        )
+        with self.assertRaisesRegex(ValueError, "unexpected Parallel CPU subject: pillow"):
+            merge_parallel_cpu(
+                project_pillow(result("default-run", [("pillow", 30), ("python-cpu", 20)])),
+                duplicate_baseline,
+                "b" * 64,
+                "c" * 64,
+            )
 
     def test_incomplete_jpeg_matrix_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

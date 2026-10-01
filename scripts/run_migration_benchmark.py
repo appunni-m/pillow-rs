@@ -90,6 +90,11 @@ def runtime_backend_for_profile(profile: str) -> str:
 
 
 def benchmark_subjects() -> list[tuple[str, str]]:
+    if PARALLEL_CPU_PROFILE:
+        # The ordinary Pillow timing is already recorded by the default run.
+        # Keep this run's timed cohort to the Rayon-enabled target only; the
+        # parity preflight still compares it with Pillow before timing.
+        return [("target_profile", "python-parallel-cpu")]
     return [
         ("oracle", "pillow"),
         *(
@@ -1043,9 +1048,9 @@ def workload_subjects_for_profile(
     """Select the declared benchmark subjects for the active backend profile.
 
     The manifest's standard cohort contains Pillow, serial CPU, SIMD, and GPU.
-    Parallel CPU reuses the same inputs but compares Pillow with its own
-    feature-identified CPU profile, without relabeling it as SIMD or replacing
-    the standard manifest contract.
+    Parallel CPU reuses the same inputs and parity preflight, but times only its
+    own feature-identified CPU profile. The public benchmark joins that timing
+    to the ordinary Pillow measurement from the standard run.
     """
 
     if not PARALLEL_CPU_PROFILE:
@@ -1062,10 +1067,7 @@ def workload_subjects_for_profile(
             "Parallel CPU benchmark input must start from the standard Pillow/"
             "CPU/SIMD/GPU subject contract"
         )
-    return [
-        {"kind": "oracle", "id": "pillow"},
-        {"kind": "target_profile", "id": "python-parallel-cpu"},
-    ]
+    return [{"kind": "target_profile", "id": "python-parallel-cpu"}]
 
 
 def apply_profile_to_workloads(
@@ -1278,29 +1280,30 @@ def run(args: argparse.Namespace) -> int:
         samples,
     ), timing_cases in timing_groups.items():
         repeat = warmup_iterations + measurement_iterations * samples
-        source_receipt = run_timed_side(
-            "source",
-            manifest,
-            timing_cases,
-            repeat,
-            args.timeout,
-            backend="cpu",
-            timing_boundary=timing_boundary,
-            timing_steps=list(timing_step_ids),
-            lifecycle=lifecycle,
-        )
-        source_timing.update(source_receipt["timings_ns"])
-        source_phase_telemetry.update(source_receipt["telemetry"])
-        source_execution.update(source_receipt["execution"])
-        source_status.update(
-            {item["case_id"]: item["status"] for item in source_receipt["results"]}
-        )
-        source_execution_errors.update(
-            {
-                item["case_id"]: item.get("execution_errors", [])
-                for item in source_receipt["results"]
-            }
-        )
+        if not PARALLEL_CPU_PROFILE:
+            source_receipt = run_timed_side(
+                "source",
+                manifest,
+                timing_cases,
+                repeat,
+                args.timeout,
+                backend="cpu",
+                timing_boundary=timing_boundary,
+                timing_steps=list(timing_step_ids),
+                lifecycle=lifecycle,
+            )
+            source_timing.update(source_receipt["timings_ns"])
+            source_phase_telemetry.update(source_receipt["telemetry"])
+            source_execution.update(source_receipt["execution"])
+            source_status.update(
+                {item["case_id"]: item["status"] for item in source_receipt["results"]}
+            )
+            source_execution_errors.update(
+                {
+                    item["case_id"]: item.get("execution_errors", [])
+                    for item in source_receipt["results"]
+                }
+            )
         for backend in TARGET_BACKENDS:
             profile = target_profile_for_backend(backend)
             target_receipt = run_timed_side(
@@ -1331,14 +1334,14 @@ def run(args: argparse.Namespace) -> int:
             )
 
     def timed_success(case_id: str, expected_repeat: int) -> bool:
-        return (
+        source_complete = PARALLEL_CPU_PROFILE or (
             source_status.get(case_id) == "completed"
             and len(source_timing.get(case_id, [])) == expected_repeat
-            and all(
-                target_status[profile].get(case_id) == "completed"
-                and len(target_timings[profile].get(case_id, [])) == expected_repeat
-                for profile in TARGET_PROFILES
-            )
+        )
+        return source_complete and all(
+            target_status[profile].get(case_id) == "completed"
+            and len(target_timings[profile].get(case_id, [])) == expected_repeat
+            for profile in TARGET_PROFILES
         )
 
     def empty_phases() -> dict[str, Any]:
@@ -1495,6 +1498,16 @@ def run(args: argparse.Namespace) -> int:
                 "status": "completed" if measurements else "not_run",
                 "measurements": measurements,
             })
+        if PARALLEL_CPU_PROFILE:
+            # The parallel artifact is a target-only timing cohort. Its public
+            # Pillow comparison is joined from the default run at export time.
+            suites.append({
+                "suite_id": suite["suite_id"],
+                "members": suite["members"],
+                "subjects": suite_subjects,
+                "comparisons": [],
+            })
+            continue
         oracle_subject = next(item for item in suite_subjects if item["id"] == "pillow")
         oracle_values = {
             item["metric"]: item["weighted_mean"]
