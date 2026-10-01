@@ -8773,23 +8773,23 @@ materialization boundary. They used five warmups, 20 iterations × five samples,
 and concurrency one. The standard CPU/SIMD/GPU parity gate passed 3/3, with
 100/100 executions on each requested backend and no fallback. The separate
 Parallel CPU parity gate passed 1/1 and also recorded 100/100 CPU executions.
-The dirty-worktree benchmark receipts are
-`migration-benchmark-44424a99da594abb9059dc91000fc142` and
-`migration-benchmark-2067c456bc874111a6b4cfcd4ae19683`:
+The clean-worktree receipts were collected against source revision `6662833c3`:
+`migration-benchmark-fca9ca901eed4f57a4a160007fdc849f` and
+`migration-benchmark-3e5c0f44d2d041d6b9552f48eaaf1aaf`:
 
 | Profile | Median latency | Pillow-relative result | Actual backend |
 | --- | ---: | ---: | --- |
-| Pillow | 9.0183 ms | baseline | Pillow |
-| CPU | 18.4302 ms | 2.04× slower | CPU (100/100) |
-| SIMD | 10.3929 ms | 1.15× slower | SIMD (100/100) |
-| Parallel CPU | 3.5801 ms | 2.52× faster | CPU (100/100) |
-| GPU | 1.2405 ms | 7.27× lower latency | GPU (100/100) |
+| Pillow | 8.8675 ms | baseline | Pillow |
+| CPU | 17.9890 ms | 2.03× slower | CPU (100/100) |
+| SIMD | 10.3583 ms | 1.17× slower | SIMD (100/100) |
+| Parallel CPU | 3.2105 ms | 2.76× faster | CPU (100/100) |
+| GPU | 1.1853 ms | 7.48× lower latency | GPU (100/100) |
 
 GPU used two resize dispatches, uploaded 1,572,864 bytes, and read back
 2,797,568 bytes. Its latency is below SIMD for this single-request workload;
 the concurrency-one reciprocal latency is not sustained-throughput evidence.
 The default serial CPU still misses Pillow, and SIMD remains far from the 5×
-target despite improving from 17.84 to 10.39 ms. Parallel CPU is reported
+target despite improving from 17.84 to 10.36 ms. Parallel CPU is reported
 separately and is not folded into either profile. Keep Cover LA open for the
 serial CPU/SIMD goals; this checkpoint makes no operation-wide performance
 claim. No coverage was run.
