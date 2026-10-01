@@ -5779,6 +5779,7 @@ each API boundary before tuning the pixel loop. If the producer already owns
 the exact expanded raster consumed by the next stage, transfer that allocation
 and preserve its logical mode tag instead of encoding and decoding it again.
 No coverage collection ran.
+
 ## PIL.ImageDraw.ImageDraw.multiline_text checkpoint — 2026-09-27
 
 The original `multiline_text.standard` benchmark called the method with
@@ -11289,5 +11290,57 @@ is a modest single-caller latency gain; no SIMD or GPU implementation changed,
 and no concurrent-throughput claim is made. RGB→YCbCr, nonzero RGB→YCbCr, and
 RGB→HSV control parity each pass on CPU, strict SIMD, and strict GPU (3/3 per
 backend). The audit inventory was corrected: `rgb_to_hsv` already borrowed
-RGB; `hsv_to_rgb` and `ycbcr_to_rgb` remain independent follow-up candidates.
+RGB; `hsv_to_rgb` is now optimized below, and `ycbcr_to_rgb` remains an
+independent follow-up candidate.
 No coverage collection ran.
+
+## HSV→RGB hue/saturation factor table — 2026-10-01
+
+The direct HSV→RGB loop recomputed hue division, sector selection, saturation
+division, and three factors for every pixel. The retained CPU path builds a
+65,536-entry table indexed by the input hue and saturation bytes. Each entry
+stores the same three `f32` factors in output-channel order; the per-pixel loop
+now performs one lookup, three value multiplies, Pillow-compatible round and
+clamp operations, and one output append. The `OnceLock` allocation is about
+768 KiB. Native HSV/RGB-carrier bytes are borrowed, and a capacity-sized output
+buffer avoids an additional full-frame source clone and zero-fill. Other
+physical input variants continue through the existing `to_rgb8()` conversion.
+
+The new route matches Pillow for every HSV input tuple, exhaustively covering
+all **16,777,216** byte triples in one image. Input and output were each
+50,331,648 bytes, and the complete output digests matched. The focused HSV→RGB
+sector/nonzero cases also pass 7/7 on CPU, strict SIMD, and strict GPU; the
+SIMD/GPU implementations were not changed.
+
+For an interleaved seven-process-pair comparison, Pillow, the pre-table direct
+CPU implementation, and the candidate each converted the same deterministic
+1024×768 HSV bytes to RGB and materialized `tobytes()`. Each process measured
+the first call separately, ran two subsequent warmups, then nine samples of
+five complete conversions. All output digests agreed.
+
+| Profile | Warm median | First conversion | Warm / Pillow |
+| --- | ---: | ---: | ---: |
+| Pillow | 3.481 ms | 3.406 ms | 1.00× |
+| Pre-table CPU | 5.412 ms | 4.787 ms | 1.57× slower |
+| Factor-table CPU | 2.731 ms | 2.308 ms | 0.77× |
+
+The paired factor-table/direct-float ratio is 0.495, a 50.5% warm-latency
+reduction. The first call includes the table's one-time initialization and
+still beats Pillow at this material size.
+
+A size sweep used three independent Pillow/CPU process pairs at each size,
+measured the first conversion and then warm calls, and compared full output
+digests. The first-call measurement includes table initialization; source
+image construction is outside the timed interval.
+
+| HSV→RGB size | Pillow first | CPU first | Pillow warm | CPU warm | CPU/Pillow warm |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1×1 | 376.6 μs | 176.4 μs | 2.44 μs | 1.53 μs | 0.63× |
+| 16×16 | 366.4 μs | 186.0 μs | 3.57 μs | 2.44 μs | 0.68× |
+| 64×64 | 409.9 μs | 192.8 μs | 19.69 μs | 14.57 μs | 0.74× |
+| 256×256 | 681.0 μs | 381.1 μs | 270.8 μs | 206.7 μs | 0.76× |
+| 1024×768 | 3402.1 μs | 2260.1 μs | 3529.1 μs | 2802.0 μs | 0.79× |
+
+Small-input warm samples batch multiple conversions per sample to reduce timer
+noise (1000 calls at 1×1, 200 at 16×16, 20 at 64×64, five at 256×256, and two
+at 1024×768). No coverage collection ran.
