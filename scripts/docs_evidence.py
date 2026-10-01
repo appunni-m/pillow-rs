@@ -54,6 +54,7 @@ def project_pillow(document: dict) -> dict:
             execution = subject.get("execution", {})
             rows.append({
                 "workload": workload["workload_id"], "subject": subject["id"],
+                "comparison_group": "default",
                 "status": subject["status"], "median_us": number(stats.get("median"), 1000),
                 "p90_us": None, "p95_us": number(stats.get("p95"), 1000),
                 "sample_count": latency.get("sample_count") if latency else None,
@@ -76,6 +77,61 @@ def project_pillow(document: dict) -> dict:
                   "Requested and actual backends are separate. Host controls and missing terminal evidence do not prove native GPU performance."],
         "rows": rows,
     }
+
+
+def merge_parallel_cpu(snapshot: dict, parallel: dict, source_hash: str, parallel_hash: str) -> dict:
+    """Add Rayon measurements with their own same-run Pillow baseline."""
+    if snapshot["revision"] != parallel["revision"]:
+        raise ValueError("default and Parallel CPU benchmarks use different source revisions")
+    if snapshot["environment"] != parallel["environment"]:
+        raise ValueError("default and Parallel CPU benchmarks use different environments")
+
+    expected_subjects = {"pillow", "python-parallel-cpu"}
+    by_workload: dict[str, dict[str, dict]] = {}
+    for row in parallel["rows"]:
+        if row["subject"] not in expected_subjects:
+            raise ValueError(f"unexpected Parallel CPU subject: {row['subject']}")
+        subjects = by_workload.setdefault(row["workload"], {})
+        if row["subject"] in subjects:
+            raise ValueError(f"duplicate Parallel CPU subject for {row['workload']}")
+        subjects[row["subject"]] = row
+
+    default_by_workload: dict[str, dict[str, dict]] = {}
+    for row in snapshot["rows"]:
+        default_by_workload.setdefault(row["workload"], {})[row["subject"]] = row
+    merged = []
+    for workload, subjects in by_workload.items():
+        if set(subjects) != expected_subjects:
+            raise ValueError(f"Parallel CPU workload lacks its paired Pillow baseline: {workload}")
+        if workload not in default_by_workload:
+            raise ValueError(f"Parallel CPU workload is absent from the default benchmark: {workload}")
+        pillow = subjects["pillow"]
+        parallel_cpu = subjects["python-parallel-cpu"]
+        for field in ("policy", "context", "sample_unit", "sample_count"):
+            if pillow[field] != parallel_cpu[field]:
+                raise ValueError(f"Parallel CPU and Pillow conditions differ for {workload}: {field}")
+        if not any(row["subject"] == "python-cpu" for row in default_by_workload[workload].values()):
+            raise ValueError(f"Parallel CPU workload has no matching default CPU lane: {workload}")
+        if any(default_by_workload[workload]["python-cpu"][field] != pillow[field]
+               for field in ("policy", "context", "sample_unit", "sample_count")):
+            raise ValueError(f"Parallel CPU and default CPU conditions differ for {workload}")
+        baseline = dict(pillow, subject="pillow-parallel-cpu", comparison_group="parallel-cpu")
+        target = dict(parallel_cpu, comparison_group="parallel-cpu")
+        merged.extend((baseline, target))
+
+    for row in snapshot["rows"]:
+        row.setdefault("comparison_group", "default")
+    snapshot["rows"].extend(merged)
+    snapshot["cohorts"] = [
+        {"id": "default", "run_id": snapshot["run_id"], "measured_at": snapshot["measured_at"],
+         "source_sha256": source_hash},
+        {"id": "parallel-cpu", "run_id": parallel["run_id"], "measured_at": parallel["measured_at"],
+         "source_sha256": parallel_hash},
+    ]
+    snapshot["notes"].append(
+        "Parallel CPU is an opt-in Rayon build measured separately. Its speed ratios use the Pillow baseline from that same run."
+    )
+    return snapshot
 
 
 def project_fontdone(document: dict) -> dict:
@@ -176,7 +232,15 @@ def validate(snapshot: dict, repository: str) -> None:
     if not re.fullmatch(r"[0-9a-f]{64}", snapshot.get("source_sha256", "")):
         raise ValueError("benchmark source hash is missing")
     keys = set()
+    parallel_subjects: dict[str, set[str]] = {}
     for row in snapshot["rows"]:
+        cohort = row.get("comparison_group", "default")
+        if cohort not in {"default", "parallel-cpu"}:
+            raise ValueError("unknown benchmark comparison cohort")
+        if cohort == "parallel-cpu":
+            if row["subject"] not in {"pillow-parallel-cpu", "python-parallel-cpu"}:
+                raise ValueError("Parallel CPU cohort contains an unrelated subject")
+            parallel_subjects.setdefault(row["workload"], set()).add(row["subject"])
         key = (row["workload"], row["subject"])
         if key in keys:
             raise ValueError(f"duplicate benchmark subject: {key}")
@@ -190,6 +254,9 @@ def validate(snapshot: dict, repository: str) -> None:
             raise ValueError("benchmark row omitted its result or measurement boundary")
     if not keys:
         raise ValueError("an empty result is not a measured benchmark")
+    for workload, subjects in parallel_subjects.items():
+        if subjects != {"pillow-parallel-cpu", "python-parallel-cpu"}:
+            raise ValueError(f"Parallel CPU row lacks its same-run Pillow baseline: {workload}")
 
 
 def cell(value: object) -> str:
@@ -237,6 +304,10 @@ def render_benchmarks(root: Path, config: dict, output: Path) -> str:
              f"| Policy | {cell(snapshot['policy_status'])} |"]
     for key, value in snapshot["environment"].items():
         details.append(f"| {cell(key)} | {cell(value)} |")
+    if snapshot.get("cohorts"):
+        details += ["", "## Comparison cohorts", "", "| Cohort | Run | Measured at | Source SHA-256 |", "| --- | --- | --- | --- |"]
+        for cohort in snapshot["cohorts"]:
+            details.append("| " + " | ".join(cell(cohort.get(key)) for key in ("id", "run_id", "measured_at", "source_sha256")) + " |")
     details += ["", "Download the [public measurement data](assets/benchmark.json). This is a presentation snapshot, "
               "not the full source receipt. It preserves the original report hash and numerical observations; "
               "hostnames, local paths, and internal traces are omitted.", ""]
@@ -303,6 +374,8 @@ def main() -> None:
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--repository", required=True)
+    parser.add_argument("--parallel-source", type=Path,
+                        help="optional separate Parallel CPU benchmark result with its paired Pillow baseline")
     args = parser.parse_args()
     if args.kind == "jpeg":
         snapshot = project_jpeg(args.source)
@@ -315,7 +388,17 @@ def main() -> None:
             document = compact_performance_baseline(document, hashlib.sha256(raw).hexdigest(),
                                                     load_matrix(DEFAULT_MATRIX), sha256_file(DEFAULT_MATRIX))
         snapshot = (project_pillow if args.kind == "pillow" else project_fontdone)(document)
-    snapshot.update(schema=SCHEMA, repository=args.repository, source_sha256=hashlib.sha256(raw).hexdigest())
+    source_hash = hashlib.sha256(raw).hexdigest()
+    if args.parallel_source:
+        if args.kind != "pillow":
+            raise ValueError("a separate Parallel CPU source is supported only for Pillow benchmarks")
+        parallel_raw = args.parallel_source.read_bytes()
+        parallel_document = json.loads(parallel_raw)
+        parallel = project_pillow(parallel_document)
+        parallel_hash = hashlib.sha256(parallel_raw).hexdigest()
+        snapshot = merge_parallel_cpu(snapshot, parallel, source_hash, parallel_hash)
+        source_hash = hashlib.sha256(raw + b"\0parallel-cpu\0" + parallel_raw).hexdigest()
+    snapshot.update(schema=SCHEMA, repository=args.repository, source_sha256=source_hash)
     validate(snapshot, args.repository)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n")

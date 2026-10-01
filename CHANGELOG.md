@@ -52,7 +52,7 @@ backend limitations in the documentation remain part of its contract.
 - Remove obsolete Rust pixel trait methods (`channels4`, `from_channels`,
   generic `get_pixel_mut`, and `blend_pixel`), `Image::transform_affine`, and
   the deferred `Quantize`, `PointOp`, `LinearGradient`, `RadialGradient`, and
-  `EffectMandelbrot` variants. See the [migration guide](https://appunni-m.github.io/pillow-rs/rust/#upgrading-to-1220-alpha1).
+  `EffectMandelbrot` variants. Current integrations start from the [Rust guide](https://appunni-m.github.io/pillow-rs/rust/).
 - Route internal LUT fusion through `Eval`; eager quantization, gradient,
   and Mandelbrot constructors remain supported. Keep all existing benchmark operation
   workloads (85 canonical families) and the full public parity inventory.

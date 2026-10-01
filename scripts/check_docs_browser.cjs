@@ -34,6 +34,10 @@ async function main() {
       for (const width of [1440, 390]) {
         await page.setViewport({ width, height: 1000 });
         await page.goto(url, { waitUntil: 'networkidle0' });
+        const resetFilters = async () => {
+          await page.$eval('#bench-reset', button => button.scrollIntoView({ block: 'center' }));
+          await page.click('#bench-reset');
+        };
         if (await page.$('pre.api-contract')) {
           const contracts = await page.$$eval('pre.api-contract', nodes => nodes.map(node => ({
             text: node.querySelector('code')?.textContent,
@@ -52,6 +56,8 @@ async function main() {
           continue;
         }
         const before = await page.$eval('#bench-count', element => element.textContent);
+        const tableKinds = await page.$$eval('.bench-comparison', tables => tables.map(table => table.closest('[data-table-kind]').dataset.tableKind));
+        if (tableKinds.join(',') !== 'pipelines,operations') throw new Error(`Expected pipeline and operation tables, got ${tableKinds.join(',')}`);
         await page.type('#evidence-filter', 'no-such-workload');
         const after = await page.$eval('#bench-count', element => element.textContent);
         if (!after.startsWith('0 of')) throw new Error(`Filter failed: ${after}`);
@@ -62,25 +68,55 @@ async function main() {
         await page.select('#bench-group', group);
         const groupsMatch = await page.$$eval('.bench-workload:not([hidden])', (rows, group) => rows.length > 0 && rows.every(row => row.dataset.group === group), group);
         if (!groupsMatch) throw new Error('Workload group filtering failed');
-        await page.click('#bench-reset');
+        await resetFilters();
+        const mode = await page.$eval('#bench-mode', element => element.options[1].value);
+        await page.select('#bench-mode', mode);
+        const modesMatch = await page.$$eval('.bench-workload:not([hidden])', (rows, mode) => rows.length > 0 && rows.every(row => row.dataset.mode === mode), mode);
+        if (!modesMatch) throw new Error('Mode filtering failed');
+        await resetFilters();
         await page.$eval('.bench-table-scroll', element => { element.scrollLeft = 0; element.scrollTop = 0; });
         await page.evaluate(() => window.scrollTo(0, 0));
         const subject = await page.$eval('#bench-subject', element => element.options[1].value);
         await page.select('#bench-subject', subject);
-        const columns = await page.$$eval('.bench-comparison thead [data-subject]:not([hidden])', nodes => nodes.map(node => node.dataset.subject));
+        const columns = await page.$$eval('.bench-section[data-table-kind="pipelines"] .bench-comparison thead [data-subject]:not([hidden])', nodes => nodes.map(node => node.dataset.subject));
         if (columns.length !== 2 || !columns.includes(subject)) throw new Error('Implementation filtering lost the baseline');
         // Numeric sort must operate on source microseconds, not rounded display
         // strings whose units vary between ns, µs and ms.
-        await page.click(`button[data-sort="${subject}"]`);
-        const ascending = await page.$$eval('.bench-workload', (rows, subject) => rows.map(row => [...row.querySelectorAll('[data-subject]')].find(cell => cell.dataset.subject === subject)).filter(cell => cell.dataset.value).map(cell => Number(cell.dataset.value)), subject);
+        await page.click(`.bench-section[data-table-kind="pipelines"] button[data-sort="${subject}"]`);
+        const ascending = await page.$$eval('.bench-section[data-table-kind="pipelines"] .bench-workload', (rows, subject) => rows.map(row => [...row.querySelectorAll('[data-subject]')].find(cell => cell.dataset.subject === subject)).filter(cell => cell.dataset.value).map(cell => Number(cell.dataset.value)), subject);
         if (ascending.some((value, i) => i > 0 && value < ascending[i - 1])) throw new Error('Numeric ascending sort failed');
-        await page.click(`button[data-sort="${subject}"]`);
-        const descending = await page.$$eval('.bench-workload', (rows, subject) => rows.map(row => [...row.querySelectorAll('[data-subject]')].find(cell => cell.dataset.subject === subject)).filter(cell => cell.dataset.value).map(cell => Number(cell.dataset.value)), subject);
+        await page.click(`.bench-section[data-table-kind="pipelines"] button[data-sort="${subject}"]`);
+        const descending = await page.$$eval('.bench-section[data-table-kind="pipelines"] .bench-workload', (rows, subject) => rows.map(row => [...row.querySelectorAll('[data-subject]')].find(cell => cell.dataset.subject === subject)).filter(cell => cell.dataset.value).map(cell => Number(cell.dataset.value)), subject);
         if (descending.some((value, i) => i > 0 && value > descending[i - 1])) throw new Error('Numeric descending sort failed');
+        for (const tableKind of tableKinds) {
+          for (const [key, field] of [['type', 'group'], ['mode', 'mode'], ['name', 'name']]) {
+            const section = `.bench-section[data-table-kind="${tableKind}"]`;
+            const selector = `${section} button[data-sort="${key}"]`;
+            await page.click(selector);
+            const ascendingLabels = await page.$$eval(`${section} .bench-workload`, (rows, field) => rows.map(row => row.dataset[field]), field);
+            if (ascendingLabels.some((value, i) => i > 0 && value.localeCompare(ascendingLabels[i - 1]) < 0)) throw new Error(`${tableKind} ${key} ascending sort failed`);
+            await page.click(selector);
+            const descendingLabels = await page.$$eval(`${section} .bench-workload`, (rows, field) => rows.map(row => row.dataset[field]), field);
+            if (descendingLabels.some((value, i) => i > 0 && value.localeCompare(descendingLabels[i - 1]) > 0)) throw new Error(`${tableKind} ${key} descending sort failed`);
+          }
+        }
+        await resetFilters();
+        await page.click('.bench-section[data-table-kind="pipelines"] button[data-sort="name"]');
+        const resetAscending = await page.$$eval('.bench-section[data-table-kind="pipelines"] .bench-workload', rows => rows.map(row => row.dataset.name));
+        if (resetAscending.some((value, i) => i > 0 && value.localeCompare(resetAscending[i - 1]) < 0)) throw new Error('Reset did not restore ascending sort');
+        await page.$eval('.bench-expand', button => button.scrollIntoView({ block: 'center', inline: 'center' }));
+        const expandHit = await page.$eval('.bench-expand', button => {
+          const rect = button.getBoundingClientRect();
+          const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          return button === top || button.contains(top);
+        });
+        if (!expandHit) throw new Error('Details button is obscured after sorting');
         await page.click('.bench-expand');
         const detailShown = await page.$eval('.bench-workload', row => row.querySelector('.bench-expand').getAttribute('aria-expanded') === 'true' && !row.nextElementSibling.hidden);
         if (!detailShown) throw new Error('Details detached from the sorted workload');
-        await page.click('#bench-reset');
+        await resetFilters();
+        const wrapperCount = await page.$$eval('.bench-table-scroll', elements => elements.length);
+        if (wrapperCount !== 2) throw new Error(`Reset removed comparison containers: ${wrapperCount}; ${await page.title()}`);
         await page.$eval('.bench-table-scroll', element => { element.scrollLeft = 0; element.scrollTop = 0; });
         await page.evaluate(() => window.scrollTo(0, 0));
         const size = await page.evaluate(() => {

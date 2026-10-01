@@ -1,7 +1,7 @@
 # Installation
 
 <!-- release:summary -->
-**Latest release: [12.2.0-alpha.4](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.4).**
+**Latest release: [12.2.0-alpha.5](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.0-alpha.5).**
 <!-- /release:summary -->
 
 Install **pillow-rs** from PyPI, npm, or crates.io. Python imports `PIL`,
@@ -15,7 +15,7 @@ installing both in one environment can overwrite each other's files.
 <!-- release:python -->
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install pillow-rs==12.2.0-alpha.4
+.venv/bin/python -m pip install pillow-rs==12.2.0-alpha.5
 ```
 <!-- /release:python -->
 
@@ -39,7 +39,7 @@ and a native linker. See [contributor setup](../CONTRIBUTING.md) for source deve
 
 <!-- release:npm -->
 ```sh
-npm install pillow-rs@12.2.0-alpha.4
+npm install pillow-rs@12.2.0-alpha.5
 ```
 <!-- /release:npm -->
 
@@ -55,21 +55,22 @@ Add this dependency to your application's `Cargo.toml`:
 <!-- release:cargo -->
 ```toml
 [dependencies]
-pillow-rs = "=12.2.0-alpha.4"
+pillow-rs = "=12.2.0-alpha.5"
 ```
 <!-- /release:cargo -->
 
 Requires Rust 1.96.1 or newer. Continue with the [Rust quickstart](RUST.md).
 
-## Upgrade or return to Pillow
+## Greenfield integration
 
-Keep an exact package version and your application's lockfile. Check your own
-images, modes, fonts, and errors before upgrading an alpha. See
-[breaking changes](RUST.md#upgrading-to-1220-alpha1) when upgrading from 0.1.x.
+Treat an alpha installation as a new integration: pin an exact package version
+and validate your application's images, modes, fonts, and errors before
+adopting another alpha. There is no previous-alpha migration guide or
+compatibility guarantee.
 
-To compare with or return to Pillow, create another environment and install
-Pillow there. Run the two implementations in separate processes so their shared
-`PIL` name cannot collide. See [Python migration](PYTHON.md#evaluate-an-existing-pillow-application).
+To compare with Pillow, create another environment and install Pillow there.
+Run the two implementations in separate processes so their shared `PIL` name
+cannot collide. See [Python recipes](PYTHON.md#evaluate-an-existing-pillow-application).
 
 ## Troubleshooting
 

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from docs_evidence import SCHEMA, cell, contract_code, number, project_jpeg, project_pillow, validate
+from docs_evidence import SCHEMA, cell, contract_code, merge_parallel_cpu, number, project_jpeg, project_pillow, validate
 from docs_site import HtmlContracts, anchors, check_api_contracts, prepare_output, read_config, rewrite_links
 from report_pipeline_roadmap_status import ROADMAP, build_report
 from report_pipeline_benchmark_coverage import DEFAULT_INPUT, report as pipeline_report
@@ -137,6 +137,43 @@ class DocumentationTests(unittest.TestCase):
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_parallel_cpu_snapshot_keeps_its_own_pillow_cohort(self) -> None:
+        def result(run_id: str, subjects: list[tuple[str, float]], parallel: bool = False) -> dict:
+            entries = []
+            for subject_id, median in subjects:
+                pillow = subject_id == "pillow"
+                backend = "pillow" if pillow else "cpu"
+                entries.append({
+                    "id": subject_id, "status": "completed",
+                    "measurements": [{"metric": "latency", "unit": "millisecond", "sample_count": 5,
+                                      "statistics": {"median": median, "p95": median * 1.1}}],
+                    "execution": {"requested_backend": backend, "actual_backend": backend,
+                                  "terminal_complete": False if pillow else True,
+                                  "fallback_reason_counts": {},
+                                  "status": "not_applicable" if pillow else "completed"},
+                })
+            return {
+                "schema": "migration-parity/benchmark-result@1",
+                "identity": {"targets": [{"revision": "a" * 40, "dirty": False}],
+                             "finished_at": "2026-09-16T00:00:00Z", "run_id": run_id},
+                "status": "completed", "environment": {"os": "test", "architecture": "arm64"},
+                "workloads": [{"workload_id": "pipeline-op.resize", "measurement_policy": {"boundary": "whole_workflow"},
+                               "context": {"mode": "RGB", "size": [16, 16]},
+                               "correctness": {"gate": "source_target_match", "outcome": "pass"},
+                               "subjects": entries}],
+            }
+
+        default = project_pillow(result("default-run", [("pillow", 30), ("python-cpu", 20),
+                                                          ("python-simd", 10), ("python-gpu", 5)]))
+        parallel = project_pillow(result("parallel-run", [("pillow", 40), ("python-parallel-cpu", 15)], True))
+        snapshot = merge_parallel_cpu(default, parallel, "b" * 64, "c" * 64)
+        snapshot.update(schema=SCHEMA, repository="owner/repo", source_sha256="d" * 64)
+        validate(snapshot, "owner/repo")
+        subjects = {(row["workload"], row["subject"]): row for row in snapshot["rows"]}
+        self.assertEqual(subjects[("pipeline-op.resize", "python-parallel-cpu")]["comparison_group"], "parallel-cpu")
+        self.assertEqual(subjects[("pipeline-op.resize", "pillow-parallel-cpu")]["median_us"], 40000)
+        self.assertEqual(snapshot["cohorts"][1]["run_id"], "parallel-run")
+
     def test_incomplete_jpeg_matrix_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

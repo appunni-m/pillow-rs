@@ -6,19 +6,22 @@ on:
     paths:
       - '.github/workflows/benchmark.yml'
       - 'scripts/run_migration_benchmark.py'
+      - 'scripts/build_migration_parity_inputs.py'
       - 'scripts/report_pipeline_*.py'
+      - 'pillow-rs/tests/fixtures/manifest.yaml'
+      - 'pillow-rs/tests/fixtures/inputs/benchmark/**'
       - 'docs/PIPELINE_ROADMAP.md'
       - 'scripts/docs_evidence.py'
+      - 'scripts/docs_benchmark_view.py'
+      - 'scripts/test_docs_benchmark_view.py'
+      - 'docs.mk'
+      - 'docs/BENCHMARKING.md'
+      - 'site-assets/evidence.js'
+      - 'site-assets/docs.css'
   workflow_dispatch:
     inputs:
-      profile:
-        description: Benchmark cohort to run
-        required: true
-        default: quick
-        type: choice
-        options: [quick, standard, release]
       baseline_run_id:
-        description: Optional prior successful benchmark run ID for budget comparison
+        description: Optional prior successful full operation run ID for budget comparison
         required: false
         type: string
   schedule:
@@ -37,13 +40,15 @@ env:
   RUST_BACKTRACE: 1
   RUST_TOOLCHAIN: 1.96.1
   RUSTC_WRAPPER: ""
-  MIGRATION_BENCHMARK_PROFILE: ${{ inputs.profile || 'quick' }}
+  # The public benchmark snapshot must contain both the individual-operation
+  # and composed-pipeline cohorts. Quick runs remain available through Make.
+  MIGRATION_BENCHMARK_PROFILE: pipeline
 
 jobs:
   benchmark:
-    name: ${{ inputs.profile || 'quick' }} benchmark
+    name: full operation and pipeline benchmark
     runs-on: macos-14
-    timeout-minutes: 60
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,8 +62,10 @@ jobs:
           python-version: "3.12.10"
       - name: install locked benchmark tools
         run: make setup-venv PYTHON=python
-      - name: run correctness-gated benchmark
+      - name: run full correctness-gated CPU, SIMD, and GPU benchmark
         run: make migration-parity-benchmark
+      - name: run separately gated Parallel CPU benchmark
+        run: make migration-parity-benchmark-parallel-cpu
       - name: generate benchmark evidence
         run: |
           make migration-parity-pipeline-report
@@ -113,8 +120,12 @@ jobs:
             exit "$status"
           fi
           exit "$status"
-      - name: Export the public measurement view
-        run: make docs-benchmark DOCS_BENCHMARK_OUTPUT=target/public-benchmark/snapshot.json
+      - name: Export both benchmark cohorts for the public view
+        run: >-
+          make docs-benchmark
+          DOCS_BENCHMARK_SOURCE=build/migration-parity/benchmark-result.json
+          DOCS_BENCHMARK_PARALLEL_SOURCE=build/migration-parity/benchmark-result-parallel-cpu.json
+          DOCS_BENCHMARK_OUTPUT=target/public-benchmark/snapshot.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: public-benchmark
@@ -127,6 +138,8 @@ jobs:
           path: |
             build/migration-parity/benchmark-result.json
             build/migration-parity/benchmark-parity-result.json
+            build/migration-parity/benchmark-result-parallel-cpu.json
+            build/migration-parity/benchmark-parity-result-parallel-cpu.json
             build/migration-parity/pipeline-performance-report.json
             build/migration-parity/pipeline-roadmap-status.json
             build/migration-parity/pipeline-budget-check.json
