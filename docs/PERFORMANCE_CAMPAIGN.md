@@ -5779,7 +5779,6 @@ each API boundary before tuning the pixel loop. If the producer already owns
 the exact expanded raster consumed by the next stage, transfer that allocation
 and preserve its logical mode tag instead of encoding and decoding it again.
 No coverage collection ran.
-
 ## PIL.ImageDraw.ImageDraw.multiline_text checkpoint — 2026-09-27
 
 The original `multiline_text.standard` benchmark called the method with
@@ -11227,3 +11226,35 @@ work runs while Python turns the sequence into tuples. `getdata` passes its
 focused Pillow parity cases for default RGB, L, LA, RGBA, band access, RGB/LA/
 RGBA/PA/CMYK byte layouts, and a retained view across mutation and thumbnail.
 No coverage collection ran.
+
+## PIL.Image.fromarray checkpoint — 2026-10-01
+
+The first-copy review found a larger blocker: for contiguous NumPy arrays,
+Pillow's `fromarray` uses its `frombuffer` path when the requested mode supports
+sharing. Pillow documents the supported shared modes and read-only view
+behavior; direct probes against the pinned Pillow 12.2.0 oracle confirmed it
+for L and RGBA. Changes made to the source array remain visible in the image
+until an image mutation detaches it. pillow-rs instead copies the array into an
+owned Rust raster, so equal initial `tobytes()` is not complete parity. The
+official behavior is described in the [Pillow `Image.frombuffer` reference](https://pillow.readthedocs.io/en/stable/reference/Image.html).
+
+Baseline: CPython 3.12.13, Pillow 12.2.0, macOS arm64, contiguous 1024 × 768
+`uint8` arrays. Each of three source/target process pairs used two warmups and
+seven samples of five `Image.fromarray(array)` calls; output mode, size, and
+initial pixel digest matched. Median per-call latency across the paired runs:
+
+| Mode | Pillow | CPU | CPU / Pillow |
+| --- | ---: | ---: | ---: |
+| L | 2.6 µs | 55.7 µs | 21.4× |
+| LA | 519.5 µs | 151.2 µs | 0.29× |
+| RGB | 384.7 µs | 306.9 µs | 0.80× |
+| RGBA | 2.5 µs | 411.3 µs | 164.5× |
+
+L and RGBA are the zero-copy source paths and remain dramatically slower in the
+target; the faster LA and RGB target timings do not resolve the operation's
+parity gap. The straightforward copy-reduction alternatives were rejected
+because none retains live exporter mutations and copy-on-write behavior. A
+correct fix requires safe shared-buffer ownership across the Python binding and
+core raster storage, including stable exporter lifetime and detach-on-write.
+This visit is checkpointed with no runtime change; do not report the mode's
+current behavior as parity. No coverage collection ran.
