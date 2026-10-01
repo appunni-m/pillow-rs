@@ -101,8 +101,8 @@ class BenchmarkViewTests(unittest.TestCase):
         workloads = json.loads(source.read_text())["workloads"]
         categories = [facets(row(workload=workload["workload_id"], context=workload.get("context", {})), "pillow")[0]
                      for workload in workloads]
-        self.assertEqual(len(workloads), 632)
-        self.assertEqual(categories.count("operations"), 176)
+        self.assertEqual(len(workloads), 636)
+        self.assertEqual(categories.count("operations"), 180)
         self.assertEqual(categories.count("pipelines"), 456)
 
     def test_all_observations_retained_without_mutating_snapshot(self):
