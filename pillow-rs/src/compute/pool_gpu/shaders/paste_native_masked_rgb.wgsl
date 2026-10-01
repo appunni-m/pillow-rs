@@ -1,6 +1,6 @@
-// Exact-layout RGB-to-RGB masked Paste with an L mask. One invocation owns
-// four RGB pixels (twelve bytes) and emits their three aligned output words.
-// This keeps packed 3-byte pixels native across both input and output buffers.
+// Exact-layout RGB/HSV-to-same-mode masked Paste with an L mask. One invocation
+// owns four three-byte pixels and emits their three aligned output words. Both
+// modes blend the stored channels independently without RGBA staging.
 
 struct Params {
     width: u32,

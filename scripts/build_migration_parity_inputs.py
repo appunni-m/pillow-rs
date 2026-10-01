@@ -256,6 +256,7 @@ PASTE_MASKED_PERFORMANCE_CASES = (
     ("masked-rgb-noise-1024x768", "RGB", [1024, 768], 20261015),
     ("masked-rgba-noise-1024x768", "RGBA", [1024, 768], 20261016),
     ("masked-cmyk-noise-1024x768", "CMYK", [1024, 768], 20261017),
+    ("masked-hsv-noise-1024x768", "HSV", [1024, 768], 20261102),
 )
 PUTALPHA_PERFORMANCE_CASES = (
     ("la-noise-1024x768-scalar", "LA", [1024, 768], 20261019),

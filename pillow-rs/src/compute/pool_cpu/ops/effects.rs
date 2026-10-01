@@ -697,6 +697,46 @@ fn paste_native_masked_cmyk_row(source: &[u8], destination: &mut [u8], mask: &[u
     }
 }
 
+/// Blend native HSV samples with an L mask without branching on each mask
+/// value. HSV is stored as three independent bytes here; Paste blends those
+/// stored channels directly, just as it does for RGB.
+#[inline]
+fn paste_native_masked_hsv_l_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
+    debug_assert_eq!(source.len(), destination.len());
+    debug_assert_eq!(source.len() % 3, 0);
+    debug_assert_eq!(source.len() / 3, mask.len());
+
+    for ((source_pixel, destination_pixel), mask_value) in source
+        .chunks_exact(3)
+        .zip(destination.chunks_exact_mut(3))
+        .zip(mask.iter().copied())
+    {
+        let weight = u16::from(mask_value);
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "mask is a byte, so subtracting it from 255 cannot underflow"
+        )]
+        let inverse = 255 - weight;
+        let blend = |source_value: u8, destination_value: u8| {
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
+            )]
+            let weighted =
+                u16::from(source_value) * weight + u16::from(destination_value) * inverse + 127;
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "DIV255 yields an 8-bit convex blend of byte channels"
+            )]
+            let blended = (weighted / 255) as u8;
+            blended
+        };
+        destination_pixel[0] = blend(source_pixel[0], destination_pixel[0]);
+        destination_pixel[1] = blend(source_pixel[1], destination_pixel[1]);
+        destination_pixel[2] = blend(source_pixel[2], destination_pixel[2]);
+    }
+}
+
 /// Blend an exact same-mode byte layout directly. This covers common modes
 /// whose storage is already native; tagged, indexed, scalar, and cross-mode
 /// cases retain the established conversion path until their contracts have
@@ -710,7 +750,7 @@ fn paste_native_masked(
     mask_alpha: bool,
     mode: &str,
 ) -> Option<DynamicImage> {
-    if !matches!(mode, "L" | "LA" | "PA" | "RGB" | "RGBA" | "CMYK") {
+    if !matches!(mode, "L" | "LA" | "PA" | "RGB" | "HSV" | "RGBA" | "CMYK") {
         return None;
     }
     let channels = paste_native_channels(mode, destination)?;
@@ -794,7 +834,13 @@ fn paste_native_masked(
         let source_row = &source_bytes[source_start..source_start.saturating_add(copy_bytes)];
         let destination_row = &mut row[destination_x..destination_x_end];
         let mask_row = &mask_bytes[mask_start..mask_start.saturating_add(mask_copy_bytes)];
-        if mode == "PA" {
+        if mode == "HSV"
+            && mask_channels == 1
+            && mask_pixels.layout.value_index == 0
+            && !mask_pixels.layout.premultiplied
+        {
+            paste_native_masked_hsv_l_row(source_row, destination_row, mask_row);
+        } else if mode == "PA" {
             paste_native_masked_pa_row(source_row, destination_row, mask_row, mask_pixels.layout);
         } else if mode == "CMYK"
             && mask_channels == 1
@@ -4202,7 +4248,7 @@ mod tests {
             "LA" | "PA" => DynamicImage::ImageLumaA8(
                 GrayAlphaImage::from_raw(width, height, bytes).expect("LA image shape"),
             ),
-            "RGB" => DynamicImage::ImageRgb8(
+            "RGB" | "HSV" => DynamicImage::ImageRgb8(
                 RgbImage::from_raw(width, height, bytes).expect("RGB image shape"),
             ),
             "RGBA" | "RGBa" | "CMYK" => DynamicImage::ImageRgba8(
@@ -4351,6 +4397,7 @@ mod tests {
             ("LA", 2),
             ("PA", 2),
             ("RGB", 3),
+            ("HSV", 3),
             ("RGBA", 4),
             ("CMYK", 4),
         ] {
