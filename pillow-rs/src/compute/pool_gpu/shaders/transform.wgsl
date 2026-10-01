@@ -65,6 +65,23 @@ fn mode_has_fourth(m: u32) -> bool {
 fn mode_has_a(m: u32) -> bool {
     return m == 1u || m == 3u;
 }
+
+// The native RGB transport keeps three bytes per source pixel in input.
+// Reassemble one sample only for the singleton RGB Transform layout; every
+// other operation retains its existing packed-word contract.
+fn read_pixel(index: u32) -> u32 {
+    if params.mode != 2u || (params._pad & 2u) == 0u {
+        return input[index];
+    }
+    let byte_offset = index * 3u;
+    let word_index = byte_offset >> 2u;
+    let shift = (byte_offset & 3u) * 8u;
+    var packed = input[word_index] >> shift;
+    if shift > 8u {
+        packed = packed | (input[word_index + 1u] << (32u - shift));
+    }
+    return (packed & 0x00ffffffu) | 0xff000000u;
+}
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     return a * (1.0 - t) + b * t;
 }
@@ -132,7 +149,7 @@ fn sample_nearest(sx: f32, sy: f32) -> u32 {
         return get_fill_pixel();
     }
     let idx = iy * params.width + ix;
-    let pixel = input[idx];
+    let pixel = read_pixel(idx);
     if params.mode == 7u || params.mode == 8u {
         // I/F samples are opaque four-byte words in the packed transport.
         return pixel;
@@ -168,7 +185,7 @@ fn sample_nearest_fixed(sx_fixed: i32, sy_fixed: i32) -> u32 {
     if ix < 0 || iy < 0 || ix >= i32(params.width) || iy >= i32(params.height) {
         return get_fill_pixel();
     }
-    let pixel = input[u32(iy) * params.width + u32(ix)];
+    let pixel = read_pixel(u32(iy) * params.width + u32(ix));
     if params.mode == 5u {
         // Native I;16 affine-nearest samples are one unsigned 16-bit word
         // in the low bytes of the packed storage word.  Keep the high bytes
@@ -217,7 +234,7 @@ fn sample_nearest_projective(sx: f32, sy: f32) -> u32 {
     if ix >= params.width || iy >= params.height {
         return get_fill_pixel();
     }
-    let pixel = input[iy * params.width + ix];
+    let pixel = read_pixel(iy * params.width + ix);
     if params.mode == 7u || params.mode == 8u {
         return pixel;
     }
@@ -355,22 +372,22 @@ fn sample_projective_bicubic(sx: f32, sy: f32) -> u32 {
     let y1 = u32(clamp(y0_f + 1.0, 0.0, src_h_f - 1.0));
     let y2 = u32(clamp(y0_f + 2.0, 0.0, src_h_f - 1.0));
     let y3 = u32(clamp(y0_f + 3.0, 0.0, src_h_f - 1.0));
-    let p00 = input[y0 * params.width + x0];
-    let p01 = input[y0 * params.width + x1];
-    let p02 = input[y0 * params.width + x2];
-    let p03 = input[y0 * params.width + x3];
-    let p10 = input[y1 * params.width + x0];
-    let p11 = input[y1 * params.width + x1];
-    let p12 = input[y1 * params.width + x2];
-    let p13 = input[y1 * params.width + x3];
-    let p20 = input[y2 * params.width + x0];
-    let p21 = input[y2 * params.width + x1];
-    let p22 = input[y2 * params.width + x2];
-    let p23 = input[y2 * params.width + x3];
-    let p30 = input[y3 * params.width + x0];
-    let p31 = input[y3 * params.width + x1];
-    let p32 = input[y3 * params.width + x2];
-    let p33 = input[y3 * params.width + x3];
+    let p00 = read_pixel(y0 * params.width + x0);
+    let p01 = read_pixel(y0 * params.width + x1);
+    let p02 = read_pixel(y0 * params.width + x2);
+    let p03 = read_pixel(y0 * params.width + x3);
+    let p10 = read_pixel(y1 * params.width + x0);
+    let p11 = read_pixel(y1 * params.width + x1);
+    let p12 = read_pixel(y1 * params.width + x2);
+    let p13 = read_pixel(y1 * params.width + x3);
+    let p20 = read_pixel(y2 * params.width + x0);
+    let p21 = read_pixel(y2 * params.width + x1);
+    let p22 = read_pixel(y2 * params.width + x2);
+    let p23 = read_pixel(y2 * params.width + x3);
+    let p30 = read_pixel(y3 * params.width + x0);
+    let p31 = read_pixel(y3 * params.width + x1);
+    let p32 = read_pixel(y3 * params.width + x2);
+    let p33 = read_pixel(y3 * params.width + x3);
 
     let wx = bicubic_quarter_weights(i32((sx - floor(sx)) * 4.0));
     let wy = bicubic_quarter_weights(i32((sy - floor(sy)) * 4.0));
@@ -422,10 +439,10 @@ fn sample_projective_bilinear(sx: f32, sy: f32) -> u32 {
     let y0 = u32(clamp(y0_f, 0.0, src_h_f - 1.0));
     let x1 = u32(clamp(x0_f + 1.0, 0.0, src_w_f - 1.0));
     let y1 = u32(clamp(y0_f + 1.0, 0.0, src_h_f - 1.0));
-    let p00 = input[y0 * params.width + x0];
-    let p10 = input[y0 * params.width + x1];
-    let p01 = input[y1 * params.width + x0];
-    let p11 = input[y1 * params.width + x1];
+    let p00 = read_pixel(y0 * params.width + x0);
+    let p10 = read_pixel(y0 * params.width + x1);
+    let p01 = read_pixel(y1 * params.width + x0);
+    let p11 = read_pixel(y1 * params.width + x1);
 
     // Image.transform converts all four source taps through La/RGBa before
     // Geometry.c interpolation. Quantize the interpolated premultiplied byte
@@ -678,10 +695,10 @@ fn sample_bilinear(sx: f32, sy: f32) -> u32 {
     let y1 = u32(clamp(y0_f + 1.0, 0.0, src_h_f - 1.0));
 
     // Load 4 neighboring pixels
-    let p00 = input[y0 * params.width + x0];
-    let p10 = input[y0 * params.width + x1];
-    let p01 = input[y1 * params.width + x0];
-    let p11 = input[y1 * params.width + x1];
+    let p00 = read_pixel(y0 * params.width + x0);
+    let p10 = read_pixel(y0 * params.width + x1);
+    let p01 = read_pixel(y1 * params.width + x0);
+    let p11 = read_pixel(y1 * params.width + x1);
 
     // Keep the four channel values explicit so the compiler can inline this
     // small kernel.  The packed transport always carries the logical sample

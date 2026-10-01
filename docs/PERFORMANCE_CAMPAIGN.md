@@ -12401,3 +12401,60 @@ open. Continue the mode-ranked campaign with the next measured operation; do
 not treat these constructor-only gains as proof that the direct saturation
 kernel or other Color modes meet their targets. CI, coverage, release, and push
 remain deferred.
+
+## RGB `Image.transform` GPU input checkpoint — 2026-10-02
+
+The 1024 × 768 RGB transform baseline exposed the general P1 staging route:
+the GPU expands each three-byte input pixel into four bytes before its single
+transform dispatch, then reads back four bytes per pixel and narrows to RGB on
+the host. A singleton RGB Transform now uploads its native triple bytes and
+the affine and projective shaders reassemble RGB samples on demand, adding
+opaque alpha to the packed working sample. The output contract and existing
+single-dispatch GPU layout remain unchanged.
+
+The change reduces input transfer from 3,145,728 to 2,359,296 bytes (25%) and
+removes the source widening conversion. Readback remains 3,145,728 bytes, one
+dispatch, and one full-frame copy because the current kernels still write
+four-byte output words. The measured q1 GPU request medians were 1.365 ms
+before, then 1.232 ms and 1.263 ms in two candidate runs. At q2 they were
+2.631 ms before and 2.473/2.535 ms after. Queue-four timings and throughput
+varied substantially across the runs, so the latency direction is promising
+but the aggregate-throughput change is not established. In the second
+candidate run, q1 GPU throughput was 683.9 requests/s versus 703.4/s before;
+GPU also remained slower than SIMD at q1 (683.9 versus 1,198.7 requests/s).
+This is a partial transport reduction, not closure of the GPU performance
+target.
+
+| GPU RGB transform at 1024 × 768 | Before | Compact input run 1 | Compact input run 2 |
+| --- | ---: | ---: | ---: |
+| Queue depth 1 latency | 1.365 ms | 1.232 ms | 1.263 ms |
+| Queue depth 1 throughput | 703.4 req/s | 773.0 req/s | 683.9 req/s |
+| Queue depth 2 latency | 2.631 ms | 2.473 ms | 2.535 ms |
+| Queue depth 2 throughput | 719.0 req/s | 691.3 req/s | 686.2 req/s |
+| Queue depth 4 latency | 3.989 ms | 4.137 ms | 3.688 ms |
+| Queue depth 4 throughput | 696.0 req/s | 374.7 req/s | 744.7 req/s |
+
+The high q4 variation and changing Pillow/CPU/SIMD baselines indicate host or
+device scheduling noise; do not use the throughput figures to claim a gain.
+Both candidate runs completed with 14,400/14,400 measured CPU, SIMD, and GPU
+outputs byte-identical to live Pillow, with unchanged source and runtime files.
+The focused Rust regression also checks affine nearest, affine bilinear, and
+the projective geometry-table shader, exact bytes, compact upload telemetry,
+and zero source conversion. No coverage, CI, release, or push was run.
+
+The benchmark receipts are `transform-rgb-p1-before-20261002.json`,
+`transform-rgb-p1-after-compact-20261002.json`, and
+`transform-rgb-p1-after-compact-repeat-20261002.json`. Reproduce with:
+
+```sh
+cargo test --locked -p pillow-rs --lib rgb_transform_consumes_compact_input_for_affine_and_geometry_shaders
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/transform-rgb-p1-after-compact-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation transform --mode RGB --size 1024 768' \
+  migration-parity-transpose-throughput
+```
+
+Keep the native input path as a transport improvement with exact parity, but
+move to the next measured operation rather than iterating further on this
+shader now. RGB Transform still needs compact output or resident batching to
+approach SIMD throughput.

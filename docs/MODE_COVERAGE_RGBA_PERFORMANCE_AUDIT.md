@@ -327,6 +327,16 @@ still behind SIMD at queue depths 2 and 4, and the generic RGBA transport
 remains for other operations and modes. See `PERFORMANCE_CAMPAIGN.md` for the
 three-attempt measurements and exact commands.
 
+RGB `Image.transform` now uploads packed native triples and both affine and
+projective transform shaders reconstruct RGB samples on demand. At 1024 × 768,
+this cuts input transfer by 25% and removes host-side RGB-to-RGBA widening;
+readback remains four bytes per output pixel. Exact CPU/SIMD/GPU parity passed
+14,400/14,400 measured outputs in each of two runs. The q1 latency medians were
+lower in both candidate runs, but throughput did not improve consistently and
+GPU remained slower than SIMD. Keep this as a partial P1 transport win and move
+on; P1 remains open for other operations and modes. See
+`PERFORMANCE_CAMPAIGN.md` for timings and receipts.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
@@ -352,8 +362,9 @@ or Parallel CPU route.
 
 ## Suggested order for follow-up
 
-1. Continue P1 by selecting the next operation/mode with measured RGBA staging
-   cost; keep every native kernel's current rounding and channel contract.
+1. Continue P1 after the measured RGB Transform input reduction by selecting
+   the next operation/mode with RGBA staging cost; preserve each kernel's
+   current rounding and channel contract.
 2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
