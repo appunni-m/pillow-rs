@@ -24,7 +24,7 @@ The checkout already has several uncommitted changes. They were treated as user-
 | P4 | Medium | Scalar conversions | Source-carrier clones are removed; serial CPU I→L still trails Pillow. |
 | P5 | Medium | Python data access | Multiband getdata iteration slices the compact byte buffer per pixel; target slicing also diverged from Pillow. |
 | P6 | High | Array input | Contiguous L/RGBA fromarray inputs are copied instead of sharing Pillow's read-only buffer view. |
-| P7 | Low–Medium | Color transforms | HSV→RGB and YCbCr→RGB still clone RGB-shaped input; RGB→HSV already borrows, and RGB→YCbCr now borrows. |
+| P7 | Low–Medium | Color transforms | YCbCr→RGB still clones RGB-shaped input; RGB→HSV, RGB→YCbCr, and HSV→RGB now borrow. |
 | P8 | Conditional | CPU Paste | Masked same-mode Paste outside the native allowlist converts source and destination to RGBA. |
 | P9 | Medium | GPU shaders | Several mode-aware L/LA kernels express four-channel arithmetic or sorting before selecting the channels they use. |
 | P10 | Low–Medium | JavaScript data access | Formatted multiband getdata builds a nested JavaScript array and a per-pixel array. |
@@ -146,32 +146,46 @@ stable lifetime, reads external writes, and detaches on image mutation without
 creating unsynchronized access. No code change was retained. Keep P6 blocked
 until that ownership contract is designed and parity-tested.
 
-### P7. HSV/YCbCr transforms clone RGB-shaped input
+### P7. YCbCr→RGB still clones RGB-shaped input
 
 The initial inventory overstated the affected functions: `rgb_to_hsv` already
-borrows native RGB storage, while `hsv_to_rgb` and `ycbcr_to_rgb` still call
-`to_rgb8()` and clone an RGB-shaped source before writing their output. This
-checkpoint fixes `rgb_to_ycbcr`: for `ImageRgb8`, it now borrows the source
-bytes and writes output triples into one reserved `Vec`, avoiding both the
-source clone and the zero-filled `RgbImage::new` destination. Other input modes
-retain the existing `to_rgb8()` conversion. HSV→RGB and YCbCr→RGB remain open
-items; do not count P7 as complete.
+borrowed native RGB storage. `rgb_to_ycbcr` now borrows `ImageRgb8`, reserves
+the final byte buffer, and writes the existing Pillow-rounded triples without
+cloning the source or zero-filling `RgbImage::new`. `hsv_to_rgb` now borrows
+its HSV bytes and uses a 256×256 hue/saturation factor table initialized once;
+the per-pixel loop no longer divides, computes the hue sector, branches, or
+selects a sector. The table stores the same `f32` factors and preserves the
+final multiply, round, clamp, and channel order. Both functions retain the
+existing `to_rgb8()` conversion for other physical input variants.
+`ycbcr_to_rgb` still clones and zero-fills; P7 remains open until it is checked
+separately.
 
-The focused public RGB→YCbCr and nonzero-pixel parity cases, plus RGB→HSV as a
-control, passed on CPU, strict SIMD, and strict GPU (3/3 on each backend). An
-interleaved seven-process-pair comparison of the exact pre-change and candidate
-CPU extensions used 1024×768 deterministic RGB input, three warmups, nine
-samples of five full `convert("YCbCr").tobytes()` calls, and compared complete
-output digests. All Pillow, baseline, and candidate digests agreed. Median
-latency was 2246.7 μs for the pre-change CPU implementation and 2189.7 μs for
-the candidate, a 2.5% paired reduction. Candidate CPU measured 0.87× Pillow
-latency (about 1.15× faster). This is a modest single-caller latency result;
-there is no SIMD/GPU speed claim or concurrent-throughput measurement.
+RGB→YCbCr, nonzero RGB→YCbCr, and the RGB→HSV control pass on CPU, strict SIMD,
+and strict GPU (3/3 per backend). For RGB→YCbCr, an interleaved seven-pair
+comparison of the exact pre-change and candidate CPU extensions used
+1024×768 deterministic RGB input, three warmups, nine samples of five full
+`convert("YCbCr").tobytes()` calls, and complete output digests. The digests all
+matched. Median latency was 2246.7 μs before and 2189.7 μs after, a 2.5% paired
+reduction; candidate CPU measured 0.87× Pillow latency.
 
-**Assessment:** a small, measured CPU improvement removes a full-frame source
-copy and destination zero-fill from RGB→YCbCr. Reuse the borrow-plus-reserved-
-output pattern only where exact parity holds; assess the two remaining
-transform functions separately.
+HSV→RGB passes seven focused sector and nonzero cases on CPU, strict SIMD, and
+strict GPU (7/7 per backend). A separate exhaustive CPU/Pillow comparison
+covered every one of the 16,777,216 HSV byte triples; the full 50,331,648-byte
+RGB outputs had identical SHA-256 digests. For 1024×768 materialized
+`convert("RGB")`, a seven-pair interleaved comparison of the direct-float CPU
+baseline and factor-table candidate produced identical output digests. The
+candidate/baseline warm-latency ratio was 0.495, and candidate CPU latency was
+0.77× Pillow (about 1.29× faster). The cold first conversion, including table
+initialization, was also faster than Pillow. A five-size run found the CPU
+faster than Pillow from 1×1 through 1024×768, both for the cold first call and
+warm repeated calls. These are single-caller CPU latency results; neither
+operation changed SIMD/GPU code, and no concurrent-throughput claim is made.
+
+**Assessment:** RGB→YCbCr removes two full-frame memory passes and measured a
+small CPU gain. HSV→RGB replaces repeated per-pixel hue/saturation arithmetic
+with a compact factor lookup and roughly halves latency versus its direct-float
+baseline while preserving every possible byte input. Continue with
+YCbCr→RGB as its own operation; do not infer its result from these paths.
 
 ### P8. CPU masked Paste has more same-mode RGBA fallback cases
 

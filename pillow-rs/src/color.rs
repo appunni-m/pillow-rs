@@ -939,43 +939,51 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
 ///   Then round all to nearest integer, CLIP8
 /// ```
 pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-        let h_in = ip[0] as f32;
-        let s_in = ip[1] as f32;
-        let v = ip[2] as f32;
+    use std::sync::OnceLock;
 
-        if s_in == 0.0 {
-            let g = v.round().clamp(0.0, 255.0) as u8;
-            *op = crate::raster::Rgb([g, g, g]);
-        } else {
-            let fs = s_in / 255.0; // normalized saturation
-            let h = h_in * 6.0 / 255.0; // 0-6 sector mapping
+    static FACTORS: OnceLock<Vec<[f32; 3]>> = OnceLock::new();
+    let factors = FACTORS.get_or_init(|| {
+        let mut table = Vec::with_capacity(256 * 256);
+        for h_in in 0..=255u8 {
+            let h = h_in as f32 * 6.0 / 255.0;
             let j = h.floor() as i32;
             let f = h - h.floor();
-            // p, q, t are in 0-255 range (v is 0-255)
-            let p = v * (1.0 - fs);
-            let q = v * (1.0 - fs * f);
-            let t = v * (1.0 - fs * (1.0 - f));
-            // PIL rounds all values, then CLIP8
-            let up = p.round().clamp(0.0, 255.0) as u8;
-            let uq = q.round().clamp(0.0, 255.0) as u8;
-            let ut = t.round().clamp(0.0, 255.0) as u8;
-            let uv = v.round().clamp(0.0, 255.0) as u8;
-            let (r, g, b) = match j % 6 {
-                0 => (uv, ut, up),
-                1 => (uq, uv, up),
-                2 => (up, uv, ut),
-                3 => (up, uq, uv),
-                4 => (ut, up, uv),
-                _ => (uv, up, uq),
-            };
-            *op = crate::raster::Rgb([r, g, b]);
+            for s_in in 0..=255u8 {
+                let fs = s_in as f32 / 255.0;
+                let p = 1.0 - fs;
+                let q = 1.0 - fs * f;
+                let t = 1.0 - fs * (1.0 - f);
+                table.push(match j % 6 {
+                    0 => [1.0, t, p],
+                    1 => [q, 1.0, p],
+                    2 => [p, 1.0, t],
+                    3 => [p, q, 1.0],
+                    4 => [t, p, 1.0],
+                    _ => [1.0, p, q],
+                });
+            }
         }
+        table
+    });
+
+    let (w, h) = (img.width(), img.height());
+    let rgb = match img {
+        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb.as_raw().as_slice()),
+        _ => Cow::Owned(img.to_rgb8().into_raw()),
+    };
+    let mut out = Vec::with_capacity(rgb.len());
+    for ip in rgb.chunks_exact(3) {
+        let v = ip[2] as f32;
+        let factor = factors[ip[0] as usize * 256 + ip[1] as usize];
+        let r = (v * factor[0]).round().clamp(0.0, 255.0) as u8;
+        let g = (v * factor[1]).round().clamp(0.0, 255.0) as u8;
+        let b = (v * factor[2]).round().clamp(0.0, 255.0) as u8;
+        out.extend_from_slice(&[r, g, b]);
     }
-    DynamicImage::ImageRgb8(out)
+    DynamicImage::ImageRgb8(
+        RgbImage::from_raw(w, h, out)
+            .expect("HSV-to-RGB output preserves the source's RGB dimensions"),
+    )
 }
 
 /// Converts RGB to HSV using Pillow's `rgb2hsv` precision behavior.
