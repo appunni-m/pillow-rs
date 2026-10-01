@@ -17,11 +17,20 @@ from release_versions import python_version
 def validate_archive_versions(archives: list[Path], version: str) -> str:
     normalized = python_version(version)
     for archive in archives:
-        wheel = archive.name.startswith(f"pillow_rs-{normalized}-") and archive.suffix == ".whl"
-        sdist = archive.name in (f"pillow_rs-{normalized}.tar.gz", f"pillow-rs-{normalized}.tar.gz")
-        if not wheel and not sdist:
+        base_wheel = archive.name.startswith(f"pillow_rs-{normalized}-") and archive.name.endswith(".whl")
+        parallel_wheel = archive.name.startswith(f"pillow_rs_parallel-{normalized}-") and archive.name.endswith(".whl")
+        base_sdist = archive.name in (f"pillow_rs-{normalized}.tar.gz", f"pillow-rs-{normalized}.tar.gz")
+        if not (base_wheel or parallel_wheel or base_sdist):
             raise ValueError(f"unexpected package/version: {archive.name}")
     return normalized
+
+
+def distribution_for_archive(archive: Path) -> str:
+    if archive.name.startswith("pillow_rs_parallel-"):
+        return "pillow-rs-parallel"
+    if archive.name.startswith(("pillow_rs-", "pillow-rs-")):
+        return "pillow-rs"
+    raise ValueError(f"unexpected Python release package: {archive.name}")
 
 
 def missing_files(archives: list[Path], metadata: dict | None) -> list[Path]:
@@ -52,14 +61,24 @@ def main() -> None:
     args = parser.parse_args()
     archives = sorted(args.archive_dir.glob("*.whl")) + sorted(args.archive_dir.glob("*.tar.gz"))
     normalized = validate_archive_versions(archives, args.version)
-    try:
-        with urllib.request.urlopen(f"https://pypi.org/pypi/pillow-rs/{normalized}/json", timeout=30) as response:
-            metadata = json.load(response)
-    except urllib.error.HTTPError as error:
-        if error.code != 404:
-            raise
-        metadata = None
-    selected = missing_files(archives, metadata)
+    grouped: dict[str, list[Path]] = {}
+    for archive in archives:
+        grouped.setdefault(distribution_for_archive(archive), []).append(archive)
+    if not {"pillow-rs", "pillow-rs-parallel"}.issubset(grouped):
+        raise ValueError("release bundle must contain both pillow-rs and pillow-rs-parallel artifacts")
+
+    selected = []
+    for distribution, files in grouped.items():
+        try:
+            with urllib.request.urlopen(
+                f"https://pypi.org/pypi/{distribution}/{normalized}/json", timeout=30
+            ) as response:
+                metadata = json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code != 404:
+                raise
+            metadata = None
+        selected.extend(missing_files(files, metadata))
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if any(args.output_dir.iterdir()):
         raise SystemExit("PyPI staging directory must be empty")

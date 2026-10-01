@@ -7,6 +7,7 @@ explains ownership; [Contributing](../CONTRIBUTING.md) explains the workflow.
 | --- | --- |
 | `pillow-rs/` | Rust image model, operations, drawing, pipelines, font integration |
 | `pillow-rs-py/` | Python `PIL` facade and PyO3 conversion/delegation |
+| `pillow-rs-parallel/` | Optional PyPI companion wheel for the Rayon-backed Parallel CPU extension |
 | `pillow-rs-js/` | WASM bindings, npm runtime entry points, Node/browser runners |
 | `pillow-rs/tests/fixtures/manifest.yaml` | Selected public contract and indexed input files |
 | `scripts/` | Maintained generators, runners, receipt validators, release and documentation tools |
@@ -288,6 +289,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |-- package.json
 |   `-- src/
 |       `-- lib.rs
+|-- pillow-rs-parallel/
+|   |-- LICENSE
+|   |-- README.md
+|   `-- pyproject.toml
 |-- pillow-rs-py/
 |   |-- Cargo.toml
 |   |-- pyproject.toml
@@ -332,6 +337,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_public_api_boundary.py
     |-- check_python_compatibility.py
     |-- check_release_licenses.py
+    |-- check_release_parallel_wheel.py
     |-- check_release_recovery.py
     |-- check_release_status.py
     |-- check_release_wheel.py

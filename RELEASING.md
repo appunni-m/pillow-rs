@@ -11,7 +11,14 @@ The [release evidence](docs/REGISTRY_RELEASE_MATRIX.md) keeps older measurements
 | --- | --- | --- |
 | Rust core | crates.io `pillow-rs` | `pillow_rs` |
 | Python wheels and source distribution | PyPI `pillow-rs` | `PIL` |
+| Optional Rayon Python extension | PyPI `pillow-rs-parallel` | `pillow_rs._core_parallel` |
 | Shared Node/browser WASM package | npm `pillow-rs` | `pillow-rs` |
+
+Beginning with the next alpha, the `pillow-rs[parallel]` extra will install the
+same-version companion package. The standard Python wheel stays serial; the
+loader uses `_core_parallel` only when the companion extension is installed.
+Release both wheel families from the same source commit and configure the
+PyPI trusted publisher for both project names.
 
 Publish new dependency versions from fontdone and image-slash-star first, then
 update pillow-rs's exact dependency versions and lockfile. Fontdone has one
@@ -28,6 +35,9 @@ that every API is implemented.
 
 Python tooling normalizes the declared spelling automatically for its registry
 metadata and archive filenames. Do not maintain a separate Python version.
+The `pillow-rs-parallel` project derives its version from the same Cargo
+binding manifest; `make release-version-check` also verifies its dependency
+and the main package's optional-extra pin.
 Release validation checks exact declarations first, then checks the normalized
 Python artifacts. GitHub marks candidate releases as prereleases; npm uses
 `next` until a stable release.

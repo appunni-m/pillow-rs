@@ -87,9 +87,9 @@ The small thumbnail row remains useful for dispatch and adapter overhead, but
 must not stand in for this material workload.
 
 The public benchmark page presents two tables: individual operation workloads
-and composed pipeline workloads. The maintained input currently contains 632
-workload cases: 176 individual-operation cases spanning 90 operation names,
-plus 456 composed, matrix, lifecycle, and quick pipeline cases. Their recorded
+and composed pipeline workloads. The 2026-10-01 published snapshot contains 635
+rows: 179 individual-operation workloads spanning 91 operation names, plus 456
+composed, matrix, lifecycle, and quick pipeline workloads. Their recorded
 contexts include 12 mode labels, including the mixed-mode `I+F` case. Each row
 carries its own mode, operation type, dimensions, boundary, and repeat policy;
 the page can filter and sort by type, mode, workload name, or backend latency.

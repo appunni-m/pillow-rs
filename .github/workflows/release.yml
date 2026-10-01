@@ -189,9 +189,34 @@ jobs:
           working-directory: pillow-rs-py
           command: build
           args: --release --locked --out ../dist/python-wheel --interpreter python
+      - name: Build parallel manylinux wheel with fixed tools and container
+        if: runner.os == 'Linux'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b1 # v1.51.0
+        with:
+          maturin-version: v1.14.1
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ matrix.target }}
+          manylinux: '2_28'
+          container: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
+          working-directory: pillow-rs-parallel
+          command: build
+          args: --release --locked --out ../dist/python-wheel --interpreter python3.12
+      - name: Build parallel native wheel with fixed tools
+        if: runner.os != 'Linux'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b1 # v1.51.0
+        with:
+          maturin-version: v1.14.1
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ matrix.target }}
+          working-directory: pillow-rs-parallel
+          command: build
+          args: --release --locked --out ../dist/python-wheel --interpreter python
       - name: Install and exercise the exact wheel outside the checkout
         shell: bash
         run: make release-wheel-test PYTHON=python
+      - name: Install and verify the optional Parallel CPU wheel
+        shell: bash
+        run: make release-parallel-wheel-test PYTHON=python
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-wheel-${{ matrix.runner }}

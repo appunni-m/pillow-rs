@@ -38,6 +38,8 @@ python3 -m venv .venv
 
 On Windows, use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
 See [installation requirements](https://appunni-m.github.io/pillow-rs/installation/) for supported platforms.
+The next alpha will offer the separately built Rayon-backed **Parallel CPU**
+wheel through `pillow-rs[parallel]`; the normal wheel remains serial CPU.
 
 ## Make your first image
 

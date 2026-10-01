@@ -47,7 +47,14 @@ use std::sync::{Mutex, OnceLock};
 mod putdata;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
+#[cfg(not(feature = "parallel-wheel"))]
 pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
+#[cfg(feature = "parallel-wheel")]
+pyo3::create_exception!(
+    _core_parallel,
+    DecompressionBombError,
+    pyo3::exceptions::PyException
+);
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -2469,6 +2476,9 @@ fn exif_compat_fields(
 }
 
 #[pymodule]
+// Only the companion wheel uses a new init symbol; `--features parallel`
+// source/benchmark builds deliberately retain the ordinary `_core` name.
+#[cfg_attr(feature = "parallel-wheel", pyo3(name = "_core_parallel"))]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 

@@ -5,6 +5,7 @@
 
 # ── Variables ─────────────────────────────────────────────────────────────────
 PYTHON       ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+PYTHON_EXECUTABLE := $(abspath $(shell command -v $(PYTHON)))
 PYTHON_COMPAT ?= $(PYTHON)
 PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
@@ -302,6 +303,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make clean-all$(NC)      clean + cargo clean\n"
 	@printf "\n$(BOLD)Release$(NC)\n"
 	@printf "  $(CYAN)make release-python-wheel$(NC) Build a host Python wheel\n"
+	@printf "  $(CYAN)make release-parallel-python-wheel$(NC) Build the Parallel CPU companion wheel\n"
 	@printf "  $(CYAN)make release-tools-test$(NC)  Verify release artifact and recovery guards\n"
 	@printf "  $(CYAN)make workflows-check$(NC)    Check Actions YAML with checksum-pinned actionlint\n"
 	@printf "  $(CYAN)make release-platform-check RELEASE_PLATFORM_TARGET=<triple>$(NC) Type-check the Python binding\n"
@@ -1073,12 +1075,15 @@ release-check: build-all ## Build and package every release artifact without pub
 	# tree; never include those generated files in a publishable wheel.
 	find $(PY_SRC)/python -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out dist/release-check
+	$(MAKE) release-parallel-python-wheel RELEASE_WHEEL_DIR=dist/release-check
+	$(MAKE) release-wheel-test RELEASE_WHEEL_DIR=dist/release-check
+	$(MAKE) release-parallel-wheel-test RELEASE_WHEEL_DIR=dist/release-check
 	$(MAKE) python-compat-check PYTHON_COMPAT="$(PYTHON_COMPAT)"
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm run test:package
 	cd $(JS_SRC) && NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm pack --dry-run --ignore-scripts
 
 
-.PHONY: release-version-check release-tools-test release-python-wheel release-python-sdist release-wheel-test release-sdist-test release-crate-package release-npm-pack
+.PHONY: release-version-check release-tools-test release-python-wheel release-parallel-python-wheel release-python-sdist release-wheel-test release-parallel-wheel-test release-sdist-test release-crate-package release-npm-pack
 RELEASE_WHEEL_DIR ?= dist/python-wheel
 release-version-check: ## Require one version in manifests, locks, runtime, and docs (Python 3.12)
 	$(PYTHON) scripts/release_versions.py $(if $(RELEASE_VERSION),--version "$(RELEASE_VERSION)")
@@ -1095,11 +1100,17 @@ release-platform-check: ## Type-check the Python binding for an installed foreig
 release-python-wheel: ## Build a host Python wheel (Linux releases use pinned manylinux in CI)
 	$(MATURIN) build --manifest-path $(PY_SRC)/Cargo.toml --release --locked --out "$(RELEASE_WHEEL_DIR)"
 
+release-parallel-python-wheel: ## Build the separate opt-in Rayon companion wheel
+	cd pillow-rs-parallel && "$(PYTHON_EXECUTABLE)" -m maturin build --release --locked --out "$(CURDIR)/$(RELEASE_WHEEL_DIR)"
+
 release-python-sdist: ## Build the Python source distribution
 	$(MATURIN) sdist --manifest-path $(PY_SRC)/Cargo.toml --out "$(RELEASE_WHEEL_DIR)"
 
 release-wheel-test: ## Install a host release wheel in an isolated environment and exercise PIL
 	$(PYTHON) scripts/check_release_wheel.py --wheel-dir "$(RELEASE_WHEEL_DIR)"
+
+release-parallel-wheel-test: ## Install and verify standard and Parallel CPU wheels together
+	$(PYTHON) scripts/check_release_parallel_wheel.py --wheel-dir "$(RELEASE_WHEEL_DIR)"
 
 release-sdist-test: ## Build and install the source distribution in isolation and exercise PIL
 	$(PYTHON) scripts/check_release_wheel.py --sdist $(RELEASE_WHEEL_DIR)/pillow_rs-*.tar.gz

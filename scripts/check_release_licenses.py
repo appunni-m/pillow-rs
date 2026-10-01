@@ -31,7 +31,7 @@ def main() -> None:
     parser.add_argument("--crate", action="store_true")
     args = parser.parse_args()
     expected = (ROOT / "LICENSE").read_bytes()
-    for directory in ("pillow-rs", "pillow-rs-py", "pillow-rs-js"):
+    for directory in ("pillow-rs", "pillow-rs-py", "pillow-rs-parallel", "pillow-rs-js"):
         if (ROOT / directory / "LICENSE").read_bytes() != expected:
             raise ValueError(f"{directory}/LICENSE differs from the project LICENSE")
     if args.crate:
