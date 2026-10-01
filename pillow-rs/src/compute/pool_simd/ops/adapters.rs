@@ -9809,6 +9809,49 @@ const NATIVE_RGBA_ALPHA_LANES: u8x16 =
 const NATIVE_RGBA_COLOR_LANES: u8x16 = u8x16::new([
     255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0,
 ]);
+const NATIVE_LA_TO_RGBA_BYTES_0: u8x16 =
+    u8x16::new([0, 0, 0, 1, 2, 2, 2, 3, 4, 4, 4, 5, 6, 6, 6, 7]);
+const NATIVE_LA_TO_RGBA_BYTES_1: u8x16 =
+    u8x16::new([8, 8, 8, 9, 10, 10, 10, 11, 12, 12, 12, 13, 14, 14, 14, 15]);
+const NATIVE_LA_DUPLICATE_0: u8x16 = u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
+const NATIVE_LA_DUPLICATE_1: u8x16 =
+    u8x16::new([8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15]);
+const NATIVE_LA_LUMA_LANES: u8x16 = u8x16::new([
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+]);
+const NATIVE_LA_ALPHA_LANES: u8x16 = u8x16::new([
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+]);
 const NATIVE_RGB_TO_RGBA_BYTES: u8x16 =
     u8x16::new([0, 1, 2, 15, 3, 4, 5, 15, 6, 7, 8, 15, 9, 10, 11, 15]);
 
@@ -9893,6 +9936,96 @@ fn native_luma_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> 
     Some((output, vector_blocks, 0))
 }
 
+/// Expand native LA pixels to RGBA with fixed four-pixel shuffles.
+///
+/// ImageEnhance.Color retains an LA-derived base in the source mode. For
+/// RGBA, each LA pixel becomes `[L, L, L, A]`; processing four pixels per
+/// block used to rebuild a sixteen-byte shuffle index for every block. These
+/// constants express that mapping directly and cover sixteen pixels with four
+/// fixed vector shuffles while keeping both input and output in their native
+/// formats.
+fn native_luma_alpha_to_rgba_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+    let DynamicImage::ImageLumaA8(source) = img else {
+        return None;
+    };
+    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
+    if source.as_raw().len() != pixels.checked_mul(2)? {
+        return None;
+    }
+    let output_bytes = pixels.checked_mul(4)?;
+    let mut output = Vec::with_capacity(output_bytes);
+    let mut source_blocks = source.as_raw().chunks(32);
+    while let Some(source_block) = source_blocks.next() {
+        let active_pixels = (pixels - output.len() / 4).min(16);
+        let mut padded = [0u8; 32];
+        padded[..source_block.len()].copy_from_slice(source_block);
+        let low = u8x16::new(padded[..16].try_into().ok()?);
+        let high = u8x16::new(padded[16..].try_into().ok()?);
+        let vectors = [
+            low.swizzle_relaxed(NATIVE_LA_TO_RGBA_BYTES_0).to_array(),
+            low.swizzle_relaxed(NATIVE_LA_TO_RGBA_BYTES_1).to_array(),
+            high.swizzle_relaxed(NATIVE_LA_TO_RGBA_BYTES_0).to_array(),
+            high.swizzle_relaxed(NATIVE_LA_TO_RGBA_BYTES_1).to_array(),
+        ];
+        for (block_index, vector) in vectors.into_iter().enumerate() {
+            let block_pixels = active_pixels.saturating_sub(block_index * 4).min(4);
+            output.extend_from_slice(&vector[..block_pixels * 4]);
+        }
+    }
+    Some((output, pixels.div_ceil(4) as u64, 0))
+}
+
+/// Convert RGBA pixels to Pillow's LA layout with sixteen-lane grayscale and
+/// alpha deinterleaving. The generic converter gathered each color channel
+/// scalarly for every eight-pixel block; this path shuffles four loaded byte
+/// vectors, computes the exact rounded BT.601 luma, and interleaves eight LA
+/// pixels per output vector.
+fn native_rgba_to_la_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+    let DynamicImage::ImageRgba8(source) = img else {
+        return None;
+    };
+    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
+    let output_bytes = pixels.checked_mul(2)?;
+    if source.as_raw().len() != pixels.checked_mul(4)? {
+        return None;
+    }
+    let mut output = Vec::with_capacity(output_bytes);
+    for source_block in source.as_raw().chunks(64) {
+        let active_pixels = source_block.len() / 4;
+        let mut padded = [0u8; 64];
+        padded[..source_block.len()].copy_from_slice(source_block);
+        let load = |offset| {
+            u8x16::new(
+                padded[offset..offset + 16]
+                    .try_into()
+                    .expect("complete RGBA-to-LA vector"),
+            )
+        };
+        let blocks = [load(0), load(16), load(32), load(48)];
+        let red = u16x16::from(grayscale_channel::<4, 0>(&blocks));
+        let green = u16x16::from(grayscale_channel::<4, 1>(&blocks));
+        let blue = u16x16::from(grayscale_channel::<4, 2>(&blocks));
+        let base = red * const { u16x16::splat(77) }
+            + green * const { u16x16::splat(150) }
+            + blue * const { u16x16::splat(29) };
+        let residual = green * const { u16x16::splat(70) } + blue * const { u16x16::splat(47) }
+            - red * const { u16x16::splat(117) }
+            + const { u16x16::splat(32768) };
+        let luma = u8x16::new(simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array());
+        let alpha = grayscale_channel::<4, 3>(&blocks);
+        let la_vectors = [NATIVE_LA_DUPLICATE_0, NATIVE_LA_DUPLICATE_1].map(|indices| {
+            ((luma.swizzle_relaxed(indices) & NATIVE_LA_LUMA_LANES)
+                | (alpha.swizzle_relaxed(indices) & NATIVE_LA_ALPHA_LANES))
+                .to_array()
+        });
+        let first_pixels = active_pixels.min(8);
+        output.extend_from_slice(&la_vectors[0][..first_pixels * 2]);
+        let second_pixels = active_pixels.saturating_sub(8).min(8);
+        output.extend_from_slice(&la_vectors[1][..second_pixels * 2]);
+    }
+    Some((output, pixels.div_ceil(8) as u64, 0))
+}
+
 #[inline]
 fn native_rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: usize) -> [u8; 16] {
     debug_assert!((1..=4).contains(&active_pixels));
@@ -9973,6 +10106,16 @@ fn native_convert_bytes(
     }
     if layout.source_is_luma && layout.source_channels == 1 && layout.target_channels == 4 {
         return native_luma_to_rgba_bytes(img);
+    }
+    if layout.source_is_luma && layout.source_channels == 2 && layout.target_channels == 4 {
+        return native_luma_alpha_to_rgba_bytes(img);
+    }
+    if !layout.source_is_luma
+        && layout.source_channels == 4
+        && layout.target_channels == 2
+        && !layout.source_is_rgbx
+    {
+        return native_rgba_to_la_bytes(img);
     }
     let source = img.as_bytes();
     let pixel_count = (img.width() as usize).checked_mul(img.height() as usize)?;
@@ -30671,6 +30814,101 @@ mod tests {
                 "{width}x{height}"
             );
             assert_eq!(vector_blocks, pixels.div_ceil(16) as u64);
+            assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_luma_alpha_to_rgba_matches_exact_conversion_across_vector_tails() {
+        for (width, height) in [
+            (1u32, 1u32),
+            (3, 5),
+            (15, 3),
+            (16, 3),
+            (17, 3),
+            (31, 3),
+            (32, 3),
+            (33, 3),
+            (1023, 512),
+        ] {
+            let pixels = width as usize * height as usize;
+            let source: Vec<u8> = (0..pixels * 2)
+                .map(|index| ((index * 73 + index / 11 + 19) & 255) as u8)
+                .collect();
+            let image = DynamicImage::ImageLumaA8(
+                crate::raster::GrayAlphaImage::from_raw(width, height, source)
+                    .expect("valid LA storage"),
+            );
+            let expected = image.to_rgba8();
+            let layout = super::NativeConvertLayout {
+                source_channels: 2,
+                target_channels: 4,
+                source_is_luma: true,
+                source_is_rgbx: false,
+                target_is_luma: false,
+                target_is_cmyk: false,
+                target_is_hsv: false,
+                target_is_ycbcr: false,
+                target_is_integer: false,
+                target_is_float: false,
+            };
+            let (actual, vector_blocks, scalar_tail) =
+                super::native_convert_bytes(&image, layout).expect("native LA to RGBA");
+
+            assert_eq!(
+                actual.as_slice(),
+                expected.as_raw().as_slice(),
+                "{width}x{height}"
+            );
+            assert_eq!(vector_blocks, pixels.div_ceil(4) as u64);
+            assert_eq!(scalar_tail, 0);
+        }
+    }
+
+    #[test]
+    fn native_rgba_to_la_matches_exact_conversion_across_vector_tails() {
+        for (width, height) in [
+            (1u32, 1u32),
+            (15, 3),
+            (16, 3),
+            (17, 3),
+            (31, 3),
+            (32, 3),
+            (33, 3),
+            (1023, 512),
+        ] {
+            let pixels = width as usize * height as usize;
+            let source: Vec<u8> = (0..pixels * 4)
+                .map(|index| ((index * 113 + index / 5 + 29) & 255) as u8)
+                .collect();
+            let image = DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(width, height, source).expect("valid RGBA storage"),
+            );
+            let gray = crate::color::pil_grayscale(&image).expect("reference luma");
+            let expected: Vec<u8> = gray
+                .as_raw()
+                .iter()
+                .copied()
+                .zip(image.as_bytes().chunks_exact(4).map(|pixel| pixel[3]))
+                .flat_map(|(luma, alpha)| [luma, alpha])
+                .collect();
+            let layout = super::NativeConvertLayout {
+                source_channels: 4,
+                target_channels: 2,
+                source_is_luma: false,
+                source_is_rgbx: false,
+                target_is_luma: true,
+                target_is_cmyk: false,
+                target_is_hsv: false,
+                target_is_ycbcr: false,
+                target_is_integer: false,
+                target_is_float: false,
+            };
+            let (actual, vector_blocks, scalar_tail) =
+                super::native_convert_bytes(&image, layout).expect("native RGBA to LA");
+
+            assert_eq!(actual, expected, "RGBA to LA {width}x{height}");
+            assert_eq!(vector_blocks, pixels.div_ceil(8) as u64);
             assert_eq!(scalar_tail, 0);
         }
     }

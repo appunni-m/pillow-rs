@@ -12330,3 +12330,74 @@ L invert's CPU latency target is met; the SIMD latency target is met only at
 queue depth 1, its concurrent throughput target remains open, and GPU does not
 match SIMD. No Parallel CPU measurements, CI, coverage, release, or push were
 run.
+
+## RGBA `ImageEnhance.Color` checkpoint — 2026-10-02
+
+The measured call constructs a fresh RGBA image, constructs
+`ImageEnhance.Color` (including its observable `degenerate` snapshot), calls
+`enhance(0.3)`, and exports the full RGBA result at 1024 × 768. Pillow's stateful
+enhancer semantics rule out replacing the public flow with the one-shot
+`ColorSaturation` op: the enhancer retains a converted base, and later source
+mutation must not change that snapshot. The exact base conversion is RGBA→LA
+(rounded BT.601 luma plus original alpha), then LA→RGBA (`[L,L,L,A]` per pixel).
+
+The SIMD converter's generic layout path rebuilt shuffle indices in nested
+pixel/channel loops for each four-pixel LA→RGBA block. Attempt 1 introduced
+fixed four-pixel swizzles and processes the complete conversion in fixed
+sixteen-pixel groups. This retained the exact native `[L,L,L,A]` bytes and
+lowered complete queue-one SIMD latency from 6.093 ms to 4.175 ms. Attempt 2
+removed the scalar channel gathers from the preceding RGBA→LA conversion:
+four native byte vectors are deinterleaved with `wide`, exact fixed-point luma
+is computed in sixteen lanes, and original alpha is interleaved into LA with
+constant shuffles. It lowered SIMD request latency again to 2.879 ms at queue
+depth 1, 3.419 ms at depth 2, and 5.361 ms at depth 4. Both attempts keep input
+and intermediate images in their actual RGBA and LA modes.
+
+| Complete-call SIMD latency | Before | After attempt 1 | After attempt 2 |
+| --- | ---: | ---: | ---: |
+| Queue depth 1 | 6.093 ms | 4.175 ms | 2.879 ms |
+| Queue depth 2 | 7.286 ms | 5.178 ms | 3.419 ms |
+| Queue depth 4 | 9.490 ms | 7.186 ms | 5.361 ms |
+
+Attempt 2's maintained aggregate completed-request throughput ratios against
+Pillow are 0.508×, 1.349×, and 1.693× at queue depths 1, 2, and 4. Its q1
+latency remains slower than Pillow (2.879 ms versus 2.293 ms), while q2/q4
+latencies are faster than Pillow. It still falls far short of the 5× SIMD goal.
+The serial CPU and GPU code did not change. GPU's final BlendModule remains a
+one-dispatch request with a 3 MiB primary upload, 3 MiB auxiliary upload, and
+3 MiB readback; end-to-end GPU latency and throughput still miss the target.
+These GPU counters describe the final blend receipt, not the earlier
+materialized constructor conversions. No Parallel CPU profile was measured.
+
+The run completed all 20,160 exact live-Pillow output comparisons across
+Pillow, CPU, SIMD, and GPU, including warmups, with no failures. Both focused
+converter tests include tails and a 1023 × 512 buffer, and compare every output
+byte against the native raster conversion. The attempt-1 and attempt-2
+throughput runs overlapped an unrelated CPU-heavy coverage job in
+image-slash-star; serial CPU and GPU throughput also fell in the later run, so
+the absolute aggregate throughput figures need a quiet-host rerun before they
+are used as a final cross-backend ranking. The SIMD latency reduction is
+consistent across all three queue depths. No coverage command was run for this
+campaign.
+
+The baseline, attempt-1, and attempt-2 receipts are
+`color-rgba-before-20261002.json`,
+`color-rgba-after-attempt1-20261002.json`, and
+`color-rgba-after-attempt2-20261002.json`. Reproduce the focused checks and
+attempt-2 measurement with:
+
+```sh
+cargo test --locked -p pillow-rs --lib native_luma_alpha_to_rgba_matches_exact_conversion_across_vector_tails
+cargo test --locked -p pillow-rs --lib native_rgba_to_la_matches_exact_conversion_across_vector_tails
+make PYTHON=build/parity-venv/bin/python \
+  MIGRATION_TRANSPOSE_THROUGHPUT_OUTPUT=build/migration-parity/color-rgba-after-attempt2-20261002.json \
+  MIGRATION_TRANSPOSE_THROUGHPUT_ARGS='--operation color --mode RGBA --size 1024 768' \
+  migration-parity-transpose-throughput
+```
+
+Keep both SIMD conversion improvements. RGBA Color remains an incomplete
+operation checkpoint: q1 SIMD latency/throughput and every GPU target remain
+open. Continue the mode-ranked campaign with the next measured operation; do
+not treat these constructor-only gains as proof that the direct saturation
+kernel or other Color modes meet their targets. CI, coverage, release, and push
+remain deferred.
