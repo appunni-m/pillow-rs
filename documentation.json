@@ -1,7 +1,7 @@
 {
   "project": "pillow-rs",
   "version": "12.2.0-alpha.4",
-  "release_revision": "02e4afcc2385f25656a16b49a38631535a19684b",
+  "release_revision": "5a08cf48c509e90a4b6052c350676bb2f2f15074",
   "repository": "appunni-m/pillow-rs",
   "site_url": "https://appunni-m.github.io/pillow-rs/",
   "pages": [
@@ -109,9 +109,9 @@
     "crate": "pillow-rs"
   },
   "published_release": {
-    "version": "12.2.0-alpha.3",
-    "revision": "02e4afcc2385f25656a16b49a38631535a19684b",
-    "published_at": "2026-09-30T22:28:41Z"
+    "version": "12.2.0-alpha.4",
+    "revision": "5a08cf48c509e90a4b6052c350676bb2f2f15074",
+    "published_at": "2026-10-01T01:25:00Z"
   },
   "registries": [
     "cargo",
