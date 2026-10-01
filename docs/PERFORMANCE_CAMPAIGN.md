@@ -11961,3 +11961,59 @@ The default `.venv` in this worktree has no `maturin`; setting `PYTHON` to the
 existing `build/parity-venv/bin/python` let the documented `build-parity`
 prerequisite run without replacing Pillow. No coverage, full CI, or release
 action was run.
+
+## I-mode `Image.filter` 3×3 checkpoint — 2026-10-02
+
+The existing 1024 × 768 I-mode 3×3 benchmark filled every pixel with 37 and
+used a normalized cross-smoothing kernel whose exact output is unchanged.
+That input hid the general convolution cost: the original serial CPU and SIMD
+medians were 9.197 ms and 7.057 ms against Pillow at 2.074 ms. Its GPU median
+was 1.440 ms. A dedicated varied-pixel workload now perturbs the top-left,
+center, and bottom-right samples while keeping the same public `Kernel` →
+`filter` → `tobytes` workflow.
+
+Four bounded attempts produced a uniform fast path and a general-kernel
+improvement. First, CPU and SIMD prove the bounded uniform identity using the
+exact Pillow f32/FMA row order. Second, a
+proven result shares the immutable source allocation; public mutation still
+detaches through copy-on-write. Third, SIMD checks uniformity with packed byte
+comparisons. Fourth, serial CPU slides decoded three-pixel row windows instead
+of decoding nine source samples for each output, and SIMD uses contiguous
+four-sample vector loads with the same FMA order. Focused 1024 × 768 release
+runs measured:
+
+| I-mode 3×3 workload | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Uniform identity, ms | 2.058–2.363 | 0.533–1.231 | 0.306–0.316 | 1.281–1.507 |
+| Varied input, ms | 2.256 | 3.413 | 1.187 | 1.343 |
+
+The uniform identity shortcut now beats Pillow on CPU and is over 6.5× faster
+on SIMD in both release samples. On varied input, sliding CPU windows improved
+serial CPU by about 60% and contiguous vector loads improved SIMD by about 84%
+against the original measured generic path. The operation still misses its
+targets on varied data: CPU is 1.51× slower than Pillow, SIMD is 1.90× slower,
+and GPU is 1.13× slower than SIMD. The next investigation is to remove repeated
+overlapping loads in the vector stencil and reduce the scalar CPU kernel's
+remaining per-pixel arithmetic/conversion overhead. GPU's varied case transfers
+3,145,728 bytes in and out and spends about 1.01 ms in backend execution; keep
+those costs visible rather than reporting the uniform CPU shortcut as GPU work.
+Throughput figures here are reciprocal single-call latency, not a sustained
+concurrent-throughput measurement.
+
+The exact regression cases
+`i-mode-cross-smooth-uniform-identity`, `i-mode-cross-smooth-varied`, and
+`i-mode-find-edges-negative` each passed 3/3 cases on CPU, strict SIMD, and
+strict GPU with no fallback. The ownership test confirms that mutating a
+shared identity result leaves its source unchanged. The release varied
+benchmark uses `pipeline-chain.convolution-i.3x3-varied-1024x768`; its benchmark
+gate is successful execution, so the separate parity lanes provide the exact
+output evidence.
+
+The checkpoint commands were `cargo test --locked -p pillow-rs --lib
+i32_filter3x3_uniform_tests`, `cargo test --locked -p pillow-rs --lib
+i32_uniform_filter_ownership_tests`, `make migration-parity-test` with
+`MIGRATION_TARGET_BACKEND=cpu|simd|gpu` and
+`MIGRATION_STRICT_TARGET_BACKEND=1` for the three cases, and
+`make migration-parity-benchmark` filtered to the uniform and varied I-mode
+workload IDs. Full CI and coverage were not run. The release build was only for
+measurement; no package release or push was made.

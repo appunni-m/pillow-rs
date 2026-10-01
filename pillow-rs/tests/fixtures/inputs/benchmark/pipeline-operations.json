@@ -66785,6 +66785,216 @@
       }
     },
     {
+      "workload_id": "pipeline-chain.convolution-i.3x3-varied-1024x768",
+      "covers": [
+        "PIL.Image.Image.filter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "I"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  1024,
+                  768
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": 37
+              }
+            }
+          },
+          {
+            "step_id": "setup-pixel-0",
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "xy": {
+                "kind": "literal",
+                "value": [
+                  0,
+                  0
+                ]
+              },
+              "value": {
+                "kind": "literal",
+                "value": -11
+              }
+            }
+          },
+          {
+            "step_id": "setup-pixel-1",
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "xy": {
+                "kind": "literal",
+                "value": [
+                  511,
+                  383
+                ]
+              },
+              "value": {
+                "kind": "literal",
+                "value": 91
+              }
+            }
+          },
+          {
+            "step_id": "setup-pixel-2",
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "xy": {
+                "kind": "literal",
+                "value": [
+                  1023,
+                  767
+                ]
+              },
+              "value": {
+                "kind": "literal",
+                "value": 204
+              }
+            }
+          },
+          {
+            "step_id": "setup-filter",
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  3,
+                  3
+                ]
+              },
+              "kernel": {
+                "kind": "literal",
+                "value": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  1.0,
+                  4.0,
+                  1.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "kind": "literal",
+                "value": 8.0
+              },
+              "offset": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "filtered",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-filter"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "filtered"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "filtered",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "I",
+        "chain_length": 1,
+        "operation_class": "neighborhood",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-chain.convolution-i.5x5-1024x768",
       "covers": [
         "PIL.Image.Image.filter.performance.standard"
@@ -245932,6 +246142,10 @@
         },
         {
           "workload_id": "pipeline-chain.convolution-i.3x3-1024x768",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.convolution-i.3x3-varied-1024x768",
           "weight": 1
         },
         {
