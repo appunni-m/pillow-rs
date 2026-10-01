@@ -10597,6 +10597,21 @@ each pass independently. A larger GPU follow-up would keep the original RGB
 image resident and fuse the final threshold/blend into the sixth blur pass, but
 that is broader than this checkpoint. No coverage collection ran.
 
+Current-main remeasure, 2026-10-02: the same material RGB workload was run on
+revision `33833df8ca9d24005dfdf4fcbe614b57f06b4aec` with the exact parity gate
+before timing. Pillow / CPU / SIMD / GPU medians were 8.068 / 9.765 / 26.330 /
+3.913 ms (123.9 / 102.4 / 38.0 / 255.6 operations/s). The gate
+`migration-parity-benchmark-gate-18c556eb9c78450fbedfc2c1df9f01c3` passed all
+three target backends, each selected for 100/100 timed executions without
+fallback. Backend-only medians were 8.865 / 25.679 / 3.021 ms for CPU / SIMD /
+GPU; these track the existing RGB GaussianBlur costs, so the bytewise unsharp
+blend is not the dominant stage. GPU still performs six dispatches, transfers
+3,145,728 bytes in each direction, and records one RGB mode conversion. No
+implementation change was made: four blend/data-movement attempts are already
+checkpointed above, and any further useful CPU/SIMD work belongs in the
+GaussianBlur implementation itself. This remeasure is a new baseline, not a
+claim that the earlier blend attempts improved the current revision.
+
 ### Native-L identity-contain Pad: packed transport and row emission — 2026-09-30
 
 The selected workload was
