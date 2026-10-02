@@ -32181,6 +32181,28 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-filled-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "uniform-fill",
+            "pixel": [1, 2, 3],
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-rgb-noise-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "backend-filter-rgb-noise-ref",
+            "seed": 20260928,
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
             "requirement_suffix": "parameter.alpha-only",
             "name": "la-zero-rgb-nonzero-alpha",
             "mode": "LA",
@@ -53150,6 +53172,57 @@ def build_inputs(
                                 variant=f"paste-masked-{slug(name)}",
                                 surface=surface_id,
                                 operation="paste",
+                            ),
+                        }
+                    )
+                    members.append({"workload_id": workload_id, "weight": 1})
+            getbbox_benchmark = next(
+                (
+                    (operation, requirement)
+                    for operation, requirement in benchmark_requirements
+                    if operation["id"] == "getbbox"
+                ),
+                None,
+            )
+            if getbbox_benchmark is not None:
+                operation, requirement = getbbox_benchmark
+                for name in (
+                    "rgb-filled-1024x768",
+                    "rgb-noise-1024x768",
+                ):
+                    workload_id = (
+                        f"{storage_slug}.getbbox.materialized.{slug(name)}"
+                    )
+                    case_id = (
+                        "PIL.Image.Image.getbbox.nuanced.performance-"
+                        f"{slug(name)}"
+                    )
+                    case = all_cases_by_id[case_id]
+                    workloads.append(
+                        {
+                            "workload_id": workload_id,
+                            "covers": [requirement["id"]],
+                            "subjects": benchmark_subjects(),
+                            "input": {
+                                "kind": "parity_case",
+                                "case_id": case_id,
+                            },
+                            "measurement": {
+                                "boundary": "observed_steps",
+                                "step_ids": ["call"],
+                                "metrics": operation["benchmark"]["metrics"],
+                                "warmup_iterations": 5,
+                                "measurement_iterations": 20,
+                                "samples": 5,
+                                "concurrency": 1,
+                                "cache_state": "warm",
+                                "correctness_gate": "parity_pass",
+                            },
+                            "context": _workflow_benchmark_context(
+                                case,
+                                variant=f"getbbox-{slug(name)}",
+                                surface=surface_id,
+                                operation="getbbox",
                             ),
                         }
                     )

@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: c3c3c6c6c25ca8bbd51f7b37cf9dccdf86bc983bf2768cd8ed45ac75cb8860d7
+manifest_sha256: b7ba089baec686a207a09c136f5c2e4eb6911d7db1f9d3258a8a844e87bc83e3
 statement_status: declared
 ```
 
@@ -15,13 +15,13 @@ statement_status: declared
 
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
-- Target profiles: `python-cpu`, `python-simd`, `python-gpu`
+- Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`
 - Public surfaces: 24
 - Operations: 209
 - Requirements: 1803
-- Indexed parity cases: 16783
+- Indexed parity cases: 17062
 - Indexed coverage plans: 24
-- Indexed benchmark workloads: 825
+- Indexed benchmark workloads: 929
 
 ## Declared operations
 

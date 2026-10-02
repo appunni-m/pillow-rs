@@ -14565,3 +14565,72 @@ the Parallel CPU receipts are
 4096 × 4096 GPU image parity run was made; only its allocation-free planner
 boundary and the small real 2D shader dispatch were tested. No coverage was
 run.
+
+## Native RGB `Image.getbbox` checkpoint — 2026-10-02
+
+The RGB8 path can derive a box from the first and last nonzero pixel of each
+nonempty row; it does not need to calculate coordinates or update four extrema
+for every pixel. If the first nonempty row already spans the image width, the
+horizontal bounds are final, so a reverse row search finds the bottom edge
+without visiting interior rows. A contiguous zero-byte check returns `None`
+for a blank RGB image. The path keeps the three-byte RGB storage native and
+checks all three color bands; the alpha-only option does not narrow RGB to one
+band. Other logical modes keep their existing predicates and storage paths.
+
+The added material workloads time only the `getbbox` call on a 1024 × 768
+native RGB input: one full nonzero fill exercises the full-width-row fast path,
+and one varied RGB noise image uses the existing generated parity asset. Exact
+live-Pillow parity passed for both. The existing 16 × 16 standard workload is
+unchanged and retains its whole-workflow boundary, including `Image.new`.
+
+| Workload | Pillow p50 | Serial CPU p50 | SIMD-profile p50 | GPU-profile p50 |
+| --- | ---: | ---: | ---: | ---: |
+| 16 × 16 blank RGB, whole workflow | 4.958 µs | 5.750 µs | 5.750 µs | 5.792 µs |
+| 1024 × 768 filled RGB, call only | 1.875 µs | 1.625 µs | 1.500 µs | 1.583 µs |
+| 1024 × 768 varied RGB, call only | 2.000 µs | 1.666 µs | 1.583 µs | 1.791 µs |
+
+Each p50 comes from 100 warmed samples per subject.
+
+The direct material calls are 1.15× and 1.20× faster than Pillow on the CPU
+profile. The small whole-workflow row remains 1.16× slower; its measurement
+includes image construction, so it does not isolate the `getbbox` call. The
+receipt reports no backend execution for SIMD- or GPU-profile calls (`actual_backend`
+is null and dispatch count is zero). Those columns are profile-tagged timings
+of this direct host read, not evidence of architecture-specific SIMD or GPU
+execution. GPU and SIMD goals therefore remain unproven for this scalar-return
+API. Parallel CPU was not measured because this path has no Rayon execution.
+
+Three bounded candidates were tried: row-edge reduction, a full-width first
+row reverse-search fast path, and a blank-image contiguous scan. The reverse
+search improved the filled workload from 2.542 µs CPU in attempt 1 to 1.583 µs
+in attempt 2; the canonical final run measured 1.625 µs filled and 1.666 µs
+varied. The blank-image shortcut did not make the whole-workflow standard
+faster than Pillow. Preserve that as an end-to-end blocker and continue with
+the next eligible operation.
+
+The final focused parity lane passed 9/9 RGB cases, including blank, single
+red/green/blue content, sparse rows, both material workloads, and zero-width
+and zero-height images. The parity-gated benchmark passed 7/7 comparisons
+across the standard, filled, and varied workloads. Reproduce the measurements
+and RGB parity with:
+
+```sh
+PYTHON=.venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.getbbox.standard --workload-id pil-image-image.getbbox.materialized.rgb-filled-1024x768 --workload-id pil-image-image.getbbox.materialized.rgb-noise-1024x768' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/getbbox-rgb-canonical-final-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/getbbox-rgb-canonical-final-parity-20261002.json \
+make migration-parity-benchmark
+
+PYTHON=.venv/bin/python \
+MIGRATION_PARITY_CASE_IDS='PIL.Image.Image.getbbox.behavior.default,PIL.Image.Image.getbbox.nuanced.nonzero-rgb,PIL.Image.Image.getbbox.nuanced.green-only-rgb,PIL.Image.Image.getbbox.nuanced.blue-only-rgb,PIL.Image.Image.getbbox.nuanced.coverage-batch-analysis-pattern-getbbox-rgb-2,PIL.Image.Image.getbbox.nuanced.zero-width,PIL.Image.Image.getbbox.nuanced.zero-height,PIL.Image.Image.getbbox.nuanced.performance-rgb-filled-1024x768,PIL.Image.Image.getbbox.nuanced.performance-rgb-noise-1024x768' \
+MIGRATION_PARITY_OUTPUT=build/migration-parity/getbbox-rgb-final-canonical-20261002.json \
+make migration-parity-test
+```
+
+Attempt receipts are `getbbox-rgb-filled-attempt1-20261002.json`,
+`getbbox-rgb-filled-attempt2-20261002.json`,
+`getbbox-rgb-canonical-final-20261002.json`,
+`getbbox-rgb-canonical-final-parity-20261002.json`, and
+`getbbox-rgb-final-canonical-20261002.json` under `build/migration-parity/`.
+No coverage collection ran.
