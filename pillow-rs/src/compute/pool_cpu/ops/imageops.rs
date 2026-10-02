@@ -1673,15 +1673,20 @@ fn pad_native_bytes(
     let fill = &fill[..channels];
     let output_dims = CheckedDims::new(w, h, channels as u8)?;
 
-    // Full-width vertical RGB/RGBA padding can construct the destination in
-    // one pass: append filled border rows around the already-contiguous source
-    // rows instead of initializing a canvas and overwriting its center. Keep
-    // the two logical modes explicit; RGBX and CMYK have their own fourth-byte
-    // semantics and remain governed by their separate paths.
-    if matches!(
-        (explicit_mode, channels),
-        (Some("RGB"), 3) | (Some("RGBA"), 4)
-    ) && offset_x_bytes == 0
+    // Full-width vertical RGB, HSV, and RGBA padding can construct the
+    // destination in one pass: append filled border rows around the
+    // already-contiguous source rows instead of initializing a canvas and
+    // overwriting its center. Keep the logical modes explicit; HSV copies raw
+    // stored triplets, while RGBX and CMYK retain their separate fourth-byte
+    // semantics.
+    let append_identity_vertical_rows = match (explicit_mode, channels) {
+        (Some("RGB"), 3) => true,
+        (Some("HSV"), 3) => true,
+        (Some("RGBA"), 4) => true,
+        _ => false,
+    };
+    if append_identity_vertical_rows
+        && offset_x_bytes == 0
         && copy_width == width
         && source_stride == output_stride
     {

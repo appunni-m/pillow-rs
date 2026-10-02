@@ -13863,3 +13863,76 @@ make migration-parity-benchmark
 After two bounded attempts, keep the native append and vector-built RGBA fill
 row, record the remaining SIMD/GPU gaps, and move to another operation. No
 coverage, broad CI, release, or push was run.
+
+## HSV `ImageOps.pad` native-copy checkpoint — 2026-10-02
+
+The selected workload is
+`pil-imageops.pad.materialized.native-hsv-noise-1024x768-square`: a 1024 × 768
+HSV image padded to 1024 × 1024 without resizing, leaving 128 fill rows above
+and below the image. The HSV bytes are stored in `ImageRgb8`, but they are H/S/V
+samples; Pad copies and fills those three stored channels directly.
+
+The serial CPU path previously initialized the whole destination from the fill
+sample and then overwrote its center with the source. It now reserves the exact
+output size and appends the fill rows, contiguous source bytes, and remaining
+fill rows. This removes the full-canvas fill and center overwrite. A trial of
+the same append strategy in the SIMD Pad path measured 0.333 ms versus a 0.328
+ms clean SIMD baseline, so that SIMD change was reverted. The retained SIMD HSV
+path still constructs a repeated fill canvas before copying in the source;
+this is the next place to investigate if SIMD becomes the selected target.
+
+The strict GPU path previously widened the three-byte HSV carrier through an
+RGBA transport. Its specialized route admits only a singleton HSV Pad over
+`ImageRgb8` with identity contain geometry, unchanged full source width, and a
+width divisible by four. Each shader invocation owns four H/S/V pixels and
+writes their three packed words. Row alignment keeps all word stores within a
+row. The planner checks the adapter's two-dimensional workgroup limit, storage
+binding and buffer sizes, and the pool capacity before admitting the route;
+unsupported geometry stays on the established path. This keeps the GPU input
+and output native and removes the mode conversion.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms | GPU input/output | GPU conversions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Clean baseline | 1.508 | 1.074 | 0.328 | 1.902 | 3.00 / 4.00 MiB | 1 |
+| Native packed GPU attempt 3 | 1.406 | 0.313 | 0.349 | 0.946 | 2.25 / 3.00 MiB | 0 |
+| Native packed GPU repeat | 1.329 | 0.264 | 0.337 | 0.996 | 2.25 / 3.00 MiB | 0 |
+
+Both current-tree runs passed all three Pillow comparisons. CPU, SIMD, and GPU
+each executed 100/100 measured calls on the requested backend with no fallback.
+The GPU path recorded one dispatch and zero mode conversions. Serial CPU was
+4.49× and 5.03× faster than contemporaneous Pillow in the two runs, improving
+3.43× and 4.06× over the clean CPU baseline. The current SIMD path was about
+4.0× faster than Pillow but 11–28% slower than serial CPU, and remains below
+the 5× target. The direct GPU path was 1.91–2.01× faster than the earlier GPU
+baseline, but its 0.946–0.996 ms latency remained 2.71–2.96× slower than SIMD.
+Its one-call throughput is therefore lower than CPU and SIMD; the receipts do
+not establish saturated device throughput. For this copy-dominated workload,
+the GPU still transfers 2.25 MiB in and reads back 3 MiB, so synchronization
+and round-trip traffic dominate the small kernel.
+
+The clean baseline is `pad-hsv-clean-before-9a41b6e6-20261002.json` with
+`pad-hsv-clean-before-9a41b6e6-20261002-parity.json`. The retained direct route
+is recorded in `pad-hsv-native-packed-attempt3-9a41b6e6-20261002.json` and its
+parity sidecar; its repeat is
+`pad-hsv-native-packed-repeat1-9a41b6e6-20261002.json` with the corresponding
+`-parity.json` sidecar. The first append trial is
+`pad-hsv-native-append-attempt1-9a41b6e6-20261002.json`; the timing run that
+overlapped an unrelated coverage build was discarded.
+
+The final exact-tree benchmark command was:
+
+```sh
+RUSTC_WRAPPER= PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.pad.materialized.native-hsv-noise-1024x768-square' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/pad-hsv-native-packed-repeat1-9a41b6e6-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/pad-hsv-native-packed-repeat1-9a41b6e6-20261002-parity.json \
+make migration-parity-benchmark
+```
+
+`cargo test -p pillow-rs --lib gpu_native_hsv_pad -- --nocapture` passed both
+planner and execution tests; the HSV/native-mode regression passed with
+`cargo test -p pillow-rs --lib pad_keeps_l_la_rgb_hsv_and_rgba_channels_in_native_storage -- --nocapture`.
+After four bounded attempts, keep the serial CPU append and native packed GPU
+route, leave the unhelpful SIMD append reverted, record the SIMD and GPU gaps,
+and move to another operation. No coverage, broad CI, release, or push was run.
