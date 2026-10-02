@@ -10026,6 +10026,68 @@ fn native_rgba_to_la_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     Some((output, pixels.div_ceil(8) as u64, 0))
 }
 
+/// Build Color's RGBA degenerate snapshot directly as `[L, L, L, A]`.
+/// Reuse the exact native RGBA-to-LA luma calculation, but shuffle the
+/// sixteen luma and alpha lanes straight into the final RGBA vectors instead
+/// of allocating and rereading an intermediate LA image.
+fn native_rgba_color_degenerate(img: &DynamicImage) -> Option<(DynamicImage, u64, u64)> {
+    let DynamicImage::ImageRgba8(source) = img else {
+        return None;
+    };
+    let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
+    let output_bytes = pixels.checked_mul(4)?;
+    if source.as_raw().len() != output_bytes {
+        return None;
+    }
+
+    let mut output = Vec::with_capacity(output_bytes);
+    for source_block in source.as_raw().chunks(64) {
+        let active_pixels = source_block.len() / 4;
+        let mut padded = [0u8; 64];
+        padded[..source_block.len()].copy_from_slice(source_block);
+        let load = |offset| {
+            u8x16::new(
+                padded[offset..offset + 16]
+                    .try_into()
+                    .expect("complete RGBA Color-degenerate vector"),
+            )
+        };
+        let blocks = [load(0), load(16), load(32), load(48)];
+        let red = u16x16::from(grayscale_channel::<4, 0>(&blocks));
+        let green = u16x16::from(grayscale_channel::<4, 1>(&blocks));
+        let blue = u16x16::from(grayscale_channel::<4, 2>(&blocks));
+        let base = red * const { u16x16::splat(77) }
+            + green * const { u16x16::splat(150) }
+            + blue * const { u16x16::splat(29) };
+        let residual = green * const { u16x16::splat(70) } + blue * const { u16x16::splat(47) }
+            - red * const { u16x16::splat(117) }
+            + const { u16x16::splat(32768) };
+        let luma = u8x16::new(simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array());
+        let alpha = grayscale_channel::<4, 3>(&blocks);
+        let output_vectors = [
+            ((luma.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_0) & NATIVE_RGBA_COLOR_LANES)
+                | (alpha.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_0) & NATIVE_RGBA_ALPHA_LANES))
+                .to_array(),
+            ((luma.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_1) & NATIVE_RGBA_COLOR_LANES)
+                | (alpha.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_1) & NATIVE_RGBA_ALPHA_LANES))
+                .to_array(),
+            ((luma.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_2) & NATIVE_RGBA_COLOR_LANES)
+                | (alpha.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_2) & NATIVE_RGBA_ALPHA_LANES))
+                .to_array(),
+            ((luma.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_3) & NATIVE_RGBA_COLOR_LANES)
+                | (alpha.swizzle_relaxed(NATIVE_LUMA_TO_RGBA_BYTES_3) & NATIVE_RGBA_ALPHA_LANES))
+                .to_array(),
+        ];
+        for (block_index, vector) in output_vectors.into_iter().enumerate() {
+            let block_pixels = active_pixels.saturating_sub(block_index * 4).min(4);
+            output.extend_from_slice(&vector[..block_pixels * 4]);
+        }
+    }
+    let image =
+        crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, 4).ok()?;
+    Some((image, pixels.div_ceil(4) as u64, 0))
+}
+
 #[inline]
 fn native_rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: usize) -> [u8; 16] {
     debug_assert!((1..=4).contains(&active_pixels));
@@ -13884,6 +13946,19 @@ pub fn simd_color_saturation(
         || !has_vectorized_float_bytes(img, channels)
     {
         return Err(simd_unsupported("ColorSaturation"));
+    }
+    if *factor == 0.0
+        && channels == 4
+        && matches!(img, DynamicImage::ImageRgba8(_))
+        && matches!(mode, None | Some("RGBA"))
+    {
+        let Some((result, vector_blocks, scalar_tail)) = native_rgba_color_degenerate(img) else {
+            return Err(simd_unsupported("ColorSaturation"));
+        };
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+        crate::compute::record_pipeline_operation_path("vector");
+        return Ok(result);
     }
     let Some((result, vector_blocks, scalar_tail)) =
         native_enhance_output(img, mode, channels, active_channels, *factor)

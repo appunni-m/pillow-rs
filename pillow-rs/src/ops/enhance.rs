@@ -176,6 +176,16 @@ impl Image {
         if mode == intermediate {
             return Ok(self.clone());
         }
+        if mode == "RGBA" {
+            // RGBA -> LA -> RGBA produces the same rounded BT.601 gray in
+            // each color channel. The native
+            // ColorSaturation(0) path writes that retained base in one pass
+            // and keeps RGBA alpha unchanged. Materialize here because this
+            // image is the stateful enhancer's construction-time snapshot.
+            let mut base = Image::push_op(self, PipelineOp::ColorSaturation { factor: 0.0 });
+            base.load()?;
+            return Ok(base);
+        }
         let mut base = self.convert(intermediate, None, None, None, None)?;
         if mode == "RGBa" {
             return Err(PilError::ValueError(
@@ -343,5 +353,45 @@ impl Image {
     pub fn enhance_sharpness(&self, factor: f64) -> Result<Image, PilError> {
         validate_mode(self, true)?;
         Ok(Image::push_op(self, PipelineOp::Sharpness { factor }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Image;
+
+    #[test]
+    fn rgb_color_degenerate_matches_convert_roundtrip_across_vector_tails() {
+        for (mode, channels, intermediate) in [("RGB", 3usize, "L"), ("RGBA", 4, "LA")] {
+            for pixel_count in 1..=17usize {
+                let bytes: Vec<u8> = (0..pixel_count * channels)
+                    .map(|index| {
+                        (index
+                            .wrapping_mul(73)
+                            .wrapping_add(index / 9 * 11)
+                            .wrapping_add(29)) as u8
+                    })
+                    .collect();
+                let source = Image::frombytes(mode, (pixel_count as u32, 1), &bytes)
+                    .expect("varied native color source");
+                let mut expected = source
+                    .convert(intermediate, None, None, None, None)
+                    .expect("convert to Pillow's grayscale base")
+                    .convert(mode, None, None, None, None)
+                    .expect("convert grayscale base to source mode");
+                expected.load().expect("materialize reference roundtrip");
+
+                let mut actual = source
+                    .color_degenerate()
+                    .expect("construct optimized color base");
+                actual.load().expect("materialize optimized color base");
+                assert_eq!(actual.mode().expect("optimized mode"), mode);
+                assert_eq!(
+                    actual.tobytes().expect("optimized bytes"),
+                    expected.tobytes().expect("reference bytes"),
+                    "{mode} with {pixel_count} pixels"
+                );
+            }
+        }
     }
 }
