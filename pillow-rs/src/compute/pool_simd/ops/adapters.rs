@@ -28280,7 +28280,7 @@ pub fn simd_crop(
 /// never stored. There is no packed-RGBA conversion here, so CMYK's fourth
 /// sample remains K throughout the copy.
 fn native_merge_vector_block(
-    bands: &[Vec<u8>],
+    bands: &[&[u8]],
     pixel: usize,
     channels: usize,
 ) -> Option<(usize, [u8; 16])> {
@@ -28311,12 +28311,84 @@ fn native_merge_vector_block(
     ))
 }
 
+fn native_merge_interleave(
+    width: u32,
+    height: u32,
+    pixels: usize,
+    channels: usize,
+    band_bytes: &[&[u8]],
+) -> Result<(DynamicImage, u64, u64), PilError> {
+    let output_len = pixels
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("SIMD merge output length overflow".into()))?;
+    let mut output = vec![0u8; output_len];
+    let pixels_per_vector = match channels {
+        1 => 16,
+        2 => 8,
+        3 | 4 => 4,
+        _ => return Err(simd_unsupported("Merge")),
+    };
+    let mut pixel = 0usize;
+    let mut vector_blocks = 0u64;
+    while pixel + pixels_per_vector <= pixels {
+        let (block_bytes, block) = native_merge_vector_block(band_bytes, pixel, channels)
+            .ok_or_else(|| PilError::InternalError("SIMD merge vector shape mismatch".into()))?;
+        let output_start = pixel * channels;
+        output[output_start..output_start + block_bytes].copy_from_slice(&block[..block_bytes]);
+        vector_blocks = vector_blocks.saturating_add(1);
+        pixel += pixels_per_vector;
+    }
+    for output_pixel in pixel..pixels {
+        let output_start = output_pixel * channels;
+        for channel in 0..channels {
+            output[output_start + channel] = band_bytes[channel][output_pixel];
+        }
+    }
+    let scalar_tail = ((pixels - pixel) * channels) as u64;
+    let result =
+        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels)?;
+    Ok((result, vector_blocks, scalar_tail))
+}
+
 fn native_merge_luma_band(band: &Image) -> Result<Option<Vec<u8>>, PilError> {
     let materialized = band.materialize_for_ops()?;
     Ok(match materialized {
         DynamicImage::ImageLuma8(image) => Some(image.into_raw()),
         _ => None,
     })
+}
+
+fn native_merge_rgb_luma_owners(
+    img: &DynamicImage,
+    target_mode: &ColorMode,
+    bands: &[Image],
+    logical_mode: &str,
+    pixels: usize,
+) -> Result<Option<Vec<Arc<DynamicImage>>>, PilError> {
+    // The pipeline op keeps the complete channel list, including the first
+    // source already supplied as `img`; only later bands need shared owners.
+    if !matches!(target_mode, ColorMode::RGB) || logical_mode != "RGB" || bands.len() != 3 {
+        return Ok(None);
+    }
+    let DynamicImage::ImageLuma8(first) = img else {
+        return Ok(None);
+    };
+    if first.as_raw().len() != pixels {
+        return Ok(None);
+    }
+
+    let mut owners = Vec::with_capacity(2);
+    for band in bands.iter().skip(1) {
+        let owner = band.materialized_shared_for_ops()?;
+        let DynamicImage::ImageLuma8(image) = owner.as_ref() else {
+            return Ok(None);
+        };
+        if image.as_raw().len() != pixels {
+            return Ok(None);
+        }
+        owners.push(owner);
+    }
+    Ok(Some(owners))
 }
 
 /// Merge validated L bands into the target's native byte layout.
@@ -28340,6 +28412,32 @@ fn native_merge_bytes(
     };
     let width = img.width();
     let height = img.height();
+
+    // RGB's three native L inputs are already shared immutable buffers. Keep
+    // their owners alive and interleave borrowed slices rather than cloning
+    // every complete band before the vector kernel reads it.
+    if channels == 3 {
+        if let Some(owners) =
+            native_merge_rgb_luma_owners(img, target_mode, bands, logical_mode, pixels)?
+        {
+            if let DynamicImage::ImageLuma8(first) = img {
+                let mut band_bytes = Vec::with_capacity(3);
+                band_bytes.push(first.as_raw().as_slice());
+                for owner in &owners {
+                    let DynamicImage::ImageLuma8(image) = owner.as_ref() else {
+                        return Err(PilError::InternalError(
+                            "native RGB merge band changed storage while borrowed".into(),
+                        ));
+                    };
+                    band_bytes.push(image.as_raw().as_slice());
+                }
+                let (result, vector_blocks, scalar_tail) =
+                    native_merge_interleave(width, height, pixels, channels, &band_bytes)?;
+                return Ok(Some((result, vector_blocks, scalar_tail)));
+            }
+        }
+    }
+
     let mut band_bytes = Vec::with_capacity(channels);
     band_bytes.push(img.as_bytes().to_vec());
     for band in bands.iter().skip(1) {
@@ -28351,36 +28449,9 @@ fn native_merge_bytes(
         }
         band_bytes.push(bytes);
     }
-
-    let output_len = pixels
-        .checked_mul(channels)
-        .ok_or_else(|| PilError::ValueError("SIMD merge output length overflow".into()))?;
-    let mut output = vec![0u8; output_len];
-    let pixels_per_vector = match channels {
-        1 => 16,
-        2 => 8,
-        3 | 4 => 4,
-        _ => return Ok(None),
-    };
-    let mut pixel = 0usize;
-    let mut vector_blocks = 0u64;
-    while pixel + pixels_per_vector <= pixels {
-        let (block_bytes, block) = native_merge_vector_block(&band_bytes, pixel, channels)
-            .ok_or_else(|| PilError::InternalError("SIMD merge vector shape mismatch".into()))?;
-        let output_start = pixel * channels;
-        output[output_start..output_start + block_bytes].copy_from_slice(&block[..block_bytes]);
-        vector_blocks = vector_blocks.saturating_add(1);
-        pixel += pixels_per_vector;
-    }
-    for output_pixel in pixel..pixels {
-        let output_start = output_pixel * channels;
-        for channel in 0..channels {
-            output[output_start + channel] = band_bytes[channel][output_pixel];
-        }
-    }
-    let scalar_tail = ((pixels - pixel) * channels) as u64;
-    let result =
-        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels)?;
+    let band_byte_slices: Vec<&[u8]> = band_bytes.iter().map(Vec::as_slice).collect();
+    let (result, vector_blocks, scalar_tail) =
+        native_merge_interleave(width, height, pixels, channels, &band_byte_slices)?;
     Ok(Some((result, vector_blocks, scalar_tail)))
 }
 
@@ -30902,6 +30973,44 @@ pub fn simd_alpha_composite(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_rgb_merge_borrows_auxiliary_bands_from_full_channel_list() {
+        use crate::pipeline::ColorMode;
+        use crate::raster::{DynamicImage, GrayImage};
+
+        let red = vec![1, 2, 3, 4, 5];
+        let green = vec![11, 22, 33, 44, 55];
+        let blue = vec![101, 102, 103, 104, 105];
+        let first = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(5, 1, red.clone()).expect("first L band shape"),
+        );
+        let bands = vec![
+            crate::image::Image::from_luma_mask(5, 1, red).expect("first L band"),
+            crate::image::Image::from_luma_mask(5, 1, green.clone()).expect("green L band"),
+            crate::image::Image::from_luma_mask(5, 1, blue).expect("blue L band"),
+        ];
+        let shared_green = bands[1]
+            .materialized_shared_for_ops()
+            .expect("green L band materialization");
+        let owners = super::native_merge_rgb_luma_owners(&first, &ColorMode::RGB, &bands, "RGB", 5)
+            .expect("RGB merge owner lookup")
+            .expect("all three channel bands should select the borrowed path");
+
+        assert_eq!(owners.len(), 2, "the first band is already `img`");
+        assert!(std::sync::Arc::ptr_eq(&owners[0], &shared_green));
+
+        let (merged, vector_blocks, scalar_tail) =
+            super::native_merge_bytes(&first, &ColorMode::RGB, &bands, Some("L"), "RGB")
+                .expect("native SIMD merge")
+                .expect("native RGB/L merge should be admitted");
+        assert_eq!(
+            merged.as_bytes(),
+            [1, 11, 101, 2, 22, 102, 3, 33, 103, 4, 44, 104, 5, 55, 105]
+        );
+        assert_eq!(vector_blocks, 1);
+        assert_eq!(scalar_tail, 3);
+    }
+
     #[test]
     fn i_thumbnail_simd_matches_cpu_at_tails_and_edges() {
         use crate::compute::pool_cpu::ops::geometry::execute_thumbnail;

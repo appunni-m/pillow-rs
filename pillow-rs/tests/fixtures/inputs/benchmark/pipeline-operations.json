@@ -12902,6 +12902,62 @@
       }
     },
     {
+      "workload_id": "pipeline-op.merge.material-rgb-l-1024x768",
+      "covers": [
+        "PIL.Image.merge.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.Image.merge.nuanced.performance-material-rgb-l-1024x768"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call",
+          "observe-result"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          768
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
       "workload_id": "pipeline-op.posterize.material-l-noise-1024x768",
       "covers": [
         "PIL.ImageOps.posterize.performance.standard"
@@ -246107,6 +246163,16 @@
       "members": [
         {
           "workload_id": "pipeline-op.thumbnail.material-rgb-1024x768",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "suite_id": "pipeline-operations.merge-material-size-suite",
+      "description": "Parity-gated 1024x768 RGB merge from three native L bands, measuring the public merge and byte materialization on CPU, SIMD, and GPU.",
+      "members": [
+        {
+          "workload_id": "pipeline-op.merge.material-rgb-l-1024x768",
           "weight": 1
         }
       ]
