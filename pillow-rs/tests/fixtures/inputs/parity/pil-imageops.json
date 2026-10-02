@@ -108520,6 +108520,178 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.expand.nuanced.cmyk-three-component-fill-defaults-fourth",
+      "surface": "PIL.ImageOps",
+      "operation": "expand",
+      "covers": [
+        "PIL.ImageOps.expand.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "LUlTU2NEG4I6W+dgplugpOit6Gh8PA8l",
+          "sha256": "a8ba576bc74ce06dc5693846d0b742a8c5ac9edea126ade46494214f3b45ad0d",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "expand",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "border": {
+              "kind": "literal",
+              "value": 1
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                17,
+                83,
+                149
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.expand.nuanced.rgbx-three-component-fill-defaults-fourth",
+      "surface": "PIL.ImageOps",
+      "operation": "expand",
+      "covers": [
+        "PIL.ImageOps.expand.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu",
+        "python-simd",
+        "python-gpu"
+      ],
+      "assets": [
+        {
+          "id": "image-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "a6W9/wp0xgMl6sAO5VLxejuSlWw4o/78",
+          "sha256": "ef161ed463ecdff26fd94162e35f8283cc95f1ab5c8020e5f0c37cb39d0ded39",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBX"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "expand",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "border": {
+              "kind": "literal",
+              "value": 1
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                17,
+                83,
+                149
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.expand.nuanced.pa-putpalette-materialized",
       "surface": "PIL.ImageOps",
       "operation": "expand",

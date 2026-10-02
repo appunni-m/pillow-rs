@@ -1347,6 +1347,8 @@
           "PIL.ImageOps.expand.nuanced.rgbx-scalar-fill-keeps-native-fourth-zero",
           "PIL.ImageOps.expand.nuanced.cmyk-omitted-fill-keeps-native-fourth-zero",
           "PIL.ImageOps.expand.nuanced.rgbx-omitted-fill-keeps-native-fourth-zero",
+          "PIL.ImageOps.expand.nuanced.cmyk-three-component-fill-defaults-fourth",
+          "PIL.ImageOps.expand.nuanced.rgbx-three-component-fill-defaults-fourth",
           "PIL.ImageOps.expand.nuanced.pa-putpalette-materialized",
           "PIL.ImageOps.expand.nuanced.p-mode-materialized",
           "PIL.ImageOps.crop.nuanced.materialized-border",

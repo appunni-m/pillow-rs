@@ -361,6 +361,36 @@ correctness gates, and requested/actual backends. It retains failed subjects and
 missing measurements. It does not aggregate unrelated operations into a headline
 speedup. Hosted runners are useful observations, not controlled laboratory hosts.
 
+The Pillow results page has two searchable and sortable tables.
+**Individual operations** lists the declared single-operation workloads, with
+operation classes such as point, multi-image, geometry, neighborhood, and draw.
+Each row retains its image mode and size. **Composed pipelines** holds pipeline
+chains, matrices, lifecycle, and quick workflows. Search matches operation or
+pipeline names, workload IDs, modes, and sizes; type filters narrow each table,
+and timing headers sort numerically. Parallel CPU is its own column, built with
+the opt-in `parallel` Cargo feature and compared directly with the ordinary
+Pillow oracle. It is not relabeled as SIMD or merged into serial CPU.
+
+The public Benchmark workflow uses the full `standard` fixture selection, then
+runs the same selected workloads with the separately compiled Parallel CPU
+profile. The exporter combines only matching revisions, manifests, input
+documents, workload sets, modes, and repeat policies; it rejects a mismatched
+pair instead of producing misleading side-by-side values. Reproduce both runs
+and export the combined view with:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark
+MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-parallel-cpu
+DOCS_BENCHMARK_PARALLEL_SOURCE=build/migration-parity/benchmark-result-parallel-cpu.json \
+  make docs-benchmark DOCS_BENCHMARK_OUTPUT=build/migration-parity/public-benchmark.json
+```
+
+The Parallel CPU run includes the ordinary Pillow oracle; the public view uses
+the ordinary Pillow subject as its single baseline and adds only the
+`python-parallel-cpu` measurements from that second run. The original source
+receipts remain separate artifacts so each build's feature identity and parity
+results can be inspected.
+
 The committed snapshot is historical: source
 `3a3ae28b20b0d86eebc1dddb45234f2da65af6b7`, measured 2026-09-12. It contains
 11 workloads and 44 subject rows. Its original result SHA-256 is

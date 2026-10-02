@@ -723,7 +723,11 @@
           "pipeline-composition.matrix-096",
           "pipeline-composition.matrix-097",
           "pipeline-composition.matrix-098",
-          "pipeline-composition.matrix-099"
+          "pipeline-composition.matrix-099",
+          "PIL.ImageFilter.MaxFilter.nuanced.backend-noise-rgb-5x3-size-3",
+          "PIL.ImageFilter.MaxFilter.nuanced.backend-noise-rgb-8x3-size-3",
+          "PIL.ImageFilter.MinFilter.nuanced.backend-noise-rgb-5x3-size-3",
+          "PIL.ImageFilter.MinFilter.nuanced.backend-noise-rgb-8x3-size-3"
         ],
         "command_ids": []
       },

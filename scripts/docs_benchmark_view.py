@@ -160,6 +160,8 @@ def compare(row: dict, baseline: dict | None) -> tuple[float | None, str, str]:
         state, label = evidence(item)
         if state == "unavailable":
             return None, state, label
+        if item["requested_backend"] == "gpu" and item["actual_backend"] != "gpu":
+            return None, "unavailable", "GPU request used a fallback; native GPU performance is not established"
         if item["requested_backend"] == "gpu" and item["terminal_complete"] is not True:
             return None, "unavailable", "GPU completion not established"
     state = "checked" if all(evidence(item)[0] == "checked" for item in (row, baseline)) else "timing"
