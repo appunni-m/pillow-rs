@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Measure full-call throughput for the explicit ImageBatch API.
 
-Run after ``make build-parity`` so the checkout facade is used while Pillow
-remains installed as the oracle. For exact Pillow comparison and grouped-
-dispatch proof, run ``scripts/test_imagebatch_parity.py`` separately.
+Run target profiles after ``make build-parity``. ``--backend pillow`` runs an
+ordinary sequential Pillow baseline without adding the checkout facade to
+``sys.path``. For exact Pillow comparison and grouped-dispatch proof, run
+``scripts/test_imagebatch_parity.py`` separately.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import time
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("cpu", "simd", "gpu"), default="gpu")
+    parser.add_argument("--backend", choices=("pillow", "cpu", "simd", "gpu"), default="gpu")
     parser.add_argument("--queue", action="store_true", help="queue operations until join")
     parser.add_argument("--mode", choices=("L", "LA", "RGB", "RGBA"), default="L")
     parser.add_argument("--width", type=int, default=64)
@@ -29,16 +30,30 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if min(args.width, args.height, args.images, args.samples) < 1 or args.warmups < 0:
         parser.error("dimensions, image count, and samples must be positive; warmups cannot be negative")
+    if args.backend == "pillow" and args.queue:
+        parser.error("Pillow baseline is ordinary sequential execution; omit --queue")
     return args
 
 
 def main() -> int:
     args = parse_args()
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / "pillow-rs-py" / "python"))
-    sys.path.insert(0, str(root / "scripts"))
-    from PIL import Image, ImageBatch, ImageFilter
-    import pillow_rs._core as core
+    if args.backend != "pillow":
+        sys.path.insert(0, str(root / "pillow-rs-py" / "python"))
+        sys.path.insert(0, str(root / "scripts"))
+    from PIL import Image, ImageFilter
+    if args.backend == "pillow":
+        import PIL
+
+        if PIL.__version__ != "12.2.0":
+            raise RuntimeError(f"unexpected Pillow baseline version: {PIL.__version__}")
+        pillow_version = PIL.__version__
+        core = None
+    else:
+        from PIL import ImageBatch
+        import pillow_rs._core as core
+
+        pillow_version = None
 
     channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4}[args.mode]
     frame_bytes = args.width * args.height * channels
@@ -51,12 +66,23 @@ def main() -> int:
         for seed in range(args.images * window_count)
     ]
 
-    for backend in ("cpu", "simd", "gpu"):
-        core.disable_backend(backend)
-    if not core.enable_backend(args.backend):
-        raise RuntimeError(f"{args.backend} backend is unavailable")
+    if core is not None:
+        for backend in ("cpu", "simd", "gpu"):
+            core.disable_backend(backend)
+        if not core.enable_backend(args.backend):
+            raise RuntimeError(f"{args.backend} backend is unavailable")
 
     def run_window(start: int) -> list[Image.Image]:
+        if args.backend == "pillow":
+            for image_index in range(args.images):
+                image = Image.frombytes(
+                    args.mode,
+                    (args.width, args.height),
+                    inputs[start + image_index],
+                )
+                image.filter(ImageFilter.MedianFilter(3)).tobytes()
+            return []
+
         executor = ImageBatch.BatchExecutor(queue=args.queue, backend=args.backend)
         for image_index in range(args.images):
             image = Image.frombytes(
@@ -70,16 +96,25 @@ def main() -> int:
             raise RuntimeError(f"expected {args.images} outputs, received {len(result)}")
         return result
 
-    core.set_pipeline_telemetry(True)
-    run_window(0)
-    receipt = core.take_pipeline_telemetry()
-    core.set_pipeline_telemetry(False)
-    if (
-        receipt is None
-        or receipt.get("actual_backend") != args.backend
-        or receipt.get("fallback_reason")
-    ):
-        raise RuntimeError(f"requested {args.backend}, but preflight routed differently: {receipt}")
+    if args.backend == "pillow":
+        run_window(0)
+        receipt = {
+            "actual_backend": "pillow",
+            "operation_count": args.images,
+            "dispatch_count": 0,
+            "fallback_reason": None,
+        }
+    else:
+        core.set_pipeline_telemetry(True)
+        run_window(0)
+        receipt = core.take_pipeline_telemetry()
+        core.set_pipeline_telemetry(False)
+        if (
+            receipt is None
+            or receipt.get("actual_backend") != args.backend
+            or receipt.get("fallback_reason")
+        ):
+            raise RuntimeError(f"requested {args.backend}, but preflight routed differently: {receipt}")
 
     for warmup in range(args.warmups):
         run_window((warmup + 1) * args.images)
@@ -99,6 +134,7 @@ def main() -> int:
                 "size": [args.width, args.height],
                 "images_per_window": args.images,
                 "backend": args.backend,
+                "pillow_version": pillow_version,
                 "queue": args.queue,
                 "samples": args.samples,
                 "warmups": args.warmups,
