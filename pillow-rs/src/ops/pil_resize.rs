@@ -1816,6 +1816,153 @@ fn vertical_pass_col_hsv_i32(
 }
 
 #[cfg(not(feature = "parallel"))]
+fn resize_coefficients_fit_source(coeffs: &FilterCoeffs, source_extent: usize) -> bool {
+    if coeffs.xmin.len() != coeffs.count.len() || coeffs.xmin.len() != coeffs.offsets.len() {
+        return false;
+    }
+    coeffs
+        .xmin
+        .iter()
+        .zip(&coeffs.count)
+        .all(|(&first, &count)| {
+            usize::try_from(first)
+                .ok()
+                .and_then(|first| first.checked_add(count))
+                .is_some_and(|end| end <= source_extent)
+        })
+}
+
+#[cfg(not(feature = "parallel"))]
+fn horizontal_pass_luma_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
+    for (output_x, output) in output_row.iter_mut().enumerate() {
+        let weights = coeffs.weights_for(output_x);
+        if weights.is_empty() {
+            continue;
+        }
+        let mut sum = 0i32;
+        let source_x = coeffs.xmin[output_x] as usize;
+        if weights.len() == 4 {
+            sum = i32::from(source_row[source_x]) * weights[0] as i32;
+            sum += i32::from(source_row[source_x + 1]) * weights[1] as i32;
+            sum += i32::from(source_row[source_x + 2]) * weights[2] as i32;
+            sum += i32::from(source_row[source_x + 3]) * weights[3] as i32;
+        } else {
+            for (tap, &weight) in weights.iter().enumerate() {
+                sum += i32::from(source_row[source_x + tap]) * weight as i32;
+            }
+        }
+        *output = fixed_point_to_u8_i32(sum);
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn vertical_pass_luma_i32(
+    intermediate: &[u8],
+    source_height: usize,
+    output_width: usize,
+    coeffs: &FilterCoeffs,
+    transposed: bool,
+    output: &mut [u8],
+) {
+    for (output_y, output_row) in output.chunks_exact_mut(output_width).enumerate() {
+        let weights = coeffs.weights_for(output_y);
+        if weights.is_empty() {
+            continue;
+        }
+        let source_y = coeffs.xmin[output_y] as usize;
+        if transposed {
+            for (output_x, pixel) in output_row.iter_mut().enumerate() {
+                let source_start = output_x * source_height + source_y;
+                let mut sum = i32::from(intermediate[source_start]) * weights[0] as i32;
+                for (tap, &weight) in weights.iter().enumerate().skip(1) {
+                    sum += i32::from(intermediate[source_start + tap]) * weight as i32;
+                }
+                *pixel = fixed_point_to_u8_i32(sum);
+            }
+        } else if weights.len() == 4 {
+            let weight0 = weights[0] as i32;
+            let weight1 = weights[1] as i32;
+            let weight2 = weights[2] as i32;
+            let weight3 = weights[3] as i32;
+            let row0 = source_y * output_width;
+            let row1 = row0 + output_width;
+            let row2 = row1 + output_width;
+            let row3 = row2 + output_width;
+            for (output_x, pixel) in output_row.iter_mut().enumerate() {
+                let mut sum = i32::from(intermediate[row0 + output_x]) * weight0;
+                sum += i32::from(intermediate[row1 + output_x]) * weight1;
+                sum += i32::from(intermediate[row2 + output_x]) * weight2;
+                sum += i32::from(intermediate[row3 + output_x]) * weight3;
+                *pixel = fixed_point_to_u8_i32(sum);
+            }
+        } else {
+            for (output_x, pixel) in output_row.iter_mut().enumerate() {
+                let source_start = source_y * output_width + output_x;
+                let mut sum = i32::from(intermediate[source_start]) * weights[0] as i32;
+                for (tap, &weight) in weights.iter().enumerate().skip(1) {
+                    sum +=
+                        i32::from(intermediate[source_start + tap * output_width]) * weight as i32;
+                }
+                *pixel = fixed_point_to_u8_i32(sum);
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn pil_resize_luma_i32(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    horizontal: &FilterCoeffs,
+    vertical: &FilterCoeffs,
+) -> Option<Vec<u8>> {
+    let DynamicImage::ImageLuma8(source) = img else {
+        return None;
+    };
+    let source_width = usize::try_from(source.width()).ok()?;
+    let source_height = usize::try_from(source.height()).ok()?;
+    let output_width = usize::try_from(output_width).ok()?;
+    let output_height = usize::try_from(output_height).ok()?;
+    if horizontal.xmin.len() != output_width
+        || vertical.xmin.len() != output_height
+        || !resize_coefficients_fit_source(horizontal, source_width)
+        || !resize_coefficients_fit_source(vertical, source_height)
+        || !resize_u8_coefficients_fit_i32(horizontal)
+        || !resize_u8_coefficients_fit_i32(vertical)
+    {
+        return None;
+    }
+    let intermediate_len = source_height.checked_mul(output_width)?;
+    let output_len = output_height.checked_mul(output_width)?;
+    if source.as_raw().len() != source_width.checked_mul(source_height)? {
+        return None;
+    }
+
+    let mut intermediate = vec![0; intermediate_len];
+    for source_y in 0..source_height {
+        let source_start = source_y.checked_mul(source_width)?;
+        let output_start = source_y.checked_mul(output_width)?;
+        horizontal_pass_luma_i32(
+            &source.as_raw()[source_start..source_start + source_width],
+            horizontal,
+            &mut intermediate[output_start..output_start + output_width],
+        );
+    }
+
+    let mut output = vec![0; output_len];
+    vertical_pass_luma_i32(
+        &intermediate,
+        source_height,
+        output_width,
+        vertical,
+        false,
+        &mut output,
+    );
+    Some(output)
+}
+
+#[cfg(not(feature = "parallel"))]
 fn pil_resize_hsv_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -2604,6 +2751,13 @@ pub fn pil_resize(
     // Precompute horizontal and vertical coefficients for two-pass pipeline
     let h_coeffs = precompute_coeffs(dw, sw, filter);
     let v_coeffs = precompute_coeffs(dh, sh, filter);
+
+    #[cfg(not(feature = "parallel"))]
+    if matches!(explicit_mode, None | Some("L")) && matches!(img, DynamicImage::ImageLuma8(_)) {
+        if let Some(output) = pil_resize_luma_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
+            return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 1));
+        }
+    }
 
     #[cfg(not(feature = "parallel"))]
     if explicit_mode == Some("HSV")
@@ -3510,10 +3664,13 @@ mod typed_nearest_tests {
 }
 
 #[cfg(all(test, not(feature = "parallel")))]
-mod hsv_i32_tests {
-    use super::{FilterCoeffs, pil_resize, precompute_coeffs, resize_u8_coefficients_fit_i32};
+mod narrow_u8_resize_tests {
+    use super::{
+        FilterCoeffs, pil_resize, pil_resize_luma_i32, precompute_coeffs,
+        resize_u8_coefficients_fit_i32,
+    };
     use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, RgbImage};
+    use crate::raster::{DynamicImage, GrayImage, RgbImage};
 
     #[test]
     fn hsv_narrow_cpu_resize_matches_wide_three_channel_resize() {
@@ -3588,5 +3745,64 @@ mod hsv_i32_tests {
         assert!(resize_u8_coefficients_fit_i32(&safe));
         assert!(!resize_u8_coefficients_fit_i32(&unsafe_sum));
         assert!(!resize_u8_coefficients_fit_i32(&unsafe_weight));
+    }
+
+    #[test]
+    fn luma_narrow_cpu_resize_matches_wide_one_channel_reference() {
+        for (width, height, output_width, output_height) in [
+            (1, 7, 9, 3),
+            (5, 3, 7, 5),
+            (37, 17, 53, 23),
+            (73, 41, 13, 9),
+        ] {
+            for filter in [
+                ResampleFilter::Bilinear,
+                ResampleFilter::Bicubic,
+                ResampleFilter::Lanczos,
+                ResampleFilter::Hamming,
+                ResampleFilter::Box,
+            ] {
+                let horizontal = precompute_coeffs(output_width, width, filter);
+                let vertical = precompute_coeffs(output_height, height, filter);
+                assert!(resize_u8_coefficients_fit_i32(&horizontal));
+                assert!(resize_u8_coefficients_fit_i32(&vertical));
+
+                for pattern in 0..4u32 {
+                    let bytes = (0..width * height)
+                        .map(|index| match pattern {
+                            0 => 0,
+                            1 => 255,
+                            2 if (index + index / width) % 2 == 0 => 0,
+                            2 => 255,
+                            _ => index
+                                .wrapping_mul(73)
+                                .wrapping_add(index / width * 19)
+                                .wrapping_add(31) as u8,
+                        })
+                        .collect::<Vec<_>>();
+                    let image = DynamicImage::ImageLuma8(
+                        GrayImage::from_raw(width, height, bytes).expect("L test image shape"),
+                    );
+                    let specialized = pil_resize_luma_i32(
+                        &image,
+                        output_width,
+                        output_height,
+                        &horizontal,
+                        &vertical,
+                    )
+                    .expect("safe L coefficients select the narrow path");
+
+                    // A different logical-mode hint leaves the L storage at
+                    // one byte per sample but bypasses the L-only candidate.
+                    let reference =
+                        pil_resize(&image, output_width, output_height, filter, Some("RGB"));
+                    assert_eq!(
+                        specialized,
+                        reference.as_bytes(),
+                        "{width}x{height}->{output_width}x{output_height} {filter:?} pattern {pattern}"
+                    );
+                }
+            }
+        }
     }
 }

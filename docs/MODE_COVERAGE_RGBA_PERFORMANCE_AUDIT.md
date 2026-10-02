@@ -346,6 +346,16 @@ pixel in each direction and records one mode conversion; a packed RGB Eval
 shader route is the remaining P1 task for this operation. See
 `PERFORMANCE_CAMPAIGN.md` for the four-attempt checkpoint and receipts.
 
+L `ImageOps.cover` now has a direct single-byte CPU resize path guarded by
+coefficient and source-extent bounds. The final 1024 × 768 material workload
+passes CPU, SIMD, and GPU parity; serial CPU latency is 1.955 ms against
+Pillow's 4.840 ms, and GPU is 0.783 ms with two dispatches, native L upload,
+packed output, and zero mode conversions. The SIMD path remains only 1.07×
+Pillow; its fourth vector-kernel trial did not show a repeatable whole-call
+gain and was discarded. This closes the CPU target and confirms the existing
+native GPU route for this specific L Cover case, not P1 across the operation
+set. Detailed attempts and receipts are in `PERFORMANCE_CAMPAIGN.md`.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
@@ -372,9 +382,10 @@ or Parallel CPU route.
 ## Suggested order for follow-up
 
 1. Continue P1 after the RGB Transform and RGB AutoContrast checkpoints by
-   selecting the next operation/mode with RGBA staging cost; preserve each
-   kernel's current rounding and channel contract. RGB AutoContrast still
-   needs packed GPU input/output, while SIMD remains below its 5× target.
+   selecting the next uncheckpointed operation/mode with measurable RGBA
+   staging cost; preserve each kernel's rounding and channel contract. RGB
+   AutoContrast still needs packed GPU input/output. L Cover's serial CPU target
+   is closed on the material case; SIMD remains below its 5× target.
 2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
