@@ -1467,10 +1467,10 @@ def i16_pattern_bytes(mode: str, pattern: int) -> bytes:
 
 
 def color_16_png(channels: int, pattern: int) -> bytes:
-    """Return a valid 2x2 16-bit RGB or RGBA PNG stimulus."""
+    """Return a valid 2x2 16-bit LA, RGB, or RGBA PNG stimulus."""
 
-    if channels not in {3, 4}:
-        raise ValueError("16-bit PNG probes require RGB or RGBA channels")
+    if channels not in {2, 3, 4}:
+        raise ValueError("16-bit PNG probes require LA, RGB, or RGBA channels")
 
     def chunk(kind: bytes, payload: bytes) -> bytes:
         checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
@@ -1491,7 +1491,7 @@ def color_16_png(channels: int, pattern: int) -> bytes:
         )
         for row in range(2)
     )
-    color_type = 2 if channels == 3 else 6
+    color_type = {2: 4, 3: 2, 4: 6}[channels]
     header = struct.pack(">IIBBBBB", 2, 2, 16, color_type, 0, 0, 0)
     return (
         b"\x89PNG\r\n\x1a\n"
@@ -2167,6 +2167,27 @@ class WorkflowBuilder:
                 "data": base64.b64encode(data).decode("ascii"),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "media_type": media_type,
+            }
+        )
+        return asset_value(asset_id)
+
+    def ref_bytes(self, asset_id: str, data: bytes) -> dict[str, str]:
+        digest = hashlib.sha256(data).hexdigest()
+        relative = Path("generated") / f"{digest}.bin"
+        path = self.assets_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            if path.read_bytes() != data:
+                raise ValueError(f"content-addressed asset mismatch: {relative}")
+        else:
+            path.write_bytes(data)
+        self.add_asset(
+            {
+                "id": asset_id,
+                "kind": "ref_bytes",
+                "path": relative.as_posix(),
+                "sha256": digest,
+                "media_type": "application/octet-stream",
             }
         )
         return asset_value(asset_id)
@@ -2980,6 +3001,56 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "backend-filter-rgb-noise-ref" and label == "image":
+            size = self.scenario_size or [1024, 768]
+            if requested_mode != "RGB":
+                raise ValueError("material packed RGB filter input requires RGB mode")
+            rng = random.Random(self.scenario_noise_seed or 0)
+            data = bytes(rng.randrange(256) for _ in range(size[0] * size[1] * 3))
+            data_desc = self.ref_bytes("image-noise", data)
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("RGB"),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge and self.edge.startswith("backend-filter-rgb-pattern-") and label == "image":
+            size = self.scenario_size or [8, 3]
+            if requested_mode != "RGB":
+                raise ValueError("packed RGB filter pattern requires RGB mode")
+            try:
+                stride = int(self.edge.rsplit("-", 1)[1])
+            except ValueError as error:
+                raise ValueError("packed RGB filter pattern needs an integer stride") from error
+            if stride <= 0:
+                raise ValueError("packed RGB filter pattern stride must be positive")
+            data = bytes(
+                (index * 73 + index // stride * 31 + 19) & 0xFF
+                for index in range(size[0] * size[1] * 3)
+            )
+            data_desc = self.inline_bytes(
+                "rgb-pixels", data, "application/octet-stream"
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("RGB"),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge in {"noise-fill", "paste-noise-fill"}:
             # Deterministic diverse images are built through the public
             # frombytes endpoint with inline bytes so the oracle and target
@@ -3025,6 +3096,33 @@ class WorkflowBuilder:
                     "mode": literal(requested_mode),
                     "size": literal(size),
                     "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "backend-filter-rgb-pattern" and label == "image":
+            # Preserve the packed-word boundary stimulus used by both RGB
+            # extrema filters, including pixels whose triples cross u32 words.
+            size = self.scenario_size or [8, 3]
+            if requested_mode != "RGB":
+                raise ValueError("packed RGB filter pattern requires RGB mode")
+            data = bytes(
+                (index * 73 + index // 3 * 31 + 19) & 0xFF
+                for index in range(size[0] * size[1] * 3)
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("RGB"),
+                    "size": literal(size),
+                    "data": self.inline_bytes(
+                        f"{label}-packed-rgb-filter-pattern",
+                        data,
+                        "application/octet-stream",
+                    ),
                 },
                 step_id=self.next_step_id(f"setup-{label}"),
             )
@@ -30575,6 +30673,25 @@ def build_nuanced_cases(
             }
             for name, mode, size, seed, fill in EXPAND_PERFORMANCE_CASES
         ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower()}-three-component-fill-defaults-fourth",
+                "mode": mode,
+                "size": [3, 2],
+                "edge": "noise-fill",
+                "seed": seed,
+                "values": {
+                    "border": literal(1),
+                    "fill": literal([17, 83, 149]),
+                },
+                "observe_result": "tobytes",
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            for mode, seed in (("CMYK", 20261103), ("RGBX", 20261104))
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "expand",
@@ -41821,6 +41938,57 @@ def build_nuanced_cases(
                 "target_profiles": list(BENCHMARK_TARGET_PROFILES),
             },)
 
+        # Keep RGB MaxFilter and MinFilter benchmark inputs reproducible. The
+        # material rows share the same noise bytes; small patterned rows cover
+        # packed RGB word tails and row-tiled output boundaries.
+        for filter_name in ("MaxFilter", "MinFilter"):
+            for name, size, edge, seed, requirement_suffix, extra_requirements in (
+                (
+                    "performance-material-rgb-noise-1024x768-size-3",
+                    [1024, 768],
+                    "backend-filter-rgb-noise-ref",
+                    20260929,
+                    "performance.standard",
+                    (),
+                ),
+                (
+                    "backend-noise-rgb-5x3-size-3",
+                    [5, 3],
+                    "backend-filter-rgb-pattern-3",
+                    None,
+                    "mode.rgb",
+                    ("performance.standard",),
+                ),
+                (
+                    "backend-noise-rgb-8x3-size-3",
+                    [8, 3],
+                    "backend-filter-rgb-pattern-13",
+                    None,
+                    "mode.rgb",
+                    ("performance.standard",),
+                ),
+            ):
+                spec = {
+                    "surface": "PIL.ImageFilter",
+                    "operation": filter_name,
+                    "append_at_end": True,
+                    "requirement_suffix": requirement_suffix,
+                    "name": name,
+                    "mode": "RGB",
+                    "size": size,
+                    "edge": edge,
+                    "observe_result": "tobytes",
+                    "values": {"size": literal(3)},
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                }
+                if seed is not None:
+                    spec["seed"] = seed
+                if extra_requirements:
+                    spec["additional_requirement_suffixes"] = list(
+                        extra_requirements
+                    )
+                specs += (spec,)
+
         # The existing 9x9 material RankFilter input is constant-valued, which
         # makes insertion-sort comparisons exit immediately and does not
         # exercise useful order-statistic work. Keep varied native-L inputs
@@ -41871,6 +42039,7 @@ def build_nuanced_cases(
             }
 
     cases: list[dict[str, Any]] = []
+    append_at_end: list[dict[str, Any]] = []
     for spec in specs:
         if spec["surface"] != surface_id:
             continue
@@ -41939,7 +42108,17 @@ def build_nuanced_cases(
             case["observations"] = ["setup-filter", "call", "observe-result"]
         if "target_profiles" in spec:
             case["target_profiles"] = list(spec["target_profiles"])
-        cases.append(case)
+        for suffix in spec.get("additional_requirement_suffixes", []):
+            additional = requirements[key].get(suffix)
+            if additional is None:
+                raise ValueError(
+                    f"nuanced case requirement missing: {key}.{suffix}"
+                )
+            case["covers"].append(additional["id"])
+        if spec.get("append_at_end"):
+            append_at_end.append(case)
+        else:
+            cases.append(case)
     cases.extend(benchmark_pipeline_cases(surface_id))
     cases.extend(pipeline_composition_cases(surface_id, operations))
     cases.extend(release_cleanup_parity_cases(surface_id))
@@ -42050,6 +42229,7 @@ def build_nuanced_cases(
                 "observations": ["call", "call-after-mutation"],
             }
         )
+    cases.extend(append_at_end)
     return cases
 
 
@@ -43395,6 +43575,68 @@ def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         "target_profiles": list(BENCHMARK_TARGET_PROFILES), "assets": assets,
                         "steps": steps, "observations": ["call", "materialize"],
                     })
+
+    # Exercise high-bit-depth PNGs through the public open path. Pillow
+    # normalizes these to byte-backed RGB/RGBA modes (including gray+alpha as
+    # RGBA); these cases verify codec-to-resize parity, while Rust unit tests
+    # separately cover internal typed DynamicImage variants.
+    for prefix, channels in (("la16-png", 2), ("rgb16-png", 3), ("rgba16-png", 4)):
+        raw = color_16_png(channels, 4)
+        asset = {
+            "id": "pixels",
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "media_type": "image/png",
+        }
+        scenario = f"{prefix}-pattern-4"
+        for name, arguments in (
+            ("standard", {"size": literal([5, 3]), "resample": literal(3)}),
+            (
+                "fractional-box",
+                {
+                    "size": literal([5, 3]),
+                    "resample": literal(3),
+                    "box": literal([0.25, 0.25, 1.75, 1.75]),
+                },
+            ),
+        ):
+            case_id = f"{surface_id}.resize.nuanced.high-depth-{scenario}-{name}"
+            cases.append(
+                {
+                    "case_id": case_id,
+                    "surface": surface_id,
+                    "operation": "resize",
+                    "covers": [f"{surface_id}.resize.behavior.default"],
+                    "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+                    "assets": [asset],
+                    "steps": [
+                        {
+                            "step_id": "image",
+                            "surface": "PIL.Image",
+                            "operation": "open",
+                            "receiver": None,
+                            "arguments": {"fp": asset_value("pixels")},
+                        },
+                        {
+                            "step_id": "call",
+                            "surface": surface_id,
+                            "operation": "resize",
+                            "receiver": binding("image"),
+                            "arguments": arguments,
+                        },
+                        {
+                            "step_id": "materialize",
+                            "surface": surface_id,
+                            "operation": "tobytes",
+                            "receiver": binding("call"),
+                            "arguments": {},
+                        },
+                    ],
+                    "observations": ["call", "materialize"],
+                }
+            )
     return cases
 
 
@@ -48118,6 +48360,47 @@ def build_pipeline_benchmark_document(
     }
     median_rgb_material_workload["context"]["operation_class"] = "neighborhood"
 
+    extreme_filter_material_workloads = []
+    for filter_name in ("MaxFilter", "MinFilter"):
+        case_id = (
+            f"PIL.ImageFilter.{filter_name}.nuanced."
+            "performance-material-rgb-noise-1024x768-size-3"
+        )
+        case = cases_by_id[case_id]
+        workload = {
+            "workload_id": (
+                f"pipeline-op.{filter_name.lower()}."
+                "material-rgb-noise-1024x768"
+            ),
+            "covers": [
+                _performance_requirement(
+                    operations, "PIL.ImageFilter", filter_name
+                )
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {"kind": "parity_case", "case_id": case_id},
+            "measurement": {
+                **copy.deepcopy(policy),
+                "boundary": "observed_steps",
+                "step_ids": ["apply-filter", "observe-filter-result"],
+                "warmup_iterations": 5,
+                "measurement_iterations": 20,
+                "samples": 5,
+                "correctness_gate": "parity_pass",
+            },
+            "context": _workflow_benchmark_context(
+                case,
+                variant=(
+                    f"{filter_name.lower()}-material-rgb-noise-"
+                    "1024x768-size-3"
+                ),
+                surface="PIL.ImageFilter",
+                operation=filter_name,
+            ),
+        }
+        workload["context"]["operation_class"] = "neighborhood"
+        extreme_filter_material_workloads.append(workload)
+
     grayscale_rgb_case_id = (
         "PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768"
     )
@@ -50704,6 +50987,7 @@ def build_pipeline_benchmark_document(
             median_l_material_workload,
             median_la_material_workload,
             median_rgb_material_workload,
+            *extreme_filter_material_workloads,
             grayscale_rgb_material_workload,
             grayscale_ycbcr_material_workload,
             *thumbnail_scalar_workloads,

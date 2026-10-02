@@ -56,7 +56,10 @@ class BenchmarkViewTests(unittest.TestCase):
         target=row('python-gpu',10,requested_backend='gpu',actual_backend='cpu',terminal_complete=False)
         self.assertIsNone(compare(target,baseline)[0])
         target['terminal_complete']=True
-        self.assertEqual(compare(target,baseline)[0],2)
+        ratio, state, note = compare(target,baseline)
+        self.assertIsNone(ratio)
+        self.assertEqual(state, 'unavailable')
+        self.assertIn('fallback', note)
         text=render_dashboard(dict(rows=[baseline,target],environment={'os':'Test'},measured_at='2026-09-16'),
                               dict(project='pillow-rs',benchmark={'kind':'pillow'}))
         self.assertIn('Actual: cpu',text)
@@ -101,9 +104,9 @@ class BenchmarkViewTests(unittest.TestCase):
         workloads = json.loads(source.read_text())["workloads"]
         categories = [facets(row(workload=workload["workload_id"], context=workload.get("context", {})), "pillow")[0]
                      for workload in workloads]
-        self.assertEqual(len(workloads), 636)
-        self.assertEqual(categories.count("operations"), 180)
-        self.assertEqual(categories.count("pipelines"), 456)
+        self.assertEqual(len(workloads), 644)
+        self.assertEqual(categories.count("operations"), 186)
+        self.assertEqual(categories.count("pipelines"), 458)
 
     def test_all_observations_retained_without_mutating_snapshot(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('unknown',None)],environment={'os':'Test'},measured_at='2026-09-16')
@@ -127,10 +130,14 @@ class BenchmarkViewTests(unittest.TestCase):
         self.assertNotIn('<script>',text)
         self.assertNotIn('data-subject="" onclick=',text)
 
-    def test_pipelines_are_separate_from_individual_operations(self):
-        self.assertEqual(describe(row(workload='pipeline-chain.reviewed.resize-rotate-crop'),'pillow')[1],'Pipelines')
-        self.assertEqual(describe(row(workload='pipeline-op.resize.benchmark-materialized'),'pillow')[1],'Operations')
-        self.assertEqual(describe(row(workload='pipeline-lifecycle.new'),'pillow')[1],'Lifecycle')
+    def test_operation_groups_and_pipeline_groups_are_distinct_and_searchable(self):
+        pipeline = row(workload="pipeline-chain.reviewed.resize-rotate-crop")
+        operation = row(
+            workload="pipeline-op.resize.materialized",
+            context={"mode": "RGB", "size": [1024, 768], "operation_class": "geometry"},
+        )
+        self.assertEqual(facets(pipeline, "pillow")[0], "pipelines")
+        self.assertEqual(facets(operation, "pillow")[:3], ("operations", "geometry", "RGB"))
 
     def test_no_extreme_ratio_becomes_infinity_or_zero(self):
         self.assertIsNone(compare(row(median=1e-310),row('FreeType',1e300))[0])

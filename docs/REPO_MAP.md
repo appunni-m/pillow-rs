@@ -99,8 +99,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- blend_module.wgsl
 |   |   |   |       |-- box_blur.wgsl
 |   |   |   |       |-- box_blur_h.wgsl
+|   |   |   |       |-- box_blur_h_la_packed.wgsl
 |   |   |   |       |-- box_blur_h_luma_packed.wgsl
 |   |   |   |       |-- box_blur_v.wgsl
+|   |   |   |       |-- box_blur_v_la_packed.wgsl
 |   |   |   |       |-- box_blur_v_luma_packed.wgsl
 |   |   |   |       |-- brightness.wgsl
 |   |   |   |       |-- brightness_native.wgsl
@@ -126,6 +128,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- equalize.wgsl
 |   |   |   |       |-- equalize_cdf.wgsl
 |   |   |   |       |-- equalize_histogram.wgsl
+|   |   |   |       |-- equalize_histogram_rgb_packed.wgsl
 |   |   |   |       |-- equalize_remap.wgsl
 |   |   |   |       |-- eval.wgsl
 |   |   |   |       |-- expand.wgsl
@@ -146,9 +149,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- logical_or.wgsl
 |   |   |   |       |-- logical_xor.wgsl
 |   |   |   |       |-- max_filter.wgsl
+|   |   |   |       |-- max_filter_3x3_rgb_packed.wgsl
 |   |   |   |       |-- median_filter.wgsl
 |   |   |   |       |-- median_filter_3x3.wgsl
+|   |   |   |       |-- median_filter_3x3_la_packed.wgsl
 |   |   |   |       |-- median_filter_3x3_luma_packed.wgsl
+|   |   |   |       |-- median_filter_3x3_rgb_packed.wgsl
 |   |   |   |       |-- merge.wgsl
 |   |   |   |       |-- min_filter.wgsl
 |   |   |   |       |-- mirror.wgsl
@@ -157,6 +163,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- offset.wgsl
 |   |   |   |       |-- overlay.wgsl
 |   |   |   |       |-- pad.wgsl
+|   |   |   |       |-- pad_hsv_native_rgb.wgsl
+|   |   |   |       |-- pad_la_packed.wgsl
 |   |   |   |       |-- pad_luma_packed.wgsl
 |   |   |   |       |-- paste.wgsl
 |   |   |   |       |-- paste_native_bytes.wgsl
@@ -167,6 +175,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- paste_native_rgb_to_rgba.wgsl
 |   |   |   |       |-- point_luma_packed.wgsl
 |   |   |   |       |-- point_op.wgsl
+|   |   |   |       |-- point_rgb_packed.wgsl
 |   |   |   |       |-- posterize.wgsl
 |   |   |   |       |-- put_alpha.wgsl
 |   |   |   |       |-- put_alpha_data.wgsl
@@ -202,6 +211,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- thumbnail.wgsl
 |   |   |   |       |-- transform.wgsl
 |   |   |   |       |-- transform_geometry.wgsl
+|   |   |   |       |-- transform_l_nearest_packed.wgsl
+|   |   |   |       |-- transform_la_nearest_packed.wgsl
+|   |   |   |       |-- transform_rgb_nearest_packed.wgsl
 |   |   |   |       |-- transpose.wgsl
 |   |   |   |       |-- transpose_rgb.wgsl
 |   |   |   |       `-- transpose_rgb_tiled.wgsl

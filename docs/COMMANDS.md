@@ -20,7 +20,9 @@ enabled.
 | Rust lint | `make clippy` | Runs workspace Clippy checks |
 | Full lint | `make lint` | Runs Rust, binding, dependency, and input checks |
 | Source map | `make repo-map-update` / `make repo-map-check` | Regenerates / validates the tracked source inventory |
-| Benchmark | `make bench MIGRATION_BENCHMARK_PROFILE=quick` | Runs the maintained smoke cohort; see the protocol |
+| Full operation and pipeline benchmark | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark` | Benchmarks every declared operation and pipeline workload against Pillow, CPU, SIMD, and GPU; see the protocol |
+| Parallel CPU comparison | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-parallel-cpu` | Builds the opt-in Rayon feature and compares Parallel CPU with ordinary Pillow across the same full workload set |
+| Benchmark smoke test | `make bench MIGRATION_BENCHMARK_PROFILE=quick` | Runs the maintained smoke cohort; see the protocol |
 | Documentation setup | `make docs-setup` | Installs the hash-locked documentation tools into `.venv-docs` |
 | Documentation checks | `make docs-test docs-lint` | Tests validation guards and checks public sources |
 | Site build / preview | `make docs-build` / `make docs-serve` | Builds static HTML / serves it at localhost:8000 |
