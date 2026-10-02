@@ -4498,6 +4498,20 @@ fn compact_luma8_transfer_bytes(width: u32, height: u32) -> Result<u64, PilError
         .map_err(|_| PilError::ValueError("GPU luma readback is too large".into()))
 }
 
+fn compact_native_channel_transfer_bytes(
+    width: u32,
+    height: u32,
+    channels: u8,
+) -> Result<u64, PilError> {
+    let native_bytes = CheckedDims::new(width, height, channels)?.total_bytes();
+    let transfer_bytes = native_bytes
+        .div_ceil(std::mem::size_of::<u32>())
+        .checked_mul(std::mem::size_of::<u32>())
+        .ok_or_else(|| PilError::ValueError("GPU native channel transfer is too large".into()))?;
+    u64::try_from(transfer_bytes)
+        .map_err(|_| PilError::ValueError("GPU native channel transfer is too large".into()))
+}
+
 fn unpack_native_cover_packed_rows(
     width: u32,
     height: u32,
@@ -4589,9 +4603,9 @@ fn plan_packed_luma_dispatch(
     ))
 }
 
-/// Plan dispatch for native-LA byte-filter words. Each little-endian u32 stores
-/// two adjacent interleaved LA pixels, so its compact word count is ceil(pixels/2).
-fn plan_packed_la_filter_dispatch(
+/// Plan dispatch for native-LA words. Each little-endian u32 stores two
+/// adjacent interleaved LA pixels, so its compact word count is ceil(pixels/2).
+fn plan_packed_la_dispatch(
     width: u32,
     height: u32,
     max_workgroups_per_dimension: u32,
@@ -6906,6 +6920,7 @@ impl GpuInner {
         packed_luma_order_statistic: bool,
         packed_native_byte_filter: bool,
         packed_luma_pad: bool,
+        packed_la_pad: bool,
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
         native_sharpness_rgb_input: bool,
@@ -7219,6 +7234,12 @@ impl GpuInner {
                         "__internal_pad_luma_packed",
                         "pad_luma_packed.wgsl",
                         include_str!("shaders/pad_luma_packed.wgsl"),
+                    )?
+                } else if packed_la_pad {
+                    self.resolve_pipeline(
+                        "__internal_pad_la_packed",
+                        "pad_la_packed.wgsl",
+                        include_str!("shaders/pad_la_packed.wgsl"),
                     )?
                 } else {
                     self.resolve_pipeline(
@@ -9712,7 +9733,7 @@ impl GpuInner {
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
-            "__internal_median_filter_3x3_la_packed" => plan_packed_la_filter_dispatch(
+            "__internal_median_filter_3x3_la_packed" => plan_packed_la_dispatch(
                 input_dims.0,
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -9735,7 +9756,7 @@ impl GpuInner {
                 )?
             }
             "__internal_blur_h_la_packed" | "__internal_blur_v_la_packed" => {
-                plan_packed_la_filter_dispatch(
+                plan_packed_la_dispatch(
                     output_dims.0,
                     output_dims.1,
                     self.device.limits().max_compute_workgroups_per_dimension,
@@ -9752,6 +9773,11 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_pad_luma_packed" => plan_packed_luma_dispatch(
+                output_dims.0,
+                output_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_pad_la_packed" => plan_packed_la_dispatch(
                 output_dims.0,
                 output_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -9889,6 +9915,7 @@ impl GpuInner {
         packed_luma_order_statistic: bool,
         packed_native_byte_filter: bool,
         packed_luma_pad: bool,
+        packed_la_pad: bool,
         packed_luma_transform_output: bool,
         native_sharpness_l_input: bool,
         native_sharpness_la_input: bool,
@@ -9903,6 +9930,7 @@ impl GpuInner {
             packed_luma_order_statistic,
             packed_native_byte_filter,
             packed_luma_pad,
+            packed_la_pad,
             native_sharpness_l_input,
             native_sharpness_la_input,
             native_sharpness_rgb_input,
@@ -13585,6 +13613,7 @@ impl GpuInner {
         packed_luma_order_statistic: bool,
         packed_native_byte_filter: bool,
         packed_luma_pad: bool,
+        packed_la_pad: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_l_input: bool,
@@ -13856,6 +13885,7 @@ impl GpuInner {
                 packed_luma_order_statistic,
                 packed_native_byte_filter,
                 packed_luma_pad,
+                packed_la_pad,
                 packed_luma_transform_output,
                 native_sharpness_l_input,
                 native_sharpness_la_input,
@@ -13874,6 +13904,8 @@ impl GpuInner {
                     dispatch.transfer_bytes
                 } else if packed_luma_transform_output {
                     compact_luma8_transfer_bytes(final_dims.0, final_dims.1)?
+                } else if packed_la_pad {
+                    compact_native_channel_transfer_bytes(final_dims.0, final_dims.1, 2)?
                 } else if packed_luma_point
                     || packed_luma_putdata
                     || packed_luma_order_statistic
@@ -14280,6 +14312,59 @@ fn gpu_packed_luma_pad_dispatch_supported(
         return false;
     }
     plan_packed_luma_dispatch(*w, *h, max_workgroups_per_dimension).is_ok()
+}
+
+/// Admit native LA transport for identity-contain Pad only. A resize needs its
+/// own exact two-channel separable kernels; keeping this path to a same-size
+/// contain means the shader only places whole LA samples and fills the border.
+#[cfg(target_endian = "little")]
+fn gpu_packed_la_pad_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    if !matches!(ops, [PipelineOp::Pad { .. }]) || !matches!(logical_mode, None | Some("LA")) {
+        return false;
+    }
+    let DynamicImage::ImageLumaA8(la) = image else {
+        return false;
+    };
+    let Ok(layout) = CheckedDims::new(image.width(), image.height(), 2) else {
+        return false;
+    };
+    let pixels = layout.total_pixels();
+    pixels > 0
+        && pixels <= u32::MAX as usize
+        && la.as_raw().len() == layout.total_bytes()
+        && gpu_pad_geometry(&ops[0], image.width(), image.height())
+            .is_some_and(|(resize_dimensions, _)| resize_dimensions == image.dimensions())
+}
+
+#[cfg(not(target_endian = "little"))]
+fn gpu_packed_la_pad_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
+}
+
+fn gpu_packed_la_pad_dispatch_supported(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    max_workgroups_per_dimension: u32,
+) -> bool {
+    let PipelineOp::Pad { w, h, .. } = op else {
+        return false;
+    };
+    let Some(source_pixels) =
+        u64::from(source_dimensions.0).checked_mul(u64::from(source_dimensions.1))
+    else {
+        return false;
+    };
+    source_pixels > 0
+        && source_pixels <= u64::from(u32::MAX)
+        && plan_packed_la_dispatch(*w, *h, max_workgroups_per_dimension).is_ok()
 }
 
 fn gpu_packed_luma_rank_filter_9_input(
@@ -21207,6 +21292,7 @@ impl GpuPool {
         let packed_luma_order_statistic = gpu_packed_luma_order_statistic_input(ops, img, mode);
         let packed_native_byte_filter = gpu_packed_native_byte_filter_input(ops, img, mode);
         let packed_luma_pad = gpu_packed_luma_pad_input(ops, img, mode);
+        let packed_la_pad = gpu_packed_la_pad_input(ops, img, mode);
         let segment_boundary = gpu_first_nonterminal_mode_change(ops).or_else(|| {
             (mode == Some("F")
                 && ops.len() > 1
@@ -22052,7 +22138,7 @@ impl GpuPool {
         let packed_native_byte_filter_requested = packed_native_byte_filter;
         let packed_native_byte_filter = packed_native_byte_filter_requested
             && if matches!(mode, Some("LA")) {
-                plan_packed_la_filter_dispatch(
+                plan_packed_la_dispatch(
                     img.width(),
                     img.height(),
                     gpu.device.limits().max_compute_workgroups_per_dimension,
@@ -22078,6 +22164,27 @@ impl GpuPool {
         if packed_luma_pad_requested && !packed_luma_pad {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed-L Pad to CPU: adapter workgroup limit"
+            );
+            return self.preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "adapter workgroup limit",
+            );
+        }
+        let packed_la_pad_requested = packed_la_pad;
+        let packed_la_pad = packed_la_pad_requested
+            && matches!(ops, [op @ PipelineOp::Pad { .. }]
+                if gpu_packed_la_pad_dispatch_supported(
+                    op,
+                    img.dimensions(),
+                    gpu.device.limits().max_compute_workgroups_per_dimension,
+                )
+            );
+        if packed_la_pad_requested && !packed_la_pad {
+            gpu_log!(
+                "[GPU] dispatch preflight routed packed-LA Pad to CPU: adapter workgroup limit"
             );
             return self.preflight_failure(
                 ops,
@@ -22833,6 +22940,8 @@ impl GpuPool {
         } else if full_luma_putdata {
             // A complete replacement has no observable source pixels. The
             // packed shader initializes every valid destination sample.
+        } else if packed_la_pad {
+            buffers.upload_native_channel_bytes(&gpu.queue, w, h, 2, img.as_bytes())?;
         } else if packed_native_byte_filter && matches!(mode, Some("LA")) {
             buffers.upload_native_channel_bytes(&gpu.queue, w, h, 2, img.as_bytes())?;
         } else if packed_luma_colorize
@@ -22915,6 +23024,7 @@ impl GpuPool {
             packed_luma_order_statistic,
             packed_native_byte_filter,
             packed_luma_pad,
+            packed_la_pad,
             native_extract_band,
             native_grayscale_rgb_input,
             native_sharpness_l_input,
@@ -23007,6 +23117,8 @@ impl GpuPool {
             gpu.readback_to_cover_native_bytes(final_w, final_h, dispatch, readback_buffer)?
         } else if native_rgb_packed_output {
             gpu.readback_to_native_channels(final_w, final_h, 3, readback_buffer)?
+        } else if packed_la_pad {
+            gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
         } else if native_la_transform_output {
             gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
         } else if packed_native_byte_filter && matches!(mode, Some("LA")) {
@@ -23079,6 +23191,8 @@ impl GpuPool {
             .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))?
         } else if packed_native_byte_filter {
             compact_luma8_transfer_bytes(w, h)?
+        } else if packed_la_pad {
+            compact_native_channel_transfer_bytes(w, h, 2)?
         } else if packed_luma_pad {
             compact_luma8_transfer_bytes(w, h)?
         } else if native_sharpness_la_input {
@@ -23145,7 +23259,7 @@ impl GpuPool {
                 .ok_or_else(|| {
                     PilError::ValueError("GPU native RGB readback size overflow".into())
                 })?
-        } else if native_la_transform_output {
+        } else if packed_la_pad || native_la_transform_output {
             u64::try_from(CheckedDims::new(final_w, final_h, 2)?.total_bytes())
                 .map_err(|_| PilError::ValueError("GPU native LA readback is too large".into()))?
                 .div_ceil(4)
@@ -23203,6 +23317,7 @@ impl GpuPool {
             || packed_luma_order_statistic
             || packed_native_byte_filter
             || packed_luma_pad
+            || packed_la_pad
             || native_rgb_compact_input
             || native_la_transform_output
             || native_grayscale_rgb_input
@@ -23230,6 +23345,7 @@ impl GpuPool {
                     && !packed_luma_order_statistic
                     && !packed_native_byte_filter
                     && !packed_luma_pad
+                    && !packed_la_pad
                     && (native_luma16_convert
                         || native_luma16_paste
                         || !matches!(
@@ -23250,6 +23366,7 @@ impl GpuPool {
             || native_sharpness_la_input
             || native_cover_packed_output.is_some()
             || packed_luma_pad
+            || packed_la_pad
         {
             // The final native layout was decoded directly from the mapping;
             // applying mode preservation again would reallocate it.
@@ -23264,6 +23381,7 @@ impl GpuPool {
             || packed_luma_order_statistic
             || packed_native_byte_filter
             || packed_luma_pad
+            || packed_la_pad
         {
             return Ok(result);
         }
@@ -23312,7 +23430,7 @@ mod tests {
         plan_gpu_native_masked_l_paste, plan_gpu_native_rgb_crop,
         plan_gpu_native_rgb_to_rgba_paste, plan_native_expand_output_dispatch,
         plan_native_rgb_put_alpha_data_dispatch, plan_native_rgb_put_alpha_dispatch,
-        plan_native_rgba_put_alpha_data_dispatch, plan_packed_la_filter_dispatch,
+        plan_native_rgba_put_alpha_data_dispatch, plan_packed_la_dispatch,
         plan_packed_luma_dispatch, plan_packed_point_luma_dispatch, plan_sharpness_l_dispatch,
         putdata_auxiliary_words, readback_poll_backoff,
     };
@@ -25495,6 +25613,7 @@ mod tests {
                         17,
                         15,
                         3,
+                        false,
                         false,
                         false,
                         false,
@@ -30363,25 +30482,22 @@ mod tests {
     }
 
     #[test]
-    fn packed_la_filter_dispatch_respects_word_and_adapter_boundaries() {
+    fn packed_la_dispatch_respects_word_and_adapter_boundaries() {
+        assert_eq!(plan_packed_la_dispatch(1, 1, 65_535).unwrap(), (1, 1));
         assert_eq!(
-            plan_packed_la_filter_dispatch(1, 1, 65_535).unwrap(),
-            (1, 1)
-        );
-        assert_eq!(
-            plan_packed_la_filter_dispatch(1024, 768, 65_535).unwrap(),
+            plan_packed_la_dispatch(1024, 768, 65_535).unwrap(),
             (1536, 1)
         );
         assert_eq!(
-            plan_packed_la_filter_dispatch(4096, 4096, 65_535).unwrap(),
+            plan_packed_la_dispatch(4096, 4096, 65_535).unwrap(),
             (32_768, 1)
         );
-        assert_eq!(plan_packed_la_filter_dispatch(1024, 1, 2).unwrap(), (2, 1));
-        assert!(plan_packed_la_filter_dispatch(1025, 1, 2).is_err());
-        assert!(plan_packed_la_filter_dispatch(0, 1, 65_535).is_err());
-        assert!(plan_packed_la_filter_dispatch(1, 0, 65_535).is_err());
-        assert!(plan_packed_la_filter_dispatch(1, 1, 0).is_err());
-        assert!(plan_packed_la_filter_dispatch(u32::MAX, 2, 65_535).is_err());
+        assert_eq!(plan_packed_la_dispatch(1024, 1, 2).unwrap(), (2, 1));
+        assert!(plan_packed_la_dispatch(1025, 1, 2).is_err());
+        assert!(plan_packed_la_dispatch(0, 1, 65_535).is_err());
+        assert!(plan_packed_la_dispatch(1, 0, 65_535).is_err());
+        assert!(plan_packed_la_dispatch(1, 1, 0).is_err());
+        assert!(plan_packed_la_dispatch(u32::MAX, 2, 65_535).is_err());
     }
 
     #[test]
@@ -30606,6 +30722,120 @@ mod tests {
             &DynamicImage::ImageLuma8(GrayImage::new(0, 2)),
             Some("L")
         ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_la_pad_admits_only_identity_contain() {
+        let image = DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(
+                3,
+                2,
+                vec![11, 211, 22, 222, 33, 233, 44, 244, 55, 255, 66, 166],
+            )
+            .unwrap(),
+        );
+        let pad = PipelineOp::Pad {
+            w: 3,
+            h: 3,
+            filter: ResampleFilter::Lanczos,
+            color: Some((173, 0, 0, 47)),
+            centering: (0.5, 1.0),
+        };
+        assert!(super::gpu_packed_la_pad_input(
+            std::slice::from_ref(&pad),
+            &image,
+            Some("LA")
+        ));
+        assert!(super::gpu_packed_la_pad_input(
+            std::slice::from_ref(&pad),
+            &image,
+            None
+        ));
+        assert!(!super::gpu_packed_la_pad_input(
+            std::slice::from_ref(&pad),
+            &image,
+            Some("PA")
+        ));
+        assert!(super::gpu_packed_la_pad_dispatch_supported(
+            &pad,
+            (3, 2),
+            65_535
+        ));
+        assert!(!super::gpu_packed_la_pad_dispatch_supported(
+            &pad,
+            (3, 2),
+            0
+        ));
+
+        let resize = PipelineOp::Pad {
+            w: 2,
+            h: 2,
+            filter: ResampleFilter::Lanczos,
+            color: Some((173, 0, 0, 47)),
+            centering: (0.5, 1.0),
+        };
+        assert!(!super::gpu_packed_la_pad_input(
+            std::slice::from_ref(&resize),
+            &image,
+            Some("LA")
+        ));
+        assert!(!super::gpu_packed_la_pad_input(
+            &[pad.clone(), PipelineOp::Duplicate],
+            &image,
+            Some("LA")
+        ));
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_la_pad_preserves_odd_rows_fill_and_alpha() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        let source = DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(
+                3,
+                2,
+                vec![11, 211, 22, 222, 33, 233, 44, 244, 55, 255, 66, 166],
+            )
+            .unwrap(),
+        );
+        let op = [PipelineOp::Pad {
+            w: 3,
+            h: 3,
+            filter: ResampleFilter::Lanczos,
+            color: Some((173, 0, 0, 47)),
+            centering: (0.5, 1.0),
+        }];
+        let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("LA"))
+            .expect("CPU LA Pad reference");
+        let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Pad routing");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
+            Ok(actual) => actual,
+            Err(error)
+                if error.to_string().contains("GPU adapter not available")
+                    || error
+                        .to_string()
+                        .contains("GPU device initialization failed") =>
+            {
+                Backend::set_pipeline_telemetry_enabled(previous);
+                return;
+            }
+            Err(error) => panic!("native GPU LA Pad failed: {error}"),
+        };
+        assert!(matches!(&actual, DynamicImage::ImageLumaA8(_)));
+        assert_eq!(actual.as_bytes(), expected.as_bytes());
+        let receipt = Backend::take_pipeline_telemetry().expect("native LA Pad receipt");
+        assert_eq!(receipt.0, Some(Backend::Gpu));
+        assert_eq!(receipt.1, Backend::Gpu);
+        assert_eq!(receipt.6, Some(1));
+        assert_eq!(receipt.7, None);
+        let resources = receipt.8.expect("native LA Pad resources");
+        assert_eq!(resources.upload_bytes, 12);
+        assert_eq!(resources.readback_bytes, 20);
+        assert_eq!(resources.mode_conversion_count, 0);
+        Backend::set_pipeline_telemetry_enabled(previous);
     }
 
     #[test]
