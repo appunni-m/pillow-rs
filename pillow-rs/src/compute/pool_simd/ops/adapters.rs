@@ -21164,11 +21164,16 @@ fn native_pad_bytes(
         return Ok(Some((preserve_mode(img, result), 0, 0)));
     }
 
-    // Keep RGBX's exact separable resize arithmetic, but let its vertical
-    // pass store directly into the full-width content window of the final
-    // padded canvas. The previous route materialized a contained image, then
+    let luma_byte_i32 = matches!(filter, ResampleFilter::Bicubic)
+        && matches!(mode, None | Some("L"))
+        && matches!(img, DynamicImage::ImageLuma8(_));
+
+    // Keep the exact separable resize arithmetic, but let the vertical pass
+    // store directly into the full-width content window of the final padded
+    // canvas. The previous route materialized a contained image, then
     // initialized a second canvas and copied every resized row into it.
-    if mode == Some("RGBX")
+    if (mode == Some("RGBX")
+        || matches!(mode, None | Some("L")) && matches!(img, DynamicImage::ImageLuma8(_)))
         && !matches!(filter, ResampleFilter::Nearest)
         && (img.width(), img.height()) != (contained_width, contained_height)
         && offset_x == 0
@@ -21199,7 +21204,7 @@ fn native_pad_bytes(
             filter,
             channels,
             false,
-            false,
+            luma_byte_i32,
             0,
             false,
             &mut output[window_start..window_end],
@@ -21248,7 +21253,7 @@ fn native_pad_bytes(
                     4 => matches!(mode, None | Some("RGBA")),
                     _ => false,
                 },
-                false,
+                luma_byte_i32,
             )?,
         })
     };

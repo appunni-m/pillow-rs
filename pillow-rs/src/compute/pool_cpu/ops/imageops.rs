@@ -29,6 +29,8 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::pil_resize;
 use crate::ops::pil_resize::pil_resize_boxed_with_parallel_pixel_threshold;
+#[cfg(not(feature = "parallel"))]
+use crate::ops::pil_resize::pil_resize_luma_i32_into_window;
 use crate::ops::pil_resize::pil_resize_rgbx_into_window;
 use crate::pipeline::ResampleFilter;
 use wide::u8x16;
@@ -1807,6 +1809,42 @@ pub fn op_pad(
                 | (Some("CMYK"), DynamicImage::ImageRgba8(_))
         );
 
+    // Native L Pad with a full-width contained image can write the exact
+    // two-pass resize into its final canvas rows. Keep Pillow's coefficient
+    // and fixed-point order while avoiding a separate contained-image output
+    // allocation and the subsequent row copy.
+    #[cfg(not(feature = "parallel"))]
+    if matches!(explicit_mode, None | Some("L"))
+        && matches!(img, DynamicImage::ImageLuma8(_))
+        && !matches!(resize_filter, ResampleFilter::Nearest)
+        && (iw, ih) != (nw, nh)
+        && nw == w
+        && nh < h
+    {
+        let canvas_dims = CheckedDims::new(w, h, 1)?;
+        let content_dims = CheckedDims::new(nw, nh, 1)?;
+        let offset_y =
+            bankers_round((f64::from(h) - f64::from(nh)) * centering.1.clamp(0.0, 1.0)) as usize;
+        let window_start = offset_y
+            .checked_mul(canvas_dims.row_stride())
+            .ok_or_else(|| PilError::DimensionError("L pad offset overflow".into()))?;
+        let window_end = window_start
+            .checked_add(content_dims.total_bytes())
+            .filter(|end| *end <= canvas_dims.total_bytes())
+            .ok_or_else(|| PilError::DimensionError("L pad window overflow".into()))?;
+        let mut output = vec![fill.0; canvas_dims.total_bytes()];
+        if pil_resize_luma_i32_into_window(
+            img,
+            nw,
+            nh,
+            resize_filter,
+            &mut output[window_start..window_end],
+        ) {
+            let result = crate::image_utils::raw_bytes_to_image(w, h, output, 1)?;
+            return Ok(preserve_mode(img, result));
+        }
+    }
+
     // For RGBX contain-resizes that keep the full canvas width, write the
     // unchanged Pillow vertical-resize result directly into its final padded
     // rows. RGBX's fourth byte is filtered as data, never as alpha. This
@@ -2553,6 +2591,36 @@ mod pad_native_tests {
                 73, 99, 111, 157, 73, 99, 111, 157, 11, 12, 13, 14, 22, 23, 24, 25,
             ],
         );
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[test]
+    fn pad_l_bicubic_full_width_contain_preserves_fill_and_resized_samples() {
+        let source_bytes = (0..48).map(|value| (value * 37 % 256) as u8).collect();
+        let source = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(8, 6, source_bytes).expect("native L source"),
+        );
+        let resized =
+            crate::ops::pil_resize::pil_resize(&source, 4, 3, ResampleFilter::Bicubic, Some("L"));
+        let result = op_pad(
+            &source,
+            4,
+            5,
+            ResampleFilter::Bicubic,
+            Some((19, 31, 47, 61)),
+            (0.5, 0.5),
+            Some("L"),
+        )
+        .expect("bicubic L pad");
+        let expected = [
+            &[19, 19, 19, 19][..],
+            &resized.as_bytes()[..4],
+            &resized.as_bytes()[4..8],
+            &resized.as_bytes()[8..12],
+            &[19, 19, 19, 19][..],
+        ]
+        .concat();
+        assert_eq!(native_bytes(&result, "L"), expected);
     }
 
     #[test]

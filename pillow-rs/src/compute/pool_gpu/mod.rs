@@ -4588,6 +4588,42 @@ fn plan_packed_luma_dispatch(
     ))
 }
 
+/// Plan the row-packed resize kernels used by native-L Pad. Unlike the
+/// flattened point kernels, the resize shaders use one 16x16 invocation grid
+/// over packed output words per row; the full word range must fit WGSL u32
+/// indexing and both adapter dispatch axes.
+fn plan_packed_luma_resize_dispatch(
+    width: u32,
+    height: u32,
+    max_workgroups_per_dimension: u32,
+) -> Result<(u32, u32), PilError> {
+    let pixels = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| PilError::ValueError("GPU packed-L resize is too large".into()))?;
+    let words_per_row = width.div_ceil(4);
+    let words = u64::from(words_per_row)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| PilError::ValueError("GPU packed-L resize is too large".into()))?;
+    if width == 0 || height == 0 || pixels > u64::from(u32::MAX) || words > u64::from(u32::MAX) {
+        return Err(PilError::ValueError(
+            "GPU packed-L resize dimensions exceed shader indexing limits".into(),
+        ));
+    }
+    if max_workgroups_per_dimension == 0 {
+        return Err(PilError::ValueError(
+            "GPU adapter reports no compute workgroups per dimension".into(),
+        ));
+    }
+    let groups_x = words_per_row.div_ceil(16);
+    let groups_y = height.div_ceil(16);
+    if groups_x > max_workgroups_per_dimension || groups_y > max_workgroups_per_dimension {
+        return Err(PilError::ValueError(
+            "GPU packed-L resize exceeds adapter workgroup limits".into(),
+        ));
+    }
+    Ok((groups_x, groups_y))
+}
+
 fn plan_packed_point_luma_dispatch(
     width: u32,
     height: u32,
@@ -7077,16 +7113,33 @@ impl GpuInner {
                     pass_count,
                 });
             } else if matches!(op, PipelineOp::Pad { .. }) {
-                let horizontal = self.resolve_pipeline(
-                    "__internal_resize_h",
-                    "resize_convolution_h.wgsl",
-                    include_str!("shaders/resize_convolution_h.wgsl"),
-                )?;
-                let vertical = self.resolve_pipeline(
-                    "__internal_resize_v",
-                    "resize_convolution_v.wgsl",
-                    include_str!("shaders/resize_convolution_v.wgsl"),
-                )?;
+                let (horizontal, vertical) = if packed_luma_pad {
+                    (
+                        self.resolve_pipeline(
+                            "__internal_resize_h_pad_luma_packed",
+                            "resize_convolution_h.wgsl",
+                            include_str!("shaders/resize_convolution_h.wgsl"),
+                        )?,
+                        self.resolve_pipeline(
+                            "__internal_resize_v_pad_luma_packed",
+                            "resize_convolution_v.wgsl",
+                            include_str!("shaders/resize_convolution_v.wgsl"),
+                        )?,
+                    )
+                } else {
+                    (
+                        self.resolve_pipeline(
+                            "__internal_resize_h",
+                            "resize_convolution_h.wgsl",
+                            include_str!("shaders/resize_convolution_h.wgsl"),
+                        )?,
+                        self.resolve_pipeline(
+                            "__internal_resize_v",
+                            "resize_convolution_v.wgsl",
+                            include_str!("shaders/resize_convolution_v.wgsl"),
+                        )?,
+                    )
+                };
                 let place = if packed_luma_pad {
                     self.resolve_pipeline(
                         "__internal_pad_luma_packed",
@@ -7643,8 +7696,10 @@ impl GpuInner {
             cached.variant_name,
             "__internal_resize_h"
                 | "__internal_resize_h_cover_native_packed"
+                | "__internal_resize_h_pad_luma_packed"
                 | "__internal_resize_v"
                 | "__internal_resize_v_cover_native_packed"
+                | "__internal_resize_v_pad_luma_packed"
                 | "__internal_resize_v_pad_rgbx"
         ) {
             let (horizontal, vertical) = resources
@@ -7658,7 +7713,9 @@ impl GpuInner {
                 })?;
             let range = if matches!(
                 cached.variant_name,
-                "__internal_resize_h" | "__internal_resize_h_cover_native_packed"
+                "__internal_resize_h"
+                    | "__internal_resize_h_cover_native_packed"
+                    | "__internal_resize_h_pad_luma_packed"
             ) {
                 *horizontal
             } else {
@@ -8214,6 +8271,7 @@ impl GpuInner {
         packed_luma_putdata: bool,
         packed_luma_order_statistic: bool,
         packed_luma_blur: bool,
+        packed_luma_pad: bool,
         native_extract_band: bool,
         native_grayscale_rgb_input: bool,
         native_sharpness_l_input: bool,
@@ -8848,6 +8906,12 @@ impl GpuInner {
                     offset_x,
                     offset_y,
                 ]);
+                if packed_luma_pad {
+                    // Reuse the exact row-packed L resize variants for both
+                    // axes; `_pad` selects native byte addressing and packed
+                    // output without changing Pad's public geometry fields.
+                    params[3] = NATIVE_COVER_PACKED_OUTPUT_MARKER;
+                }
             } else if matches!(op, PipelineOp::EqualizeMasked { .. }) {
                 params[3] = u32::from(auxiliary_images[index].third.is_some());
             } else if let PipelineOp::Autocontrast { cutoff, .. } = op {
@@ -9321,7 +9385,11 @@ impl GpuInner {
             let lut_values = if cached.is_lut
                 && !matches!(
                     cached.variant_name,
-                    "__internal_resize_h" | "__internal_resize_v" | "__internal_resize_v_pad_rgbx"
+                    "__internal_resize_h"
+                        | "__internal_resize_v"
+                        | "__internal_resize_v_pad_rgbx"
+                        | "__internal_resize_h_pad_luma_packed"
+                        | "__internal_resize_v_pad_luma_packed"
                 ) {
                 Some(extract_lut(op, op_mode).ok_or_else(|| {
                     PilError::ValueError(format!(
@@ -9546,6 +9614,16 @@ impl GpuInner {
                     self.device.limits().max_compute_workgroups_per_dimension,
                 )?
             }
+            "__internal_resize_h_pad_luma_packed" => plan_packed_luma_resize_dispatch(
+                output_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_resize_v_pad_luma_packed" => plan_packed_luma_resize_dispatch(
+                output_dims.0,
+                output_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
             "__internal_pad_luma_packed" => plan_packed_luma_dispatch(
                 output_dims.0,
                 output_dims.1,
@@ -13613,6 +13691,7 @@ impl GpuInner {
                 packed_luma_putdata,
                 packed_luma_order_statistic,
                 packed_luma_blur,
+                packed_luma_pad,
                 native_extract_band,
                 native_grayscale_rgb_input,
                 native_sharpness_l_input,
@@ -13964,9 +14043,9 @@ fn gpu_packed_luma_blur_input(
     pixels > 0 && pixels <= u32::MAX as usize && luma.as_raw().len() == pixels
 }
 
-/// Admit compact L transport for identity-contain Pad. This intentionally
-/// excludes every real resize: the packed placement kernel only copies the
-/// source bytes into the canvas and fills the remaining samples.
+/// Admit compact L transport for Pad. Real resizes are limited to contained
+/// widths divisible by four: the generic exact resize kernels then keep each
+/// row-packed intermediate byte-aligned for the flattened placement kernel.
 #[cfg(target_endian = "little")]
 fn gpu_packed_luma_pad_input(
     ops: &[PipelineOp],
@@ -14003,8 +14082,11 @@ fn gpu_packed_luma_pad_input(
     {
         return false;
     }
-    gpu_pad_geometry(&ops[0], image.width(), image.height())
-        .is_some_and(|(resize_dimensions, _)| resize_dimensions == image.dimensions())
+    gpu_pad_geometry(&ops[0], image.width(), image.height()).is_some_and(
+        |(resize_dimensions, _)| {
+            resize_dimensions == image.dimensions() || resize_dimensions.0 % 4 == 0
+        },
+    )
 }
 
 #[cfg(not(target_endian = "little"))]
@@ -14014,6 +14096,38 @@ fn gpu_packed_luma_pad_input(
     _logical_mode: Option<&str>,
 ) -> bool {
     false
+}
+
+fn gpu_packed_luma_pad_dispatch_supported(
+    op: &PipelineOp,
+    source_dimensions: (u32, u32),
+    max_workgroups_per_dimension: u32,
+) -> bool {
+    let PipelineOp::Pad { w, h, .. } = op else {
+        return false;
+    };
+    let Some((resize_dimensions, _)) =
+        gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)
+    else {
+        return false;
+    };
+    if resize_dimensions != source_dimensions
+        && (plan_packed_luma_resize_dispatch(
+            resize_dimensions.0,
+            source_dimensions.1,
+            max_workgroups_per_dimension,
+        )
+        .is_err()
+            || plan_packed_luma_resize_dispatch(
+                resize_dimensions.0,
+                resize_dimensions.1,
+                max_workgroups_per_dimension,
+            )
+            .is_err())
+    {
+        return false;
+    }
+    plan_packed_luma_dispatch(*w, *h, max_workgroups_per_dimension).is_ok()
 }
 
 fn gpu_packed_luma_rank_filter_9_input(
@@ -18054,10 +18168,13 @@ fn gpu_dispatch_dimensions_require_cpu(
             && packed_luma_pad
             && matches!(ops, [PipelineOp::Pad { .. }])
         {
-            // Identity native-L Pad uses a four-samples-per-word 1D grid,
-            // already admitted against this adapter's actual limit. Do not
-            // reject it again using the legacy 16x16 placement grid.
-            plan_packed_luma_dispatch(next.0, next.1, max_workgroups_per_dimension).is_err()
+            // Packed-L Pad proves the row-packed H/V resize grids and the
+            // flattened final placement grid against this adapter's limits.
+            !gpu_packed_luma_pad_dispatch_supported(
+                op,
+                (cur_w, cur_h),
+                max_workgroups_per_dimension,
+            )
         } else if matches!(op, PipelineOp::Pad { .. }) {
             let Some(((resize_w, resize_h), _)) = gpu_pad_geometry(op, cur_w, cur_h) else {
                 return true;
@@ -21789,13 +21906,13 @@ impl GpuPool {
             .is_ok();
         let packed_luma_pad_requested = packed_luma_pad;
         let packed_luma_pad = packed_luma_pad_requested
-            && matches!(ops, [PipelineOp::Pad { w, h, .. }]
-                if plan_packed_luma_dispatch(
-                    *w,
-                    *h,
+            && matches!(ops, [op @ PipelineOp::Pad { .. }]
+                if gpu_packed_luma_pad_dispatch_supported(
+                    op,
+                    img.dimensions(),
                     gpu.device.limits().max_compute_workgroups_per_dimension,
                 )
-                .is_ok());
+            );
         if packed_luma_pad_requested && !packed_luma_pad {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed-L Pad to CPU: adapter workgroup limit"
@@ -30011,7 +30128,7 @@ mod tests {
 
     #[test]
     #[cfg(target_endian = "little")]
-    fn gpu_packed_luma_pad_admits_only_identity_contain_native_l() {
+    fn gpu_packed_luma_pad_admits_identity_and_aligned_native_l_resize() {
         let luma = DynamicImage::ImageLuma8(
             GrayImage::from_raw(3, 2, vec![11, 22, 33, 44, 55, 66]).unwrap(),
         );
@@ -30043,6 +30160,27 @@ mod tests {
             Some("L")
         ));
 
+        let aligned_luma = DynamicImage::ImageLuma8(
+            GrayImage::from_raw(8, 6, (0..48).map(|sample| sample as u8).collect()).unwrap(),
+        );
+        let aligned_resize = PipelineOp::Pad {
+            w: 4,
+            h: 5,
+            filter: ResampleFilter::Lanczos,
+            color: Some((173, 0, 0, 255)),
+            centering: (0.5, 0.5),
+        };
+        assert!(super::gpu_packed_luma_pad_input(
+            std::slice::from_ref(&aligned_resize),
+            &aligned_luma,
+            Some("L")
+        ));
+        assert!(super::gpu_packed_luma_pad_dispatch_supported(
+            &aligned_resize,
+            aligned_luma.dimensions(),
+            65_535
+        ));
+
         let resized = PipelineOp::Pad {
             w: 5,
             h: 4,
@@ -30065,6 +30203,23 @@ mod tests {
             &DynamicImage::ImageLuma8(GrayImage::new(0, 2)),
             Some("L")
         ));
+    }
+
+    #[test]
+    fn packed_luma_resize_dispatch_checks_word_index_and_both_axes() {
+        assert_eq!(
+            super::plan_packed_luma_resize_dispatch(64, 64, 4).unwrap(),
+            (1, 4)
+        );
+        assert_eq!(
+            super::plan_packed_luma_resize_dispatch(1024, 768, 65_535).unwrap(),
+            (16, 48)
+        );
+        assert!(super::plan_packed_luma_resize_dispatch(0, 1, 65_535).is_err());
+        assert!(super::plan_packed_luma_resize_dispatch(1, 0, 65_535).is_err());
+        assert!(super::plan_packed_luma_resize_dispatch(1, 16, 0).is_err());
+        assert!(super::plan_packed_luma_resize_dispatch(64, 80, 4).is_err());
+        assert!(super::plan_packed_luma_resize_dispatch(u32::MAX, 2, 65_535).is_err());
     }
 
     #[test]

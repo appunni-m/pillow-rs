@@ -294,6 +294,14 @@ PAD_PERFORMANCE_CASES = (
 )
 PAD_RESIZE_PERFORMANCE_CASES = (
     (
+        "l-noise-1024x768-to-768-square",
+        "L",
+        [1024, 768],
+        20261108,
+        73,
+        [768, 768],
+    ),
+    (
         "rgbx-resize-1024x768-to-768-square",
         "RGBX",
         [1024, 768],
@@ -47078,7 +47086,7 @@ def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
 def _pipeline_operation_class(variant: str, surface: str, operation: str) -> str:
     """Classify a benchmark workload for operation-class performance gates."""
 
-    if surface == "PIL.ImageOps" and operation == "mirror":
+    if surface == "PIL.ImageOps" and operation in {"mirror", "pad"}:
         return "geometry"
     if surface == "PIL.Image.Image" and operation in {"crop", "reduce"}:
         return "geometry"
