@@ -12667,3 +12667,74 @@ The CPU and SIMD source hashes in the final receipt match the checkpointed
 source; neither rejected SIMD candidate remains in the tree. Move to the next
 ranked operation and revisit RGB AutoContrast's compact GPU route later. CI,
 coverage, release, and push remain deferred.
+
+## L `ImageOps.cover` direct CPU resampling checkpoint — 2026-10-02
+
+The material case resizes native 1024 × 768 L to 1365 × 1024 L for
+`ImageOps.cover((768, 1024))` with Pillow's default bicubic filter. The
+correctness-gated baseline was `migration-benchmark-377d9133e98d49a598511f8887315d14`
+on clean revision `dab7824b1a48d2da26f00a615cdfa939f70c85c5`; its strict
+benchmark parity gate passed CPU, SIMD, and GPU (3/3), each with 100 actual
+backend executions. Pillow / CPU / SIMD / GPU medians were 4.797 / 12.175 /
+4.540 / 1.048 ms. The CPU's generic one-band resampler still routed every
+sample through an i64 accumulator and four-slot per-pixel result; its vertical
+pass also transposed the full one-byte intermediate. GPU was already fast and
+native L: two dispatches, 786,432 uploaded bytes, 1,400,832 padded readback
+bytes, zero mode conversions, and no fallback.
+
+Three CPU changes were retained. First, a concrete `ImageLuma8` path uses
+native one-byte samples and i32 sums only after the existing fixed-point
+coefficient guard proves `sum(abs(weights)) * 255 + rounding_bias <= i32::MAX`
+for every output. Coefficient extents are checked too; if any proof fails,
+execution falls back to the wide generic path. This removed the four-channel
+temporary and cut CPU latency to 6.216 ms, but still missed Pillow. Second, the
+L path stopped transposing the intermediate: its row-major vertical scan reads
+the same four source rows while writing each destination row, saving the
+full-frame transpose and reducing CPU to 5.102 ms. Third, the common
+four-tap vertical case hoists weights and row bases out of the pixel loop and
+unrolls the fixed-point multiply-adds; variable tap counts retain the general
+loop. CPU fell to 1.913 ms. Each attempt passed the exact three-backend
+benchmark parity gate.
+
+The SIMD route already has native L/i32 `wide` kernels. A fourth trial hoisted
+the four vertical tap rows and weights into its vector block loop, but the
+correctness-gated result did not establish an end-to-end gain: SIMD measured
+4.729 ms versus 4.530 ms on the preceding retained run while Pillow and GPU
+also varied. That change was removed. The final retained-source receipt is
+`migration-benchmark-d9b3690b09834aabb5363d20b611a482`, with parity gate
+`migration-parity-benchmark-gate-0f67cf54e5364fdabb4c9f5f30d85852` (3/3; 100
+actual CPU/SIMD/GPU executions each, no fallback). The retained Rust source
+diff SHA-256 is
+`8144ee269cc1fc7a198c289c9f72ad0f68ac2d552bebc9a3c29985ad27beb927`.
+
+| L Cover, 1024 × 768 input | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Median latency | 4.840 ms | 1.955 ms | 4.540 ms | 0.783 ms |
+| Reciprocal throughput, q1 | 206.6 ops/s | 511.4 ops/s | 220.3 ops/s | 1,277.4 ops/s |
+
+The retained CPU is 2.48× faster than Pillow and 6.22× faster than its original
+baseline. SIMD remains only 1.07× faster than Pillow, far short of 5×. GPU
+latency is 5.8× lower than SIMD in this run and its q1 reciprocal throughput is
+5.8× higher; this is single-request evidence, not a sustained-concurrency
+throughput claim. The GPU path was unchanged, so the measured move from 1.048
+to 0.783 ms is run variation, not an optimization result.
+
+The focused test `cargo test --locked -p pillow-rs --lib
+luma_narrow_cpu_resize_matches_wide_one_channel_reference -- --nocapture`
+compares the L specialization with the wide path for five filters, four
+up/downscale shapes, and zero, full, checkerboard, and varied samples. The
+maintained Pillow command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.l-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-l-p1-final-cpu-i32-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-l-p1-final-cpu-i32-parity-20261002.json \
+  make migration-parity-benchmark
+```
+
+Checkpoint after four bounded attempts. Serial CPU and GPU meet their goals on
+this L workload; the 5× SIMD target remains open. Continue on another operation
+or mode instead of extending this attempt set. No coverage, CI, release, or push
+was run.
