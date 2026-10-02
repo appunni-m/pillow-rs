@@ -14292,3 +14292,89 @@ ordinary Pillow baseline, without a threaded Pillow baseline. The `getchannel`
 implementation does not schedule Rayon work, so the profile is reported
 separately and its timing is not evidence of Rayon acceleration. No coverage
 was collected.
+
+## Masked L Paste NEON revisit — 2026-10-02
+
+This revisit measured the materialized L/L-mask workload
+`pil-image-image.paste.masked.materialized.masked-l-noise-1024x768` on the
+primary local `main` tree. The inputs are a 1024 × 768 L destination, L source,
+and L mask with varied bytes; the operation replaces the full image and then
+observes the destination bytes. No mode conversion is involved. The clean
+baseline at `56de8fc2fe592aa95145847d24df35d4f45b2c45` passed its parity gate on
+CPU, SIMD, and GPU, with 100 actual executions and no fallback for each target.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | Parallel CPU ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Clean main baseline | 0.232334 | 0.140084 | 0.156521 | — | 0.774355 |
+| NEON attempt 1 | 0.258042 | 0.161125 | 0.136375 | — | 0.829063 |
+| NEON repeat | 0.243980 | 0.143125 | 0.145709 | — | 1.025396 |
+| Opt-in Parallel CPU | 0.232334* | — | — | 0.230459 | — |
+
+Median throughput for the same samples, in completed operations per second:
+
+| Run | Pillow | Serial CPU | SIMD | Parallel CPU | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Clean main baseline | 4,304 | 7,139 | 6,389 | — | 1,291 |
+| NEON attempt 1 | 3,875 | 6,206 | 7,333 | — | 1,206 |
+| NEON repeat | 4,099 | 6,987 | 6,863 | — | 975 |
+| Opt-in Parallel CPU | 4,304* | — | — | 4,339 | — |
+
+The SIMD change uses AArch64 NEON widening byte multiplies for 16 pixels at a
+time and unrolls four blocks per loop. The rounded weighted sum keeps Pillow's
+exact integer rule, `((source × mask) + (destination × (255 − mask)) + 127) /
+255`; division by 255 is lowered with an exact bounded integer identity. A
+fewer-than-16-byte row tail remains scalar. Other architectures retain the
+existing portable vector path. The regression calls `simd_paste` directly,
+checks every output byte across varied inputs, and requires `neon-blend` path
+telemetry with 32 vector blocks and two scalar tail bytes. It passed with
+default features and with `--features parallel`, where the SIMD path remains
+serial architecture-specific code.
+
+Both standard NEON runs passed the benchmark parity gate and reported actual
+CPU/SIMD/GPU execution without fallback. Compared with the clean baseline, the
+two SIMD medians are directionally lower by 13.0% and 6.9%, while the full-call
+readings vary enough that this is a modest checkpoint rather than a stable
+performance claim. SIMD remains only 1.68–1.89× faster than ordinary Pillow in
+the two candidate runs, below the 5× target. Serial CPU remains about 1.60–1.70×
+faster than Pillow. The separate opt-in Parallel CPU build also passed parity;
+its 0.230459 ms median is close to the ordinary Pillow baseline, and much
+slower than serial CPU on this single-operation workload. Do not present it as
+a SIMD result or as evidence of a Rayon speedup for this operation.
+
+GPU is still the largest gap: its medians are around 5–7× the SIMD medians. The
+native L route already uses one GPU dispatch with zero mode conversions, but
+each call uploads 2,359,296 bytes and reads back 786,432 bytes, with another
+1,572,864 auxiliary bytes. For this materialized one-shot operation, transfer,
+mapping, and synchronization dominate the GPU route; kernel-only changes are
+unlikely to close the gap without a way to keep the result on-device or reduce
+completion overhead. A documented low-load rerun was an outlier across all
+profiles and is excluded from timing conclusions.
+
+The focused checks were:
+
+```sh
+cargo test -p pillow-rs --lib simd_l_masked_paste_uses_neon_and_keeps_exact_rounding_and_tail --locked -- --nocapture
+cargo test -p pillow-rs --lib simd_l_masked_paste_uses_neon_and_keeps_exact_rounding_and_tail --locked --features parallel -- --nocapture
+cargo test -p pillow-rs --lib paste --locked -- --test-threads=1
+```
+
+They passed one, one, and 27 tests, respectively. The clean baseline receipts
+are `paste-masked-l-main-baseline-20261002.json` and
+`paste-masked-l-main-baseline-parity-20261002.json`; the candidate receipts are
+`paste-masked-l-main-neon-20261002.json` and
+`paste-masked-l-main-neon-repeat-20261002.json` with their matching `-parity`
+files. The standard benchmark used
+`MIGRATION_BENCHMARK_PROFILE=standard` and
+`MIGRATION_BENCHMARK_ARGS='--workload-id pil-image-image.paste.masked.materialized.masked-l-noise-1024x768'`
+with `PYTHON=.venv/bin/python make migration-parity-benchmark`; its parity gate
+passed on CPU, SIMD, and GPU. The separate
+`MIGRATION_BENCHMARK_PROFILE=standard` run with the same workload argument and
+`PYTHON=.venv/bin/python make migration-parity-benchmark-parallel-cpu` passed
+its one-workload parity gate with both parallel Cargo features enabled; its
+receipts are `benchmark-result-parallel-cpu.json` and
+`benchmark-parity-result-parallel-cpu.json`. `*`
+reuses the ordinary Pillow timing from the clean standard-profile baseline; it
+is not a threaded Pillow comparison. No coverage was run. For each
+checkpoint, run the parity gate on the commit intended for `main` before
+pushing; carry the unresolved SIMD/Pillow and GPU/transfer gaps forward instead
+of extending this one indefinitely.
