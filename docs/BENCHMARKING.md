@@ -152,6 +152,19 @@ MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-la-noi
 make migration-parity-benchmark
 ```
 
+The native-RGB `MedianFilter(3)` workload is
+`pipeline-op.medianfilter.material-rgb-noise-1024x768`. It uses seeded
+1024×768 RGB noise and the same Pillow parity gate and full-result timing
+boundary. The GPU path keeps RGB triples native through upload, filtering, and
+readback. Use this row to compare RGB channel medians independently from L and
+LA:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-rgb-noise-1024x768" \
+make migration-parity-benchmark
+```
+
 To measure the opt-in Parallel CPU profile separately, compare its result with
 the ordinary single-threaded Pillow subject from the standard workload above:
 
@@ -160,6 +173,11 @@ MIGRATION_BENCHMARK_PROFILE=pipeline \
 MIGRATION_BENCHMARK_ARGS="--workload-id pipeline-op.medianfilter.material-la-noise-1024x768" \
 make migration-parity-benchmark-parallel-cpu
 ```
+
+For RGB, select
+`pipeline-op.medianfilter.material-rgb-noise-1024x768` with the same command.
+The Parallel CPU target runs only the opt-in CPU profile; compare it with the
+ordinary Pillow result from the standard RGB workload.
 
 ## Correctness gate and budget gate
 
