@@ -14241,46 +14241,54 @@ Reproduce the checks with `cargo test -p pillow-rs --lib extract_band_ --locked
 with the same four workload IDs. No coverage was collected. Broader CI and
 release work remain outside this performance checkpoint.
 
-## `getchannel` final repeat and bounded checkpoint — 2026-10-02
+## `getchannel` exact-commit checkpoint — 2026-10-02
 
-After the three source-level attempts above, I ran two all-mode confirmation
-passes on the merged local `main` tree. Both passed all 12 CPU/SIMD/GPU Pillow
-comparisons, with 100 actual executions per backend and no fallback. The
-receipts are `getchannel-native-modes-final-main-20261002.json`
-(`migration-benchmark-4c6dd5f2fc4148c6a8726c1bd4c872c4`) and
-`getchannel-native-modes-attempt4-main-20261002.json`
-(`migration-benchmark-a0e9e86d6f6c467ca5cf4d213dec1fb5`). Attempt 4 repeated
-the measurement without changing code; it is the last run for this operation
-in this checkpoint.
+After the three source-level optimization attempts and the measurement-only
+fourth pass, I ran the push-gate benchmarks against clean commit
+`a6172128dde5a3fa6f5ccc54bbef3357afff394d`. The standard receipt is
+`getchannel-native-modes-main-commit-a6172128d-20261002.json`
+(`migration-benchmark-25f132d9317b48b08fe7e230ba49b2ed`); its parity receipt
+passed 12/12 CPU/SIMD/GPU comparisons. The separate Parallel CPU receipt is
+`getchannel-parallel-main-commit-a6172128d-20261002.json`
+(`migration-benchmark-fff90c186f474087ae6abbc93cb051a8`); its parity receipt
+passed 4/4. Both receipts name the same commit with `dirty: false`. Each
+profile ran 100 actual backend calls per workload with no fallback.
 
 | Mode | Pillow ms | Serial CPU ms | Parallel CPU ms | SIMD ms | GPU ms | CPU faster than Pillow | Parallel CPU faster than Pillow | SIMD faster than Pillow | GPU latency / SIMD |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| L | 0.094354 | 0.029000 | 0.047708 | 0.047625 | 0.461937 | 3.25×* | 1.98× | 1.98× | 9.70× |
-| LA | 0.137688 | 0.083250 | 0.084917 | 0.106292 | 0.498437 | 1.65× | 1.62× | 1.30× | 4.69× |
-| RGB | 0.171666 | 0.047230 | 0.044750 | 0.091666 | 0.658459 | 3.63× | 3.84× | 1.87× | 7.18× |
-| RGBA | 0.162042 | 0.082854 | 0.079563 | 0.100938 | 0.817646 | 1.96× | 2.04× | 1.61× | 8.10× |
+| L | 0.103500 | 0.063312 | 0.065000 | 0.053208 | 0.440208 | 1.63×* | 1.59× | 1.95× | 8.27× |
+| LA | 0.206229 | 0.095791 | 0.089208 | 0.107291 | 0.665521 | 2.15× | 2.31× | 1.92× | 6.20× |
+| RGB | 0.204562 | 0.052146 | 0.048041 | 0.083834 | 0.699145 | 3.92× | 4.26× | 2.44× | 8.34× |
+| RGBA | 0.204896 | 0.090792 | 0.085312 | 0.112042 | 0.870416 | 2.26× | 2.40× | 1.83× | 7.77× |
 
-*The L CPU result is inconclusive across runs: the preceding pass measured
-Pillow / CPU / SIMD at 0.055396 / 0.066542 / 0.058833 ms, reversing the CPU
-median ranking. That run also had broad tails (Pillow p95 0.134375 ms; CPU p95
-0.176083 ms), while attempt 4 measured CPU p95 at 0.030042 ms. Keep the L CPU
-target unproven rather than choosing the favorable run. The attempt cap is
-reached; revisit L only with a more controlled measurement setup.
+Measured throughput medians from those same receipts (operations per second):
 
-Across LA, RGB, and RGBA, serial CPU beat Pillow in both confirmation runs.
-SIMD remains only 1.30–1.98× faster than Pillow, below the 5× goal in every
-mode. The one-shot GPU call remains 4.69–9.70× slower than SIMD because it
-must upload the source, dispatch, map, and materialize the result. Do not
-extend the RGB NEON result to other layouts. The SIMD target and GPU target
-remain blockers; a GPU revisit needs a resident consumer or a measured
-transfer/completion improvement. Continue with the next operation after this
-checkpoint instead of extending `getchannel` attempts.
+| Mode | Pillow | Serial CPU | Parallel CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| L | 9,662 | 15,795 | 15,385 | 18,794 | 2,272 |
+| LA | 4,849 | 10,439 | 11,210 | 9,320 | 1,503 |
+| RGB | 4,888 | 19,177 | 20,816 | 11,928 | 1,430 |
+| RGBA | 4,881 | 11,014 | 11,722 | 8,925 | 1,149 |
 
-Parallel CPU was measured separately by
-`migration-benchmark-a71e51dff9de44c7b815bd2af1bb6001` with
-`pillow-rs/parallel` and `pillow-rs-py/parallel` enabled; all four parity
-comparisons passed with actual CPU execution and no fallback. The table pairs
-those timings with the standard run's ordinary Pillow baseline, without a
-threaded Pillow baseline. `getchannel` itself does not schedule Rayon work, so
-the Parallel CPU column is a separately reported feature build, not a claim
-that Rayon accelerates this operation. No coverage was collected.
+*The clean-commit L CPU result beats Pillow by 1.63×, but an earlier
+confirmation run measured Pillow / CPU at 0.055396 / 0.066542 ms, reversing
+the median ranking; the L margin remains variable. Do not use the favorable
+run alone to claim a stable margin. The three implementation attempts and
+fourth measurement are the limit for this checkpoint.
+
+The exact-commit run shows serial CPU faster than Pillow in all four modes,
+but the L result needs a more controlled repeat before treating its margin as
+stable. SIMD is only 1.83–2.44× faster than Pillow, below the 5× target in all
+four modes. GPU latency remains 6.20–8.34× SIMD latency because this
+materialized call uploads, dispatches, maps, and reads back the result. Its
+measured throughput is only 0.12–0.16× SIMD throughput on these rows. A GPU
+revisit needs an on-device consumer or a demonstrated transfer/completion
+improvement. Do not extend the RGB NEON result to other layouts; move to the
+next operation after this checkpoint.
+
+Parallel CPU is an opt-in feature build with both `pillow-rs/parallel` and
+`pillow-rs-py/parallel` enabled. It is compared here with the standard run's
+ordinary Pillow baseline, without a threaded Pillow baseline. The `getchannel`
+implementation does not schedule Rayon work, so the profile is reported
+separately and its timing is not evidence of Rayon acceleration. No coverage
+was collected.
