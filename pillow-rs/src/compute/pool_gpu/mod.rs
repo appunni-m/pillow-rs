@@ -33084,7 +33084,7 @@ mod tests {
             assert_eq!(receipt.6, Some(1));
             assert_eq!(receipt.7, None);
             let resources = receipt.8.expect("native LA Transform resources");
-            let transfer_bytes = ((u64::from(width) * u64::from(height) * 2 + 3) / 4 * 4) as u64;
+            let transfer_bytes = (u64::from(width) * u64::from(height) * 2).div_ceil(4) * 4;
             assert_eq!(resources.upload_bytes, transfer_bytes);
             assert_eq!(resources.readback_bytes, transfer_bytes);
             assert_eq!(resources.mode_conversion_count, 0);
