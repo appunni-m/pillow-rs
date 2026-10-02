@@ -70,6 +70,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |-- pillow-rs/
 |   |-- Cargo.toml
 |   |-- src/
+|   |   |-- batch.rs
 |   |   |-- checked_dims.rs
 |   |   |-- color.rs
 |   |   |-- compute/
@@ -128,8 +129,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- equalize.wgsl
 |   |   |   |       |-- equalize_cdf.wgsl
 |   |   |   |       |-- equalize_histogram.wgsl
+|   |   |   |       |-- equalize_histogram_l_packed.wgsl
 |   |   |   |       |-- equalize_histogram_rgb_packed.wgsl
 |   |   |   |       |-- equalize_remap.wgsl
+|   |   |   |       |-- equalize_remap_l_packed.wgsl
 |   |   |   |       |-- eval.wgsl
 |   |   |   |       |-- expand.wgsl
 |   |   |   |       |-- extract_band.wgsl
@@ -318,6 +321,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |-- __init__.py
 |   |       |-- enums.py
 |   |       |-- image.py
+|   |       |-- imagebatch.py
 |   |       |-- imagechops.py
 |   |       |-- imagecolor.py
 |   |       |-- imagedraw.py
@@ -340,6 +344,7 @@ It is a navigation aid, not an API-support or coverage claim.
 `-- scripts/
     |-- aggregate_migration_parity.py
     |-- audit_rust_result_methods.py
+    |-- benchmark_imagebatch.py
     |-- build_migration_parity_inputs.py
     |-- build_migration_parity_manifest.py
     |-- check_bindings.py
@@ -405,6 +410,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_font_variant_parity.py
     |-- test_getdata_sequence_parity.py
     |-- test_grayscale_rgb_domain.py
+    |-- test_imagebatch_parity.py
     |-- test_migration_benchmark_selection.py
     |-- test_migration_parity_icc_timestamp.py
     |-- test_migration_parity_serialization.py

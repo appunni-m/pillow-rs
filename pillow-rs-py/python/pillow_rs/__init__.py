@@ -21,6 +21,7 @@ else:
     _sys.modules[f"{__name__}._core"] = _core
 
 from . import imagechops as ImageChops
+from . import imagebatch as ImageBatch
 from . import imagecolor as ImageColor
 from . import imagedraw as ImageDraw
 from . import imageenhance as ImageEnhance
@@ -41,7 +42,7 @@ from .operations import (
 __version__ = "12.2.0-alpha.5"
 
 __all__ = [
-    "Image", "ImageMode", "ImageFormat",
+    "Image", "ImageMode", "ImageFormat", "ImageBatch",
     "ImageOps", "ImageChops", "ImageColor", "ImageDraw",
     "ImageEnhance", "ImageFilter", "ImageFont",
     "ImagePalette", "ImageStat", "ImageSequence",

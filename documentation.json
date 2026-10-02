@@ -21,6 +21,11 @@
       "audience": "user"
     },
     {
+      "source": "docs/IMAGE_BATCHING.md",
+      "output": "image-batching.md",
+      "audience": "user"
+    },
+    {
       "source": "pillow-rs-js/README.md",
       "output": "javascript.md",
       "audience": "user"

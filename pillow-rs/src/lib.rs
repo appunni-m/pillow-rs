@@ -100,6 +100,8 @@ use std::collections::BTreeMap;
 //   - image_utils:   Canonical buffer conversion (no duplicate copies)
 // ============================================================================
 
+/// Explicit batching for compatible image operation jobs.
+mod batch;
 /// Validated image dimensions and allocation-size helpers.
 mod checked_dims;
 /// Pillow-compatible color parsing and color-space conversion.
@@ -134,6 +136,8 @@ mod par;
 mod pipeline;
 /// Pillow-owned materialized pixel storage and raster primitives.
 mod raster;
+pub use crate::batch::BatchExecutor;
+pub use crate::batch::BatchOperation;
 pub use crate::color::ColorValue;
 pub use crate::color::PaletteColorInput;
 pub use crate::color::color_has_explicit_alpha;

@@ -2475,6 +2475,23 @@ impl Image {
         Ok(image.as_ref().clone())
     }
 
+    /// Seeds an ordinary operation result with pixels produced by the
+    /// explicit batch executor. The lazy result still owns the same source,
+    /// mode, palette, and metadata path as its single-image equivalent.
+    pub(crate) fn cache_batched_materialization(
+        &mut self,
+        image: DynamicImage,
+    ) -> Result<(), PilError> {
+        let Image::Pipeline { materialized, .. } = self else {
+            return Err(PilError::InternalError(
+                "batched pixels require an operation pipeline result".into(),
+            ));
+        };
+        materialized
+            .set(Ok(Arc::new(image)))
+            .map_err(|_| PilError::InternalError("batch result was already materialized".into()))
+    }
+
     /// Returns operation-ready shared pixels after validating the logical
     /// mode against their storage, without cloning the materialized buffer.
     pub(crate) fn materialized_shared_for_ops(&self) -> Result<Arc<DynamicImage>, PilError> {

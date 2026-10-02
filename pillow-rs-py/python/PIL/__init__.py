@@ -30,6 +30,7 @@ from pillow_rs import (
     enable_backend,
 )
 from pillow_rs import imagechops as ImageChops
+from pillow_rs import imagebatch as ImageBatch
 from pillow_rs import imagecolor as ImageColor
 from pillow_rs import imagedraw as ImageDraw
 from pillow_rs import imageenhance as ImageEnhance
@@ -47,6 +48,7 @@ __version__ = _pillow_rs.__version__
 # ``from PIL import ImageOps`` behave identically.
 for _name, _module in {
     "ImageChops": ImageChops,
+    "ImageBatch": ImageBatch,
     "ImageColor": ImageColor,
     "ImageDraw": ImageDraw,
     "ImageEnhance": ImageEnhance,
@@ -65,6 +67,7 @@ __all__ = [
     "ImageFormat",
     "ImageOps",
     "ImageChops",
+    "ImageBatch",
     "ImageColor",
     "ImageDraw",
     "ImageEnhance",
