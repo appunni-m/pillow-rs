@@ -13746,3 +13746,60 @@ tests); the packed-LA dispatch/filter regression group passed 5 tests with
 passed. After two bounded changes, keep the native LA transfer path
 and the coordinate-hoisted shader, record the remaining SIMD and GPU gaps, and
 move to another operation. No coverage, broad CI, release, or push was run.
+
+## RGBA `ImageOps.pad` vertical-fill checkpoint — 2026-10-02
+
+The workload `pil-imageops.pad.materialized.native-rgba-noise-1024x768-square`
+places a native 1024 × 768 RGBA source in a 1024 × 1024 canvas without
+resampling. The focused opportunity is the 128 fill rows above and below the
+source. The old CPU and SIMD paths initialized a complete canvas, then wrote
+the fill and copied over the source area. For full-width vertical RGBA Pad,
+they now append the alpha-aware fill row, the original RGBA rows, and the
+remaining fill rows once each. The CPU route stays restricted to explicit
+logical RGBA. The SIMD route builds its reusable fill row in `u8x16` blocks;
+RGBX and CMYK retain their own fourth-byte contracts.
+
+The CPU change cut the measured target from 1.258 ms to 0.431–0.458 ms. The
+SIMD path moved from 0.492 ms to 0.439–0.476 ms after append construction; a
+second candidate that explicitly vectorized the fill-row construction measured
+0.445 ms and was within run noise of that candidate. Exact output parity
+includes nonuniform source alpha and fill alpha. The full Pad unit selection
+passes, including direct CPU and strict SIMD tests for fill/source byte order.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Fresh baseline | 1.241 | 1.258 | 0.492 | 1.368 |
+| Native append attempt | 1.384 | 0.434 | 0.476 | 1.680 |
+| Native append repeat | 1.340 | 0.431 | 0.439 | 1.702 |
+| SIMD fill-row attempt | 1.396 | 0.458 | 0.445 | 1.770 |
+
+Every benchmark parity gate passed 3/3 comparisons, and each candidate records
+100/100 CPU, SIMD, and GPU executions without fallback. The final GPU route has
+one dispatch, zero mode conversions, 3,145,728 uploaded bytes, and 4,194,304
+readback bytes. For the final run CPU is 3.04× faster than Pillow, SIMD is
+3.14× faster, and GPU latency is 3.98× slower than SIMD. The CPU goal is met;
+SIMD remains below 5×. This low-arithmetic operation sends a full source and
+output across the GPU boundary, so its single-request GPU latency remains
+transfer-bound. Concurrency was one; the receipt does not prove sustained GPU
+throughput. Parallel CPU was not measured.
+
+The receipts are `pad-rgba-baseline-a6b9fe3c-20261002.json`,
+`pad-rgba-append-attempt1-a6b9fe3c-20261002.json`,
+`pad-rgba-append-repeat1-a6b9fe3c-20261002.json`, and
+`pad-rgba-vectorfill-attempt2-a6b9fe3c-20261002.json`, each with the matching
+`-parity-20261002.json` sidecar. The final run used:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.pad.materialized.native-rgba-noise-1024x768-square' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/pad-rgba-vectorfill-attempt2-a6b9fe3c-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/pad-rgba-vectorfill-attempt2-a6b9fe3c-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+`cargo fmt --all -- --check`, `git diff --check`, and
+`cargo test --locked -p pillow-rs --lib pad_ -- --nocapture` passed (23 tests).
+After two bounded attempts, keep the native append and vector-built RGBA fill
+row, record the remaining SIMD/GPU gaps, and move to another operation. No
+coverage, broad CI, release, or push was run.

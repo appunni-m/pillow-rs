@@ -1671,7 +1671,44 @@ fn pad_native_bytes(
         _ => return Ok(None),
     };
     let fill = &fill[..channels];
-    let mut output = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
+    let output_dims = CheckedDims::new(w, h, channels as u8)?;
+
+    // RGBA vertical padding can construct the destination in one pass: append
+    // the filled border rows around the already-contiguous source rows instead
+    // of zero-initializing the canvas, filling it, and overwriting its center.
+    // Keep this on the exact logical RGBA route; RGBX and CMYK have separate
+    // fourth-byte semantics and remain governed by their own paths.
+    if explicit_mode == Some("RGBA")
+        && offset_x_bytes == 0
+        && copy_width == width
+        && source_stride == output_stride
+    {
+        let Some(source_bytes) = source_stride.checked_mul(copy_height) else {
+            return Ok(None);
+        };
+        if source_bytes > source.len() {
+            return Ok(None);
+        }
+        let fill_row = fill.repeat(width);
+        if fill_row.len() != output_stride {
+            return Ok(None);
+        }
+        let mut output = Vec::with_capacity(output_dims.total_bytes());
+        for _ in 0..offset_y {
+            output.extend_from_slice(&fill_row);
+        }
+        output.extend_from_slice(&source[..source_bytes]);
+        for _ in copy_end_y..height {
+            output.extend_from_slice(&fill_row);
+        }
+        if output.len() != output_dims.total_bytes() {
+            return Ok(None);
+        }
+        let padded = crate::image_utils::raw_bytes_to_image(w, h, output, channels)?;
+        return Ok(Some(preserve_mode(original, padded)));
+    }
+
+    let mut output = output_dims.alloc_buffer();
 
     #[cfg(feature = "parallel")]
     if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {

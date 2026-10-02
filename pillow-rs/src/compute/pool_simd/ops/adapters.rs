@@ -21703,11 +21703,28 @@ fn native_pad_bytes(
         if source.len() != expected_source {
             return Ok(None);
         }
-        let fill_row = fill_pixel.repeat(target_width_usize);
+        let source_end = offset_y
+            .checked_add(source_height)
+            .filter(|end| *end <= target_height_usize)
+            .ok_or_else(|| simd_unsupported("Pad"))?;
+        let needs_fill_rows = offset_y != 0 || source_end != target_height_usize;
+        let (fill_row, vector_blocks, scalar_tail) = if mode == Some("RGBA") && needs_fill_rows {
+            // RGBA padding has a genuine vector data-plane step: build
+            // its reusable alpha-aware fill row with the SIMD lane type,
+            // then append that row around the native source bytes.
+            let mut row = vec![0u8; target_stride];
+            let (vector_blocks, scalar_tail) = native_fill_row(&mut row, fill, channels)
+                .ok_or_else(|| {
+                    PilError::InternalError("SIMD RGBA pad fill shape mismatch".into())
+                })?;
+            (row, vector_blocks, scalar_tail)
+        } else {
+            (fill_pixel.repeat(target_width_usize), 0, 0)
+        };
         if fill_row.len() != target_stride {
             return Ok(None);
         }
-        let append_vertical_rows = matches!(mode, Some("CMYK" | "RGBX"))
+        let append_vertical_rows = matches!(mode, Some("RGBA" | "CMYK" | "RGBX"))
             || (channels == 1 && matches!(mode, None | Some("L")));
         let mut output = if append_vertical_rows {
             Vec::with_capacity(output_len)
@@ -21717,10 +21734,6 @@ fn native_pad_bytes(
         if append_vertical_rows {
             // Avoid initializing source rows and overwriting them: append
             // native source bytes between the top and bottom fill rows.
-            let source_end = offset_y
-                .checked_add(source_height)
-                .filter(|end| *end <= target_height_usize)
-                .ok_or_else(|| simd_unsupported("Pad"))?;
             for _ in 0..offset_y {
                 output.extend_from_slice(&fill_row);
             }
@@ -21743,7 +21756,11 @@ fn native_pad_bytes(
         }
         let result =
             crate::image_utils::raw_bytes_to_image(target_width, target_height, output, channels)?;
-        return Ok(Some((preserve_mode(img, result), 0, 0)));
+        return Ok(Some((
+            preserve_mode(img, result),
+            vector_blocks,
+            scalar_tail,
+        )));
     }
 
     let luma_byte_i32 = matches!(filter, ResampleFilter::Bicubic)
@@ -31013,6 +31030,33 @@ mod tests {
         };
         let result =
             super::simd_pad(&image, &operation, Some("RGBX")).expect("SIMD RGBX pad must succeed");
+
+        let fill_row = [7, 11, 13, 17, 7, 11, 13, 17];
+        let mut expected = Vec::with_capacity(2 * 4 * 4);
+        expected.extend_from_slice(&fill_row);
+        expected.extend_from_slice(&fill_row);
+        expected.extend_from_slice(&[23, 47, 89, 131, 29, 31, 37, 41]);
+        expected.extend_from_slice(&fill_row);
+        assert_eq!(result.as_bytes(), expected);
+    }
+
+    #[test]
+    fn pad_rgba_appends_native_source_rows_between_alpha_fill_rows() {
+        use crate::raster::{DynamicImage, RgbaImage};
+
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(2, 1, vec![23, 47, 89, 131, 29, 31, 37, 41])
+                .expect("RGBA source shape must be valid"),
+        );
+        let fill = (7, 11, 13, 17);
+        let operation = crate::pipeline::PipelineOp::Pad {
+            w: 2,
+            h: 4,
+            filter: crate::pipeline::ResampleFilter::Nearest,
+            color: Some(fill),
+            centering: (0.0, 0.5),
+        };
+        let result = super::simd_pad(&source, &operation, Some("RGBA")).expect("SIMD RGBA pad");
 
         let fill_row = [7, 11, 13, 17, 7, 11, 13, 17];
         let mut expected = Vec::with_capacity(2 * 4 * 4);
