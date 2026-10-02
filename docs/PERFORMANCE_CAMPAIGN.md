@@ -15270,3 +15270,89 @@ policy; timings are diagnostic rather than long-run throughput evidence. The
 final exact-output receipts are
 `radial-gradient-l-attempt4-{cpu,simd,gpu}-parity.json`. The selected SIMD run
 also confirms actual backend identity. No coverage was run.
+
+## RGB `Image.merge` from three native L bands checkpoint — 2026-10-03
+
+This case merges three 1024 × 768 native `L` bands to `RGB`. Red uses a linear
+gradient, green a radial gradient, and blue a rotated linear gradient; every
+input therefore varies spatially and differs by channel. The setup resizes and
+then explicitly loads each band before the timed merge, so lazy input creation
+is not accidentally charged to the target's `merge` call. The observed timing
+boundary is `call` plus `tobytes`, with five warmups, twenty measured
+iterations, and five samples (100 observations per profile). The parity gate
+uses live Pillow.
+
+| Profile | Pillow median / p95 (ms) | pillow-rs median / p95 (ms) | Relative latency | Median throughput | Backend proof |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Serial CPU | 1.012 / 1.154 | 1.096 / 1.283 | 1.08× slower | 913 ops/s | CPU 100/100 |
+| SIMD | 1.012 / 1.154 | 3.165 / 3.365 | 3.13× slower | 316 ops/s | SIMD 100/100 |
+| GPU | 1.012 / 1.154 | 3.987 / 4.412 | 3.94× slower | 251 ops/s | GPU 100/100, 1 dispatch/call |
+| Parallel CPU (opt-in Rayon) | 1.012 / 1.154 | 0.499 / 0.632 | 2.03× faster | 2,003 ops/s | CPU 100/100, `parallel` feature |
+
+The Parallel CPU profile was built separately with `pillow-rs/parallel` and
+`pillow-rs-py/parallel`; its comparison uses the ordinary Pillow oracle from
+the same workload, not a separate threaded Pillow baseline. It is not SIMD or
+GPU evidence. Serial CPU is still about 8% slower than Pillow on the median.
+SIMD is 3.13× slower than Pillow, and GPU is 3.94× slower than Pillow and
+slower than SIMD. Strict backend receipts show 100 executions on each
+requested backend with no fallback.
+
+The fixture now constructs only the three patterned L-band inputs; it no longer
+creates a generic full-size RGB image that the explicit `bands` argument then
+replaced. All band resizing and materialization occurs before the timed merge.
+The logical RGB output is 2,359,296 bytes (2.36 MB or 2.25 MiB). GPU resource
+telemetry records 3 MiB uploaded, 3 MiB read back, and 6 MiB in auxiliary
+buffers per measured call. These counters describe separate resource classes;
+do not sum them as unique live memory without proving whether they overlap.
+The current one-image GPU schedule still pays transfer and completion costs.
+
+Four bounded attempts produced these decisions and lessons:
+
+1. A narrow CPU fast path for logical RGB with exactly three native L bands
+   holds the shared green and blue images and reads their raw bytes, avoiding
+   the full-plane clones made by `to_luma8()` and `materialize_for_ops()`.
+   It allocates only the required output, preserves the mode-specific fallback,
+   and keeps Rayon under the opt-in Parallel CPU feature.
+2. Reserving exact output capacity avoids clearing bytes that the serial
+   interleave immediately overwrites. This is a small allocation improvement;
+   the valid spatial-pattern workload still measures serial CPU slower than
+   Pillow, so it is not accepted as having solved the operation.
+3. The SIMD path can borrow the auxiliary native L planes while the existing
+   vector block and scalar tail perform the interleave. A first guard expected
+   two entries, but `PipelineOp::Merge.bands` contains all three channels,
+   including the first band already supplied as `img`. That guard silently
+   left the old clone path active. The corrected helper requires three bands
+   and borrows `bands[1..]`; a Rust regression verifies Arc identity, varying
+   bytes, vector blocks, and the scalar tail. Only the corrected implementation
+   and current receipt may support performance claims.
+4. Appending each small vector block into an uninitialized output `Vec` removed
+   the clear but regressed its measured SIMD result. Reverted; the output uses
+   indexed writes into the initialized destination. The trial preceded the
+   spatial-pattern fixture and is only evidence against that store strategy.
+
+The multi-image GPU scheduler is the separate explicit `ImageBatch` feature;
+it currently groups compatible `MedianFilter(3)` jobs. It is not involved in
+this operation and no ordinary `Image.merge` route or backend choice was
+changed.
+
+`PIL.Image.merge.nuanced.performance-material-rgb-l-1024x768` passed exact
+live-Pillow parity 1/1 on serial CPU, strict SIMD, strict GPU, and Parallel
+CPU. `cargo test -p pillow-rs --lib merge` passed 8/8, including the new
+borrowed-band route test and existing typed-scalar, palette, LAB, and GPU merge
+checks. The standard result is
+`build/migration-parity/merge-rgb-fixture-final-benchmark.json`; the separately
+compiled opt-in feature result is
+`build/migration-parity/merge-rgb-fixture-final-parallel-cpu-benchmark.json`.
+Strict parity receipts are
+`build/migration-parity/merge-rgb-fixture-final-cpu.json`,
+`build/migration-parity/merge-rgb-fixture-final-simd.json`,
+`build/migration-parity/merge-rgb-fixture-final-gpu.json`, and
+`build/migration-parity/merge-rgb-fixture-final-parallel-cpu.json`. All use the
+workload generated by `scripts/build_migration_parity_inputs.py`. No coverage
+was run.
+
+This operation is checkpointed after four attempts. The CPU, SIMD, and GPU
+profiles still miss their targets; Parallel CPU is separately faster than
+ordinary Pillow for this image size. Move to the next operation rather than
+spending another round on Merge without a different SIMD kernel or a measured
+GPU scheduling hypothesis.

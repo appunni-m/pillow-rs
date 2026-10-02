@@ -6775,9 +6775,7 @@ class WorkflowBuilder:
             # ``generate`` is a public classmethod; call it on the class
             # rather than constructing an unnecessary receiver instance.
             receiver = None
-        arguments = self.primary_arguments(operation)
-
-        if (
+        merge_with_explicit_bands = (
             self.primary_surface == "PIL.Image"
             and self.primary_operation == "merge"
             and self.edge not in {
@@ -6786,7 +6784,21 @@ class WorkflowBuilder:
                 "invalid-band-item",
                 "invalid-band-item-int",
             }
-        ):
+        )
+        # The materialized RGB merge workload replaces the generic `bands`
+        # argument below with explicit inputs. Avoid leaving its default image
+        # alive during the measured operation, where it skews cache/memory
+        # pressure. Keep other merge fixtures unchanged.
+        omit_unused_merge_default = (
+            merge_with_explicit_bands and self.edge == "merge-rgb-channel-pattern"
+        )
+        arguments = (
+            {}
+            if omit_unused_merge_default
+            else self.primary_arguments(operation)
+        )
+
+        if merge_with_explicit_bands:
             # ``Image.merge`` takes a sequence of single-band Image objects.
             # A single binding is useful for error coverage but cannot reach
             # the core merge pipeline, so construct the sequence through the
@@ -6843,21 +6855,52 @@ class WorkflowBuilder:
                         step_id=f"setup-band-{index + 1}-palette",
                     )
                 else:
-                    band = self.add_step(
-                        "PIL.Image",
-                        "new",
-                        receiver=None,
-                        arguments={
-                            "mode": literal("L"),
-                            "size": literal(current_band_size),
-                            "color": literal(
-                                17
-                                if self.edge == "merge-rgb-nonzero"
-                                else 0
-                            ),
-                        },
-                        step_id=f"setup-band-{index + 1}",
-                    )
+                    if self.edge == "merge-rgb-channel-pattern":
+                        generator = (
+                            "radial_gradient" if index == 1 else "linear_gradient"
+                        )
+                        band = self.add_step(
+                            "PIL.Image",
+                            generator,
+                            receiver=None,
+                            arguments={"mode": literal("L")},
+                            step_id=f"setup-band-{index + 1}-pattern",
+                        )
+                        if index == 2:
+                            band = self.add_step(
+                                "PIL.Image.Image",
+                                "transpose",
+                                receiver=binding(band),
+                                arguments={"method": literal(2)},
+                                step_id=f"setup-band-{index + 1}-transpose",
+                            )
+                        band = self.add_step(
+                            "PIL.Image.Image",
+                            "resize",
+                            receiver=binding(band),
+                            arguments={"size": literal(current_band_size)},
+                            step_id=f"setup-band-{index + 1}-resize",
+                        )
+                        self.add_step(
+                            "PIL.Image.Image",
+                            "load",
+                            receiver=binding(band),
+                            arguments={},
+                            step_id=f"setup-band-{index + 1}-materialize",
+                        )
+                    else:
+                        color = 17 if self.edge == "merge-rgb-nonzero" else 0
+                        band = self.add_step(
+                            "PIL.Image",
+                            "new",
+                            receiver=None,
+                            arguments={
+                                "mode": literal("L"),
+                                "size": literal(current_band_size),
+                                "color": literal(color),
+                            },
+                            step_id=f"setup-band-{index + 1}",
+                        )
                 band_steps.append(band)
             arguments["mode"] = literal(self.mode)
             arguments["bands"] = bindings(band_steps)
@@ -24225,6 +24268,17 @@ def build_nuanced_cases(
             "name": "rgb-mode-nonzero",
             "mode": "RGB",
             "edge": "merge-rgb-nonzero",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "performance-material-rgb-l-1024x768",
+            "mode": "RGB",
+            "size": [1024, 768],
+            "edge": "merge-rgb-channel-pattern",
+            "observe_result": "tobytes",
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },
         {
             "surface": "PIL.Image",
@@ -48258,6 +48312,35 @@ def build_pipeline_benchmark_document(
         ),
     }
 
+    merge_rgb_material_case_id = (
+        "PIL.Image.merge.nuanced.performance-material-rgb-l-1024x768"
+    )
+    merge_rgb_material_case = cases_by_id[merge_rgb_material_case_id]
+    merge_rgb_material_context = _workflow_benchmark_context(
+        merge_rgb_material_case,
+        variant="merge-material-rgb-l-1024x768",
+        surface="PIL.Image",
+        operation="merge",
+    )
+    merge_rgb_material_context["mode"] = "RGB"
+    merge_rgb_material_context["operation_class"] = "point"
+    merge_rgb_material_workload = {
+        "workload_id": "pipeline-op.merge.material-rgb-l-1024x768",
+        "covers": [_performance_requirement(operations, "PIL.Image", "merge")],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": merge_rgb_material_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["call", "observe-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": merge_rgb_material_context,
+    }
+
     posterize_material_workloads = []
     posterize_requirement = _performance_requirement(
         operations, "PIL.ImageOps", "posterize"
@@ -51005,6 +51088,7 @@ def build_pipeline_benchmark_document(
             *operation_workloads,
             *scalar_conversion_workloads,
             thumbnail_material_workload,
+            merge_rgb_material_workload,
             *posterize_material_workloads,
             median_l_material_workload,
             median_la_material_workload,
@@ -51079,6 +51163,17 @@ def build_pipeline_benchmark_document(
                 ),
                 "members": [
                     {"workload_id": thumbnail_material_workload["workload_id"], "weight": 1}
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.merge-material-size-suite",
+                "description": (
+                    "Parity-gated 1024x768 RGB merge from three native L bands, "
+                    "measuring the public merge and byte materialization on "
+                    "CPU, SIMD, and GPU."
+                ),
+                "members": [
+                    {"workload_id": merge_rgb_material_workload["workload_id"], "weight": 1}
                 ],
             },
             {
