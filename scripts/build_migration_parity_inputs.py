@@ -42065,6 +42065,50 @@ def build_nuanced_cases(
                     )
                 specs += (spec,)
 
+        # The RGB order filters have compact GPU routes, but native L still
+        # enters the RGBA transport. Add a focused MaxFilter(3) L workload and
+        # a one-pixel/odd-size pair to expose transport and edge behavior.
+        for name, size, seed, requirement_suffix, extra_requirements in (
+            (
+                "performance-material-l-noise-1024x768-size-3",
+                [1024, 768],
+                20261068,
+                "performance.standard",
+                (),
+            ),
+            (
+                "backend-noise-l-1x1-size-3",
+                [1, 1],
+                20261069,
+                "mode.l",
+                ("performance.standard",),
+            ),
+            (
+                "backend-noise-l-33x35-size-3",
+                [33, 35],
+                20261070,
+                "mode.l",
+                ("performance.standard",),
+            ),
+        ):
+            spec = {
+                "surface": "PIL.ImageFilter",
+                "operation": "MaxFilter",
+                "append_at_end": True,
+                "requirement_suffix": requirement_suffix,
+                "name": name,
+                "mode": "L",
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "observe_result": "tobytes",
+                "values": {"size": literal(3)},
+                "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+            }
+            if extra_requirements:
+                spec["additional_requirement_suffixes"] = list(extra_requirements)
+            specs += (spec,)
+
         # The existing 9x9 material RankFilter input is constant-valued, which
         # makes insertion-sort comparisons exit immediately and does not
         # exercise useful order-statistic work. Keep varied native-L inputs
@@ -48505,6 +48549,37 @@ def build_pipeline_benchmark_document(
         }
         workload["context"]["operation_class"] = "neighborhood"
         extreme_filter_material_workloads.append(workload)
+
+    maxfilter_l_case_id = (
+        "PIL.ImageFilter.MaxFilter.nuanced."
+        "performance-material-l-noise-1024x768-size-3"
+    )
+    maxfilter_l_case = cases_by_id[maxfilter_l_case_id]
+    maxfilter_l_material_workload = {
+        "workload_id": "pipeline-op.maxfilter.material-l-noise-1024x768",
+        "covers": [
+            _performance_requirement(operations, "PIL.ImageFilter", "MaxFilter")
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {"kind": "parity_case", "case_id": maxfilter_l_case_id},
+        "measurement": {
+            **copy.deepcopy(policy),
+            "boundary": "observed_steps",
+            "step_ids": ["apply-filter", "observe-filter-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            maxfilter_l_case,
+            variant="maxfilter-material-l-noise-1024x768-size-3",
+            surface="PIL.ImageFilter",
+            operation="MaxFilter",
+        ),
+    }
+    maxfilter_l_material_workload["context"]["operation_class"] = "neighborhood"
+    extreme_filter_material_workloads.append(maxfilter_l_material_workload)
 
     grayscale_rgb_case_id = (
         "PIL.ImageOps.grayscale.nuanced.performance-large-rgb-noise-1024x768"

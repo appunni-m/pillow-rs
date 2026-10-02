@@ -15356,3 +15356,83 @@ profiles still miss their targets; Parallel CPU is separately faster than
 ordinary Pillow for this image size. Move to the next operation rather than
 spending another round on Merge without a different SIMD kernel or a measured
 GPU scheduling hypothesis.
+
+## Native-L `ImageFilter.MaxFilter(3)` GPU transport checkpoint — 2026-10-03
+
+The L specialization reuses the packed-L input and readback infrastructure
+already used by other native byte operations. It admits only one native-L
+`MaxFilter(3)` operation on little-endian targets, computes the exact clamped
+3 × 3 maximum, and assigns each packed output word to one shader invocation.
+The final partial word is masked before storage. The normal `Image` call stays
+on the existing single-image executor; this does not route it through the
+separate explicit `ImageBatch` scheduler.
+
+The material fixture is seeded noise at 1024 × 768. Two boundary fixtures are
+1 × 1 and 33 × 35. Live-Pillow parity passed 3/3 for serial CPU, strict SIMD,
+strict GPU, and Parallel CPU. The GPU unit test also checked 1 × 1, 1 × 3,
+4 × 3, 5 × 3, and 33 × 35 directly against the CPU result, and asserted actual
+GPU execution, one dispatch, native L output, zero mode conversions, and
+compact transfer sizes. No coverage was run.
+
+The correctness-gated pipeline workload measured 100 observations per
+profile, with image creation outside the timed `apply-filter` plus
+`observe-filter-result` steps. The Pillow comparator is the ordinary Pillow
+profile shared by the Parallel CPU result; no threaded Pillow baseline was
+used.
+
+| Profile | Pillow median / p95 (ms) | pillow-rs median / p95 (ms) | Relative latency | Median throughput | Execution proof |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Serial CPU | 31.968 / 32.846 | 10.177 / 11.891 | 3.14× faster | 98.3 ops/s | CPU 100/100, no fallback |
+| SIMD | 31.968 / 32.846 | 4.554 / 4.739 | 7.02× faster | 219.6 ops/s | SIMD 100/100, no fallback |
+| GPU | 31.968 / 32.846 | 1.028 / 1.163 | 31.1× faster; 4.43× lower latency than SIMD | 972.8 ops/s | GPU 100/100, 1 dispatch/call, no fallback |
+| Parallel CPU (opt-in Rayon) | 31.968 / 32.846 | 1.240 / 1.418 | 25.8× faster | 806.4 ops/s | CPU 100/100, `parallel` feature |
+
+The pre-change generic L GPU route measured 2.384 ms median and 2.821 ms p95.
+It uploaded and read back 3,145,728 bytes each and reported one mode
+conversion. The native-L route moves 786,432 bytes in each direction (a 4×
+reduction), reports zero conversions, and lowers median GPU latency by 56.9%.
+GPU's serial-call throughput is 4.43× SIMD's for this measured workload; it is
+not a high-concurrency or queued-batch throughput claim. The `parallel-cpu`
+build uses the opt-in `pillow-rs/parallel` feature and remains separate from
+serial CPU, SIMD, and GPU.
+
+This one-case checkpoint meets the measured serial CPU, SIMD, and GPU goals.
+It does not close P1 for other modes or filter sizes. Exact inputs, medians,
+receipts, and commands are in these standard and Parallel CPU benchmark
+artifacts:
+
+- `build/migration-parity/maxfilter-l-baseline-benchmark.json`
+- `build/migration-parity/maxfilter-l-optimized-benchmark.json`
+- `build/migration-parity/maxfilter-l-optimized-parallel-cpu-benchmark.json`
+
+The strict parity artifacts are
+`build/migration-parity/maxfilter-l-optimized-cpu-parity.json`,
+`maxfilter-l-optimized-simd-parity.json`,
+`maxfilter-l-optimized-gpu-parity.json`, and
+`maxfilter-l-optimized-parallel-cpu-parity.json` in the same directory. The
+reproducible input selection is:
+
+```sh
+MAXFILTER_L_CASES='PIL.ImageFilter.MaxFilter.nuanced.performance-material-l-noise-1024x768-size-3,PIL.ImageFilter.MaxFilter.nuanced.backend-noise-l-1x1-size-3,PIL.ImageFilter.MaxFilter.nuanced.backend-noise-l-33x35-size-3'
+```
+
+Run `make migration-parity-test` with
+`MIGRATION_TARGET_BACKEND=cpu MIGRATION_PARITY_CASE_IDS="$MAXFILTER_L_CASES"`,
+then run `make migration-parity-test-simd-strict` and
+`make migration-parity-test-gpu-strict` with the same case IDs. For Parallel
+CPU, use `MIGRATION_TARGET_PROFILE=parallel-cpu` and
+`MIGRATION_TARGET_BACKEND=cpu` with `make migration-parity-test`.
+
+Run the standard benchmark with:
+
+```sh
+MIGRATION_BENCHMARK_PROFILE=pipeline \
+MIGRATION_BENCHMARK_ARGS='--workload-id pipeline-op.maxfilter.material-l-noise-1024x768' \
+make migration-parity-benchmark
+```
+
+Use the same environment with `make migration-parity-benchmark-parallel-cpu`
+for the separately built opt-in profile. The GPU unit regression is
+`cargo test --locked -p pillow-rs --lib gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers`.
+Continue the audit with the next uncheckpointed operation/mode that still pays
+measurable RGBA staging.

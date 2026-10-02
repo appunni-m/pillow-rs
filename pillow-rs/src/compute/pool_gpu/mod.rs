@@ -7040,6 +7040,16 @@ impl GpuInner {
                 index += 1;
                 continue;
             }
+            if packed_luma_order_statistic && matches!(op, PipelineOp::MaxFilter { size: 3 }) {
+                let max_filter = self.resolve_pipeline(
+                    "__internal_max_filter_3x3_luma_packed",
+                    "max_filter_3x3_luma_packed.wgsl",
+                    include_str!("shaders/max_filter_3x3_luma_packed.wgsl"),
+                )?;
+                resolved.push(ResolvedPipeline::Single(max_filter));
+                index += 1;
+                continue;
+            }
             if packed_native_byte_filter
                 && matches!(logical_mode, Some("LA"))
                 && matches!(op, PipelineOp::MedianFilter { size: 3 })
@@ -8687,6 +8697,13 @@ impl GpuInner {
                     "median_filter_3x3_luma_packed.wgsl",
                     include_str!("shaders/median_filter_3x3_luma_packed.wgsl"),
                 )?
+            } else if packed_luma_order_statistic && matches!(op, PipelineOp::MaxFilter { size: 3 })
+            {
+                self.resolve_pipeline(
+                    "__internal_max_filter_3x3_luma_packed",
+                    "max_filter_3x3_luma_packed.wgsl",
+                    include_str!("shaders/max_filter_3x3_luma_packed.wgsl"),
+                )?
             } else if packed_luma_order_statistic
                 && matches!(op, PipelineOp::RankFilter { size: 9, .. })
                 && cur_w % 4 == 0
@@ -9831,6 +9848,11 @@ impl GpuInner {
                 self.device.limits().max_compute_workgroups_per_dimension,
             )?,
             "__internal_median_filter_3x3_luma_packed" => plan_packed_luma_dispatch(
+                input_dims.0,
+                input_dims.1,
+                self.device.limits().max_compute_workgroups_per_dimension,
+            )?,
+            "__internal_max_filter_3x3_luma_packed" => plan_packed_luma_dispatch(
                 input_dims.0,
                 input_dims.1,
                 self.device.limits().max_compute_workgroups_per_dimension,
@@ -14423,7 +14445,7 @@ fn gpu_packed_luma_point_input(
     pixels != 0 && pixels <= u32::MAX as usize && luma.as_raw().len() == pixels
 }
 
-/// Admit native-L order-statistic specializations. Their shaders operate on
+/// Admit native-L neighborhood specializations. Their shaders operate on
 /// four adjacent samples packed into one word; keep prefixes, palette modes,
 /// empty images, unsupported filter sizes, and malformed backing lengths on
 /// the ordinary path.
@@ -14435,7 +14457,9 @@ fn gpu_packed_luma_order_statistic_input(
 ) -> bool {
     if !matches!(
         ops,
-        [PipelineOp::MedianFilter { size: 3 }] | [PipelineOp::RankFilter { size: 9, .. }]
+        [PipelineOp::MedianFilter { size: 3 }]
+            | [PipelineOp::MaxFilter { size: 3 }]
+            | [PipelineOp::RankFilter { size: 9, .. }]
     ) || !matches!(logical_mode, None | Some("L"))
     {
         return false;
@@ -31066,6 +31090,7 @@ mod tests {
     #[cfg(target_endian = "little")]
     fn gpu_packed_luma_order_statistic_admits_only_exact_native_l_singletons() {
         let median = PipelineOp::MedianFilter { size: 3 };
+        let max_filter = PipelineOp::MaxFilter { size: 3 };
         let rank = PipelineOp::RankFilter { size: 9, rank: 40 };
         let luma = DynamicImage::ImageLuma8(
             GrayImage::from_raw(3, 2, vec![5, 40, 250, 100, 80, 10]).unwrap(),
@@ -31085,6 +31110,11 @@ mod tests {
             &luma,
             Some("L")
         ));
+        assert!(super::gpu_packed_luma_order_statistic_input(
+            std::slice::from_ref(&max_filter),
+            &luma,
+            Some("L")
+        ));
         assert!(!super::gpu_packed_luma_order_statistic_input(
             std::slice::from_ref(&median),
             &luma,
@@ -31097,6 +31127,11 @@ mod tests {
         ));
         assert!(!super::gpu_packed_luma_order_statistic_input(
             &[PipelineOp::RankFilter { size: 7, rank: 20 }],
+            &luma,
+            Some("L")
+        ));
+        assert!(!super::gpu_packed_luma_order_statistic_input(
+            &[PipelineOp::MaxFilter { size: 5 }],
             &luma,
             Some("L")
         ));
@@ -31357,6 +31392,61 @@ mod tests {
             assert_eq!(receipt.7, None);
             let resources = receipt.8.expect("native RGB median resources");
             let transfer_bytes = (width as usize * height as usize * 3).div_ceil(4) * 4;
+            assert_eq!(resources.upload_bytes, transfer_bytes as u64);
+            assert_eq!(resources.readback_bytes, transfer_bytes as u64);
+            assert_eq!(resources.mode_conversion_count, 0);
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers() {
+        use crate::compute::{execute_prepared, prepare_execution};
+
+        struct RestoreTelemetry(bool);
+        impl Drop for RestoreTelemetry {
+            fn drop(&mut self) {
+                Backend::set_pipeline_telemetry_enabled(self.0);
+            }
+        }
+
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let _restore_telemetry = RestoreTelemetry(previous);
+        let op = [PipelineOp::MaxFilter { size: 3 }];
+        for (width, height) in [(1u32, 1u32), (1, 3), (4, 3), (5, 3), (33, 35)] {
+            let pixel_count = width as usize * height as usize;
+            let bytes = (0..pixel_count)
+                .map(|index| ((index * 73 + index / 13 * 31 + 19) % 256) as u8)
+                .collect::<Vec<_>>();
+            let source = DynamicImage::ImageLuma8(
+                GrayImage::from_raw(width, height, bytes).expect("L max-filter source"),
+            );
+            let expected = crate::compute::registry::execute_cpu(&op[0], &source, Some("L"))
+                .expect("CPU L MaxFilter reference");
+            let prepared =
+                prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L MaxFilter routing");
+            let actual = match execute_prepared(&prepared, &op, &source, Some("L")) {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return;
+                }
+                Err(error) => panic!("native GPU L MaxFilter failed: {error}"),
+            };
+            assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
+            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
+
+            let receipt = Backend::take_pipeline_telemetry().expect("native L max receipt");
+            assert_eq!(receipt.0, Some(Backend::Gpu));
+            assert_eq!(receipt.1, Backend::Gpu);
+            assert_eq!(receipt.6, Some(1));
+            assert_eq!(receipt.7, None);
+            let resources = receipt.8.expect("native L max resources");
+            let transfer_bytes = pixel_count.div_ceil(4) * 4;
             assert_eq!(resources.upload_bytes, transfer_bytes as u64);
             assert_eq!(resources.readback_bytes, transfer_bytes as u64);
             assert_eq!(resources.mode_conversion_count, 0);
