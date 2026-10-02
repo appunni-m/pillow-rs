@@ -18621,6 +18621,209 @@ fn simd_rgba_vertical_radius_one_rows(
     }
 }
 
+/// Apply one native-LA horizontal radius-one box pass over eight pixels per
+/// vector. Each 16-byte vector contains eight `[L, A]` pairs; both bands use
+/// the same Pillow weights but stay interleaved in the two-byte image layout.
+fn simd_la_horizontal_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(2)
+        .expect("validated LA dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+
+    let interior_end = width.saturating_sub(2);
+    let vector_blocks_per_row = interior_end.saturating_sub(2) / 8;
+    let vector_blocks = vector_blocks_per_row.saturating_mul(height) as u64;
+    let scalar_tail = width.saturating_sub(vector_blocks_per_row * 8) * height;
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    if scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
+    }
+
+    for y in 0..height {
+        let row_start = y * row_stride;
+        let input = &source[row_start..row_start + row_stride];
+        let output = &mut destination[row_start..row_start + row_stride];
+        let prefix_end = width.min(2);
+        for x in 0..prefix_end {
+            simd_la_blur_scalar_pixel(input, output, width, x, whole_weight, fractional_weight);
+        }
+
+        let mut x = 2usize;
+        while x + 8 <= interior_end {
+            let byte_start = x * 2;
+            let load =
+                |pixel: usize| u32x16::from(u16x16::from(simd_blur_load_u8x16(input, pixel * 2)));
+            let sum = load(x - 1) + load(x) + load(x + 1);
+            let edge = if fractional_weight == 0 {
+                u32x16::splat(0)
+            } else {
+                load(x - 2) + load(x + 2)
+            };
+            let weighted = sum * u32x16::splat(whole_weight)
+                + edge * u32x16::splat(fractional_weight)
+                + u32x16::splat(SIMD_BOX_BLUR_BIAS);
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            output[byte_start..byte_start + 16].copy_from_slice(&packed);
+            x += 8;
+        }
+
+        for x in x..interior_end {
+            simd_la_blur_scalar_pixel(input, output, width, x, whole_weight, fractional_weight);
+        }
+        for x in interior_end.max(prefix_end)..width {
+            simd_la_blur_scalar_pixel(input, output, width, x, whole_weight, fractional_weight);
+        }
+    }
+}
+
+#[inline(always)]
+fn simd_la_blur_scalar_pixel(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    x: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let left = x.saturating_sub(1);
+    let right = x.saturating_add(1).min(width - 1);
+    let far_left = x.saturating_sub(2);
+    let far_right = x.saturating_add(2).min(width - 1);
+    let center = x * 2;
+    for channel in 0..2 {
+        let sum = u32::from(source[left * 2 + channel])
+            + u32::from(source[center + channel])
+            + u32::from(source[right * 2 + channel]);
+        let edge =
+            u32::from(source[far_left * 2 + channel]) + u32::from(source[far_right * 2 + channel]);
+        let weighted = sum
+            .wrapping_mul(whole_weight)
+            .wrapping_add(edge.wrapping_mul(fractional_weight))
+            .wrapping_add(SIMD_BOX_BLUR_BIAS);
+        destination[center + channel] = (weighted >> 24) as u8;
+    }
+}
+
+/// Apply one native-LA vertical radius-one box pass directly in row-major
+/// storage. Eight interleaved LA pixels fit each vector; border rows and an
+/// incomplete final vector retain Pillow's clamped-edge and byte rounding.
+fn simd_la_vertical_radius_one_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_stride = width
+        .checked_mul(2)
+        .expect("validated LA dimensions fit the native row stride");
+    debug_assert!(width > 0);
+    debug_assert!(height > 0);
+    debug_assert_eq!(source.len(), row_stride * height);
+    debug_assert_eq!(destination.len(), source.len());
+
+    let last_y = height - 1;
+    let vector_blocks = row_stride.div_ceil(16).saturating_mul(height) as u64;
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+
+    for y in 0..height {
+        let sum_top_base = y.saturating_sub(1) * row_stride;
+        let sum_middle_base = y * row_stride;
+        let sum_bottom_base = y.saturating_add(1).min(last_y) * row_stride;
+        let edge_top_base = y.saturating_sub(2) * row_stride;
+        let edge_bottom_base = y.saturating_add(2).min(last_y) * row_stride;
+        let output_row = y * row_stride;
+
+        for x in (0..row_stride).step_by(16) {
+            let count = (row_stride - x).min(16);
+            let load = |base: usize| {
+                if count == 16 {
+                    u32x16::from(u16x16::from(simd_blur_load_u8x16(source, base + x)))
+                } else {
+                    let mut padded = [0u8; 16];
+                    padded[..count].copy_from_slice(&source[base + x..base + x + count]);
+                    u32x16::from(u16x16::from(u8x16::new(padded)))
+                }
+            };
+            let sum = load(sum_top_base) + load(sum_middle_base) + load(sum_bottom_base);
+            let edge = if fractional_weight == 0 {
+                u32x16::splat(0)
+            } else {
+                load(edge_top_base) + load(edge_bottom_base)
+            };
+            let weighted = sum * u32x16::splat(whole_weight)
+                + edge * u32x16::splat(fractional_weight)
+                + u32x16::splat(SIMD_BOX_BLUR_BIAS);
+            let packed = simd_blur_pack_u32x16_to_bytes(weighted >> 24u32);
+            destination[output_row + x..output_row + x + count].copy_from_slice(&packed[..count]);
+        }
+    }
+}
+
+fn simd_pil_gaussian_blur_la_radius_one(
+    img: &DynamicImage,
+    radius: f32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let dimensions = CheckedDims::new(img.width(), img.height(), 2)?;
+    if img.as_bytes().len() != dimensions.total_bytes() || (radius as i32) != 1 {
+        return Err(simd_unsupported("GaussianBlur"));
+    }
+    if native_small_uniform_byte_image(img, 2) {
+        return native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("GaussianBlur"));
+    }
+
+    let whole_weight = (SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+    let integer_window = 3u32;
+    let fractional_weight =
+        SIMD_BOX_BLUR_SCALE.wrapping_sub(integer_window.wrapping_mul(whole_weight)) / 2;
+    let width = dimensions.width as usize;
+    let height = dimensions.height as usize;
+    crate::compute::record_pipeline_operation_path("vector");
+    let mut work = img.as_bytes().to_vec();
+    let mut scratch = dimensions.alloc_buffer();
+
+    for _ in 0..3 {
+        simd_la_horizontal_radius_one_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+    }
+    for _ in 0..3 {
+        simd_la_vertical_radius_one_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
+    }
+
+    let result =
+        crate::image_utils::raw_bytes_to_image(dimensions.width, dimensions.height, work, 2)?;
+    Ok(preserve_mode(img, result))
+}
+
 fn simd_pil_gaussian_blur_l_radius_one(
     img: &DynamicImage,
     radius: f32,
@@ -26691,6 +26894,13 @@ pub fn simd_gaussian_blur(
         {
             return simd_pil_gaussian_blur_l_radius_one(img, blur_radius, mode);
         }
+        if channels == 2
+            && matches!(img, DynamicImage::ImageLumaA8(_))
+            && matches!(mode, Some("LA"))
+            && (1.0..2.0).contains(&blur_radius)
+        {
+            return simd_pil_gaussian_blur_la_radius_one(img, blur_radius, mode);
+        }
         return simd_pil_box_blur(img, blur_radius, 3, channels, mode);
     }
     Err(PilError::ValueError("expected GaussianBlur op".into()))
@@ -29824,6 +30034,99 @@ mod tests {
 
                 let mut vertical_actual = dimensions.alloc_buffer();
                 super::simd_rgba_vertical_radius_one_rows(
+                    &source,
+                    &mut vertical_actual,
+                    width as usize,
+                    height as usize,
+                    whole_weight,
+                    fractional_weight,
+                );
+                assert_eq!(
+                    vertical_actual, vertical_expected,
+                    "vertical dimensions={width}x{height} radius={radius}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn la_radius_one_direct_passes_match_generic_simd() {
+        for radius in [1.0f32, 1.25, 1.9] {
+            let whole_weight = (super::SIMD_BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+            let fractional_weight = super::SIMD_BOX_BLUR_SCALE.wrapping_sub(3 * whole_weight) / 2;
+
+            for (width, height) in [
+                (1, 1),
+                (2, 3),
+                (3, 2),
+                (4, 5),
+                (5, 9),
+                (8, 3),
+                (9, 4),
+                (19, 7),
+                (65, 47),
+            ] {
+                let dimensions = crate::checked_dims::CheckedDims::new(width, height, 2)
+                    .expect("test LA dimensions fit");
+                let source: Vec<u8> = (0..dimensions.total_bytes())
+                    .map(|index| (index.wrapping_mul(59).wrapping_add(17) % 256) as u8)
+                    .collect();
+
+                let mut horizontal_expected = dimensions.alloc_buffer();
+                super::simd_blur_rows(
+                    &source,
+                    &mut horizontal_expected,
+                    width as usize,
+                    height as usize,
+                    2,
+                    1,
+                    whole_weight,
+                    fractional_weight,
+                );
+                let mut horizontal_actual = dimensions.alloc_buffer();
+                super::simd_la_horizontal_radius_one_rows(
+                    &source,
+                    &mut horizontal_actual,
+                    width as usize,
+                    height as usize,
+                    whole_weight,
+                    fractional_weight,
+                );
+                assert_eq!(
+                    horizontal_actual, horizontal_expected,
+                    "horizontal dimensions={width}x{height} radius={radius}"
+                );
+
+                let mut transposed = dimensions.alloc_buffer();
+                super::simd_transpose_interleaved_rows(
+                    &source,
+                    &mut transposed,
+                    width as usize,
+                    height as usize,
+                    2,
+                );
+                let mut transposed_blurred = dimensions.alloc_buffer();
+                super::simd_blur_rows(
+                    &transposed,
+                    &mut transposed_blurred,
+                    height as usize,
+                    width as usize,
+                    2,
+                    1,
+                    whole_weight,
+                    fractional_weight,
+                );
+                let mut vertical_expected = dimensions.alloc_buffer();
+                super::simd_transpose_interleaved_rows(
+                    &transposed_blurred,
+                    &mut vertical_expected,
+                    height as usize,
+                    width as usize,
+                    2,
+                );
+
+                let mut vertical_actual = dimensions.alloc_buffer();
+                super::simd_la_vertical_radius_one_rows(
                     &source,
                     &mut vertical_actual,
                     width as usize,

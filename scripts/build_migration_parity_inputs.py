@@ -41701,6 +41701,20 @@ def build_nuanced_cases(
             "target_profiles": list(BENCHMARK_TARGET_PROFILES),
         },)
 
+        # LA has two independent stored bands, but the generic GPU blur route
+        # widens it to RGBA and filters four channels. Keep a material varied
+        # LA row beside the L case to measure the conversion and extra channel
+        # work before adding a compact native-LA shader.
+        specs += ({
+            "surface": "PIL.ImageFilter", "operation": "GaussianBlur",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-la-noise-1024x768-radius-2",
+            "mode": "LA", "size": [1024, 768], "edge": "noise-fill",
+            "seed": 20261013, "observe_result": "tobytes",
+            "values": {"radius": literal(2.0)},
+            "target_profiles": list(BENCHMARK_TARGET_PROFILES),
+        },)
+
         # BoxBlur's default benchmark image is constant, allowing the blur
         # implementation to return without exercising its horizontal and
         # vertical passes. Keep a varied native-L workload so byte-layout and
@@ -51615,6 +51629,32 @@ def build_inputs(
                 members.append(
                     {
                         "workload_id": l_workload["workload_id"],
+                        "weight": 1,
+                    }
+                )
+                la_case_id = (
+                    "PIL.ImageFilter.GaussianBlur.nuanced."
+                    "performance-material-la-noise-1024x768-radius-2"
+                )
+                la_case = all_cases_by_id[la_case_id]
+                la_workload = copy.deepcopy(workloads[-1])
+                la_workload["workload_id"] = (
+                    "pipeline-op.gaussianblur.material-la-noise-1024x768"
+                )
+                la_workload["input"] = {
+                    "kind": "parity_case",
+                    "case_id": la_case_id,
+                }
+                la_workload["context"] = _workflow_benchmark_context(
+                    la_case,
+                    variant="material-la-noise-1024x768-radius-2",
+                    surface=surface_id,
+                    operation=operation["id"],
+                )
+                workloads.append(la_workload)
+                members.append(
+                    {
+                        "workload_id": la_workload["workload_id"],
                         "weight": 1,
                     }
                 )
