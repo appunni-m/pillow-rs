@@ -403,6 +403,20 @@ L MinFilter(3) case only; other modes and filter sizes keep their own proofs.
 See `PERFORMANCE_CAMPAIGN.md` for the separate Parallel CPU result and exact
 receipts.
 
+Native-LA `ImageFilter.MaxFilter(3)` now has a two-channel packed GPU route.
+It keeps L and alpha independent, uses the native LA transfer/readback path,
+and handles odd image sizes and the final partial pixel word. CPU, strict SIMD,
+strict GPU, and opt-in Parallel CPU each passed all three live-Pillow cases
+(1 × 1, 33 × 35, and 1024 × 768). The material GPU upload/readback fell from
+3,145,728 to 1,572,864 bytes each, mode conversions fell from one to zero, and
+GPU median latency fell from 2.918 ms to 1.204 ms. Serial CPU was 5.41× faster
+than Pillow, SIMD 7.00× faster, and GPU had 7.33× lower latency than SIMD on
+this sample. This closes only native-LA MaxFilter(3) at the measured
+size; other LA filters and sizes retain separate parity and performance rows.
+The explicit `ImageBatch` API and ordinary single-image paths were untouched.
+See `PERFORMANCE_CAMPAIGN.md` for the distinct Parallel CPU result and
+receipts.
+
 P3 is partially addressed on main. The median-cut path borrows bytes for native
 RGB and avoids the unused tuple and flattened-byte buffers when `kmeans=0`;
 non-RGB modes retain conversion. Focused parity passed for default median-cut,
@@ -428,11 +442,11 @@ or Parallel CPU route.
 
 ## Suggested order for follow-up
 
-1. Continue P1 after the RGB Transform, RGB AutoContrast, RGB/L MaxFilter(3),
-   L MinFilter(3), and Cover checkpoints by selecting the next uncheckpointed
-   operation/mode with measurable RGBA staging cost; preserve each kernel's
-   rounding and channel contract. RGB AutoContrast's native GPU transfers are
-   implemented, but queued throughput and the SIMD speedup target remain
+1. Continue P1 after the RGB Transform, RGB AutoContrast, RGB/L/LA
+   MaxFilter(3), L MinFilter(3), and Cover checkpoints by selecting the next
+   uncheckpointed operation/mode with measurable RGBA staging cost; preserve
+   each kernel's rounding and channel contract. RGB AutoContrast's native GPU
+   transfers are implemented, but queued throughput and the SIMD speedup target remain
    open. L and LA Cover serial CPU targets are closed on their material cases;
    LA SIMD remains below its 5× target after one measured
    redundant-premultiplication removal.

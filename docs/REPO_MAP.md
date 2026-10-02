@@ -161,6 +161,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- median_filter_3x3_rgb_packed.wgsl
 |   |   |   |       |-- merge.wgsl
 |   |   |   |       |-- min_filter.wgsl
+|   |   |   |       |-- min_filter_3x3_luma_packed.wgsl
 |   |   |   |       |-- min_filter_3x3_rgb_packed.wgsl
 |   |   |   |       |-- mirror.wgsl
 |   |   |   |       |-- multiply.wgsl
