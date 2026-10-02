@@ -346,10 +346,16 @@ RGB `ImageOps.autocontrast` now maps each native RGB triplet directly into its
 output on serial CPU instead of cloning then rescanning bytes with per-byte
 channel selection. On the 1024 × 768 material case, CPU throughput increased
 from 354.2 to 774.3 images/s and every measured CPU/SIMD/GPU output matched
-live Pillow. SIMD remains about 1.34× Pillow. GPU still stages four bytes per
-pixel in each direction and records one mode conversion; a packed RGB Eval
-shader route is the remaining P1 task for this operation. See
-`PERFORMANCE_CAMPAIGN.md` for the four-attempt checkpoint and receipts.
+live Pillow. Its GPU path now admits only the host-derived unmasked RGB LUT to
+a compact three-byte upload, channel-specific packed-LUT shader, and compact
+three-byte readback; this cuts both transfers from 3,145,728 to 2,359,296
+bytes and removes the input mode conversion. Repeated q1 runs put GPU at
+1.04–1.14× SIMD throughput with exact Pillow parity. The exact-source q2
+result is even with SIMD; q4 is still 18% slower, with earlier runs varying
+from 0.77× to 1.08×. Serial CPU is faster than Pillow on this case; SIMD
+remains about 1.3× Pillow, far below the 5× target. See
+`PERFORMANCE_CAMPAIGN.md` for the route details, all queue-depth measurements,
+and receipts.
 
 L `ImageOps.cover` now has a direct single-byte CPU resize path guarded by
 coefficient and source-extent bounds. The final 1024 × 768 material workload
@@ -389,9 +395,10 @@ or Parallel CPU route.
 1. Continue P1 after the RGB Transform and RGB AutoContrast checkpoints by
    selecting the next uncheckpointed operation/mode with measurable RGBA
    staging cost; preserve each kernel's rounding and channel contract. RGB
-   AutoContrast still needs packed GPU input/output. L and LA Cover serial CPU
-   targets are closed on their material cases; LA SIMD remains below its 5×
-   target after one measured redundant-premultiplication removal.
+   AutoContrast's native GPU transfers are implemented, but queued throughput
+   and the SIMD speedup target remain open. L and LA Cover serial CPU targets
+   are closed on their material cases; LA SIMD remains below its 5× target
+   after one measured redundant-premultiplication removal.
 2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
