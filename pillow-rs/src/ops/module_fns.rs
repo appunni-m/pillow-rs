@@ -632,9 +632,19 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
         GradientMode::Integer | GradientMode::Float => (4, 256),
     };
     let size: usize = row_bytes * 256 * bytes_per_pixel;
-    let mut data = vec![0u8; size];
+    let mut data = if mode == "L" {
+        Vec::with_capacity(size)
+    } else {
+        vec![0u8; size]
+    };
 
     for y in 0..256usize {
+        if mode == "L" {
+            // Each native-L row is one repeated sample; initialize every
+            // output byte once instead of zeroing the frame before filling it.
+            data.resize((y + 1) * 256, y as u8);
+            continue;
+        }
         let row_start = y * row_bytes * bytes_per_pixel;
         match gradient_mode {
             GradientMode::Byte => {
@@ -668,7 +678,9 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
             }
         }
     }
-    Image::frombytes(mode, (256, 256), &data)
+    // The generated buffer is already the final raster, so transfer ownership
+    // instead of copying it through the borrowed `frombytes` constructor.
+    Image::frombytes_owned(mode, (256, 256), data)
 }
 
 /// Generates a 256 by 256 radial gradient.

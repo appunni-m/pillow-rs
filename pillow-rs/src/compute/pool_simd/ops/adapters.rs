@@ -15451,6 +15451,23 @@ pub(crate) fn simd_linear_gradient_generate(mode: &str) -> Result<DynamicImage, 
     let output_len = row_bytes
         .checked_mul(256)
         .ok_or_else(|| PilError::ValueError("SIMD LinearGradient output length overflow".into()))?;
+    if mode == "L" {
+        let mut output = Vec::with_capacity(output_len);
+        let mut vector_blocks = 0u64;
+        for y in 0..256usize {
+            let block = u8x16::splat(y as u8).to_array();
+            let mut row = [0u8; 256];
+            for chunk in row.chunks_exact_mut(block.len()) {
+                chunk.copy_from_slice(&block);
+                vector_blocks = vector_blocks.saturating_add(1);
+            }
+            output.extend_from_slice(&row);
+        }
+        crate::compute::record_pipeline_operation_path("vector");
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+        return crate::image_utils::raw_bytes_to_image(256, 256, output, 1);
+    }
     let mut output = vec![0u8; output_len];
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;

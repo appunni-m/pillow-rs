@@ -14929,3 +14929,71 @@ Move to the next ranked operation. Revisit I thumbnail only with stage-level
 profiles or a materially better contiguous arithmetic layout; retain the
 focused parity test and the device-fallback reason as blockers. No coverage was
 run.
+
+## L-mode `Image.linear_gradient` checkpoint — 2026-10-03
+
+`Image.linear_gradient("L")` eagerly creates a fixed 256 × 256 native-L
+image. Each row contains 256 copies of its y coordinate, so this is output
+initialization and ownership cost rather than per-pixel arithmetic. The clean
+`main` source at `0014b5852` initially measured Pillow/CPU/SIMD/GPU-request
+medians of 0.009605/0.038979/0.013188/0.012354 ms (six samples each). CPU and
+the GPU-request row had no operation-level backend receipt; SIMD recorded six
+actual SIMD executions. This eager constructor does not enter the GPU
+dispatcher, so the GPU-request timing is not GPU evidence.
+
+Four bounded candidates were tried. The retained changes are transferring the
+completed output buffer into `Image::frombytes_owned`, building L rows in a
+reserved buffer without zero-initializing the whole frame first, and writing
+the SIMD L row through 16-byte vector blocks into one stack row before
+appending it. The direct-per-block append variant was reverted. Median ms:
+
+| Candidate | Pillow | CPU | SIMD | GPU request |
+| --- | ---: | ---: | ---: | ---: |
+| Clean-source baseline | 0.009605 | 0.038979 | 0.013188 | 0.012354 |
+| 1. Transfer the output buffer into the image | 0.010000 | 0.016313 | 0.015667 | 0.011000 |
+| 2. Also skip the zero-fill for CPU L rows | 0.011479 | 0.009396 | 0.013542 | 0.008709 |
+| 3. Vector-fill one L row, first run | 0.010396 | 0.008479 | 0.011334 | 0.008501 |
+| 4. Append each SIMD block directly (reverted) | 0.012875 | 0.009021 | 0.016333 | 0.010875 |
+| 3. Buffered SIMD row, repeat | 0.010980 | 0.008646 | 0.008522 | 0.008229 |
+
+Benchmark artifacts are `linear-gradient-l-baseline-0014b5852-20261003.json`,
+`linear-gradient-l-owned-buffer-0014b5852-20261003.json`,
+`linear-gradient-l-nozero-0014b5852-20261003.json`,
+`linear-gradient-l-simd-row-0014b5852-20261003.json`,
+`linear-gradient-l-simd-direct-blocks-0014b5852-20261003.json`, and
+`linear-gradient-l-attempt3-repeat-0014b5852-20261003.json` under
+`build/migration-parity/`. The repeat has six measured samples per subject;
+the operation's timing gate is successful execution only.
+
+The ordinary CPU and buffered-SIMD medians in the final completed run were
+1.27× and 1.29× faster than that run's Pillow median. These runs contain only
+six samples and moved noticeably between cohorts; the SIMD candidate narrowly
+lost to Pillow on its first run and won on the repeat. Treat the last result as
+a promising checkpoint, not a stable 5× SIMD result. The whole call is a tiny
+eager allocation/fill/return path with only 64 KiB of output and little useful
+per-sample arithmetic, so repeated lane setup and extra copies quickly erase
+the SIMD advantage. The direct append lost because it issued a vector-to-Vec
+append for every 16-byte block instead of appending one completed row.
+
+The parallel build was benchmarked independently with the opt-in `parallel`
+feature. `python-parallel-cpu` measured 0.008876 ms (six samples), versus the
+ordinary Pillow median of 0.010980 ms from the standard-profile run for the
+same workload: about 1.24× faster in these separate runs. The generator does
+not call Rayon, and its benchmark had no operation-level CPU receipt, so this
+is the Parallel CPU profile result, not evidence that this operation used
+parallel workers. Do not fold it into serial CPU or SIMD.
+
+The benchmark's correctness gate is `successful_execution`, not pixel parity.
+Separate live-Pillow checks passed all seven maintained cases—default RGB,
+L, I, F, mode `1`, P, and invalid one-character mode—on CPU (7/7), strict SIMD
+(7/7), and the opt-in Parallel CPU profile (7/7). This also exercises the
+owned-buffer constructor across every supported output mode. No GPU parity lane
+was claimed because there is no GPU route for this eager operation. No coverage
+was run.
+
+For the next revisit, add no more code until a stable, low-noise benchmark
+shows the buffered SIMD path reliably clearing Pillow. The optional macOS
+low-load target's confirmation build was stopped after its utility-priority
+release LTO link ran for more than four minutes without reaching measurement;
+the two completed ordinary-scheduler result sets above remain the evidence.
+Move on to the next ranked operation after this checkpoint.
