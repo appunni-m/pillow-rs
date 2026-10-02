@@ -13655,3 +13655,94 @@ make migration-parity-benchmark
 ```
 
 No coverage, broad CI, release, or push was run.
+
+## LA `ImageOps.pad` identity-contain GPU checkpoint — 2026-10-02
+
+The workload is `pil-imageops.pad.materialized.native-la-noise-1024x768-square`:
+a 1024 × 768 native LA image padded to 1024 × 1024 without resampling, with
+fill `(73, 149)`. The contain dimensions equal the source dimensions, leaving
+128 rows of fill above and below. The fresh parity-gated baseline measured
+Pillow / serial CPU / SIMD / GPU at 0.837 / 0.636 / 0.186 / 2.658 ms. CPU was
+1.32× faster than Pillow; SIMD was 4.51× faster; GPU was 14.31× slower than
+SIMD. The benchmark ran one request at a time, so the recorded rates are
+reciprocal-latency figures rather than saturated throughput.
+
+CPU and SIMD already read and write native LA bytes for this no-resize Pad.
+The GPU path was the outlier: it widened the 1,572,864-byte LA source to
+3,145,728 bytes, returned a 4,194,304-byte RGBA frame, and recorded one mode
+conversion. The new route admits only a singleton Pad over matching
+`ImageLumaA8` storage in logical LA/default mode when Pillow's contain geometry
+leaves the source dimensions unchanged. A real LA resize still uses the
+existing exact path; it needs two-channel resize kernels to preserve Pillow's
+intermediate rounding and alpha behavior.
+
+The native shader keeps each `[L, A]` pair intact and assigns one invocation
+exclusive ownership of a u32 containing two adjacent pixels. Flattened output
+coordinates deliberately allow a packed word to cross an odd-width row; each
+pixel derives its own source position, so the row transition cannot shift the
+next row's source sample. The fill's luminance comes from its low byte and LA
+alpha from the original color tuple's fourth byte. The final partial word is
+zero-filled, while native readback trims it to the exact two-byte-per-pixel
+image length. Dispatch planning checks the pixel index range and adapter
+workgroup limit before encoding.
+
+The focused GPU test covers 3 × 2 → 3 × 3 placement with nonuniform luminance
+and alpha, bottom centering, odd output rows, and a partial final transfer
+word. It compares every byte with the CPU Pad result and verifies the actual
+GPU backend, one dispatch, compact transfers, and zero mode conversions. Route
+tests also reject mode mismatch, extra operations, and contain resizes.
+
+| Run | Pillow ms | Serial CPU ms | SIMD ms | GPU ms | GPU transfer in/out | conversions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Clean baseline | 0.837 | 0.636 | 0.186 | 2.658 | 3.00 / 4.00 MiB | 1 |
+| Native LA, simple per-pixel coordinates | 1.321 | 0.641 | 0.243 | 0.916 | 1.50 / 2.00 MiB | 0 |
+| Native LA, repeat | 1.212 | 0.668 | 0.202 | 2.002 | 1.50 / 2.00 MiB | 0 |
+| Native LA, one coordinate division per word | 1.034 | 0.642 | 0.213 | 0.850 | 1.50 / 2.00 MiB | 0 |
+| Native LA, coordinate-hoisted repeat | 1.065 | 0.653 | 0.257 | 0.968 | 1.50 / 2.00 MiB | 0 |
+
+The retained shader computes the first pixel coordinate once per output word,
+then derives the second pixel with a row-crossing check. This removes one set
+of per-pixel division/modulo work while retaining the odd-row mapping. The two
+whole-call medians were 0.850 and 0.968 ms GPU, versus 0.916 and 2.002 ms for
+the simpler coordinate version; run-to-run GPU variation is large enough that
+the small incremental kernel gain remains directional. The robust, directly
+verified change is the halving of both transfer sizes and removal of the mode
+conversion.
+
+For the two retained runs, CPU measured 0.642/0.653 ms against Pillow at
+1.034/1.065 ms (1.61×/1.63× faster). SIMD measured 0.213/0.257 ms (4.85×/4.14×
+faster than Pillow), still short of the 5× target. GPU was 4.0×/3.8× slower
+than SIMD. The final GPU run used the requested GPU backend for all 100 timed
+calls with no fallback and one dispatch per call. A single materialized Pad
+still synchronously transfers the 1.5 MiB input and reads back 2 MiB; matching
+SIMD latency and proving higher GPU throughput need device-resident successors
+or a separate changing-input concurrency test.
+
+The final retained benchmark and parity sidecar are
+`pad-la-native-attempt2-28f019a4-20261002.json` and
+`pad-la-native-attempt2-28f019a4-parity-20261002.json`; the sidecar passed all
+three CPU/SIMD/GPU cases. The two simple-coordinate control runs are
+`pad-la-native-attempt1-28f019a4-20261002.json` and
+`pad-la-native-repeat1-28f019a4-20261002.json`. The clean baseline is
+`pad-la-before-28f019a4-20261002.json` with sidecar
+`pad-la-before-28f019a4-parity-20261002.json`.
+
+The exact retained benchmark command was:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+MIGRATION_BENCHMARK_PROFILE=standard \
+MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.pad.materialized.native-la-noise-1024x768-square' \
+MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/pad-la-native-attempt2-28f019a4-20261002.json \
+MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/pad-la-native-attempt2-28f019a4-parity-20261002.json \
+make migration-parity-benchmark
+```
+
+`cargo fmt --all -- --check` passed. The retained coordinate-hoisted shader's
+focused GPU route tests passed with
+`cargo test --locked -p pillow-rs --lib gpu_packed_la_pad -- --nocapture` (2
+tests); the packed-LA dispatch/filter regression group passed 5 tests with
+`cargo test --locked -p pillow-rs --lib packed_la_ -- --nocapture`. `git diff --check`
+passed. After two bounded changes, keep the native LA transfer path
+and the coordinate-hoisted shader, record the remaining SIMD and GPU gaps, and
+move to another operation. No coverage, broad CI, release, or push was run.
