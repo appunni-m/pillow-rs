@@ -1963,6 +1963,153 @@ fn pil_resize_luma_i32(
 }
 
 #[cfg(not(feature = "parallel"))]
+fn horizontal_pass_la_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
+    for (output_x, output_pixel) in output_row.chunks_exact_mut(2).enumerate() {
+        let weights = coeffs.weights_for(output_x);
+        if weights.is_empty() {
+            continue;
+        }
+        let source_start = coeffs.xmin[output_x] as usize * 2;
+        let (mut luma_sum, mut alpha_sum) = (0i32, 0i32);
+        if weights.len() == 4 {
+            luma_sum = i32::from(source_row[source_start]) * weights[0] as i32;
+            alpha_sum = i32::from(source_row[source_start + 1]) * weights[0] as i32;
+            luma_sum += i32::from(source_row[source_start + 2]) * weights[1] as i32;
+            alpha_sum += i32::from(source_row[source_start + 3]) * weights[1] as i32;
+            luma_sum += i32::from(source_row[source_start + 4]) * weights[2] as i32;
+            alpha_sum += i32::from(source_row[source_start + 5]) * weights[2] as i32;
+            luma_sum += i32::from(source_row[source_start + 6]) * weights[3] as i32;
+            alpha_sum += i32::from(source_row[source_start + 7]) * weights[3] as i32;
+        } else {
+            for (tap, &weight) in weights.iter().enumerate() {
+                let sample = source_start + tap * 2;
+                let weight = weight as i32;
+                luma_sum += i32::from(source_row[sample]) * weight;
+                alpha_sum += i32::from(source_row[sample + 1]) * weight;
+            }
+        }
+        output_pixel[0] = fixed_point_to_u8_i32(luma_sum);
+        output_pixel[1] = fixed_point_to_u8_i32(alpha_sum);
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn vertical_pass_la_i32(
+    intermediate: &[u8],
+    output_width: usize,
+    coeffs: &FilterCoeffs,
+    output: &mut [u8],
+) {
+    let output_stride = output_width * 2;
+    for (output_y, output_row) in output.chunks_exact_mut(output_stride).enumerate() {
+        let weights = coeffs.weights_for(output_y);
+        if weights.is_empty() {
+            continue;
+        }
+        let source_start = coeffs.xmin[output_y] as usize * output_stride;
+        if weights.len() == 4 {
+            let row1 = source_start + output_stride;
+            let row2 = row1 + output_stride;
+            let row3 = row2 + output_stride;
+            let (weight0, weight1, weight2, weight3) = (
+                weights[0] as i32,
+                weights[1] as i32,
+                weights[2] as i32,
+                weights[3] as i32,
+            );
+            for (output_x, output_pixel) in output_row.chunks_exact_mut(2).enumerate() {
+                let source_pixel = output_x * 2;
+                let mut luma_sum = i32::from(intermediate[source_start + source_pixel]) * weight0;
+                let mut alpha_sum =
+                    i32::from(intermediate[source_start + source_pixel + 1]) * weight0;
+                luma_sum += i32::from(intermediate[row1 + source_pixel]) * weight1;
+                alpha_sum += i32::from(intermediate[row1 + source_pixel + 1]) * weight1;
+                luma_sum += i32::from(intermediate[row2 + source_pixel]) * weight2;
+                alpha_sum += i32::from(intermediate[row2 + source_pixel + 1]) * weight2;
+                luma_sum += i32::from(intermediate[row3 + source_pixel]) * weight3;
+                alpha_sum += i32::from(intermediate[row3 + source_pixel + 1]) * weight3;
+                let alpha = fixed_point_to_u8_i32(alpha_sum);
+                output_pixel[0] = unpremultiply_channel(fixed_point_to_u8_i32(luma_sum), alpha);
+                output_pixel[1] = alpha;
+            }
+        } else {
+            for (output_x, output_pixel) in output_row.chunks_exact_mut(2).enumerate() {
+                let source_pixel = output_x * 2;
+                let (mut luma_sum, mut alpha_sum) = (0i32, 0i32);
+                for (tap, &weight) in weights.iter().enumerate() {
+                    let sample = source_start + tap * output_stride + source_pixel;
+                    let weight = weight as i32;
+                    luma_sum += i32::from(intermediate[sample]) * weight;
+                    alpha_sum += i32::from(intermediate[sample + 1]) * weight;
+                }
+                let alpha = fixed_point_to_u8_i32(alpha_sum);
+                output_pixel[0] = unpremultiply_channel(fixed_point_to_u8_i32(luma_sum), alpha);
+                output_pixel[1] = alpha;
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn pil_resize_la_i32(
+    img: &DynamicImage,
+    output_width: u32,
+    output_height: u32,
+    horizontal: &FilterCoeffs,
+    vertical: &FilterCoeffs,
+) -> Option<Vec<u8>> {
+    let DynamicImage::ImageLumaA8(source) = img else {
+        return None;
+    };
+    let source_width = usize::try_from(source.width()).ok()?;
+    let source_height = usize::try_from(source.height()).ok()?;
+    let output_width = usize::try_from(output_width).ok()?;
+    let output_height = usize::try_from(output_height).ok()?;
+    if horizontal.xmin.len() != output_width
+        || vertical.xmin.len() != output_height
+        || !resize_coefficients_fit_source(horizontal, source_width)
+        || !resize_coefficients_fit_source(vertical, source_height)
+        || !resize_u8_coefficients_fit_i32(horizontal)
+        || !resize_u8_coefficients_fit_i32(vertical)
+    {
+        return None;
+    }
+
+    let source_stride = source_width.checked_mul(2)?;
+    let source_len = source_height.checked_mul(source_stride)?;
+    let output_stride = output_width.checked_mul(2)?;
+    let intermediate_len = source_height.checked_mul(output_stride)?;
+    let output_len = output_height.checked_mul(output_stride)?;
+    if source.as_raw().len() != source_len {
+        return None;
+    }
+
+    let mut intermediate = vec![0; intermediate_len];
+    let mut premultiplied_row = vec![0; source_stride];
+    for source_y in 0..source_height {
+        let source_start = source_y.checked_mul(source_stride)?;
+        let output_start = source_y.checked_mul(output_stride)?;
+        for (source_pixel, output_pixel) in source.as_raw()
+            [source_start..source_start + source_stride]
+            .chunks_exact(2)
+            .zip(premultiplied_row.chunks_exact_mut(2))
+        {
+            output_pixel[0] = premultiply_channel(source_pixel[0], source_pixel[1]);
+            output_pixel[1] = source_pixel[1];
+        }
+        horizontal_pass_la_i32(
+            &premultiplied_row,
+            horizontal,
+            &mut intermediate[output_start..output_start + output_stride],
+        );
+    }
+
+    let mut output = vec![0; output_len];
+    vertical_pass_la_i32(&intermediate, output_width, vertical, &mut output);
+    Some(output)
+}
+
+#[cfg(not(feature = "parallel"))]
 fn pil_resize_hsv_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -2756,6 +2903,13 @@ pub fn pil_resize(
     if matches!(explicit_mode, None | Some("L")) && matches!(img, DynamicImage::ImageLuma8(_)) {
         if let Some(output) = pil_resize_luma_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 1));
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    if matches!(explicit_mode, None | Some("LA")) && matches!(img, DynamicImage::ImageLumaA8(_)) {
+        if let Some(output) = pil_resize_la_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
+            return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 2));
         }
     }
 
@@ -3666,11 +3820,11 @@ mod typed_nearest_tests {
 #[cfg(all(test, not(feature = "parallel")))]
 mod narrow_u8_resize_tests {
     use super::{
-        FilterCoeffs, pil_resize, pil_resize_luma_i32, precompute_coeffs,
+        FilterCoeffs, pil_resize, pil_resize_la_i32, pil_resize_luma_i32, precompute_coeffs,
         resize_u8_coefficients_fit_i32,
     };
     use crate::pipeline::ResampleFilter;
-    use crate::raster::{DynamicImage, GrayImage, RgbImage};
+    use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage};
 
     #[test]
     fn hsv_narrow_cpu_resize_matches_wide_three_channel_resize() {
@@ -3804,5 +3958,91 @@ mod narrow_u8_resize_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn la_narrow_cpu_resize_matches_wide_two_channel_reference() {
+        let small_shapes = [
+            (1, 7, 9, 3),
+            (5, 3, 7, 5),
+            (37, 17, 53, 23),
+            (73, 41, 13, 9),
+        ];
+        for (width, height, output_width, output_height) in small_shapes {
+            for filter in [
+                ResampleFilter::Bilinear,
+                ResampleFilter::Bicubic,
+                ResampleFilter::Lanczos,
+                ResampleFilter::Hamming,
+                ResampleFilter::Box,
+            ] {
+                let horizontal = precompute_coeffs(output_width, width, filter);
+                let vertical = precompute_coeffs(output_height, height, filter);
+                assert!(resize_u8_coefficients_fit_i32(&horizontal));
+                assert!(resize_u8_coefficients_fit_i32(&vertical));
+
+                for pattern in 0..4u32 {
+                    let bytes = (0..width * height)
+                        .flat_map(|index| {
+                            let luma = index
+                                .wrapping_mul(73)
+                                .wrapping_add(index / width * 19)
+                                .wrapping_add(31) as u8;
+                            let alpha = match pattern {
+                                0 => 0,
+                                1 => 255,
+                                2 if (index + index / width) % 2 == 0 => 0,
+                                2 => 255,
+                                _ => index
+                                    .wrapping_mul(47)
+                                    .wrapping_add(index / width * 61)
+                                    .wrapping_add(7) as u8,
+                            };
+                            [luma, alpha]
+                        })
+                        .collect::<Vec<_>>();
+                    let image = DynamicImage::ImageLumaA8(
+                        GrayAlphaImage::from_raw(width, height, bytes)
+                            .expect("LA test image shape"),
+                    );
+                    let specialized = pil_resize_la_i32(
+                        &image,
+                        output_width,
+                        output_height,
+                        &horizontal,
+                        &vertical,
+                    )
+                    .expect("safe LA coefficients select the narrow path");
+                    let public = pil_resize(&image, output_width, output_height, filter, None);
+                    let wide = pil_resize(&image, output_width, output_height, filter, Some("RGB"));
+                    assert_eq!(specialized, wide.as_bytes());
+                    assert_eq!(public.as_bytes(), wide.as_bytes());
+                    assert!(matches!(public, DynamicImage::ImageLumaA8(_)));
+                }
+            }
+        }
+
+        // The generic path transposes at this size; the direct LA kernel
+        // intentionally reads its row-major intermediate without that copy.
+        let (width, height, output_width, output_height) = (641, 481, 853, 641);
+        let bytes = (0u32..width * height)
+            .flat_map(|index| {
+                [
+                    index.wrapping_mul(73).wrapping_add(23) as u8,
+                    index.wrapping_mul(29).wrapping_add(11) as u8,
+                ]
+            })
+            .collect::<Vec<_>>();
+        let image = DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(width, height, bytes).expect("large LA test image shape"),
+        );
+        let filter = ResampleFilter::Bicubic;
+        let horizontal = precompute_coeffs(output_width, width, filter);
+        let vertical = precompute_coeffs(output_height, height, filter);
+        let specialized =
+            pil_resize_la_i32(&image, output_width, output_height, &horizontal, &vertical)
+                .expect("safe LA coefficients select the narrow path");
+        let wide = pil_resize(&image, output_width, output_height, filter, Some("RGB"));
+        assert_eq!(specialized, wide.as_bytes());
     }
 }

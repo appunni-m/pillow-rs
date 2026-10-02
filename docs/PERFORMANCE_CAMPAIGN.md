@@ -12738,3 +12738,92 @@ Checkpoint after four bounded attempts. Serial CPU and GPU meet their goals on
 this L workload; the 5× SIMD target remains open. Continue on another operation
 or mode instead of extending this attempt set. No coverage, CI, release, or push
 was run.
+
+## LA `ImageOps.cover` direct CPU resampling and SIMD precompute checkpoint — 2026-10-02
+
+The material case is
+`pil-imageops.cover.materialized.la-noise-1024x768`: a native 1024 × 768 LA
+image is covered to 1365 × 1024 with Pillow's default bicubic filter and fully
+materialized. The clean checkpoint baseline was revision `d2e6328d34a7`; its
+correctness gate passed the live Pillow comparison on CPU, strict SIMD, and
+GPU, with 100 actual executions per backend and no fallback. Pillow / CPU /
+SIMD / GPU median latencies were 9.270 / 21.429 / 11.150 / 1.275 ms.
+
+The serial CPU's LA route used generic i64 tap loops and transposed the full
+two-byte intermediate before the vertical pass. Attempt 1 added a dedicated
+`ImageLumaA8` route behind logical-mode, source-extent, buffer-length, and
+fixed-point coefficient checks. It premultiplies each native `[L, A]` source
+row with Pillow's `(L * A + 127) / 255` rounding, filters luma and alpha in
+paired i32 accumulators, and applies the same fixed-point rounding after each
+axis. The vertical pass reads the row-major intermediate directly; final
+luma restoration uses the established integer truncation and alpha-zero
+behavior. If a coefficient or extent cannot be proven safe, the wide generic
+path remains the fallback. `PA`, premultiplied `La`, and nearest-neighbor stay
+on their existing mode-specific paths. This code is limited to builds without
+the opt-in `parallel` feature.
+
+That CPU candidate measured 4.904 ms CPU, 11.460 ms SIMD, and 2.213 ms GPU
+against Pillow at 9.448 ms. CPU was already 1.93× faster than Pillow. The SIMD
+route had not changed; the GPU timing was also unmodified and varied from its
+baseline, so neither is credited to attempt 1.
+
+The existing checked-i32 SIMD LA kernel did an additional premultiply for
+every source tap gathered into each output vector. Attempt 2 now premultiplies
+each source row once and feeds those two-byte samples to the same vector tap
+plan. It retains the per-tap order, i32 accumulation, horizontal rounding,
+vertical rounding, and final alpha restoration. The generic SIMD route and
+other channel layouts are unchanged. The before/after focused Rust test
+`cover_la_i32_two_pass_matches_widened_for_alpha_patterns` compares its
+transparent, opaque, checkerboard-alpha, and varying-alpha outputs against the
+wide implementation; the CPU test
+`la_narrow_cpu_resize_matches_wide_two_channel_reference` compares five
+filters and four patterns at small/odd sizes plus a 641 × 481 to 853 × 641
+case whose generic path transposes the intermediate.
+
+The final candidate was measured twice. Each correctness gate passed all three
+requested profiles, with 100/100 actual CPU, SIMD, and GPU executions and no
+fallback:
+
+| LA Cover at 1024 × 768 | Pillow | Serial CPU | SIMD | GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Attempt 2 median latency | 9.429 ms | 4.910 ms | 10.263 ms | 1.428 ms |
+| Repeat median latency | 9.139 ms | 4.829 ms | 10.081 ms | 1.268 ms |
+| Repeat reciprocal q1 rate | 109.4 ops/s | 207.1 ops/s | 99.2 ops/s | 788.5 ops/s |
+
+The CPU reduction from baseline is 4.44×, and serial CPU now beats Pillow by
+1.89× on this material case. The SIMD row precompute is repeatable at about a
+9–10% latency reduction from baseline, but SIMD remains 1.10× slower than
+Pillow, far below the 5× goal. GPU code did not change; its repeated 1.27 ms
+latency is about 7.95× lower than SIMD for this queue-one workload, with the
+same ratio in reciprocal rate. That is single-request evidence, not a
+saturated-throughput result.
+
+Benchmark receipts are `cover-la-p1-before-20261002.json`,
+`cover-la-p1-after-attempt1-20261002.json`,
+`cover-la-p1-after-attempt2-20261002.json`, and
+`cover-la-p1-after-attempt2-repeat-20261002.json`; the corresponding parity
+gates are `migration-parity-benchmark-gate-9336e7deacc8416db76f3223db9d41d6`,
+`migration-parity-benchmark-gate-6f56af4d65cc46b183516a5e8e51b474`,
+`migration-parity-benchmark-gate-8d56457aab714899b5cbff61a4c8516f`, and
+`migration-parity-benchmark-gate-ecaa5c7a32984d59b38b2b6a6405f601`. The final
+run id is `migration-benchmark-7a31e1a242c34fbf87d27abc86ead97b`; its tested
+working-tree source diff SHA-256 is
+`faa9f57f947611686502f8d3506875aea13072de4e7325994eda36d3537bf60b`.
+
+The retained-tree repeat used:
+
+```sh
+PYTHON=build/parity-venv/bin/python \
+  MIGRATION_BENCHMARK_PROFILE=standard \
+  MIGRATION_BENCHMARK_ARGS='--workload-id pil-imageops.cover.materialized.la-noise-1024x768' \
+  MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/cover-la-p1-after-attempt2-repeat-20261002.json \
+  MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/cover-la-p1-after-attempt2-repeat-parity-20261002.json \
+  make migration-parity-benchmark
+```
+
+Checkpoint after four benchmark visits (baseline, CPU candidate, SIMD
+candidate, and candidate repeat). The serial CPU target is closed for this LA
+case; SIMD has a small retained gain but remains below Pillow and the 5× goal.
+Do not spend another attempt on this mode without a new architecture-specific
+SIMD/data-access hypothesis. Move to the next uncheckpointed operation. No
+coverage, full CI, release, or push was run.

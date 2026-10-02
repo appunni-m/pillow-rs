@@ -315,7 +315,12 @@ four-byte RGBA. On the maintained material LA Cover workload, strict CPU,
 SIMD, and GPU parity passed 3/3; GPU used two dispatches, had no fallback, and
 reduced readback from 5,591,040 to 2,797,568 bytes. This does not remove the
 generic RGBA transport from other operations or modes. CPU and SIMD latency
-targets for Cover LA also remain open; see the measured checkpoint in
+have since improved: a direct two-byte CPU path now avoids the generic i64
+channel loops and intermediate transpose, making serial CPU about 1.9× faster
+than Pillow. SIMD now premultiplies each LA source row once instead of
+recomputing luma×alpha per filter tap, but remains about 1.1× slower than
+Pillow and far below the 5× target. GPU source was unchanged and is already
+faster than SIMD for this single-request case. See the measured checkpoint in
 `PERFORMANCE_CAMPAIGN.md`.
 
 L AutoContrast is another operation-specific P1 reduction: its lowered
@@ -384,8 +389,9 @@ or Parallel CPU route.
 1. Continue P1 after the RGB Transform and RGB AutoContrast checkpoints by
    selecting the next uncheckpointed operation/mode with measurable RGBA
    staging cost; preserve each kernel's rounding and channel contract. RGB
-   AutoContrast still needs packed GPU input/output. L Cover's serial CPU target
-   is closed on the material case; SIMD remains below its 5× target.
+   AutoContrast still needs packed GPU input/output. L and LA Cover serial CPU
+   targets are closed on their material cases; LA SIMD remains below its 5×
+   target after one measured redundant-premultiplication removal.
 2. Continue with P7 color transforms and the host access findings using
    full-call benchmarks and exact parity cases. P3 remains open for evidence
    beyond its allocation reduction.
